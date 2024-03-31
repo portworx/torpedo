@@ -274,6 +274,7 @@ var _ = AfterSuite(func() {
 			err = DeleteRestore(restoreName, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
 		}
+		// Verify PVC Cleanup on PX-Backup namespace
 		if err := SetPVCListAfterRun(); err != nil {
 			log.FailOnError(err, "Setting PVC list after run failed")
 		}

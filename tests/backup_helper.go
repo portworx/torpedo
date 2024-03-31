@@ -8557,7 +8557,7 @@ func SetPVCListBeforeRun() error {
 	for _, pvc := range pvcList.Items {
 		pvcListBeforeRun = append(pvcListBeforeRun,pvc.Name)
 	}
-	log.Infof("PVC list is [%s]",pvcListBeforeRun)
+	log.Infof("PVC list before the run is [%s]",pvcListBeforeRun)
 	return nil
 }
 
@@ -8574,7 +8574,7 @@ func SetPVCListAfterRun() error {
 	for _, pvc := range pvcList.Items {
 		pvcListAfterRun = append(pvcListAfterRun,pvc.Name)
 	}
-	log.Infof("PVC list is [%s]",pvcListAfterRun)
+	log.Infof("PVC list after the run is [%s]",pvcListAfterRun)
 	return nil
 }
 
@@ -8586,7 +8586,7 @@ func ValidatePVCCleanup() error {
 	// Check if the contents of the lists are the same
 	for i := 0; i < len(pvcListBeforeRun); i++ {
 		if pvcListBeforeRun[i] != pvcListAfterRun[i] {
-			return fmt.Errorf("mismatch in pvc list")
+			return fmt.Errorf("mismatch in pvc list before and after the run")
 		}
 	}
 	return nil
