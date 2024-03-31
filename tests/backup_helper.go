@@ -8552,7 +8552,7 @@ func SetPVCListBeforeRun() error {
 	k8sCore := core.Instance()
 	pvcListBeforeRun, err = k8sCore.GetPersistentVolumeClaims(pxBackupNamespace, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", pxBackupNamespace, err)
+		return fmt.Errorf("failed to get PVCs in namespace %s: %w", pxBackupNamespace, err)
 	}
 	log.Infof("PVC list is [%s]",pvcListBeforeRun)
 	return nil
@@ -8566,7 +8566,7 @@ func SetPVCListAfterRun() error {
 	k8sCore := core.Instance()
 	pvcListAfterRun, err = k8sCore.GetPersistentVolumeClaims(pxBackupNamespace, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", pxBackupNamespace, err)
+		return fmt.Errorf("failed to get PVCs in namespace %s: %w", pxBackupNamespace, err)
 	}
 	log.Infof("PVC list is [%s]",pvcListAfterRun)
 	return nil
@@ -8574,13 +8574,13 @@ func SetPVCListAfterRun() error {
 
 func ValidatePVCCleanup() error {
 	if len(pvcListBeforeRun) != len(pvcListAfterRun) {
-		return errors.New("mismatch in pvc count")
+		return fmt.Errorf("mismatch in pvc count")
 	}
 
 	// Check if the contents of the lists are the same
 	for i := 0; i < len(pvcListBeforeRun); i++ {
 		if pvcListBeforeRun[i] != pvcListAfterRun[i] {
-			return errors.New("mismatch in pvc list")
+			return fmt.Errorf("mismatch in pvc list")
 		}
 	}
 	return nil
