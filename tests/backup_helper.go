@@ -8568,7 +8568,7 @@ func SetPVCListAfterRun() error {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", pxBackupNamespace, err)
 	}
-	log.Infof("PVC list is [%s]",pvcListAfter)
+	log.Infof("PVC list is [%s]",pvcListAfterRun)
 	return nil
 }
 
