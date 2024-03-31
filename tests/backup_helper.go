@@ -8550,9 +8550,12 @@ func SetPVCListBeforeRun() error {
 	}
 
 	k8sCore := core.Instance()
-	pvcListBeforeRun, err = k8sCore.GetPersistentVolumeClaims(pxBackupNamespace, nil)
+	pvcList, err := k8sCore.GetPersistentVolumeClaims(pxBackupNamespace, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get PVCs in namespace %s: %w", pxBackupNamespace, err)
+	}
+	for _, pvc := range pvcList.Items {
+		pvcListBeforeRun = append(pvcListBeforeRun,pvc.Name)
 	}
 	log.Infof("PVC list is [%s]",pvcListBeforeRun)
 	return nil
@@ -8564,9 +8567,12 @@ func SetPVCListAfterRun() error {
 		return err
 	}
 	k8sCore := core.Instance()
-	pvcListAfterRun, err = k8sCore.GetPersistentVolumeClaims(pxBackupNamespace, nil)
+	pvcList, err := k8sCore.GetPersistentVolumeClaims(pxBackupNamespace, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get PVCs in namespace %s: %w", pxBackupNamespace, err)
+	}
+	for _, pvc := range pvcList.Items {
+		pvcListAfterRun = append(pvcListAfterRun,pvc.Name)
 	}
 	log.Infof("PVC list is [%s]",pvcListAfterRun)
 	return nil
