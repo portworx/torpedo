@@ -201,6 +201,8 @@ var (
 	NfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
 	queryCountForValidation    = 10
 	IsBackupLongevityRun       = false
+	pvcListBeforeRun              = []string
+	pvcListAfterRun               = []string
 )
 
 type UserRoleAccess struct {
@@ -8536,6 +8538,49 @@ func GetUpdatedKubeVirtVMSpecForBackup(scheduledAppContextsToBackup []*scheduler
 		err := Inst().S.RemoveAppSpecsByName(scheduledAppContext, removeSpecs)
 		if err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func SetPVCListBeforeRun() error {
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+
+	k8sCore := core.Instance()
+	pvcListBeforeRun, err = k8sCore.GetPersistentVolumeClaims(pxBackupNamespace, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", pxBackupNamespace, err)
+	}
+	log.Infof("PVC list is [%s]",pvcListBeforeRun)
+	return nil
+}
+
+func SetPVCListAfterRun() error {
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+	k8sCore := core.Instance()
+	pvcListAfterRun, err = k8sCore.GetPersistentVolumeClaims(pxBackupNamespace, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", pxBackupNamespace, err)
+	}
+	log.Infof("PVC list is [%s]",pvcListAfter)
+	return nil
+}
+
+func ValidatePVCCleanup() error {
+	if len(pvcListBeforeRun) != len(pvcListAfterRun) {
+		return errors.New("mismatch in pvc count")
+	}
+
+	// Check if the contents of the lists are the same
+	for i := 0; i < len(pvcListBeforeRun); i++ {
+		if pvcListBeforeRun[i] != pvcListAfterRun[i] {
+			return errors.New("mismatch in pvc list")
 		}
 	}
 	return nil

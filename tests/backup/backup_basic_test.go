@@ -235,6 +235,9 @@ var _ = BeforeSuite(func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for Global Post-rule of application"))
 		}
 	}
+	if err := SetPVCListBeforeRun(); err != nil {
+		log.FailOnError(err, "Setting PVC list before run failed")
+	}
 })
 
 var _ = AfterSuite(func() {
@@ -271,7 +274,14 @@ var _ = AfterSuite(func() {
 			err = DeleteRestore(restoreName, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
 		}
-
+		if err := SetPVCListAfterRun(); err != nil {
+			log.FailOnError(err, "Setting PVC list after run failed")
+		}
+		if err := ValidatePVCCleanup(); err != nil {
+			log.FailOnError(err, "PVC cleanup validation failed")
+		}
+		fmt.Println("PVC cleanup validation passed.")
+	
 		// Deleting clusters and the corresponding cloud cred
 		var clusterCredName string
 		var clusterCredUID string
