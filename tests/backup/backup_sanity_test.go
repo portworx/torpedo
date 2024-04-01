@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 	"strings"
 	"time"
 
@@ -110,6 +111,7 @@ var _ = Describe("{BasicBackupCreation}", Label(TestCaseLabelsMap[BasicBackupCre
 		monthlyName          string
 		controlChannel       chan string
 		errorGroup           *errgroup.Group
+		allVirtualMachines   []kubevirtv1.VirtualMachine
 	)
 
 	JustBeforeEach(func() {
@@ -134,6 +136,16 @@ var _ = Describe("{BasicBackupCreation}", Label(TestCaseLabelsMap[BasicBackupCre
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
 			}
 		}
+
+		if IsKubevirtInstalled() {
+			log.InfoD("Get a list of all Vms in case of Kubevirt")
+			for _, appCtx := range scheduledAppContexts {
+				allVms, err := GetAllVMsInNamespace(appCtx.ScheduleOptions.Namespace)
+				log.FailOnError(err, "Unable to get Virtual Machines from [%s]", appCtx.ScheduleOptions.Namespace)
+				allVirtualMachines = append(allVirtualMachines, allVms...)
+			}
+		}
+
 	})
 
 	It("Basic Backup Creation", func() {
