@@ -692,20 +692,23 @@ func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
 }
 
 func IsPoolAddDiskSupported() (bool, error) {
-
 	DMthin, err := IsDMthin()
 	if err != nil {
-		return true, nil
+		log.InfoD("Failed to determine if DMTHIN is enabled")
+		return false, err
 	}
-	if DMthin {
+	if !DMthin {
+		log.InfoD("DMTHIN is not enabled on this setup, Add Disk to Pool is  supported")
+		return true, nil
+	} else {
 		log.Infof("DMTHIN is enabled")
 		dmthinSupportedPxVersion, err := semver.NewVersion("3.1.0")
 		if err != nil {
 			return false, err
 		}
-		driverVersion, err := Inst().V.GetDriverVersion()
-		if err != nil {
-			return false, err
+		driverVersion, version_err := Inst().V.GetDriverVersion()
+		if version_err != nil {
+			return false, version_err
 		}
 		var new_trimmedVersion string
 		parts := strings.Split(driverVersion, "-")
@@ -715,10 +718,10 @@ func IsPoolAddDiskSupported() (bool, error) {
 		} else {
 			new_trimmedVersion = parts[0]
 		}
-		currentPxVersionOnCluster, err := semver.NewVersion(new_trimmedVersion)
-		if err != nil {
-			log.InfoD(fmt.Sprintf("[semver.NewVersion] error is", err))
-			return false, err
+		currentPxVersionOnCluster, semver_err := semver.NewVersion(new_trimmedVersion)
+		if semver_err != nil {
+			log.InfoD(fmt.Sprintf("[semver.NewVersion] error is", semver_err))
+			return false, semver_err
 		}
 		log.InfoD(fmt.Sprintf("The current version on the cluster is :%s", currentPxVersionOnCluster))
 		if currentPxVersionOnCluster.GreaterThan(dmthinSupportedPxVersion) {
