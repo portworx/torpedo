@@ -720,7 +720,6 @@ func IsPoolAddDiskSupported() (bool, error) {
 		}
 		currentPxVersionOnCluster, semver_err := semver.NewVersion(new_trimmedVersion)
 		if semver_err != nil {
-			log.InfoD(fmt.Sprintf("[semver.NewVersion] error is", semver_err))
 			return false, semver_err
 		}
 		log.InfoD(fmt.Sprintf("The current version on the cluster is :%s", currentPxVersionOnCluster))
