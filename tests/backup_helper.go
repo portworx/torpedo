@@ -201,6 +201,8 @@ var (
 	NfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
 	queryCountForValidation    = 10
 	IsBackupLongevityRun       = false
+	pvcListBeforeRun              []string
+	pvcListAfterRun               []string
 )
 
 type UserRoleAccess struct {
@@ -8536,6 +8538,59 @@ func GetUpdatedKubeVirtVMSpecForBackup(scheduledAppContextsToBackup []*scheduler
 		err := Inst().S.RemoveAppSpecsByName(scheduledAppContext, removeSpecs)
 		if err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// SetPVCListBeforeRun will set the value of global variable pvcListBeforeRun with the PVC names
+func SetPVCListBeforeRun() error {
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+
+	k8sCore := core.Instance()
+	pvcList, err := k8sCore.GetPersistentVolumeClaims(pxBackupNamespace, nil)
+	if err != nil {
+		return fmt.Errorf("failed to get PVCs in namespace %s: %w", pxBackupNamespace, err)
+	}
+	for _, pvc := range pvcList.Items {
+		pvcListBeforeRun = append(pvcListBeforeRun,pvc.Name)
+	}
+	log.Infof("PVC list before the run is [%s]",pvcListBeforeRun)
+	return nil
+}
+
+// SetPVCListAfterRun will set the value of global variable pvcListAfterRun with the PVC names
+func SetPVCListAfterRun() error {
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+	k8sCore := core.Instance()
+	pvcList, err := k8sCore.GetPersistentVolumeClaims(pxBackupNamespace, nil)
+	if err != nil {
+		return fmt.Errorf("failed to get PVCs in namespace %s: %w", pxBackupNamespace, err)
+	}
+	for _, pvc := range pvcList.Items {
+		pvcListAfterRun = append(pvcListAfterRun,pvc.Name)
+	}
+	log.Infof("PVC list after the run is [%s]",pvcListAfterRun)
+	return nil
+}
+
+// ValidatePVCCleanup will compare the PVC list before and after the run
+func ValidatePVCCleanup() error {
+	// Check if the total number of the PVC's are the same
+	if len(pvcListBeforeRun) != len(pvcListAfterRun) {
+		return fmt.Errorf("mismatch in pvc count")
+	}
+
+	// Check if the contents of the PVC lists are the same
+	for i := 0; i < len(pvcListBeforeRun); i++ {
+		if pvcListBeforeRun[i] != pvcListAfterRun[i] {
+			return fmt.Errorf("mismatch in pvc list before and after the run")
 		}
 	}
 	return nil
