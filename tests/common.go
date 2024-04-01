@@ -615,6 +615,10 @@ func PrintCommandOutput(cmnd string) {
 
 }
 
+func PrintSvPoolStatus(node node.Node) {
+	runCmdGetOutput("pxctl sv pool show", node)
+}
+
 // ValidateCleanup checks that there are no resource leaks after the test run
 func ValidateCleanup() {
 	Step("validate cleanup of resources used by the test suite", func() {
@@ -2265,6 +2269,7 @@ func DestroyApps(contexts []*scheduler.Context, opts map[string]bool) {
 // DestroyApps destroy applications with data validation
 func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, controlChannel chan string, errGroup *errgroup.Group) error {
 
+	defer ginkgo.GinkgoRecover()
 	var allErrors string
 
 	log.InfoD("Validating apps data continuity")
