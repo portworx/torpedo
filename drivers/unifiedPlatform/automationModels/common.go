@@ -185,3 +185,7 @@ type V1PXEMetadata struct {
 	ServiceNamespace *string `copier:"must,nopanic"`
 	Version          *string `copier:"must,nopanic"`
 }
+
+type WorkflowResiliency struct {
+	ResiliencyFlag bool
+}
