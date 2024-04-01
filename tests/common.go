@@ -694,7 +694,7 @@ func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
 func IsPoolAddDiskSupported() (bool, error) {
 	DMthin, err := IsDMthin()
 	if err != nil {
-		log.InfoD("Failed to determine if DMTHIN is enabled")
+		log.Infof("Failed to determine if DMTHIN is enabled")
 		return false, err
 	}
 	if !DMthin {
