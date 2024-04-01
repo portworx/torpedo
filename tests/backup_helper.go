@@ -8543,49 +8543,33 @@ func GetUpdatedKubeVirtVMSpecForBackup(scheduledAppContextsToBackup []*scheduler
 	return nil
 }
 
-func SetPVCListBeforeRun() error {
-	pxBackupNamespace, err := backup.GetPxBackupNamespace()
-	if err != nil {
-		return err
-	}
+func GetPVCList() ([]string, error) {
+    pxBackupNamespace, err := backup.GetPxBackupNamespace()
+    if err != nil {
+        return nil, err
+    }
 
-	k8sCore := core.Instance()
-	pvcList, err := k8sCore.GetPersistentVolumeClaims(pxBackupNamespace, nil)
-	if err != nil {
-		return fmt.Errorf("failed to get PVCs in namespace %s: %w", pxBackupNamespace, err)
-	}
-	for _, pvc := range pvcList.Items {
-		pvcListBeforeRun = append(pvcListBeforeRun,pvc.Name)
-	}
-	log.Infof("PVC list before the run is [%s]",pvcListBeforeRun)
-	return nil
+    k8sCore := core.Instance()
+    pvcList, err := k8sCore.GetPersistentVolumeClaims(pxBackupNamespace, make(map[string]string))
+    if err != nil {
+        return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", pxBackupNamespace, err)
+    }
+
+    var pvcNameList []string
+    for _, pvc := range pvcList.Items {
+        pvcNameList = append(pvcNameList, pvc.Name)
+    }
+    return pvcNameList, nil
 }
 
-func SetPVCListAfterRun() error {
-	pxBackupNamespace, err := backup.GetPxBackupNamespace()
-	if err != nil {
-		return err
-	}
-	k8sCore := core.Instance()
-	pvcList, err := k8sCore.GetPersistentVolumeClaims(pxBackupNamespace, nil)
-	if err != nil {
-		return fmt.Errorf("failed to get PVCs in namespace %s: %w", pxBackupNamespace, err)
-	}
-	for _, pvc := range pvcList.Items {
-		pvcListAfterRun = append(pvcListAfterRun,pvc.Name)
-	}
-	log.Infof("PVC list after the run is [%s]",pvcListAfterRun)
-	return nil
-}
-
-func ValidatePVCCleanup() error {
-	if len(pvcListBeforeRun) != len(pvcListAfterRun) {
+func ValidatePVCCleanup(pvcListBefore, pvcListAfter []string) error {
+	if len(pvcListBefore) != len(pvcListAfter) {
 		return fmt.Errorf("mismatch in pvc count")
 	}
 
 	// Check if the contents of the lists are the same
-	for i := 0; i < len(pvcListBeforeRun); i++ {
-		if pvcListBeforeRun[i] != pvcListAfterRun[i] {
+	for i := 0; i < len(pvcListBefore); i++ {
+		if pvcListBefore[i] != pvcListAfter[i] {
 			return fmt.Errorf("mismatch in pvc list before and after the run")
 		}
 	}
