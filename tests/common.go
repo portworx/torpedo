@@ -10,6 +10,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/hashicorp/go-version"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -11092,6 +11094,40 @@ func GetVolumesOnNode(nodeId string) ([]string, error) {
 	}
 
 	return volumes, nil
+}
+
+// IsKubevirtInstalled reruns true if Kubevirt is installed else returns false
+func IsKubevirtInstalled() bool {
+	err := SetSourceKubeConfig()
+	if err != nil {
+		return false
+	}
+	k8sApiExtensions := apiextensions.Instance()
+	crdList, err := k8sApiExtensions.ListCRDs()
+	log.InfoD("Source %s", crdList)
+	for _, crd := range crdList.Items {
+		if crd.Name == "kubevirts.kubevirt.io" {
+			k8sKubevirt := kubevirt.Instance()
+			_, err = k8sKubevirt.GetVersion()
+			log.InfoD("source %v", err)
+		}
+	}
+
+	err = SetDestinationKubeConfig()
+	if err != nil {
+		return false
+	}
+	k8sApiExtensions = apiextensions.Instance()
+	crdList, err = k8sApiExtensions.ListCRDs()
+	log.InfoD("Desitioan %s", crdList)
+	for _, crd := range crdList.Items {
+		if crd.Name == "kubevirts.kubevirt.io" {
+			k8sKubevirt := kubevirt.Instance()
+			_, err = k8sKubevirt.GetVersion()
+			log.InfoD("Desitioan %s", err)
+		}
+	}
+	return true
 }
 
 // IsCloudsnapBackupActiveOnVolume returns true is cloudsnap backup is active on the volume
