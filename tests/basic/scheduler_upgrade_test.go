@@ -77,6 +77,16 @@ var _ = Describe("{UpgradeScheduler}", func() {
 
 			}
 
+			//if IsOkeCluster() {
+			//	currSize, err := Inst().N.GetASGClusterSize()
+			//	log.FailOnError(err, "error getting ASG cluster size")
+			//	err = Inst().N.SetASGClusterSize(0, upgradeTimeoutMins)
+			//	log.FailOnError(err, "error setting ASG cluster size to 0")
+			//	err = Inst().N.SetASGClusterSize(currSize, upgradeTimeoutMins)
+			//	log.FailOnError(err, "error setting ASG cluster size to %d", currSize)
+			//
+			//}
+
 			stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storage nodes",
 				Inst().AutoStorageNodeRecoveryTimeout.String())
 			Step(stepLog, func() {

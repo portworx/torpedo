@@ -1032,7 +1032,7 @@ github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/scheme
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/typed/autopilot/v1alpha1
-# github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
+# github.com/libopenstorage/cloudops v0.0.0-20240401121502-492e87b6c7a6
 ## explicit; go 1.13
 github.com/libopenstorage/cloudops
 github.com/libopenstorage/cloudops/azure

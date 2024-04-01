@@ -27,7 +27,7 @@ require (
 	github.com/kubernetes-csi/external-snapshotter/client/v6 v6.2.0
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api v1.3.0
-	github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
+	github.com/libopenstorage/cloudops v0.0.0-20240401121502-492e87b6c7a6
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
 	github.com/libopenstorage/operator v0.0.0-20240206041752-d8569d10595c
 	github.com/libopenstorage/stork v1.4.1-0.20230610103146-72cf75320066
@@ -428,4 +428,5 @@ replace (
 	kubevirt.io/containerized-data-importer-api v1.57.0-alpha1 => kubevirt.io/containerized-data-importer-api v1.56.1
 	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.13.0
 	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 => sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
+	github.com/libopenstorage/cloudops => github.com/libopenstorage/cloudops v0.0.0-20240401121502-492e87b6c7a6
 )

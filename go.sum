@@ -2472,6 +2472,8 @@ github.com/libopenstorage/cloudops v0.0.0-20200604165016-9cc0977d745e/go.mod h1:
 github.com/libopenstorage/cloudops v0.0.0-20221107233229-3fa4664e96b1/go.mod h1:FkADW9gyVQyD6igV0keQ3nW9k+V3W88yhJ4faZP97wI=
 github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413 h1:OOK0nxRDxGG4CkeiC0MCiFuKMsxiIGLS1WsLB4bZcLs=
 github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413/go.mod h1:XDq7GKCnwg76NKMbLZ5Xe/er3iyGyB0BG9lQ65yB3Q8=
+github.com/libopenstorage/cloudops v0.0.0-20240401121502-492e87b6c7a6 h1:F4egzPSaQuJX/7aGZ9IZFJ9UO8Tb3JW98sfx+JMl7sg=
+github.com/libopenstorage/cloudops v0.0.0-20240401121502-492e87b6c7a6/go.mod h1:iuy84mzViIvmJRXCHgJW2iHe8vl6IaA89uiTg79afyE=
 github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10 h1:q21CLGSi9DhNBBuJuitquA/T6FwLV3KNZxaJpxQbOLc=
 github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10/go.mod h1:nffpoeodwwp+wwngmBGbLBCd7TZ9GxHLtxKoaLRW6K4=
 github.com/libopenstorage/gossip v0.0.0-20190507031959-c26073a01952/go.mod h1:TjXt2Iz2bTkpfc4Q6xN0ttiNipTVwEEYoZSMZHlfPek=
