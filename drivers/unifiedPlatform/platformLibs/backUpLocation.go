@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func ListBackupLocation(tenantId string) ([]*automationModels.BackupLocationResponse, error) {
+func ListBackupLocation(tenantId string) (*automationModels.BackupLocationResponse, error) {
 	listReq := automationModels.BackupLocationRequest{}
 	listReq.List.TenantID = tenantId
 	bkpLocations, err := v2Components.Platform.ListBackupLocations(&listReq)

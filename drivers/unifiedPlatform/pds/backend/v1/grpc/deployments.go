@@ -32,8 +32,10 @@ func (deployment *PdsGrpc) getDeploymentClient() (context.Context, publicdeploym
 	return ctx, depClient, token, nil
 }
 
-func (deployment *PdsGrpc) GetDeployment(deploymentId string) (*WorkFlowResponse, error) {
-	depResponse := WorkFlowResponse{}
+func (deployment *PdsGrpc) GetDeployment(deploymentId string) (*PDSDeploymentResponse, error) {
+	depResponse := PDSDeploymentResponse{
+		Get: V1Deployment{},
+	}
 	ctx, client, _, err := deployment.getDeploymentClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
@@ -79,8 +81,10 @@ func (deployment *PdsGrpc) DeleteDeployment(deploymentId string) error {
 	return nil
 }
 
-func (deployment *PdsGrpc) ListDeployment() (*WorkFlowResponse, error) {
-	depResponse := WorkFlowResponse{}
+func (deployment *PdsGrpc) ListDeployment() (*PDSDeploymentResponse, error) {
+	depResponse := PDSDeploymentResponse{
+		Get: V1Deployment{},
+	}
 	ctx, client, _, err := deployment.getDeploymentClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
@@ -106,8 +110,10 @@ func (deployment *PdsGrpc) ListDeployment() (*WorkFlowResponse, error) {
 	return &depResponse, nil
 }
 
-func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *PDSDeploymentRequest) (*WorkFlowResponse, error) {
-	depResponse := WorkFlowResponse{}
+func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *PDSDeploymentRequest) (*PDSDeploymentResponse, error) {
+	depResponse := PDSDeploymentResponse{
+		Create: V1Deployment{},
+	}
 	dep := createDeploymentRequest.Create.V1Deployment
 
 	createRequest := &publicdeploymentapis.CreateDeploymentRequest{

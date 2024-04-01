@@ -7,7 +7,13 @@ type BackupLocationRequest struct {
 
 type BackupLocationResponse struct {
 	Create BackupLocation
-	List   BackupLocation
+	Get    BackupLocation
+	List   ListBackupLocation
+	Update BackupLocation
+}
+
+type ListBackupLocation struct {
+	BackupLocations []BackupLocation
 }
 
 type BackupLocation struct {

@@ -42,9 +42,11 @@ func (cloudCredGrpcV1 *PlatformGrpc) getCloudCredClient() (context.Context, publ
 }
 
 // ListCloudCredentials return list of cloud credentials
-func (cloudCredGrpcV1 *PlatformGrpc) ListCloudCredentials(request *CloudCredentials) ([]CloudCredentials, error) {
+func (cloudCredGrpcV1 *PlatformGrpc) ListCloudCredentials(request *CloudCredentialsRequest) (*CloudCredentialsResponse, error) {
 	ctx, cloudCredsClient, _, err := cloudCredGrpcV1.getCloudCredClient()
-	cloudCredsResponse := []CloudCredentials{}
+	cloudCredsResponse := CloudCredentialsResponse{
+		List: ListCloudCredentials{},
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -62,11 +64,11 @@ func (cloudCredGrpcV1 *PlatformGrpc) ListCloudCredentials(request *CloudCredenti
 		return nil, err
 	}
 	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredsResponse)
-	return cloudCredsResponse, nil
+	return &cloudCredsResponse, nil
 }
 
 // GetCloudCredentials gets cloud credentials by ts id
-func (cloudCredGrpcV1 *PlatformGrpc) GetCloudCredentials(getWorkflowRequest *CloudCredentials) (*CloudCredentialsResponse, error) {
+func (cloudCredGrpcV1 *PlatformGrpc) GetCloudCredentials(getWorkflowRequest *CloudCredentialsRequest) (*CloudCredentialsResponse, error) {
 	ctx, cloudCredsClient, _, err := cloudCredGrpcV1.getCloudCredClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -89,7 +91,7 @@ func (cloudCredGrpcV1 *PlatformGrpc) GetCloudCredentials(getWorkflowRequest *Clo
 	return cloudCredResponse, nil
 }
 
-func cloudConfig(createRequest *CloudCredentials) *publiccloudcredapi.Config {
+func cloudConfig(createRequest *CloudCredentialsRequest) *publiccloudcredapi.Config {
 	PROVIDER_TYPE := createRequest.Create.Config.Provider.CloudProvider
 	secret := createRequest.Create.Config.Credentials
 	switch PROVIDER_TYPE {
@@ -187,7 +189,7 @@ func copyCloudCredResponse(providerType int32, cloudCredModel *publiccloudcredap
 }
 
 // CreateCloudCredentials return newly created cloud credentials
-func (cloudCredGrpcV1 *PlatformGrpc) CreateCloudCredentials(createRequest *CloudCredentials) (*CloudCredentialsResponse, error) {
+func (cloudCredGrpcV1 *PlatformGrpc) CreateCloudCredentials(createRequest *CloudCredentialsRequest) (*CloudCredentialsResponse, error) {
 	ctx, cloudCredsClient, _, err := cloudCredGrpcV1.getCloudCredClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -227,12 +229,14 @@ func (cloudCredGrpcV1 *PlatformGrpc) CreateCloudCredentials(createRequest *Cloud
 }
 
 // UpdateCloudCredentials return newly created cloud credentials
-func (cloudCredGrpcV1 *PlatformGrpc) UpdateCloudCredentials(updateRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (cloudCredGrpcV1 *PlatformGrpc) UpdateCloudCredentials(updateRequest *CloudCredentialsRequest) (*CloudCredentialsResponse, error) {
 	ctx, cloudCredsClient, _, err := cloudCredGrpcV1.getCloudCredClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	cloudCredsResponse := WorkFlowResponse{}
+	cloudCredsResponse := CloudCredentialsResponse{
+		Update: CloudCredentials{},
+	}
 	var updateAppRequest *publiccloudcredapi.UpdateCloudCredentialRequest
 	err = copier.Copy(&updateAppRequest, updateRequest)
 	if err != nil {
@@ -251,7 +255,7 @@ func (cloudCredGrpcV1 *PlatformGrpc) UpdateCloudCredentials(updateRequest *WorkF
 }
 
 // DeleteCloudCredential delete cloud cred model.
-func (cloudCredGrpcV1 *PlatformGrpc) DeleteCloudCredential(cloudCred *CloudCredentials) error {
+func (cloudCredGrpcV1 *PlatformGrpc) DeleteCloudCredential(cloudCred *CloudCredentialsRequest) error {
 	ctx, cloudCredsClient, _, err := cloudCredGrpcV1.getCloudCredClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)

@@ -53,18 +53,18 @@ type ApplicationInterface interface {
 
 type BackupLocationInterface interface {
 	CreateBackupLocation(*BackupLocationRequest) (*BackupLocationResponse, error)
-	ListBackupLocations(*BackupLocationRequest) ([]*BackupLocationResponse, error)
+	ListBackupLocations(*BackupLocationRequest) (*BackupLocationResponse, error)
 	DeleteBackupLocation(*BackupLocationRequest) error
-	GetBackupLocation(*WorkFlowRequest) (*WorkFlowResponse, error)
-	UpdateBackupLocation(*WorkFlowRequest) (*WorkFlowResponse, error)
+	GetBackupLocation(*WorkFlowRequest) (*BackupLocationResponse, error)
+	UpdateBackupLocation(*WorkFlowRequest) (*BackupLocationResponse, error)
 }
 
 type CloudCredentialsInterface interface {
-	ListCloudCredentials(*CloudCredentials) ([]CloudCredentials, error)
-	GetCloudCredentials(*CloudCredentials) (*CloudCredentialsResponse, error)
-	CreateCloudCredentials(*CloudCredentials) (*CloudCredentialsResponse, error)
-	DeleteCloudCredential(*CloudCredentials) error
-	UpdateCloudCredentials(*WorkFlowRequest) (*WorkFlowResponse, error)
+	ListCloudCredentials(*CloudCredentialsRequest) (*CloudCredentialsResponse, error)
+	GetCloudCredentials(*CloudCredentialsRequest) (*CloudCredentialsResponse, error)
+	CreateCloudCredentials(*CloudCredentialsRequest) (*CloudCredentialsResponse, error)
+	DeleteCloudCredential(*CloudCredentialsRequest) error
+	UpdateCloudCredentials(*CloudCredentialsRequest) (*CloudCredentialsResponse, error)
 }
 type NamespaceInterface interface {
 	ListNamespaces(namespace *PlatformNamespace) (*PlatformNamespaceResponse, error)

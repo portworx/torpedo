@@ -20,7 +20,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		workflowDataService  stworkflows.WorkflowDataService
 		workflowBackUpConfig stworkflows.WorkflowPDSBackupConfig
 		workflowRestore      stworkflows.WorkflowPDSRestore
-		deployment           *automationModels.WorkFlowResponse
+		deployment           *automationModels.PDSDeploymentResponse
 		restoreDeployment    *automationModels.PDSRestoreResponse
 		pdsBackupConfigName  string
 		err                  error
@@ -64,7 +64,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
 
 		Step("Take Backup and validate", func() {
-			bkpConfigResponse, err = workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.PDSDeployment.V1Deployment.Meta.Uid)
+			bkpConfigResponse, err = workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
 			log.FailOnError(err, "Error occured while creating backupConfig")
 			log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", bkpConfigResponse.Create.Meta.Name, bkpConfigResponse.Create.Meta.Uid)
 		})
@@ -79,7 +79,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		Step("Perform Restore and validate", func() {
 			workflowRestore.WorkflowDataService = workflowDataService
 			backupUid := *bkpConfigResponse.Create.Meta.Uid
-			deploymentName := *deployment.PDSDeployment.V1Deployment.Meta.Name
+			deploymentName := *deployment.Create.Meta.Name
 			cloudSnapId := ""
 			// Set the DestClusterId same as the current ClusterId
 			workflowRestore.Destination.DestinationClusterId = WorkflowTargetCluster.ClusterUID
@@ -119,7 +119,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 		workflowDataService  stworkflows.WorkflowDataService
 		workflowBackUpConfig stworkflows.WorkflowPDSBackupConfig
 		workflowRestore      stworkflows.WorkflowPDSRestore
-		deployment           *automationModels.WorkFlowResponse
+		deployment           *automationModels.PDSDeploymentResponse
 		restoreDeployment    *automationModels.PDSRestoreResponse
 		pdsBackupConfigName  string
 		err                  error
@@ -163,7 +163,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
 
 		Step("Take Backup and validate", func() {
-			bkpConfigResponse, err = workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.PDSDeployment.V1Deployment.Meta.Uid)
+			bkpConfigResponse, err = workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
 			log.FailOnError(err, "Error occured while creating backupConfig")
 			log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", bkpConfigResponse.Create.Meta.Name, bkpConfigResponse.Create.Meta.Uid)
 		})
@@ -178,7 +178,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 		Step("Perform Restore and validate", func() {
 			workflowRestore.WorkflowDataService = workflowDataService
 			backupUid := *bkpConfigResponse.Create.Meta.Uid
-			deploymentName := *deployment.PDSDeployment.V1Deployment.Meta.Name
+			deploymentName := *deployment.Create.Meta.Name
 			cloudSnapId := ""
 
 			//Set the context to  the destination clusterId

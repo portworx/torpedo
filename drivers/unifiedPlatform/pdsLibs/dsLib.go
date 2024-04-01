@@ -16,7 +16,7 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 	return nil
 }
 
-func UpdateDataService(ds PDSDataService, namespaceId, projectId, imageId string) (*automationModels.WorkFlowResponse, error) {
+func UpdateDataService(ds PDSDataService, namespaceId, projectId, imageId string) (*automationModels.PDSDeploymentResponse, error) {
 	log.Info("Update Data service will be performed")
 
 	depInputs := automationModels.PDSDeploymentRequest{}
@@ -63,7 +63,7 @@ func DeleteDeployment(deployment map[string]string) error {
 }
 
 // DeployDataService should be called from workflows
-func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterId, imageId, appConfigId, resConfigId, stConfigId string) (*automationModels.WorkFlowResponse, error) {
+func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterId, imageId, appConfigId, resConfigId, stConfigId string) (*automationModels.PDSDeploymentResponse, error) {
 	log.Info("Data service will be deployed as per the config map passed..")
 
 	depInputs := automationModels.PDSDeploymentRequest{}

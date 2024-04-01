@@ -1,12 +1,20 @@
 package automationModels
 
-type CloudCredentials struct {
-	Create CreateCloudCredentials
+type CloudCredentialsRequest struct {
+	Create CloudCredentials
 	Get    GetCloudCredentials
+	Update CloudCredentials
 }
 
 type CloudCredentialsResponse struct {
-	Create CreateCloudCredentials
+	Create CloudCredentials
+	Get    GetCloudCredentials
+	List   ListCloudCredentials
+	Update CloudCredentials
+}
+
+type ListCloudCredentials struct {
+	CloudCredentials []CloudCredentials
 }
 
 type GetCloudCredentials struct {
@@ -14,7 +22,7 @@ type GetCloudCredentials struct {
 	IsConfigRequired   bool
 }
 
-type CreateCloudCredentials struct {
+type CloudCredentials struct {
 	TenantID string
 	Meta     Meta
 	Config   CloudConfig
