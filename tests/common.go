@@ -11098,30 +11098,12 @@ func GetVolumesOnNode(nodeId string) ([]string, error) {
 
 // IsKubevirtInstalled reruns true if Kubevirt is installed else returns false
 func IsKubevirtInstalled() bool {
-	err := SetSourceKubeConfig()
-	if err != nil {
-		return false
-	}
 	k8sApiExtensions := apiextensions.Instance()
 	crdList, err := k8sApiExtensions.ListCRDs()
-	log.InfoD("Source crd list: %s", crdList)
-	for _, crd := range crdList.Items {
-		if crd.Name == "kubevirts.kubevirt.io" {
-			k8sKubevirt := kubevirt.Instance()
-			version, err := k8sKubevirt.GetVersion()
-			if err == nil && version != "" {
-				return true
-			}
-		}
-	}
-
-	err = SetDestinationKubeConfig()
 	if err != nil {
 		return false
 	}
-	k8sApiExtensions = apiextensions.Instance()
-	crdList, err = k8sApiExtensions.ListCRDs()
-	log.InfoD("Desitioan crd list:  %s", crdList)
+	log.InfoD("Source crd list: %s", crdList)
 	for _, crd := range crdList.Items {
 		if crd.Name == "kubevirts.kubevirt.io" {
 			k8sKubevirt := kubevirt.Instance()

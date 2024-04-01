@@ -256,6 +256,11 @@ var _ = Describe("{BasicBackupCreation}", Label(TestCaseLabelsMap[BasicBackupCre
 				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
+				if len(allVirtualMachines) > 0 {
+					err := CreateVMBackup(backupName, allVirtualMachines, SourceClusterName, backupLocationName, backupLocationUID, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", false, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of VM backup and Validation of backup [%s]", backupName))
+					backupNames = append(backupNames, backupName)
+				}
 			}
 		})
 
