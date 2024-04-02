@@ -1397,8 +1397,8 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", Labe
 	})
 
 	It("Scale down px-backup deployment when backups/restores are in progress and validate", func() {
-		var sem = make(chan struct{}, numberOfBackups)
-		var wg sync.WaitGroup
+		//var sem = make(chan struct{}, numberOfBackups)
+		//var wg sync.WaitGroup
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
@@ -1452,23 +1452,28 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", Labe
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range appNamespaces {
 				for i := 0; i < numberOfBackups; i++ {
-					sem <- struct{}{}
-					time.Sleep(5 * time.Second)
+					//sem <- struct{}{}
+					//time.Sleep(5 * time.Second)
 					backupName := fmt.Sprintf("%s-%s-%d-%v", BackupNamePrefix, namespace, i, time.Now().Unix())
+					log.InfoD("The backup name is %v", backupName)
 					backupNames = append(backupNames, backupName)
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 					appContextsToBackupMap[backupName] = appContextsToBackup
-					wg.Add(1)
-					go func(backupName string, namespace string, appContextsToBackup []*scheduler.Context) {
-						defer GinkgoRecover()
-						defer wg.Done()
-						defer func() { <-sem }()
-						_, err := CreateBackupWithoutCheck(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup [%s] of application [%s]", backupName, namespace))
-					}(backupName, namespace, appContextsToBackup)
+					//wg.Add(1)
+					//go func(backupName string, namespace string, appContextsToBackup []*scheduler.Context) {
+					//	defer GinkgoRecover()
+					//	defer wg.Done()
+					//	defer func() { <-sem }()
+
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+
+					//_, err := CreateBackupWithoutCheck(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+					//dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup [%s] of application [%s]", backupName, namespace))
+					//}(backupName, namespace, appContextsToBackup)
 				}
 			}
-			wg.Wait()
+			//wg.Wait()
 			log.InfoD("The list of backups taken are: %v", backupNames)
 		})
 		Step("Scaling px-backup deployment replica count to 0 and back to original replica while backup is in progress", func() {

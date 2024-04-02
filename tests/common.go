@@ -194,7 +194,7 @@ const (
 )
 
 var (
-	clusterProviders       = []string{"k8s"}
+	clusterProviders       = []string{"rke"}
 	GlobalCredentialConfig backup.BackupCloudConfig
 	GlobalGkeSecretString  string
 )
@@ -343,7 +343,7 @@ const (
 
 const (
 	oneMegabytes                          = 1024 * 1024
-	defaultScheduler                      = "k8s"
+	defaultScheduler                      = "rke"
 	defaultNodeDriver                     = "ssh"
 	defaultMonitorDriver                  = "prometheus"
 	defaultStorageDriver                  = "pxd"

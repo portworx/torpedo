@@ -36,7 +36,7 @@ const (
 	pxbRestPort           = 10001
 	defaultPxbServicePort = 10002
 	pxbServiceName        = "px-backup"
-	schedulerDriverName   = "k8s"
+	schedulerDriverName   = "rke"
 	nodeDriverName        = "ssh"
 	volumeDriverName      = "pxd"
 	licFeatureName        = "BackupNodeCount"

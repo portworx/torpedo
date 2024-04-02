@@ -722,9 +722,15 @@ func CreateBackupWithValidation(ctx context1.Context, backupName string, cluster
 
 	log.InfoD("Backup [%s] started at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
 	// Insert data before backup which is expected to be present after restore
-	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
-	if err != nil {
-		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
+	var appHandlers []appDriver.ApplicationDriver
+	var commandBeforeBackup map[appDriver.ApplicationDriver]map[string][]string
+	var err error
+
+	for i := 0; i < 10000; i++ {
+		appHandlers, commandBeforeBackup, err = InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
+		if err != nil {
+			return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
+		}
 	}
 
 	err = CreateBackup(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
