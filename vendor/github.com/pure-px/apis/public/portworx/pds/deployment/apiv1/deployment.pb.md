@@ -23,7 +23,6 @@
     - [ListDeploymentsResponse](#listdeploymentsresponse)
     - [References](#references)
     - [Status](#status)
-    - [Status.ConnectionInfoEntry](#statusconnectioninfoentry)
     - [TLSConfig](#tlsconfig)
     - [UpdateDeploymentRequest](#updatedeploymentrequest)
   
@@ -214,21 +213,9 @@ Status of the Deployment.
 | ----- | ---- | ----------- |
 | health | [ Status.Health](#statushealth) | Health of the Deployment. |
 | phase | [ Status.Phase](#statusphase) | Status of the Deployment. |
-| connection_info | [map Status.ConnectionInfoEntry](#statusconnectioninfoentry) | ConnectionDetails urls, ports, credentials, etc for connecting to the data service. |
+| connection_info | [ google.protobuf.Struct](#googleprotobufstruct) | ConnectionDetails urls, ports, credentials, etc for connecting to the data service. |
 | initialized | [ string](#string) | Initialize used to control startup scripts. |
 | deployment_topology_status | [repeated public.portworx.pds.deploymenttopology.v1.DeploymentTopologyStatus](#publicportworxpdsdeploymenttopologyv1deploymenttopologystatus) | Status of the deployment topology. |
- <!-- end Fields -->
- <!-- end HasFields -->
-
-
-### Status.ConnectionInfoEntry {#statusconnectioninfoentry}
-
-
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| key | [ string](#string) | none |
-| value | [ google.protobuf.Any](#googleprotobufany) | none |
  <!-- end Fields -->
  <!-- end HasFields -->
 

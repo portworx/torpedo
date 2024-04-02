@@ -1383,7 +1383,7 @@ github.com/prometheus/procfs/internal/util
 ## explicit; go 1.13
 github.com/prometheus/statsd_exporter/pkg/mapper
 github.com/prometheus/statsd_exporter/pkg/mapper/fsm
-# github.com/pure-px/apis v0.0.0-20240318054837-ad38145f9144
+# github.com/pure-px/apis v0.0.0-20240326194748-e9f7f27de779
 ## explicit; go 1.21
 github.com/pure-px/apis/public/portworx/common/apiv1
 github.com/pure-px/apis/public/portworx/pds/backup/apiv1

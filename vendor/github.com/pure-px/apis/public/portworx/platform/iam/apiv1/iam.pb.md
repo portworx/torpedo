@@ -160,7 +160,7 @@ GetIAMRequest is the request message to GetIAM API.
 
 
 ### GrantIAMRequest {#grantiamrequest}
-GrantIAMRequest to grant/add a new role binding at tenant, project or account.
+GrantIAMRequest to grant add a new role in the IAM for tenant, project or account.
 
 
 | Field | Type | Description |
@@ -168,7 +168,8 @@ GrantIAMRequest to grant/add a new role binding at tenant, project or account.
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) resource_id.account_id | [ string](#string) | Account UID under which user wants to add role binding. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) resource_id.tenant_id | [ string](#string) | Tenant UID under which user wants to add role binding. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) resource_id.project_id | [ string](#string) | Project UID under which user wants to add role binding. |
-| iam | [ IAM](#iam) | Specifies the IAM role binding that needs to be added or granted for the user. |
+| actor_id | [ string](#string) | actorId is UID of user/serviceAccount for we want to add new role in the IAM |
+| access_policy | [ AccessPolicy](#accesspolicy) | Describes roles that needs to be added |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -241,10 +242,11 @@ RevokeIAMRequest to revoke/delete a role binding at tenant, project or account.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) resource_id.account_id | [ string](#string) | Account UID under which user wants to delete role binding. |
-| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) resource_id.tenant_id | [ string](#string) | Tenant UID under which user wants to delete role binding. |
-| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) resource_id.project_id | [ string](#string) | Project UID under which user wants to delete role binding. |
-| iam | [ IAM](#iam) | Specifies the IAM role binding that needs to be deleted/revoked for the user. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) resource_id.account_id | [ string](#string) | Account UID under which user wants to delete role . |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) resource_id.tenant_id | [ string](#string) | Tenant UID under which user wants to delete role . |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) resource_id.project_id | [ string](#string) | Project UID under which user wants to delete role . |
+| actor_id | [ string](#string) | actorId is UID of user/serviceAccount for we want to revoke role in the IAM |
+| access_policy | [ AccessPolicy](#accesspolicy) | Describes roles that needs to be revoke |
  <!-- end Fields -->
  <!-- end HasFields -->
 

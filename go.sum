@@ -3146,8 +3146,8 @@ github.com/prometheus/tsdb v0.7.1/go.mod h1:qhTCs0VvXwvX/y3TZrWD7rabWM+ijKTux40T
 github.com/prometheus/tsdb v0.8.0/go.mod h1:fSI0j+IUQrDd7+ZtR9WKIGtoYAYAJUKcKhYLG25tN4g=
 github.com/pseudomuto/protoc-gen-doc v1.3.2/go.mod h1:y5+P6n3iGrbKG+9O04V5ld71in3v/bX88wUwgt+U8EA=
 github.com/pseudomuto/protokit v0.2.0/go.mod h1:2PdH30hxVHsup8KpBTOXTBeMVhJZVio3Q8ViKSAXT0Q=
-github.com/pure-px/apis v0.0.0-20240318054837-ad38145f9144 h1:rOFXOo86mFX1imrEvQUervWkGhJquEIUcmhsaNERGoE=
-github.com/pure-px/apis v0.0.0-20240318054837-ad38145f9144/go.mod h1:vuPbG0guw0Nl8/a4Dpb9LSHKMPtf5dGR7SQqnpMjU4o=
+github.com/pure-px/apis v0.0.0-20240326194748-e9f7f27de779 h1:4v0l3HWdp/odrm4yYFpN9FBeaXnJwjYTmvdDA2FAhaQ=
+github.com/pure-px/apis v0.0.0-20240326194748-e9f7f27de779/go.mod h1:vuPbG0guw0Nl8/a4Dpb9LSHKMPtf5dGR7SQqnpMjU4o=
 github.com/pure-px/platform-api-go-client v0.0.0-20240318062355-002fc4aaccf2 h1:CO+5dHXFzb1JYOyEXQ9wRU1/Jp0ItPJzL13aXnx6xow=
 github.com/pure-px/platform-api-go-client v0.0.0-20240318062355-002fc4aaccf2/go.mod h1:1JYlDoZQvC6Q2T9LdXVWHCzBGgR9frA9JKTEz3aSQcQ=
 github.com/quasilyte/go-ruleguard v0.3.1-0.20210203134552-1b5a410e1cc8/go.mod h1:KsAh3x0e7Fkpgs+Q9pNLS5XpFSvYCEVl5gP9Pp1xp30=

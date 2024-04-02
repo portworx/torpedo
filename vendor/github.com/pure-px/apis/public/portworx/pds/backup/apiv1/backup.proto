@@ -103,8 +103,8 @@ message Status {
     // Phase is unspecified.
     PHASE_UNSPECIFIED = 0;
 
-    // Backup is Queued.
-    QUEUED = 1;
+    // Backup is in_progress.
+    IN_PROGRESS = 1;
 
     // Backup is completed.
     COMPLETED= 2;

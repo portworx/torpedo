@@ -11,7 +11,6 @@
     - [ConnectionDetails](#connectiondetails)
     - [ConnectionDetails.PortsEntry](#connectiondetailsportsentry)
     - [ConnectionInfo](#connectioninfo)
-    - [ConnectionInfo.ClusterDetailsEntry](#connectioninfoclusterdetailsentry)
     - [DeploymentTopology](#deploymenttopology)
     - [DeploymentTopologyStatus](#deploymenttopologystatus)
     - [PodInfo](#podinfo)
@@ -63,19 +62,7 @@ Connection Information for the Deployment Topology.
 | pods | [repeated PodInfo](#podinfo) | Ready pods. |
 | not_ready_pods | [repeated PodInfo](#podinfo) | Pods that are not ready. |
 | connection_details | [ ConnectionDetails](#connectiondetails) | ConnectionDetails of data service. |
-| cluster_details | [map ConnectionInfo.ClusterDetailsEntry](#connectioninfoclusterdetailsentry) | Stores details about the cluster. |
- <!-- end Fields -->
- <!-- end HasFields -->
-
-
-### ConnectionInfo.ClusterDetailsEntry {#connectioninfoclusterdetailsentry}
-
-
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| key | [ string](#string) | none |
-| value | [ google.protobuf.Any](#googleprotobufany) | none |
+| cluster_details | [ google.protobuf.Struct](#googleprotobufstruct) | Stores details about the cluster. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -147,7 +134,7 @@ Template.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | key | [ string](#string) | none |
-| value | [ google.protobuf.Any](#googleprotobufany) | none |
+| value | [ string](#string) | none |
  <!-- end Fields -->
  <!-- end HasFields -->
  <!-- end messages -->

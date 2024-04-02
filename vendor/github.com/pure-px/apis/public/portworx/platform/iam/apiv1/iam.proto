@@ -44,7 +44,7 @@ service IAMService {
   rpc GrantIAM(GrantIAMRequest)
     returns(GrantIAMResponse) {
       option(google.api.http) = {
-        post: "/core/v1/iam/{iam.config.actor_id}:grant"
+        post: "/core/v1/iam/{actor_id}:grant"
         body: "*"
       };
     }
@@ -53,7 +53,7 @@ service IAMService {
    rpc RevokeIAM(RevokeIAMRequest)
    returns(RevokeIAMResponse) {
      option(google.api.http) = {
-       post: "/core/v1/iam/{iam.config.actor_id}:revoke"
+       post: "/core/v1/iam/{actor_id}:revoke"
        body: "*"
      };
    }
@@ -108,10 +108,10 @@ message CreateIAMRequest {
   IAM iam = 1;
 }
 
-// GrantIAMRequest to grant/add a new role binding at tenant, project or account.
+// GrantIAMRequest to grant add a new role in the IAM for tenant, project or account.
 message GrantIAMRequest {
 
-  // Specifies the resource ID under which a new role binding needs to be added.
+  // Specifies the resource ID under which a new role needs to be added.
   // Choose one of the following identifiers: account_id, tenant_id, or project_id.
   oneof resource_id {
     // Account UID under which user wants to add role binding.
@@ -124,8 +124,12 @@ message GrantIAMRequest {
     string project_id = 103 ;
   }
 
-  // Specifies the IAM role binding that needs to be added or granted for the user.
-  IAM iam = 1;
+  // actorId is UID of user/serviceAccount for we want to add new role in the IAM
+  string actor_id = 2;
+
+  // Describes roles that needs to be added
+  AccessPolicy access_policy = 3;
+
 }
 
 // GrantIAMResponse is response for GrantIAM API.
@@ -141,18 +145,21 @@ message RevokeIAMRequest {
   // Specifies the resource ID from which role binding needs to be deleted/revoke.
   // Choose one of the following identifiers: account_id, tenant_id, or project_id.
   oneof resource_id {
-    // Account UID under which user wants to delete role binding.
+    // Account UID under which user wants to delete role .
     string account_id = 101 ;
 
-    // Tenant UID  under which user wants to delete role binding.
+    // Tenant UID  under which user wants to delete role .
     string tenant_id = 102 ;
 
-    // Project UID under which user wants to delete role binding.
+    // Project UID under which user wants to delete role .
     string project_id = 103 ;
   }
 
-  // Specifies the IAM role binding that needs to be deleted/revoked for the user.
-  IAM iam = 1;
+  // actorId is UID of user/serviceAccount for we want to revoke role in the IAM
+  string actor_id = 2;
+
+  // Describes roles that needs to be revoke
+  AccessPolicy access_policy = 3;
 }
 
 // GrantIAMResponse is response for GrantIAM API.

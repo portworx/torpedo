@@ -367,7 +367,7 @@ func RegisterCloudCredentialServiceHandlerServer(ctx context.Context, mux *runti
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/GetCloudCredential", runtime.WithHTTPPathPattern("/core/v1/cloudcredentials/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/GetCloudCredential", runtime.WithHTTPPathPattern("/core/v1/cloudCredentials/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -556,7 +556,7 @@ func RegisterCloudCredentialServiceHandlerClient(ctx context.Context, mux *runti
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/GetCloudCredential", runtime.WithHTTPPathPattern("/core/v1/cloudcredentials/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/GetCloudCredential", runtime.WithHTTPPathPattern("/core/v1/cloudCredentials/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -686,7 +686,7 @@ func RegisterCloudCredentialServiceHandlerClient(ctx context.Context, mux *runti
 }
 
 var (
-	pattern_CloudCredentialService_GetCloudCredential_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "cloudcredentials", "id"}, ""))
+	pattern_CloudCredentialService_GetCloudCredential_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "cloudCredentials", "id"}, ""))
 
 	pattern_CloudCredentialService_CreateCloudCredential_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"core", "v1", "tenants", "tenant_id", "cloudCredentials"}, ""))
 

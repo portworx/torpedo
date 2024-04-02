@@ -282,7 +282,7 @@
                 ]
             }
         },
-        "/core/v1/iam/{iam.config.actorId}:grant": {
+        "/core/v1/iam/{actorId}:grant": {
             "post": {
                 "summary": "GrantIAM API creates new IAM role-binding at tenant, project and account level.",
                 "operationId": "IAMService_GrantIAM",
@@ -310,8 +310,8 @@
                 },
                 "parameters": [
                     {
-                        "name": "iam.config.actorId",
-                        "description": "Actor ID for the associated actor.",
+                        "name": "actorId",
+                        "description": "actorId is UID of user/serviceAccount for we want to add new role in the IAM",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -334,7 +334,7 @@
                 ]
             }
         },
-        "/core/v1/iam/{iam.config.actorId}:revoke": {
+        "/core/v1/iam/{actorId}:revoke": {
             "post": {
                 "summary": "RevokeIAM API delete IAM role-binding at tenant, project and account level.",
                 "operationId": "IAMService_RevokeIAM",
@@ -362,8 +362,8 @@
                 },
                 "parameters": [
                     {
-                        "name": "iam.config.actorId",
-                        "description": "Actor ID for the associated actor.",
+                        "name": "actorId",
+                        "description": "actorId is UID of user/serviceAccount for we want to revoke role in the IAM",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -519,83 +519,29 @@
                         "type": "string",
                         "description": "Project UID under which user wants to add role binding."
                     },
-                    "iam": {
-                        "type": "object",
-                        "properties": {
-                            "meta": {
-                                "$ref": "#/components/schemas/v1Meta"
-                            },
-                            "config": {
-                                "type": "object",
-                                "properties": {
-                                    "actorType": {
-                                        "type": "string",
-                                        "description": "Actor Type gives the actor type for the concerned actor_id.",
-                                        "readOnly": true
-                                    },
-                                    "actorEmail": {
-                                        "type": "string",
-                                        "description": "Actor email for actorType USER.",
-                                        "readOnly": true
-                                    },
-                                    "accessPolicy": {
-                                        "$ref": "#/components/schemas/v1AccessPolicy"
-                                    }
-                                },
-                                "description": "Desired configuration of the IAM.",
-                                "title": "Desired configuration of the IAM."
-                            }
-                        },
-                        "description": "Specifies the IAM role binding that needs to be added or granted for the user.",
-                        "title": "Specifies the IAM role binding that needs to be added or granted for the user."
+                    "accessPolicy": {
+                        "$ref": "#/components/schemas/v1AccessPolicy"
                     }
                 },
-                "description": "GrantIAMRequest to grant/add a new role binding at tenant, project or account."
+                "description": "GrantIAMRequest to grant add a new role in the IAM for tenant, project or account."
             },
             "IAMServiceRevokeIAMBody": {
                 "type": "object",
                 "properties": {
                     "accountId": {
                         "type": "string",
-                        "description": "Account UID under which user wants to delete role binding."
+                        "description": "Account UID under which user wants to delete role ."
                     },
                     "tenantId": {
                         "type": "string",
-                        "description": "Tenant UID  under which user wants to delete role binding."
+                        "description": "Tenant UID  under which user wants to delete role ."
                     },
                     "projectId": {
                         "type": "string",
-                        "description": "Project UID under which user wants to delete role binding."
+                        "description": "Project UID under which user wants to delete role ."
                     },
-                    "iam": {
-                        "type": "object",
-                        "properties": {
-                            "meta": {
-                                "$ref": "#/components/schemas/v1Meta"
-                            },
-                            "config": {
-                                "type": "object",
-                                "properties": {
-                                    "actorType": {
-                                        "type": "string",
-                                        "description": "Actor Type gives the actor type for the concerned actor_id.",
-                                        "readOnly": true
-                                    },
-                                    "actorEmail": {
-                                        "type": "string",
-                                        "description": "Actor email for actorType USER.",
-                                        "readOnly": true
-                                    },
-                                    "accessPolicy": {
-                                        "$ref": "#/components/schemas/v1AccessPolicy"
-                                    }
-                                },
-                                "description": "Desired configuration of the IAM.",
-                                "title": "Desired configuration of the IAM."
-                            }
-                        },
-                        "description": "Specifies the IAM role binding that needs to be deleted/revoked for the user.",
-                        "title": "Specifies the IAM role binding that needs to be deleted/revoked for the user."
+                    "accessPolicy": {
+                        "$ref": "#/components/schemas/v1AccessPolicy"
                     }
                 },
                 "description": "RevokeIAMRequest to revoke/delete a role binding at tenant, project or account."
