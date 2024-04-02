@@ -18,6 +18,7 @@ syntax = "proto3";
 package public.portworx.platform.account.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
 import "google/api/field_behavior.proto";
 import "public/portworx/common/apiv1/meta.proto";
 import "public/portworx/common/apiv1/pagination.proto";
@@ -37,11 +38,25 @@ service AccountService {
       get: "/core/v1/accounts/{account_id}"
     };
   }
+
+  // DeleteAccount API deletes account for given id.
+  rpc DeleteAccount(DeleteAccountRequest)
+      returns (google.protobuf.Empty) {
+    option(google.api.http) = {
+      delete: "/core/v1/accounts/{account_id}"
+    };
+  }
 }
 
 // GetAccountRequest is the request message to GetAccount API.
 message GetAccountRequest {
   // account id for which account details need to be fetched.
+  string account_id = 1;
+}
+
+// DeleteAccountRequest is the request message to DeleteAccount API.
+message DeleteAccountRequest {
+  // account id which is going to be deleted.
   string account_id = 1;
 }
 
@@ -62,7 +77,7 @@ message Account {
 message Config {
 
   // email of the first account user.
-  string user_email = 1;
+  string user_email = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
 
  // Account DNS name.
   string dns_name = 2 [(google.api.field_behavior) = OPTIONAL];

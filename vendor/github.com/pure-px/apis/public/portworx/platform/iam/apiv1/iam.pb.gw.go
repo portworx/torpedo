@@ -73,14 +73,14 @@ func request_IAMService_GrantIAM_0(ctx context.Context, marshaler runtime.Marsha
 		_   = err
 	)
 
-	val, ok = pathParams["iam.config.actor_id"]
+	val, ok = pathParams["actor_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "iam.config.actor_id")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "actor_id")
 	}
 
-	err = runtime.PopulateFieldFromPath(&protoReq, "iam.config.actor_id", val)
+	protoReq.ActorId, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "iam.config.actor_id", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "actor_id", err)
 	}
 
 	msg, err := client.GrantIAM(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -103,14 +103,14 @@ func local_request_IAMService_GrantIAM_0(ctx context.Context, marshaler runtime.
 		_   = err
 	)
 
-	val, ok = pathParams["iam.config.actor_id"]
+	val, ok = pathParams["actor_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "iam.config.actor_id")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "actor_id")
 	}
 
-	err = runtime.PopulateFieldFromPath(&protoReq, "iam.config.actor_id", val)
+	protoReq.ActorId, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "iam.config.actor_id", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "actor_id", err)
 	}
 
 	msg, err := server.GrantIAM(ctx, &protoReq)
@@ -133,14 +133,14 @@ func request_IAMService_RevokeIAM_0(ctx context.Context, marshaler runtime.Marsh
 		_   = err
 	)
 
-	val, ok = pathParams["iam.config.actor_id"]
+	val, ok = pathParams["actor_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "iam.config.actor_id")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "actor_id")
 	}
 
-	err = runtime.PopulateFieldFromPath(&protoReq, "iam.config.actor_id", val)
+	protoReq.ActorId, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "iam.config.actor_id", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "actor_id", err)
 	}
 
 	msg, err := client.RevokeIAM(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -163,14 +163,14 @@ func local_request_IAMService_RevokeIAM_0(ctx context.Context, marshaler runtime
 		_   = err
 	)
 
-	val, ok = pathParams["iam.config.actor_id"]
+	val, ok = pathParams["actor_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "iam.config.actor_id")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "actor_id")
 	}
 
-	err = runtime.PopulateFieldFromPath(&protoReq, "iam.config.actor_id", val)
+	protoReq.ActorId, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "iam.config.actor_id", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "actor_id", err)
 	}
 
 	msg, err := server.RevokeIAM(ctx, &protoReq)
@@ -435,7 +435,7 @@ func RegisterIAMServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.iam.v1.IAMService/GrantIAM", runtime.WithHTTPPathPattern("/core/v1/iam/{iam.config.actor_id}:grant"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.iam.v1.IAMService/GrantIAM", runtime.WithHTTPPathPattern("/core/v1/iam/{actor_id}:grant"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -460,7 +460,7 @@ func RegisterIAMServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.iam.v1.IAMService/RevokeIAM", runtime.WithHTTPPathPattern("/core/v1/iam/{iam.config.actor_id}:revoke"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.iam.v1.IAMService/RevokeIAM", runtime.WithHTTPPathPattern("/core/v1/iam/{actor_id}:revoke"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -671,7 +671,7 @@ func RegisterIAMServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.iam.v1.IAMService/GrantIAM", runtime.WithHTTPPathPattern("/core/v1/iam/{iam.config.actor_id}:grant"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.iam.v1.IAMService/GrantIAM", runtime.WithHTTPPathPattern("/core/v1/iam/{actor_id}:grant"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -693,7 +693,7 @@ func RegisterIAMServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.iam.v1.IAMService/RevokeIAM", runtime.WithHTTPPathPattern("/core/v1/iam/{iam.config.actor_id}:revoke"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.iam.v1.IAMService/RevokeIAM", runtime.WithHTTPPathPattern("/core/v1/iam/{actor_id}:revoke"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -825,9 +825,9 @@ func RegisterIAMServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 var (
 	pattern_IAMService_CreateIAM_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"core", "v1", "iam"}, ""))
 
-	pattern_IAMService_GrantIAM_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "iam", "iam.config.actor_id"}, "grant"))
+	pattern_IAMService_GrantIAM_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "iam", "actor_id"}, "grant"))
 
-	pattern_IAMService_RevokeIAM_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "iam", "iam.config.actor_id"}, "revoke"))
+	pattern_IAMService_RevokeIAM_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "iam", "actor_id"}, "revoke"))
 
 	pattern_IAMService_GetIAM_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "iam", "actor_id"}, ""))
 

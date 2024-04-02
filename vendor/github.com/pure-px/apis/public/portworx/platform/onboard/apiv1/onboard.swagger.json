@@ -272,7 +272,8 @@
                 "properties": {
                     "userEmail": {
                         "type": "string",
-                        "description": "email of the first account user."
+                        "description": "email of the first account user.",
+                        "readOnly": true
                     },
                     "dnsName": {
                         "type": "string",

@@ -15,6 +15,7 @@
     - [Account](#account)
     - [AwsSubscriptionInfo](#awssubscriptioninfo)
     - [Config](#config)
+    - [DeleteAccountRequest](#deleteaccountrequest)
     - [GetAccountRequest](#getaccountrequest)
     - [Phase](#phase)
     - [Status](#status)
@@ -43,6 +44,12 @@ Account service provides APIs to interact with the Account entity.
     [Account](#account)
 
 GetAccount API returns the info about account for given account id.
+### DeleteAccount {#methodpublicportworxplatformaccountv1accountservicedeleteaccount}
+
+> **rpc** DeleteAccount([DeleteAccountRequest](#deleteaccountrequest))
+    [.google.protobuf.Empty](#googleprotobufempty)
+
+DeleteAccount API deletes account for given id.
  <!-- end methods -->
  <!-- end services -->
 
@@ -90,6 +97,17 @@ Desired configuration of the account.
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) pxe_subscription.pxe_zuora_subscription | [ ZuoraSubscriptionInfo](#zuorasubscriptioninfo) | Zuora subscription info. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) baas_subscription.baas_aws_subscription | [ AwsSubscriptionInfo](#awssubscriptioninfo) | AWS registration token. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) baas_subscription.baas_zuora_subscription | [ ZuoraSubscriptionInfo](#zuorasubscriptioninfo) | Zuora subscription info. |
+ <!-- end Fields -->
+ <!-- end HasFields -->
+
+
+### DeleteAccountRequest {#deleteaccountrequest}
+DeleteAccountRequest is the request message to DeleteAccount API.
+
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| account_id | [ string](#string) | account id which is going to be deleted. |
  <!-- end Fields -->
  <!-- end HasFields -->
 

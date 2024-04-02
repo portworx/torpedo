@@ -21,7 +21,7 @@ package public.portworx.pds.deployment.v1;
 import "google/api/annotations.proto";
 import "google/api/field_behavior.proto";
 import "google/protobuf/empty.proto";
-import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
 import "public/portworx/common/apiv1/meta.proto";
 import "public/portworx/pds/deploymenttopology/apiv1/deploymenttopology.proto";
 import "public/portworx/common/apiv1/pagination.proto";
@@ -192,7 +192,7 @@ message Status {
   Phase phase = 2;
 
   // ConnectionDetails urls, ports, credentials, etc for connecting to the data service.
-  map<string, google.protobuf.Any> connection_info = 3;
+  google.protobuf.Struct connection_info = 3;
 
   // Initialize used to control startup scripts.
   string  initialized = 4;

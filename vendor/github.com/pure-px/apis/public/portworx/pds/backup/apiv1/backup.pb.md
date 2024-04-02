@@ -168,7 +168,7 @@ Enum for Phase of the Deployment.
 | Name | Number | Description |
 | ---- | ------ | ----------- |
 | PHASE_UNSPECIFIED | 0 | Phase is unspecified. |
-| QUEUED | 1 | Backup is Queued. |
+| IN_PROGRESS | 1 | Backup is in_progress. |
 | COMPLETED | 2 | Backup is completed. |
 | FAILED | 3 | Backup is failed. |
 

@@ -17,7 +17,7 @@ syntax = "proto3";
 package public.portworx.pds.deploymenttopology.v1;
 
 import "google/api/field_behavior.proto";
-import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
 
 option go_package = "github.com/pure-px/apis/public/portworx/pds/deploymenttopology/apiv1;deploymenttopology";
 option java_multiple_files = true;
@@ -64,7 +64,7 @@ message Template {
   string resource_version = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Values required for template.
-  map<string, google.protobuf.Any> values = 3;
+  map<string, string> values = 3;
 }
 
 // Status of the deployment topology. It is consumed in Deployment.
@@ -136,7 +136,7 @@ message ConnectionInfo {
   ConnectionDetails connection_details = 3;
 
   // Stores details about the cluster.
-  map<string, google.protobuf.Any> cluster_details = 4;
+  google.protobuf.Struct cluster_details = 4;
 }
 
 // PodInfo contains information about a pod.
