@@ -694,14 +694,14 @@ func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
 func IsPoolAddDiskSupported() (bool, error) {
 	DMthin, err := IsDMthin()
 	if err != nil {
-		log.Infof("Failed to determine if DMTHIN is enabled")
+		log.Info("Failed to determine if DMTHIN is enabled")
 		return false, err
 	}
 	if !DMthin {
-		log.InfoD("DMTHIN is not enabled on this setup, Add Disk to Pool is  supported")
+		log.Info("DMTHIN is not enabled on this setup, Add Disk to Pool is  supported")
 		return true, nil
 	} else {
-		log.Infof("DMTHIN is enabled")
+		log.Info("DMTHIN is enabled")
 		dmthinSupportedPxVersion, err := semver.NewVersion("3.1.0")
 		if err != nil {
 			return false, err
@@ -727,7 +727,7 @@ func IsPoolAddDiskSupported() (bool, error) {
 			err = fmt.Errorf("drive add to existing pool not supported for px-storev2 or px-cache pools ")
 			return false, err
 		}
-		log.Infof("drive add to existing pool supported for px-storev2 or px-cache pools")
+		log.Info("drive add to existing pool supported for px-storev2 or px-cache pools")
 		return true, nil
 	}
 	return true, nil
