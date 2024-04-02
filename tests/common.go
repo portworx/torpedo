@@ -11107,7 +11107,7 @@ func GetVolumesOnNode(nodeId string) ([]string, error) {
 	return volumes, nil
 }
 
-// IsKubevirtInstalled reruns true if Kubevirt is installed else returns false
+// IsKubevirtInstalled returns true if Kubevirt is installed else returns false
 func IsKubevirtInstalled() bool {
 	k8sApiExtensions := apiextensions.Instance()
 	crdList, err := k8sApiExtensions.ListCRDs()
@@ -11119,6 +11119,7 @@ func IsKubevirtInstalled() bool {
 			k8sKubevirt := kubevirt.Instance()
 			version, err := k8sKubevirt.GetVersion()
 			if err == nil && version != "" {
+				log.InfoD("Version %s", version)
 				return true
 			}
 		}
