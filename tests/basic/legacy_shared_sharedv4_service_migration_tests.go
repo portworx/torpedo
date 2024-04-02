@@ -1,9 +1,23 @@
 package tests
 
 import (
-	"errors"
 	"fmt"
+	"time"
+	"math/rand"
 
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
+
+	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/volume"
+	"k8s.io/apimachinery/pkg/types"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	. "github.com/portworx/torpedo/tests"
 )
 
 const (
@@ -16,19 +30,18 @@ const (
 var _ = Describe("{LegacySharedVolumeCreate}", func() {
 	var testrailID = 296369
 	// https://portworx.testrail.net/index.php?/cases/view/296369
-	var pxNode node.Node
-	var contexts []*scheduler.Context
 
-	volumeName := "legacy-shared=volume"
+	StartTorpedoTest("LegacySharedVolumeAppCreateVolume", "Legacy Shared to Sharedv4 Service CreateVolume", nil, testrailID)
 
+	volumeName := "legacy-shared-volume"
 	stepLog := "Create legacy shared volume and check it got created as sharedv4 service volume"
-	It (stepLog, func() {
+	It(stepLog, func() {
 		pxNodes, err := GetStorageNodes()
 		log.FailOnError(err, "Unable to get the storage nodes")
 		pxNode := GetRandomNode(pxNodes)
 		log.Infof("Creating legacy shared volume: %s", volumeName)
-		pxctlCmtFull := fmt.Sprintf("v c --shared=true %s", volumeName)
-		output, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
+		pxctlCmdFull := fmt.Sprintf("v c --shared=true %s", volumeName)
+		output, err := Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 		log.FailOnError(err, fmt.Sprintf("error creating legacy shared volume %s", volumeName))
 		log.Infof(output)
 		vol, err := Inst().V.InspectVolume(volumeName)
@@ -39,6 +52,7 @@ var _ = Describe("{LegacySharedVolumeCreate}", func() {
 		output, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 		log.FailOnError(err, fmt.Sprintf("error deleting legacy shared volume %s", volumeName))
 	})
+	EndTorpedoTest()
 })
 
 func setCreateLegacySharedAsSharedv4Service(on bool) {
@@ -52,7 +66,7 @@ func setCreateLegacySharedAsSharedv4Service(on bool) {
 	} else {
 		pxctlCmdFull = fmt.Sprintf("cluster update option --create-legacy-shared-as-sharedv4-service=false")
 	}
-	_, err = Inst().V.GetPxctlCmdOoutput(pxNode, pxctlCmdFull)
+	_, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 	log.FailOnError(err, fmt.Sprintf("error updating cluster option"))
 	// Sleep so that the config variable can be updated on all nodes.
 	time.Sleep(20 * time.Second)
@@ -66,48 +80,17 @@ func setMigrateLegacySharedToSharedv4Service(on bool) {
 	var pxctlCmdFull string
 	if on {
 		pxctlCmdFull = fmt.Sprintf("cluster update option --create-legacy-shared-as-sharedv4-service=true")
-	} else  {
+	} else {
 		pxctlCmdFull = fmt.Sprintf("cluster update option --create-legacy-shared-as-sharedv4-service=false")
 	}
-	_, err = Inst().V.GetPxctlCmdOoutput(pxNode, pxctlCmdFull)
+	_, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 	log.FailOnError(err, fmt.Sprintf("error updating cluster option"))
 	// Sleep so that the config variable can be updated on all nodes.
 	time.Sleep(20 * time.Second)
 
 }
 
-var _ = Describe("{LegacySharedVolumeMigrate}", func() {
-	var testrailID = 296370
-	var pxNode node.Node
-	volumeName := "legacy-shared-volume-idle"
-	stepLog := "Create legacy shared volume and migrate it to shared v4 service volume"
-	It (stepLog, func() {
-		pxctlCmdFull = fmt.Sprintf("v c --shared=true %s", volumeName)
-		output, err := Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
-		log.FailOnError(err, fmt.Sprintf("error creating legacy shared volume %s", volumeName))
-		log.Infof(output)
-		vol, err := Inst().V.InspectVolume(volumeName)
-		log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume {%v}", volumeName))
-		Expect(vol.Spec.Shared).To(BeTrue(), "non-shared volume created unexpectedly")
-		setMigrateLegacySharedToSharedv4Service(true)
-		for i := 0; i < 6; i++ {
-			vol, err := Inst().V.InspectVolume(volumeName)
-			log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume {%v}", volumeName))
-			if vol.Spec.Shared == "false" && vol.Spec.Sharedv4 == "true" {
-				migrated = true
-				break
-			}
-			time.Sleep(1 * time.Minute)
-		}
-		if !migrated {
-			log.FailOnError(err, fmt.Sprintf("Migration failed on volume {%v}", volumeName))
-		}
-		pxctlCmdFull = fmt.Sprintf("v d %s", volumeName)
-		Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
-	})
-})
-
-getLegacySharedVolumeCount() int {
+func getLegacySharedVolumeCount(contexts []*scheduler.Context) int {
 	count := 0
 	for _, ctx := range contexts {
 		vols, err := Inst().S.GetVolumes(ctx)
@@ -125,79 +108,436 @@ getLegacySharedVolumeCount() int {
 
 func getLegacySharedTestAppVol(ctx *scheduler.Context) (*volume.Volume, *api.Volume, *node.Node) {
 	vols, err := Inst().S.GetVolumes(ctx)
-	Expect(err).NotToHaveOccured()
+	Expect(err).NotTo(HaveOccurred())
 	// Assert len > 0.Expect(lenvols)).To(
 	vol := vols[0]
 	apiVol, err := Inst().V.InspectVolume(vol.ID)
 	Expect(err).NotTo(HaveOccurred())
-
 	attachedNode, err := Inst().V.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
-	Expect(err).NotTo(HaveOccured())
-	log.Infof("volume %v {%v} is attached to node %v", vol.ID, apivol.Id, attachedNode.Name)
+	Expect(err).NotTo(HaveOccurred())
+	log.Infof("volume %v {%v} is attached to node %v", vol.ID, apiVol.Id, attachedNode.Name)
 	return vol, apiVol, attachedNode
 }
 
-func returnMapOfPodsUsingApiSharedVolumes(map[core.Pod]bool sharedVolPods, ctx *scheduler.Context) {
+func returnMapOfPodsUsingApiSharedVolumes(sharedVolPods map[types.UID]bool, sharedVols map[string]bool, ctx *scheduler.Context) {
 	vols, err := Inst().S.GetVolumes(ctx)
-	Expect(err).NotToHaveOccured()
+	Expect(err).NotTo(HaveOccurred())
 	for _, vol := range vols {
 		apiVol, err := Inst().V.InspectVolume(vol.ID)
-		Expect(err).NotToHaveOccured()
+		Expect(err).NotTo(HaveOccurred())
 		if apiVol.Spec.Shared {
-			pods, err := core.Instance()GetPodsUsingPV(vol.ID)
-			Expect(err).NotToHaveOccured()
+			sharedVols[vol.ID] = true
+			pods, err := core.Instance().GetPodsUsingPV(vol.ID)
+			Expect(err).NotTo(HaveOccurred())
 			for _, pod := range pods {
-				sharedVolPods[pod.UUID] = true
+				sharedVolPods[pod.UID] = true
 			}
 		}
 	}
 	return
 }
 
-func checkMapOfPods(map[core.Pod]bool sharedVolPods, ctx *scheduler.Context) error {
+func checkVolsConvertedtoSharedv4Service(sharedVols map[string]bool) error {
+	for v := range sharedVols {
+		apiVol, err := Inst().V.InspectVolume(v)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(apiVol.Spec.Shared).To(BeFalse(), "legacy shared volume exists post migration")
+		Expect(apiVol.Spec.Sharedv4).To(BeTrue(), "legacy shared volume not migrated to sharedv4 service")
+	}
+	return nil
+}
+
+func checkMapOfPods(sharedVolPods map[types.UID]bool, ctx *scheduler.Context) error {
 	vols, err := Inst().S.GetVolumes(ctx)
-	Expect(err).NotToHaveOccured()
+	Expect(err).NotTo(HaveOccurred())
 	for _, vol := range vols {
 		apiVol, err := Inst().V.InspectVolume(vol.ID)
-		Expect(err).NotToHaveOccured()
-		pods, err := core.Instance()GetPodsUsingPV(vol.ID)
-		Expect(err).NotToHaveOccured()
-		for _, pod := range pods {
-			_, ok: sharedVolPods[pod.UUID]
-			if ok {
-				return fmt.Errorf("A pod using shared volume prior to migration remains after migration [%v]", pod.Name)
+		Expect(err).NotTo(HaveOccurred())
+		if apiVol.Spec.Shared {
+			pods, err := core.Instance().GetPodsUsingPV(vol.ID)
+			Expect(err).NotTo(HaveOccurred())
+			for _, pod := range pods {
+				_, ok := sharedVolPods[pod.UID]
+				if ok {
+					return fmt.Errorf("A pod using shared volume prior to migration remains after migration [%v]", pod.Name)
+				}
 			}
 		}
 	}
 	return nil
 }
 
+func waitAllSharedVolumesToGetMigrated(contexts []*scheduler.Context, maxWaitTime int) {
+	i := 0
+	for i < maxWaitTime {
+		count := getLegacySharedVolumeCount(contexts)
+		if count != 0 {
+			time.Sleep(time.Minute)
+			i++
+			log.Infof("There are [%d] Legacy Shared Volumes. Waiting for them to be migrated", count)
+		}
+	}
+}
+
+// Create Legacy Shared Volumes.
+// Turn on Migration, no Apps required, volumes should get converted to sharedv4 service volume.
+
+var _ = Describe("{LegacySharedVolumeMigrate_CreateIdle}", func() {
+	var testrailID = 296370
+	volumeName := "legacy-shared-volume-idle"
+	StartTorpedoTest("LegacySharedVolumeIdleVolume", "Legacy Shared to Sharedv4 Service Idle Volume", nil, testrailID)
+	stepLog := "Create legacy shared volume and check it is created as shared volume. Then enable migration"
+	It(stepLog, func() {
+		setCreateLegacySharedAsSharedv4Service(false)
+		setMigrateLegacySharedToSharedv4Service(false)
+
+		pxctlCmdFull := fmt.Sprintf("v c --shared=true %s", volumeName)
+		pxNodes, err := GetStorageNodes()
+		log.FailOnError(err, "Unable to get the storage nodes")
+		pxNode := GetRandomNode(pxNodes)
+		log.Infof("Creating legacy shared volume: %s", volumeName)
+		pxctlCmdFull = fmt.Sprintf("v c --shared=true %s", volumeName)
+		output, err := Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
+		log.FailOnError(err, fmt.Sprintf("error creating legacy shared volume %s", volumeName))
+		log.Infof(output)
+
+		vol, err := Inst().V.InspectVolume(volumeName)
+		log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume {%v}", volumeName))
+		Expect(vol.Spec.Shared).To(BeTrue(), "non-shared volume created unexpectedly")
+		setMigrateLegacySharedToSharedv4Service(true)
+		migrated := false
+		for i := 0; i < 6; i++ {
+			vol, err := Inst().V.InspectVolume(volumeName)
+			log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume {%v}", volumeName))
+			if !vol.Spec.Shared  && vol.Spec.Sharedv4 {
+				migrated = true
+				break
+			}
+			time.Sleep(1 * time.Minute)
+		}
+		Expect(migrated).To(BeTrue(), "migration failed on volume [%v]", volumeName)
+		pxctlCmdFull = fmt.Sprintf("v d %s", volumeName)
+		Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
+	})
+	EndTorpedoTest()
+})
+
+// Basic migration Test case:
+// Create apps, start migration.
+// apps should restart, shared volume should be
 var _ = Describe("{LegacySharedVolumeAppMigrateBasic}", func() {
 	JustBeforeEach(func() {
-		runID = testrailuttils.AddRunsToMilestone(testraildID)
+		testrailID = 296374
+		namespacePrefix := "lstsv4mbasic"
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		StartTorpedoTest("LegacySharedVolumeAppMigrateBasic", "Legacy Shared to Sharedv4 Service Functional Test", nil, testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
-		StartTorpedoTest("LegacySharedVolumeAppMigrateBasic", "Legacy Shared to Sharedv4 Service Functional Test", nil testrailID)
+		setMigrateLegacySharedToSharedv4Service(false)
 		contexts = make([]*scheduler.Context, 0)
-		var err error
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-$d", namespacePrefix, i))...)m
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
 		}
 		// TODO: Skip non legacy shared tests
 		ValidateApplications(contexts)
 	})
 
-var _ = Describe("{LegacySharedVolumeAppMigrateBasic}", func() {
+	It("has to verify migration is successful and pods are restarted", func() {
+		// podMap is a map of the pods using shared volumes.
+		// volMap is the list of shared volumes.
+
+		podMap := make(map[types.UID]bool)
+		volMap := make(map[string]bool)
+		for _, ctx := range contexts {
+			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
+		}
+		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
+		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
+		setMigrateLegacySharedToSharedv4Service(true)
+		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
+		countPostTimeout := getLegacySharedVolumeCount(contexts)
+		Expect(countPostTimeout).To(Equal(0))
+		checkVolsConvertedtoSharedv4Service(volMap)
+		for _, ctx := range contexts {
+			checkMapOfPods(podMap, ctx)
+		}
+		ValidateApplications(contexts)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		DestroyApps(contexts, nil)
+	})
+})
+
+var _ = Describe("{LegacySharedToSharedv4ServiceMigrationBasicMany", func() {
 	JustBeforeEach(func() {
-		runID = testrailuttils.AddRunsToMilestone(testraildID)
+		testrailID = 296728
+		namespacePrefix := "lstsv4mbasic2"
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
-		StartTorpedoTest("LegacySharedVolumeAppMigrateBasic", "Legacy Shared to Sharedv4 Service Functional Test", nil testrailID)
+		setMigrateLegacySharedToSharedv4Service(false)
+		StartTorpedoTest("LegacySharedVolumeAppMigrateMany", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
 		contexts = make([]*scheduler.Context, 0)
-		var err error
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-$d", namespacePrefix, i))...)m
+		numberNameSpaces := Inst().GlobalScaleFactor
+		if numberNameSpaces < 40 {
+			numberNameSpaces = 40
+		}
+		for i := 0; i < numberNameSpaces; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
 		}
 		// TODO: Skip non legacy shared tests
 		ValidateApplications(contexts)
 	})
 
+	stepLog := "Start Migration and wait till all volumes have migrated"
+	It(stepLog, func() {
+		podMap := make(map[types.UID]bool)
+		volMap := make(map[string]bool)
+		for _, ctx := range contexts {
+			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
+		}
+		timeForMigration := ((len(volMap) + 30) / 30) * 10
+		setMigrateLegacySharedToSharedv4Service(true)
+		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
+		countPostTimeout := getLegacySharedVolumeCount(contexts)
+		Expect(countPostTimeout).To(Equal(0))
+		checkVolsConvertedtoSharedv4Service(volMap)
+		for _, ctx := range contexts {
+			checkMapOfPods(podMap, ctx)
+		}
+		ValidateApplications(contexts)
+	})
+})
 
+var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart", func() {
+	JustBeforeEach(func() {
+		testrailID = 296736
+		namespacePrefix := "lstsv4m_restart"
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		setCreateLegacySharedAsSharedv4Service(false)
+		setMigrateLegacySharedToSharedv4Service(false)
+		StartTorpedoTest("LegacySharedVolumeAppMigrationRestart", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
+		contexts = make([]*scheduler.Context, 0)
+		numberNameSpaces := Inst().GlobalScaleFactor
+		if numberNameSpaces < 40 {
+			numberNameSpaces = 40
+		}
+		for i := 0; i < numberNameSpaces; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
+		}
+		// TODO: Skip non legacy shared tests
+		ValidateApplications(contexts)
+	})
+
+	ItLog := "Start Migration and after 3 minutes stop migration"
+	It(ItLog, func() {
+		podMap := make(map[types.UID]bool)
+		volMap := make(map[string]bool)
+		for _, ctx := range contexts {
+			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
+		}
+		setMigrateLegacySharedToSharedv4Service(true)
+		time.Sleep(210 * time.Second) // sleep 3.5 minutes.
+		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
+		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
+
+		stepLog := "Pause Migration and let all Apps come up and restart Migration"
+		Step(stepLog, func() {
+			setMigrateLegacySharedToSharedv4Service(false)
+			ValidateApplications(contexts)
+			time.Sleep(time.Minute)
+			setMigrateLegacySharedToSharedv4Service(true)
+			waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
+			countPostTimeout := getLegacySharedVolumeCount(contexts)
+			Expect(countPostTimeout).To(Equal(0))
+			checkVolsConvertedtoSharedv4Service(volMap)
+			for _, ctx := range contexts {
+				checkMapOfPods(podMap, ctx)
+			}
+			ValidateApplications(contexts)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		DestroyApps(contexts, nil)
+	})
+})
+
+var _ = Describe("{LegacySharedToSharedv4ServicePxRestart", func() {
+	JustBeforeEach(func() {
+		testrailID = 296732
+		namespacePrefix := "lstsv4m_px_restart"
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		setCreateLegacySharedAsSharedv4Service(false)
+		setMigrateLegacySharedToSharedv4Service(false)
+		StartTorpedoTest("LegacySharedVolumeAppMigrationRestart", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
+		contexts = make([]*scheduler.Context, 0)
+		numberNameSpaces := Inst().GlobalScaleFactor
+		if numberNameSpaces < 40 {
+			numberNameSpaces = 40
+		}
+		for i := 0; i < numberNameSpaces; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
+		}
+		// TODO: Skip non legacy shared tests
+		ValidateApplications(contexts)
+	})
+
+	ItLog := "Start Migration and after 3 minutes restart px on a random Storage Node"
+	It(ItLog, func() {
+		podMap := make(map[types.UID]bool)
+		volMap := make(map[string]bool)
+		for _, ctx := range contexts {
+			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
+		}
+		setMigrateLegacySharedToSharedv4Service(true)
+		time.Sleep(210 * time.Second) // sleep 3.5 minutes.
+
+		stepLog := "Restart px and let all Apps come up and restart Migration"
+		Step(stepLog, func() {
+			storageNodes, err := GetStorageNodes()
+			log.FailOnError(err, "Unable to get the storage nodes")
+			pxNode := storageNodes[rand.Intn(len(storageNodes))]
+			err = Inst().V.RestartDriver(pxNode, nil)
+			log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", pxNode.Name))
+			err = Inst().V.WaitDriverUpOnNode(pxNode, 5*time.Minute)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", pxNode.Name))
+		})
+
+		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
+		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
+		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
+		countPostTimeout := getLegacySharedVolumeCount(contexts)
+		Expect(countPostTimeout).To(Equal(0))
+		checkVolsConvertedtoSharedv4Service(volMap)
+		for _, ctx := range contexts {
+			checkMapOfPods(podMap, ctx)
+		}
+		ValidateApplications(contexts)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		DestroyApps(contexts, nil)
+	})
+})
+
+var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission", func() {
+	JustBeforeEach(func() {
+		testrailID = 296732
+		namespacePrefix := "lstsv4m_node_decom"
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		setCreateLegacySharedAsSharedv4Service(false)
+		setMigrateLegacySharedToSharedv4Service(false)
+		StartTorpedoTest("LegacySharedVolumeAppMigrationRestart", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
+		contexts = make([]*scheduler.Context, 0)
+		numberNameSpaces := Inst().GlobalScaleFactor
+		if numberNameSpaces < 40 {
+			numberNameSpaces = 40
+		}
+		for i := 0; i < numberNameSpaces; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
+		}
+		// TODO: Skip non legacy shared tests
+		ValidateApplications(contexts)
+	})
+
+	ItLog := "Start Migration and after 3 minutes Decommission a random Storage Node"
+	It(ItLog, func() {
+		podMap := make(map[types.UID]bool)
+		volMap := make(map[string]bool)
+		for _, ctx := range contexts {
+			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
+		}
+		setMigrateLegacySharedToSharedv4Service(true)
+		time.Sleep(210 * time.Second) // sleep 3.5 minutes.
+
+		stepLog := "Decommission Node while Migration is in Progress"
+		Step(stepLog, func() {
+			storageNodes, err := GetStorageNodes()
+			log.FailOnError(err, "Unable to get the storage nodes")
+			pxNode := storageNodes[rand.Intn(len(storageNodes))]
+			err = Inst().S.PrepareNodeToDecommission(pxNode, Inst().Provisioner)
+			log.FailOnError(err, fmt.Sprintf("error preparing node %s for decommision", pxNode.Name))
+			err = Inst().V.DecommissionNode(&pxNode)
+			log.FailOnError(err, fmt.Sprintf("error in decommision of node %s ", pxNode.Name))
+		})
+
+		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
+		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
+		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
+		countPostTimeout := getLegacySharedVolumeCount(contexts)
+		Expect(countPostTimeout).To(Equal(0))
+		checkVolsConvertedtoSharedv4Service(volMap)
+		for _, ctx := range contexts {
+			checkMapOfPods(podMap, ctx)
+		}
+		ValidateApplications(contexts)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		DestroyApps(contexts, nil)
+	})
+})
+
+var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator", func() {
+	JustBeforeEach(func() {
+		testrailID := 296732
+		namespacePrefix := "lstsv4m_px_restart"
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		setCreateLegacySharedAsSharedv4Service(false)
+		setMigrateLegacySharedToSharedv4Service(false)
+		StartTorpedoTest("LegacySharedVolumeAppRestartCoordinator", "Legacy Shared to Sharedv4 Service Migration and coordinator restart", nil, testrailID)
+		contexts = make([]*scheduler.Context, 0)
+		numberNameSpaces := Inst().GlobalScaleFactor
+		if numberNameSpaces < 40 {
+			numberNameSpaces = 40
+		}
+		for i := 0; i < numberNameSpaces; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
+		}
+		// TODO: Skip non legacy shared tests
+		ValidateApplications(contexts)
+	})
+
+	ItLog := "Start Migration and after 2 minutes restart volume coordinator node"
+	It(ItLog, func() {
+		podMap := make(map[types.UID]bool)
+		volMap := make(map[string]bool)
+		for _, ctx := range contexts {
+			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
+		}
+		var nodeForPxRestart *node.Node
+		for _, ctx := range contexts {
+			_, apiVol, attachedNode := getLegacySharedTestAppVol(ctx)
+			if apiVol.Spec.Shared {
+				nodeForPxRestart = attachedNode
+				break
+			}
+		}
+		setMigrateLegacySharedToSharedv4Service(true)
+		time.Sleep(120 * time.Second) // sleep 2 minutes.
+
+		stepLog := "Decommission Node while Migration is in Progress"
+		Step(stepLog, func() {
+			err := Inst().V.RestartDriver(*nodeForPxRestart, nil)
+			log.FailOnError(err, fmt.Sprintf("error in Restart PX Driver of node %s ", nodeForPxRestart.Name))
+			err = Inst().V.WaitDriverUpOnNode(*nodeForPxRestart, 5*time.Minute)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeForPxRestart.Name))
+		})
+
+		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
+		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
+		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
+		countPostTimeout := getLegacySharedVolumeCount(contexts)
+		Expect(countPostTimeout).To(Equal(0))
+		checkVolsConvertedtoSharedv4Service(volMap)
+		for _, ctx := range contexts {
+			checkMapOfPods(podMap, ctx)
+		}
+		ValidateApplications(contexts)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		DestroyApps(contexts, nil)
+	})
+})
