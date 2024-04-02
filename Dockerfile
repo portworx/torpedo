@@ -26,10 +26,6 @@ RUN curl -L -o vcluster "https://github.com/loft-sh/vcluster/releases/latest/dow
     && install -c -m 0755 vcluster /usr/local/bin  \
     && rm -f vcluster
 
-# Install Oracle CLI
-RUN bash -x -c "$(curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh)" -- --python-install-location /usr/bin/python3 --accept-all-defaults && \
-    chmod a+x /root/bin/oci && \
-    mv -f /root/bin/oci /usr/bin/oci
 
 
 # No need to copy *everything*. This keeps the cache useful
@@ -54,11 +50,17 @@ RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
 # Build a fresh container with just the binaries
 FROM alpine:3.18.5
 
-RUN apk add --no-cache ca-certificates bash curl jq libc6-compat
+RUN apk add --no-cache ca-certificates bash curl jq libc6-compat coreutils
 
  # Install Azure Cli
 RUN apk add --no-cache --update python3 py3-pip
 RUN apk add --no-cache --update --virtual=build gcc musl-dev python3-dev libffi-dev openssl-dev cargo make && pip3 install "pyyaml<=5.3.1" && pip3 install --no-cache-dir --prefer-binary azure-cli && apk del build
+
+
+# Install Oracle CLI
+RUN bash -c "$(curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh)" -- --python-install-location /usr/bin/python3 --accept-all-defaults && \
+    chmod a+x /root/bin/oci && \
+    mv -f /root/bin/oci /usr/bin/oci
 
 
 # Install kubectl from Docker Hub.
