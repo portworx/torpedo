@@ -1,0 +1,82 @@
+{{- $defaultClaimsCount := 4 }}
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: fio-vm-multi-disk
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: ubuntu-bionic
+        kubevirt-key: kubevirt-val
+        app: vm-multi-disk
+    spec:
+      domain:
+        cpu:
+          cores: 2
+        devices:
+          disks:
+            - name: containervolume
+              disk:
+                bus: virtio
+            {{- if gt .ClaimsCount 0}}
+            {{- range $i := Iterate .ClaimsCount}}
+            - name: datavolume{{ $i }}
+              disk:
+                bus: virtio
+              {{- end}}
+            {{- else}}
+            {{- range $i := Iterate $defaultClaimsCount}}
+            - name: datavolume{{ $i }}
+              disk:
+                bus: virtio
+              {{- end}}
+            {{- end}}
+            - name: cloudinitvolume
+              disk:
+                bus: virtio
+          interfaces:
+            - name: default
+              masquerade: {}
+        resources:
+          requests:
+            cpu: 2
+            memory: 4096M
+      networks:
+        - name: default
+          pod: {}
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
+      volumes:
+        - name: containervolume
+          persistentVolumeClaim:
+            claimName: fio-boot-pvc
+        {{- if .ClaimsCount }}
+        {{- range $val := Iterate .ClaimsCount }}
+        - name: datavolume{{ $val }}
+          persistentVolumeClaim:
+            claimName: fio-disk-{{ $val }}
+          {{- end }}
+        {{- else }}
+        {{- range $val := Iterate $defaultClaimsCount }}
+        - name: datavolume{{ $val }}
+          persistentVolumeClaim:
+            claimName: fio-disk-{{ $val }}
+          {{- end }}
+        {{- end }}
+        - name: cloudinitvolume
+          cloudInitNoCloud:
+            userData: |-
+              #cloud-config
+              chpasswd:
+                list: |
+                  ubuntu:ubuntu
+                  root:toor
+                expire: False
+              runcmd:
+                - while true; do
+                    sleep 60
+                  done
