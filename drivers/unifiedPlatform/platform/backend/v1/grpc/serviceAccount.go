@@ -31,12 +31,14 @@ func (saGrpcV1 *PlatformGrpc) getSAClient() (context.Context, publicsaapi.Servic
 }
 
 // ListAllServiceAccounts List all Service Accounts
-func (saGrpcV1 *PlatformGrpc) ListAllServiceAccounts(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
+func (saGrpcV1 *PlatformGrpc) ListAllServiceAccounts(listReq *PDSServiceAccountRequest) (*PDSServiceAccountResponse, error) {
 	ctx, client, _, err := saGrpcV1.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	saResponse := []WorkFlowResponse{}
+	saResponse := PDSServiceAccountResponse{
+		List: []V1ServiceAccount{},
+	}
 	var firstPageRequest *publicsaapi.ListServiceAccountRequest
 	err = utilities.CopyStruct(&firstPageRequest, listReq)
 	saModel, err := client.ListServiceAccount(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
@@ -44,18 +46,20 @@ func (saGrpcV1 *PlatformGrpc) ListAllServiceAccounts(listReq *WorkFlowRequest) (
 		return nil, fmt.Errorf("Error in calling `ListServiceAccountRequest` api call: %v\n", err)
 	}
 	log.Infof("Value of  SA - [%v]", saModel)
-	err = utilities.CopyStruct(&saResponse, saModel.ServiceAccounts)
+	err = utilities.CopyStruct(saModel.ServiceAccounts, &saResponse.List)
 	log.Infof("Value of  SA after copy - [%v]", saResponse)
-	return saResponse, nil
+	return &saResponse, nil
 }
 
 // GetServiceAccount return service account model.
-func (saGrpcV1 *PlatformGrpc) GetServiceAccount(saID *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (saGrpcV1 *PlatformGrpc) GetServiceAccount(saID *PDSServiceAccountRequest) (*PDSServiceAccountResponse, error) {
 	ctx, client, _, err := saGrpcV1.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	saResponse := WorkFlowResponse{}
+	saResponse := PDSServiceAccountResponse{
+		Get: V1ServiceAccount{},
+	}
 	var getRequest *publicsaapi.GetServiceAccountRequest
 	err = utilities.CopyStruct(&getRequest, saID)
 	saModel, err := client.GetServiceAccount(ctx, getRequest, grpc.PerRPCCredentials(credentials))
@@ -63,7 +67,7 @@ func (saGrpcV1 *PlatformGrpc) GetServiceAccount(saID *WorkFlowRequest) (*WorkFlo
 		return nil, fmt.Errorf("Error in calling `GetServiceAccountRequest` api call: %v\n", err)
 	}
 	log.Infof("Value of  SA - [%v]", saModel)
-	err = utilities.CopyStruct(&saResponse, saModel)
+	err = utilities.CopyStruct(saModel, &saResponse.Get)
 	log.Infof("Value of  SA after copy - [%v]", saResponse)
 	return &saResponse, nil
 }
@@ -90,12 +94,12 @@ func (saGrpcV1 *PlatformGrpc) CreateServiceAccount(createReq *PDSServiceAccountR
 }
 
 // DeleteServiceAccount delete service account and return status.
-func (saGrpcV1 *PlatformGrpc) DeleteServiceAccount(saId *WorkFlowRequest) error {
+func (saGrpcV1 *PlatformGrpc) DeleteServiceAccount(saId *PDSServiceAccountRequest) error {
 	ctx, client, _, err := saGrpcV1.getSAClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	saResponse := WorkFlowResponse{}
+	saResponse := PDSServiceAccountResponse{}
 	var delSaRequest *publicsaapi.DeleteServiceAccountRequest
 	err = utilities.CopyStruct(&delSaRequest, saId)
 	saModel, err := client.DeleteServiceAccount(ctx, delSaRequest, grpc.PerRPCCredentials(credentials))
@@ -109,12 +113,14 @@ func (saGrpcV1 *PlatformGrpc) DeleteServiceAccount(saId *WorkFlowRequest) error 
 }
 
 // RegenerateServiceAccountSecret serviceAccountSecret
-func (saGrpcV1 *PlatformGrpc) RegenerateServiceAccountSecret(saId *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (saGrpcV1 *PlatformGrpc) RegenerateServiceAccountSecret(saId *PDSServiceAccountRequest) (*PDSServiceAccountResponse, error) {
 	ctx, client, _, err := saGrpcV1.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	saResponse := WorkFlowResponse{}
+	saResponse := PDSServiceAccountResponse{
+		RegenerateToken: GetServiceAccountTokenResponse{},
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -125,18 +131,20 @@ func (saGrpcV1 *PlatformGrpc) RegenerateServiceAccountSecret(saId *WorkFlowReque
 		return nil, fmt.Errorf("Error in calling `RegenerateServiceAccountSecret` api call: %v\n", err)
 	}
 	log.Infof("Value of  SA - [%v]", saModel)
-	err = utilities.CopyStruct(&saResponse, saModel)
+	err = utilities.CopyStruct(saModel, &saResponse.RegenerateToken)
 	log.Infof("Value of  SA after copy - [%v]", saResponse)
 	return &saResponse, nil
 }
 
 // UpdateServiceAccount update existing serviceAccount
-func (saGrpcV1 *PlatformGrpc) UpdateServiceAccount(saId *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (saGrpcV1 *PlatformGrpc) UpdateServiceAccount(saId *PDSServiceAccountRequest) (*PDSServiceAccountResponse, error) {
 	ctx, client, _, err := saGrpcV1.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	saResponse := WorkFlowResponse{}
+	saResponse := PDSServiceAccountResponse{
+		Update: V1ServiceAccount{},
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -147,17 +155,19 @@ func (saGrpcV1 *PlatformGrpc) UpdateServiceAccount(saId *WorkFlowRequest) (*Work
 		return nil, fmt.Errorf("Error in calling `UpdateServiceAccountRequest` api call: %v\n", err)
 	}
 	log.Infof("Value of SA - [%v]", saModel)
-	err = utilities.CopyStruct(&saResponse, saModel)
+	err = utilities.CopyStruct(saModel, &saResponse.Update)
 	log.Infof("Value of  SA after copy - [%v]", saResponse)
 	return &saResponse, nil
 }
 
-func (saGrpcV1 *PlatformGrpc) GenerateServiceAccountAccessToken(tokenReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (saGrpcV1 *PlatformGrpc) GenerateServiceAccountAccessToken(tokenReq *PDSServiceAccountRequest) (*PDSServiceAccountResponse, error) {
 	ctx, client, _, err := saGrpcV1.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	saResponse := WorkFlowResponse{}
+	saResponse := PDSServiceAccountResponse{
+		GetToken: GetServiceAccountTokenResponse{},
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -167,7 +177,7 @@ func (saGrpcV1 *PlatformGrpc) GenerateServiceAccountAccessToken(tokenReq *WorkFl
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling `GetAccessTokenRequest` api call: %v\n", err)
 	}
-	err = utilities.CopyStruct(&saResponse, saModel)
+	err = utilities.CopyStruct(saModel, &saResponse.GetToken)
 	log.Infof("Value of  SA after copy - [%v]", saResponse)
 	return &saResponse, nil
 }

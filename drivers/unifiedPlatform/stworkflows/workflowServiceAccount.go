@@ -31,7 +31,7 @@ func (svcUser *WorkflowServiceAccount) CreateServiceAccount(accId, saName, roleN
 	log.InfoD("moving on to assign roleBindings to this user")
 	newToken, err := platformLibs.AssignRoleBindingsToUser(saName, roleName, resourceId, svcUser.WorkflowPlatform.TenantId)
 
-	rbacToken := newToken.PdsServiceAccount.GetToken.Token
+	rbacToken := newToken.GetToken.Token
 	svcUser.UserRoles[saName] = SeviceAccount{
 		Token:    rbacToken,
 		RoleName: roleName,

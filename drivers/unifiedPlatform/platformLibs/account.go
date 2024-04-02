@@ -15,7 +15,7 @@ import (
 //}
 
 // GetAccount
-func GetAccount(accountID string) (*automationModels.WorkFlowResponse, error) {
+func GetAccount(accountID string) (*automationModels.PlatformAccountResponse, error) {
 	request := automationModels.PlatformAccount{
 		Get: automationModels.PlatformGetAccount{
 			AccountId: accountID,
