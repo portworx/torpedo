@@ -22,8 +22,6 @@ import (
 
 const (
 	ubuntu = "ubuntu-app"
-	cmdRetry = 10 * time.Second
-	cmdTimeout = 1* time.Minute
 )
 
 // Legacy Shared Volume Create
@@ -115,7 +113,7 @@ func getLegacySharedTestAppVol(ctx *scheduler.Context) (*volume.Volume, *api.Vol
 	vol := vols[0]
 	apiVol, err := Inst().V.InspectVolume(vol.ID)
 	Expect(err).NotTo(HaveOccurred())
-	attachedNode, err := Inst().V.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
+	attachedNode, err := Inst().V.GetNodeForVolume(vol, 1 * time.Minute, 5 * time.Second)
 	Expect(err).NotTo(HaveOccurred())
 	log.Infof("volume %v {%v} is attached to node %v", vol.ID, apiVol.Id, attachedNode.Name)
 	return vol, apiVol, attachedNode
@@ -267,6 +265,7 @@ var _ = Describe("{LegacySharedVolumeAppMigrateBasic}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 		DestroyApps(contexts, nil)
 	})
 })
@@ -309,6 +308,11 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationBasicMany", func() {
 			checkMapOfPods(podMap, ctx)
 		}
 		ValidateApplications(contexts)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+		DestroyApps(contexts, nil)
 	})
 })
 
@@ -364,6 +368,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 		DestroyApps(contexts, nil)
 	})
 })
@@ -423,6 +428,7 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestart", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 		DestroyApps(contexts, nil)
 	})
 })
@@ -482,6 +488,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 		DestroyApps(contexts, nil)
 	})
 })
@@ -546,6 +553,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 		DestroyApps(contexts, nil)
 	})
 })
