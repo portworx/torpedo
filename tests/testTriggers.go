@@ -672,6 +672,7 @@ func startLongevityTest(testName string) {
 	longevityLogger = CreateLogger(fmt.Sprintf("%s-%s.log", testName, time.Now().Format(time.RFC3339)))
 	log.SetTorpedoFileOutput(longevityLogger)
 	dash.TestCaseBegin(testName, fmt.Sprintf("validating %s in longevity cluster", testName), "", nil)
+	PrintPxctlStatus()
 }
 func endLongevityTest() {
 	PrintPxctlStatus()
@@ -1046,6 +1047,10 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 				}
 			})
 
+			initialRepls := make(map[*volume.Volume]int64)
+			opts := volume.Options{
+				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+			}
 			for _, v := range appVolumes {
 				currRep, err := Inst().V.GetReplicationFactor(v)
 				UpdateOutcome(event, err)
@@ -1058,16 +1063,14 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 				if replStatus != "Up" {
 					continue
 				}
+				initialRepls[v] = currRep
 
 				if currRep != 0 {
 					for {
-
 						//Changing replication factor to 1
 						if currRep > 1 {
 							log.Infof("Current replication is > 1, reducing it before proceeding")
-							opts := volume.Options{
-								ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
-							}
+
 							dashStats := make(map[string]string)
 							dashStats["volume-name"] = v.Name
 							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
@@ -1093,17 +1096,39 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 						}
 					}
 				}
-
 				if err == nil {
 					err := HaIncreaseErrorInjectionTargetNode(event, selctx, v, storageNodeMap, errorInj)
 					log.Error(err)
+					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after HaIncreaseErrorInjectionTargetNode ", v.Name, v.ID, v.Namespace)
+					PrintInspectVolume(v.ID)
 					UpdateOutcome(event, err)
 					err = HaIncreaseErrorInjectSourceNode(event, selctx, v, storageNodeMap, errorInj)
 					log.Error(err)
+					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after HaIncreaseErrorInjectSourceNode ", v.Name, v.ID, v.Namespace)
+					PrintInspectVolume(v.ID)
 					UpdateOutcome(event, err)
 				}
 			}
 
+			//Reverting back the initial replication factor
+			for v, actualRep := range initialRepls {
+				currRep, err := Inst().V.GetReplicationFactor(v)
+				UpdateOutcome(event, err)
+				for {
+					if currRep > actualRep {
+						err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
+						if err != nil {
+							log.Errorf("There is an error decreasing repl [%v]", err.Error())
+							UpdateOutcome(event, err)
+							break
+						}
+						currRep, err = Inst().V.GetReplicationFactor(v)
+						UpdateOutcome(event, err)
+					} else {
+						break
+					}
+				}
+			}
 		}
 		updateMetrics(*event)
 
@@ -1222,8 +1247,11 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							updateLongevityStats(HAIncrease, stats.HAIncreaseEventName, dashStats)
 							err = Inst().V.SetReplicationFactor(v, expRF, nil, nil, true, opts)
 							if err != nil {
+								log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s", v.Name, v.ID, v.Namespace)
+								PrintInspectVolume(v.ID)
 								log.Errorf("There is a error setting repl [%v]", err.Error())
 							}
+
 							UpdateOutcome(event, err)
 						} else {
 							log.Warnf("cannot peform HA increase as new repl factor value is greater than max allowed %v", MaxRF)
@@ -1266,6 +1294,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, err)
 				}
 			})
+
 		}
 		updateMetrics(*event)
 	})
@@ -1325,6 +1354,8 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 
 				err = Inst().V.ResizeVolume(vol.ID, newSize)
 				if err != nil {
+					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failure of resizing the volume", vol.Name, vol.ID, vol.Namespace)
+					PrintInspectVolume(vol.ID)
 					return err
 				}
 
@@ -1409,11 +1440,16 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 						}
 						err = Inst().V.SetReplicationFactor(v, currRep, nil, nil, false, opts)
 						if err != nil {
+							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failing to set replication", v.Name, v.ID, v.Namespace)
+							PrintInspectVolume(v.ID)
 							log.Errorf("There is a error setting repl [%v]", err.Error())
 							UpdateOutcome(event, err)
 						}
-
 						err = volumeResize(v)
+						if err != nil {
+							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failure of a volume resize", v.Name, v.ID, v.Namespace)
+							PrintInspectVolume(v.ID)
+						}
 						UpdateOutcome(event, err)
 
 					})
@@ -1537,6 +1573,8 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							updateLongevityStats(HADecrease, stats.HADecreaseEventName, dashStats)
 							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
 							if err != nil {
+								log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failed to  decrease repl", v.Name, v.ID, v.Namespace)
+								PrintInspectVolume(v.ID)
 								log.Errorf("There is an error decreasing repl [%v]", err.Error())
 							}
 							UpdateOutcome(event, err)
@@ -1951,6 +1989,8 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 					updateLongevityStats(PoolMaintenanceCycle, stats.PoolMaintenanceEventName, dashStats)
 					err = Inst().V.EnterPoolMaintenance(appNode)
 					if err != nil {
+						log.InfoD(fmt.Sprintf("Printing The storage pool status on Node:%s after entering pool Maintenance", appNode.Name))
+						PrintSvPoolStatus(appNode)
 						UpdateOutcome(event, err)
 						return
 					}
@@ -1970,6 +2010,8 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 					event.Event.Type += "<br>" + taskStep
 					err = Inst().V.ExitPoolMaintenance(appNode)
 					if err != nil {
+						log.InfoD(fmt.Sprintf("Printing The storage pool status on Node:%s after pool Maintenance", appNode.Name))
+						PrintSvPoolStatus(appNode)
 						UpdateOutcome(event, err)
 						return
 					}
@@ -2081,6 +2123,12 @@ func TriggerStorageFullPoolExpansion(contexts *[]*scheduler.Context, recordChan 
 
 						err = Inst().V.ExpandPool(selectedPool.Uuid, resizeOpType, expandedExpectedPoolSize, true)
 						if err != nil {
+							stNode, err := GetNodeFromPoolUUID(selectedPool.Uuid)
+							if err != nil {
+								log.Errorf(fmt.Sprintf("error getting the node for pool %s", selectedPool.Uuid))
+							}
+							log.InfoD(fmt.Sprintf("Printing The storage pool status after pool resize on Node:%s ", stNode.Name))
+							PrintSvPoolStatus(*stNode)
 							UpdateOutcome(event, err)
 							return
 						}
@@ -2496,21 +2544,21 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		nodesToReboot := getNodesByChaosLevel(RebootManyNodes)
-		selectedNodes := make([]string, len(nodesToReboot))
+		selectedNodes := make([]node.Node, len(nodesToReboot))
 		for _, n := range nodesToReboot {
 			err := isNodeHealthy(n, event.Event.Type)
 			if err != nil {
 				UpdateOutcome(event, err)
 				continue
 			}
-			selectedNodes = append(selectedNodes, n.Name)
+			selectedNodes = append(selectedNodes, n)
 		}
 		// Reboot node and check driver status
-		stepLog = fmt.Sprintf("reboot the node(s): %v", selectedNodes)
+		stepLog = fmt.Sprintf("rebooting [%d] node(s)", len(selectedNodes))
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			var wg sync.WaitGroup
-			for _, n := range nodesToReboot {
+			for _, n := range selectedNodes {
 				dashStats := make(map[string]string)
 				dashStats["node"] = n.Name
 				updateLongevityStats(RebootManyNodes, stats.NodeRebootEventName, dashStats)
@@ -2547,7 +2595,7 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 				wg.Wait()
 			})
 
-			for _, n := range nodesToReboot {
+			for _, n := range selectedNodes {
 				wg.Add(1)
 				go func(n node.Node) {
 					defer wg.Done()
@@ -2778,6 +2826,8 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 					log.InfoD(stepLog)
 					log.Infof("Calling CloneVolume()...")
 					clonedVolID, err = Inst().V.CloneVolume(vol.ID)
+					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after cloning the volume", vol.Name, vol.ID, vol.Namespace)
+					PrintInspectVolume(vol.ID)
 					UpdateOutcome(event, err)
 				})
 				stepLog = fmt.Sprintf("Validate successful clone %s", clonedVolID)
@@ -2881,7 +2931,13 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 							params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 							UpdateOutcome(event, err)
 						}
+						log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after vol resize", v.Name, v.ID, v.Namespace)
+						PrintInspectVolume(v.ID)
 						err := Inst().V.ValidateUpdateVolume(v, params)
+						if err != nil {
+							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after vol resize", v.Name, v.ID, v.Namespace)
+							PrintInspectVolume(v.ID)
+						}
 						UpdateOutcome(event, err)
 					}
 				})
@@ -5455,6 +5511,8 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 			}
 			err = EnterPoolMaintenance(*pNode)
 			if err != nil {
+				log.InfoD(fmt.Sprintf("Printing The storage pool status after failure of entering maintenance on Node:%s ", pNode.Name))
+				PrintSvPoolStatus(*pNode)
 				log.Error(err.Error())
 				UpdateOutcome(event, err)
 				return
@@ -5464,6 +5522,8 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 		updateLongevityStats(event.Event.Type, statType, dashStats)
 		err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, resizeOperationType, uint64(chaosLevel))
 		if err != nil {
+			log.InfoD(fmt.Sprintf("Printing The storage pool status after pool resize failure on Node:%s ", pNode.Name))
+			PrintSvPoolStatus(*pNode)
 			err = fmt.Errorf("error initiating pool [%v ] %v: [%v]", pool.Uuid, expansionType, err.Error())
 			log.Error(err.Error())
 			UpdateOutcome(event, err)
@@ -5471,6 +5531,8 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 			if doNodeReboot {
 				err = WaitForExpansionToStart(pool.Uuid)
 				if err != nil {
+					log.InfoD(fmt.Sprintf("Printing The storage pool status after pool resize failure on Node:%s ", pNode.Name))
+					PrintSvPoolStatus(*pNode)
 					log.Error(err.Error())
 					UpdateOutcome(event, err)
 				}
@@ -5501,6 +5563,8 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 			}
 			err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
 			if err != nil {
+				log.InfoD(fmt.Sprintf("Printing The storage pool status on Node:%s  after pool resize failure", pNode.Name))
+				PrintSvPoolStatus(*pNode)
 				err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, expansionType, err)
 				UpdateOutcome(event, err)
 			}
@@ -5564,6 +5628,7 @@ func TriggerMetadataPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *c
 		wg.Wait()
 
 	})
+
 	validateContexts(event, contexts)
 	updateMetrics(*event)
 }
@@ -5620,6 +5685,8 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 
 			}
 			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 2, true)
+			log.InfoD(fmt.Sprintf("Printing The storage pool status after resizing disks in the pool and reboot on the node:%s", storageNode.Name))
+			PrintSvPoolStatus(*storageNode)
 		}
 		err = ValidateDataIntegrity(&nodeContexts)
 		UpdateOutcome(event, err)
@@ -5672,6 +5739,7 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				wg.Add(1)
 
 			}
+
 		}
 		wg.Wait()
 
@@ -5730,8 +5798,8 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 			UpdateOutcome(event, err)
 		}
 	})
-	validateContexts(event, contexts)
 
+	validateContexts(event, contexts)
 	updateMetrics(*event)
 }
 
@@ -5793,6 +5861,8 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 		Step("validate Px on the rebalanced node", func() {
 			log.InfoD("Validating PX on node : %s", autoPilotLabelNode.Name)
 			err := Inst().V.WaitDriverUpOnNode(autoPilotLabelNode, 1*time.Minute)
+			log.InfoD(fmt.Sprintf("Printing The storage pool status on reblanaced Node:%s ", autoPilotLabelNode.Name))
+			PrintSvPoolStatus(autoPilotLabelNode)
 			UpdateOutcome(event, err)
 			err = ValidateRebalanceJobs(autoPilotLabelNode)
 			UpdateOutcome(event, err)
@@ -6241,11 +6311,14 @@ func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecor
 					log.InfoD("COS after update %v", appVol.Spec.GetCos().SimpleString())
 					if !strings.EqualFold(requiredPriority, appVol.Spec.GetCos().SimpleString()) {
 						err = fmt.Errorf("Failed to update volume %v with expected priority %v ", v.ID, requiredPriority)
+						log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after io prirority update", v.Name, v.ID, v.Namespace)
+						PrintInspectVolume(v.ID)
 						UpdateOutcome(event, err)
 					}
 					log.InfoD("Update IO priority on [%v] : [%v]", v.ID, requiredPriority)
 				}
 				log.InfoD("Completed update on %v", v.ID)
+
 			}
 		}
 		// setIoPriority if IO priority is set to High then next iteration will be run with low.
@@ -9530,6 +9603,8 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 
 			err = Inst().V.ResizeVolume(vol.ID, newSize)
 			if err != nil {
+				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after resize", vol.Name, vol.ID, vol.Namespace)
+				PrintInspectVolume(vol.ID)
 				return err
 			}
 
@@ -9553,6 +9628,8 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 			log.Infof("Resizing Volumes created [%v]", eachVol.Name)
 			err := volumeResize(eachVol)
 			if err != nil {
+				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after resize", eachVol.Name, eachVol.ID, eachVol.Namespace)
+				PrintInspectVolume(eachVol.ID)
 				UpdateOutcome(event, fmt.Errorf("Resizing volume failed on the cluster err: [%v]", err))
 			}
 		}
@@ -9566,6 +9643,8 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 			log.InfoD("Validating Volume Status of Volume [%v]", eachVol.ID)
 			status, err := IsVolumeStatusUP(eachVol)
 			if err != nil {
+				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after io prirority update", eachVol.Name, eachVol.ID, eachVol.Namespace)
+				PrintInspectVolume(eachVol.ID)
 				UpdateOutcome(event, fmt.Errorf("error validating volume status"))
 			}
 			dash.VerifyFatal(status == true, true, "is volume status up ?")

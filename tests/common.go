@@ -10,6 +10,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/hashicorp/go-version"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -366,6 +368,7 @@ const (
 	defaultTorpedoJob                     = "torpedo-job"
 	defaultTorpedoJobType                 = "functional"
 	labelNameKey                          = "name"
+	serviceURL                            = "https://us-east.iaas.cloud.ibm.com/v1"
 )
 
 const (
@@ -600,6 +603,10 @@ func PrintPxctlStatus() {
 	PrintCommandOutput("pxctl status")
 }
 
+func PrintInspectVolume(volID string) {
+	PrintCommandOutput(fmt.Sprintf("pxctl volume inspect %s", volID))
+}
+
 func PrintCommandOutput(cmnd string) {
 	output, err := Inst().N.RunCommand(node.GetStorageNodes()[0], cmnd, node.ConnectionOpts{
 		IgnoreError:     false,
@@ -612,6 +619,10 @@ func PrintCommandOutput(cmnd string) {
 	}
 	log.Infof(output)
 
+}
+
+func PrintSvPoolStatus(node node.Node) {
+	runCmdGetOutput("pxctl sv pool show", node)
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -699,6 +710,10 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 		}
 
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
+			// In case of tektoncd skip the volume validation as the pods are created through jobs and not deployments or sts
+			if strings.Contains(ctx.App.Key, "tektoncd") {
+				ctx.SkipVolumeValidation = true
+			}
 			if !ctx.SkipVolumeValidation {
 				log.InfoD(fmt.Sprintf("Validating %s app's volumes", ctx.App.Key))
 				ValidateVolumes(ctx, errChan...)
@@ -1946,6 +1961,33 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	return contexts
 }
 
+// ScheduleApplicationsWithScheduleOptions schedules *the* applications taking scheduleOptions as input and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
+func ScheduleApplicationsWithScheduleOptions(testname string, appSpec string, provisioner string, errChan ...*chan error) []*scheduler.Context {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	var contexts []*scheduler.Context
+	var taskName string
+	var err error
+	options := scheduler.ScheduleOptions{
+		AppKeys:            []string{appSpec},
+		StorageProvisioner: provisioner,
+	}
+	taskName = fmt.Sprintf("%s", testname)
+	contexts, err = Inst().S.Schedule(taskName, options)
+	// Need to check err != nil before calling processError
+	if err != nil {
+		processError(err, errChan...)
+	}
+	if len(contexts) == 0 {
+		processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
+	}
+
+	return contexts
+}
+
 // ScheduleApplicationsOnNamespace ScheduleApplications schedules *the* applications and returns
 // the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
 func ScheduleApplicationsOnNamespace(namespace string, testname string, errChan ...*chan error) []*scheduler.Context {
@@ -2233,6 +2275,7 @@ func DestroyApps(contexts []*scheduler.Context, opts map[string]bool) {
 // DestroyApps destroy applications with data validation
 func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, controlChannel chan string, errGroup *errgroup.Group) error {
 
+	defer ginkgo.GinkgoRecover()
 	var allErrors string
 
 	log.InfoD("Validating apps data continuity")
@@ -3352,7 +3395,7 @@ func SetClusterContext(clusterConfigPath string) error {
 		return nil
 	}
 	log.InfoD("Switching context to [%s]", clusterConfigPathForLog)
-	provider := getClusterProvider()
+	provider := GetClusterProvider()
 	if clusterConfigPath != "" {
 		switch provider {
 		case drivers.ProviderGke:
@@ -7655,6 +7698,10 @@ func StartPxBackupTorpedoTest(testName string, testDescription string, tags map[
 
 // EndPxBackupTorpedoTest ends the logging for Px Backup torpedo test and updates results in testrail
 func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
+	defer func() {
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	}()
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
 	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
@@ -7682,12 +7729,12 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
 	}
 
-	defer func() {
-		err := SetSourceKubeConfig()
-		log.FailOnError(err, "failed to switch context to source cluster")
-	}()
+	err = SetSourceKubeConfig()
+	log.FailOnError(err, "failed to switch context to source cluster")
+
 	masterNodes := node.GetMasterNodes()
-	if len(masterNodes) > 0 {
+	// TODO: enable the log collection for charmed k8s once we get the way to ssh into worker node from juju
+	if len(masterNodes) > 0 && GetClusterProvider() != "charmed" {
 		log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
 		testCaseName := currentSpecReport.FullText()
 		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(currentSpecReport.FullText())
@@ -7745,11 +7792,14 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 		}
 		if err != nil {
 			return createdVolIDs, fmt.Errorf("failed to creared volume %s, due to error : %v ", volName, err)
+
 		}
 		volPath = fmt.Sprintf("%v", out)
 		createdVolIDs[volId] = volPath
 		log.Infof("Volume %s attached to path %s", volId, volPath)
 		count--
+		log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s  after creating the volume", volName, volId)
+		PrintInspectVolume(volId)
 	}
 	return createdVolIDs, nil
 }
@@ -10275,7 +10325,7 @@ func GetAllPoolsOnNode(nodeUuid string) ([]string, error) {
 }
 
 // Set default provider as aws
-func getClusterProvider() string {
+func GetClusterProvider() string {
 	clusterProvider = os.Getenv("CLUSTER_PROVIDER")
 	return clusterProvider
 }
@@ -11055,6 +11105,26 @@ func GetVolumesOnNode(nodeId string) ([]string, error) {
 	}
 
 	return volumes, nil
+}
+
+// IsKubevirtInstalled returns true if Kubevirt is installed else returns false
+func IsKubevirtInstalled() bool {
+	k8sApiExtensions := apiextensions.Instance()
+	crdList, err := k8sApiExtensions.ListCRDs()
+	if err != nil {
+		return false
+	}
+	for _, crd := range crdList.Items {
+		if crd.Name == "kubevirts.kubevirt.io" {
+			k8sKubevirt := kubevirt.Instance()
+			version, err := k8sKubevirt.GetVersion()
+			if err == nil && version != "" {
+				log.InfoD("Version %s", version)
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // IsCloudsnapBackupActiveOnVolume returns true is cloudsnap backup is active on the volume
