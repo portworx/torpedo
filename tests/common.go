@@ -11107,7 +11107,6 @@ func IsKubevirtInstalled() bool {
 	if err != nil {
 		return false
 	}
-	log.InfoD("Source crd list: %s", crdList)
 	for _, crd := range crdList.Items {
 		if crd.Name == "kubevirts.kubevirt.io" {
 			k8sKubevirt := kubevirt.Instance()
