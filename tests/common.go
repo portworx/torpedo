@@ -696,9 +696,7 @@ func IsPoolAddDiskSupported() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if !DMthin {
-		return true, nil
-	} else {
+	if DMthin {
 		dmthinSupportedPxVersion, err := semver.NewVersion("3.1.0")
 		if err != nil {
 			return false, err
