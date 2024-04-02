@@ -235,9 +235,9 @@ var _ = BeforeSuite(func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for Global Post-rule of application"))
 		}
 	}
-	pvcListBeforeRun, err = GetPVCList()
+	PvcListBeforeRun, err = GetPVCList()
 	log.FailOnError(err, "failed to list PVCs before run")
-	log.Infof("PVC list before the run is [%s]", pvcListBeforeRun)
+	log.Infof("PVC list before the run is [%s]", PvcListBeforeRun)
 })
 
 var _ = AfterSuite(func() {
@@ -274,11 +274,11 @@ var _ = AfterSuite(func() {
 			err = DeleteRestore(restoreName, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
 		}
-		pvcListAfterRun, err = GetPVCList()
+		PvcListAfterRun, err = GetPVCList()
 		log.FailOnError(err, "failed to list PVCs after run")
-		log.Infof("PVC list after the run is [%s]", pvcListAfterRun)
+		log.Infof("PVC list after the run is [%s]", PvcListAfterRun)
 		// Verify PVC Cleanup on PX-Backup namespace
-		if err := ValidatePVCCleanup(pvcListBeforeRun,pvcListAfterRun); err != nil {
+		if err := ValidatePVCCleanup(PvcListBeforeRun,PvcListAfterRun); err != nil {
 			log.FailOnError(err, "PVC cleanup validation failed")
 		}
 		fmt.Println("PVC cleanup validation passed.")

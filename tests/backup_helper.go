@@ -201,8 +201,8 @@ var (
 	NfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
 	queryCountForValidation    = 10
 	IsBackupLongevityRun       = false
-	pvcListBeforeRun              []string
-	pvcListAfterRun               []string
+	PvcListBeforeRun           []string
+	PvcListAfterRun            []string
 )
 
 type UserRoleAccess struct {
