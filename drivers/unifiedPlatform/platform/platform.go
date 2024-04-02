@@ -81,13 +81,13 @@ type IamRoleBindingsInterface interface {
 }
 
 type ServiceAccountsInterface interface {
-	ListAllServiceAccounts(*WorkFlowRequest) ([]WorkFlowResponse, error)
-	GetServiceAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
+	ListAllServiceAccounts(*PDSServiceAccountRequest) (*PDSServiceAccountResponse, error)
+	GetServiceAccount(*PDSServiceAccountRequest) (*PDSServiceAccountResponse, error)
 	CreateServiceAccount(*PDSServiceAccountRequest) (*PDSServiceAccountResponse, error)
-	RegenerateServiceAccountSecret(*WorkFlowRequest) (*WorkFlowResponse, error)
-	UpdateServiceAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
-	GenerateServiceAccountAccessToken(*WorkFlowRequest) (*WorkFlowResponse, error)
-	DeleteServiceAccount(*WorkFlowRequest) error
+	RegenerateServiceAccountSecret(*PDSServiceAccountRequest) (*PDSServiceAccountResponse, error)
+	UpdateServiceAccount(*PDSServiceAccountRequest) (*PDSServiceAccountResponse, error)
+	GenerateServiceAccountAccessToken(*PDSServiceAccountRequest) (*PDSServiceAccountResponse, error)
+	DeleteServiceAccount(*PDSServiceAccountRequest) error
 }
 
 type TemplatesInterface interface {

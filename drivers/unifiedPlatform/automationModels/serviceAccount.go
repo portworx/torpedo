@@ -5,11 +5,16 @@ type PDSServiceAccountRequest struct {
 	Create      CreateServiceAccounts
 	Get         GetServiceAccount
 	CreateToken CreatePdsServiceAccountToken
-	GetToken    GetServiceAccountToken
+	GetToken    GetServiceAccountTokenRequest
 }
 
 type PDSServiceAccountResponse struct {
-	Create V1ServiceAccount
+	Create          V1ServiceAccount
+	List            []V1ServiceAccount
+	Get             V1ServiceAccount
+	Update          V1ServiceAccount
+	RegenerateToken GetServiceAccountTokenResponse
+	GetToken        GetServiceAccountTokenResponse
 }
 
 type CreateServiceAccounts struct {
@@ -18,8 +23,10 @@ type CreateServiceAccounts struct {
 }
 
 type GetServiceAccount struct {
-	Meta   Meta
-	Config V1Config2
+	Meta     Meta
+	Config   V1Config2
+	Id       string
+	TenantId string
 }
 
 type CreatePdsServiceAccountToken struct {
@@ -27,8 +34,13 @@ type CreatePdsServiceAccountToken struct {
 	ServiceAccountServiceGetAccessTokenBody ServiceAccountServiceGetAccessTokenBody
 }
 
-type GetServiceAccountToken struct {
+type GetServiceAccountTokenResponse struct {
 	Token string
+}
+
+type GetServiceAccountTokenRequest struct {
+	Token    string
+	TenantId string
 }
 
 type V1ServiceAccount struct {
