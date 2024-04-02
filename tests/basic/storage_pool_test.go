@@ -10147,7 +10147,7 @@ func isMaintenanceModeRequiredForAddDisk() bool {
 		}
 		currentPxVersionOnCluster, err := semver.NewVersion(new_trimmedVersion)
 		if err != nil {
-			log.InfoD("[semver.NewVersion] error is", err)
+			log.InfoD(fmt.Sprintf("[semver.NewVersion] error is: %s", err))
 			return false
 		}
 		if currentPxVersionOnCluster.GreaterThan(pxVersion) {
