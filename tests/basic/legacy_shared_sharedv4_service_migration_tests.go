@@ -22,6 +22,8 @@ import (
 
 const (
 	ubuntu = "ubuntu-app"
+	cmdRetry = 10 * time.Second
+	cmdTimeout = 1* time.Minute
 )
 
 // Legacy Shared Volume Create
@@ -226,8 +228,9 @@ var _ = Describe("{LegacySharedVolumeMigrate_CreateIdle}", func() {
 // Create apps, start migration.
 // apps should restart, shared volume should be
 var _ = Describe("{LegacySharedVolumeAppMigrateBasic}", func() {
+	var testrailID = 296374
+	var runID int
 	JustBeforeEach(func() {
-		testrailID = 296374
 		namespacePrefix := "lstsv4mbasic"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		StartTorpedoTest("LegacySharedVolumeAppMigrateBasic", "Legacy Shared to Sharedv4 Service Functional Test", nil, testrailID)
@@ -269,8 +272,9 @@ var _ = Describe("{LegacySharedVolumeAppMigrateBasic}", func() {
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServiceMigrationBasicMany", func() {
+	var testrailID = 296728
+	var runID int
 	JustBeforeEach(func() {
-		testrailID = 296728
 		namespacePrefix := "lstsv4mbasic2"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
@@ -309,8 +313,9 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationBasicMany", func() {
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart", func() {
+	var testrailID = 296736
+	var runID int
 	JustBeforeEach(func() {
-		testrailID = 296736
 		namespacePrefix := "lstsv4m_restart"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
@@ -364,8 +369,9 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart", func() {
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServicePxRestart", func() {
+	var testrailID = 296732
+	var runID int
 	JustBeforeEach(func() {
-		testrailID = 296732
 		namespacePrefix := "lstsv4m_px_restart"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
@@ -422,8 +428,9 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestart", func() {
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission", func() {
+	var testrailID = 296732
+	var runID int
 	JustBeforeEach(func() {
-		testrailID = 296732
 		namespacePrefix := "lstsv4m_node_decom"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
@@ -480,8 +487,9 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission", func() {
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator", func() {
+	var testrailID = 296732
+	var runID int
 	JustBeforeEach(func() {
-		testrailID := 296732
 		namespacePrefix := "lstsv4m_px_restart"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
