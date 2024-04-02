@@ -79,8 +79,10 @@ func NewPaginationRequest(pageNumber, pageSize int) *commonapis.PageBasedPaginat
 //	return accountsResponse, nil
 //}
 
-func (AccountV1 *PlatformGrpc) GetAccount(accountReq *PlatformAccount) (*WorkFlowResponse, error) {
-	accountsResponse := WorkFlowResponse{}
+func (AccountV1 *PlatformGrpc) GetAccount(accountReq *PlatformAccount) (*PlatformAccountResponse, error) {
+	accountsResponse := PlatformAccountResponse{
+		Get: V1Account{},
+	}
 	ctx, client, _, err := AccountV1.getAccountClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
@@ -102,7 +104,7 @@ func (AccountV1 *PlatformGrpc) GetAccount(accountReq *PlatformAccount) (*WorkFlo
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Value of accounts after copy - [%v]", *accountsResponse.Meta.Name)
+	log.Infof("Value of accounts after copy - [%v]", *accountsResponse.Get.Meta.Name)
 
 	return &accountsResponse, nil
 }

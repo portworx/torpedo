@@ -22,7 +22,7 @@ type Platform interface {
 
 type AccountInterface interface {
 	//GetAccountList() ([]WorkFlowResponse, error) // not used as of now
-	GetAccount(*PlatformAccount) (*WorkFlowResponse, error)
+	GetAccount(*PlatformAccount) (*PlatformAccountResponse, error)
 }
 
 type TenantInterface interface {

@@ -12,9 +12,11 @@ import (
 )
 
 // GetAccount return pds account model.
-func (AccountV1 *PLATFORM_API_V1) GetAccount(accountRequest *PlatformAccount) (*WorkFlowResponse, error) {
+func (AccountV1 *PLATFORM_API_V1) GetAccount(accountRequest *PlatformAccount) (*PlatformAccountResponse, error) {
 	log.Infof("Get the account detail having UUID: %v", accountRequest.Get.AccountId)
-	accountResponse := WorkFlowResponse{}
+	accountResponse := PlatformAccountResponse{
+		Get: V1Account{},
+	}
 	ctx, client, err := AccountV1.getAccountClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
@@ -27,10 +29,10 @@ func (AccountV1 *PLATFORM_API_V1) GetAccount(accountRequest *PlatformAccount) (*
 		return nil, fmt.Errorf("Error when calling `AccountServiceGetAccount`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("Value of account - [%v]", *accountModel.Meta.Name)
-	err = copier.Copy(&accountResponse, accountModel)
+	err = copier.Copy(&accountResponse.Get, accountModel)
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Value of account after copy - [%v]", *accountResponse.Meta.Name)
+	log.Infof("Value of account after copy - [%v]", *accountResponse.Get.Meta.Name)
 	return &accountResponse, nil
 }
