@@ -235,6 +235,7 @@ var _ = BeforeSuite(func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for Global Post-rule of application"))
 		}
 	}
+	var err error
 	PvcListBeforeRun, err = GetPVCList()
 	log.FailOnError(err, "failed to list PVCs before run")
 	log.Infof("PVC list before the run is [%s]", PvcListBeforeRun)
@@ -274,6 +275,7 @@ var _ = AfterSuite(func() {
 			err = DeleteRestore(restoreName, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
 		}
+		var err error
 		PvcListAfterRun, err = GetPVCList()
 		log.FailOnError(err, "failed to list PVCs after run")
 		log.Infof("PVC list after the run is [%s]", PvcListAfterRun)
