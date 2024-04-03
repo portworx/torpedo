@@ -11,12 +11,6 @@ import (
 	status "net/http"
 )
 
-var (
-	SiToken       string
-	SiFlag        bool
-	SaRequestBody serviceaccountv1.V1ServiceAccount
-)
-
 // ListAllServiceAccounts List all Service Accounts
 func (sa *PLATFORM_API_V1) ListAllServiceAccounts(listReq *PDSServiceAccountRequest) (*PDSServiceAccountResponse, error) {
 	_, client, err := sa.getSAClient()
@@ -161,24 +155,29 @@ func (sa *PLATFORM_API_V1) UpdateServiceAccount(saId *PDSServiceAccountRequest) 
 }
 
 func (sa *PLATFORM_API_V1) GenerateServiceAccountAccessToken(tokenReq *PDSServiceAccountRequest) (*PDSServiceAccountResponse, error) {
-	_, client, err := sa.getSAClient()
+	ctx, client, err := sa.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	saResponse := PDSServiceAccountResponse{
-		GetToken: GetServiceAccountTokenResponse{},
+		CreateToken: GetServiceAccountTokenResponse{},
 	}
 	var tokenIamRequest serviceaccountv1.ApiServiceAccountServiceGetAccessTokenRequest
-	tokenIamRequest = tokenIamRequest.ApiService.ServiceAccountServiceGetAccessToken(context.Background(), tokenReq.GetToken.Token)
-	err = utilities.CopyStruct(&tokenIamRequest, tokenReq)
+	log.Infof("Tenant Id - [%s]", tokenReq.CreateToken.TenantId)
+	tokenIamRequest = tokenIamRequest.ApiService.ServiceAccountServiceGetAccessToken(ctx, tokenReq.CreateToken.TenantId)
+	tokenIamRequest = tokenIamRequest.ServiceAccountServiceGetAccessTokenBody(
+		serviceaccountv1.ServiceAccountServiceGetAccessTokenBody{
+			ClientId:     tokenReq.CreateToken.ServiceAccountServiceGetAccessTokenBody.ClientId,
+			ClientSecret: tokenReq.CreateToken.ServiceAccountServiceGetAccessTokenBody.ClientSecret,
+		},
+	)
 	tokenModel, res, err := client.ServiceAccountServiceGetAccessTokenExecute(tokenIamRequest)
+	log.Infof("Response - [%+v]", res)
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApiServiceAccountServiceGetAccessTokenRequest`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("Value of ServiceAccount - [%v]", tokenModel)
-	err = utilities.CopyStruct(&saResponse, tokenModel)
-	SiFlag = true
-	SiToken = tokenModel.GetToken()
+	saResponse.CreateToken.Token = tokenModel.GetToken()
 	log.Infof("Value of ServiceAccount after copy - [%v]", saResponse)
 	return &saResponse, nil
 }

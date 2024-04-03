@@ -72,7 +72,7 @@ type NamespaceInterface interface {
 
 type IamRoleBindingsInterface interface {
 	ListIamRoleBindings(*WorkFlowRequest) ([]WorkFlowResponse, error)
-	CreateIamRoleBinding(*WorkFlowRequest) (*WorkFlowResponse, error)
+	CreateIamRoleBinding(*PDSIAMRequest) (*PDSIAMResponse, error)
 	UpdateIamRoleBindings(*WorkFlowRequest) (*WorkFlowResponse, error)
 	GetIamRoleBindingByID(*WorkFlowRequest) (*WorkFlowResponse, error)
 	GrantIAMRoles(*WorkFlowRequest) (*WorkFlowResponse, error)

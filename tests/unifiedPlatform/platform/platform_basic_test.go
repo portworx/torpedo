@@ -17,6 +17,11 @@ import (
 var dash *aetosutil.Dashboard
 
 var _ = BeforeSuite(func() {
+	InitInstance()
+	dash = Inst().Dash
+	dash.TestSet.Product = "pds"
+	dash.TestSetBegin(dash.TestSet)
+
 	steplog := "Get prerequisite params to run platform tests"
 	log.InfoD(steplog)
 	Step(steplog, func() {
