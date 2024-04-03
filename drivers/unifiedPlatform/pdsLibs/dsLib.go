@@ -16,7 +16,7 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 	return nil
 }
 
-func UpdateDataService(ds PDSDataService, namespaceId, projectId, imageId string) (*automationModels.PDSDeploymentResponse, error) {
+func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, imageId string) (*automationModels.PDSDeploymentResponse, error) {
 	log.Info("Update Data service will be performed")
 
 	depInputs := automationModels.PDSDeploymentRequest{}

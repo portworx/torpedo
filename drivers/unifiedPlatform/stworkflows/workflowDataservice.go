@@ -43,12 +43,12 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 
 	log.Infof("targetClusterId [%s]", targetClusterId)
 
-	//imageId, err := dslibs.GetDataServiceImageId(ds.Name, image, version)
-	//if err != nil {
-	//	return nil, err
-	//}
+	imageId, err := dslibs.GetDataServiceImageId(ds.Name, image, version)
+	if err != nil {
+		return nil, err
+	}
 
-	deployment, err := dslibs.DeployDataService(ds, namespace, projectId, targetClusterId, "imageId", appConfigId, resConfigId, stConfigId)
+	deployment, err := dslibs.DeployDataService(ds, namespace, projectId, targetClusterId, imageId, appConfigId, resConfigId, stConfigId)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	return deployment, nil
 }
 
-func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataService, image, version string) (*automationModels.PDSDeploymentResponse, error) {
+func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataService, deploymentId, image, version string) (*automationModels.PDSDeploymentResponse, error) {
 	namespace := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
@@ -91,7 +91,7 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 		return nil, err
 	}
 
-	deployment, err := dslibs.UpdateDataService(ds, namespace, projectId, imageId)
+	deployment, err := dslibs.UpdateDataService(ds, deploymentId, namespace, projectId, imageId)
 	if err != nil {
 		return nil, err
 	}
