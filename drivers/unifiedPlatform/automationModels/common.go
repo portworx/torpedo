@@ -28,9 +28,15 @@ type Meta struct {
 }
 
 type Config struct {
-	UserEmail   *string `copier:"must,nopanic"`
-	DnsName     *string `copier:"must,nopanic"`
-	DisplayName *string `copier:"must,nopanic"`
+	UserEmail       *string `copier:"must,nopanic"`
+	DnsName         *string `copier:"must,nopanic"`
+	DisplayName     *string `copier:"must,nopanic"`
+	References      *References
+	JobHistoryLimit *int32  `copier:"must,nopanic"`
+	Suspend         *bool   `copier:"must,nopanic"`
+	BackupType      *string `copier:"must,nopanic"`
+	BackupLevel     *string `copier:"must,nopanic"`
+	ReclaimPolicy   *string `copier:"must,nopanic"`
 }
 
 type V1Info struct {
