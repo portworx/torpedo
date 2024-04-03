@@ -95,3 +95,7 @@ type BackupV1Schedule struct {
 	Id              *string `copier:"must,nopanic"`
 	ResourceVersion *string `copier:"must,nopanic"`
 }
+
+type References struct {
+	BackupLocationId *string `copier:"must,nopanic"`
+}

@@ -248,7 +248,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
 			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
-			workflowDataservice.PDSTemplates.StorageTemplatetId = stConfigId
+			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 		})
 
