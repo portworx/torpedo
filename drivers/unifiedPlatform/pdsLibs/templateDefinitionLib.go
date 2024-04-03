@@ -7,17 +7,24 @@ import (
 	"reflect"
 )
 
+const (
+	defaultPXProvisioner = "pxd.portworx.com"
+	defaultVolGroup      = false
+	defaultVolSecure     = false
+)
+
 type StorageConfiguration struct {
-	FSType         string
-	ReplFactor     int32
-	StorageRequest string
-	NewStorageSize string
+	FSType      string
+	ReplFactor  int32
+	Provisioner string
 }
 type ResourceConfiguration struct {
-	CpuLimit      string
-	CpuRequest    string
-	MemoryLimit   string
-	MemoryRequest string
+	CpuLimit       string
+	CpuRequest     string
+	MemoryLimit    string
+	MemoryRequest  string
+	StorageRequest string
+	NewStorageSize string
 }
 type ServiceConfiguration struct {
 	HeapSize int
@@ -71,9 +78,15 @@ func CreateStorageConfigTemplate(tenantId string, templateConfigs StorageConfigu
 	semanticVersion := utilities.RandomString(12)
 	templateKind := utilities.RandomString(12)
 
+	var templateValue map[string]interface{}
+	templateValue["fs"] = templateConfigs.FSType
+	templateValue["repl"] = templateConfigs.ReplFactor
+	templateValue["provisioner"] = defaultPXProvisioner
+	templateValue["fg"] = defaultVolGroup
+	templateValue["secure"] = defaultVolSecure
+
 	templateName := "pdsAutoStTemp" + utilities.RandomString(5)
-	templateValue := structToMap(templateConfigs)
-	log.InfoD("Temp value fromed in lib folder is- [%v]", templateValue)
+	log.InfoD("Temp value formed in lib folder is- [%v]", templateValue)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +118,14 @@ func CreateResourceConfigTemplate(tenantId string, templateConfigs ResourceConfi
 	semanticVersion := utilities.RandomString(12)
 	templateKind := utilities.RandomString(12)
 	templateName := "pdsAutoResTemp" + utilities.RandomString(5)
-	templateValue := structToMap(templateConfigs)
+
+	var templateValue map[string]interface{}
+	templateValue["cpu_limit"] = templateConfigs.CpuLimit
+	templateValue["cpu_request"] = templateConfigs.CpuRequest
+	templateValue["memory_limit"] = templateConfigs.MemoryLimit
+	templateValue["memory_request"] = templateConfigs.MemoryRequest
+	templateValue["storage_request"] = templateConfigs.StorageRequest
+
 	if err != nil {
 		return nil, err
 	}

@@ -11,7 +11,7 @@ import (
 type CustomTemplates struct {
 	Platform                WorkflowPlatform
 	ResourceTemplateId      string
-	StorageTemplatetId      string
+	StorageTemplateId       string
 	ServiceConfigTemplateId string
 }
 
@@ -27,16 +27,16 @@ func (cusTemp *CustomTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *p
 		Password: templates.ServiceConfiguration.Password,
 	}
 	stConfigParams := pdslibs.StorageConfiguration{
-		FSType:         templates.StorageConfiguration.FSType,
-		ReplFactor:     templates.StorageConfiguration.ReplFactor,
-		StorageRequest: templates.StorageConfiguration.StorageRequest,
-		NewStorageSize: templates.StorageConfiguration.NewStorageSize,
+		FSType:     templates.StorageConfiguration.FSType,
+		ReplFactor: templates.StorageConfiguration.ReplFactor,
 	}
 	resConfigParams := pdslibs.ResourceConfiguration{
-		CpuLimit:      templates.ResourceConfiguration.CpuLimit,
-		CpuRequest:    templates.ResourceConfiguration.CpuRequest,
-		MemoryLimit:   templates.ResourceConfiguration.MemoryLimit,
-		MemoryRequest: templates.ResourceConfiguration.MemoryRequest,
+		CpuLimit:       templates.ResourceConfiguration.CpuLimit,
+		CpuRequest:     templates.ResourceConfiguration.CpuRequest,
+		MemoryLimit:    templates.ResourceConfiguration.MemoryLimit,
+		MemoryRequest:  templates.ResourceConfiguration.MemoryRequest,
+		StorageRequest: templates.StorageConfiguration.StorageRequest,
+		NewStorageSize: templates.StorageConfiguration.NewStorageSize,
 	}
 	if updateTemplate {
 		//create new templates with changed values of CPU Values -
@@ -63,7 +63,7 @@ func (cusTemp *CustomTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *p
 	stConfig, _ := pdslibs.CreateStorageConfigTemplate(cusTemp.Platform.TenantId, stConfigParams)
 	log.InfoD("stConfig ID-  %v", *stConfig.Create.Meta.Uid)
 	stConfigId := stConfig.Create.Meta.Uid
-	cusTemp.StorageTemplatetId = *stConfigId
+	cusTemp.StorageTemplateId = *stConfigId
 
 	resConfig, _ := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, resConfigParams)
 	log.InfoD("resConfig ID-  %v", *resConfig.Create.Meta.Uid)
