@@ -47,6 +47,12 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 		restoreWithVMMixed         string
 		backupWithVMStopped        string
 		restoreWithVMStopped       string
+		allVMs                     []kubevirtv1.VirtualMachine
+		allVMNames                 []string
+		freezeRuleName             string
+		unfreezeRuleName           string
+		freezeRuleUid              string
+		unfreezeRuleUid            string
 		//controlChannel             chan string
 		//errorGroup                 *errgroup.Group
 	)
@@ -139,6 +145,30 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 			}
 		})
 
+		Step("Creating freeze and unfreeze rules", func() {
+			log.InfoD("Creating freeze and unfreeze rules")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, appCtx := range scheduledAppContexts {
+				vms, err := GetAllVMsInNamespace(appCtx.ScheduleOptions.Namespace)
+				log.FailOnError(err, "Failed to get VMs in namespace - %s", appCtx.ScheduleOptions.Namespace)
+				allVMs = append(allVMs, vms...)
+			}
+			for _, v := range allVMs {
+				allVMNames = append(allVMNames, v.Name)
+			}
+			freezeRuleName = fmt.Sprintf("vm-freeze-rule-%s", RandomString(4))
+			err = CreateRuleForVMBackup(freezeRuleName, allVMs, Freeze, ctx)
+			log.FailOnError(err, "Failed to create freeze rule %s for VMs - %v", freezeRuleName, allVMNames)
+			freezeRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, freezeRuleName)
+			log.FailOnError(err, "Failed to get freeze rule uid for rule %s", freezeRuleName)
+			unfreezeRuleName = fmt.Sprintf("vm-unfreeze-rule-%s", RandomString(4))
+			err = CreateRuleForVMBackup(unfreezeRuleName, allVMs, Unfreeze, ctx)
+			log.FailOnError(err, "Failed to create unfreeze rule %s for VMs - %v", unfreezeRuleName, allVMNames)
+			unfreezeRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, unfreezeRuleName)
+			log.FailOnError(err, "Failed to get unfreeze rule uid for rule %s", unfreezeRuleName)
+		})
+
 		Step("Taking individual backup of each namespace", func() {
 			log.InfoD("Taking individual backup of each namespace")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -154,18 +184,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 				go func(backupName string, appCtx *scheduler.Context) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					_, preRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, []string{appCtx.ScheduleOptions.Namespace}, "pre", "default")
-					log.FailOnError(err, "Unable to create Pre Rule")
-					log.Infof("Pre rule Name - [%s]", preRuleName)
-					preRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleName)
-					log.FailOnError(err, "Unable fetch pre rule uid")
-					_, postRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, []string{appCtx.ScheduleOptions.Namespace}, "post", "default")
-					log.FailOnError(err, "Unable to create Post Rule")
-					log.Infof("Post rule Name - [%s]", postRuleName)
-					postRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleName)
-					log.FailOnError(err, "Unable fetch post rule uid")
 					log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, appCtx.ScheduleOptions.Namespace, backupLocationName)
-					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, []*scheduler.Context{appCtx}, labelSelectors, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, []*scheduler.Context{appCtx}, labelSelectors, BackupOrgID, sourceClusterUid, freezeRuleName, freezeRuleUid, unfreezeRuleName, unfreezeRuleUid)
 					if err != nil {
 						mutex.Lock()
 						errors = append(errors, fmt.Sprintf("Failed while taking backup [%s]. Error - [%s]", backupName, err.Error()))
@@ -255,21 +275,11 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
 				namespaceMappingMixed[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-mixed"
 			}
-			_, preRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, namespaces, "pre", "default")
-			log.FailOnError(err, "Unable to create Pre Rule")
-			log.Infof("Pre rule Name - [%s]", preRuleName)
-			preRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleName)
-			log.FailOnError(err, "Unable fetch pre rule uid")
-			_, postRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, namespaces, "post", "default")
-			log.FailOnError(err, "Unable to create Post Rule")
-			log.Infof("Post rule Name - [%s]", postRuleName)
-			postRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleName)
-			log.FailOnError(err, "Unable fetch post rule uid")
 			backupWithVMMixed = fmt.Sprintf("%s-%s", "auto-backup-mixed", RandomString(6))
 			backupNames = append(backupNames, backupWithVMMixed)
 			log.InfoD("creating backup [%s] in cluster [%s] (%s), organization [%s], of namespace [%v], in backup location [%s]", backupWithVMMixed, SourceClusterName, sourceClusterUid, BackupOrgID, namespaces, backupLocationName)
 			err = CreateBackupWithValidation(ctx, backupWithVMMixed, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
-				nil, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+				nil, BackupOrgID, sourceClusterUid, freezeRuleName, freezeRuleUid, unfreezeRuleName, unfreezeRuleUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupWithVMMixed))
 		})
 
@@ -307,18 +317,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 			}
 			backupWithVMRestart = fmt.Sprintf("%s-%s", "auto-backup-restart", RandomString(6))
 			backupNames = append(backupNames, backupWithVMRestart)
-			_, preRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, namespaces, "pre", "default")
-			log.FailOnError(err, "Unable to create Pre Rule")
-			log.Infof("Pre rule Name - [%s]", preRuleName)
-			preRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleName)
-			log.FailOnError(err, "Unable fetch pre rule uid")
-			_, postRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, namespaces, "post", "default")
-			log.FailOnError(err, "Unable to create Post Rule")
-			log.Infof("Post rule Name - [%s]", postRuleName)
-			postRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleName)
-			log.FailOnError(err, "Unable fetch post rule uid")
 			log.InfoD("creating backup [%s] in cluster [%s] (%s), organization [%s], of namespace [%v], in backup location [%s]", backupWithVMRestart, SourceClusterName, sourceClusterUid, BackupOrgID, namespaces, backupLocationName)
-			_, err = CreateBackupWithoutCheck(ctx, backupWithVMRestart, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+			_, err = CreateBackupWithoutCheck(ctx, backupWithVMRestart, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, sourceClusterUid, freezeRuleName, freezeRuleUid, unfreezeRuleName, unfreezeRuleUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupWithVMRestart))
 			for _, n := range namespaces {
 				wg.Add(1)
@@ -367,21 +367,11 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
 				namespaceMappingStopped[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-stopped"
 			}
-			_, preRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, namespaces, "pre", "default")
-			log.FailOnError(err, "Unable to create Pre Rule")
-			log.Infof("Pre rule Name - [%s]", preRuleName)
-			preRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleName)
-			log.FailOnError(err, "Unable fetch pre rule uid")
-			_, postRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, namespaces, "post", "default")
-			log.FailOnError(err, "Unable to create Post Rule")
-			log.Infof("Post rule Name - [%s]", postRuleName)
-			postRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleName)
-			log.FailOnError(err, "Unable fetch post rule uid")
 			backupWithVMStopped = fmt.Sprintf("%s-%s", "auto-backup-stopped", RandomString(6))
 			backupNames = append(backupNames, backupWithVMStopped)
 			log.InfoD("creating backup [%s] in cluster [%s] (%s), organization [%s], of namespace [%v], in backup location [%s]", backupWithVMStopped, SourceClusterName, sourceClusterUid, BackupOrgID, namespaces, backupLocationName)
 			err = CreateBackupWithValidation(ctx, backupWithVMStopped, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
-				nil, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+				nil, BackupOrgID, sourceClusterUid, freezeRuleName, freezeRuleUid, unfreezeRuleName, unfreezeRuleUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupWithVMStopped))
 		})
 
@@ -2830,6 +2820,471 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting schedule policy - %s", periodicSchedulePolicyName))
 		log.Info("Destroying scheduled apps on source cluster")
 		DestroyApps(scheduledAppContexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// This testcase verifies custom backup & restore with both Kubevirt VMs and non-kubevirt resources
+var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(TestCaseLabelsMap[CustomBackupRestoreWithKubevirtAndNonKubevirtNS]...), func() {
+	var (
+		backupName                 string
+		restoreName                string
+		scheduleBackupName         string
+		backupNames                []string
+		scheduleNames              []string
+		scheduledAppContexts       []*scheduler.Context
+		singleScheduledAppContexts []*scheduler.Context
+		multiScheduledAppContexts  []*scheduler.Context
+		sourceClusterUID           string
+		cloudCredName              string
+		cloudCredUID               string
+		backupLocationUID          string
+		backupLocationName         string
+		backupLocationMap          map[string]string
+		labelSelectors             map[string]string
+		providers                  []string
+		numOfDeployments           int
+		appNamespaces              []string
+		schPolicyUid               string
+		periodicPolicyName         string
+		preRuleName                string
+		postRuleName               string
+		preRuleUid                 string
+		postRuleUid                string
+		preRuleNames               []string
+		postRuleNames              []string
+		allVMs                     []kubevirtv1.VirtualMachine
+		allVMNames                 []string
+		preRuleList                []*api.RulesInfo_RuleItem
+		postRuleList               []*api.RulesInfo_RuleItem
+		testAppList                []string
+	)
+
+	backupLocationMap = make(map[string]string)
+	backupNames = make([]string, 0)
+	labelSelectors = make(map[string]string)
+	appNamespaces = make([]string, 0)
+	backupNamespaceMap := make(map[string]string)
+	periodicPolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(6))
+	testAppList = []string{"mysql-backup", "kubevirt-cirros-cd-with-pvc"}
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("CustomBackupRestoreWithKubevirtAndNonKubevirtNS", "Verify custom backup & restore with both Kubevirt and Non-Kubevirt namespaces", nil, 93007, Vpinisetti, Q1FY25)
+		numOfDeployments = Inst().GlobalScaleFactor
+		providers = GetBackupProviders()
+		actualAppList := Inst().AppList
+		defer func() {
+			Inst().AppList = actualAppList
+		}()
+		Inst().AppList = testAppList
+		log.InfoD("Deploying all provided applications in a single namespace")
+		for i := 0; i < numOfDeployments; i++ {
+			taskName := fmt.Sprintf("%s-%d-%d", TaskNamePrefix, 93007, i)
+			namespace := fmt.Sprintf("single-ns-multi-app-%s-%v", taskName, time.Now().Unix())
+			singleScheduledAppContexts = ScheduleApplicationsOnNamespace(namespace, taskName)
+			appNamespaces = append(appNamespaces, namespace)
+			scheduledAppContexts = append(scheduledAppContexts, singleScheduledAppContexts...)
+			for _, appCtx := range singleScheduledAppContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+			}
+		}
+		log.InfoD("Deploying all provided applications in separate namespaces")
+		multiScheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < numOfDeployments; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			multiScheduledAppContexts = ScheduleApplications(taskName)
+			scheduledAppContexts = append(scheduledAppContexts, multiScheduledAppContexts...)
+			for _, appCtx := range multiScheduledAppContexts {
+				namespace := GetAppNamespace(appCtx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+			}
+		}
+	})
+
+	It("Verify custom backup & restore with both Kubevirt and Non-Kubevirt namespaces", func() {
+		defer func() {
+			log.InfoD("Switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "Failed to set ClusterContext to default cluster")
+		}()
+
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Create cloud credentials and backup location", func() {
+			log.InfoD("Creating cloud credentials and backup location")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, RandomString(6))
+				backupLocationName = fmt.Sprintf("%s-%v", getGlobalBucketName(provider), RandomString(6))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, "Creation of backup location")
+			}
+		})
+
+		Step("Register clusters for backup & restore", func() {
+			log.InfoD("Registering clusters for backup & restore")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination clusters")
+
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+			sourceClusterUID, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+		})
+
+		Step("Create schedule policies", func() {
+			log.InfoD("Creating schedule policies")
+			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 2)
+			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(periodicPolicyName, uuid.New(), BackupOrgID, periodicSchedulePolicyInfo)
+			dash.VerifyFatal(periodicPolicyStatus, nil, fmt.Sprintf("Creation of periodic schedule policy - %s", periodicPolicyName))
+		})
+
+		Step("Create pre & post exec rules", func() {
+			log.InfoD("Creating pre & post exec rules")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			// Application pre & post exec rules
+			preRuleName, postRuleName, err = CreateRuleForBackupWithMultipleApplications(BackupOrgID, testAppList, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of pre & post exec rules"))
+			if preRuleName != "" {
+				preRuleNames = append(preRuleNames, preRuleName)
+			}
+			if postRuleName != "" {
+				postRuleNames = append(postRuleNames, postRuleName)
+			}
+			// Vm freeze and unfreeze rules
+			for _, namespace := range appNamespaces {
+				vms, err := GetAllVMsInNamespace(namespace)
+				log.FailOnError(err, "Failed to get VMs in namespace - %s", namespace)
+				allVMs = append(allVMs, vms...)
+			}
+			for _, v := range allVMs {
+				allVMNames = append(allVMNames, v.Name)
+			}
+			freezeRuleName := fmt.Sprintf("vm-freeze-rule-%s", RandomString(4))
+			err = CreateRuleForVMBackup(freezeRuleName, allVMs, Freeze, ctx)
+			log.FailOnError(err, "Failed to create freeze rule %s for VMs - %v", freezeRuleName, allVMNames)
+			unfreezeRuleName := fmt.Sprintf("vm-unfreeze-rule-%s", RandomString(4))
+			err = CreateRuleForVMBackup(unfreezeRuleName, allVMs, Unfreeze, ctx)
+			log.FailOnError(err, "Failed to create unfreeze rule %s for VMs - %v", unfreezeRuleName, allVMNames)
+			preRuleNames = append(preRuleNames, freezeRuleName)
+			postRuleNames = append(postRuleNames, unfreezeRuleName)
+
+			// processing pre exec rules
+			log.InfoD("Actual pre rules are [%v]", preRuleNames)
+			for _, preRule := range preRuleNames {
+				preRuleID, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRule)
+				log.FailOnError(err, "Fetching pre backup rule [%s] uid", preRule)
+				log.Infof("Pre backup rule name [%s] & uid [%s]", preRule, preRuleID)
+				ruleInspectRequest := &api.RuleInspectRequest{
+					OrgId: BackupOrgID,
+					Name:  preRule,
+					Uid:   preRuleID,
+				}
+				resp, _ := Inst().Backup.InspectRule(ctx, ruleInspectRequest)
+				for _, rule := range resp.GetRule().GetRules() {
+					preRuleList = append(preRuleList, rule)
+				}
+			}
+
+			preRuleName = fmt.Sprintf("final-pre-exec-rule-%s", RandomString(4))
+			preRuleCreateReq := &api.RuleCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  preRuleName,
+					OrgId: BackupOrgID,
+				},
+				RulesInfo: &api.RulesInfo{
+					Rules: preRuleList,
+				},
+			}
+			log.InfoD("Creating final pre backup rule [%s]", preRuleName)
+			_, err = Inst().Backup.CreateRule(ctx, preRuleCreateReq)
+			log.FailOnError(err, "Failed while creating final pre backup rule [%s]", preRuleName)
+			preRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleName)
+			log.FailOnError(err, "Fetching final pre backup rule [%s] uid", preRuleName)
+			log.Infof("Final pre backup rule [%s] with uid [%s]", preRuleName, preRuleUid)
+
+			// processing post exec rules
+			log.InfoD("Actual post rules are : %v", postRuleNames)
+			for _, postRule := range postRuleNames {
+				log.InfoD("Processing post rule [%s]", postRule)
+				postRuleID, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRule)
+				log.FailOnError(err, "Fetching post backup rule [%s] uid", postRule)
+				log.Infof("Post backup rule name [%s] & uid [%s]", postRule, postRuleID)
+				ruleInspectRequest := &api.RuleInspectRequest{
+					OrgId: BackupOrgID,
+					Name:  postRule,
+					Uid:   postRuleID,
+				}
+				resp, _ := Inst().Backup.InspectRule(ctx, ruleInspectRequest)
+				for _, rule := range resp.GetRule().GetRules() {
+					postRuleList = append(postRuleList, rule)
+				}
+			}
+
+			postRuleName = fmt.Sprintf("final-post-exec-rule-%s", RandomString(4))
+			postRuleCreateReq := &api.RuleCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  postRuleName,
+					OrgId: BackupOrgID,
+				},
+				RulesInfo: &api.RulesInfo{
+					postRuleList,
+				},
+			}
+			log.InfoD("Creating final post backup rule [%s]", postRuleName)
+			_, err = Inst().Backup.CreateRule(ctx, postRuleCreateReq)
+			log.FailOnError(err, "Failed while creating final post backup rule [%s]", postRuleName)
+			postRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleName)
+			log.FailOnError(err, "Fetching final post backup rule [%s] uid", postRuleName)
+			log.Infof("Final post backup rule [%s] with uid: [%s]", postRuleName, postRuleUid)
+		})
+
+		// Manual backups with pre & post exec rules
+		Step("Creating manual backup with single namespace contains both kubevirt and non-kubevirt using exec rules", func() {
+			log.InfoD("Creating manual backup with single namespace contains both kubevirt and non-kubevirt using exec rules")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			backupName = fmt.Sprintf("manual-rule-single-ns-multi-apps-%v", RandomString(6))
+			backupNames = append(backupNames, backupName)
+			log.InfoD("Creating a backup [%s] in [%s] with namespace [%s] in backup location [%s]", backupName, SourceClusterName, appNamespaces[0], backupLocationName)
+			err = CreateBackupWithCustomResourceTypeWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, singleScheduledAppContexts, []string{"PersistentVolumeClaim"}, labelSelectors, BackupOrgID, sourceClusterUID, preRuleName, preRuleUid, postRuleName, postRuleUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single manual backup [%s] with single namespace contains multiple apps using exec rules.", backupName))
+		})
+
+		Step("Creating single manual backup with all namespaces using exec rules", func() {
+			log.InfoD(fmt.Sprintf("Creating single manual backup with all namespaces using exec rules : %v", appNamespaces))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			backupName = fmt.Sprintf("manual-rule-all-ns-%v", RandomString(6))
+			backupNames = append(backupNames, backupName)
+			log.InfoD("Creating a backup [%s] in [%s] with all namespaces %s in backup location [%s]", backupName, SourceClusterName, appNamespaces, backupLocationName)
+			err = CreateBackupWithCustomResourceTypeWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, []string{"PersistentVolumeClaim"}, labelSelectors, BackupOrgID, sourceClusterUID, preRuleName, preRuleUid, postRuleName, postRuleUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single manual backup [%s] with multiple namespaces %v using exec rules", backupName, appNamespaces))
+		})
+
+		// Schedule backups with pre & post exec rules
+		Step("Creating schedule backup with single namespace contains both kubevirt and non-kubevirt using exec rules", func() {
+			log.InfoD("Creating schedule backup with single namespace contains both kubevirt and non-kubevirt using exec rules")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, periodicPolicyName)
+			backupName = fmt.Sprintf("schdule-rule-single-ns-multi-apps-%v", RandomString(6))
+			scheduleNames = append(scheduleNames, backupName)
+			log.InfoD("Creating a backup [%s] in [%s] with namespace [%s] in backup location [%s]", backupName, SourceClusterName, appNamespaces[0], backupLocationName)
+			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, singleScheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid, []string{"PersistentVolumeClaim"}...)
+			backupNames = append(backupNames, scheduleBackupName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single schedule backup [%s] with single namespace contains multiple apps using exec rules.", scheduleBackupName))
+		})
+
+		Step("Creating single schedule backup with all namespaces", func() {
+			log.InfoD("Creating single schedule backup with all namespaces")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, periodicPolicyName)
+			backupName = fmt.Sprintf("schedule-rule-all-ns-%v", RandomString(6))
+			scheduleNames = append(scheduleNames, backupName)
+			log.InfoD("Creating a backup [%s] in [%s] with namespaces %s in backup location [%s]", backupName, SourceClusterName, appNamespaces, backupLocationName)
+			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid, []string{"PersistentVolumeClaim"}...)
+			backupNames = append(backupNames, scheduleBackupName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single schedule backup [%s] with all namespaces %s using exec rules", scheduleBackupName, appNamespaces))
+		})
+
+		// Manual backups
+		Step("Creating manual backup with single namespace contains both kubevirt and non-kubevirt apps", func() {
+			log.InfoD("Creating manual backup with single namespace contains both kubevirt and non-kubevirt apps")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			backupName = fmt.Sprintf("manual-single-ns-multi-apps-%v", RandomString(6))
+			backupNames = append(backupNames, backupName)
+			log.InfoD("Creating a backup [%s] in [%s] with namespace [%s] in backup location [%s]", backupName, SourceClusterName, appNamespaces[0], backupLocationName)
+			err = CreateBackupWithCustomResourceTypeWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, singleScheduledAppContexts, []string{"PersistentVolumeClaim"}, labelSelectors, BackupOrgID, sourceClusterUID, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single manual backup [%s] with single namespace contains multiple apps.", backupName))
+		})
+
+		Step("Creating single manual backup with all namespaces", func() {
+			log.InfoD(fmt.Sprintf("Creating single backup with all namespaces %v", appNamespaces))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			backupName = fmt.Sprintf("manual-all-ns-%v", RandomString(6))
+			backupNames = append(backupNames, backupName)
+			log.InfoD("Creating a backup [%s] in [%s] with all namespaces [%s] in backup location [%s]", backupName, SourceClusterName, appNamespaces, backupLocationName)
+			err = CreateBackupWithCustomResourceTypeWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, []string{"PersistentVolumeClaim"}, labelSelectors, BackupOrgID, sourceClusterUID, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single manual backup [%s] with multiple namespaces %v", backupName, appNamespaces))
+		})
+
+		Step("Creating multiple manual backups with each namespace", func() {
+			log.InfoD("Creating multiple manual backups with each namespace")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			for i, appCtx := range multiScheduledAppContexts {
+				scheduledNamespace := appCtx.ScheduleOptions.Namespace
+				backupName = fmt.Sprintf("%s-%s-%v", "manual", scheduledNamespace, RandomString(6))
+				backupNames = append(backupNames, backupName)
+				log.InfoD("Creating backup [%s] in [%s] with namespace [%s] in backup location [%s]", backupName, SourceClusterName, scheduledNamespace, backupLocationName)
+				err := CreateBackupWithCustomResourceTypeWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, multiScheduledAppContexts[i:i+1], []string{"PersistentVolumeClaim"}, labelSelectors, BackupOrgID, sourceClusterUID, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of multiple manual backups [%s] with each namespace [%s]", backupName, scheduledNamespace))
+			}
+		})
+
+		// Schedule backups
+		Step("Creating schedule backup with single namespace contains both kubevirt and non-kubevirt apps", func() {
+			log.InfoD("Creating schedule backup with single namespace contains both kubevirt and non-kubevirt apps")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, periodicPolicyName)
+			backupName = fmt.Sprintf("schdule-single-ns-multi-apps-%v", RandomString(6))
+			scheduleNames = append(scheduleNames, backupName)
+			log.InfoD("Creating a backup [%s] in [%s] with namespace [%s] in backup location [%s]", backupName, SourceClusterName, appNamespaces[0], backupLocationName)
+			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, singleScheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid, []string{"PersistentVolumeClaim"}...)
+			backupNames = append(backupNames, scheduleBackupName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single schedule backup [%s] with single namespace contains multiple apps.", scheduleBackupName))
+		})
+
+		Step("Creating single schedule backup with all the namespaces", func() {
+			log.InfoD("Creating single schedule backup with all the namespaces")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, periodicPolicyName)
+			backupName = fmt.Sprintf("schedule-all-ns-%v", RandomString(6))
+			scheduleNames = append(scheduleNames, backupName)
+			log.InfoD("Creating a backup [%s] in [%s] with namespaces %s in backup location [%s]", backupName, SourceClusterName, appNamespaces, backupLocationName)
+			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid, []string{"PersistentVolumeClaim"}...)
+			backupNames = append(backupNames, scheduleBackupName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single schedule backup [%s] with all namespaces %s", scheduleBackupName, appNamespaces))
+		})
+
+		Step("Creating multiple schedule backups with each namespace", func() {
+			log.InfoD("Creating multiple schedule backups with each namespace")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			for i, appCtx := range multiScheduledAppContexts {
+				scheduledNamespace := appCtx.ScheduleOptions.Namespace
+				backupName = fmt.Sprintf("schedule-%s-%v", scheduledNamespace, RandomString(6))
+				scheduleNames = append(scheduleNames, backupName)
+				log.InfoD("Creating backup [%s] in [%s] with namespace [%s] in backup location [%s]", backupName, SourceClusterName, scheduledNamespace, backupLocationName)
+				scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, multiScheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid, []string{"PersistentVolumeClaim"}...)
+				backupNames = append(backupNames, scheduleBackupName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of multiple schedule backup [%s] with each namespace [%s]", scheduleBackupName, scheduledNamespace))
+			}
+		})
+
+		// Default Restores
+		Step("Restoring all the backups which were taken above", func() {
+			log.InfoD("Restoring all the backups : %v", backupNames)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			for i, bkpName := range backupNames {
+				restoreName = fmt.Sprintf("rretain-%v-%s-%s", i, bkpName, RandomString(6))
+				log.InfoD("Restoring from the backup - [%s]", bkpName)
+				bkpNamespace := backupNamespaceMap[bkpName]
+				appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespace})
+				err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsExpectedInBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s] from backup [%s]", restoreName, backupNames[i]))
+			}
+		})
+
+		// Default Restores with Replace Policy
+		Step(fmt.Sprintf("Default restore of backups by replacing the existing resources"), func() {
+			log.InfoD(fmt.Sprintf("Default restore of backups by replacing the existing resources"))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			log.InfoD("Total backups to restore : %v", backupNames)
+			for i, bkpName := range backupNames {
+				restoreName = fmt.Sprintf("rreplace-%v-%s-%s", i, bkpName, RandomString(6))
+				log.InfoD("Restoring from the backup - [%s]", bkpName)
+				err = CreateRestoreWithReplacePolicyWithValidation(restoreName, bkpName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), 2, scheduledAppContexts)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Default restore of backups by replacing the existing resources [%s]", restoreName))
+			}
+		})
+
+		Step(fmt.Sprintf("Default restore of backups by replacing to a new namespace"), func() {
+			log.InfoD(fmt.Sprintf("Default restore of backups by replacing to a new namespace"))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			log.InfoD("Total backups to restore : %v", backupNames)
+			for i, bkpName := range backupNames {
+				restoreName = fmt.Sprintf("rreplace-ns-%v-%s-%s", i, bkpName, RandomString(6))
+				log.InfoD("Restoring from the backup - [%s]", bkpName)
+				actualBackupNamespaces, err := FetchNamespacesFromBackup(ctx, bkpName, BackupOrgID)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching namespaces from schedule backup %v - [%v]", actualBackupNamespaces, bkpName))
+				namespaceMapping := make(map[string]string)
+				for _, namespace := range actualBackupNamespaces {
+					if _, ok := namespaceMapping[namespace]; !ok {
+						namespaceMapping[namespace] = namespace + "-new"
+					}
+				}
+				log.InfoD("Backup namespace mapping : %v", namespaceMapping)
+				err = CreateRestoreWithReplacePolicyWithValidation(restoreName, bkpName, namespaceMapping, DestinationClusterName, BackupOrgID, ctx, make(map[string]string), 2, scheduledAppContexts)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Default restore of backups by replacing to a new namespace [%s]", restoreName))
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "Failed to SetClusterContext to default cluster")
+		}()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.Info("Deleting backup schedules")
+		var wg sync.WaitGroup
+		var mutex sync.Mutex
+		errors := make([]string, 0)
+		for _, scheduleName := range scheduleNames {
+			wg.Add(1)
+			go func(scheduleName string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedules [%s]", scheduleName))
+				if err != nil {
+					mutex.Lock()
+					errors = append(errors, fmt.Sprintf("Failed while deleting schedules [%s]. Error - [%s]", scheduleName, err.Error()))
+					mutex.Unlock()
+				}
+			}(scheduleName)
+		}
+		wg.Wait()
+		if len(errors) > 0 {
+			err = fmt.Errorf("the combined list of errors while deleting backup schedules. Errors - [%v]", strings.Join(errors, ","))
+			dash.VerifySafely(err, nil, "List of errors while deleting backup schedules")
+		}
+		log.Infof("Deleting backup schedule policy")
+		schedulePolicyNames, err := Inst().Backup.GetAllSchedulePolicies(ctx, BackupOrgID)
+		for _, schedulePolicyName := range schedulePolicyNames {
+			err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, []string{schedulePolicyName})
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policy %s ", []string{schedulePolicyName}))
+		}
+		log.Infof("Deleting pre & post exec rules")
+		allRules, _ := Inst().Backup.GetAllRules(ctx, BackupOrgID)
+		for _, ruleName := range allRules {
+			err := DeleteRule(ruleName, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of rule [%s]", ruleName))
+		}
+		log.InfoD("Cleaning up cloud settings and application clusters")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
