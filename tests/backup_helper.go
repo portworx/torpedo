@@ -8543,38 +8543,39 @@ func GetUpdatedKubeVirtVMSpecForBackup(scheduledAppContextsToBackup []*scheduler
 	return nil
 }
 
-// GetPVCList will get the list of PVC's and returns the PVC names
-func GetPVCList() ([]string, error) {
-    pxBackupNamespace, err := backup.GetPxBackupNamespace()
-    if err != nil {
-        return nil, err
-    }
-
-    k8sCore := core.Instance()
-    pvcList, err := k8sCore.GetPersistentVolumeClaims(pxBackupNamespace, make(map[string]string))
-    if err != nil {
-        return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", pxBackupNamespace, err)
-    }
-
-    var pvcNameList []string
-    for _, pvc := range pvcList.Items {
-        pvcNameList = append(pvcNameList, pvc.Name)
-    }
-    return pvcNameList, nil
+// GetPVCListForNamespace retrieves the list of PVCs in the specified namespace.
+func GetPVCListForNamespace(namespace string) ([]string, error) {
+	k8sCore := core.Instance()
+	pvcList, err := k8sCore.GetPersistentVolumeClaims(namespace, make(map[string]string))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", namespace, err)
+	}
+	// Extract PVC names from the list
+	var pvcNameList []string
+	for _, pvc := range pvcList.Items {
+		pvcNameList = append(pvcNameList, pvc.Name)
+	}
+	return pvcNameList, nil
 }
 
-// ValidatePVCCleanup will compare the PVC list before and after the run
+// ValidatePVCCleanup checks if there is a mismatch between the original PVC list and the current one.
 func ValidatePVCCleanup(pvcListBefore, pvcListAfter []string) error {
-	// Check if the total number of the PVC's are the same
 	if len(pvcListBefore) != len(pvcListAfter) {
-		return fmt.Errorf("mismatch in pvc count")
+		fmt.Println("Expected PVCs:", strings.Join(pvcListBefore, ", "))
+		fmt.Println("Actual PVCs:", strings.Join(pvcListAfter, ", "))
+		return fmt.Errorf("mismatch in PVC count")
 	}
-
-	// Check if the contents of the lists are the same
+	var mismatchedPVCs []string
 	for i := 0; i < len(pvcListBefore); i++ {
 		if pvcListBefore[i] != pvcListAfter[i] {
-			return fmt.Errorf("mismatch in pvc list before and after the run")
+			mismatchedPVCs = append(mismatchedPVCs, pvcListBefore[i])
 		}
+	}
+	if len(mismatchedPVCs) > 0 {
+		fmt.Println("Expected PVCs:", strings.Join(pvcListBefore, ", "))
+		fmt.Println("Actual PVCs:", strings.Join(pvcListAfter, ", "))
+		fmt.Println("Mismatched PVCs:", strings.Join(mismatchedPVCs, ", "))
+		return fmt.Errorf("mismatch in PVC list before and after the run")
 	}
 	return nil
 }
