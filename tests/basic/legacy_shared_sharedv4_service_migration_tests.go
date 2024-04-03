@@ -179,6 +179,45 @@ func waitAllSharedVolumesToGetMigrated(contexts []*scheduler.Context, maxWaitTim
 	}
 }
 
+func createSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffix string) error {
+	storageNodes, err := GetStorageNodes()
+	log.FailOnError(err, "Unable to get the storage nodes")
+	pxNode := storageNodes[rand.Intn(len(storageNodes))]
+	for vol := range volMap {
+		apiVol, err := Inst().V.InspectVolume(vol)
+		Expect(err).NotTo(HaveOccurred())
+		cloneName := fmt.Sprintf("%s-%s", vol, cloneSuffix)
+		snapshotName := fmt.Sprintf("%s-%s", vol, snapshotSuffix)
+		pxctlCloneCmd := fmt.Sprintf("volume clone create %s --name %s", apiVol.Id, cloneName)
+		pxctlSnapshotCmd := fmt.Sprintf("volume snapshot create %s --name %s", apiVol.Id, snapshotName)
+		output, err := Inst().V.GetPxctlCmdOutput(pxNode, pxctlCloneCmd)
+		log.FailOnError(err, fmt.Sprintf("error creating clone for volumes %s", apiVol.Id))
+		output, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlSnapshotCmd)
+		log.FailOnError(err, fmt.Sprintf("error creating snapshot for volumes %s", apiVol.Id))
+		log.Infof(output)
+	}
+	return nil
+}
+
+func deleteSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffix string) error {
+	storageNodes, err := GetStorageNodes()
+	log.FailOnError(err, "Unable to get the storage nodes")
+	pxNode := storageNodes[rand.Intn(len(storageNodes))]
+	for vol := range volMap {
+		apiVol, err := Inst().V.InspectVolume(vol)
+		Expect(err).NotTo(HaveOccurred())
+		cloneName := fmt.Sprintf("%s-%s", vol, cloneSuffix)
+		snapshotName := fmt.Sprintf("%s-%s", vol, snapshotSuffix)
+		pxctlCloneCmd := fmt.Sprintf("volume delete %s --force",  cloneName)
+		pxctlSnapshotCmd := fmt.Sprintf("volume delete %s --force", snapshotName)
+		output, err := Inst().V.GetPxctlCmdOutput(pxNode, pxctlCloneCmd)
+		log.FailOnError(err, fmt.Sprintf("error deleting clone for volumes %s, clone %s", apiVol.Id, cloneName))
+		output, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlSnapshotCmd)
+		log.FailOnError(err, fmt.Sprintf("error deleting snapshot for volumes %s, snapshot %s", apiVol.Id, snapshotName))
+		log.Infof(output)
+	}
+	return nil
+}
 // Create Legacy Shared Volumes.
 // Turn on Migration, no Apps required, volumes should get converted to sharedv4 service volume.
 
@@ -557,3 +596,60 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator", func() {
 		DestroyApps(contexts, nil)
 	})
 })
+
+var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones", func() {
+	var testrailID = 0
+	var runID int
+	JustBeforeEach(func() {
+		namespacePrefix := "lstsv4m_snapshot_clone"
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		setCreateLegacySharedAsSharedv4Service(false)
+		setMigrateLegacySharedToSharedv4Service(false)
+		StartTorpedoTest("LegacySharedVolumeAppRestartCoordinator", "Legacy Shared to Sharedv4 Service Migration with creation of snapshots and clones", nil, testrailID)
+		contexts = make([]*scheduler.Context, 0)
+		numberNameSpaces := Inst().GlobalScaleFactor
+		if numberNameSpaces < 40 {
+			numberNameSpaces = 40
+		}
+		for i := 0; i < numberNameSpaces; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
+		}
+		// TODO: Skip non legacy shared tests
+		ValidateApplications(contexts)
+	})
+
+	ItLog := "Start Migration "
+	It(ItLog, func() {
+		podMap := make(map[types.UID]bool)
+		volMap := make(map[string]bool)
+		for _, ctx := range contexts {
+			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
+		}
+		createSnapshotsAndClones(volMap, "snapshot-1", "clone-1")
+		setMigrateLegacySharedToSharedv4Service(true)
+		time.Sleep(120 * time.Second) // sleep 2 minutes.
+
+		stepLog := "Create snaphots and clones Migration is in Progress"
+		Step(stepLog, func() {
+			createSnapshotsAndClones(volMap, "snapshot-2", "clone-2")
+			deleteSnapshotsAndClones(volMap, "snapshot-1", "clone-1")
+		})
+
+		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
+		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
+		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
+		countPostTimeout := getLegacySharedVolumeCount(contexts)
+		Expect(countPostTimeout).To(Equal(0))
+		checkVolsConvertedtoSharedv4Service(volMap)
+		for _, ctx := range contexts {
+			checkMapOfPods(podMap, ctx)
+		}
+		ValidateApplications(contexts)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+		DestroyApps(contexts, nil)
+	})
+})
+
