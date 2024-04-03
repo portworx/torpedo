@@ -2,6 +2,7 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
@@ -17,6 +18,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	var (
 		workflowDataservice stworkflows.WorkflowDataService
 		workFlowTemplates   stworkflows.CustomTemplates
+		deployment          *automationModels.PDSDeploymentResponse
 	)
 
 	It("Deploy and Validate DataService", func() {
@@ -54,7 +56,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 
 	It("ScaleUp DataService", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			_, err := workflowDataservice.UpdateDataService(ds, ds.Image, ds.Version)
+			_, err := workflowDataservice.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
 			log.FailOnError(err, "Error while updating ds")
 		}
 
@@ -82,6 +84,8 @@ var _ = Describe("{UpgradeDataServiceImageAndVersion}", func() {
 	var (
 		workflowDataservice stworkflows.WorkflowDataService
 		workFlowTemplates   stworkflows.CustomTemplates
+		deployment          *automationModels.PDSDeploymentResponse
+		err                 error
 	)
 
 	It("Deploy and Validate DataService", func() {
@@ -105,7 +109,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersion}", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
-			_, err := workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
 			log.FailOnError(err, "Error while deploying ds")
 		}
 
@@ -121,7 +125,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersion}", func() {
 
 	It("Upgrade DataService Version and Image", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			_, err := workflowDataservice.UpdateDataService(ds, ds.Image, ds.Version)
+			_, err := workflowDataservice.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
 			log.FailOnError(err, "Error while updating ds")
 		}
 
@@ -152,6 +156,7 @@ var _ = Describe("{ScaleUpCpuMemLimitsOfDS}", func() {
 	var (
 		workflowDataservice stworkflows.WorkflowDataService
 		workFlowTemplates   stworkflows.CustomTemplates
+		deployment          *automationModels.PDSDeploymentResponse
 	)
 	It("Deploy and Validate DataService", func() {
 		Step("Create a PDS Namespace", func() {
@@ -176,7 +181,7 @@ var _ = Describe("{ScaleUpCpuMemLimitsOfDS}", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
-			_, err := workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
 			log.FailOnError(err, "Error while deploying ds")
 		}
 
@@ -187,7 +192,7 @@ var _ = Describe("{ScaleUpCpuMemLimitsOfDS}", func() {
 		log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdated)
 		workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigIdUpdated
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			_, err := workflowDataservice.UpdateDataService(ds, ds.OldImage, ds.OldVersion)
+			_, err := workflowDataservice.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.OldImage, ds.OldVersion)
 			log.FailOnError(err, "Error while updating ds")
 		}
 	})
@@ -203,6 +208,7 @@ var _ = Describe("{IncreasePVCby1gb}", func() {
 	var (
 		workflowDataservice stworkflows.WorkflowDataService
 		workFlowTemplates   stworkflows.CustomTemplates
+		deployment          *automationModels.PDSDeploymentResponse
 	)
 	It("Deploy and Validate DataService", func() {
 		Step("Create a PDS Namespace", func() {
@@ -238,7 +244,7 @@ var _ = Describe("{IncreasePVCby1gb}", func() {
 		log.InfoD("Updated Storage Template ID- [updated- %v]", stConfigIdUpdated)
 		workflowDataservice.PDSTemplates.StorageTemplatetId = stConfigIdUpdated
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			_, err := workflowDataservice.UpdateDataService(ds, ds.OldImage, ds.OldVersion)
+			_, err := workflowDataservice.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.OldImage, ds.OldVersion)
 			log.FailOnError(err, "Error while updating ds")
 		}
 	})
