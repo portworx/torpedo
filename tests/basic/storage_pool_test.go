@@ -3774,7 +3774,7 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 				} else {
 					if strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type") {
 						dash.VerifyFatal(err, nil, "drive add to existing pool not supported for px-storev2 or px-cache pools")
-						log.InfoD("")
+						log.InfoD("Drive add not supported :%s, hence skipping the test", disk_err)
 						Skip("drive add to existing pool not supported for px-storev2 or px-cache pools")
 
 					}
