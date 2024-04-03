@@ -166,7 +166,7 @@ func (saGrpcV1 *PlatformGrpc) GenerateServiceAccountAccessToken(tokenReq *PDSSer
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	saResponse := PDSServiceAccountResponse{
-		GetToken: GetServiceAccountTokenResponse{},
+		CreateToken: GetServiceAccountTokenResponse{},
 	}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -177,7 +177,7 @@ func (saGrpcV1 *PlatformGrpc) GenerateServiceAccountAccessToken(tokenReq *PDSSer
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling `GetAccessTokenRequest` api call: %v\n", err)
 	}
-	err = utilities.CopyStruct(saModel, &saResponse.GetToken)
+	err = utilities.CopyStruct(saModel, &saResponse.CreateToken)
 	log.Infof("Value of  SA after copy - [%v]", saResponse)
 	return &saResponse, nil
 }

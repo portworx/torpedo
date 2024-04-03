@@ -1,15 +1,19 @@
 package automationModels
 
 // PDSCreateIAM Struct for IAM roleBindings
-type PDSIam struct {
+type PDSIAMRequest struct {
 	Create CreateIAM
+}
+
+type PDSIAMResponse struct {
+	Create V1IAM
 }
 
 type CreateIAM struct {
 	V1IAM V1IAM
 }
 type V1RoleBinding struct {
-	RoleName    *string
+	RoleName    string
 	ResourceIds []string
 }
 type V1AccessPolicy struct {

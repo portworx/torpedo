@@ -36,20 +36,64 @@ func (iam *PLATFORM_API_V1) ListIamRoleBindings(listReq *WorkFlowRequest) ([]Wor
 }
 
 // CreateIamRoleBinding returns newly create IAM RoleBinding object
-func (iam *PLATFORM_API_V1) CreateIamRoleBinding(createIamReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (iam *PLATFORM_API_V1) CreateIamRoleBinding(createIamReq *PDSIAMRequest) (*PDSIAMResponse, error) {
 	_, iamClient, err := iam.getIAMClient()
-	iamResponse := WorkFlowResponse{}
-	iamCreateRequest := iamv1.ApiIAMServiceCreateIAMRequest{}
-	iamCreateRequest = iamCreateRequest.ApiService.IAMServiceCreateIAM(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
-	err = utilities.CopyStruct(&IAMRequestBody, createIamReq.Iam)
+	iamResponse := PDSIAMResponse{
+		Create: V1IAM{},
+	}
+	iamCreateRequest := iamv1.ApiIAMServiceCreateIAMRequest{}
+	iamCreateRequest = iamCreateRequest.ApiService.IAMServiceCreateIAM(context.Background())
+	V1IAM := iamv1.V1IAM{
+		Meta: &iamv1.V1Meta{
+			Name: createIamReq.Create.V1IAM.Meta.Name,
+		},
+		Config: &iamv1.V1Config{
+			ActorId:   createIamReq.Create.V1IAM.Config.ActorId,
+			ActorType: createIamReq.Create.V1IAM.Config.ActorType,
+			AccessPolicy: &iamv1.V1AccessPolicy{
+				GlobalScope: []string{},
+				Account:     []string{},
+				Tenant:      []iamv1.V1RoleBinding{},
+				Project:     []iamv1.V1RoleBinding{},
+				Namespace:   []iamv1.V1RoleBinding{},
+			},
+		},
+	}
+
+	// Applying all the Tenant policies
+	for _, tenantPolicy := range createIamReq.Create.V1IAM.Config.AccessPolicy.Tenant {
+		V1IAM.Config.AccessPolicy.Tenant = append(V1IAM.Config.AccessPolicy.Tenant, iamv1.V1RoleBinding{
+			RoleName:    &tenantPolicy.RoleName,
+			ResourceIds: tenantPolicy.ResourceIds,
+		})
+	}
+
+	// Applying all the Project policies
+	for _, projectPolicy := range createIamReq.Create.V1IAM.Config.AccessPolicy.Project {
+		V1IAM.Config.AccessPolicy.Project = append(V1IAM.Config.AccessPolicy.Project, iamv1.V1RoleBinding{
+			RoleName:    &projectPolicy.RoleName,
+			ResourceIds: projectPolicy.ResourceIds,
+		})
+	}
+
+	// Applying all the Namepsace policies
+	for _, nsPolicy := range createIamReq.Create.V1IAM.Config.AccessPolicy.Namespace {
+		V1IAM.Config.AccessPolicy.Namespace = append(V1IAM.Config.AccessPolicy.Namespace, iamv1.V1RoleBinding{
+			RoleName:    &nsPolicy.RoleName,
+			ResourceIds: nsPolicy.ResourceIds,
+		})
+	}
+
+	iamCreateRequest = iamCreateRequest.V1IAM(V1IAM)
+
 	iamModel, res, err := iamClient.IAMServiceCreateIAMExecute(iamCreateRequest)
 	if err != nil || res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
+		return nil, fmt.Errorf("Error when calling `IAMServiceCreateIAMExecute`: %v\n.Full HTTP response: %v", err, res)
 	}
-	err = utilities.CopyStruct(&iamResponse, iamModel)
+	err = utilities.CopyStruct(iamModel, &iamResponse.Create)
 	return &iamResponse, err
 }
 

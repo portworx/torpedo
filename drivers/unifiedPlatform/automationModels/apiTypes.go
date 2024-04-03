@@ -27,7 +27,6 @@ type WorkFlowRequest struct {
 	PdsAppId              string                        `copier:"must,nopanic"`
 	Pagination            PaginationRequest             `copier:"must,nopanic"`
 	ServiceAccountRequest PDSServiceAccountRequest      `copier:"must,nopanic"`
-	Iam                   PDSIam                        `copier:"must,nopanic"`
 	DataServiceId         string                        `copier:"must,nopanic"`
 	DataServiceVersionId  string                        `copier:"must,nopanic"`
 }

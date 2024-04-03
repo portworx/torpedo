@@ -50,9 +50,11 @@ func (iamGrpcV1 *PlatformGrpc) ListIamRoleBindings(listReq *WorkFlowRequest) ([]
 }
 
 // CreateIamRoleBinding returns newly create IAM RoleBinding object
-func (iamGrpcV1 *PlatformGrpc) CreateIamRoleBinding(createReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (iamGrpcV1 *PlatformGrpc) CreateIamRoleBinding(createReq *PDSIAMRequest) (*PDSIAMResponse, error) {
 	ctx, iamClient, _, err := iamGrpcV1.getIamClient()
-	iamResponse := WorkFlowResponse{}
+	iamResponse := PDSIAMResponse{
+		Create: V1IAM{},
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
