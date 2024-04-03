@@ -3,20 +3,22 @@ package tests
 import (
 	context1 "context"
 	"fmt"
+	"regexp"
+	"strings"
+	"time"
+
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
-	kubevirtdy "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
+
+	kubevirtdy "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 	corev1 "k8s.io/api/core/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
-	"regexp"
-	"strings"
-	"time"
 )
 
 const (
@@ -201,24 +203,6 @@ func StartAndWaitForVMIMigration(virtualMachineCtx *scheduler.Context, ctx conte
 
 		//Get the node where the vm is scheduled after the migration
 		nodeNameAfterMigration := testPod.Spec.NodeName
-
-		// Adding an extra check which keeps on checking for 5 mins if the pod has been migrated to another node (because in an overloaded cluster it might take time for the pod to be scheduled on another node)
-		podMigrated := func() (interface{}, bool, error) {
-			testPod, err := GetVirtLauncherPodForVM(virtualMachineCtx, vols[0])
-			if err != nil {
-				return "", true, err
-			}
-			nodeNameAfterMigration = testPod.Spec.NodeName
-			if nodeName == nodeNameAfterMigration {
-				return "", true, fmt.Errorf("VM pod not migrated to another node after migration triggered for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
-			}
-			log.InfoD("VM pod migrated to node: [%s]", nodeNameAfterMigration)
-			return "", false, nil
-		}
-		_, err = task.DoRetryWithTimeout(podMigrated, 5*time.Minute, 30*time.Second)
-		if err != nil {
-			return "", false, err
-		}
 
 		if nodeName == nodeNameAfterMigration {
 			return "", false, fmt.Errorf("VM pod live migrated [%s] in namespace [%s] but is still on the same node [%s]", testPod.Name, testPod.Namespace, nodeName)

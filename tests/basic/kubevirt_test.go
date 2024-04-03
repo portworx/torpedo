@@ -22,14 +22,13 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-cirros-cd-with-pvc"}
+		Inst().AppList = []string{"kubevirt-cirros-live-migration"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				appCtxs = append(appCtxs, ScheduleApplications("test")...)
 			}
 		})
-		defer DestroyApps(appCtxs, nil)
 		ValidateApplications(appCtxs)
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
