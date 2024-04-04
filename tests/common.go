@@ -693,18 +693,16 @@ func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
 
 func IsPoolAddDiskSupported() bool {
 	DMthin, err := IsDMthin()
-	if err != nil {
-		log.FailOnError(err, "Error occured while checking if DMthin is enabled")
-	}
+	log.FailOnError(err, "Error occured while checking if DMthin is enabled")
 	if DMthin {
 		dmthinSupportedPxVersion, px_err := semver.NewVersion("3.1.0")
 		if px_err != nil {
-			log.Errorf("Error occured :%s", px_err)
+			log.FailOnError(px_err, "Error occured :%s")
 			return false
 		}
 		driverVersion, version_err := Inst().V.GetDriverVersion()
 		if version_err != nil {
-			log.Errorf("Error occured while fetching current version :%s", version_err)
+			log.FailOnError(version_err, "Error occured while fetching current version")
 			return false
 		}
 		var new_trimmedVersion string
@@ -717,7 +715,7 @@ func IsPoolAddDiskSupported() bool {
 		}
 		currentPxVersionOnCluster, semver_err := semver.NewVersion(new_trimmedVersion)
 		if semver_err != nil {
-			log.Errorf("Error occured while comparing the current and expected version:%s", semver_err)
+			log.FailOnError(semver_err, "Error occured while comparing the current and expected version")
 			return false
 		}
 		log.InfoD(fmt.Sprintf("The current version on the cluster is :%s", currentPxVersionOnCluster))
