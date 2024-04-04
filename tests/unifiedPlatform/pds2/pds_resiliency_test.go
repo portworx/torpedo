@@ -30,7 +30,7 @@ var _ = Describe("{MultiplyNumDuringSummation}", func() {
 		})
 
 		Step("Induce errors while some PDS operation is going on", func() {
-			err := workflowResiliency.InduceFailureAndExecuteResiliencyScenario(workflowDataservice.NamespaceName, MultiplyNumDuringSummation, PerformMultiplication())
+			err := workflowResiliency.InduceFailureAndExecuteResiliencyScenario(workflowDataservice.NamespaceName, MultiplyNumDuringSummation)
 			log.FailOnError(err, fmt.Sprintf("Error happened"))
 
 		})

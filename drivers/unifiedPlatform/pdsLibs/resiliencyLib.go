@@ -11,6 +11,11 @@ const (
 	MultiplyNumDuringSummation = "test-dummy-resiliency"
 )
 
+// FunctionMap stores functions by their names
+var FunctionMap = map[string]error{
+	MultiplyNumDuringSummation: PerformMultiplication(),
+}
+
 var (
 	wg                        sync.WaitGroup
 	ResiFlag                  = false
@@ -63,14 +68,23 @@ func ExecuteInParallel(functions ...func()) {
 	}
 }
 
-func GenerateFailureTypeAndMethod(failuretype string, method error) TypeOfFailure {
-	failureSceanrio := TypeOfFailure{
+func GenerateFailureTypeAndMethod(failuretype string) TypeOfFailure {
+	// Create a map to associate string keys with functions
+
+	var method error
+	// Call a function based on a string argument
+	if fn, ok := FunctionMap[failuretype]; ok {
+		method = fn
+	} else {
+		fmt.Println("Function not found")
+	}
+	failureScenario := TypeOfFailure{
 		Type: failuretype,
 		Method: func() error {
 			return method
 		},
 	}
-	return failureSceanrio
+	return failureScenario
 }
 
 // DefineFailureType Wrapper to Define failure type from Test Case
@@ -78,9 +92,9 @@ func DefineFailureType(failuretype TypeOfFailure) {
 	FailureType = failuretype
 }
 
-func InduceFailureAfterWaitingForCondition(namespace string, failureType string, method error, resiFlag bool) error {
+func InduceFailureAfterWaitingForCondition(namespace string, failureType string, resiFlag bool) error {
 	ResiFlag = resiFlag
-	failureTypeGen := GenerateFailureTypeAndMethod(failureType, method)
+	failureTypeGen := GenerateFailureTypeAndMethod(failureType)
 	DefineFailureType(failureTypeGen)
 	switch failureTypeGen.Type {
 	case MultiplyNumDuringSummation:
