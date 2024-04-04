@@ -1,7 +1,6 @@
 package stworkflows
 
 import (
-	"fmt"
 	_ "github.com/gobwas/glob/syntax/ast"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
@@ -31,7 +30,6 @@ func (svcUser *WorkflowServiceAccount) CreateServiceAccount(saName string, roleN
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Created service account with Name - [%s], ID - [%s]", *userDetails.Create.Meta.Name, *userDetails.Create.Meta.Uid)
 	log.Infof("Assigning role bindings to the user")
 
 	token, err := svcUser.CreateRoleBindingForUser(userDetails.Create, roleName)
@@ -49,8 +47,7 @@ func (svcUser *WorkflowServiceAccount) CreateServiceAccount(saName string, roleN
 }
 
 func (svcUser *WorkflowServiceAccount) SwitchToServiceAccount(saName string) {
-	if user, ok := svcUser.UserRoles[saName]; ok {
-		fmt.Println("User is found", user)
+	if _, ok := svcUser.UserRoles[saName]; ok {
 		jwtToken := svcUser.UserRoles[saName]
 		// check if token expired, if expired create new and update the map
 		utils.RunWithRBAC = utils.RunWithRbac{
@@ -62,10 +59,11 @@ func (svcUser *WorkflowServiceAccount) SwitchToServiceAccount(saName string) {
 }
 
 func (svcUser *WorkflowServiceAccount) SwitchToAdmin() error {
-	log.Infof("\n\n----Switched to Admin User----\n\n")
+
 	utils.RunWithRBAC = utils.RunWithRbac{
 		RbacFlag: false,
 	}
+	log.Infof("\n\n----Switched to Admin User----\n\n")
 	return nil
 }
 
@@ -103,9 +101,5 @@ func (svcUser *WorkflowServiceAccount) CreateRoleBindingForUser(userDetails auto
 	log.Infof("Token for the user - [%s]", tokenRes.CreateToken.Token)
 
 	return tokenRes.CreateToken.Token, nil
-
-}
-
-func (svcUser *WorkflowServiceAccount) ValidateAccountSwitch(saName string) {
 
 }
