@@ -122,8 +122,10 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 
 	var appCtxs []*scheduler.Context
 	var nodes []string
+	var namespace string
 	itLog := "Kill Px then Add disk to Kubevirt VM"
 	It(itLog, func() {
+		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
@@ -133,7 +135,7 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				appCtxs = append(appCtxs, ScheduleApplications("test")...)
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
 		})
 		ValidateApplications(appCtxs)
@@ -221,8 +223,11 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 
 	var appCtxs []*scheduler.Context
 	var nodes []string
+	var namespace string
+
 	itLog := "Add disk to Kubevirt VM, Kill Px and then add another disk"
 	It(itLog, func() {
+		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
@@ -232,7 +237,7 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				appCtxs = append(appCtxs, ScheduleApplications("test")...)
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
 		})
 		ValidateApplications(appCtxs)
