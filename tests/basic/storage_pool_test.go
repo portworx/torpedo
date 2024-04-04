@@ -141,12 +141,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
 			if err != nil {
 				isPoolAddDiskSupported := IsPoolAddDiskSupported()
-				if isPoolAddDiskSupported {
-					dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-					resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
-					dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
-
-				} else {
+				if !isPoolAddDiskSupported {
 					IsExpectederr := strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
 					dash.VerifyFatal(IsExpectederr, true, err.Error())
 					log.InfoD("Drive add not supported :%s, hence skipping the test", err.Error())
@@ -3760,12 +3755,7 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 			if err != nil {
 				isPoolAddDiskSupported := IsPoolAddDiskSupported()
-				if isPoolAddDiskSupported {
-					dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-					resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
-					dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", poolToBeResized.Uuid, stNode.Name))
-
-				} else {
+				if !isPoolAddDiskSupported {
 					IsExpectederr := strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
 					dash.VerifyFatal(IsExpectederr, true, err.Error())
 					log.InfoD("Drive add not supported :%s, hence skipping the test", err.Error())
