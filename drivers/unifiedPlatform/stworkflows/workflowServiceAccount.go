@@ -33,10 +33,13 @@ func (svcUser *WorkflowServiceAccount) CreateServiceAccount(saName string, roleN
 	}
 	log.Infof("Created service account with Name - [%s], ID - [%s]", *userDetails.Create.Meta.Name, *userDetails.Create.Meta.Uid)
 	log.Infof("Assigning role bindings to the user")
+
 	token, err := svcUser.CreateRoleBindingForUser(userDetails.Create, roleName)
+
 	if err != nil {
 		return svcUser, err
 	}
+	log.Infof("Token for [%s] is [%s]", saName, token)
 	svcUser.UserRoles[saName] = SeviceAccount{
 		Token:    token,
 		RoleName: roleName,
@@ -69,28 +72,30 @@ func (svcUser *WorkflowServiceAccount) SwitchToAdmin() error {
 func (svcUser *WorkflowServiceAccount) CreateRoleBindingForUser(userDetails automationModels.V1ServiceAccount, roleName []string) (string, error) {
 	actorID := *userDetails.Meta.Uid
 	log.Infof("Client ID - [%s], Client Secret [%s]", *userDetails.Config.ClientId, *userDetails.Config.ClientSecret)
-	allRoleBindings := make(map[string][]automationModels.V1RoleBinding)
-	for _, role := range roleName {
-		if role == TenantAdmin {
-			allRoleBindings[TenantAdmin] = append(allRoleBindings[TenantAdmin], automationModels.V1RoleBinding{
-				RoleName:    TenantAdmin,
-				ResourceIds: []string{svcUser.WorkflowProject.Platform.TenantId},
-			})
-		}
+	if len(roleName) > 0 {
+		allRoleBindings := make(map[string][]automationModels.V1RoleBinding)
+		for _, role := range roleName {
+			if role == TenantAdmin {
+				allRoleBindings[TenantAdmin] = append(allRoleBindings[TenantAdmin], automationModels.V1RoleBinding{
+					RoleName:    TenantAdmin,
+					ResourceIds: []string{svcUser.WorkflowProject.Platform.TenantId},
+				})
+			}
 
-		if role == ProjectAdmin {
-			allRoleBindings[ProjectAdmin] = append(allRoleBindings[ProjectAdmin], automationModels.V1RoleBinding{
-				RoleName:    ProjectAdmin,
-				ResourceIds: []string{svcUser.WorkflowProject.ProjectId},
-			})
+			if role == ProjectAdmin {
+				allRoleBindings[ProjectAdmin] = append(allRoleBindings[ProjectAdmin], automationModels.V1RoleBinding{
+					RoleName:    ProjectAdmin,
+					ResourceIds: []string{svcUser.WorkflowProject.ProjectId},
+				})
+			}
 		}
+		iamName := "iam-role-for-" + *userDetails.Meta.Name + strconv.Itoa(rand.Int())
+		iamRoles, err := platformLibs.CreatePlatformServiceAccountIamRoles(iamName, actorID, allRoleBindings)
+		if err != nil {
+			return "", err
+		}
+		log.Infof("created iam role with name %s", *iamRoles.Create.Meta.Name)
 	}
-	iamName := "iam-role-for-" + *userDetails.Meta.Name + strconv.Itoa(rand.Int())
-	iamRoles, err := platformLibs.CreatePlatformServiceAccountIamRoles(iamName, actorID, allRoleBindings)
-	if err != nil {
-		return "", err
-	}
-	log.Infof("created iam role with name %s", *iamRoles.Create.Meta.Name)
 	tokenRes, err := platformLibs.GenerateServiceAccountAccessToken(svcUser.WorkflowProject.Platform.TenantId, *userDetails.Config.ClientId, *userDetails.Config.ClientSecret)
 	if err != nil {
 		return "", err

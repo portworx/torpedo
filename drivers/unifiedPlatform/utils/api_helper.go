@@ -185,5 +185,7 @@ func GetDefaultHeader(token string, accountId string) map[string]string {
 		defaultHeader["px-account-id"] = accountId
 	}
 
+	log.Infof("Current Header - [%+v]", defaultHeader)
+
 	return defaultHeader
 }
