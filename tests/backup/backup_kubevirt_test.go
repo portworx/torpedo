@@ -273,7 +273,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 			var namespaces []string
 			for _, appCtx := range scheduledAppContexts {
 				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
-				namespaceMappingMixed[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-mixed"
+				namespaceMappingMixed[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-mxd"
 			}
 			backupWithVMMixed = fmt.Sprintf("%s-%s", "auto-backup-mixed", RandomString(6))
 			backupNames = append(backupNames, backupWithVMMixed)
@@ -313,7 +313,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 			var namespaces []string
 			for _, appCtx := range scheduledAppContexts {
 				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
-				namespaceMappingRestart[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-restart"
+				namespaceMappingRestart[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-rst"
 			}
 			backupWithVMRestart = fmt.Sprintf("%s-%s", "auto-backup-restart", RandomString(6))
 			backupNames = append(backupNames, backupWithVMRestart)
@@ -365,7 +365,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 			var namespaces []string
 			for _, appCtx := range scheduledAppContexts {
 				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
-				namespaceMappingStopped[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-stopped"
+				namespaceMappingStopped[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-stp"
 			}
 			backupWithVMStopped = fmt.Sprintf("%s-%s", "auto-backup-stopped", RandomString(6))
 			backupNames = append(backupNames, backupWithVMStopped)
@@ -1610,7 +1610,7 @@ var _ = Describe("{KubevirtInPlaceRestoreWithReplaceAndRetain}", Label(TestCaseL
 			restoreNames = append(restoreNames, restoreName)
 			log.InfoD("Restoring the [%s] backup", backupName)
 			// Not restoring with validation as it will fail for all the VMs which are gone in scheduling state
-			err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyRetain)
+			err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyRetain)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreName, backupName))
 		})
 
@@ -1640,7 +1640,7 @@ var _ = Describe("{KubevirtInPlaceRestoreWithReplaceAndRetain}", Label(TestCaseL
 			restoreNames = append(restoreNames, restoreName)
 			log.InfoD("Restoring the [%s] backup", backupName)
 			// Not restoring with validation as it will fail for all the VMs which are gone in scheduling state
-			err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete)
+			err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreName, backupName))
 		})
 
@@ -2211,7 +2211,7 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 
 		Step("Create schedule policies", func() {
 			log.InfoD("Creating schedule policies")
-			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 2)
+			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(10, 15, 2)
 			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(periodicPolicyName, uuid.New(), BackupOrgID, periodicSchedulePolicyInfo)
 			dash.VerifyFatal(periodicPolicyStatus, nil, fmt.Sprintf("Creation of periodic schedule policy - %s", periodicPolicyName))
 		})
@@ -2953,7 +2953,7 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 
 		Step("Create schedule policies", func() {
 			log.InfoD("Creating schedule policies")
-			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 2)
+			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(10, 15, 2)
 			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(periodicPolicyName, uuid.New(), BackupOrgID, periodicSchedulePolicyInfo)
 			dash.VerifyFatal(periodicPolicyStatus, nil, fmt.Sprintf("Creation of periodic schedule policy - %s", periodicPolicyName))
 		})
