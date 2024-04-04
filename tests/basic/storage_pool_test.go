@@ -148,7 +148,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 
 				} else {
 					IsExpectederr := strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
-					dash.VerifyFatal(IsExpectederr, true, "drive add to existing pool not supported for px-storev2 or px-cache pools")
+					dash.VerifyFatal(IsExpectederr, true, err.Error())
 					log.InfoD("Drive add not supported :%s, hence skipping the test", err.Error())
 					Skip("drive add to existing pool not supported for px-storev2 or px-cache pools")
 
@@ -3765,7 +3765,7 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 
 				} else {
 					IsExpectederr := strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
-					dash.VerifyFatal(IsExpectederr, true, "drive add to existing pool not supported for px-storev2 or px-cache pools")
+					dash.VerifyFatal(IsExpectederr, true, err.Error())
 					log.InfoD("Drive add not supported :%s, hence skipping the test", err.Error())
 					Skip("drive add to existing pool not supported for px-storev2 or px-cache pools")
 
