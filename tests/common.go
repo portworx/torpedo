@@ -699,12 +699,12 @@ func IsPoolAddDiskSupported() bool {
 	if DMthin {
 		dmthinSupportedPxVersion, px_err := semver.NewVersion("3.1.0")
 		if px_err != nil {
-			log.Errorf(fmt.Sprintf("Error occured :%s", px_err))
+			log.Errorf("Error occured :%s", px_err)
 			return false
 		}
 		driverVersion, version_err := Inst().V.GetDriverVersion()
 		if version_err != nil {
-			log.Errorf(fmt.Sprintf("Error occured while fetching current version :%s", version_err))
+			log.Errorf("Error occured while fetching current version :%s", version_err)
 			return false
 		}
 		var new_trimmedVersion string
@@ -717,12 +717,12 @@ func IsPoolAddDiskSupported() bool {
 		}
 		currentPxVersionOnCluster, semver_err := semver.NewVersion(new_trimmedVersion)
 		if semver_err != nil {
-			log.Errorf(fmt.Sprintf("Error occured while comparing the current and expected version:%s", semver_err))
+			log.Errorf("Error occured while comparing the current and expected version:%s", semver_err)
 			return false
 		}
 		log.InfoD(fmt.Sprintf("The current version on the cluster is :%s", currentPxVersionOnCluster))
 		if currentPxVersionOnCluster.GreaterThan(dmthinSupportedPxVersion) {
-			log.Errorf(fmt.Sprintf("drive add to existing pool not supported for px-storev2 or px-cache pools as the current version is:%s", currentPxVersionOnCluster))
+			log.Errorf("drive add to existing pool not supported for px-storev2 or px-cache pools as the current version is:%s", currentPxVersionOnCluster)
 			return false
 		}
 	}
