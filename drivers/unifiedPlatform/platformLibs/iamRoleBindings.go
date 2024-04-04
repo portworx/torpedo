@@ -12,9 +12,9 @@ const (
 )
 
 // CreatePlatformServiceAccountIamRoles creates IAM roles for given Namespace role binding and ActorId
-func CreatePlatformServiceAccountIamRoles(iamName, actorId string, nsRoleBindings map[string][]automationModels.V1RoleBinding) (*automationModels.PDSIAMResponse, error) {
+func CreatePlatformServiceAccountIamRoles(iamName, actorId string, nsRoleBindings map[string][]automationModels.V1RoleBinding) (*automationModels.IAMResponse, error) {
 
-	iamInputs := &automationModels.PDSIAMRequest{
+	iamInputs := &automationModels.IAMRequest{
 		Create: automationModels.CreateIAM{
 			V1IAM: automationModels.V1IAM{
 				Meta: automationModels.V1Meta{},
