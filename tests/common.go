@@ -698,12 +698,10 @@ func IsPoolAddDiskSupported() bool {
 		dmthinSupportedPxVersion, px_err := semver.NewVersion("3.1.0")
 		if px_err != nil {
 			log.FailOnError(px_err, "Error occured :%s")
-			return false
 		}
 		driverVersion, version_err := Inst().V.GetDriverVersion()
 		if version_err != nil {
 			log.FailOnError(version_err, "Error occured while fetching current version")
-			return false
 		}
 		var new_trimmedVersion string
 		parts := strings.Split(driverVersion, "-")
@@ -716,7 +714,6 @@ func IsPoolAddDiskSupported() bool {
 		currentPxVersionOnCluster, semver_err := semver.NewVersion(new_trimmedVersion)
 		if semver_err != nil {
 			log.FailOnError(semver_err, "Error occured while comparing the current and expected version")
-			return false
 		}
 		log.InfoD(fmt.Sprintf("The current version on the cluster is :%s", currentPxVersionOnCluster))
 		if currentPxVersionOnCluster.GreaterThan(dmthinSupportedPxVersion) {
