@@ -176,3 +176,14 @@ func GetWorkflowResponseMap() map[string][]WorkFlowResponse {
 	var createdMap = make(map[string][]WorkFlowResponse)
 	return createdMap
 }
+
+func GetDefaultHeader(token string, accountId string) map[string]string {
+	defaultHeader := make(map[string]string)
+
+	defaultHeader["Authorization"] = "Bearer " + token
+	if !RunWithRBAC.RbacFlag {
+		defaultHeader["px-account-id"] = accountId
+	}
+
+	return defaultHeader
+}
