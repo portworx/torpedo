@@ -45,8 +45,7 @@ func (account *PLATFORM_API_V1) getAccountClient() (context.Context, *accountv1.
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
 
-	account.AccountV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	account.AccountV1APIClient.GetConfig().DefaultHeader["px-account-id"] = account.AccountID
+	account.AccountV1APIClient.GetConfig().DefaultHeader = GetDefaultHeader(token, account.AccountID)
 
 	client := account.AccountV1APIClient.AccountServiceAPI
 	return ctx, client, nil
@@ -58,8 +57,7 @@ func (applications *PLATFORM_API_V1) getTenantAppClient() (context.Context, *ten
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	applications.TenantV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	applications.TenantV1APIClient.GetConfig().DefaultHeader["px-account-id"] = applications.AccountID
+	applications.TenantV1APIClient.GetConfig().DefaultHeader = GetDefaultHeader(token, applications.AccountID)
 	client := applications.TenantV1APIClient.ApplicationServiceAPI
 
 	return ctx, client, nil
@@ -71,8 +69,7 @@ func (applications *PLATFORM_API_V1) getClusterAppClient() (context.Context, *ta
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	applications.TargetClusterV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	applications.TargetClusterV1APIClient.GetConfig().DefaultHeader["px-account-id"] = applications.AccountID
+	applications.TargetClusterV1APIClient.GetConfig().DefaultHeader = GetDefaultHeader(token, applications.AccountID)
 	client := applications.TargetClusterV1APIClient.ApplicationServiceAPI
 
 	return ctx, client, nil
@@ -84,8 +81,7 @@ func (backuploc *PLATFORM_API_V1) getBackupLocClient() (context.Context, *backup
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	backuploc.BackupLocationV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	backuploc.BackupLocationV1APIClient.GetConfig().DefaultHeader["px-account-id"] = backuploc.AccountID
+	backuploc.BackupLocationV1APIClient.GetConfig().DefaultHeader = GetDefaultHeader(token, backuploc.AccountID)
 	client := backuploc.BackupLocationV1APIClient.BackupLocationServiceAPI
 
 	return ctx, client, nil
@@ -97,8 +93,7 @@ func (cloudCred *PLATFORM_API_V1) getCloudCredentialClient() (context.Context, *
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	cloudCred.CloudCredentialV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	cloudCred.CloudCredentialV1APIClient.GetConfig().DefaultHeader["px-account-id"] = cloudCred.AccountID
+	cloudCred.CloudCredentialV1APIClient.GetConfig().DefaultHeader = GetDefaultHeader(token, cloudCred.AccountID)
 	client := cloudCred.CloudCredentialV1APIClient.CloudCredentialServiceAPI
 
 	return ctx, client, nil
@@ -110,8 +105,7 @@ func (iam *PLATFORM_API_V1) getIAMClient() (context.Context, *iamv1.IAMServiceAP
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	iam.IamV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	iam.IamV1APIClient.GetConfig().DefaultHeader["px-account-id"] = iam.AccountID
+	iam.IamV1APIClient.GetConfig().DefaultHeader = GetDefaultHeader(token, iam.AccountID)
 	client := iam.IamV1APIClient.IAMServiceAPI
 
 	return ctx, client, nil
@@ -123,8 +117,7 @@ func (ns *PLATFORM_API_V1) getNamespaceClient() (context.Context, *namespacev1.N
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	ns.NamespaceV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	ns.NamespaceV1APIClient.GetConfig().DefaultHeader["px-account-id"] = ns.AccountID
+	ns.NamespaceV1APIClient.GetConfig().DefaultHeader = GetDefaultHeader(token, ns.AccountID)
 	client := ns.NamespaceV1APIClient.NamespaceServiceAPI
 	return ctx, client, nil
 }
@@ -137,8 +130,7 @@ func (onboard *PLATFORM_API_V1) getOnboardClient() (context.Context, *onboardv1.
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
 
-	onboard.OnboardV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	onboard.OnboardV1APIClient.GetConfig().DefaultHeader["px-account-id"] = onboard.AccountID
+	onboard.OnboardV1APIClient.GetConfig().DefaultHeader = GetDefaultHeader(token, onboard.AccountID)
 
 	client := onboard.OnboardV1APIClient.OnboardServiceAPI
 	return ctx, client, nil
@@ -152,8 +144,7 @@ func (project *PLATFORM_API_V1) getProjectClient() (context.Context, *projectv1.
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
 
-	project.ProjectV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	project.ProjectV1APIClient.GetConfig().DefaultHeader["px-account-id"] = project.AccountID
+	project.ProjectV1APIClient.GetConfig().DefaultHeader = GetDefaultHeader(token, project.AccountID)
 
 	client := project.ProjectV1APIClient.ProjectServiceAPI
 	return ctx, client, nil
@@ -167,8 +158,7 @@ func (tc *PLATFORM_API_V1) getTargetClusterClient() (context.Context, *targetClu
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
 
-	tc.TargetClusterV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	tc.TargetClusterV1APIClient.GetConfig().DefaultHeader["px-account-id"] = tc.AccountID
+	tc.TargetClusterV1APIClient.GetConfig().DefaultHeader = GetDefaultHeader(token, tc.AccountID)
 
 	client := tc.TargetClusterV1APIClient.TargetClusterServiceAPI
 	return ctx, client, nil
@@ -182,8 +172,7 @@ func (tcManifest *PLATFORM_API_V1) getTargetClusterManifestClient() (context.Con
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
 
-	tcManifest.TargetClusterManifestV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	tcManifest.TargetClusterManifestV1APIClient.GetConfig().DefaultHeader["px-account-id"] = tcManifest.AccountID
+	tcManifest.TargetClusterManifestV1APIClient.GetConfig().DefaultHeader = GetDefaultHeader(token, tcManifest.AccountID)
 
 	client := tcManifest.TargetClusterManifestV1APIClient.TargetClusterRegistrationManifestServiceAPI
 	return ctx, client, nil
@@ -195,8 +184,7 @@ func (tenant *PLATFORM_API_V1) getTenantClient() (context.Context, *tenantv1.Ten
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	tenant.TenantV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	tenant.TenantV1APIClient.GetConfig().DefaultHeader["px-account-id"] = tenant.AccountID
+	tenant.TenantV1APIClient.GetConfig().DefaultHeader = GetDefaultHeader(token, tenant.AccountID)
 	client := tenant.TenantV1APIClient.TenantServiceAPI
 
 	return ctx, client, nil
@@ -210,8 +198,7 @@ func (whoAmI *PLATFORM_API_V1) getWhoAmIClient() (context.Context, *whoamiv1.Who
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
 
-	whoAmI.WhoamiV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	whoAmI.WhoamiV1APIClient.GetConfig().DefaultHeader["px-account-id"] = whoAmI.AccountID
+	whoAmI.WhoamiV1APIClient.GetConfig().DefaultHeader = GetDefaultHeader(token, whoAmI.AccountID)
 
 	client := whoAmI.WhoamiV1APIClient.WhoAmIServiceAPI
 	return ctx, client, nil
@@ -223,8 +210,9 @@ func (sa *PLATFORM_API_V1) getSAClient() (context.Context, *serviceaccountv1.Ser
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	sa.ServiceAccountV1Client.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	sa.ServiceAccountV1Client.GetConfig().DefaultHeader["px-account-id"] = sa.AccountID
+
+	sa.ServiceAccountV1Client.GetConfig().DefaultHeader = GetDefaultHeader(token, sa.AccountID)
+
 	client := sa.ServiceAccountV1Client.ServiceAccountServiceAPI
 
 	return ctx, client, nil
@@ -238,8 +226,7 @@ func (template *PLATFORM_API_V1) getTemplateClient() (context.Context, *template
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
 
-	template.TemplatesV1Client.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	template.TemplatesV1Client.GetConfig().DefaultHeader["px-account-id"] = template.AccountID
+	template.TemplatesV1Client.GetConfig().DefaultHeader = GetDefaultHeader(token, template.AccountID)
 
 	client := template.TemplatesV1Client.TemplateServiceAPI
 	return ctx, client, nil
