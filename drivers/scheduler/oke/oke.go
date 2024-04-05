@@ -43,6 +43,7 @@ type oke struct {
 	instanceGroupName string
 	compartmentId     string
 	clusterId         string
+	isUserConfigured  bool
 }
 
 type Cluster struct {
@@ -205,77 +206,75 @@ func (o *oke) String() string {
 // Init initializes the node driver for oke under the given scheduler
 func (o *oke) Init(schedOpts scheduler.InitOptions) error {
 
-	instanceGroup := os.Getenv("INSTANCE_GROUP")
-	if len(instanceGroup) != 0 {
-		o.instanceGroupName = instanceGroup
-	} else {
-		o.instanceGroupName = "default"
-	}
-	compartmentId := os.Getenv("PX_ORACLE_compartment_id")
-	if len(compartmentId) == 0 {
-		return fmt.Errorf("compartment id not provided as env var [PX_ORACLE_compartment_id]: %s", compartmentId)
-	}
-	o.compartmentId = compartmentId
-
 	ops, err := oracleOps.NewClient()
 	if err != nil {
 		return err
 	}
 	o.ops = ops
 	err = o.K8s.Init(schedOpts)
-	if err != nil {
-		return err
-	}
-
-	err = configureUser()
-	if err != nil {
-		return err
-
-	}
-	err = o.setCluster()
-
 	return err
 }
 
-func configureUser() error {
-	userKey := os.Getenv("PX_ORACLE_user_ocid")
-	if len(userKey) == 0 {
-		return fmt.Errorf("user key not provided as env var [PX_ORACLE_user_oci]: %s", userKey)
-	}
+func (o *oke) configureUser() error {
 
-	fingerprint := os.Getenv("PX_ORACLE_fingerprint")
-	if len(fingerprint) == 0 {
-		return fmt.Errorf("fingerprint key not provided as env var [PX_ORACLE_fingerprint]: %s", fingerprint)
-	}
-	privateKey := os.Getenv("PX_ORACLE_private_key_path")
-	if len(privateKey) == 0 {
-		return fmt.Errorf("private key not provided as env var [PX_ORACLE_private_key_path]: %s", privateKey)
-	}
-	region := os.Getenv("PX_ORACLE_cluster_region")
-	if len(region) == 0 {
-		return fmt.Errorf("region not provided as env var [PX_ORACLE_cluster_region]: %s", region)
-	}
-	tenancy := os.Getenv("PX_ORACLE_tenancy")
-	if len(tenancy) == 0 {
-		return fmt.Errorf("tenancy not provided as env var [PX_ORACLE_tenancy]: %s", tenancy)
-	}
+	if !o.isUserConfigured {
+		instanceGroup := os.Getenv("INSTANCE_GROUP")
+		if len(instanceGroup) != 0 {
+			o.instanceGroupName = instanceGroup
+		} else {
+			o.instanceGroupName = "default"
+		}
+		compartmentId := os.Getenv("PX_ORACLE_compartment_id")
+		if len(compartmentId) == 0 {
+			return fmt.Errorf("compartment id not provided as env var [PX_ORACLE_compartment_id]")
+		}
+		o.compartmentId = compartmentId
 
-	creatDir := fmt.Sprintf("mkdir %s", "/root/.oci")
-	_, stderr, err := osutils.ExecShell(creatDir)
-	if err != nil {
-		return fmt.Errorf("error in creating .oci directory, error %v %v", err, stderr)
-	}
+		userKey := os.Getenv("PX_ORACLE_user_ocid")
+		if len(userKey) == 0 {
+			return fmt.Errorf("user key not provided as env var [PX_ORACLE_user_oci]")
+		}
 
-	cmd := fmt.Sprintf("echo '[DEFAULT]\nuser=%s\nfingerprint=%s\ntenancy=%s\nregion=%s\nkey_file=%s' > %s", userKey, fingerprint, tenancy, region, privateKey, okeConfigFile)
-	_, stderr, err = osutils.ExecShell(cmd)
-	if err != nil {
-		return fmt.Errorf("error in configuring User info in OCI CLI, error %v %v", err, stderr)
-	}
+		fingerprint := os.Getenv("PX_ORACLE_fingerprint")
+		if len(fingerprint) == 0 {
+			return fmt.Errorf("fingerprint key not provided as env var [PX_ORACLE_fingerprint]")
+		}
+		privateKey := os.Getenv("PX_ORACLE_private_key_path")
+		if len(privateKey) == 0 {
+			return fmt.Errorf("private key not provided as env var [PX_ORACLE_private_key_path]")
+		}
+		region := os.Getenv("PX_ORACLE_cluster_region")
+		if len(region) == 0 {
+			return fmt.Errorf("region not provided as env var [PX_ORACLE_cluster_region]")
+		}
+		tenancy := os.Getenv("PX_ORACLE_tenancy")
+		if len(tenancy) == 0 {
+			return fmt.Errorf("tenancy not provided as env var [PX_ORACLE_tenancy]")
+		}
 
-	cmd = fmt.Sprintf("sudo chmod 400 %s", okeConfigFile)
-	_, stderr, err = osutils.ExecShell(cmd)
-	if err != nil {
-		return fmt.Errorf("error in setting permissions for oci config, error %v %v", err, stderr)
+		creatDir := fmt.Sprintf("mkdir %s", "/root/.oci")
+		_, stderr, err := osutils.ExecShell(creatDir)
+		if err != nil {
+			return fmt.Errorf("error in creating .oci directory, error %v %v", err, stderr)
+		}
+
+		cmd := fmt.Sprintf("echo '[DEFAULT]\nuser=%s\nfingerprint=%s\ntenancy=%s\nregion=%s\nkey_file=%s' > %s", userKey, fingerprint, tenancy, region, privateKey, okeConfigFile)
+		_, stderr, err = osutils.ExecShell(cmd)
+		if err != nil {
+			return fmt.Errorf("error in configuring User info in OCI CLI, error %v %v", err, stderr)
+		}
+
+		cmd = fmt.Sprintf("sudo chmod 400 %s", okeConfigFile)
+		_, stderr, err = osutils.ExecShell(cmd)
+		if err != nil {
+			return fmt.Errorf("error in setting permissions for oci config, error %v %v", err, stderr)
+		}
+
+		o.isUserConfigured = true
+		err = o.setCluster()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -284,7 +283,7 @@ func configureUser() error {
 func (o *oke) setCluster() error {
 	clusterName := os.Getenv("PX_ORACLE_cluster_name")
 	if len(clusterName) == 0 {
-		return fmt.Errorf("cluster name not provided as env var [PX_ORACLE_cluster_name]: %s", clusterName)
+		return fmt.Errorf("cluster name not provided as env var [PX_ORACLE_cluster_name]")
 	}
 
 	cmd := fmt.Sprintf("%s ce cluster list --compartment-id %s --output json", ociCLI, o.compartmentId)
@@ -308,12 +307,12 @@ func (o *oke) setCluster() error {
 	return nil
 }
 
-// Returns Portworx cluster node pool
+// getNodePool returns Portworx cluster node pool
 func (o *oke) getNodePool() (NodePool, error) {
 	cmd := fmt.Sprintf("%s ce node-pool list --compartment-id %s --cluster-id %s --output json", ociCLI, o.compartmentId, o.clusterId)
 	stdout, stderr, err := osutils.ExecShell(cmd)
 	if err != nil {
-		return NodePool{}, fmt.Errorf("failed to get node pools list. stderr: %v, err: %v,stdout: %v", stderr, err, stdout)
+		return NodePool{}, fmt.Errorf("failed to get node pools list. stderr: %v, err: %v, stdout: %v", stderr, err, stdout)
 	}
 	nodePools := &NodePools{}
 	err = json.Unmarshal([]byte(stdout), nodePools)
@@ -333,8 +332,7 @@ func (o *oke) getNodePool() (NodePool, error) {
 func (o *oke) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
 	err := o.ops.SetInstanceGroupSize(o.instanceGroupName, perZoneCount, timeout)
 	if err != nil {
-		log.Errorf("failed to set size of node pool %s. Error: %v", o.instanceGroupName, err)
-		return err
+		return fmt.Errorf("failed to set size of node pool [%s] to [%d]. Error: %v", o.instanceGroupName, perZoneCount, err)
 	}
 
 	return nil
@@ -342,10 +340,19 @@ func (o *oke) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
 
 // GetASGClusterSize gets node count for cluster
 func (o *oke) GetASGClusterSize() (int64, error) {
+	err := o.configureUser()
+	if err != nil {
+		return 0, err
+
+	}
+	err = o.setCluster()
+	if err != nil {
+		return 0, err
+
+	}
 	nodePool, err := o.getNodePool()
 	if err != nil {
-		log.Errorf("failed to get size of node pool %s. Error: %v", o.instanceGroupName, err)
-		return 0, err
+		return 0, fmt.Errorf("failed to get size of node pool [%s]. Error: %v", o.instanceGroupName, err)
 	}
 	return int64(nodePool.NodeConfigDetails.Size), nil
 }
@@ -362,9 +369,21 @@ func (o *oke) GetZones() ([]string, error) {
 
 // UpgradeScheduler performs OKE cluster upgrade to a specified version
 func (o *oke) UpgradeScheduler(version string) error {
+
+	err := o.configureUser()
+	if err != nil {
+		return err
+
+	}
+	err = o.setCluster()
+	if err != nil {
+		return err
+
+	}
+
 	log.Infof("Starting OKE cluster upgrade to [%s]", version)
 
-	err := o.setControlPlaneVersion(version)
+	err = o.setControlPlaneVersion(version)
 	if err != nil {
 		return err
 	}
@@ -411,7 +430,7 @@ func (o *oke) UpgradeScheduler(version string) error {
 		return err
 	}
 
-	log.Infof("Successfully upgraded GKE cluster to [%s]", version)
+	log.Infof("Successfully upgraded OKE cluster to [%s]", version)
 	return nil
 }
 
@@ -421,7 +440,7 @@ func (o *oke) setControlPlaneVersion(version string) error {
 	cmd := fmt.Sprintf("%s ce cluster update --cluster-id %s --kubernetes-version %s", ociCLI, o.clusterId, version)
 	stdout, stderr, err := osutils.ExecShell(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to set controlplane version tio [%s] . stderr: %v, err: %v,stdout: %v", version, stderr, err, stdout)
+		return fmt.Errorf("failed to set controlplane version tio [%s] . stderr: %v, err: %v, stdout: %v", version, stderr, err, stdout)
 	}
 	var setVersionResp WorkRequest
 	err = json.Unmarshal([]byte(stdout), &setVersionResp)
@@ -437,8 +456,10 @@ func (o *oke) setControlPlaneVersion(version string) error {
 	return nil
 }
 
-// Return the image id for the given version
+// getNodeImageIdToUpgrade returns the image id for the given version
 func (o *oke) getNodeImageIdToUpgrade(version string) (string, error) {
+
+	log.Infof("Getting image id for version [%s]", version)
 
 	nodePool, err := o.getNodePool()
 	if err != nil {
@@ -476,7 +497,7 @@ func (o *oke) getNodeImageIdToUpgrade(version string) (string, error) {
 func (o *oke) addUpgradedNodePool(nodePool NodePool, name, version string) error {
 	nodeImageId, err := o.getNodeImageIdToUpgrade(version)
 	if err != nil {
-		return fmt.Errorf("error in getting node image ID %v", err)
+		return fmt.Errorf("failed to get node image ID for version [%s], Err: %v", version, err)
 	}
 
 	log.Infof("Adding node-pool with %s with node count [%d]", name, nodePool.NodeConfigDetails.Size)
@@ -535,7 +556,17 @@ func (o *oke) deleteNodePool(nodePool NodePool) error {
 
 // DeleteNode deletes the given node
 func (o *oke) DeleteNode(node node.Node, timeout time.Duration) error {
-	log.Infof("[Torpedo] Deleting node [%s]", node.Hostname)
+	err := o.configureUser()
+	if err != nil {
+		return err
+
+	}
+	err = o.setCluster()
+	if err != nil {
+		return err
+
+	}
+	log.Infof("Deleting node [%s]", node.Hostname)
 	instanceDetails, err := o.ops.GetInstance(node.Hostname)
 	if err != nil {
 		return err
