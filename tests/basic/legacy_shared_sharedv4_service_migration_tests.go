@@ -20,10 +20,6 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
-const (
-	ubuntu = "ubuntu-app"
-)
-
 // Legacy Shared Volume Create
 // Automatically it should get created as Sharedv4 service volume.
 
@@ -31,7 +27,9 @@ var _ = Describe("{LegacySharedVolumeCreate}", func() {
 	var testrailID = 296369
 	// https://portworx.testrail.net/index.php?/cases/view/296369
 
-	StartTorpedoTest("LegacySharedVolumeAppCreateVolume", "Legacy Shared to Sharedv4 Service CreateVolume", nil, testrailID)
+	JustBeforeEach(func() {
+		StartTorpedoTest("LegacySharedVolumeAppCreateVolume", "Legacy Shared to Sharedv4 Service CreateVolume", nil, testrailID)
+	})
 
 	volumeName := "legacy-shared-volume"
 	stepLog := "Create legacy shared volume and check it got created as sharedv4 service volume"
@@ -52,7 +50,9 @@ var _ = Describe("{LegacySharedVolumeCreate}", func() {
 		output, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 		log.FailOnError(err, fmt.Sprintf("error deleting legacy shared volume %s", volumeName))
 	})
-	EndTorpedoTest()
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
 })
 
 func setCreateLegacySharedAsSharedv4Service(on bool) {
@@ -61,11 +61,7 @@ func setCreateLegacySharedAsSharedv4Service(on bool) {
 	pxNode := GetRandomNode(pxNodes)
 	log.Infof("Setting Creation of Legacy shared volumes")
 	var pxctlCmdFull string
-	if on {
-		pxctlCmdFull = fmt.Sprintf("cluster update option --create-legacy-shared-as-sharedv4-service=true")
-	} else {
-		pxctlCmdFull = fmt.Sprintf("cluster update option --create-legacy-shared-as-sharedv4-service=false")
-	}
+	pxctlCmdFull = fmt.Sprintf("cluster update option --create-legacy-shared-as-sharedv4-service=%t", on)
 	_, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 	log.FailOnError(err, fmt.Sprintf("error updating cluster option"))
 	// Sleep so that the config variable can be updated on all nodes.
@@ -76,13 +72,9 @@ func setMigrateLegacySharedToSharedv4Service(on bool) {
 	pxNodes, err := GetStorageNodes()
 	log.FailOnError(err, "Unable to get storage nodes")
 	pxNode := GetRandomNode(pxNodes)
-	log.Infof("Turning on Creation of Legacy shared volumes")
+	log.Infof("Turning on Migration of Legacy shared volumes")
 	var pxctlCmdFull string
-	if on {
-		pxctlCmdFull = fmt.Sprintf("cluster update option --create-legacy-shared-as-sharedv4-service=true")
-	} else {
-		pxctlCmdFull = fmt.Sprintf("cluster update option --create-legacy-shared-as-sharedv4-service=false")
-	}
+	pxctlCmdFull = fmt.Sprintf("cluster update option --migrate-legacy-shared-to-sharedv4-service=%t", on)
 	_, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 	log.FailOnError(err, fmt.Sprintf("error updating cluster option"))
 	// Sleep so that the config variable can be updated on all nodes.
@@ -94,7 +86,7 @@ func getLegacySharedVolumeCount(contexts []*scheduler.Context) int {
 	count := 0
 	for _, ctx := range contexts {
 		vols, err := Inst().S.GetVolumes(ctx)
-		Expect(err).NotTo(HaveOccurred())
+		log.FailOnError(err, "error geting volumes used by app")
 		for _, v := range vols {
 			vol, err := Inst().V.InspectVolume(v.ID)
 			Expect(err).NotTo(HaveOccurred(), "failed in inspect volume: %v", err)
@@ -258,7 +250,9 @@ var _ = Describe("{LegacySharedVolumeMigrate_CreateIdle}", func() {
 		pxctlCmdFull = fmt.Sprintf("v d %s", volumeName)
 		Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 	})
-	EndTorpedoTest()
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
 })
 
 // Basic migration Test case:
@@ -268,9 +262,9 @@ var _ = Describe("{LegacySharedVolumeAppMigrateBasic}", func() {
 	var testrailID = 296374
 	var runID int
 	JustBeforeEach(func() {
+		StartTorpedoTest("LegacySharedVolumeAppMigrateBasic", "Legacy Shared to Sharedv4 Service Functional Test", nil, testrailID)
 		namespacePrefix := "lstsv4mbasic"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
-		StartTorpedoTest("LegacySharedVolumeAppMigrateBasic", "Legacy Shared to Sharedv4 Service Functional Test", nil, testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
 		contexts = make([]*scheduler.Context, 0)
@@ -313,11 +307,11 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationBasicMany", func() {
 	var testrailID = 296728
 	var runID int
 	JustBeforeEach(func() {
+		StartTorpedoTest("LegacySharedVolumeAppMigrateMany", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
 		namespacePrefix := "lstsv4mbasic2"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		StartTorpedoTest("LegacySharedVolumeAppMigrateMany", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
 		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
 		if numberNameSpaces < 40 {
@@ -359,11 +353,11 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart", func() {
 	var testrailID = 296736
 	var runID int
 	JustBeforeEach(func() {
+		StartTorpedoTest("LegacySharedVolumeAppMigrationRestart", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
 		namespacePrefix := "lstsv4m_restart"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		StartTorpedoTest("LegacySharedVolumeAppMigrationRestart", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
 		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
 		if numberNameSpaces < 40 {
@@ -416,11 +410,11 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestart", func() {
 	var testrailID = 296732
 	var runID int
 	JustBeforeEach(func() {
+		StartTorpedoTest("LegacySharedVolumeAppMigrationRestart", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
 		namespacePrefix := "lstsv4m_px_restart"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		StartTorpedoTest("LegacySharedVolumeAppMigrationRestart", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
 		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
 		if numberNameSpaces < 40 {
@@ -476,11 +470,11 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission", func() {
 	var testrailID = 296732
 	var runID int
 	JustBeforeEach(func() {
+		StartTorpedoTest("LegacySharedVolumeAppMigrationRestart", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
 		namespacePrefix := "lstsv4m_node_decom"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		StartTorpedoTest("LegacySharedVolumeAppMigrationRestart", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
 		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
 		if numberNameSpaces < 40 {
@@ -536,11 +530,11 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator", func() {
 	var testrailID = 296732
 	var runID int
 	JustBeforeEach(func() {
+		StartTorpedoTest("LegacySharedVolumeAppRestartCoordinator", "Legacy Shared to Sharedv4 Service Migration and coordinator restart", nil, testrailID)
 		namespacePrefix := "lstsv4m_px_restart"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		StartTorpedoTest("LegacySharedVolumeAppRestartCoordinator", "Legacy Shared to Sharedv4 Service Migration and coordinator restart", nil, testrailID)
 		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
 		if numberNameSpaces < 40 {
@@ -601,11 +595,11 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones", func() {
 	var testrailID = 0
 	var runID int
 	JustBeforeEach(func() {
+		StartTorpedoTest("LegacySharedVolumeAppRestartCoordinator", "Legacy Shared to Sharedv4 Service Migration with creation of snapshots and clones", nil, testrailID)
 		namespacePrefix := "lstsv4m_snapshot_clone"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		StartTorpedoTest("LegacySharedVolumeAppRestartCoordinator", "Legacy Shared to Sharedv4 Service Migration with creation of snapshots and clones", nil, testrailID)
 		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
 		if numberNameSpaces < 40 {
