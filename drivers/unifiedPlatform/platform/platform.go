@@ -71,13 +71,13 @@ type NamespaceInterface interface {
 }
 
 type IamRoleBindingsInterface interface {
-	ListIamRoleBindings(*WorkFlowRequest) ([]WorkFlowResponse, error)
-	CreateIamRoleBinding(*WorkFlowRequest) (*WorkFlowResponse, error)
-	UpdateIamRoleBindings(*WorkFlowRequest) (*WorkFlowResponse, error)
-	GetIamRoleBindingByID(*WorkFlowRequest) (*WorkFlowResponse, error)
-	GrantIAMRoles(*WorkFlowRequest) (*WorkFlowResponse, error)
-	RevokeAccessForIAM(*WorkFlowRequest) (*WorkFlowResponse, error)
-	DeleteIamRoleBinding(*WorkFlowRequest) error
+	ListIamRoleBindings(*IAMRequest) (*IAMResponse, error)
+	CreateIamRoleBinding(*IAMRequest) (*IAMResponse, error)
+	UpdateIamRoleBindings(*IAMRequest) (*IAMResponse, error)
+	GetIamRoleBindingByID(*IAMRequest) (*IAMResponse, error)
+	GrantIAMRoles(*IAMRequest) (*IAMResponse, error)
+	RevokeAccessForIAM(*IAMRequest) (*IAMResponse, error)
+	DeleteIamRoleBinding(*IAMRequest) error
 }
 
 type ServiceAccountsInterface interface {

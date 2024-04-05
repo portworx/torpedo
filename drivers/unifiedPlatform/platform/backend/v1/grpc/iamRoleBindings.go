@@ -31,9 +31,9 @@ func (iamGrpcV1 *PlatformGrpc) getIamClient() (context.Context, publiciamapi.IAM
 }
 
 // ListIamRoleBindings return service identities models for a project.
-func (iamGrpcV1 *PlatformGrpc) ListIamRoleBindings(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
+func (iamGrpcV1 *PlatformGrpc) ListIamRoleBindings(listReq *IAMRequest) (*IAMResponse, error) {
 	ctx, iamClient, _, err := iamGrpcV1.getIamClient()
-	iamResponse := []WorkFlowResponse{}
+	iamResponse := &IAMResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -50,9 +50,11 @@ func (iamGrpcV1 *PlatformGrpc) ListIamRoleBindings(listReq *WorkFlowRequest) ([]
 }
 
 // CreateIamRoleBinding returns newly create IAM RoleBinding object
-func (iamGrpcV1 *PlatformGrpc) CreateIamRoleBinding(createReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (iamGrpcV1 *PlatformGrpc) CreateIamRoleBinding(createReq *IAMRequest) (*IAMResponse, error) {
 	ctx, iamClient, _, err := iamGrpcV1.getIamClient()
-	iamResponse := WorkFlowResponse{}
+	iamResponse := IAMResponse{
+		Create: V1IAM{},
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -68,9 +70,9 @@ func (iamGrpcV1 *PlatformGrpc) CreateIamRoleBinding(createReq *WorkFlowRequest) 
 	return &iamResponse, nil
 }
 
-func (iamGrpcV1 *PlatformGrpc) UpdateIamRoleBindings(updateReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (iamGrpcV1 *PlatformGrpc) UpdateIamRoleBindings(updateReq *IAMRequest) (*IAMResponse, error) {
 	ctx, iamClient, _, err := iamGrpcV1.getIamClient()
-	iamResponse := WorkFlowResponse{}
+	iamResponse := IAMResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -87,9 +89,9 @@ func (iamGrpcV1 *PlatformGrpc) UpdateIamRoleBindings(updateReq *WorkFlowRequest)
 }
 
 // GetIamRoleBindingByID return IAM RoleBinding model.
-func (iamGrpcV1 *PlatformGrpc) GetIamRoleBindingByID(actorId *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (iamGrpcV1 *PlatformGrpc) GetIamRoleBindingByID(actorId *IAMRequest) (*IAMResponse, error) {
 	ctx, iamClient, _, err := iamGrpcV1.getIamClient()
-	iamResponse := WorkFlowResponse{}
+	iamResponse := IAMResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -106,7 +108,7 @@ func (iamGrpcV1 *PlatformGrpc) GetIamRoleBindingByID(actorId *WorkFlowRequest) (
 }
 
 // DeleteIamRoleBinding delete IAM RoleBinding and return status.
-func (iamGrpcV1 *PlatformGrpc) DeleteIamRoleBinding(actorId *WorkFlowRequest) error {
+func (iamGrpcV1 *PlatformGrpc) DeleteIamRoleBinding(actorId *IAMRequest) error {
 	ctx, iamClient, _, err := iamGrpcV1.getIamClient()
 	iamResponse := WorkFlowResponse{}
 	if err != nil {
@@ -124,9 +126,9 @@ func (iamGrpcV1 *PlatformGrpc) DeleteIamRoleBinding(actorId *WorkFlowRequest) er
 	return nil
 }
 
-func (iamGrpcV1 *PlatformGrpc) GrantIAMRoles(grantIamReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (iamGrpcV1 *PlatformGrpc) GrantIAMRoles(grantIamReq *IAMRequest) (*IAMResponse, error) {
 	ctx, iamClient, _, err := iamGrpcV1.getIamClient()
-	iamResponse := WorkFlowResponse{}
+	iamResponse := IAMResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -142,9 +144,9 @@ func (iamGrpcV1 *PlatformGrpc) GrantIAMRoles(grantIamReq *WorkFlowRequest) (*Wor
 	return &iamResponse, nil
 }
 
-func (iamGrpcV1 *PlatformGrpc) RevokeAccessForIAM(revokeReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (iamGrpcV1 *PlatformGrpc) RevokeAccessForIAM(revokeReq *IAMRequest) (*IAMResponse, error) {
 	ctx, iamClient, _, err := iamGrpcV1.getIamClient()
-	iamResponse := WorkFlowResponse{}
+	iamResponse := IAMResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

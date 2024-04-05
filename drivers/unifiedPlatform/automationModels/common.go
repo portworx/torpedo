@@ -193,5 +193,14 @@ type V1PXEMetadata struct {
 }
 
 type WorkflowResiliency struct {
-	ResiliencyFlag bool
+	ResiliencyFlag bool `copier:"must,nopanic"`
+}
+
+type V1PageBasedPaginationResponse struct {
+	TotalRecords *string `copier:"must,nopanic"`
+	CurrentPage  *string `copier:"must,nopanic"`
+	PageSize     *string `copier:"must,nopanic"`
+	TotalPages   *string `copier:"must,nopanic"`
+	NextPage     *string `copier:"must,nopanic"`
+	PrevPage     *string `copier:"must,nopanic"`
 }
