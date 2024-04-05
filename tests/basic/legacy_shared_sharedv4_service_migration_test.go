@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	. "github.com/onsi/ginkgo/v2"
