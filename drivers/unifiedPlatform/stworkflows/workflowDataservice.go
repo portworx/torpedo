@@ -223,10 +223,7 @@ func ValidateDeploymentResources(resourceTemp dslibs.ResourceSettingTemplate, st
 	}
 }
 
-func (wfDataservice *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string, deployment map[string]string, sizeInGb uint64) error {
+func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string, deployment map[string]string, sizeInGb uint64) error {
 	_, err := k8utils.IncreasePVCby1Gig(namespace, deployment, sizeInGb)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
