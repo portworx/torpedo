@@ -69,12 +69,12 @@ func GetBearerToken() (context.Context, string, error) {
 	if RunWithRBAC.RbacFlag == true {
 		return context.Background(), RunWithRBAC.RbacToken, nil
 	}
-	log.Infof("user name %s", username)
-	log.Infof("password %s", password)
+	//log.Infof("user name %s", username)
+	//log.Infof("password %s", password)
 
 	url := fmt.Sprintf("%s/login", issuerURL)
 
-	log.Infof("issuer url %s", issuerURL)
+	//log.Infof("issuer url %s", issuerURL)
 
 	postBody, err := json.Marshal(map[string]string{
 		"email":    username,
@@ -131,10 +131,6 @@ func GetContext() (context.Context, error) {
 	issuerURL := os.Getenv(envPxCentralAPI)
 	url := fmt.Sprintf("%s/login", issuerURL)
 
-	log.Infof("issuerURL [%s]", issuerURL)
-	log.Infof("email [%s]", username)
-	log.Infof("password [%s]", password)
-
 	postBody, err := json.Marshal(map[string]string{
 		"email":    username,
 		"password": password,
@@ -164,7 +160,6 @@ func GetContext() (context.Context, error) {
 		return nil, err
 	}
 
-	log.Infof("Bearer Token %s", bearerToken.DATA.Token)
 	ctx := context.WithValue(context.Background(), "auth apiKey", map[string]accountv1.APIKey{"ApiKeyAuth": {Key: bearerToken.DATA.Token, Prefix: "Bearer"}})
 	log.Infof("ctx value [%s]", ctx.Value("auth apiKey"))
 
@@ -175,4 +170,15 @@ func GetContext() (context.Context, error) {
 func GetWorkflowResponseMap() map[string][]WorkFlowResponse {
 	var createdMap = make(map[string][]WorkFlowResponse)
 	return createdMap
+}
+
+func GetDefaultHeader(token string, accountId string) map[string]string {
+	defaultHeader := make(map[string]string)
+
+	defaultHeader["Authorization"] = "Bearer " + token
+	if !RunWithRBAC.RbacFlag {
+		defaultHeader["px-account-id"] = accountId
+	}
+
+	return defaultHeader
 }

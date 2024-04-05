@@ -29,22 +29,22 @@ func (WhoAmIV1 *PlatformGrpc) getWhoAmIClient() (context.Context, publicwhoamiap
 	return ctx, whoAmIClient, token, nil
 }
 
-func (WhoAmIV1 *PlatformGrpc) WhoAmI() (WorkFlowResponse, error) {
-	whoAmIResponse := WorkFlowResponse{}
+func (WhoAmIV1 *PlatformGrpc) WhoAmI() (*WhoamiResponse, error) {
+	whoAmIResponse := WhoamiResponse{}
 	ctx, client, _, err := WhoAmIV1.getWhoAmIClient()
 	if err != nil {
-		return whoAmIResponse, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
+		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
 
 	apiResponse, err := client.WhoAmI(ctx, nil, grpc.PerRPCCredentials(credentials))
 	if err != nil {
-		return whoAmIResponse, fmt.Errorf("Error calling whoAMI: %v\n", err)
+		return nil, fmt.Errorf("Error calling whoAMI: %v\n", err)
 	}
 
 	err = copier.Copy(&whoAmIResponse, apiResponse)
 	if err != nil {
-		return whoAmIResponse, err
+		return nil, err
 	}
 
-	return whoAmIResponse, nil
+	return &whoAmIResponse, nil
 }

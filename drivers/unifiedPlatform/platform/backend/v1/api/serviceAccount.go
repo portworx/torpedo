@@ -11,19 +11,15 @@ import (
 	status "net/http"
 )
 
-var (
-	SiToken       string
-	SiFlag        bool
-	SaRequestBody serviceaccountv1.V1ServiceAccount
-)
-
 // ListAllServiceAccounts List all Service Accounts
-func (sa *PLATFORM_API_V1) ListAllServiceAccounts(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
+func (sa *PLATFORM_API_V1) ListAllServiceAccounts(listReq *PDSServiceAccountRequest) (*PDSServiceAccountResponse, error) {
 	_, client, err := sa.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	saResponse := []WorkFlowResponse{}
+	saResponse := PDSServiceAccountResponse{
+		List: []V1ServiceAccount{},
+	}
 	var firstPageRequest serviceaccountv1.ApiServiceAccountServiceListServiceAccountRequest
 	err = copier.Copy(&firstPageRequest, listReq)
 	if err != nil {
@@ -34,18 +30,20 @@ func (sa *PLATFORM_API_V1) ListAllServiceAccounts(listReq *WorkFlowRequest) ([]W
 		return nil, fmt.Errorf("Error when calling `ApiServiceAccountServiceListServiceAccountRequest`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("Value of ServiceAccount - [%v]", saModel)
-	err = utilities.CopyStruct(&saResponse, saModel.ServiceAccounts)
+	err = utilities.CopyStruct(saModel.ServiceAccounts, &saResponse.List)
 	log.Infof("Value of ServiceAccount after copy - [%v]", saResponse)
-	return saResponse, nil
+	return &saResponse, nil
 }
 
 // GetServiceAccount return service account model.
-func (sa *PLATFORM_API_V1) GetServiceAccount(saID *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (sa *PLATFORM_API_V1) GetServiceAccount(saID *PDSServiceAccountRequest) (*PDSServiceAccountResponse, error) {
 	_, client, err := sa.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	saResponse := WorkFlowResponse{}
+	saResponse := PDSServiceAccountResponse{
+		Get: V1ServiceAccount{},
+	}
 	var getRequest serviceaccountv1.ApiServiceAccountServiceGetServiceAccountRequest
 	err = copier.Copy(&getRequest, saID)
 	if err != nil {
@@ -56,7 +54,7 @@ func (sa *PLATFORM_API_V1) GetServiceAccount(saID *WorkFlowRequest) (*WorkFlowRe
 		return nil, fmt.Errorf("Error when calling `ApiServiceAccountServiceGetServiceAccountRequest`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("Value of ServiceAccount - [%v]", saModel)
-	err = utilities.CopyStruct(&saResponse, saModel)
+	err = utilities.CopyStruct(saModel, &saResponse.Get)
 	log.Infof("Value of ServiceAccount after copy - [%v]", saResponse)
 	return &saResponse, nil
 }
@@ -87,7 +85,7 @@ func (sa *PLATFORM_API_V1) CreateServiceAccount(createSaReq *PDSServiceAccountRe
 }
 
 // DeleteServiceAccount delete service account and return status.
-func (sa *PLATFORM_API_V1) DeleteServiceAccount(saId *WorkFlowRequest) error {
+func (sa *PLATFORM_API_V1) DeleteServiceAccount(saId *PDSServiceAccountRequest) error {
 	_, client, err := sa.getSAClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -109,12 +107,14 @@ func (sa *PLATFORM_API_V1) DeleteServiceAccount(saId *WorkFlowRequest) error {
 }
 
 // RegenerateServiceAccountSecret serviceAccountSecret
-func (sa *PLATFORM_API_V1) RegenerateServiceAccountSecret(saId *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (sa *PLATFORM_API_V1) RegenerateServiceAccountSecret(saId *PDSServiceAccountRequest) (*PDSServiceAccountResponse, error) {
 	_, client, err := sa.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	saResponse := WorkFlowResponse{}
+	saResponse := PDSServiceAccountResponse{
+		RegenerateToken: GetServiceAccountTokenResponse{},
+	}
 	var regenIamRequest serviceaccountv1.ApiServiceAccountServiceRegenerateServiceAccountSecretRequest
 	err = copier.Copy(&regenIamRequest, saId)
 	if err != nil {
@@ -131,12 +131,14 @@ func (sa *PLATFORM_API_V1) RegenerateServiceAccountSecret(saId *WorkFlowRequest)
 }
 
 // UpdateServiceAccount update existing serviceAccount
-func (sa *PLATFORM_API_V1) UpdateServiceAccount(saId *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (sa *PLATFORM_API_V1) UpdateServiceAccount(saId *PDSServiceAccountRequest) (*PDSServiceAccountResponse, error) {
 	_, client, err := sa.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	saResponse := WorkFlowResponse{}
+	saResponse := PDSServiceAccountResponse{
+		Update: V1ServiceAccount{},
+	}
 	var updateIamRequest serviceaccountv1.ApiServiceAccountServiceUpdateServiceAccountRequest
 	err = copier.Copy(&updateIamRequest, saId)
 	if err != nil {
@@ -152,23 +154,30 @@ func (sa *PLATFORM_API_V1) UpdateServiceAccount(saId *WorkFlowRequest) (*WorkFlo
 	return &saResponse, nil
 }
 
-func (sa *PLATFORM_API_V1) GenerateServiceAccountAccessToken(tokenReq *WorkFlowRequest) (*WorkFlowResponse, error) {
-	_, client, err := sa.getSAClient()
+func (sa *PLATFORM_API_V1) GenerateServiceAccountAccessToken(tokenReq *PDSServiceAccountRequest) (*PDSServiceAccountResponse, error) {
+	ctx, client, err := sa.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	saResponse := WorkFlowResponse{}
+	saResponse := PDSServiceAccountResponse{
+		CreateToken: GetServiceAccountTokenResponse{},
+	}
 	var tokenIamRequest serviceaccountv1.ApiServiceAccountServiceGetAccessTokenRequest
-	tokenIamRequest = tokenIamRequest.ApiService.ServiceAccountServiceGetAccessToken(context.Background(), tokenReq.TenantId)
-	err = utilities.CopyStruct(&tokenIamRequest, tokenReq)
+	log.Infof("Tenant Id - [%s]", tokenReq.CreateToken.TenantId)
+	tokenIamRequest = tokenIamRequest.ApiService.ServiceAccountServiceGetAccessToken(ctx, tokenReq.CreateToken.TenantId)
+	tokenIamRequest = tokenIamRequest.ServiceAccountServiceGetAccessTokenBody(
+		serviceaccountv1.ServiceAccountServiceGetAccessTokenBody{
+			ClientId:     tokenReq.CreateToken.ServiceAccountServiceGetAccessTokenBody.ClientId,
+			ClientSecret: tokenReq.CreateToken.ServiceAccountServiceGetAccessTokenBody.ClientSecret,
+		},
+	)
 	tokenModel, res, err := client.ServiceAccountServiceGetAccessTokenExecute(tokenIamRequest)
+	log.Infof("Response - [%+v]", res)
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApiServiceAccountServiceGetAccessTokenRequest`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("Value of ServiceAccount - [%v]", tokenModel)
-	err = utilities.CopyStruct(&saResponse, tokenModel)
-	SiFlag = true
-	SiToken = tokenModel.GetToken()
+	saResponse.CreateToken.Token = tokenModel.GetToken()
 	log.Infof("Value of ServiceAccount after copy - [%v]", saResponse)
 	return &saResponse, nil
 }

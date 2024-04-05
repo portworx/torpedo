@@ -1,5 +1,5 @@
 package automationModels
 
 type PlatformTenant struct {
-	Meta *Meta
+	Meta *Meta `copier:"must,nopanic"`
 }

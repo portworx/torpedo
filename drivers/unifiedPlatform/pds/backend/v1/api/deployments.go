@@ -24,15 +24,10 @@ func (ds *PDS_API_V1) GetDeployment(deploymentId string) (*automationModels.PDSD
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	//log.Infof("DeploymentId [%s]", deploymentId)
 	dsModel, res, err := dsClient.DeploymentServiceGetDeployment(ctx, deploymentId).Execute()
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}
-
-	//log.Debugf("api response status - [+%v]", dsModel.GetStatus())
-	//log.Debugf("api response meta - [+%v]", dsModel.Meta)
-	//log.Debugf("api response config - [+%v]", dsModel.Config)
 
 	err = utilities.CopyStruct(dsModel, &dsResponse.Get)
 	if err != nil {
@@ -93,13 +88,9 @@ func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *automationModels
 		Deployment: &DeploymentRequest,
 	}
 
-	//Debug Print
-	fmt.Println("DeploymentRequest Name ", *DeploymentRequestBody.Deployment.Meta.Name)
-
 	depCreateRequest = dsClient.DeploymentServiceCreateDeployment(ctx, createDeploymentRequest.Create.NamespaceID).DeploymentServiceCreateDeploymentBody(DeploymentRequestBody)
-
 	dsModel, res, err := dsClient.DeploymentServiceCreateDeploymentExecute(depCreateRequest)
-	if err != nil && res.StatusCode != status.StatusOK {
+	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}
 

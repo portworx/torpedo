@@ -10,6 +10,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
+	"strings"
 )
 
 var _ = Describe("{PlatformBasicTest}", func() {
@@ -153,31 +154,20 @@ var _ = Describe("{PlatformRBACTest}", func() {
 		workflowPlatform       stworkflows.WorkflowPlatform
 		workflowTargetCluster  stworkflows.WorkflowTargetCluster
 		workflowProject        stworkflows.WorkflowProject
-		workflowNamespace      stworkflows.WorkflowNamespace
+		workflowProject1       stworkflows.WorkflowProject
+		workflowProject2       stworkflows.WorkflowProject
 		workflowServiceAccount stworkflows.WorkflowServiceAccount
-		namespace              string
 		projectAdmin           string
-		projectUser            string
+		tenantAdmin            string
+		user                   string
 	)
 	JustBeforeEach(func() {
 
 		StartTorpedoTest("PlatformRBACTest", "Basic RBAC operations on platform", nil, 0)
-		namespace = fmt.Sprintf("pds-namespace-%s", utilities.RandomString(5))
-		workflowPlatform.Accounts = map[string]map[string]string{
-			NewPdsParams.Users.AdminUsername: map[string]string{
-				automationModels.UserName:        NewPdsParams.Users.AdminUsername,
-				automationModels.UserDisplayName: NewPdsParams.Users.AdminUsername,
-				automationModels.UserEmail:       NewPdsParams.Users.AdminEmailAddress,
-			},
-			NewPdsParams.Users.NonAdminUsername: map[string]string{
-				automationModels.UserName:        NewPdsParams.Users.NonAdminUsername,
-				automationModels.UserDisplayName: NewPdsParams.Users.NonAdminUsername,
-				automationModels.UserEmail:       NewPdsParams.Users.NonAdminEmailAddress,
-			},
-		}
 		workflowPlatform.TenantInit()
-		projectAdmin = "project-admin-" + RandomString(5)
-		projectUser = "project-user-" + RandomString(5)
+		projectAdmin = "project-Admin-" + RandomString(5)
+		tenantAdmin = "tenant-Admin-" + RandomString(5)
+		user = "project-User-" + RandomString(5)
 
 	})
 
@@ -199,32 +189,43 @@ var _ = Describe("{PlatformRBACTest}", func() {
 			log.Infof("Target cluster registered with uid - [%s]", workflowTargetCluster.ClusterUID)
 		})
 
-		Step("Create a PDS Namespace", func() {
-			workflowNamespace.TargetCluster = workflowTargetCluster
-			workflowNamespace.Namespaces = make(map[string]string)
-			_, err := workflowNamespace.CreateNamespaces(namespace)
-			log.FailOnError(err, "Unable to create namespace")
-			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
+		Step("Create project user", func() {
+			workflowServiceAccount.UserRoles = make(map[string]stworkflows.SeviceAccount)
+			workflowServiceAccount.WorkflowProject = workflowProject
+
+			_, err := workflowServiceAccount.CreateServiceAccount(
+				user,
+				[]string{},
+			)
+			log.FailOnError(err, "Unable to create project user")
 		})
 
 		Step("Create project admin user", func() {
-			rbacParams := NewPdsParams.RbacParams
-			workflowServiceAccount.CreateServiceAccount(
-				workflowPlatform.AdminAccountId,
+			_, err := workflowServiceAccount.CreateServiceAccount(
 				projectAdmin,
-				stworkflows.ProjectAdmin,
-				rbacParams.ResourceId,
+				[]string{stworkflows.ProjectAdmin},
 			)
+			log.FailOnError(err, "Unable to create project Admin")
 		})
 
-		Step("Create project user", func() {
-			rbacParams := NewPdsParams.RbacParams
-			workflowServiceAccount.CreateServiceAccount(
-				workflowPlatform.AdminAccountId,
-				projectUser,
-				stworkflows.User,
-				rbacParams.ResourceId,
+		Step("Create tenant admin", func() {
+			_, err := workflowServiceAccount.CreateServiceAccount(
+				tenantAdmin,
+				[]string{stworkflows.TenantAdmin},
 			)
+			log.FailOnError(err, "Unable to create tenant Admin")
+		})
+
+		Step("Create Project with User - Expected Failure", func() {
+			defer func() {
+				workflowServiceAccount.SwitchToAdmin()
+			}()
+			workflowServiceAccount.SwitchToServiceAccount(user)
+			workflowProject1.Platform = workflowPlatform
+			workflowProject1.ProjectName = fmt.Sprintf("project-%s", utilities.RandomString(5))
+			_, err := workflowProject1.CreateProject()
+			// TODO: Error needs to be changed with actual error at the time of validation
+			dash.VerifyFatal(strings.Contains(err.Error(), "403 Forbidden"), true, "Create Project with User - 403 Forbidden")
 		})
 
 		Step("Create Project with Project Admin - Expected Failure", func() {
@@ -232,23 +233,23 @@ var _ = Describe("{PlatformRBACTest}", func() {
 				workflowServiceAccount.SwitchToAdmin()
 			}()
 			workflowServiceAccount.SwitchToServiceAccount(projectAdmin)
-			workflowProject.Platform = workflowPlatform
-			workflowProject.ProjectName = fmt.Sprintf("project-%s", utilities.RandomString(5))
-			_, err := workflowProject.CreateProject()
+			workflowProject1.Platform = workflowPlatform
+			workflowProject1.ProjectName = fmt.Sprintf("project-%s", utilities.RandomString(5))
+			_, err := workflowProject1.CreateProject()
 			// TODO: Error needs to be changed with actual error at the time of validation
-			dash.VerifyFatal(err, err, "Create Project with project-admin failed with project admin privelege")
+			dash.VerifyFatal(strings.Contains(err.Error(), "403 Forbidden"), true, "Create Project with Admin - 403 Forbidden")
 		})
 
-		Step("Create Project with Project Users - Expected Failure", func() {
+		Step("Create Project with tenant admin", func() {
 			defer func() {
 				workflowServiceAccount.SwitchToAdmin()
 			}()
-			workflowServiceAccount.SwitchToServiceAccount(projectUser)
-			workflowProject.Platform = workflowPlatform
-			workflowProject.ProjectName = fmt.Sprintf("project-%s", utilities.RandomString(5))
-			_, err := workflowProject.CreateProject()
-			// TODO: Error needs to be changed with actual error at the time of validation
-			dash.VerifyFatal(err, err, "Create Project with project-user failed with project admin privelege")
+			workflowServiceAccount.SwitchToServiceAccount(tenantAdmin)
+			workflowProject2.Platform = workflowPlatform
+			workflowProject2.ProjectName = fmt.Sprintf("project-%s", utilities.RandomString(5))
+			_, err := workflowProject2.CreateProject()
+			log.FailOnError(err, "Unable to create project as tenant admin")
+			log.Infof("Project created with ID - [%s]", workflowProject2.ProjectId)
 		})
 
 		Step("Register Target Cluster - Project Admin", func() {
@@ -260,121 +261,136 @@ var _ = Describe("{PlatformRBACTest}", func() {
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
 			_, err := workflowTargetCluster.RegisterToControlPlane(false)
 			// TODO: Error needs to be changed with actual error at the time of validation
-			dash.VerifyFatal(err, err, "Register target cluster failed with project admin account")
+			dash.VerifyFatal(strings.Contains(err.Error(), "403 Forbidden"), true, "Register Target Cluster with Admin - 403 Forbidden")
 		})
 
-		Step("Register Target Cluster - Project User", func() {
+		Step("Register Target Cluster - tenant admin", func() {
 			defer func() {
 				workflowServiceAccount.SwitchToAdmin()
 			}()
-			workflowServiceAccount.SwitchToServiceAccount(projectUser)
+			workflowServiceAccount.SwitchToServiceAccount(tenantAdmin)
 			workflowTargetCluster.Project = workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
 			_, err := workflowTargetCluster.RegisterToControlPlane(false)
 			// TODO: Error needs to be changed with actual error at the time of validation
-			dash.VerifyFatal(err, err, "Register target cluster failed with project user account")
+			log.FailOnError(err, "Unable to register target cluster as tenant admin")
 		})
 
-		Step("Register Target Cluster - Project User", func() {
-			defer func() {
-				workflowServiceAccount.SwitchToAdmin()
-			}()
-			workflowServiceAccount.SwitchToServiceAccount(projectUser)
-			workflowTargetCluster.Project = workflowProject
-			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
-			_, err := workflowTargetCluster.RegisterToControlPlane(false)
-			// TODO: Error needs to be changed with actual error at the time of validation
-			dash.VerifyFatal(err, err, "Register target cluster failed with project user account")
-		})
-
-		Step("Associate namespace to Project", func() {
+		Step("Associate target cluster to Project Admin", func() {
 			defer func() {
 				workflowServiceAccount.SwitchToAdmin()
 			}()
 			workflowServiceAccount.SwitchToServiceAccount(projectAdmin)
 			err := workflowProject.Associate(
-				[]string{},
 				[]string{workflowTargetCluster.ClusterUID},
 				[]string{},
 				[]string{},
 				[]string{},
 				[]string{},
+				[]string{},
 			)
-			log.FailOnError(err, "Unable to associate Cluster to Project")
-			log.Infof("Associated Resources - [%+v]", workflowProject.AssociatedResources)
+			log.FailOnError(err, "Unable to associate cluster as project admin")
 		})
 
-		Step("Dissociate namespace from Project", func() {
+		Step("Dissociate namespace from Project Admin", func() {
 			defer func() {
 				workflowServiceAccount.SwitchToAdmin()
 			}()
 			workflowServiceAccount.SwitchToServiceAccount(projectAdmin)
 			err := workflowProject.Dissociate(
+				[]string{workflowTargetCluster.ClusterUID},
 				[]string{},
-				[]string{workflowNamespace.Namespaces[namespace]},
 				[]string{},
 				[]string{},
 				[]string{},
 				[]string{},
 			)
-			log.FailOnError(err, "Unable to dissociated Cluster from Project")
-			log.Infof("Dissociated Clusters - [%s]", workflowTargetCluster.ClusterUID)
-			log.Infof("Dissociated namespaces - [%s]", workflowNamespace.Namespaces[namespace])
-			log.Infof("Associated Resources - [%+v]", workflowProject.AssociatedResources)
+			log.FailOnError(err, "Unable to dissociate cluster as project admin")
 		})
 
-		Step("Associate namespace to Project", func() {
+		Step("Associate target cluster to Project - Tenant Admin", func() {
 			defer func() {
 				workflowServiceAccount.SwitchToAdmin()
 			}()
-			workflowServiceAccount.SwitchToServiceAccount(projectUser)
+			workflowServiceAccount.SwitchToServiceAccount(tenantAdmin)
 			err := workflowProject.Associate(
-				[]string{},
 				[]string{workflowTargetCluster.ClusterUID},
 				[]string{},
 				[]string{},
 				[]string{},
 				[]string{},
+				[]string{},
 			)
-			// TODO: Error needs to be changed with actual error at the time of validation
-			dash.VerifyFatal(err, err, "Associate namespace failed with project user account")
+			log.FailOnError(err, "Tenant admin is not able to associate resource to project")
 		})
 
-		Step("Dissociate namespace from Project", func() {
+		Step("Dissociate namespace from Project - Tenant Admin", func() {
 			defer func() {
 				workflowServiceAccount.SwitchToAdmin()
 			}()
-			workflowServiceAccount.SwitchToServiceAccount(projectUser)
+			workflowServiceAccount.SwitchToServiceAccount(tenantAdmin)
 			err := workflowProject.Dissociate(
+				[]string{workflowTargetCluster.ClusterUID},
 				[]string{},
-				[]string{workflowNamespace.Namespaces[namespace]},
 				[]string{},
 				[]string{},
 				[]string{},
 				[]string{},
 			)
-			// TODO: Error needs to be changed with actual error at the time of validation
-			dash.VerifyFatal(err, err, "Dissociate namespace failed with project user account")
+			log.FailOnError(err, "Tenant admin is not able to associate resource from project")
 		})
 
-		Step("Delete Project", func() {
+		Step("Associate target cluster to Project - User", func() {
 			defer func() {
 				workflowServiceAccount.SwitchToAdmin()
 			}()
-			workflowServiceAccount.SwitchToServiceAccount(projectUser)
-			err := workflowProject.DeleteProject()
-			// TODO: Error needs to be changed with actual error at the time of validation
-			dash.VerifyFatal(err, err, "Delete Project failed with project user account")
+			workflowServiceAccount.SwitchToServiceAccount(user)
+			err := workflowProject.Associate(
+				[]string{workflowTargetCluster.ClusterUID},
+				[]string{},
+				[]string{},
+				[]string{},
+				[]string{},
+				[]string{},
+			)
+			dash.VerifyFatal(strings.Contains(err.Error(), "403 Forbidden"), true, "Associate project with user - 403 Forbidden")
 		})
 
-		Step("Delete Project", func() {
+		Step("Dissociate namespace from Project - User", func() {
+			defer func() {
+				workflowServiceAccount.SwitchToAdmin()
+			}()
+			workflowServiceAccount.SwitchToServiceAccount(user)
+			err := workflowProject.Dissociate(
+				[]string{workflowTargetCluster.ClusterUID},
+				[]string{},
+				[]string{},
+				[]string{},
+				[]string{},
+				[]string{},
+			)
+			dash.VerifyFatal(strings.Contains(err.Error(), "403 Forbidden"), true, "Dissociate project with user - 403 Forbidden")
+		})
+
+		Step("Delete Project - Project Admin", func() {
 			defer func() {
 				workflowServiceAccount.SwitchToAdmin()
 			}()
 			workflowServiceAccount.SwitchToServiceAccount(projectAdmin)
 			err := workflowProject.DeleteProject()
-			// TODO: Error needs to be changed with actual error at the time of validation
-			dash.VerifyFatal(err, err, "Delete Project failed with project user account")
+			log.FailOnError(err, "Unable to delete project as project Admin with access")
+
+			err = workflowProject2.DeleteProject() // Delete project without access
+			dash.VerifyFatal(strings.Contains(err.Error(), "403 Forbidden"), true, "Delete project on another project - 403 Forbidden")
+		})
+
+		Step("Delete Project - Tenant Admin", func() {
+			defer func() {
+				workflowServiceAccount.SwitchToAdmin()
+			}()
+			workflowServiceAccount.SwitchToServiceAccount(tenantAdmin)
+			err := workflowProject2.DeleteProject() // Delete project without access
+			log.FailOnError(err, "Unable to delete project as tenant Admin")
 		})
 
 	})

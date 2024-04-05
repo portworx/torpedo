@@ -4,6 +4,14 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
+var (
+	defaultBackupSuspend       = false
+	defaultBackupType          = "ADHOC"
+	defaultBackupLevel         = "SNAPSHOT"
+	defaultBackupRetainPolicy  = "RETAIN"
+	defaultBackJobHistoryLimit = int32(10)
+)
+
 // CreateBackupConfig created backup config for the deployment
 func CreateBackupConfig(name string, deploymentId string, projectId string) (*automationModels.PDSBackupConfigResponse, error) {
 
@@ -11,7 +19,17 @@ func CreateBackupConfig(name string, deploymentId string, projectId string) (*au
 
 	createBackupConfigRequest.Create.BackupConfig = &automationModels.V1BackupConfig{
 		Meta: &automationModels.Meta{
-			Uid: &name,
+			Name: &name,
+		},
+		Config: &automationModels.Config{
+			References: &automationModels.References{
+				BackupLocationId: &deploymentId,
+			},
+			BackupType:      &defaultBackupType,
+			Suspend:         &defaultBackupSuspend,
+			BackupLevel:     &defaultBackupLevel,
+			ReclaimPolicy:   &defaultBackupRetainPolicy,
+			JobHistoryLimit: &defaultBackJobHistoryLimit,
 		},
 	}
 	createBackupConfigRequest.Create.DeploymentId = deploymentId

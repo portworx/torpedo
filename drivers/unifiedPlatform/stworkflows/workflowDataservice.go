@@ -35,7 +35,7 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
 	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
 	resConfigId := wfDataService.PDSTemplates.ResourceTemplateId
-	stConfigId := wfDataService.PDSTemplates.StorageTemplatetId
+	stConfigId := wfDataService.PDSTemplates.StorageTemplateId
 	log.Infof("targetClusterId [%s]", targetClusterId)
 
 	imageId, err := dslibs.GetDataServiceImageId(ds.Name, image, version)
@@ -82,7 +82,7 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
 	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
 	resConfigId := wfDataService.PDSTemplates.ResourceTemplateId
-	stConfigId := wfDataService.PDSTemplates.StorageTemplatetId
+	stConfigId := wfDataService.PDSTemplates.StorageTemplateId
 	log.Infof("targetClusterId [%s]", targetClusterId)
 
 	imageId, err := dslibs.GetDataServiceImageId(ds.Name, image, version)

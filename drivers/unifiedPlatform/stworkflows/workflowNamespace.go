@@ -89,7 +89,7 @@ func (workflowNamespace *WorkflowNamespace) ListNamespaces(tenantId string, labe
 func (workflowNamespace *WorkflowNamespace) GetNamespaceUID(namespace string) (string, error) {
 	waitForNSToReflect := func() (interface{}, bool, error) {
 		allNamespaces, err := workflowNamespace.ListNamespaces(
-			workflowNamespace.TargetCluster.Project.Platform.TenantId, "", "", "")
+			workflowNamespace.TargetCluster.Project.Platform.TenantId, "", "CREATED_AT", "DESC")
 
 		if err != nil {
 			return "", true, err

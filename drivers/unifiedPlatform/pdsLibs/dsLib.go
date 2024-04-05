@@ -111,31 +111,6 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 		},
 	}
 
-	//depInputs.Create.V1Deployment.Config.DeploymentTopologies = []automationModels.DeploymentTopology{{
-	//	Name:     StringPtr("pds-qa-test-topology"),
-	//	Replicas: intToPointerString(ds.Replicas),
-	//}}
-	//
-	//depInputs.Create.V1Deployment.Meta.Name = &ds.DeploymentName
-	//depInputs.Create.NamespaceID = namespaceId
-	//depInputs.Create.ProjectID = projectId
-	//depInputs.Create.V1Deployment.Config.References.TargetClusterId = targetClusterId
-	//depInputs.Create.V1Deployment.Config.References.ProjectId = &projectId
-	//depInputs.Create.V1Deployment.Config.References.ImageId = &imageId
-	//
-	//depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings = &automationModels.PdsTemplates{
-	//	Id:     &resConfigId,
-	//	Values: nil,
-	//}
-	//depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations = &automationModels.PdsTemplates{
-	//	Id:     &appConfigId,
-	//	Values: nil,
-	//}
-	//depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].StorageOptions = &automationModels.PdsTemplates{
-	//	Id:     &stConfigId,
-	//	Values: nil,
-	//}
-
 	log.Infof("deployment name  [%s]", *depInputs.Create.V1Deployment.Meta.Name)
 	log.Infof("app template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations.Id)
 	log.Infof("resource template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings.Id)
