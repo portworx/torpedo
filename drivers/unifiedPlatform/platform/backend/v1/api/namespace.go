@@ -22,9 +22,20 @@ func (ns *PLATFORM_API_V1) ListNamespaces(request *PlatformNamespace) (*Platform
 
 	req := nsClient.NamespaceServiceListNamespaces(ctx)
 	req = req.TenantId(request.List.TenantId)
+
 	if request.List.SortSortBy != "" {
 		req = req.SortSortBy(request.List.SortSortBy)
 	}
+	if request.List.SortSortOrder != "" {
+		req = req.SortSortOrder(request.List.SortSortOrder)
+	}
+	if request.List.PaginationPageNumber != "" {
+		req = req.PaginationPageNumber(request.List.PaginationPageNumber)
+	}
+	if request.List.PaginationPageSize != "" {
+		req = req.PaginationPageSize(request.List.PaginationPageSize)
+	}
+
 	if request.List.SortSortOrder != "" {
 		req = req.SortSortOrder(request.List.SortSortOrder)
 	}
@@ -32,7 +43,7 @@ func (ns *PLATFORM_API_V1) ListNamespaces(request *PlatformNamespace) (*Platform
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `NamespaceServiceListNamespaces`: %v\n.Full HTTP response: %v", err, res)
 	}
-	err = utilities.CopyStruct(nsModels.Namespaces, &namespaceResponse.List.Namespaces)
+	err = utilities.CopyStruct(nsModels, &namespaceResponse.List)
 	if err != nil {
 		return nil, err
 	}
