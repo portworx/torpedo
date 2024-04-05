@@ -7,9 +7,10 @@ import (
 )
 
 type WorkflowPDSBackupConfig struct {
-	Backups             map[string]automationModels.V1BackupConfig
-	WorkflowDataService WorkflowDataService
-	SkipValidatation    map[string]bool
+	Backups                map[string]automationModels.V1BackupConfig
+	WorkflowDataService    WorkflowDataService
+	SkipValidatation       map[string]bool
+	WorkflowBackupLocation WorkflowBackupLocation
 }
 
 const (
@@ -20,7 +21,8 @@ const (
 func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, deploymentName string) (*automationModels.PDSBackupConfigResponse, error) {
 	createBackup, err := pdslibs.CreateBackupConfig(name,
 		backupConfig.WorkflowDataService.DataServiceDeployment[deploymentName],
-		backupConfig.WorkflowDataService.Namespace.TargetCluster.Project.ProjectId)
+		backupConfig.WorkflowDataService.Namespace.TargetCluster.Project.ProjectId,
+		backupConfig.WorkflowBackupLocation.BkpLocation.BkpLocationId)
 
 	if err != nil {
 		return nil, err
