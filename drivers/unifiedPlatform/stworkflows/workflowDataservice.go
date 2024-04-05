@@ -4,6 +4,7 @@ import (
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	k8utils "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"strconv"
@@ -220,4 +221,12 @@ func ValidateDeploymentResources(resourceTemp dslibs.ResourceSettingTemplate, st
 	for version, build := range dataServiceVersionBuildMap {
 		dash.VerifyFatal(config.Version, version+"-"+build[0], "validating ds build and version")
 	}
+}
+
+func (wfDataservice *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string, deployment map[string]string, sizeInGb uint64) error {
+	_, err := k8utils.IncreasePVCby1Gig(namespace, deployment, sizeInGb)
+	if err != nil {
+		return err
+	}
+	return nil
 }

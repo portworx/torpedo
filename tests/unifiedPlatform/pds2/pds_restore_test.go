@@ -477,7 +477,6 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 		workflowDataService  stworkflows.WorkflowDataService
 		workflowBackUpConfig stworkflows.WorkflowPDSBackupConfig
 		workflowRestore      stworkflows.WorkflowPDSRestore
-		workflowK8s          stworkflows.WorkflowK8s
 		deployment           *automationModels.PDSDeploymentResponse
 		restoreDeployment    *automationModels.PDSRestoreResponse
 
@@ -582,7 +581,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 	It("Increase PVC Size by 1 GB of DataService from K8s", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			log.InfoD("Dataservice on which the PVC needs to be resized is- [%v]", ds.Name)
-			err = workflowK8s.ExecuteK8sOperations("IncreasePVCby1Gig", workflowDataService.NamespaceName, workflowDataService.DataServiceDeployment)
+			err = workflowDataService.IncreasePvcSizeBy1gb(workflowDataService.NamespaceName, workflowDataService.DataServiceDeployment, 1)
 			log.FailOnError(err, "Failing while Increasing the PVC name...")
 
 		}

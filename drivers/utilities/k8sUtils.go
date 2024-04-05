@@ -1,7 +1,8 @@
-package pdslibs
+package utilities
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -12,7 +13,10 @@ import (
 	"time"
 )
 
-var instance *Torpedo
+var (
+	instance *Torpedo
+	k8sCores = core.Instance()
+)
 
 type Torpedo struct {
 	InstanceID string
@@ -26,22 +30,6 @@ func Inst() *Torpedo {
 	return instance
 }
 
-const (
-	IncreasePvcSizeBy1gb = "increase-pvc-size-by-1gb"
-)
-
-func ExecuteK8sOperations(functionName string, namespace string, deployment map[string]string) error {
-	switch functionName {
-	case IncreasePvcSizeBy1gb:
-		_, err := IncreasePVCby1Gig(namespace, deployment, 1)
-		if err != nil {
-			return err
-		}
-
-	}
-	return nil
-}
-
 func IncreasePVCby1Gig(namespace string, deployment map[string]string, sizeInGb uint64) (*volume.Volume, error) {
 	log.Info("Resizing of the PVC begins")
 	var vol *volume.Volume
@@ -52,12 +40,11 @@ func IncreasePVCby1Gig(namespace string, deployment map[string]string, sizeInGb 
 		return nil, err
 	}
 	for _, pvc := range pvcList.Items {
-		k8sOps := k8sCore
 		storageSize := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
 		extraAmount, _ := resource.ParseQuantity(fmt.Sprintf("%dGi", sizeInGb))
 		storageSize.Add(extraAmount)
 		pvc.Spec.Resources.Requests[corev1.ResourceStorage] = storageSize
-		_, err := k8sOps.UpdatePersistentVolumeClaim(&pvc)
+		_, err := k8sCores.UpdatePersistentVolumeClaim(&pvc)
 		if err != nil {
 			return nil, err
 		}
@@ -84,11 +71,10 @@ func IncreasePVCby1Gig(namespace string, deployment map[string]string, sizeInGb 
 
 func GetPvsAndPVCsfromDeployment(namespace string, deployment map[string]string) (*corev1.PersistentVolumeClaimList, []*volume.Volume) {
 	log.Infof("Get PVC List based on namespace and deployment")
-	k8sOps := k8sCore
 	var vols []*volume.Volume
 	labelSelector := make(map[string]string)
 	labelSelector["name"] = "deployment.GetClusterResourceName()"
-	pvcList, _ := k8sOps.GetPersistentVolumeClaims(namespace, labelSelector)
+	pvcList, _ := k8sCores.GetPersistentVolumeClaims(namespace, labelSelector)
 	for _, pvc := range pvcList.Items {
 		vols = append(vols, &volume.Volume{
 			ID: pvc.Spec.VolumeName,
@@ -107,5 +93,5 @@ func GetVolumeCapacityInGB(namespace string, deployment map[string]string) (uint
 		}
 		pvcCapacity = appVol.Spec.Size / units.GiB
 	}
-	return pvcCapacity, err
+	return pvcCapacity, nil
 }
