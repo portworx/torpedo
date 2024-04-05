@@ -367,6 +367,9 @@ type Driver interface {
 	// UpgradeScheduler upgrades the scheduler on the cluster to the specified version
 	UpgradeScheduler(version string) error
 
+	// DeleteNode deletes the given node
+	DeleteNode(node node.Node, timeout time.Duration) error
+
 	// CreateSecret creates new secret with given name in given namespace
 	CreateSecret(namespace, name, dataField, secretDataString string) error
 

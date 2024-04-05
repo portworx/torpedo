@@ -230,7 +230,7 @@ func sv4KillANodeAndValidate(nodeToKill node.Node) {
 	Step(steplog, func() {
 		log.InfoD(steplog)
 		log.Infof("Instance is of %v ", Inst().N.String())
-		err := Inst().N.DeleteNode(nodeToKill, nodeDeleteTimeoutMins)
+		err := Inst().S.DeleteNode(nodeToKill, nodeDeleteTimeoutMins)
 		dash.VerifyFatal(err, nil, "Validate node delete init")
 	})
 	steplog = fmt.Sprintf("Wait for node: %v to be deleted", nodeToKill.Name)

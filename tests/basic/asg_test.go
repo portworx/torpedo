@@ -249,7 +249,7 @@ func asgKillANodeAndValidate(storageDriverNodes []node.Node) {
 	stepLog := fmt.Sprintf("Deleting node [%v]", nodeToKill.Name)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		err := Inst().N.DeleteNode(nodeToKill, nodeDeleteTimeoutMins)
+		err := Inst().S.DeleteNode(nodeToKill, nodeDeleteTimeoutMins)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Valdiate node %s deletion", nodeToKill.Name))
 	})
 

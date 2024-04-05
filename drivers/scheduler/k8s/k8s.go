@@ -7017,6 +7017,15 @@ func (k *K8s) UpgradeScheduler(version string) error {
 	}
 }
 
+// DeleteNode deletes the given in the cluster
+func (k *K8s) DeleteNode(node node.Node, timeout time.Duration) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteNode()",
+	}
+}
+
 // DeleteSecret deletes secret with given name in given namespace
 func (k *K8s) DeleteSecret(namespace, name string) error {
 	return k8sCore.DeleteSecret(name, namespace)

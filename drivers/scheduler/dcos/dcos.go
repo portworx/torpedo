@@ -910,6 +910,14 @@ func (d *dcos) UpgradeScheduler(version string) error {
 	}
 }
 
+func (d *dcos) DeleteNode(node node.Node, timeout time.Duration) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteNode()",
+	}
+}
+
 func (d *dcos) CreateSecret(namespace, name, dataField, secretDataString string) error {
 	// TODO: Add implementation
 	return &errors.ErrNotSupported{
