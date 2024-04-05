@@ -16,101 +16,125 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 	return nil
 }
 
-func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, imageId string) (*automationModels.PDSDeploymentResponse, error) {
+func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, imageId, appConfigId, resConfigId, stConfigId string) (*automationModels.PDSDeploymentResponse, error) {
 	log.Info("Update Data service will be performed")
+	//depInputs := automationModels.PDSDeploymentRequest{}
 
-	depInputs := automationModels.PDSDeploymentRequest{}
-
-	// TODO call the below methods and fill up the structs
-	// Get TargetClusterID
-	// Get ImageID
-	// Get App, Resource and storage PdsTemplates Ids
-
-	depInputs.Update.V1Deployment.Config.DeploymentTopologies = []automationModels.DeploymentTopology{{}}
-
-	depInputs.Update.V1Deployment.Meta.Name = &ds.DeploymentName
-	depInputs.Update.NamespaceID = namespaceId
-	depInputs.Update.ProjectID = projectId
-	depInputs.Update.V1Deployment.Config.DeploymentTopologies[0].Replicas = intToPointerString(ds.ScaleReplicas)
-	depInputs.Update.V1Deployment.Config.References.ImageId = intToPointerString(4343)
-	depInputs.Update.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings = &automationModels.PdsTemplates{
-		Id:              intToPointerString(10),
-		ResourceVersion: nil,
-		Values:          nil,
+	depInputs := &automationModels.PDSDeploymentRequest{
+		Update: automationModels.PDSDeploymentUpdate{
+			NamespaceID: namespaceId,
+			ProjectID:   projectId,
+			V1Deployment: automationModels.V1DeploymentUpdate{
+				Meta: automationModels.Meta{
+					Uid:             &deploymentId,
+					Name:            nil,
+					Description:     nil,
+					ResourceVersion: nil,
+					CreateTime:      nil,
+					UpdateTime:      nil,
+					Labels:          nil,
+					Annotations:     nil,
+				},
+				Config: automationModels.DeploymentUpdateConfig{
+					DeploymentMeta: automationModels.Meta{
+						Uid:             nil,
+						Name:            nil,
+						Description:     nil,
+						ResourceVersion: nil,
+						CreateTime:      nil,
+						UpdateTime:      nil,
+						Labels:          nil,
+						Annotations:     nil,
+					},
+					DeploymentConfig: automationModels.V1Config1{
+						TlsEnabled: nil,
+						DeploymentTopologies: []automationModels.DeploymentTopology{
+							{
+								Name:     StringPtr("pds-qa-test-topology"),
+								Replicas: intToPointerString(ds.ScaleReplicas),
+							},
+						},
+					},
+				},
+			},
+		},
 	}
-	depInputs.Update.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations = &automationModels.PdsTemplates{
-		Id:              intToPointerString(11),
-		ResourceVersion: nil,
-		Values:          nil,
-	}
-	depInputs.Update.V1Deployment.Config.DeploymentTopologies[0].StorageOptions = &automationModels.PdsTemplates{
-		Id:              intToPointerString(12),
-		ResourceVersion: nil,
-		Values:          nil,
-	}
-
-	//TODO: Get the namespaceID, write method to get the namespaceID from the give namespace
-	deployment, err := v2Components.PDS.UpdateDeployment(&depInputs)
+	deployment, err := v2Components.PDS.UpdateDeployment(depInputs)
 	if err != nil {
 		return nil, err
 	}
 	return deployment, err
 }
 
+// DeleteDeployment Deletes the given deployment
 func DeleteDeployment(deployment map[string]string) error {
 	_, deploymentId := GetDeploymentNameAndId(deployment)
 	return v2Components.PDS.DeleteDeployment(deploymentId)
 }
 
-// DeployDataService should be called from workflows
+// DeployDataService Deploys the dataservices based on the given params
 func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterId, imageId, appConfigId, resConfigId, stConfigId string) (*automationModels.PDSDeploymentResponse, error) {
 	log.Info("Data service will be deployed as per the config map passed..")
 
-	depInputs := automationModels.PDSDeploymentRequest{}
-
-	// TODO call the below methods and fill up the structs
-	// Get App, Resource and storage PdsTemplates Ids
-
-	depInputs.Create.V1Deployment.Config.DeploymentTopologies = []automationModels.DeploymentTopology{{}}
-
-	depInputs.Create.V1Deployment.Meta.Name = &ds.DeploymentName
-	depInputs.Create.NamespaceID = namespaceId
-	depInputs.Create.ProjectID = projectId
-	depInputs.Create.V1Deployment.Config.References.TargetClusterId = targetClusterId
-	depInputs.Create.V1Deployment.Config.References.ProjectId = &projectId
-	depInputs.Create.V1Deployment.Config.References.ImageId = intToPointerString(4343)
-
-	// Create instances of ProtobufAny4 and assign values to their fields
-	protobufAny := automationModels.ProtobufAny4{
-		Type: StringPtr("type.googleapis.com/path/google.protobuf.Duration"),
-		AdditionalProperties: map[string]interface{}{
-			"key1": "value1",
-			"key2": 123,
+	depInputs := &automationModels.PDSDeploymentRequest{
+		Create: automationModels.PDSDeployment{
+			NamespaceID: namespaceId,
+			ProjectID:   projectId,
+			V1Deployment: automationModels.V1Deployment{
+				Meta: automationModels.Meta{
+					Name: &ds.DeploymentName,
+				},
+				Config: automationModels.V1Config1{
+					References: automationModels.Reference{
+						TargetClusterId: targetClusterId,
+						ProjectId:       &projectId,
+						ImageId:         &imageId,
+					},
+					TlsEnabled: nil,
+					DeploymentTopologies: []automationModels.DeploymentTopology{
+						{
+							Name:     StringPtr("pds-qa-test-topology"),
+							Replicas: intToPointerString(ds.Replicas),
+							ResourceSettings: &automationModels.PdsTemplates{
+								Id: &resConfigId,
+							},
+							ServiceConfigurations: &automationModels.PdsTemplates{
+								Id: &appConfigId,
+							},
+							StorageOptions: &automationModels.PdsTemplates{
+								Id: &stConfigId,
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 
-	// Initialize the map for Values and add key-value pairs to it
-	values := map[string]automationModels.ProtobufAny4{
-		"someKey": protobufAny,
-	}
-
-	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings = &automationModels.PdsTemplates{
-		Id:              &resConfigId,
-		ResourceVersion: nil,
-		Values:          &values,
-	}
-	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations = &automationModels.PdsTemplates{
-		Id:              &appConfigId,
-		ResourceVersion: nil,
-		Values:          nil,
-	}
-	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].StorageOptions = &automationModels.PdsTemplates{
-		Id:              &stConfigId,
-		ResourceVersion: nil,
-		Values:          nil,
-	}
-
-	//TODO: Get the namespaceID, write method to get the namespaceID from the give namespace
+	//depInputs.Create.V1Deployment.Config.DeploymentTopologies = []automationModels.DeploymentTopology{{
+	//	Name:     StringPtr("pds-qa-test-topology"),
+	//	Replicas: intToPointerString(ds.Replicas),
+	//}}
+	//
+	//depInputs.Create.V1Deployment.Meta.Name = &ds.DeploymentName
+	//depInputs.Create.NamespaceID = namespaceId
+	//depInputs.Create.ProjectID = projectId
+	//depInputs.Create.V1Deployment.Config.References.TargetClusterId = targetClusterId
+	//depInputs.Create.V1Deployment.Config.References.ProjectId = &projectId
+	//depInputs.Create.V1Deployment.Config.References.ImageId = &imageId
+	//
+	//depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings = &automationModels.PdsTemplates{
+	//	Id:     &resConfigId,
+	//	Values: nil,
+	//}
+	//depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations = &automationModels.PdsTemplates{
+	//	Id:     &appConfigId,
+	//	Values: nil,
+	//}
+	//depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].StorageOptions = &automationModels.PdsTemplates{
+	//	Id:     &stConfigId,
+	//	Values: nil,
+	//}
 
 	log.Infof("deployment name  [%s]", *depInputs.Create.V1Deployment.Meta.Name)
 	log.Infof("app template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations.Id)
@@ -118,7 +142,7 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 	log.Infof("storage template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].StorageOptions.Id)
 
 	log.Infof("depInputs [+%v]", depInputs.Create)
-	deployment, err := v2Components.PDS.CreateDeployment(&depInputs)
+	deployment, err := v2Components.PDS.CreateDeployment(depInputs)
 	if err != nil {
 		return nil, err
 	}
@@ -131,15 +155,16 @@ func GetDataServiceId(dsName string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("Failed to list DataServices: %v", err)
 	}
-	for _, dataService := range ds {
-		if dataService.Meta.Name == &dsName {
-			return dataService.Id, nil
+	for _, dataService := range ds.DataServiceList {
+		log.Debugf("Dataservice name: [%s]", *dataService.Meta.Name)
+		if *dataService.Meta.Name == dsName {
+			return *dataService.Meta.Uid, nil
 		}
 	}
 	return "", fmt.Errorf("Failed to find DataService with name %s", dsName)
 }
 
-func ListDataServiceVersions(dsId string) ([]automationModels.WorkFlowResponse, error) {
+func ListDataServiceVersions(dsId string) (*automationModels.CatalogResponse, error) {
 	input := automationModels.WorkFlowRequest{
 		DataServiceId: dsId,
 	}
@@ -147,7 +172,7 @@ func ListDataServiceVersions(dsId string) ([]automationModels.WorkFlowResponse, 
 	return ds, err
 }
 
-func ListDataServiceImages(dsId, dsVersionId string) ([]automationModels.WorkFlowResponse, error) {
+func ListDataServiceImages(dsId, dsVersionId string) (*automationModels.CatalogResponse, error) {
 	input := automationModels.WorkFlowRequest{
 		DataServiceId:        dsId,
 		DataServiceVersionId: dsVersionId,

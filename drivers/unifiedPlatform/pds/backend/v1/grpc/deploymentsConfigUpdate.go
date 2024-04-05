@@ -35,7 +35,7 @@ func (deployment *PdsGrpc) getDeploymentConfigClient() (context.Context, publicd
 
 func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *automationModels.PDSDeploymentRequest) (*automationModels.PDSDeploymentResponse, error) {
 	depResponse := automationModels.PDSDeploymentResponse{
-		Update: automationModels.V1Deployment{},
+		Update: automationModels.V1DeploymentUpdate{},
 	}
 
 	//TODO: try copy else go with the below approach

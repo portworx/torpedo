@@ -22,7 +22,7 @@ type Deploymentv1Status struct {
 	Health *V1StatusHealth `json:"health,omitempty"`
 	Phase *V1StatusPhase `json:"phase,omitempty"`
 	// ConnectionDetails urls, ports, credentials, etc for connecting to the data service.
-	ConnectionInfo *map[string]ProtobufAny `json:"connectionInfo,omitempty"`
+	ConnectionInfo map[string]interface{} `json:"connectionInfo,omitempty"`
 	// Initialize used to control startup scripts.
 	Initialized *string `json:"initialized,omitempty"`
 	// Status of the deployment topology.
@@ -119,19 +119,19 @@ func (o *Deploymentv1Status) SetPhase(v V1StatusPhase) {
 }
 
 // GetConnectionInfo returns the ConnectionInfo field value if set, zero value otherwise.
-func (o *Deploymentv1Status) GetConnectionInfo() map[string]ProtobufAny {
+func (o *Deploymentv1Status) GetConnectionInfo() map[string]interface{} {
 	if o == nil || IsNil(o.ConnectionInfo) {
-		var ret map[string]ProtobufAny
+		var ret map[string]interface{}
 		return ret
 	}
-	return *o.ConnectionInfo
+	return o.ConnectionInfo
 }
 
 // GetConnectionInfoOk returns a tuple with the ConnectionInfo field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *Deploymentv1Status) GetConnectionInfoOk() (*map[string]ProtobufAny, bool) {
+func (o *Deploymentv1Status) GetConnectionInfoOk() (map[string]interface{}, bool) {
 	if o == nil || IsNil(o.ConnectionInfo) {
-		return nil, false
+		return map[string]interface{}{}, false
 	}
 	return o.ConnectionInfo, true
 }
@@ -145,9 +145,9 @@ func (o *Deploymentv1Status) HasConnectionInfo() bool {
 	return false
 }
 
-// SetConnectionInfo gets a reference to the given map[string]ProtobufAny and assigns it to the ConnectionInfo field.
-func (o *Deploymentv1Status) SetConnectionInfo(v map[string]ProtobufAny) {
-	o.ConnectionInfo = &v
+// SetConnectionInfo gets a reference to the given map[string]interface{} and assigns it to the ConnectionInfo field.
+func (o *Deploymentv1Status) SetConnectionInfo(v map[string]interface{}) {
+	o.ConnectionInfo = v
 }
 
 // GetInitialized returns the Initialized field value if set, zero value otherwise.

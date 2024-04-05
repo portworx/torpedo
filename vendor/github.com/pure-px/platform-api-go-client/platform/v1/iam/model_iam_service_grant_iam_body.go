@@ -17,7 +17,7 @@ import (
 // checks if the IAMServiceGrantIAMBody type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &IAMServiceGrantIAMBody{}
 
-// IAMServiceGrantIAMBody GrantIAMRequest to grant/add a new role binding at tenant, project or account.
+// IAMServiceGrantIAMBody GrantIAMRequest to grant add a new role in the IAM for tenant, project or account.
 type IAMServiceGrantIAMBody struct {
 	// Account UID under which user wants to add role binding.
 	AccountId *string `json:"accountId,omitempty"`
@@ -25,7 +25,7 @@ type IAMServiceGrantIAMBody struct {
 	TenantId *string `json:"tenantId,omitempty"`
 	// Project UID under which user wants to add role binding.
 	ProjectId *string `json:"projectId,omitempty"`
-	Iam *SpecifiesTheIAMRoleBindingThatNeedsToBeAddedOrGrantedForTheUser `json:"iam,omitempty"`
+	AccessPolicy *V1AccessPolicy `json:"accessPolicy,omitempty"`
 }
 
 // NewIAMServiceGrantIAMBody instantiates a new IAMServiceGrantIAMBody object
@@ -141,36 +141,36 @@ func (o *IAMServiceGrantIAMBody) SetProjectId(v string) {
 	o.ProjectId = &v
 }
 
-// GetIam returns the Iam field value if set, zero value otherwise.
-func (o *IAMServiceGrantIAMBody) GetIam() SpecifiesTheIAMRoleBindingThatNeedsToBeAddedOrGrantedForTheUser {
-	if o == nil || IsNil(o.Iam) {
-		var ret SpecifiesTheIAMRoleBindingThatNeedsToBeAddedOrGrantedForTheUser
+// GetAccessPolicy returns the AccessPolicy field value if set, zero value otherwise.
+func (o *IAMServiceGrantIAMBody) GetAccessPolicy() V1AccessPolicy {
+	if o == nil || IsNil(o.AccessPolicy) {
+		var ret V1AccessPolicy
 		return ret
 	}
-	return *o.Iam
+	return *o.AccessPolicy
 }
 
-// GetIamOk returns a tuple with the Iam field value if set, nil otherwise
+// GetAccessPolicyOk returns a tuple with the AccessPolicy field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *IAMServiceGrantIAMBody) GetIamOk() (*SpecifiesTheIAMRoleBindingThatNeedsToBeAddedOrGrantedForTheUser, bool) {
-	if o == nil || IsNil(o.Iam) {
+func (o *IAMServiceGrantIAMBody) GetAccessPolicyOk() (*V1AccessPolicy, bool) {
+	if o == nil || IsNil(o.AccessPolicy) {
 		return nil, false
 	}
-	return o.Iam, true
+	return o.AccessPolicy, true
 }
 
-// HasIam returns a boolean if a field has been set.
-func (o *IAMServiceGrantIAMBody) HasIam() bool {
-	if o != nil && !IsNil(o.Iam) {
+// HasAccessPolicy returns a boolean if a field has been set.
+func (o *IAMServiceGrantIAMBody) HasAccessPolicy() bool {
+	if o != nil && !IsNil(o.AccessPolicy) {
 		return true
 	}
 
 	return false
 }
 
-// SetIam gets a reference to the given SpecifiesTheIAMRoleBindingThatNeedsToBeAddedOrGrantedForTheUser and assigns it to the Iam field.
-func (o *IAMServiceGrantIAMBody) SetIam(v SpecifiesTheIAMRoleBindingThatNeedsToBeAddedOrGrantedForTheUser) {
-	o.Iam = &v
+// SetAccessPolicy gets a reference to the given V1AccessPolicy and assigns it to the AccessPolicy field.
+func (o *IAMServiceGrantIAMBody) SetAccessPolicy(v V1AccessPolicy) {
+	o.AccessPolicy = &v
 }
 
 func (o IAMServiceGrantIAMBody) MarshalJSON() ([]byte, error) {
@@ -192,8 +192,8 @@ func (o IAMServiceGrantIAMBody) ToMap() (map[string]interface{}, error) {
 	if !IsNil(o.ProjectId) {
 		toSerialize["projectId"] = o.ProjectId
 	}
-	if !IsNil(o.Iam) {
-		toSerialize["iam"] = o.Iam
+	if !IsNil(o.AccessPolicy) {
+		toSerialize["accessPolicy"] = o.AccessPolicy
 	}
 	return toSerialize, nil
 }

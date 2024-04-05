@@ -40,9 +40,9 @@ type Backup interface {
 }
 
 type Catalog interface {
-	ListDataServices() ([]WorkFlowResponse, error)
-	ListDataServiceVersions(*WorkFlowRequest) ([]WorkFlowResponse, error)
-	ListDataServiceImages(*WorkFlowRequest) ([]WorkFlowResponse, error)
+	ListDataServices() (*CatalogResponse, error)
+	ListDataServiceVersions(*WorkFlowRequest) (*CatalogResponse, error)
+	ListDataServiceImages(*WorkFlowRequest) (*CatalogResponse, error)
 }
 
 type RestoreInterface interface {

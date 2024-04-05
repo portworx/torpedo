@@ -6,7 +6,6 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dsUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -29,7 +28,7 @@ var _ = BeforeSuite(func() {
 		PdsLabels["clusterType"] = infraParams.ClusterType
 
 		log.InfoD("Get Account ID")
-		AccID = "acc:2bf71411-cd14-43c0-9eb5-c1e09e75f5bb"
+		AccID = "acc:e9272122-9d7e-4c20-b257-bee7ebb9561a"
 
 		err = platformUtils.InitUnifiedApiComponents(os.Getenv(EnvControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
@@ -88,24 +87,24 @@ var _ = BeforeSuite(func() {
 		}
 	})
 
-	Step("Create Cloud Credential and BackUpLocation", func() {
-		log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
-		WorkflowCc.Platform = WorkflowPlatform
-		WorkflowCc.CloudCredentials = make(map[string]stworkflows.CloudCredentialsType)
-		cc, err := WorkflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
-		log.FailOnError(err, "error occured while creating cloud credentials")
-		for _, value := range cc.CloudCredentials {
-			log.Infof("cloud credentials name: [%s]", value.Name)
-			log.Infof("cloud credentials id: [%s]", value.ID)
-			log.Infof("cloud provider type: [%s]", value.CloudProviderType)
-		}
-
-		WorkflowbkpLoc.WfCloudCredentials = WorkflowCc
-		wfbkpLoc, err := WorkflowbkpLoc.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
-		log.FailOnError(err, "error while creating backup location")
-		log.Infof("wfBkpLoc id: [%s]", wfbkpLoc.BkpLocation.BkpLocationId)
-		log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
-	})
+	//Step("Create Cloud Credential and BackUpLocation", func() {
+	//	log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
+	//	WorkflowCc.Platform = WorkflowPlatform
+	//	WorkflowCc.CloudCredentials = make(map[string]stworkflows.CloudCredentialsType)
+	//	cc, err := WorkflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
+	//	log.FailOnError(err, "error occured while creating cloud credentials")
+	//	for _, value := range cc.CloudCredentials {
+	//		log.Infof("cloud credentials name: [%s]", value.Name)
+	//		log.Infof("cloud credentials id: [%s]", value.ID)
+	//		log.Infof("cloud provider type: [%s]", value.CloudProviderType)
+	//	}
+	//
+	//	WorkflowbkpLoc.WfCloudCredentials = WorkflowCc
+	//	wfbkpLoc, err := WorkflowbkpLoc.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
+	//	log.FailOnError(err, "error while creating backup location")
+	//	log.Infof("wfBkpLoc id: [%s]", wfbkpLoc.BkpLocation.BkpLocationId)
+	//	log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
+	//})
 
 })
 

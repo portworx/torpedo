@@ -51,14 +51,6 @@ type V1Info struct {
 	AdditionalImages *map[string]string
 }
 
-type V1Config1 struct {
-	References Reference `copier:"must,nopanic"`
-	// Flag to enable TLS for the Data Service.
-	TlsEnabled *bool `copier:"must,nopanic"`
-	// A deployment topology contains a number of nodes that have various attributes as a collective group.
-	DeploymentTopologies []DeploymentTopology `copier:"must,nopanic"`
-}
-
 type V1Config2 struct {
 	ClientId     *string `json:"clientId,omitempty"`
 	ClientSecret *string `json:"clientSecret,omitempty"`
@@ -77,11 +69,6 @@ type V1Config struct {
 	SemanticVersion *string                `copier:"must,nopanic"`
 	RevisionUid     *string                `copier:"must,nopanic"`
 	TemplateValues  map[string]interface{} `copier:"must,nopanic"`
-}
-
-type V1Deployment struct {
-	Meta   Meta      `copier:"must,nopanic"`
-	Config V1Config1 `copier:"must,nopanic"`
 }
 
 type Status struct {

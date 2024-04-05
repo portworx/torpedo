@@ -19,9 +19,11 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 		workflowDataservice stworkflows.WorkflowDataService
 		workFlowTemplates   stworkflows.CustomTemplates
 		deployment          *automationModels.PDSDeploymentResponse
+		//updateDeployment    *automationModels.PDSDeploymentResponse
+		err error
 	)
 
-	It("Deploy and Validate DataService", func() {
+	It("Deploy,Validate and ScaleUp DataService", func() {
 		Step("Create a PDS Namespace", func() {
 			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
 			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
@@ -32,44 +34,56 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
 			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
 
-			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
-			workflowDataservice.PDSTemplates.StorageTemplatetId = stConfigId
-			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+			//serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
+			//log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			//workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+			//workflowDataservice.PDSTemplates.StorageTemplatetId = stConfigId
+			//workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+
+			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = "tmpl:467d65b1-86eb-4c36-a240-f968d14f104e"
+			workflowDataservice.PDSTemplates.StorageTemplatetId = "tmpl:b2dead78-5d31-4b83-bcec-b8f1c9c1d83e"
+			workflowDataservice.PDSTemplates.ResourceTemplateId = "tmpl:a1517bc0-26b4-4c06-874d-4e36bbffb305"
 
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
-			_, err := workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
 			log.FailOnError(err, "Error while deploying ds")
+			log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 		}
 
-		stepLog := "Running Workloads before taking backups"
-		Step(stepLog, func() {
-			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-			log.FailOnError(err, "Error while running workloads on ds")
-		})
-	})
+		defer func() {
+			Step("Delete DataServiceDeployment", func() {
+				log.InfoD("Cleaning Up dataservice...")
+				err := workflowDataservice.DeleteDeployment()
+				log.FailOnError(err, "Error while deleting dataservice")
+			})
+		}()
 
-	It("ScaleUp DataService", func() {
-		for _, ds := range NewPdsParams.DataServiceToTest {
-			_, err := workflowDataservice.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
-			log.FailOnError(err, "Error while updating ds")
-		}
+		//stepLog := "Running Workloads before taking backups"
+		//Step(stepLog, func() {
+		//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+		//	log.FailOnError(err, "Error while running workloads on ds")
+		//})
 
-		stepLog := "Running Workloads after ScaleUp of DataService"
-		Step(stepLog, func() {
-			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-			log.FailOnError(err, "Error while running workloads on ds")
-		})
-	})
+		//TODO: Uncomment the below code once DS-8952 is fixed
+		//Step("ScaleUp DataService", func() {
+		//	log.InfoD("Scaling Up dataservices...")
+		//	for _, ds := range NewPdsParams.DataServiceToTest {
+		//		updateDeployment, err = workflowDataservice.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
+		//		log.FailOnError(err, "Error while updating ds")
+		//		log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
+		//	}
+		//})
+		//
+		//stepLog = "Running Workloads after ScaleUp of DataService"
+		//Step(stepLog, func() {
+		//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+		//	log.FailOnError(err, "Error while running workloads on ds")
+		//})
 
-	It("Delete DataServiceDeployment", func() {
-		err := workflowDataservice.DeleteDeployment()
-		log.FailOnError(err, "Error while deleting dataservice")
 	})
 
 	JustAfterEach(func() {

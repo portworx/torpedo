@@ -130,6 +130,8 @@ Class | Method | HTTP request | Description
  - [V1Selector](docs/V1Selector.md)
  - [V1Sort](docs/V1Sort.md)
  - [V1Sort1](docs/V1Sort1.md)
+ - [V1Sort2](docs/V1Sort2.md)
+ - [V1Sort3](docs/V1Sort3.md)
  - [V1SortOrderValue](docs/V1SortOrderValue.md)
  - [V1TemplateSample](docs/V1TemplateSample.md)
  - [V1TemplateType](docs/V1TemplateType.md)

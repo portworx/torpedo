@@ -3,31 +3,42 @@ package api
 import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/utilities"
+	"github.com/portworx/torpedo/pkg/log"
+	deploymentsConfigUpdateV1 "github.com/pure-px/platform-api-go-client/pds/v1/deploymentconfigupdate"
 	status "net/http"
 
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+)
 
-	deploymentsConfigUpdateV1 "github.com/pure-px/platform-api-go-client/pds/v1/deploymentconfigupdate"
+var (
+	UpdateDeploymentRequest deploymentsConfigUpdateV1.V1DeploymentConfigUpdate
 )
 
 func (ds *PDS_API_V1) UpdateDeployment(updateDeploymentRequest *automationModels.PDSDeploymentRequest) (*automationModels.PDSDeploymentResponse, error) {
-	var updateRequest deploymentsConfigUpdateV1.ApiDeploymentConfigUpdateServiceCreateDeploymentConfigUpdateRequest
 	dsResponse := automationModels.PDSDeploymentResponse{
-		Update: automationModels.V1Deployment{},
+		Update: automationModels.V1DeploymentUpdate{},
 	}
 
-	_, dsClient, err := ds.getDeploymentConfigClient()
+	ctx, dsClient, err := ds.getDeploymentConfigClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	err = utilities.CopyStruct(updateDeploymentRequest.Update, &updateRequest)
+	err = utilities.CopyStruct(updateDeploymentRequest.Update.V1Deployment, &UpdateDeploymentRequest)
 	if err != nil {
 		return nil, fmt.Errorf("Error occured while copying updateDeploymentRequest %v\n", err)
 	}
+	//
+	//var req deploymentsConfigUpdateV1.ApiDeploymentConfigUpdateServiceCreateDeploymentConfigUpdateRequest
+	//
+	//dsClient.DeploymentConfigUpdateServiceCreateDeploymentConfigUpdateExecute(req)
+	//
+	//req.ConfigOfTheDeploymentForWhichConfigUpdateIsRequested()
 
-	dsModel, res, err := dsClient.DeploymentConfigUpdateServiceCreateDeploymentConfigUpdateExecute(updateRequest)
-	if err != nil && res.StatusCode != status.StatusOK {
+	dsModel, res, err := dsClient.DeploymentConfigUpdateServiceCreateDeploymentConfigUpdate(ctx, *updateDeploymentRequest.Update.V1Deployment.Meta.Uid).ConfigOfTheDeploymentForWhichConfigUpdateIsRequested(deploymentsConfigUpdateV1.ConfigOfTheDeploymentForWhichConfigUpdateIsRequested{}).Execute()
+	log.Debugf("updated dsModel [%v]", dsModel)
+	log.Debugf("response [%v]", res)
+	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `UpdateDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}
 
