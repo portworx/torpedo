@@ -16,7 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -44,8 +43,8 @@ var _ = Describe("{LegacySharedVolumeCreate}", func() {
 		log.Infof(output)
 		vol, err := Inst().V.InspectVolume(volumeName)
 		log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume {%v}", volumeName))
-		Expect(vol.Spec.Sharedv4).To(BeTrue(), "sharedv4 volume was not created")
-		Expect(vol.Spec.Shared).To(BeFalse(), "shared volume was created unexpectedly")
+		dash.VerifyFatal(vol.Spec.Sharedv4, true, "sharedv4 volume was not created")
+		dash.VerifyFatal(vol.Spec.Shared, false, "shared volume was created unexpectedly")
 		pxctlCmdFull = fmt.Sprintf("v d %s", volumeName)
 		output, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 		log.FailOnError(err, fmt.Sprintf("error deleting legacy shared volume %s", volumeName))
@@ -89,7 +88,7 @@ func getLegacySharedVolumeCount(contexts []*scheduler.Context) int {
 		log.FailOnError(err, "error geting volumes used by app")
 		for _, v := range vols {
 			vol, err := Inst().V.InspectVolume(v.ID)
-			Expect(err).NotTo(HaveOccurred(), "failed in inspect volume: %v", err)
+			log.FailOnError(err, "Failed to inspect volume %v", v.ID)
 			if vol.Spec.Shared {
 				count++
 			}
@@ -100,27 +99,26 @@ func getLegacySharedVolumeCount(contexts []*scheduler.Context) int {
 
 func getLegacySharedTestAppVol(ctx *scheduler.Context) (*volume.Volume, *api.Volume, *node.Node) {
 	vols, err := Inst().S.GetVolumes(ctx)
-	Expect(err).NotTo(HaveOccurred())
-	// Assert len > 0.Expect(lenvols)).To(
+	log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
 	vol := vols[0]
 	apiVol, err := Inst().V.InspectVolume(vol.ID)
-	Expect(err).NotTo(HaveOccurred())
+	log.FailOnError(err, "Failed to Inspect volume [%v]", vol.ID)
 	attachedNode, err := Inst().V.GetNodeForVolume(vol, 1 * time.Minute, 5 * time.Second)
-	Expect(err).NotTo(HaveOccurred())
+	log.FailOnError(err, "Failed to Get Attached node for volume [%v]", vol.ID)
 	log.Infof("volume %v {%v} is attached to node %v", vol.ID, apiVol.Id, attachedNode.Name)
 	return vol, apiVol, attachedNode
 }
 
 func returnMapOfPodsUsingApiSharedVolumes(sharedVolPods map[types.UID]bool, sharedVols map[string]bool, ctx *scheduler.Context) {
 	vols, err := Inst().S.GetVolumes(ctx)
-	Expect(err).NotTo(HaveOccurred())
+	log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
 	for _, vol := range vols {
 		apiVol, err := Inst().V.InspectVolume(vol.ID)
-		Expect(err).NotTo(HaveOccurred())
+		log.FailOnError(err, "Failed to Inspect volume [%v]", vol.ID)
 		if apiVol.Spec.Shared {
 			sharedVols[vol.ID] = true
 			pods, err := core.Instance().GetPodsUsingPV(vol.ID)
-			Expect(err).NotTo(HaveOccurred())
+			log.FailOnError(err, "Failed to Pods using volume [%v]", vol.ID)
 			for _, pod := range pods {
 				sharedVolPods[pod.UID] = true
 			}
@@ -132,25 +130,26 @@ func returnMapOfPodsUsingApiSharedVolumes(sharedVolPods map[types.UID]bool, shar
 func checkVolsConvertedtoSharedv4Service(sharedVols map[string]bool) error {
 	for v := range sharedVols {
 		apiVol, err := Inst().V.InspectVolume(v)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(apiVol.Spec.Shared).To(BeFalse(), "legacy shared volume exists post migration")
-		Expect(apiVol.Spec.Sharedv4).To(BeTrue(), "legacy shared volume not migrated to sharedv4 service")
+		log.FailOnError(err, "Failed to Inspect Volume [%v]", v)
+		dash.VerifyFatal(apiVol.Spec.Shared, false, "legacy shared volume exists post migration")
+		dash.VerifyFatal(apiVol.Spec.Sharedv4, true, "legacy shared volume not migrated to sharedv4 service")
 	}
 	return nil
 }
 
 func checkMapOfPods(sharedVolPods map[types.UID]bool, ctx *scheduler.Context) error {
 	vols, err := Inst().S.GetVolumes(ctx)
-	Expect(err).NotTo(HaveOccurred())
+	log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
 	for _, vol := range vols {
 		apiVol, err := Inst().V.InspectVolume(vol.ID)
-		Expect(err).NotTo(HaveOccurred())
+		log.FailOnError(err, "Failed to Inspect Volume %v", vol.ID)
 		if apiVol.Spec.Shared {
 			pods, err := core.Instance().GetPodsUsingPV(vol.ID)
-			Expect(err).NotTo(HaveOccurred())
+			log.FailOnError(err, "Failed to get pods using Volume %v", vol.ID)
 			for _, pod := range pods {
 				_, ok := sharedVolPods[pod.UID]
 				if ok {
+					dash.VerifyFatal(ok, true, fmt.Sprintf("pod using shared volume prior to migration remains after migration [%v]", pod.Name))
 					return fmt.Errorf("A pod using shared volume prior to migration remains after migration [%v]", pod.Name)
 				}
 			}
@@ -177,13 +176,14 @@ func createSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffi
 	pxNode := storageNodes[rand.Intn(len(storageNodes))]
 	for vol := range volMap {
 		apiVol, err := Inst().V.InspectVolume(vol)
-		Expect(err).NotTo(HaveOccurred())
+		log.FailOnError(err, "Failed to Inspect volume [%v]", vol)
 		cloneName := fmt.Sprintf("%s-%s", vol, cloneSuffix)
 		snapshotName := fmt.Sprintf("%s-%s", vol, snapshotSuffix)
 		pxctlCloneCmd := fmt.Sprintf("volume clone create %s --name %s", apiVol.Id, cloneName)
 		pxctlSnapshotCmd := fmt.Sprintf("volume snapshot create %s --name %s", apiVol.Id, snapshotName)
 		output, err := Inst().V.GetPxctlCmdOutput(pxNode, pxctlCloneCmd)
 		log.FailOnError(err, fmt.Sprintf("error creating clone for volumes %s", apiVol.Id))
+		log.Infof(output)
 		output, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlSnapshotCmd)
 		log.FailOnError(err, fmt.Sprintf("error creating snapshot for volumes %s", apiVol.Id))
 		log.Infof(output)
@@ -197,7 +197,7 @@ func deleteSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffi
 	pxNode := storageNodes[rand.Intn(len(storageNodes))]
 	for vol := range volMap {
 		apiVol, err := Inst().V.InspectVolume(vol)
-		Expect(err).NotTo(HaveOccurred())
+		log.FailOnError(err, "Failed to Inspect Volume %v", vol)
 		cloneName := fmt.Sprintf("%s-%s", vol, cloneSuffix)
 		snapshotName := fmt.Sprintf("%s-%s", vol, snapshotSuffix)
 		pxctlCloneCmd := fmt.Sprintf("volume delete %s --force",  cloneName)
@@ -234,7 +234,7 @@ var _ = Describe("{LegacySharedVolumeMigrate_CreateIdle}", func() {
 
 		vol, err := Inst().V.InspectVolume(volumeName)
 		log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume {%v}", volumeName))
-		Expect(vol.Spec.Shared).To(BeTrue(), "non-shared volume created unexpectedly")
+		dash.VerifyFatal(vol.Spec.Shared, true, "non-shared volume created unexpectedly")
 		setMigrateLegacySharedToSharedv4Service(true)
 		migrated := false
 		for i := 0; i < 6; i++ {
@@ -246,7 +246,7 @@ var _ = Describe("{LegacySharedVolumeMigrate_CreateIdle}", func() {
 			}
 			time.Sleep(1 * time.Minute)
 		}
-		Expect(migrated).To(BeTrue(), "migration failed on volume [%v]", volumeName)
+		dash.VerifyFatal(migrated, true, fmt.Sprintf("migration failed on volume [%v]", volumeName))
 		pxctlCmdFull = fmt.Sprintf("v d %s", volumeName)
 		Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 	})
@@ -289,7 +289,7 @@ var _ = Describe("{LegacySharedVolumeAppMigrateBasic}", func() {
 		setMigrateLegacySharedToSharedv4Service(true)
 		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
 		countPostTimeout := getLegacySharedVolumeCount(contexts)
-		Expect(countPostTimeout).To(Equal(0))
+		dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Expected legacy shared volume to be 0 but is %d", countPostTimeout))
 		checkVolsConvertedtoSharedv4Service(volMap)
 		for _, ctx := range contexts {
 			checkMapOfPods(podMap, ctx)
@@ -335,7 +335,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationBasicMany", func() {
 		setMigrateLegacySharedToSharedv4Service(true)
 		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
 		countPostTimeout := getLegacySharedVolumeCount(contexts)
-		Expect(countPostTimeout).To(Equal(0))
+		dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Expected legacy shared volume to be 0 but is %d", countPostTimeout))
 		checkVolsConvertedtoSharedv4Service(volMap)
 		for _, ctx := range contexts {
 			checkMapOfPods(podMap, ctx)
@@ -390,7 +390,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart", func() {
 			setMigrateLegacySharedToSharedv4Service(true)
 			waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
 			countPostTimeout := getLegacySharedVolumeCount(contexts)
-			Expect(countPostTimeout).To(Equal(0))
+			dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Post migration count is [%d] instead of 0", countPostTimeout))
 			checkVolsConvertedtoSharedv4Service(volMap)
 			for _, ctx := range contexts {
 				checkMapOfPods(podMap, ctx)
@@ -452,7 +452,7 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestart", func() {
 		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
 		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
 		countPostTimeout := getLegacySharedVolumeCount(contexts)
-		Expect(countPostTimeout).To(Equal(0))
+		dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Post migration count is [%d] instead of 0", countPostTimeout))
 		checkVolsConvertedtoSharedv4Service(volMap)
 		for _, ctx := range contexts {
 			checkMapOfPods(podMap, ctx)
@@ -512,7 +512,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission", func() {
 		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
 		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
 		countPostTimeout := getLegacySharedVolumeCount(contexts)
-		Expect(countPostTimeout).To(Equal(0))
+		dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Post migration count is [%d] instead of 0", countPostTimeout))
 		checkVolsConvertedtoSharedv4Service(volMap)
 		for _, ctx := range contexts {
 			checkMapOfPods(podMap, ctx)
@@ -577,7 +577,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator", func() {
 		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
 		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
 		countPostTimeout := getLegacySharedVolumeCount(contexts)
-		Expect(countPostTimeout).To(Equal(0))
+		dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Post migration count is [%d] instead of 0", countPostTimeout))
 		checkVolsConvertedtoSharedv4Service(volMap)
 		for _, ctx := range contexts {
 			checkMapOfPods(podMap, ctx)
@@ -633,7 +633,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones", func() {
 		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
 		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
 		countPostTimeout := getLegacySharedVolumeCount(contexts)
-		Expect(countPostTimeout).To(Equal(0))
+		dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Post migration count is [%d] instead of 0", countPostTimeout))
 		checkVolsConvertedtoSharedv4Service(volMap)
 		for _, ctx := range contexts {
 			checkMapOfPods(podMap, ctx)
