@@ -47,7 +47,7 @@ func (backupConf *PDS_API_V1) CreateBackupConfig(createBackupConfigRequest *auto
 		return nil, fmt.Errorf("Error when calling `BackupConfigServiceCreateBackupConfigBody`: %v\n.Full HTTP response: %v", err, res)
 	}
 
-	err = utilities.CopyStruct(backupModel, response)
+	err = utilities.CopyStruct(backupModel, &response.Create)
 	if err != nil {
 		return nil, err
 	}
