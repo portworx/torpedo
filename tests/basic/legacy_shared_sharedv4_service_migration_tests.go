@@ -2,11 +2,8 @@ package tests
 
 import (
 	"fmt"
-	"time"
 	"math/rand"
-
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
+	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -14,6 +11,9 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/portworx/torpedo/tests"
@@ -103,7 +103,7 @@ func getLegacySharedTestAppVol(ctx *scheduler.Context) (*volume.Volume, *api.Vol
 	vol := vols[0]
 	apiVol, err := Inst().V.InspectVolume(vol.ID)
 	log.FailOnError(err, "Failed to Inspect volume [%v]", vol.ID)
-	attachedNode, err := Inst().V.GetNodeForVolume(vol, 1 * time.Minute, 5 * time.Second)
+	attachedNode, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 5*time.Second)
 	log.FailOnError(err, "Failed to Get Attached node for volume [%v]", vol.ID)
 	log.Infof("volume %v {%v} is attached to node %v", vol.ID, apiVol.Id, attachedNode.Name)
 	return vol, apiVol, attachedNode
@@ -200,7 +200,7 @@ func deleteSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffi
 		log.FailOnError(err, "Failed to Inspect Volume %v", vol)
 		cloneName := fmt.Sprintf("%s-%s", vol, cloneSuffix)
 		snapshotName := fmt.Sprintf("%s-%s", vol, snapshotSuffix)
-		pxctlCloneCmd := fmt.Sprintf("volume delete %s --force",  cloneName)
+		pxctlCloneCmd := fmt.Sprintf("volume delete %s --force", cloneName)
 		pxctlSnapshotCmd := fmt.Sprintf("volume delete %s --force", snapshotName)
 		output, err := Inst().V.GetPxctlCmdOutput(pxNode, pxctlCloneCmd)
 		log.FailOnError(err, fmt.Sprintf("error deleting clone for volumes %s, clone %s", apiVol.Id, cloneName))
@@ -210,6 +210,7 @@ func deleteSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffi
 	}
 	return nil
 }
+
 // Create Legacy Shared Volumes.
 // Turn on Migration, no Apps required, volumes should get converted to sharedv4 service volume.
 
@@ -240,7 +241,7 @@ var _ = Describe("{LegacySharedVolumeMigrate_CreateIdle}", func() {
 		for i := 0; i < 6; i++ {
 			vol, err := Inst().V.InspectVolume(volumeName)
 			log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume {%v}", volumeName))
-			if !vol.Spec.Shared  && vol.Spec.Sharedv4 {
+			if !vol.Spec.Shared && vol.Spec.Sharedv4 {
 				migrated = true
 				break
 			}
@@ -646,4 +647,3 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones", func() {
 		DestroyApps(contexts, nil)
 	})
 })
-
