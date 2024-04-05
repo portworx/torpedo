@@ -367,9 +367,6 @@ type Driver interface {
 	// UpgradeScheduler upgrades the scheduler on the cluster to the specified version
 	UpgradeScheduler(version string) error
 
-	// DeleteNode deletes the given node
-	DeleteNode(node node.Node, timeout time.Duration) error
-
 	// CreateSecret creates new secret with given name in given namespace
 	CreateSecret(namespace, name, dataField, secretDataString string) error
 
@@ -380,7 +377,7 @@ type Driver interface {
 	DeleteSecret(namespace, name string) error
 
 	// RecyleNode deletes nodes with given node
-	RecycleNode(n node.Node) error
+	DeleteNode(n node.Node) error
 
 	// CreateCsiSnapshotClass create csi snapshot class
 	CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error)

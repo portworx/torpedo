@@ -7018,7 +7018,7 @@ func (k *K8s) UpgradeScheduler(version string) error {
 }
 
 // DeleteNode deletes the given in the cluster
-func (k *K8s) DeleteNode(node node.Node, timeout time.Duration) error {
+func (k *K8s) DeleteNode(node node.Node) error {
 	// TODO: Add implementation
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -7056,15 +7056,6 @@ func (k *K8s) CreateSecret(namespace, name, dataField, secretDataString string) 
 
 	_, err := k8sCore.CreateSecret(secret)
 	return err
-}
-
-// RecycleNode method not supported for K8s scheduler
-func (k *K8s) RecycleNode(n node.Node) error {
-	// Recycle is not supported
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "RecycleNode()",
-	}
 }
 
 // ScaleCluster scale the cluster to the given replicas

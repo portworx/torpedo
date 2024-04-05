@@ -3,6 +3,7 @@ package aks
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node"
 	"os"
 	"time"
 
@@ -406,6 +407,20 @@ func (a *aks) GetAKSCluster() (AKSCluster, error) {
 
 	log.Infof("Successfully got AKS cluster [%s] object", aksCluster.Name)
 	return aksCluster, nil
+}
+
+// DeleteNode deletes the given node
+func (a *aks) DeleteNode(node node.Node) error {
+	log.Infof("Delete node [%s] from node pool [%s]", node.Hostname, a.instanceGroup)
+
+	cmd := fmt.Sprintf("%s aks nodepool delete-machines --resource-group %s --cluster-name %s --nodepool-name %s  --machine-names %s --no-wait --yes", azCli, a.clusterName, a.clusterName, a.instanceGroup, node.Hostname)
+	log.Infof("Running command [%s]", cmd)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to delete node [%s] , Err: %v %v %v", node.Hostname, stderr, err, stdout)
+	}
+	log.Infof("Deleted node [%s] from node pool [%s] successfully", node.Hostname, a.instanceGroup)
+	return nil
 }
 
 // WaitForAKSNodePoolToUpgrade Waits for AKS Node Pool to be upgraded to a specific version

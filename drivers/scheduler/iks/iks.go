@@ -10,8 +10,10 @@ import (
 	"github.com/IBM/go-sdk-core/v5/core"
 	k8sCore "github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strings"
@@ -385,6 +387,14 @@ func (i *IKS) UpgradeScheduler(version string) error {
 
 	log.Infof("Successfully upgraded IKS cluster [%s] scheduler and worker pool to version [%s]", i.clusterName, version)
 	return nil
+}
+
+func (i *IKS) DeleteNode(node node.Node) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteNode()",
+	}
 }
 
 func init() {

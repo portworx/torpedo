@@ -3,6 +3,7 @@ package anthos
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/errors"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -842,6 +843,14 @@ func getExecPath() (string, error) {
 	envPath := strings.TrimSpace(string(execPath))
 	return fmt.Sprintf("PATH=%s:%s:%s", curWkDir, envPath, gcloudExecPath), nil
 
+}
+
+func (anth *anthos) DeleteNode(node node.Node) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteNode()",
+	}
 }
 
 // init registering anthos sheduler

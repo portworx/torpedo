@@ -115,8 +115,8 @@ func (g *Gke) upgradeGkeNodeGroupVersion(nodeGroup, version string, timeout time
 	return nil
 }
 
-func (g *Gke) DeleteNode(node node.Node, timeout time.Duration) error {
-	if err := g.ops.DeleteInstance(node.Name, node.Zone, timeout); err != nil {
+func (g *Gke) DeleteNode(node node.Node) error {
+	if err := g.ops.DeleteInstance(node.Name, node.Zone, 10*time.Minute); err != nil {
 		return err
 	}
 	return nil

@@ -546,7 +546,7 @@ func (o *oke) deleteNodePool(nodePool NodePool) error {
 }
 
 // DeleteNode deletes the given node
-func (o *oke) DeleteNode(node node.Node, timeout time.Duration) error {
+func (o *oke) DeleteNode(node node.Node) error {
 	err := o.configureUser()
 	if err != nil {
 		return err
@@ -563,7 +563,7 @@ func (o *oke) DeleteNode(node node.Node, timeout time.Duration) error {
 	if !ok {
 		return fmt.Errorf("could not retrive oke instance details for %s", node.Hostname)
 	}
-	err = o.ops.DeleteInstance(*oracleInstance.Id, "", timeout)
+	err = o.ops.DeleteInstance(*oracleInstance.Id, "", 10*time.Minute)
 	if err != nil {
 		return err
 	}

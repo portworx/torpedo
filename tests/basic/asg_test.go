@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node/ibm"
+	"github.com/portworx/torpedo/drivers/scheduler/oke"
 	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
 	"time"
@@ -249,11 +250,11 @@ func asgKillANodeAndValidate(storageDriverNodes []node.Node) {
 	stepLog := fmt.Sprintf("Deleting node [%v]", nodeToKill.Name)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		err := Inst().S.DeleteNode(nodeToKill, nodeDeleteTimeoutMins)
+		err := Inst().S.DeleteNode(nodeToKill)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Valdiate node %s deletion", nodeToKill.Name))
 	})
 
-	if Inst().N.String() == ibm.DriverName {
+	if Inst().S.String() == ibm.DriverName {
 
 		err := waitForIBMNodeToDelete(nodeToKill)
 		log.FailOnError(err, "failed to kill node [%s]", nodeToKill.Hostname)
@@ -267,10 +268,15 @@ func asgKillANodeAndValidate(storageDriverNodes []node.Node) {
 		log.FailOnError(err, "Failed to deploy new worker")
 	}
 
-	stepLog = "Wait for 10 min. to node get replaced by autoscalling group"
+	waitTime := 10
+	if Inst().S.String() == oke.SchedName {
+		waitTime = 15 // OKE takes more time to replace the node
+	}
+
+	stepLog = fmt.Sprintf("Wait for %d min. to node get replaced by autoscalling group", waitTime)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		time.Sleep(10 * time.Minute)
+		time.Sleep(time.Duration(waitTime) * time.Minute)
 	})
 
 	err := Inst().S.RefreshNodeRegistry()

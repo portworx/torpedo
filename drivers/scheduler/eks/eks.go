@@ -10,8 +10,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strings"
@@ -305,6 +307,14 @@ func (e *EKS) UpgradeScheduler(version string) error {
 	}
 	log.Infof("Successfully finished EKS cluster [%s] upgrade from [%s] to [%s]", e.clusterName, currentVersion, version)
 	return nil
+}
+
+func (e *EKS) DeleteNode(node node.Node) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteNode()",
+	}
 }
 
 func init() {
