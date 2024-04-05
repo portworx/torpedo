@@ -13,7 +13,7 @@ var (
 )
 
 // CreateBackupConfig created backup config for the deployment
-func CreateBackupConfig(name string, deploymentId string, projectId string) (*automationModels.PDSBackupConfigResponse, error) {
+func CreateBackupConfig(name string, deploymentId string, projectId string, backupLocationId string) (*automationModels.PDSBackupConfigResponse, error) {
 
 	createBackupConfigRequest := automationModels.PDSBackupConfigRequest{}
 
@@ -23,7 +23,7 @@ func CreateBackupConfig(name string, deploymentId string, projectId string) (*au
 		},
 		Config: &automationModels.Config{
 			References: &automationModels.References{
-				BackupLocationId: &deploymentId,
+				BackupLocationId: &backupLocationId,
 			},
 			BackupType:      &defaultBackupType,
 			Suspend:         &defaultBackupSuspend,
@@ -34,7 +34,6 @@ func CreateBackupConfig(name string, deploymentId string, projectId string) (*au
 	}
 	createBackupConfigRequest.Create.DeploymentId = deploymentId
 	createBackupConfigRequest.Create.ProjectId = projectId
-
 	backupResponse, err := v2Components.PDS.CreateBackupConfig(&createBackupConfigRequest)
 	if err != nil {
 		return nil, err

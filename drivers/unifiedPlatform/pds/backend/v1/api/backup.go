@@ -34,17 +34,14 @@ func (backup *PDS_API_V1) ListBackup(listBackupConfigRequest *automationModels.P
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 	backupConfigId := listBackupConfigRequest.List.BackupConfigId
-	namespaceId := listBackupConfigRequest.List.NamespaceId
-	targetClusterId := listBackupConfigRequest.List.TargetClusterId
-	deploymentId := listBackupConfigRequest.List.DeploymentId
 
-	listBkpRequest := bkpClient.BackupServiceListBackups(ctx).BackupConfigId(backupConfigId).TargetClusterId(targetClusterId).NamespaceId(namespaceId).DeploymentId(deploymentId)
+	listBkpRequest := bkpClient.BackupServiceListBackups(ctx).BackupConfigId(backupConfigId)
 
 	bkpModel, res, err := bkpClient.BackupServiceListBackupsExecute(listBkpRequest)
 	if err != nil || res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
+		return nil, fmt.Errorf("Error when calling `BackupServiceListBackupsExecute`: %v\n.Full HTTP response: %v", err, res)
 	}
-	err = utilities.CopyStruct(bkpModel.Backups, &bkpResponse)
+	err = utilities.CopyStruct(bkpModel.Backups, &bkpResponse.List.Backups)
 	if err != nil {
 		return nil, fmt.Errorf("Error occured while copying the backup response: %v\n", err)
 	}

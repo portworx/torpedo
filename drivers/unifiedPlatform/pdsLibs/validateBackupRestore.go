@@ -9,6 +9,10 @@ import (
 	"strings"
 )
 
+const (
+	bkpJobCompleted = "COMPLETED"
+)
+
 // ValidateAdhocBackup triggers the adhoc backup for given ds and store at the given backup target and validate them
 func ValidateAdhocBackup(backup BackupParams) error {
 	var bkpJobs *automationModels.PDSBackupResponse
@@ -19,7 +23,7 @@ func ValidateAdhocBackup(backup BackupParams) error {
 			return false, err
 		}
 		log.Infof("[Backup job: %v] Status: %v", *bkpJobs.List.Backups[0].Meta.Name, *bkpJobs.List.Backups[0].Status.Phase)
-		if *bkpJobs.List.Backups[0].Status.Phase == "Succeeded" {
+		if *bkpJobs.List.Backups[0].Status.Phase == bkpJobCompleted {
 			return true, nil
 		} else {
 			return false, nil

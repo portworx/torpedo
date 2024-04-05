@@ -61,6 +61,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 	It("Perform adhoc backup, restore and validate them", func() {
 		var bkpConfigResponse *automationModels.PDSBackupConfigResponse
 		workflowBackUpConfig.WorkflowDataService = workflowDataService
+		workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
 		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
 
 		Step("Take Backup and validate", func() {
@@ -160,6 +161,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 	It("Perform adhoc backup, restore and validate them", func() {
 		var bkpConfigResponse *automationModels.PDSBackupConfigResponse
 		workflowBackUpConfig.WorkflowDataService = workflowDataService
+		workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
 		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
 
 		Step("Take Backup and validate", func() {
@@ -275,6 +277,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 
 	It("Perform adhoc backup of old deployments", func() {
 		workflowBackUpConfig.WorkflowDataService = workflowDataservice
+		workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
 		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
 
 		Step("Take Backup and validate", func() {
@@ -416,6 +419,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 	It("Perform adhoc backup, restore and validate them", func() {
 		var bkpConfigResponse *automationModels.PDSBackupConfigResponse
 		workflowBackUpConfig.WorkflowDataService = workflowDataService
+		workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
 		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
 
 		Step("Take Backup and validate", func() {
