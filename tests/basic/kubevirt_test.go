@@ -17,19 +17,20 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 		StartTorpedoTest("AddNewDiskToKubevirtVM", "Add a new disk to a kubevirtVM", nil, 0)
 	})
 	var appCtxs []*scheduler.Context
-
+	var namespace string
 	itLog := "Add a new disk to a kubevirtVM"
 	It(itLog, func() {
+		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-cirros-live-migration"}
+		Inst().AppList = []string{"kubevirt-fio-low-load-multi-disk"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				appCtxs = append(appCtxs, ScheduleApplications("test")...)
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
 		})
 		ValidateApplications(appCtxs)
@@ -76,21 +77,22 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 	})
 
 	var appCtxs []*scheduler.Context
-
+	var namespace string
 	itLog := "Live migrate a kubevirtVM"
 	It(itLog, func() {
+		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		log.InfoD(stepLog)
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
 		}()
-		Inst().AppList = []string{"kubevirt-cirros-live-migration"}
+		Inst().AppList = []string{"kubevirt-fio-low-load-multi-disk"}
 
 		stepLog := "schedule a kubevirt VM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				taskName := fmt.Sprintf("test-%v", i)
-				appCtxs = append(appCtxs, ScheduleApplications(taskName)...)
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, taskName)...)
 			}
 		})
 		defer DestroyApps(appCtxs, nil)
@@ -134,7 +136,7 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-cirros-cd-with-pvc"}
+		Inst().AppList = []string{"kubevirt-fio-low-load-multi-disk"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -236,7 +238,7 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-cirros-cd-with-pvc"}
+		Inst().AppList = []string{"kubevirt-fio-low-load-multi-disk"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -346,9 +348,10 @@ var _ = Describe("{KubevirtVMVolHaIncrease}", func() {
 		StartTorpedoTest("KubevirtVMVolHaIncrease", "Increase the volume HA of a kubevirt VM", nil, 0)
 	})
 	var appCtxs []*scheduler.Context
-
+	var namespace string
 	itLog := "Increase the volume HA of a kubevirt VM"
 	It(itLog, func() {
+		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
@@ -358,7 +361,7 @@ var _ = Describe("{KubevirtVMVolHaIncrease}", func() {
 		stepLog := "schedule a kubevirt VM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				appCtxs = append(appCtxs, ScheduleApplications("test")...)
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
 		})
 		ValidateApplications(appCtxs)
@@ -421,9 +424,10 @@ var _ = Describe("{KubevirtVMVolHaDecrease}", func() {
 		StartTorpedoTest("KubevirtVMVolHaDecrease", "Decrease the replication factor of kubevirt Vms", nil, 0)
 	})
 	var appCtxs []*scheduler.Context
-
+	var namespace string
 	itLog := "Decrease the volume HA of a kubevirt VM"
 	It(itLog, func() {
+		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		log.InfoD(stepLog)
 		appList := Inst().AppList
 		defer func() {
@@ -435,7 +439,7 @@ var _ = Describe("{KubevirtVMVolHaDecrease}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				appCtxs = append(appCtxs, ScheduleApplications("test")...)
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
 		})
 		ValidateApplications(appCtxs)
@@ -486,6 +490,68 @@ var _ = Describe("{KubevirtVMVolHaDecrease}", func() {
 		})
 	})
 
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("LiveMigrationBeforeAddDisk", "Live Migrate a VM Before Adding a new disk to a kubevirtVM", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	itLog := "Live Migrate a VM and then add a new disk to a kubevirtVM"
+	It(itLog, func() {
+		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		numberOfVolumes := 1
+		Inst().AppList = []string{"kubevirt-fio-low-load-multi-disk"}
+		stepLog := "schedule a kubevirtVM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		//defer DestroyApps(appCtxs, nil)
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+		stepLog = "Live migrate the kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+				log.FailOnError(err, "Failed to live migrate kubevirt VM")
+			}
+		})
+		stepLog = "Add one disk to the kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "0.5Gi")
+			log.FailOnError(err, "Failed to add disks to kubevirt VM")
+			dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
+		})
+
+		stepLog = "Verify the new disk added is also bind mounted"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				isVmBindMounted, err := IsVMBindMounted(appCtx, true)
+				log.FailOnError(err, "Failed to verify disks in kubevirt VM")
+				if !isVmBindMounted {
+					log.Errorf("The newly added disk to vm %s is not bind mounted", appCtx.App.Key)
+				}
+			}
+		})
+	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
