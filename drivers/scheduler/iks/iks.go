@@ -232,129 +232,7 @@ func (i *IKS) WaitForWorkerPoolToUpgrade(workerPoolName string, version string) 
 
 // UpgradeScheduler upgrades the IKS cluster to the specified version
 func (i *IKS) UpgradeScheduler(version string) error {
-	// This implementation assumes the IKS cluster has two worker pools: one pool for
-	// Torpedo and another pool for Portworx.
-	ibmCloudAPIKey := os.Getenv("IBMCLOUD_API_KEY")
-	if ibmCloudAPIKey == "" {
-		return fmt.Errorf("env IBMCLOUD_API_KEY not set")
-	}
-	torpedoNodeName := ""
-	pods, err := k8sCore.Instance().GetPods("default", nil)
-	if err != nil {
-		log.Errorf("failed to get pods from default namespace. Err: [%v]", err)
-	}
-	if pods != nil {
-		for _, pod := range pods.Items {
-			if pod.Name == "torpedo" {
-				torpedoNodeName = pod.Spec.NodeName
-			}
-		}
-	}
-	torpedoWorkerPoolName := ""
-	workerPoolLabel := "ibm-cloud.kubernetes.io/worker-pool-name"
-	nodes, err := k8sCore.Instance().GetNodes()
-	if err != nil {
-		log.Errorf("failed to get nodes. Err: [%v]", err)
-	}
-	if nodes != nil {
-		for _, node := range nodes.Items {
-			if node.Name == torpedoNodeName {
-				torpedoWorkerPoolName = node.Labels[workerPoolLabel]
-				break
-			}
-		}
-	}
-	i.pxWorkerPoolName = os.Getenv("IKS_PX_WORKERPOOL_NAME")
-	if i.pxWorkerPoolName == "" {
-		log.Warnf("env IKS_PX_WORKERPOOL_NAME not set. Using node label [%s] to determine Portworx worker pool", workerPoolLabel)
-		if torpedoWorkerPoolName != "" && nodes != nil {
-			for _, node := range nodes.Items {
-				if node.Labels[workerPoolLabel] != torpedoWorkerPoolName {
-					i.pxWorkerPoolName = node.Labels[workerPoolLabel]
-					log.Infof("Used node label [%s] to determine Portworx worker pool [%s]", workerPoolLabel, i.pxWorkerPoolName)
-					break
-				}
-			}
-		}
-		if i.pxWorkerPoolName == "" {
-			return fmt.Errorf("env IKS_PX_WORKERPOOL_NAME or node label [%s] not set", workerPoolLabel)
-		}
-	}
-	i.region = os.Getenv("IKS_CLUSTER_REGION")
-	if i.region == "" {
-		nodeRegionLabel := "topology.kubernetes.io/region"
-		log.Warnf("env IKS_CLUSTER_REGION not set. Using node label [%s] to determine region", nodeRegionLabel)
-		if torpedoWorkerPoolName != "" && nodes != nil {
-			for _, node := range nodes.Items {
-				if node.Labels[workerPoolLabel] != torpedoWorkerPoolName {
-					i.region = node.Labels[nodeRegionLabel]
-					log.Infof("Used node label [%s] to determine region [%s]", nodeRegionLabel, i.region)
-					break
-				}
-			}
-		}
-		if i.region == "" {
-			return fmt.Errorf("env IKS_CLUSTER_REGION or node label [%s] not set", nodeRegionLabel)
-		}
-	}
-	sess, err := session.New(&bluemix.Config{
-		Region:        i.region,
-		BluemixAPIKey: ibmCloudAPIKey,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create IKS session. Err: [%v]", err)
-	}
-	i.containerClient, err = containerv2.New(sess)
-	if err != nil {
-		return fmt.Errorf("failed to create IKS container client. Err: [%v]", err)
-	}
-	i.k8sClient, err = kubernetesserviceapiv1.NewKubernetesServiceApiV1(
-		&kubernetesserviceapiv1.KubernetesServiceApiV1Options{
-			// Initializes IBM Kubernetes Service client for specified region. More details:
-			// https://cloud.ibm.com/docs/containers?topic=containers-regions-and-zones
-			URL: fmt.Sprintf("https://%s.containers.cloud.ibm.com", i.region),
-			Authenticator: &core.IamAuthenticator{
-				ApiKey: ibmCloudAPIKey,
-			},
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create IKS Kubernetes Service client. Err: [%v]", err)
-	}
-	i.clusterName = os.Getenv("IKS_CLUSTER_NAME")
-	if i.clusterName == "" {
-	ClusterSearch:
-		for _, node := range nodes.Items {
-			providerID := node.Spec.ProviderID
-			// In IKS, nodes have a ProviderID formatted as ibm://<account-id>///<cluster-id>/<node-id>
-			splitID := strings.Split(providerID, "/")
-			if len(splitID) < 7 {
-				return fmt.Errorf("unexpected format of provider ID [%s]", providerID)
-			}
-			accountID, clusterID := splitID[2], splitID[5]
-			log.Infof("Found account ID [%s] and cluster ID [%s] from node provider ID [%s]", accountID, clusterID, providerID)
-			clusters, err := i.containerClient.Clusters().List(
-				containerv2.ClusterTargetHeader{
-					AccountID: accountID,
-				},
-			)
-			if err != nil {
-				return fmt.Errorf("failed to list clusters for account ID [%s], Err: [%v]", accountID, err)
-			}
-			for _, cluster := range clusters {
-				if cluster.ID == clusterID {
-					i.clusterName = cluster.Name
-					log.Infof("Found cluster name [%s] for cluster ID [%s]", i.clusterName, clusterID)
-					break ClusterSearch
-				}
-			}
-		}
-	}
-	i.resourceGroupID, err = i.GetResourceGroupID()
-	if err != nil {
-		return fmt.Errorf("failed to get resource group ID for IKS cluster [%s], Err: [%v]", i.clusterName, err)
-	}
-	log.Infof("Resource group ID for IKS cluster [%s] is [%s]", i.clusterName, i.resourceGroupID)
+
 	currentVersion, err := i.GetCurrentVersion()
 	if err != nil {
 		return fmt.Errorf("failed to get IKS cluster [%s] current version, Err: [%v]", i.clusterName, err)
@@ -389,7 +267,142 @@ func (i *IKS) UpgradeScheduler(version string) error {
 	return nil
 }
 
+func (i *IKS) configureIKSClient() error {
+	// This implementation assumes the IKS cluster has two worker pools: one pool for
+	// Torpedo and another pool for Portworx.
+	if i.k8sClient == nil || i.containerClient != nil {
+		ibmCloudAPIKey := os.Getenv("IBMCLOUD_API_KEY")
+		if ibmCloudAPIKey == "" {
+			return fmt.Errorf("env IBMCLOUD_API_KEY not set")
+		}
+		torpedoNodeName := ""
+		pods, err := k8sCore.Instance().GetPods("default", nil)
+		if err != nil {
+			log.Errorf("failed to get pods from default namespace. Err: [%v]", err)
+		}
+		if pods != nil {
+			for _, pod := range pods.Items {
+				if pod.Name == "torpedo" {
+					torpedoNodeName = pod.Spec.NodeName
+				}
+			}
+		}
+		torpedoWorkerPoolName := ""
+		workerPoolLabel := "ibm-cloud.kubernetes.io/worker-pool-name"
+		nodes, err := k8sCore.Instance().GetNodes()
+		if err != nil {
+			log.Errorf("failed to get nodes. Err: [%v]", err)
+		}
+		if nodes != nil {
+			for _, node := range nodes.Items {
+				if node.Name == torpedoNodeName {
+					torpedoWorkerPoolName = node.Labels[workerPoolLabel]
+					break
+				}
+			}
+		}
+		i.pxWorkerPoolName = os.Getenv("IKS_PX_WORKERPOOL_NAME")
+		if i.pxWorkerPoolName == "" {
+			log.Warnf("env IKS_PX_WORKERPOOL_NAME not set. Using node label [%s] to determine Portworx worker pool", workerPoolLabel)
+			if torpedoWorkerPoolName != "" && nodes != nil {
+				for _, node := range nodes.Items {
+					if node.Labels[workerPoolLabel] != torpedoWorkerPoolName {
+						i.pxWorkerPoolName = node.Labels[workerPoolLabel]
+						log.Infof("Used node label [%s] to determine Portworx worker pool [%s]", workerPoolLabel, i.pxWorkerPoolName)
+						break
+					}
+				}
+			}
+			if i.pxWorkerPoolName == "" {
+				return fmt.Errorf("env IKS_PX_WORKERPOOL_NAME or node label [%s] not set", workerPoolLabel)
+			}
+		}
+		i.region = os.Getenv("IKS_CLUSTER_REGION")
+		if i.region == "" {
+			nodeRegionLabel := "topology.kubernetes.io/region"
+			log.Warnf("env IKS_CLUSTER_REGION not set. Using node label [%s] to determine region", nodeRegionLabel)
+			if torpedoWorkerPoolName != "" && nodes != nil {
+				for _, node := range nodes.Items {
+					if node.Labels[workerPoolLabel] != torpedoWorkerPoolName {
+						i.region = node.Labels[nodeRegionLabel]
+						log.Infof("Used node label [%s] to determine region [%s]", nodeRegionLabel, i.region)
+						break
+					}
+				}
+			}
+			if i.region == "" {
+				return fmt.Errorf("env IKS_CLUSTER_REGION or node label [%s] not set", nodeRegionLabel)
+			}
+		}
+		sess, err := session.New(&bluemix.Config{
+			Region:        i.region,
+			BluemixAPIKey: ibmCloudAPIKey,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create IKS session. Err: [%v]", err)
+		}
+		i.containerClient, err = containerv2.New(sess)
+		if err != nil {
+			return fmt.Errorf("failed to create IKS container client. Err: [%v]", err)
+		}
+		i.k8sClient, err = kubernetesserviceapiv1.NewKubernetesServiceApiV1(
+			&kubernetesserviceapiv1.KubernetesServiceApiV1Options{
+				// Initializes IBM Kubernetes Service client for specified region. More details:
+				// https://cloud.ibm.com/docs/containers?topic=containers-regions-and-zones
+				URL: fmt.Sprintf("https://%s.containers.cloud.ibm.com", i.region),
+				Authenticator: &core.IamAuthenticator{
+					ApiKey: ibmCloudAPIKey,
+				},
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create IKS Kubernetes Service client. Err: [%v]", err)
+		}
+		i.clusterName = os.Getenv("IKS_CLUSTER_NAME")
+		if i.clusterName == "" {
+		ClusterSearch:
+			for _, node := range nodes.Items {
+				providerID := node.Spec.ProviderID
+				// In IKS, nodes have a ProviderID formatted as ibm://<account-id>///<cluster-id>/<node-id>
+				splitID := strings.Split(providerID, "/")
+				if len(splitID) < 7 {
+					return fmt.Errorf("unexpected format of provider ID [%s]", providerID)
+				}
+				accountID, clusterID := splitID[2], splitID[5]
+				log.Infof("Found account ID [%s] and cluster ID [%s] from node provider ID [%s]", accountID, clusterID, providerID)
+				clusters, err := i.containerClient.Clusters().List(
+					containerv2.ClusterTargetHeader{
+						AccountID: accountID,
+					},
+				)
+				if err != nil {
+					return fmt.Errorf("failed to list clusters for account ID [%s], Err: [%v]", accountID, err)
+				}
+				for _, cluster := range clusters {
+					if cluster.ID == clusterID {
+						i.clusterName = cluster.Name
+						log.Infof("Found cluster name [%s] for cluster ID [%s]", i.clusterName, clusterID)
+						break ClusterSearch
+					}
+				}
+			}
+		}
+		i.resourceGroupID, err = i.GetResourceGroupID()
+		if err != nil {
+			return fmt.Errorf("failed to get resource group ID for IKS cluster [%s], Err: [%v]", i.clusterName, err)
+		}
+		log.Infof("Resource group ID for IKS cluster [%s] is [%s]", i.clusterName, i.resourceGroupID)
+	}
+
+	return nil
+}
+
 func (i *IKS) DeleteNode(node node.Node) error {
+	err := i.configureIKSClient()
+	if err != nil {
+		return err
+	}
+
 	// TODO: Add implementation
 	return &errors.ErrNotSupported{
 		Type:      "Function",
