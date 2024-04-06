@@ -438,6 +438,10 @@ type Driver interface {
 
 	// ScaleCluster scale the cluster to the given replicas
 	ScaleCluster(replicas int) error
+	// GetZones get the zones of cluster
+	GetZones() ([]string, error)
+	// GetASGClusterSize gets node count for an asg cluster
+	GetASGClusterSize() (int64, error)
 }
 
 var (

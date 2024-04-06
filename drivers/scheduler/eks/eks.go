@@ -309,6 +309,14 @@ func (e *EKS) UpgradeScheduler(version string) error {
 	return nil
 }
 
+func (e *EKS) GetZones() ([]string, error) {
+	// TODO: Add implementation
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetZones()",
+	}
+}
+
 func (e *EKS) DeleteNode(node node.Node) error {
 	// TODO: Add implementation
 	return &errors.ErrNotSupported{
@@ -317,6 +325,13 @@ func (e *EKS) DeleteNode(node node.Node) error {
 	}
 }
 
+func (e *EKS) GetASGClusterSize() (int64, error) {
+	// TODO: Add implementation
+	return 0, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetASGClusterSize()",
+	}
+}
 func init() {
 	e := &EKS{}
 	scheduler.Register(SchedName, e)

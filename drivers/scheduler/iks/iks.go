@@ -13,7 +13,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strings"
@@ -202,6 +201,30 @@ func (i *IKS) UpgradeWorkerPool(workerPoolName string, version string) error {
 	return nil
 }
 
+func (i *IKS) GetZones() ([]string, error) {
+	var zones []string
+	err := i.configureIKSClient()
+	if err != nil {
+		return zones, err
+	}
+	i.containerClient.WorkerPools()
+	target := containerv2.ClusterTargetHeader{
+		Provider: "vpc-gen2",
+	}
+	workerPoolDetails, err := i.containerClient.WorkerPools().
+		GetWorkerPool(i.clusterName, i.pxWorkerPoolName, target)
+
+	log.Infof("workerPoolDetails: %v", workerPoolDetails)
+	if err != nil {
+		return zones, err
+	}
+
+	for _, z := range workerPoolDetails.Zones {
+		zones = append(zones, z.ID)
+	}
+	return zones, nil
+}
+
 // WaitForWorkerPoolToUpgrade waits for the IKS worker pool to be upgraded to the specified version
 func (i *IKS) WaitForWorkerPoolToUpgrade(workerPoolName string, version string) error {
 	log.Infof("Waiting for IKS cluster [%s] worker pool [%s] to be upgraded to [%s]", i.clusterName, workerPoolName, version)
@@ -232,6 +255,11 @@ func (i *IKS) WaitForWorkerPoolToUpgrade(workerPoolName string, version string) 
 
 // UpgradeScheduler upgrades the IKS cluster to the specified version
 func (i *IKS) UpgradeScheduler(version string) error {
+
+	err := i.configureIKSClient()
+	if err != nil {
+		return err
+	}
 
 	currentVersion, err := i.GetCurrentVersion()
 	if err != nil {
@@ -294,9 +322,9 @@ func (i *IKS) configureIKSClient() error {
 			log.Errorf("failed to get nodes. Err: [%v]", err)
 		}
 		if nodes != nil {
-			for _, node := range nodes.Items {
-				if node.Name == torpedoNodeName {
-					torpedoWorkerPoolName = node.Labels[workerPoolLabel]
+			for _, n := range nodes.Items {
+				if n.Name == torpedoNodeName {
+					torpedoWorkerPoolName = n.Labels[workerPoolLabel]
 					break
 				}
 			}
@@ -305,9 +333,9 @@ func (i *IKS) configureIKSClient() error {
 		if i.pxWorkerPoolName == "" {
 			log.Warnf("env IKS_PX_WORKERPOOL_NAME not set. Using node label [%s] to determine Portworx worker pool", workerPoolLabel)
 			if torpedoWorkerPoolName != "" && nodes != nil {
-				for _, node := range nodes.Items {
-					if node.Labels[workerPoolLabel] != torpedoWorkerPoolName {
-						i.pxWorkerPoolName = node.Labels[workerPoolLabel]
+				for _, n := range nodes.Items {
+					if n.Labels[workerPoolLabel] != torpedoWorkerPoolName {
+						i.pxWorkerPoolName = n.Labels[workerPoolLabel]
 						log.Infof("Used node label [%s] to determine Portworx worker pool [%s]", workerPoolLabel, i.pxWorkerPoolName)
 						break
 					}
@@ -322,9 +350,9 @@ func (i *IKS) configureIKSClient() error {
 			nodeRegionLabel := "topology.kubernetes.io/region"
 			log.Warnf("env IKS_CLUSTER_REGION not set. Using node label [%s] to determine region", nodeRegionLabel)
 			if torpedoWorkerPoolName != "" && nodes != nil {
-				for _, node := range nodes.Items {
-					if node.Labels[workerPoolLabel] != torpedoWorkerPoolName {
-						i.region = node.Labels[nodeRegionLabel]
+				for _, n := range nodes.Items {
+					if n.Labels[workerPoolLabel] != torpedoWorkerPoolName {
+						i.region = n.Labels[nodeRegionLabel]
 						log.Infof("Used node label [%s] to determine region [%s]", nodeRegionLabel, i.region)
 						break
 					}
@@ -359,10 +387,10 @@ func (i *IKS) configureIKSClient() error {
 			return fmt.Errorf("failed to create IKS Kubernetes Service client. Err: [%v]", err)
 		}
 		i.clusterName = os.Getenv("IKS_CLUSTER_NAME")
-		if i.clusterName == "" {
+		if nodes != nil && i.clusterName == "" {
 		ClusterSearch:
-			for _, node := range nodes.Items {
-				providerID := node.Spec.ProviderID
+			for _, n := range nodes.Items {
+				providerID := n.Spec.ProviderID
 				// In IKS, nodes have a ProviderID formatted as ibm://<account-id>///<cluster-id>/<node-id>
 				splitID := strings.Split(providerID, "/")
 				if len(splitID) < 7 {
@@ -402,12 +430,28 @@ func (i *IKS) DeleteNode(node node.Node) error {
 	if err != nil {
 		return err
 	}
-
-	// TODO: Add implementation
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "DeleteNode()",
+	err = i.ReplaceWorker(node.Hostname)
+	if err != nil {
+		return err
 	}
+
+	return nil
+}
+
+func (i *IKS) GetASGClusterSize() (int64, error) {
+	target := containerv2.ClusterTargetHeader{
+		Provider: "vpc-gen2",
+	}
+	workerPoolDetails, err := i.containerClient.WorkerPools().
+		GetWorkerPool(i.clusterName, i.pxWorkerPoolName, target)
+	if err != nil {
+		return 0, err
+	}
+	log.Infof("WorkerCount : %d", workerPoolDetails.WorkerCount)
+	log.Infof("Zones : %v", workerPoolDetails.Zones)
+	log.Infof("workerPoolDetails: %v", workerPoolDetails)
+
+	return int64(workerPoolDetails.WorkerCount * len(workerPoolDetails.Zones)), nil
 }
 
 func init() {

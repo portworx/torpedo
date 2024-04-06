@@ -853,6 +853,22 @@ func (anth *anthos) DeleteNode(node node.Node) error {
 	}
 }
 
+func (anth *anthos) GetZones() ([]string, error) {
+	// TODO: Add implementation
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetZones()",
+	}
+}
+
+func (anth *anthos) GetASGClusterSize() (int64, error) {
+	// TODO: Add implementation
+	return 0, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetASGClusterSize()",
+	}
+}
+
 // init registering anthos sheduler
 func init() {
 	anthos := &anthos{}

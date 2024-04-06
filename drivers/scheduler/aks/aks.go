@@ -411,23 +411,6 @@ func (a *aks) GetAKSCluster() (AKSCluster, error) {
 	return aksCluster, nil
 }
 
-// DeleteNode deletes the given node
-func (a *aks) DeleteNode(node node.Node) error {
-	aksCluster, err := a.GetAKSCluster()
-	if err != nil {
-		return fmt.Errorf("failed to get AKS cluster, Err: %v", err)
-	}
-	log.Infof("Delete node [%s] from node pool [%s]", node.Hostname, a.instanceGroup)
-
-	cmd := fmt.Sprintf("%s aks nodepool delete-machines --resource-group %s --cluster-name %s --nodepool-name %s  --machine-names %s --no-wait", azCli, aksCluster.Name, aksCluster.Name, a.instanceGroup, node.Hostname)
-	stdout, stderr, err := osutils.ExecShell(cmd)
-	if err != nil {
-		return fmt.Errorf("failed to delete node [%s] , Err: %v %v %v", node.Hostname, stderr, err, stdout)
-	}
-	log.Infof("Deleted node [%s] from node pool [%s] successfully", node.Hostname, a.instanceGroup)
-	return nil
-}
-
 // WaitForAKSNodePoolToUpgrade Waits for AKS Node Pool to be upgraded to a specific version
 func (a *aks) WaitForAKSNodePoolToUpgrade(nodePoolName, version string) error {
 	log.Infof("Waiting for AKS Node Pool [%s] to be upgraded to [%s]", nodePoolName, version)
@@ -486,5 +469,22 @@ func (a *aks) WaitForControlPlaneToUpgrade(version string) error {
 		return fmt.Errorf("failed to upgrade AKS Control Plane version to [%s], Err: %v", version, err)
 	}
 	log.Infof("Successfully upgraded AKS Control Plane to [%s]", version)
+	return nil
+}
+
+// DeleteNode deletes the given node
+func (a *aks) DeleteNode(node node.Node) error {
+	aksCluster, err := a.GetAKSCluster()
+	if err != nil {
+		return fmt.Errorf("failed to get AKS cluster, Err: %v", err)
+	}
+	log.Infof("Delete node [%s] from node pool [%s]", node.Hostname, a.instanceGroup)
+
+	cmd := fmt.Sprintf("%s aks nodepool delete-machines --resource-group %s --cluster-name %s --nodepool-name %s  --machine-names %s --no-wait", azCli, aksCluster.Name, aksCluster.Name, a.instanceGroup, node.Hostname)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to delete node [%s] , Err: %v %v %v", node.Hostname, stderr, err, stdout)
+	}
+	log.Infof("Deleted node [%s] from node pool [%s] successfully", node.Hostname, a.instanceGroup)
 	return nil
 }

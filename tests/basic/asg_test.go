@@ -253,21 +253,7 @@ func asgKillANodeAndValidate(storageDriverNodes []node.Node) {
 		err := Inst().S.DeleteNode(nodeToKill)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Valdiate node %s deletion", nodeToKill.Name))
 	})
-
-	if Inst().S.String() == ibm.DriverName {
-
-		err := waitForIBMNodeToDelete(nodeToKill)
-		log.FailOnError(err, "failed to kill node [%s]", nodeToKill.Hostname)
-
-		log.InfoD("Initiating IBM worker pool rebalance")
-		err = Inst().N.RebalanceWorkerPool()
-		log.FailOnError(err, "Failed to rebalance worker pool")
-		log.Infof("Sleeping for 2 mins for new node to start deploying")
-		time.Sleep(2 * time.Minute)
-		err = waitForIBMNodeTODeploy()
-		log.FailOnError(err, "Failed to deploy new worker")
-	}
-
+	
 	waitTime := 10
 	if Inst().S.String() == oke.SchedName {
 		waitTime = 15 // OKE takes more time to replace the node
