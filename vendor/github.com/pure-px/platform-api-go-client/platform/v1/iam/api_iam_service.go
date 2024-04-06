@@ -361,7 +361,7 @@ func (a *IAMServiceAPIService) IAMServiceGetIAMExecute(r ApiIAMServiceGetIAMRequ
 type ApiIAMServiceGrantIAMRequest struct {
 	ctx context.Context
 	ApiService *IAMServiceAPIService
-	iamConfigActorId string
+	actorId string
 	iAMServiceGrantIAMBody *IAMServiceGrantIAMBody
 }
 
@@ -378,14 +378,14 @@ func (r ApiIAMServiceGrantIAMRequest) Execute() (*V1GrantIAMResponse, *http.Resp
 IAMServiceGrantIAM GrantIAM API creates new IAM role-binding at tenant, project and account level.
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @param iamConfigActorId Actor ID for the associated actor.
+ @param actorId actorId is UID of user/serviceAccount for we want to add new role in the IAM
  @return ApiIAMServiceGrantIAMRequest
 */
-func (a *IAMServiceAPIService) IAMServiceGrantIAM(ctx context.Context, iamConfigActorId string) ApiIAMServiceGrantIAMRequest {
+func (a *IAMServiceAPIService) IAMServiceGrantIAM(ctx context.Context, actorId string) ApiIAMServiceGrantIAMRequest {
 	return ApiIAMServiceGrantIAMRequest{
 		ApiService: a,
 		ctx: ctx,
-		iamConfigActorId: iamConfigActorId,
+		actorId: actorId,
 	}
 }
 
@@ -404,8 +404,8 @@ func (a *IAMServiceAPIService) IAMServiceGrantIAMExecute(r ApiIAMServiceGrantIAM
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/core/v1/iam/{iam.config.actorId}:grant"
-	localVarPath = strings.Replace(localVarPath, "{"+"iam.config.actorId"+"}", url.PathEscape(parameterValueToString(r.iamConfigActorId, "iamConfigActorId")), -1)
+	localVarPath := localBasePath + "/core/v1/iam/{actorId}:grant"
+	localVarPath = strings.Replace(localVarPath, "{"+"actorId"+"}", url.PathEscape(parameterValueToString(r.actorId, "actorId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -777,7 +777,7 @@ func (a *IAMServiceAPIService) IAMServiceListIAMPermissionsExecute(r ApiIAMServi
 type ApiIAMServiceRevokeIAMRequest struct {
 	ctx context.Context
 	ApiService *IAMServiceAPIService
-	iamConfigActorId string
+	actorId string
 	iAMServiceRevokeIAMBody *IAMServiceRevokeIAMBody
 }
 
@@ -794,14 +794,14 @@ func (r ApiIAMServiceRevokeIAMRequest) Execute() (*V1RevokeIAMResponse, *http.Re
 IAMServiceRevokeIAM RevokeIAM API delete IAM role-binding at tenant, project and account level.
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @param iamConfigActorId Actor ID for the associated actor.
+ @param actorId actorId is UID of user/serviceAccount for we want to revoke role in the IAM
  @return ApiIAMServiceRevokeIAMRequest
 */
-func (a *IAMServiceAPIService) IAMServiceRevokeIAM(ctx context.Context, iamConfigActorId string) ApiIAMServiceRevokeIAMRequest {
+func (a *IAMServiceAPIService) IAMServiceRevokeIAM(ctx context.Context, actorId string) ApiIAMServiceRevokeIAMRequest {
 	return ApiIAMServiceRevokeIAMRequest{
 		ApiService: a,
 		ctx: ctx,
-		iamConfigActorId: iamConfigActorId,
+		actorId: actorId,
 	}
 }
 
@@ -820,8 +820,8 @@ func (a *IAMServiceAPIService) IAMServiceRevokeIAMExecute(r ApiIAMServiceRevokeI
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/core/v1/iam/{iam.config.actorId}:revoke"
-	localVarPath = strings.Replace(localVarPath, "{"+"iam.config.actorId"+"}", url.PathEscape(parameterValueToString(r.iamConfigActorId, "iamConfigActorId")), -1)
+	localVarPath := localBasePath + "/core/v1/iam/{actorId}:revoke"
+	localVarPath = strings.Replace(localVarPath, "{"+"actorId"+"}", url.PathEscape(parameterValueToString(r.actorId, "actorId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}

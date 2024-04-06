@@ -25,7 +25,7 @@ type V1ConnectionInfo struct {
 	NotReadyPods []V1PodInfo `json:"notReadyPods,omitempty"`
 	ConnectionDetails *V1ConnectionDetails `json:"connectionDetails,omitempty"`
 	// Stores details about the cluster.
-	ClusterDetails *map[string]ProtobufAny `json:"clusterDetails,omitempty"`
+	ClusterDetails map[string]interface{} `json:"clusterDetails,omitempty"`
 }
 
 // NewV1ConnectionInfo instantiates a new V1ConnectionInfo object
@@ -142,19 +142,19 @@ func (o *V1ConnectionInfo) SetConnectionDetails(v V1ConnectionDetails) {
 }
 
 // GetClusterDetails returns the ClusterDetails field value if set, zero value otherwise.
-func (o *V1ConnectionInfo) GetClusterDetails() map[string]ProtobufAny {
+func (o *V1ConnectionInfo) GetClusterDetails() map[string]interface{} {
 	if o == nil || IsNil(o.ClusterDetails) {
-		var ret map[string]ProtobufAny
+		var ret map[string]interface{}
 		return ret
 	}
-	return *o.ClusterDetails
+	return o.ClusterDetails
 }
 
 // GetClusterDetailsOk returns a tuple with the ClusterDetails field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *V1ConnectionInfo) GetClusterDetailsOk() (*map[string]ProtobufAny, bool) {
+func (o *V1ConnectionInfo) GetClusterDetailsOk() (map[string]interface{}, bool) {
 	if o == nil || IsNil(o.ClusterDetails) {
-		return nil, false
+		return map[string]interface{}{}, false
 	}
 	return o.ClusterDetails, true
 }
@@ -168,9 +168,9 @@ func (o *V1ConnectionInfo) HasClusterDetails() bool {
 	return false
 }
 
-// SetClusterDetails gets a reference to the given map[string]ProtobufAny and assigns it to the ClusterDetails field.
-func (o *V1ConnectionInfo) SetClusterDetails(v map[string]ProtobufAny) {
-	o.ClusterDetails = &v
+// SetClusterDetails gets a reference to the given map[string]interface{} and assigns it to the ClusterDetails field.
+func (o *V1ConnectionInfo) SetClusterDetails(v map[string]interface{}) {
+	o.ClusterDetails = v
 }
 
 func (o V1ConnectionInfo) MarshalJSON() ([]byte, error) {

@@ -16,7 +16,7 @@ type Pds interface {
 
 type Deployment interface {
 	CreateDeployment(*PDSDeploymentRequest) (*PDSDeploymentResponse, error)
-	ListDeployment() (*PDSDeploymentResponse, error)
+	ListDeployment(string) (*PDSDeploymentResponse, error)
 	GetDeployment(string) (*PDSDeploymentResponse, error)
 	DeleteDeployment(string) error
 }
@@ -40,9 +40,9 @@ type Backup interface {
 }
 
 type Catalog interface {
-	ListDataServices() ([]WorkFlowResponse, error)
-	ListDataServiceVersions(*WorkFlowRequest) ([]WorkFlowResponse, error)
-	ListDataServiceImages(*WorkFlowRequest) ([]WorkFlowResponse, error)
+	ListDataServices() (*CatalogResponse, error)
+	ListDataServiceVersions(*WorkFlowRequest) (*CatalogResponse, error)
+	ListDataServiceImages(*WorkFlowRequest) (*CatalogResponse, error)
 }
 
 type RestoreInterface interface {

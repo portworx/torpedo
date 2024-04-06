@@ -13,6 +13,10 @@ import (
 	"time"
 )
 
+const (
+	PDS_DEPLOYMENT_AVAILABLE = "AVAILABLE"
+)
+
 func GetDeploymentResources(deployment map[string]string, dataService, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace string) (ResourceSettingTemplate, StorageOptions, StorageClassConfig, error) {
 	var (
 		config       StorageClassConfig
@@ -106,55 +110,48 @@ func GetDeploymentResources(deployment map[string]string, dataService, dataServi
 }
 
 // ValidateDataServiceDeployment takes the deployment map(name and id), namespace and returns error
-func ValidateDataServiceDeployment(deployment map[string]string, namespace string) error {
-	var (
-		ss *v1.StatefulSet
-	)
+func ValidateDataServiceDeployment(deploymentId, namespace string) error {
+	//var ss *v1.StatefulSet
 
-	log.Debugf("deployment name [%s] in namespace [%s]", deployment[""], namespace)
+	//deploymentName, deploymentId := GetDeploymentNameAndId(deployment)
+	//log.Debugf("deployment name [%s] in namespace [%s]", deploymentName, namespace)
+	log.Debugf("deployment Id [%s] ", deploymentId)
 
-	deploymentName, deploymentId := GetDeploymentNameAndId(deployment)
-
-	err = wait.Poll(validateDeploymentTimeInterval, validateDeploymentTimeOut, func() (bool, error) {
-		ss, err = k8sApps.GetStatefulSet(deploymentName, namespace)
-		if err != nil {
-			log.Warnf("An Error Occured while getting statefulsets %v", err)
-			return false, nil
-		}
-		return true, nil
-	})
-	if err != nil {
-		log.Errorf("An Error Occured while getting statefulsets %v", err)
-		return err
-	}
-
-	//validate the statefulset deployed in the k8s namespace
-	err = k8sApps.ValidateStatefulSet(ss, validateDeploymentTimeOut)
-	if err != nil {
-		log.Errorf("An Error Occured while validating statefulsets %v", err)
-		return err
-	}
-
-	//TODO : Update the below code once we get the deployment status api
-	log.Infof("DeploymentId [%s]", deploymentId)
-	//err = wait.Poll(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
-	//	status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
-	//	log.Infof("Health status -  %v", status.GetHealth())
+	//TODO: Add validation for sts
+	//err = wait.Poll(validateDeploymentTimeInterval, validateDeploymentTimeOut, func() (bool, error) {
+	//	ss, err = k8sApps.GetStatefulSet(deploymentName, namespace)
 	//	if err != nil {
-	//		log.Errorf("Error occured while getting deployment status %v", err)
+	//		log.Warnf("An Error Occured while getting statefulsets %v", err)
 	//		return false, nil
 	//	}
-	//	if res.StatusCode != state.StatusOK {
-	//		log.Errorf("Error when calling `ApiDeploymentsIdCredentialsGet``: %v\n", err)
-	//		log.Errorf("Full HTTP response: %v\n", res)
-	//		return false, err
-	//	}
-	//	if status.GetHealth() != PdsDeploymentAvailable {
-	//		return false, nil
-	//	}
-	//	log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
 	//	return true, nil
 	//})
+	//if err != nil {
+	//	log.Errorf("An Error Occured while getting statefulsets %v", err)
+	//	return err
+	//}
+	//
+	////validate the statefulset deployed in the k8s namespace
+	//err = k8sApps.ValidateStatefulSet(ss, validateDeploymentTimeOut)
+	//if err != nil {
+	//	log.Errorf("An Error Occured while validating statefulsets %v", err)
+	//	return err
+	//}
+
+	log.Infof("DeploymentId [%s]", deploymentId)
+	err = wait.Poll(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
+		res, err := v2Components.PDS.GetDeployment(deploymentId)
+		if err != nil {
+			log.Errorf("Error occured while getting deployment status %v", err)
+			return false, nil
+		}
+		log.Debugf("Health status -  %v", *res.Get.Status.Health)
+		if *res.Get.Config.DeploymentTopologies[0].Replicas != *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas || *res.Get.Status.Health != PDS_DEPLOYMENT_AVAILABLE {
+			return false, nil
+		}
+		log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Replicas, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
+		return true, nil
+	})
 	return err
 }
 
@@ -347,6 +344,7 @@ func GetDataServiceImageId(dsName, dsImageTag, dsVersionBuild string) (string, e
 	if err != nil {
 		return "", err
 	}
+	log.Debugf("dataserviceId [%s]", dsId)
 
 	versionResps, err := ListDataServiceVersions(dsId)
 	if err != nil {
@@ -354,12 +352,13 @@ func GetDataServiceImageId(dsName, dsImageTag, dsVersionBuild string) (string, e
 	}
 
 	var dsVersionId string
-	for _, versionResp := range versionResps {
+	for _, versionResp := range versionResps.DataServiceVersionList {
 		if *versionResp.Meta.Name == dsVersionBuild {
 			dsVersionId = *versionResp.Meta.Uid
 			break
 		}
 	}
+	log.Debugf("dsVersionId [%s]", dsVersionId)
 
 	imgResps, err := ListDataServiceImages(dsId, dsVersionId)
 	if err != nil {
@@ -367,12 +366,14 @@ func GetDataServiceImageId(dsName, dsImageTag, dsVersionBuild string) (string, e
 	}
 
 	var dsImageId string
-	for _, imgResp := range imgResps {
-		if *imgResp.Info.Tag == dsImageTag {
+	for _, imgResp := range imgResps.DataServiceImageList {
+		if *imgResp.Info.Build == dsImageTag {
 			dsImageId = *imgResp.Meta.Uid
 			break
 		}
 	}
+
+	log.Debugf("dsImageId [%s]", dsImageId)
 
 	if dsImageId == "" {
 		return "", fmt.Errorf("image %s not found for data service %s version %s", dsImageTag, dsName, dsVersionBuild)

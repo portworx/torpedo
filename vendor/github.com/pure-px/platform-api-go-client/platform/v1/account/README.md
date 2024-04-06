@@ -78,6 +78,7 @@ All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
+*AccountServiceAPI* | [**AccountServiceDeleteAccount**](docs/AccountServiceAPI.md#accountservicedeleteaccount) | **Delete** /core/v1/accounts/{accountId} | DeleteAccount API deletes account for given id.
 *AccountServiceAPI* | [**AccountServiceGetAccount**](docs/AccountServiceAPI.md#accountservicegetaccount) | **Get** /core/v1/accounts/{accountId} | GetAccount API returns the info about account for given account id.
 
 

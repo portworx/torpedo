@@ -87,6 +87,7 @@ Class | Method | HTTP request | Description
 ## Documentation For Models
 
  - [ConfigOfTheDeploymentForWhichConfigUpdateIsRequested](docs/ConfigOfTheDeploymentForWhichConfigUpdateIsRequested.md)
+ - [DeploymentConfigUpdateOfTheDeploymentUpdateRequest](docs/DeploymentConfigUpdateOfTheDeploymentUpdateRequest.md)
  - [GooglerpcStatus](docs/GooglerpcStatus.md)
  - [MetadataOfTheDeploymentResource](docs/MetadataOfTheDeploymentResource.md)
  - [Pdsdeploymentconfigupdatev1Config](docs/Pdsdeploymentconfigupdatev1Config.md)
@@ -95,7 +96,6 @@ Class | Method | HTTP request | Description
  - [Pdsdeploymentv1Config](docs/Pdsdeploymentv1Config.md)
  - [ProtobufAny](docs/ProtobufAny.md)
  - [SortByField](docs/SortByField.md)
- - [SortOrderValue](docs/SortOrderValue.md)
  - [V1DeploymentConfigUpdate](docs/V1DeploymentConfigUpdate.md)
  - [V1DeploymentTopology](docs/V1DeploymentTopology.md)
  - [V1ListDeploymentConfigUpdatesResponse](docs/V1ListDeploymentConfigUpdatesResponse.md)
@@ -105,6 +105,7 @@ Class | Method | HTTP request | Description
  - [V1Reference](docs/V1Reference.md)
  - [V1References](docs/V1References.md)
  - [V1Sort](docs/V1Sort.md)
+ - [V1SortOrderValue](docs/V1SortOrderValue.md)
  - [V1TLSConfig](docs/V1TLSConfig.md)
  - [V1Template](docs/V1Template.md)
 

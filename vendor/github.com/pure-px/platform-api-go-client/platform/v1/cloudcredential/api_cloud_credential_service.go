@@ -300,7 +300,7 @@ func (a *CloudCredentialServiceAPIService) CloudCredentialServiceGetCloudCredent
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/core/v1/cloudcredentials/{id}"
+	localVarPath := localBasePath + "/core/v1/cloudCredentials/{id}"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
 
 	localVarHeaderParams := make(map[string]string)

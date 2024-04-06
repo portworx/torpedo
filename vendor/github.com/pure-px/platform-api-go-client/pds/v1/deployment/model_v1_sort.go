@@ -20,7 +20,7 @@ var _ MappedNullable = &V1Sort{}
 // V1Sort The details of the attribute for which the requested list of resource to be sorted.
 type V1Sort struct {
 	SortBy *SortByField `json:"sortBy,omitempty"`
-	SortOrder *SortOrderValue `json:"sortOrder,omitempty"`
+	SortOrder *V1SortOrderValue `json:"sortOrder,omitempty"`
 }
 
 // NewV1Sort instantiates a new V1Sort object
@@ -31,7 +31,7 @@ func NewV1Sort() *V1Sort {
 	this := V1Sort{}
 	var sortBy SortByField = SORTBYFIELD_FIELD_UNSPECIFIED
 	this.SortBy = &sortBy
-	var sortOrder SortOrderValue = SORTORDERVALUE_VALUE_UNSPECIFIED
+	var sortOrder V1SortOrderValue = V1SORTORDERVALUE_VALUE_UNSPECIFIED
 	this.SortOrder = &sortOrder
 	return &this
 }
@@ -43,7 +43,7 @@ func NewV1SortWithDefaults() *V1Sort {
 	this := V1Sort{}
 	var sortBy SortByField = SORTBYFIELD_FIELD_UNSPECIFIED
 	this.SortBy = &sortBy
-	var sortOrder SortOrderValue = SORTORDERVALUE_VALUE_UNSPECIFIED
+	var sortOrder V1SortOrderValue = V1SORTORDERVALUE_VALUE_UNSPECIFIED
 	this.SortOrder = &sortOrder
 	return &this
 }
@@ -81,9 +81,9 @@ func (o *V1Sort) SetSortBy(v SortByField) {
 }
 
 // GetSortOrder returns the SortOrder field value if set, zero value otherwise.
-func (o *V1Sort) GetSortOrder() SortOrderValue {
+func (o *V1Sort) GetSortOrder() V1SortOrderValue {
 	if o == nil || IsNil(o.SortOrder) {
-		var ret SortOrderValue
+		var ret V1SortOrderValue
 		return ret
 	}
 	return *o.SortOrder
@@ -91,7 +91,7 @@ func (o *V1Sort) GetSortOrder() SortOrderValue {
 
 // GetSortOrderOk returns a tuple with the SortOrder field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *V1Sort) GetSortOrderOk() (*SortOrderValue, bool) {
+func (o *V1Sort) GetSortOrderOk() (*V1SortOrderValue, bool) {
 	if o == nil || IsNil(o.SortOrder) {
 		return nil, false
 	}
@@ -107,8 +107,8 @@ func (o *V1Sort) HasSortOrder() bool {
 	return false
 }
 
-// SetSortOrder gets a reference to the given SortOrderValue and assigns it to the SortOrder field.
-func (o *V1Sort) SetSortOrder(v SortOrderValue) {
+// SetSortOrder gets a reference to the given V1SortOrderValue and assigns it to the SortOrder field.
+func (o *V1Sort) SetSortOrder(v V1SortOrderValue) {
 	o.SortOrder = &v
 }
 

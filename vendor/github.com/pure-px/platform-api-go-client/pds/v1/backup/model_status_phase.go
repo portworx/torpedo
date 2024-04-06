@@ -15,13 +15,13 @@ import (
 	"fmt"
 )
 
-// StatusPhase Enum for Phase of the Deployment.   - PHASE_UNSPECIFIED: Phase is unspecified.  - QUEUED: Backup is Queued.  - COMPLETED: Backup is completed.  - FAILED: Backup is failed.
+// StatusPhase Enum for Phase of the Deployment.   - PHASE_UNSPECIFIED: Phase is unspecified.  - IN_PROGRESS: Backup is in_progress.  - COMPLETED: Backup is completed.  - FAILED: Backup is failed.
 type StatusPhase string
 
 // List of StatusPhase
 const (
 	STATUSPHASE_PHASE_UNSPECIFIED StatusPhase = "PHASE_UNSPECIFIED"
-	STATUSPHASE_QUEUED StatusPhase = "QUEUED"
+	STATUSPHASE_IN_PROGRESS StatusPhase = "IN_PROGRESS"
 	STATUSPHASE_COMPLETED StatusPhase = "COMPLETED"
 	STATUSPHASE_FAILED StatusPhase = "FAILED"
 )
@@ -29,7 +29,7 @@ const (
 // All allowed values of StatusPhase enum
 var AllowedStatusPhaseEnumValues = []StatusPhase{
 	"PHASE_UNSPECIFIED",
-	"QUEUED",
+	"IN_PROGRESS",
 	"COMPLETED",
 	"FAILED",
 }
