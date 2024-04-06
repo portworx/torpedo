@@ -375,6 +375,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 						// upgradeExecutionThreshold will be 0 when triggering only upgrades
 						if upgradeExecutionThreshold == 0 {
 							log.InfoD("All upgrades are completed. Closing StopLongevityChan")
+							close(StopLongevityChan)
 							break
 						}
 						continue
@@ -481,6 +482,13 @@ func testTrigger(wg *sync.WaitGroup,
 	lastInvocationTime := start
 
 	for {
+		select {
+		case <-StopLongevityChan:
+			log.InfoD("Received stop signal. Exiting longevity test trigger [%s] loop", triggerType)
+			return
+		default:
+			// Continuing the loop as no stop signal is received
+		}
 		// if timeout is 0, run indefinitely
 		if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
 			log.InfoD("Longevity Tests timed out with timeout %d  minutes", minRunTime)
