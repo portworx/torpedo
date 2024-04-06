@@ -993,6 +993,14 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/85449
 	var runID int
 	JustBeforeEach(func() {
+		Step = func(text string, callback ...func()) {
+			log.Infof("Step: [%s]", text)
+			if len(callback) == 1 {
+				callback[0]()
+			} else if len(callback) > 1 {
+				panic(fmt.Sprintf("Step: [%s] has more than one callback", text))
+			}
+		}
 		StartTorpedoTest(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), "PVC and Pool expand test on autopilot", tags, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
@@ -1067,17 +1075,17 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 		})
 
 		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-			for _, apRule := range poolApRules {
-				Inst().S.DeleteAutopilotRule(apRule.Name)
-			}
-			for _, apRule := range pvcApRules {
-				Inst().S.DeleteAutopilotRule(apRule.Name)
-			}
+			//opts := make(map[string]bool)
+			//opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			//for _, ctx := range contexts {
+			//	TearDownContext(ctx, opts)
+			//}
+			//for _, apRule := range poolApRules {
+			//	Inst().S.DeleteAutopilotRule(apRule.Name)
+			//}
+			//for _, apRule := range pvcApRules {
+			//	Inst().S.DeleteAutopilotRule(apRule.Name)
+			//}
 			for k := range poolLabel {
 				Inst().S.RemoveLabelOnNode(storageNodes[0], k)
 			}
