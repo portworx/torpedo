@@ -17,13 +17,11 @@ import (
 // checks if the V1Info3 type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &V1Info3{}
 
-// V1Info3 Desired Info of the data service.
+// V1Info3 Information related to the data service version.
 type V1Info3 struct {
-	// Short name of the data service.
-	ShortName *string `json:"shortName,omitempty"`
-	// Enabled flag suggests if the data service is enabled or not.
+	// Enabled indicates if the version is enabled.
 	Enabled *bool `json:"enabled,omitempty"`
-	NodeRestrictions *V1NodeRestrictions `json:"nodeRestrictions,omitempty"`
+	RevisionId *string `json:"revisionId,omitempty"`
 }
 
 // NewV1Info3 instantiates a new V1Info3 object
@@ -41,38 +39,6 @@ func NewV1Info3() *V1Info3 {
 func NewV1Info3WithDefaults() *V1Info3 {
 	this := V1Info3{}
 	return &this
-}
-
-// GetShortName returns the ShortName field value if set, zero value otherwise.
-func (o *V1Info3) GetShortName() string {
-	if o == nil || IsNil(o.ShortName) {
-		var ret string
-		return ret
-	}
-	return *o.ShortName
-}
-
-// GetShortNameOk returns a tuple with the ShortName field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *V1Info3) GetShortNameOk() (*string, bool) {
-	if o == nil || IsNil(o.ShortName) {
-		return nil, false
-	}
-	return o.ShortName, true
-}
-
-// HasShortName returns a boolean if a field has been set.
-func (o *V1Info3) HasShortName() bool {
-	if o != nil && !IsNil(o.ShortName) {
-		return true
-	}
-
-	return false
-}
-
-// SetShortName gets a reference to the given string and assigns it to the ShortName field.
-func (o *V1Info3) SetShortName(v string) {
-	o.ShortName = &v
 }
 
 // GetEnabled returns the Enabled field value if set, zero value otherwise.
@@ -107,36 +73,36 @@ func (o *V1Info3) SetEnabled(v bool) {
 	o.Enabled = &v
 }
 
-// GetNodeRestrictions returns the NodeRestrictions field value if set, zero value otherwise.
-func (o *V1Info3) GetNodeRestrictions() V1NodeRestrictions {
-	if o == nil || IsNil(o.NodeRestrictions) {
-		var ret V1NodeRestrictions
+// GetRevisionId returns the RevisionId field value if set, zero value otherwise.
+func (o *V1Info3) GetRevisionId() string {
+	if o == nil || IsNil(o.RevisionId) {
+		var ret string
 		return ret
 	}
-	return *o.NodeRestrictions
+	return *o.RevisionId
 }
 
-// GetNodeRestrictionsOk returns a tuple with the NodeRestrictions field value if set, nil otherwise
+// GetRevisionIdOk returns a tuple with the RevisionId field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *V1Info3) GetNodeRestrictionsOk() (*V1NodeRestrictions, bool) {
-	if o == nil || IsNil(o.NodeRestrictions) {
+func (o *V1Info3) GetRevisionIdOk() (*string, bool) {
+	if o == nil || IsNil(o.RevisionId) {
 		return nil, false
 	}
-	return o.NodeRestrictions, true
+	return o.RevisionId, true
 }
 
-// HasNodeRestrictions returns a boolean if a field has been set.
-func (o *V1Info3) HasNodeRestrictions() bool {
-	if o != nil && !IsNil(o.NodeRestrictions) {
+// HasRevisionId returns a boolean if a field has been set.
+func (o *V1Info3) HasRevisionId() bool {
+	if o != nil && !IsNil(o.RevisionId) {
 		return true
 	}
 
 	return false
 }
 
-// SetNodeRestrictions gets a reference to the given V1NodeRestrictions and assigns it to the NodeRestrictions field.
-func (o *V1Info3) SetNodeRestrictions(v V1NodeRestrictions) {
-	o.NodeRestrictions = &v
+// SetRevisionId gets a reference to the given string and assigns it to the RevisionId field.
+func (o *V1Info3) SetRevisionId(v string) {
+	o.RevisionId = &v
 }
 
 func (o V1Info3) MarshalJSON() ([]byte, error) {
@@ -149,14 +115,11 @@ func (o V1Info3) MarshalJSON() ([]byte, error) {
 
 func (o V1Info3) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.ShortName) {
-		toSerialize["shortName"] = o.ShortName
-	}
 	if !IsNil(o.Enabled) {
 		toSerialize["enabled"] = o.Enabled
 	}
-	if !IsNil(o.NodeRestrictions) {
-		toSerialize["nodeRestrictions"] = o.NodeRestrictions
+	if !IsNil(o.RevisionId) {
+		toSerialize["revisionId"] = o.RevisionId
 	}
 	return toSerialize, nil
 }

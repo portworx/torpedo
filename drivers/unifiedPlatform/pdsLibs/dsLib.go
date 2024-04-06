@@ -27,7 +27,7 @@ func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, 
 			V1Deployment: automationModels.V1DeploymentUpdate{
 				Meta: automationModels.Meta{
 					Uid:             &deploymentId,
-					Name:            nil,
+					Name:            &ds.DeploymentName,
 					Description:     nil,
 					ResourceVersion: nil,
 					CreateTime:      nil,
@@ -52,6 +52,15 @@ func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, 
 							{
 								Name:     StringPtr("pds-qa-test-topology"),
 								Replicas: intToPointerString(ds.ScaleReplicas),
+								ResourceSettings: &automationModels.PdsTemplates{
+									Id: &resConfigId,
+								},
+								ServiceConfigurations: &automationModels.PdsTemplates{
+									Id: &appConfigId,
+								},
+								StorageOptions: &automationModels.PdsTemplates{
+									Id: &stConfigId,
+								},
 							},
 						},
 					},
@@ -154,4 +163,30 @@ func ListDataServiceImages(dsId, dsVersionId string) (*automationModels.CatalogR
 	}
 	ds, err := v2Components.PDS.ListDataServiceImages(&input)
 	return ds, err
+}
+
+func DeleteAllDeployments(projectId string) error {
+	var numberOfDeploymentsDeleted int
+	deployments, err := v2Components.PDS.ListDeployment(projectId)
+	if err != nil {
+		return err
+	}
+
+	if len(deployments.List) <= 0 {
+		return fmt.Errorf("Deployments List is empty, No deployments to delete.\n")
+	}
+
+	for _, dep := range deployments.List {
+		log.Infof("Deleting Deployment [%d]", *dep.Meta.Uid)
+		err := v2Components.PDS.DeleteDeployment(*dep.Meta.Uid)
+		if err != nil {
+			//TODO: Check for associated backup's and delete it
+			log.Infof("Error occured while deleting deployments, skipping for now: [%s]", err)
+			numberOfDeploymentsDeleted -= 1
+		}
+		numberOfDeploymentsDeleted += 1
+	}
+
+	log.Infof("Total number of deployments Deleted [%d]", numberOfDeploymentsDeleted)
+	return nil
 }

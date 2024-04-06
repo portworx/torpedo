@@ -87,6 +87,7 @@ Class | Method | HTTP request | Description
 ## Documentation For Models
 
  - [ConfigOfTheDeploymentForWhichConfigUpdateIsRequested](docs/ConfigOfTheDeploymentForWhichConfigUpdateIsRequested.md)
+ - [DeploymentConfigUpdateOfTheDeploymentUpdateRequest](docs/DeploymentConfigUpdateOfTheDeploymentUpdateRequest.md)
  - [GooglerpcStatus](docs/GooglerpcStatus.md)
  - [MetadataOfTheDeploymentResource](docs/MetadataOfTheDeploymentResource.md)
  - [Pdsdeploymentconfigupdatev1Config](docs/Pdsdeploymentconfigupdatev1Config.md)

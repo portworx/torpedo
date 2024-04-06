@@ -51,9 +51,23 @@ func (ds *PDS_API_V1) DeleteDeployment(deploymentId string) error {
 	return nil
 }
 
-func (ds *PDS_API_V1) ListDeployment() (*automationModels.PDSDeploymentResponse, error) {
+func (ds *PDS_API_V1) ListDeployment(projectId string) (*automationModels.PDSDeploymentResponse, error) {
 	dsResponse := automationModels.PDSDeploymentResponse{
 		List: []automationModels.V1Deployment{},
+	}
+	ctx, dsClient, err := ds.getDeploymentClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
+	}
+
+	dsModel, res, err := dsClient.DeploymentServiceListDeployments(ctx).ProjectId(projectId).Execute()
+	if err != nil || res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
+	}
+
+	err = utilities.CopyStruct(dsModel.Deployments, &dsResponse.List)
+	if err != nil {
+		return nil, fmt.Errorf("Error while copying list deployment response: %v\n", err)
 	}
 
 	return &dsResponse, nil

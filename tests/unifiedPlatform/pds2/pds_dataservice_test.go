@@ -19,8 +19,8 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 		workflowDataservice stworkflows.WorkflowDataService
 		workFlowTemplates   stworkflows.CustomTemplates
 		deployment          *automationModels.PDSDeploymentResponse
-		//updateDeployment    *automationModels.PDSDeploymentResponse
-		err error
+		updateDeployment    *automationModels.PDSDeploymentResponse
+		err                 error
 	)
 
 	It("Deploy,Validate and ScaleUp DataService", func() {
@@ -39,7 +39,6 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
 			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
-
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
@@ -64,16 +63,15 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 		//	log.FailOnError(err, "Error while running workloads on ds")
 		//})
 
-		//TODO: Uncomment the below code once DS-8952 is fixed
-		//Step("ScaleUp DataService", func() {
-		//	log.InfoD("Scaling Up dataservices...")
-		//	for _, ds := range NewPdsParams.DataServiceToTest {
-		//		updateDeployment, err = workflowDataservice.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
-		//		log.FailOnError(err, "Error while updating ds")
-		//		log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
-		//	}
-		//})
-		//
+		Step("ScaleUp DataService", func() {
+			log.InfoD("Scaling Up dataservices...")
+			for _, ds := range NewPdsParams.DataServiceToTest {
+				updateDeployment, err = workflowDataservice.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
+				log.FailOnError(err, "Error while updating ds")
+				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
+			}
+		})
+
 		//stepLog = "Running Workloads after ScaleUp of DataService"
 		//Step(stepLog, func() {
 		//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)

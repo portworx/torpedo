@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	UpdateDeploymentRequest deploymentsConfigUpdateV1.V1DeploymentConfigUpdate
+	UpdateDeploymentRequest deploymentsConfigUpdateV1.DeploymentConfigUpdateOfTheDeploymentUpdateRequest
 )
 
 func (ds *PDS_API_V1) UpdateDeployment(updateDeploymentRequest *automationModels.PDSDeploymentRequest) (*automationModels.PDSDeploymentResponse, error) {
@@ -28,14 +28,8 @@ func (ds *PDS_API_V1) UpdateDeployment(updateDeploymentRequest *automationModels
 	if err != nil {
 		return nil, fmt.Errorf("Error occured while copying updateDeploymentRequest %v\n", err)
 	}
-	//
-	//var req deploymentsConfigUpdateV1.ApiDeploymentConfigUpdateServiceCreateDeploymentConfigUpdateRequest
-	//
-	//dsClient.DeploymentConfigUpdateServiceCreateDeploymentConfigUpdateExecute(req)
-	//
-	//req.ConfigOfTheDeploymentForWhichConfigUpdateIsRequested()
 
-	dsModel, res, err := dsClient.DeploymentConfigUpdateServiceCreateDeploymentConfigUpdate(ctx, *updateDeploymentRequest.Update.V1Deployment.Meta.Uid).ConfigOfTheDeploymentForWhichConfigUpdateIsRequested(deploymentsConfigUpdateV1.ConfigOfTheDeploymentForWhichConfigUpdateIsRequested{}).Execute()
+	dsModel, res, err := dsClient.DeploymentConfigUpdateServiceCreateDeploymentConfigUpdate(ctx, *updateDeploymentRequest.Update.V1Deployment.Meta.Uid).DeploymentConfigUpdateOfTheDeploymentUpdateRequest(UpdateDeploymentRequest).Execute()
 	log.Debugf("updated dsModel [%v]", dsModel)
 	log.Debugf("response [%v]", res)
 	if err != nil || res.StatusCode != status.StatusOK {

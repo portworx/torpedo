@@ -81,7 +81,7 @@ func (deployment *PdsGrpc) DeleteDeployment(deploymentId string) error {
 	return nil
 }
 
-func (deployment *PdsGrpc) ListDeployment() (*PDSDeploymentResponse, error) {
+func (deployment *PdsGrpc) ListDeployment(projectId string) (*PDSDeploymentResponse, error) {
 	depResponse := PDSDeploymentResponse{
 		Get: V1DeploymentGet{},
 	}

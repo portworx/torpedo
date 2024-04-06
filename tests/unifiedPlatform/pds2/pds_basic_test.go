@@ -50,7 +50,8 @@ var _ = BeforeSuite(func() {
 	Step("Get Default Tenant", func() {
 		log.Infof("Initialising values for tenant")
 		WorkflowPlatform.AdminAccountId = AccID
-		WorkflowPlatform.TenantInit()
+		_, err := WorkflowPlatform.TenantInit()
+		log.FailOnError(err, "error while getting Default TenantId")
 	})
 
 	Step("Get Default Project", func() {

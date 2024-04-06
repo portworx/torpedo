@@ -16,7 +16,7 @@ type Pds interface {
 
 type Deployment interface {
 	CreateDeployment(*PDSDeploymentRequest) (*PDSDeploymentResponse, error)
-	ListDeployment() (*PDSDeploymentResponse, error)
+	ListDeployment(string) (*PDSDeploymentResponse, error)
 	GetDeployment(string) (*PDSDeploymentResponse, error)
 	DeleteDeployment(string) error
 }
