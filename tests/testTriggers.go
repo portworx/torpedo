@@ -5873,7 +5873,18 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 					log.InfoD("Error upgrading volume driver, Err: %v", err.Error())
 				}
 				UpdateOutcome(event, err)
-
+				endpoint, version, err := SplitStorageDriverUpgradeURL(upgradeHop)
+				if err != nil {
+					log.InfoD("Error upgrading volume driver, Err: %v", err.Error())
+				}
+				log.InfoD("Updating StorageDriverUpgradeEndpoint: URL from [%s] to [%s], Version from [%s] to [%s]", Inst().StorageDriverUpgradeEndpointURL, endpoint, Inst().StorageDriverUpgradeEndpointVersion, version)
+				Inst().StorageDriverUpgradeEndpointURL = endpoint
+				Inst().StorageDriverUpgradeEndpointVersion = version
+				err = ValidatePxLicenseSummary()
+				if err != nil {
+					err := fmt.Errorf("failed to validate license summary after upgrade. Err: [%v]", err)
+					UpdateOutcome(event, err)
+				}
 			})
 			validateContexts(event, contexts)
 		}
