@@ -263,7 +263,9 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			EmailReporter: TriggerEmailReporter,
 		}
 		// Creating a distinct trigger to ensure upgrade is triggered after a specified number of events have occurred
-		upgradeTriggerFunction = map[string]TriggerFunction{}
+		upgradeTriggerFunction = map[string]TriggerFunction{
+			UpgradeCluster: TriggerUpdateCluster,
+		}
 		switch Inst().S.String() {
 		case iks.SchedName:
 			log.Infof("Setting upgradeVolumeDriverTrigger to [%s]", UpgradeVolumeDriverFromCatalog)
@@ -364,11 +366,17 @@ var _ = Describe("{UpgradeLongevity}", func() {
 				currentUpgradeIndex := 0
 				for {
 					upgradeEndpoints := strings.Split(Inst().UpgradeStorageDriverEndpointList, ",")
+					upgradeSchedHops := strings.Split(Inst().SchedUpgradeHops, ",")
 					if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
 						log.InfoD("Longevity Tests timed out with timeout %d minutes", Inst().MinRunTimeMins)
 						break
 					}
-					if upgradeCounter.GetCount(upgradeVolumeDriverTrigger) >= len(upgradeEndpoints) {
+					if upgradeCounter.GetCount(upgradeVolumeDriverTrigger) >= len(upgradeEndpoints) && upgradeCounter.GetCount(UpgradeCluster) >= len(upgradeSchedHops) {
+						// upgradeExecutionThreshold will be 0 when triggering only upgrades
+						if upgradeExecutionThreshold == 0 {
+							log.InfoD("All upgrades are completed. Closing StopLongevityChan")
+							break
+						}
 						continue
 					}
 					minTestExecCount := math.MaxInt32
@@ -401,6 +409,15 @@ var _ = Describe("{UpgradeLongevity}", func() {
 								currentUpgradeIndex++
 								continue
 							}
+						} else {
+							if upgradeCounter.GetCount(UpgradeCluster) < len(upgradeSchedHops) {
+								Inst().SchedUpgradeHops = upgradeSchedHops[upgradeCounter.GetCount(UpgradeCluster)]
+								triggerType = UpgradeCluster
+							} else {
+								log.Warnf("No hop to upgrade cluster; index [%d] exceeds the set [%d] hops.", upgradeCounter.GetCount(UpgradeCluster), len(upgradeSchedHops))
+								currentUpgradeIndex++
+								continue
+							}
 						}
 						currentUpgradeIndex++
 						triggerFunc, ok := upgradeTriggerFunction[triggerType]
@@ -417,6 +434,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 						log.Infof("Trigger Function completed for [%s]\n", triggerType)
 						disruptiveTriggerLock.Unlock()
 						log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
+						Inst().SchedUpgradeHops = strings.Join(upgradeSchedHops, ",")
 						Inst().UpgradeStorageDriverEndpointList = strings.Join(upgradeEndpoints, ",")
 						upgradeCounter.Increment(triggerType)
 						ValidateApplications(contexts)

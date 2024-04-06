@@ -39,6 +39,7 @@ const (
 	UpgradeStorkEventName                   = "Upgrade Stork"
 	UpgradeVolumeDriverEventName            = "Upgrade Volume Driver"
 	UpgradeVolumeDriverFromCatalogEventName = "Upgrade Volume Driver From Catalog"
+	UpdateClusterEventName                  = "Update Cluster"
 	NodeMaintenanceEventName                = "Node Maintenance Cycle"
 	PoolMaintenanceEventName                = "Pool Maintenance Cycle"
 	AsyncDREventName                        = "Async DR"
