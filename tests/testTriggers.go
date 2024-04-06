@@ -6,11 +6,16 @@ import (
 	"fmt"
 	"github.com/devans10/pugo/flasharray"
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
+	"github.com/portworx/torpedo/drivers/scheduler/aks"
+	"github.com/portworx/torpedo/drivers/scheduler/eks"
+	"github.com/portworx/torpedo/drivers/scheduler/gke"
+	"github.com/portworx/torpedo/drivers/scheduler/iks"
 	"github.com/portworx/torpedo/drivers/vcluster"
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/pureutils"
 	"math"
 	"math/rand"
+	"net/url"
 	"os"
 	"os/exec"
 	"reflect"
@@ -86,6 +91,8 @@ const (
 	MigrationsCountField = "migrationscount"
 	// UpgradeEndpoints is a field in the configmap that contains a comma-separated list of upgrade endpoints
 	UpgradeEndpoints = "upgradeEndpoints"
+	// SchedUpgradeHops is a field in the configmap that contains a comma-separated list of scheduler upgrade hops
+	SchedUpgradeHops = "schedUpgradeHops"
 	// BaseInterval is a field in the configmap that represents base interval in minutes
 	BaseInterval = "baseInterval"
 	// VclusterFioRunTimeField is a field in the configmap that represents fio run time in seconds
@@ -488,6 +495,8 @@ const (
 	UpgradeVolumeDriver = "upgradeVolumeDriver"
 	// UpgradeVolumeDriverFromCatalog upgrades volume driver from catalog according to the Inst().UpgradeStorageDriverEndpointList
 	UpgradeVolumeDriverFromCatalog = "upgradeVolumeDriverFromCatalog"
+	// UpgradeCluster upgrades the cluster according to the Inst().SchedUpgradeHops
+	UpgradeCluster = "upgradeCluster"
 	// AppTasksDown scales app up and down
 	AppTasksDown = "appScaleUpAndDown"
 	// AutoFsTrim enables Auto Fstrim in PX cluster
@@ -5869,6 +5878,161 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 			validateContexts(event, contexts)
 		}
 	})
+	err := ValidateDataIntegrity(contexts)
+	UpdateOutcome(event, err)
+	updateMetrics(*event)
+}
+
+// TriggerUpdateCluster upgrades the cluster and ensures everything is running fine
+func TriggerUpdateCluster(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(UpgradeCluster)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: UpgradeCluster,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	// This is an exact copy of UpgradeCluster test case
+	Step("upgrade cluster and ensure everything is running fine", func() {
+		var versions []string
+		if len(Inst().SchedUpgradeHops) > 0 {
+			versions = strings.Split(Inst().SchedUpgradeHops, ",")
+		}
+		for _, v := range versions {
+			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), v), func() {
+				stopSignal := make(chan struct{})
+
+				var mError error
+				opver, err := oputil.GetPxOperatorVersion()
+				if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) {
+					go DoPDBValidation(stopSignal, &mError)
+					defer func() {
+						close(stopSignal)
+					}()
+				} else {
+					log.Warnf("PDB validation skipped. Current Px-Operator version: [%s], minimum required: [%s]. Error: [%v].", opver, PDBValidationMinOpVersion, err)
+				}
+				dashStats := make(map[string]string)
+				dashStats["sched-upgrade-hop"] = v
+				updateLongevityStats(UpgradeCluster, stats.UpdateClusterEventName, dashStats)
+				err = Inst().S.UpgradeScheduler(v)
+				if mError != nil {
+					mError = fmt.Errorf("failed to validate PDB of px-storage during cluster upgrade. Err: [%v]", mError)
+					UpdateOutcome(event, mError)
+				}
+				if err != nil {
+					err = fmt.Errorf("failed to upgrade scheduler [%s] to version [%s]. Err: [%v]", Inst().S.String(), v, err)
+					UpdateOutcome(event, err)
+					return
+				}
+
+				// Sleep needed for AKS cluster upgrades
+				if Inst().S.String() == aks.SchedName {
+					log.Warnf("Warning! This is [%s] scheduler, during Node Pool upgrades, AKS creates extra node, this node then becomes PX node. "+
+						"After the Node Pool upgrade is complete, AKS deletes this extra node, but PX Storage object still around for about ~20-30 mins. "+
+						"Recommended config is that you deploy PX with 6 nodes in 3 zones and set MaxStorageNodesPerZone to 2, "+
+						"so when extra AKS node gets created, PX gets deployed as Storageless node, otherwise if PX gets deployed as Storage node, "+
+						"PX storage objects will never be deleted and validation might fail!", Inst().S.String())
+					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(30 * time.Minute)
+				}
+
+				// Sleep needed for GKE cluster upgrades
+				if Inst().S.String() == gke.SchedName {
+					log.Warnf("This is [%s] scheduler, during Node Pool upgrades, GKE creates an extra node. "+
+						"After the Node Pool upgrade is complete, GKE deletes this extra node, but it takes some time.", Inst().S.String())
+					log.Infof("Sleeping for 10 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(10 * time.Minute)
+				}
+
+				// Sleep needed for EKS cluster upgrades
+				if Inst().S.String() == eks.SchedName {
+					log.Warnf("This is [%s] scheduler, during Node Group upgrades, EKS creates an extra node. "+
+						"After the Node Group upgrade is complete, EKS deletes this extra node, but it takes some time.", Inst().S.String())
+					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(30 * time.Minute)
+				}
+
+				// Sleep needed for IKS cluster upgrades
+				if Inst().S.String() == iks.SchedName {
+					log.Warnf("This is [%s] scheduler, during Worker Pool upgrades, IKS replaces all worker nodes. "+
+						"The replacement might affect cluster capacity temporarily, requiring time for stabilization.", Inst().S.String())
+					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(30 * time.Minute)
+				}
+
+				PrintK8sCluterInfo()
+			})
+
+			Step("validate storage components", func() {
+				urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
+				u, err := url.Parse(urlToParse)
+				if err != nil {
+					err = fmt.Errorf("error parsing PX version the url [%s]", urlToParse)
+					UpdateOutcome(event, err)
+					return
+				}
+				err = Inst().V.ValidateDriver(u.String(), true)
+				if err != nil {
+					err = fmt.Errorf("failed to validate volume driver after upgrade to %s. Err: [%v]", v, err)
+					UpdateOutcome(event, err)
+					return
+				}
+
+				// Printing cluster node info after the upgrade
+				PrintK8sCluterInfo()
+			})
+
+			// TODO: This currently doesn't work for most distros and commenting out this change, see PTX-22409
+			/*if Inst().S.String() != aks.SchedName {
+			  dash.VerifyFatal(mError, nil, "validate no parallel upgrade of nodes")          }*/
+			Step("update node drive endpoints", func() {
+				// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
+				err := Inst().S.RefreshNodeRegistry()
+				if err != nil {
+					err = fmt.Errorf("failed to refresh node registry after upgrade to scheduler version [%s]. Err: [%v]", v, err)
+					UpdateOutcome(event, err)
+					return
+				}
+
+				// Refresh Driver Endpoints
+				err = Inst().V.RefreshDriverEndpoints()
+				if err != nil {
+					err = fmt.Errorf("failed to refresh driver endpoints after upgrade to scheduler version [%s]. Err: [%v]", v, err)
+					UpdateOutcome(event, err)
+					return
+				}
+
+				// Printing pxctl status after the upgrade
+				PrintPxctlStatus()
+			})
+
+			Step("Validate PX license after upgrade", func() {
+				log.InfoD("Validating PX license after upgrade")
+				if Inst().S.String() == iks.SchedName {
+					err := ValidatePxLicenseSummary()
+					if err != nil {
+						err := fmt.Errorf("failed to validate IBM license after upgrade. Err: [%v]", err)
+						UpdateOutcome(event, err)
+					}
+				}
+			})
+
+			Step("validate all apps after upgrade", func() {
+				ValidateApplications(*contexts)
+			})
+		}
+	})
+
 	err := ValidateDataIntegrity(contexts)
 	UpdateOutcome(event, err)
 	updateMetrics(*event)
