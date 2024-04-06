@@ -413,8 +413,7 @@ func (a *aks) GetAKSCluster() (AKSCluster, error) {
 func (a *aks) DeleteNode(node node.Node) error {
 	log.Infof("Delete node [%s] from node pool [%s]", node.Hostname, a.instanceGroup)
 
-	cmd := fmt.Sprintf("%s aks nodepool delete-machines --resource-group %s --cluster-name %s --nodepool-name %s  --machine-names %s --no-wait --yes", azCli, a.clusterName, a.clusterName, a.instanceGroup, node.Hostname)
-	log.Infof("Running command [%s]", cmd)
+	cmd := fmt.Sprintf("%s aks nodepool delete-machines --resource-group %s --cluster-name %s --nodepool-name %s  --machine-names %s --no-wait", azCli, a.clusterName, a.clusterName, a.instanceGroup, node.Hostname)
 	stdout, stderr, err := osutils.ExecShell(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to delete node [%s] , Err: %v %v %v", node.Hostname, stderr, err, stdout)
