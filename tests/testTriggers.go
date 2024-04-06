@@ -5,7 +5,9 @@ import (
 	"container/ring"
 	"fmt"
 	"github.com/devans10/pugo/flasharray"
+	oputil "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/torpedo/drivers/vcluster"
+	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/pureutils"
 	"math"
 	"math/rand"
@@ -484,6 +486,8 @@ const (
 	UpgradeStork = "upgradeStork"
 	// UpgradeVolumeDriver  upgrade volume driver version to the latest build
 	UpgradeVolumeDriver = "upgradeVolumeDriver"
+	// UpgradeVolumeDriverFromCatalog upgrades volume driver from catalog according to the Inst().UpgradeStorageDriverEndpointList
+	UpgradeVolumeDriverFromCatalog = "upgradeVolumeDriverFromCatalog"
 	// AppTasksDown scales app up and down
 	AppTasksDown = "appScaleUpAndDown"
 	// AutoFsTrim enables Auto Fstrim in PX cluster
@@ -5868,6 +5872,186 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 	err := ValidateDataIntegrity(contexts)
 	UpdateOutcome(event, err)
 	updateMetrics(*event)
+}
+
+// TriggerUpgradeVolumeDriverFromCatalog performs upgrade hops of volume driver based on a given list of upgradeEndpoints from marketplace
+func TriggerUpgradeVolumeDriverFromCatalog(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(UpgradeVolumeDriverFromCatalog)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: UpgradeVolumeDriverFromCatalog,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	// This is an exact copy of UpgradeVolumeDriverFromCatalog test case
+	stepLog := "upgrade volume driver from catalog and ensure everything is running fine"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		var (
+			storageNodes      = node.GetStorageNodes()
+			numOfNodes        = len(node.GetStorageDriverNodes())
+			timeBeforeUpgrade time.Time
+			timeAfterUpgrade  time.Time
+		)
+		ValidateApplications(*contexts)
+		stepLog = "start the upgrade of volume driver from catalog"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
+				UpdateOutcome(event, fmt.Errorf("unable to perform volume driver upgrade hops, none were given"))
+				return
+			}
+			if IsIksCluster() {
+				log.Infof("Adding ibm helm repo [%s]", IBMHelmRepoName)
+				cmd := fmt.Sprintf("helm repo add %s %s", IBMHelmRepoName, IBMHelmRepoURL)
+				log.Infof("helm command: %v ", cmd)
+				_, _, err := osutils.ExecShell(cmd)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error adding helm repo [%s]. Err: [%v]", IBMHelmRepoName, err))
+					return
+				}
+			} else {
+				UpdateOutcome(event, fmt.Errorf("the cluster is neither IKS nor ROKS"))
+				return
+			}
+			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
+			for i, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+				if upgradeHop == "" {
+					UpdateOutcome(event, fmt.Errorf("the upgrade hop at index [%d] empty", i))
+					return
+				}
+				currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting current driver version on node [%s], Err: [%v]", storageNodes[0].Name, err))
+					return
+				}
+				timeBeforeUpgrade = time.Now()
+				upgradeHopSplit := strings.Split(upgradeHop, "/")
+				nextPXVersion := upgradeHopSplit[len(upgradeHopSplit)-1]
+				if f, err := osutils.FileExists(IBMHelmValuesFile); err != nil {
+					UpdateOutcome(event, fmt.Errorf("error checking for file [%s]. Err: [%v]", IBMHelmValuesFile, err))
+					return
+				} else {
+					if f != nil {
+						_, err = osutils.DeleteFile(IBMHelmValuesFile)
+						if err != nil {
+							UpdateOutcome(event, fmt.Errorf("error deleting file [%s]. Err: [%v]", IBMHelmValuesFile, err))
+							return
+						}
+					}
+				}
+				pxNamespace, err := Inst().V.GetVolumeDriverNamespace()
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting portworx namespace. Err: [%v]", err))
+					return
+				}
+				cmd := fmt.Sprintf("helm get values portworx -n %s > %s", pxNamespace, IBMHelmValuesFile)
+				log.Infof("Running command: %v ", cmd)
+				_, _, err = osutils.ExecShell(cmd)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting values for portworx helm chart. Err: [%v]", err))
+					return
+				}
+				f, err := osutils.FileExists(IBMHelmValuesFile)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error checking for file [%s]. Err: [%v]", IBMHelmValuesFile, err))
+					return
+				}
+				if f == nil {
+					UpdateOutcome(event, fmt.Errorf("file [%s] does not exist", IBMHelmValuesFile))
+					return
+				}
+				cmd = fmt.Sprintf("sed -i 's/imageVersion.*/imageVersion: %s/' %s", nextPXVersion, IBMHelmValuesFile)
+				log.Infof("Running command: %v ", cmd)
+				_, _, err = osutils.ExecShell(cmd)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error updating px version in [%s]. Err: [%v]", IBMHelmValuesFile, err))
+					return
+				}
+				dashStats := make(map[string]string)
+				dashStats["upgrade-hop"] = upgradeHop
+				updateLongevityStats(UpgradeVolumeDriverFromCatalog, stats.UpgradeVolumeDriverFromCatalogEventName, dashStats)
+				cmd = fmt.Sprintf("helm upgrade portworx -n %s -f %s %s/portworx --debug", pxNamespace, IBMHelmValuesFile, IBMHelmRepoName)
+				log.Infof("Running command: %v ", cmd)
+				_, _, err = osutils.ExecShell(cmd)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error running helm upgrade for portworx. Err: [%v]", err))
+					return
+				}
+				time.Sleep(2 * time.Minute)
+				stc, err := Inst().V.GetDriver()
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting storage cluster spec. Err: [%v]", err))
+					return
+				}
+				k8sVersion, err := core.Instance().GetVersion()
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting k8s version. Err: [%v]", err))
+					return
+				}
+				imageList, err := oputil.GetImagesFromVersionURL(upgradeHop, k8sVersion.String())
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting images using URL [%s] and k8s version [%s]. Err: [%v]", upgradeHop, k8sVersion.String(), err))
+					return
+				}
+				err = oputil.ValidateStorageCluster(imageList, stc, ValidateStorageClusterTimeout, defaultRetryInterval, true)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error validating storage cluster after upgrade. Err: [%v]", err))
+					return
+				}
+				timeAfterUpgrade = time.Now()
+				durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
+				expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
+				upgradeStatus := "PASS"
+				if durationInMins <= expectedUpgradeTime {
+					log.InfoD("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
+				} else {
+					log.Warnf("Upgrade took %d minutes more than expected time %d to complete minutes", durationInMins, expectedUpgradeTime)
+					UpdateOutcome(event, fmt.Errorf("upgrade took [%v] minutes more than expected time [%v] to complete minutes", durationInMins, expectedUpgradeTime))
+					upgradeStatus = "FAIL"
+				}
+				endpoint, version, err := SplitStorageDriverUpgradeURL(upgradeHop)
+				if err != nil {
+					log.InfoD("Error upgrading volume driver, Err: %v", err.Error())
+				}
+				log.InfoD("Updating from catalog StorageDriverUpgradeEndpoint: URL from [%s] to [%s], Version from [%s] to [%s]", Inst().StorageDriverUpgradeEndpointURL, endpoint, Inst().StorageDriverUpgradeEndpointVersion, version)
+				Inst().StorageDriverUpgradeEndpointURL = endpoint
+				Inst().StorageDriverUpgradeEndpointVersion = version
+				err = ValidatePxLicenseSummary()
+				if err != nil {
+					err := fmt.Errorf("failed to validate license summary after upgrade. Err: [%v]", err)
+					UpdateOutcome(event, err)
+				}
+				updatedPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting updated driver version on node [%s], Err: [%v]", storageNodes[0].Name, err))
+					return
+				}
+				majorVersion := strings.Split(currPXVersion, "-")[0]
+				statsData := make(map[string]string)
+				statsData["numOfNodes"] = fmt.Sprintf("%d", numOfNodes)
+				statsData["fromVersion"] = currPXVersion
+				statsData["toVersion"] = updatedPXVersion
+				statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)
+				statsData["status"] = upgradeStatus
+				dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
+				// Validate Apps after volume driver upgrade
+				ValidateApplications(*contexts)
+			}
+		})
+		err := ValidateDataIntegrity(contexts)
+		UpdateOutcome(event, err)
+		updateMetrics(*event)
+	})
 }
 
 // TriggerUpgradeStork performs upgrade of the stork

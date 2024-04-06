@@ -535,6 +535,7 @@ func populateIntervals() {
 	triggerInterval[LocalSnapShot] = make(map[int]time.Duration)
 	triggerInterval[DeleteLocalSnapShot] = make(map[int]time.Duration)
 	triggerInterval[UpgradeVolumeDriver] = make(map[int]time.Duration)
+	triggerInterval[UpgradeVolumeDriverFromCatalog] = make(map[int]time.Duration)
 	triggerInterval[AppTasksDown] = make(map[int]time.Duration)
 	triggerInterval[AutoFsTrim] = make(map[int]time.Duration)
 	triggerInterval[UpdateVolume] = make(map[int]time.Duration)
@@ -1441,6 +1442,13 @@ func populateIntervals() {
 	triggerInterval[UpgradeVolumeDriver][7] = 4 * baseInterval
 	triggerInterval[UpgradeVolumeDriver][6] = 5 * baseInterval
 	triggerInterval[UpgradeVolumeDriver][5] = 6 * baseInterval
+
+	triggerInterval[UpgradeVolumeDriverFromCatalog][10] = 1 * baseInterval
+	triggerInterval[UpgradeVolumeDriverFromCatalog][9] = 2 * baseInterval
+	triggerInterval[UpgradeVolumeDriverFromCatalog][8] = 3 * baseInterval
+	triggerInterval[UpgradeVolumeDriverFromCatalog][7] = 4 * baseInterval
+	triggerInterval[UpgradeVolumeDriverFromCatalog][6] = 5 * baseInterval
+	triggerInterval[UpgradeVolumeDriverFromCatalog][5] = 6 * baseInterval
 
 	triggerInterval[KVDBFailover][10] = 1 * baseInterval
 	triggerInterval[KVDBFailover][9] = 2 * baseInterval
