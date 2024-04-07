@@ -1,6 +1,7 @@
 package anthos
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -14,15 +15,21 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-version"
+	anthosops "github.com/portworx/sched-ops/k8s/anthos"
 	"github.com/portworx/sched-ops/k8s/core"
 	k8s "github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
+	gkeonprem "google.golang.org/api/gkeonprem/v1"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/cluster-api/pkg/apis/deprecated/v1alpha1"
 )
 
 type Gcp struct {
@@ -116,6 +123,9 @@ const (
 	logCollectFrequencyDuration  = 15 * time.Minute
 	defaultTestConnectionTimeout = 15 * time.Minute
 	defaultWaitUpgradeRetry      = 10 * time.Second
+	project                      = "portworx-eng"
+	location                     = "us-west1"
+	storagePDBMinAvailable       = "portworx.io/storage-pdb-min-available"
 )
 
 var (
@@ -167,6 +177,7 @@ type AnthosInstance struct {
 type anthos struct {
 	version string
 	kube.K8s
+	Ops                 anthosops.Ops
 	adminWsSSHInstance  *ssh.SSH
 	instances           []AnthosInstance
 	adminWsNode         *node.Node
@@ -174,6 +185,8 @@ type anthos struct {
 	instPath            string
 	confPath            string
 	adminClusterUpgrade bool
+	clusterName         string
+	cluster             *v1alpha1.Cluster
 }
 
 // Init Initialize the driver
@@ -184,6 +197,7 @@ func (anth *anthos) Init(schedOpts scheduler.InitOptions) error {
 	if schedOpts.AnthosInstancePath == "" {
 		return fmt.Errorf("anthos conf path is needed for anthos scheduler")
 	}
+	anth.Ops = anthosops.Instance()
 	anth.adminWsSSHInstance = &ssh.SSH{}
 	anth.adminWsNode = &node.Node{}
 	anth.instPath = schedOpts.AnthosInstancePath
@@ -210,6 +224,13 @@ func (anth *anthos) Init(schedOpts scheduler.InitOptions) error {
 	if len(schedOpts.UpgradeHops) > 0 && len(strings.Split(schedOpts.UpgradeHops, ",")) > 1 {
 		anth.adminClusterUpgrade = true
 	}
+	if err := anth.getUserClusterName(); err != nil {
+		return err
+	}
+	if err := anth.GetCluster(); err != nil {
+		return err
+	}
+	log.Infof("Successfully retrieved cluster: %v", anth.cluster)
 	log.Infof("Skip admin cluster upgrade is: [%t]", anth.adminClusterUpgrade)
 	return nil
 }
@@ -460,13 +481,9 @@ func (anth *anthos) upgradeUserCluster(version string) error {
 	logChan := make(chan bool)
 	enableControlplaneV2 := false
 	controlPlaneEnableReg := regexp.MustCompile(`enableControlplaneV2:\s+true`)
-	userClusterName, err := anth.getUserClusterName()
-	if err != nil {
-		return err
-	}
 	// Describe user cluster command help to identify dataplanev2 cluster
 	cmd := fmt.Sprintf("%s --kubeconfig %s --cluster %s",
-		userClusterDescribeCmd, adminKubeconfPath, userClusterName)
+		userClusterDescribeCmd, adminKubeconfPath, anth.clusterName)
 	log.Debugf("Executing command: %s", cmd)
 	out, err := anth.execOnAdminWSNode(cmd)
 	if err != nil {
@@ -478,7 +495,7 @@ func (anth *anthos) upgradeUserCluster(version string) error {
 		enableControlplaneV2 = true
 	}
 
-	upgradeLogger := anth.startLogCollector(logChan, userClusterName, enableControlplaneV2)
+	upgradeLogger := anth.startLogCollector(logChan, anth.clusterName, enableControlplaneV2)
 	cmd = fmt.Sprintf("%s%s.tgz  --kubeconfig %s", upgradePrepareCmd, version, adminKubeconfPath)
 	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
 		return fmt.Errorf("preparing user cluster for upgrade is failing: [%s]. Err: (%v)", out, err)
@@ -587,51 +604,44 @@ func (anth *anthos) unsetUserNameAndKey() error {
 // checkUserClusterNodesUpgradeTime measure the time taken by each node and report error
 func (anth *anthos) checkUserClusterNodesUpgradeTime() error {
 	log.Info("Validating user cluster nodes upgrade time")
-	userCluster, err := anth.getUserClusterName()
-	if err != nil {
-		return err
-	}
-	initNodeUpgradeTime, err := anth.getStartTimeForNodePoolUpgrade(userCluster)
+	initNodeUpgradeTime, err := anth.getStartTimeForNodePoolUpgrade(anth.clusterName)
 	if err != nil {
 		return err
 	}
 	log.Debugf("User cluster node pool upgrade started at: [%v]", initNodeUpgradeTime.Format(time.UnixDate))
+	storagePdbVal, err := getStoragePDBMinAvailableSet()
+	if err != nil {
+		return err
+	}
+	log.Debugf("Storage PDB value is set to : [%d]", storagePdbVal)
 	sortedNodes, err := getNodesSortByAge()
 	if err != nil {
 		return err
 	}
+	nPoolsMap, err := getNodePoolMap(sortedNodes)
+	if err != nil {
+		return fmt.Errorf("failed to get number of node pools for a cluster: %s. Err: %v", anth.clusterName, err)
+	}
+	log.Debugf("User cluster contains [%d] node pools", len(nPoolsMap))
+	maxNode, err := anth.getMaxNodesUpgraded(len(sortedNodes), storagePdbVal)
+	log.Debugf("[%d] of nodes can be upgraded at same time", maxNode)
+	if len(nPoolsMap) > 1 && storagePdbVal > 1 && maxNode > 1 {
+		log.Info("Last Anthos cluster upgrade was parallel upgrade")
+		return getParallelUpgradeTime(initNodeUpgradeTime, sortedNodes, maxNode)
+	}
 
-	// As PX support one extra static IP across all node pool
-	// this means Anthos node upgrade will be sequential
-	startTime := initNodeUpgradeTime
-	errorMessages := make([]string, 0)
-	for _, node := range sortedNodes {
-		diff := node.CreationTimestamp.Sub(startTime)
-		log.Infof("[%s] node took: [%v] time to upgrade the node", node.Name, diff)
-		if diff > errorTimeDuration {
-			errorMessages = append(errorMessages, fmt.Sprintf("[%s] node upgrade took: [%v] minutes which is longer than the expected timeout value: [%v]",
-				node.Name, diff, errorTimeDuration))
-		}
-		startTime = node.CreationTimestamp.Time
-	}
-	if len(errorMessages) > 0 {
-		for _, errMsg := range errorMessages {
-			log.Errorf(errMsg)
-		}
-		return fmt.Errorf("anthos node upgrade time exceeded the expected time")
-	}
-	return nil
+	return getSequentialUpgradeTime(initNodeUpgradeTime, sortedNodes)
 }
 
-// getUserClusterName return Anthos user cluster name
-func (anth *anthos) getUserClusterName() (string, error) {
+// getUserClusterName update Anthos cluster name
+func (anth *anthos) getUserClusterName() error {
 	log.Info("Retrieving user cluster name")
 	var userCluster string
 	// Listing user cluster to get user cluster name
 	cmd := fmt.Sprintf("%s --kubeconfig %s clusters |grep -v NAME", listUserClustersCmd, adminKubeconfPath)
 	out, err := anth.execOnAdminWSNode(cmd)
 	if err != nil {
-		return "", fmt.Errorf("listing user clusters is failing: [%s]. Err: (%v)", out, err)
+		return fmt.Errorf("listing user clusters is failing: [%s]. Err: (%v)", out, err)
 	}
 	userClusters := strings.Split(out, "\n")
 	for _, cluster := range userClusters {
@@ -640,10 +650,11 @@ func (anth *anthos) getUserClusterName() (string, error) {
 		break
 	}
 	if userCluster == "" {
-		return "", fmt.Errorf("failed to find user cluster name")
+		return fmt.Errorf("failed to find user cluster name")
 	}
 	log.Infof("Successfully retrieved user cluster name: [%s]", userCluster)
-	return userCluster, nil
+	anth.clusterName = userCluster
+	return nil
 }
 
 // getStartTimeForNodePoolUpgrade return start time when node pool upgrade started
@@ -768,7 +779,6 @@ func (anth *anthos) startLogCollector(logChan chan bool, clusterName string, ena
 		}
 	}()
 	return logTicker
-
 }
 
 // stopLogCollector stop ticker for collecting upgrade logs
@@ -778,17 +788,69 @@ func (anth *anthos) stopLogCollector(logTicker *time.Ticker, logChan chan bool) 
 	logChan <- true
 }
 
-// getNodesSortByAge return sorted node list by their age
+// GetNumberOfNodePool return number of nodes pools in a cluster
+func (anth *anthos) GetNumberOfNodePools() (int, error) {
+	nodePoolList, err := anth.Ops.ListVMwareNodePools(project, location, anth.clusterName)
+	if err != nil {
+		return -1, err
+	}
+	listNodePoolResp := &gkeonprem.ListVmwareNodePoolsResponse{}
+	if err = json.Unmarshal(nodePoolList, listNodePoolResp); err != nil {
+		return -1, fmt.Errorf("fail to unmarshal list node pool response. Err: %v", err)
+	}
+	return len(listNodePoolResp.VmwareNodePools), nil
+}
+
+// getMaxNodesUpgraded return max number of nodes can be upgraded at a time.
+func (anth *anthos) getMaxNodesUpgraded(totalNodes int, storagePdbVal int) (int, error) {
+	maxNodesCanBeUpgraded := 1
+	// Retrieving extra static IPs for a upgrade
+	if anth.cluster.Spec.ProviderSpec.Value != nil {
+		//extraStaticIP := len(anth.vmwareCluster.NetworkConfig.StaticIpConfig.IpBlocks) - totalNodes
+		extraStaticIP := 1
+		if extraStaticIP > maxNodesCanBeUpgraded {
+			maxNodesCanBeUpgraded = extraStaticIP
+		}
+	}
+	if storagePdbVal == 0 || maxNodesCanBeUpgraded < storagePdbVal {
+		return maxNodesCanBeUpgraded, nil
+	}
+	return storagePdbVal, nil
+}
+
+// GetVMWareCluster return VMwareCluster
+func (anth *anthos) GetVMwareCluster() (*gkeonprem.VmwareCluster, error) {
+	vmwareClusterResp := &gkeonprem.VmwareCluster{}
+	vmwareCluster, err := anth.Ops.GetVMwareCluster(project, location, anth.clusterName)
+	if err != nil {
+		return vmwareClusterResp, err
+	}
+	if err = json.Unmarshal(vmwareCluster, vmwareClusterResp); err != nil {
+		return vmwareClusterResp, fmt.Errorf("fail to unmarshal vmware cluster response. Err: %v", err)
+	}
+	log.Debugf("Anthos VMware cluster: %v", vmwareCluster)
+	return vmwareClusterResp, nil
+}
+
+// GetCluster return cluster objects
+func (anth *anthos) GetCluster() error {
+	cluster, err := anth.Ops.GetCluster(context.TODO(), anth.clusterName, v1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to get cluster: [%s]. Err: %v", anth.clusterName, err)
+	}
+	anth.cluster = cluster
+	return nil
+}
+
+// getNodesSortByAge return node pool map by their age
 func getNodesSortByAge() ([]corev1.Node, error) {
 	nodeList, err := k8sCore.GetNodes()
 	if err != nil {
 		return nil, err
 	}
-
 	sort.Slice(nodeList.Items, func(i, j int) bool {
 		return nodeList.Items[i].CreationTimestamp.Before(&nodeList.Items[j].CreationTimestamp)
 	})
-
 	log.Infof("Successfully retrieved sorted nodes: [%v]", nodeList.Items)
 	return nodeList.Items, nil
 }
@@ -842,6 +904,108 @@ func getExecPath() (string, error) {
 	envPath := strings.TrimSpace(string(execPath))
 	return fmt.Sprintf("PATH=%s:%s:%s", curWkDir, envPath, gcloudExecPath), nil
 
+}
+
+// getStoragePDBMinAvailableSet return storage min PDB value if set else ""
+func getStoragePDBMinAvailableSet() (int, error) {
+	pxOperator := operator.Instance()
+	schedOps, err := schedops.Get(SchedName)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get driver for scheduler: %s. Err: %v", SchedName, err)
+	}
+	pxNameSpace, err := schedOps.GetPortworxNamespace()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get portworx namespace. Err: %v", err)
+	}
+	stcList, err := pxOperator.ListStorageClusters(pxNameSpace)
+	if err != nil {
+		return 0, fmt.Errorf("Failed get StorageCluster list from namespace [%s], Err: %v", pxNameSpace, err)
+	}
+
+	stc, err := pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get StorageCluster [%s] from namespace [%s], Err: %v", stcList.Items[0].Name, stcList.Items[0].Namespace, err.Error())
+	}
+	val, ok := stc.Annotations[storagePDBMinAvailable]
+	if !ok {
+		return 0, nil
+	}
+	pdbVal, err := strconv.Atoi(val)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse pdb value. Err: %v", err)
+	}
+	return pdbVal, nil
+}
+
+// getNodePoolMap return node pool map
+func getNodePoolMap(nodeList []corev1.Node) (map[int][]corev1.Node, error) {
+	nodePoolMap := make(map[int][]corev1.Node)
+	for _, node := range nodeList {
+		poolVal, ok := node.Labels[labelKey]
+		if ok && poolVal != "" {
+			key, err := strconv.Atoi(strings.Split(poolVal, "-")[1])
+			if err != nil {
+				return nodePoolMap, err
+			}
+			poolList, ok := nodePoolMap[key]
+			if !ok {
+				poolList = make([]corev1.Node, 0)
+			}
+			nodePoolMap[key] = append(poolList, node)
+		}
+	}
+	for _, poolNodeList := range nodePoolMap {
+		sort.Slice(poolNodeList, func(i, j int) bool {
+			return poolNodeList[i].CreationTimestamp.Before(&poolNodeList[j].CreationTimestamp)
+		})
+	}
+	return nodePoolMap, nil
+}
+
+// getSequentialUpgradeTime calculate upgrade times for sequential upgrade
+func getSequentialUpgradeTime(upgradeStartTime time.Time, sortedNodes []corev1.Node) error {
+	return printUpgradeTimeExceededErrorMessage(printNodeUpgradeTime(upgradeStartTime, sortedNodes))
+}
+
+// getParallelUpgradeTime calculate upgrade times for sequential upgrade
+func getParallelUpgradeTime(upgradeStartTime time.Time, sortedNodes []corev1.Node, maxNode int) error {
+	errorMessages := make([]string, 0)
+	nodePoolMap, err := getNodePoolMap(sortedNodes)
+	if err != nil {
+		return fmt.Errorf("fail to retrieve node pool map. Err: %v", err)
+	}
+	log.Debugf("Retrieved node pool map: %v", nodePoolMap)
+	for x := 0; x < len(nodePoolMap); x++ {
+		startTime := upgradeStartTime
+		errorMessages = append(errorMessages, printNodeUpgradeTime(startTime, nodePoolMap[x])...)
+	}
+	return printUpgradeTimeExceededErrorMessage(errorMessages)
+}
+
+// printNodeUpgradeTime print time taken by node upgrade
+func printNodeUpgradeTime(startTime time.Time, sortedNodes []corev1.Node) []string {
+	errorMessages := make([]string, 0)
+	for _, node := range sortedNodes {
+		diff := node.CreationTimestamp.Sub(startTime)
+		log.Infof("[%s] node took: [%v] time to upgrade the node", node.Name, diff)
+		if diff > errorTimeDuration {
+			errorMessages = append(errorMessages, fmt.Sprintf("[%s] node upgrade took: [%v] minutes which is longer than the expected timeout value: [%v]",
+				node.Name, diff, errorTimeDuration))
+		}
+		startTime = node.CreationTimestamp.Time
+	}
+	return errorMessages
+}
+
+// printUpgradeTimeExceededErrorMessage print error messages
+func printUpgradeTimeExceededErrorMessage(errorMessages []string) error {
+	if len(errorMessages) > 0 {
+		for _, errMsg := range errorMessages {
+			log.Errorf(errMsg)
+		}
+		return fmt.Errorf("anthos node upgrade time exceeded the expected time")
+	}
+	return nil
 }
 
 // init registering anthos sheduler

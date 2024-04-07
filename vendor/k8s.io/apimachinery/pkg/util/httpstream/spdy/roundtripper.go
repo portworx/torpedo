@@ -18,11 +18,13 @@ package spdy
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -65,6 +67,12 @@ type SpdyRoundTripper struct {
 	// Used primarily for mocking the proxy discovery in tests.
 	proxier func(req *http.Request) (*url.URL, error)
 
+	// followRedirects indicates if the round tripper should examine responses for redirects and
+	// follow them.
+	followRedirects bool
+	// requireSameHostRedirects restricts redirect following to only follow redirects to the same host
+	// as the original request.
+	requireSameHostRedirects bool
 	// pingPeriod is a period for sending Ping frames over established
 	// connections.
 	pingPeriod time.Duration
@@ -76,18 +84,22 @@ var _ utilnet.Dialer = &SpdyRoundTripper{}
 
 // NewRoundTripper creates a new SpdyRoundTripper that will use the specified
 // tlsConfig.
-func NewRoundTripper(tlsConfig *tls.Config) *SpdyRoundTripper {
+func NewRoundTripper(tlsConfig *tls.Config, followRedirects, requireSameHostRedirects bool) *SpdyRoundTripper {
 	return NewRoundTripperWithConfig(RoundTripperConfig{
-		TLS: tlsConfig,
+		TLS:                      tlsConfig,
+		FollowRedirects:          followRedirects,
+		RequireSameHostRedirects: requireSameHostRedirects,
 	})
 }
 
 // NewRoundTripperWithProxy creates a new SpdyRoundTripper that will use the
 // specified tlsConfig and proxy func.
-func NewRoundTripperWithProxy(tlsConfig *tls.Config, proxier func(*http.Request) (*url.URL, error)) *SpdyRoundTripper {
+func NewRoundTripperWithProxy(tlsConfig *tls.Config, followRedirects, requireSameHostRedirects bool, proxier func(*http.Request) (*url.URL, error)) *SpdyRoundTripper {
 	return NewRoundTripperWithConfig(RoundTripperConfig{
-		TLS:     tlsConfig,
-		Proxier: proxier,
+		TLS:                      tlsConfig,
+		FollowRedirects:          followRedirects,
+		RequireSameHostRedirects: requireSameHostRedirects,
+		Proxier:                  proxier,
 	})
 }
 
@@ -98,9 +110,11 @@ func NewRoundTripperWithConfig(cfg RoundTripperConfig) *SpdyRoundTripper {
 		cfg.Proxier = utilnet.NewProxierWithNoProxyCIDR(http.ProxyFromEnvironment)
 	}
 	return &SpdyRoundTripper{
-		tlsConfig:  cfg.TLS,
-		proxier:    cfg.Proxier,
-		pingPeriod: cfg.PingPeriod,
+		tlsConfig:                cfg.TLS,
+		followRedirects:          cfg.FollowRedirects,
+		requireSameHostRedirects: cfg.RequireSameHostRedirects,
+		proxier:                  cfg.Proxier,
+		pingPeriod:               cfg.PingPeriod,
 	}
 }
 
@@ -113,6 +127,9 @@ type RoundTripperConfig struct {
 	// PingPeriod is a period for sending SPDY Pings on the connection.
 	// Optional.
 	PingPeriod time.Duration
+
+	FollowRedirects          bool
+	RequireSameHostRedirects bool
 }
 
 // TLSClientConfig implements pkg/util/net.TLSClientConfigHolder for proper TLS checking during
@@ -262,8 +279,17 @@ func (s *SpdyRoundTripper) tlsConn(ctx context.Context, rwc net.Conn, targetHost
 
 	tlsConn := tls.Client(rwc, tlsConfig)
 
+	// need to manually call Handshake() so we can call VerifyHostname() below
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
-		tlsConn.Close()
+		return nil, err
+	}
+
+	// Return if we were configured to skip validation
+	if tlsConfig.InsecureSkipVerify {
+		return tlsConn, nil
+	}
+
+	if err := tlsConn.VerifyHostname(tlsConfig.ServerName); err != nil {
 		return nil, err
 	}
 
@@ -273,20 +299,46 @@ func (s *SpdyRoundTripper) tlsConn(ctx context.Context, rwc net.Conn, targetHost
 // dialWithoutProxy dials the host specified by url, using TLS if appropriate.
 func (s *SpdyRoundTripper) dialWithoutProxy(ctx context.Context, url *url.URL) (net.Conn, error) {
 	dialAddr := netutil.CanonicalAddr(url)
-	dialer := s.Dialer
-	if dialer == nil {
-		dialer = &net.Dialer{}
-	}
 
 	if url.Scheme == "http" {
-		return dialer.DialContext(ctx, "tcp", dialAddr)
+		if s.Dialer == nil {
+			var d net.Dialer
+			return d.DialContext(ctx, "tcp", dialAddr)
+		} else {
+			return s.Dialer.DialContext(ctx, "tcp", dialAddr)
+		}
 	}
 
-	tlsDialer := tls.Dialer{
-		NetDialer: dialer,
-		Config:    s.tlsConfig,
+	// TODO validate the TLSClientConfig is set up?
+	var conn *tls.Conn
+	var err error
+	if s.Dialer == nil {
+		conn, err = tls.Dial("tcp", dialAddr, s.tlsConfig)
+	} else {
+		conn, err = tls.DialWithDialer(s.Dialer, "tcp", dialAddr, s.tlsConfig)
 	}
-	return tlsDialer.DialContext(ctx, "tcp", dialAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return if we were configured to skip validation
+	if s.tlsConfig != nil && s.tlsConfig.InsecureSkipVerify {
+		return conn, nil
+	}
+
+	host, _, err := net.SplitHostPort(dialAddr)
+	if err != nil {
+		return nil, err
+	}
+	if s.tlsConfig != nil && len(s.tlsConfig.ServerName) > 0 {
+		host = s.tlsConfig.ServerName
+	}
+	err = conn.VerifyHostname(host)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
 }
 
 // proxyAuth returns, for a given proxy URL, the value to be used for the Proxy-Authorization header
@@ -303,20 +355,39 @@ func (s *SpdyRoundTripper) proxyAuth(proxyURL *url.URL) string {
 // clients may call SpdyRoundTripper.Connection() to retrieve the upgraded
 // connection.
 func (s *SpdyRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	req = utilnet.CloneRequest(req)
-	req.Header.Add(httpstream.HeaderConnection, httpstream.HeaderUpgrade)
-	req.Header.Add(httpstream.HeaderUpgrade, HeaderSpdy31)
+	header := utilnet.CloneHeader(req.Header)
+	header.Add(httpstream.HeaderConnection, httpstream.HeaderUpgrade)
+	header.Add(httpstream.HeaderUpgrade, HeaderSpdy31)
 
-	conn, err := s.Dial(req)
+	var (
+		conn        net.Conn
+		rawResponse []byte
+		err         error
+	)
+
+	if s.followRedirects {
+		conn, rawResponse, err = utilnet.ConnectWithRedirects(req.Method, req.URL, header, req.Body, s, s.requireSameHostRedirects)
+	} else {
+		clone := utilnet.CloneRequest(req)
+		clone.Header = header
+		conn, err = s.Dial(clone)
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	responseReader := bufio.NewReader(conn)
+	responseReader := bufio.NewReader(
+		io.MultiReader(
+			bytes.NewBuffer(rawResponse),
+			conn,
+		),
+	)
 
 	resp, err := http.ReadResponse(responseReader, nil)
 	if err != nil {
-		conn.Close()
+		if conn != nil {
+			conn.Close()
+		}
 		return nil, err
 	}
 
