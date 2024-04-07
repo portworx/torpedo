@@ -45,7 +45,7 @@ var _ = Describe("{LegacySharedVolumeCreate}", func() {
 		log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume {%v}", volumeName))
 		dash.VerifyFatal(vol.Spec.Sharedv4, true, "sharedv4 volume was not created")
 		dash.VerifyFatal(vol.Spec.Shared, false, "shared volume was created unexpectedly")
-		pxctlCmdFull = fmt.Sprintf("v d %s", volumeName)
+		pxctlCmdFull = fmt.Sprintf("v d %s --force", volumeName)
 		output, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 		log.FailOnError(err, fmt.Sprintf("error deleting legacy shared volume %s", volumeName))
 	})
@@ -248,7 +248,7 @@ var _ = Describe("{LegacySharedVolumeMigrate_CreateIdle}", func() {
 			time.Sleep(1 * time.Minute)
 		}
 		dash.VerifyFatal(migrated, true, fmt.Sprintf("migration failed on volume [%v]", volumeName))
-		pxctlCmdFull = fmt.Sprintf("v d %s", volumeName)
+		pxctlCmdFull = fmt.Sprintf("v d %s --force", volumeName)
 		Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 	})
 	JustAfterEach(func() {
