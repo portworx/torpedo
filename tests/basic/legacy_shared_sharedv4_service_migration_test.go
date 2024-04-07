@@ -60,7 +60,7 @@ func setCreateLegacySharedAsSharedv4Service(on bool) {
 	pxNode := GetRandomNode(pxNodes)
 	log.Infof("Setting Creation of Legacy shared volumes")
 	var pxctlCmdFull string
-	pxctlCmdFull = fmt.Sprintf("cluster update option --create-legacy-shared-as-sharedv4-service=%t", on)
+	pxctlCmdFull = fmt.Sprintf("cluster options update --create-legacy-shared-as-sharedv4-service=%t", on)
 	_, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 	log.FailOnError(err, fmt.Sprintf("error updating cluster option"))
 	// Sleep so that the config variable can be updated on all nodes.
@@ -73,7 +73,7 @@ func setMigrateLegacySharedToSharedv4Service(on bool) {
 	pxNode := GetRandomNode(pxNodes)
 	log.Infof("Turning on Migration of Legacy shared volumes")
 	var pxctlCmdFull string
-	pxctlCmdFull = fmt.Sprintf("cluster update option --migrate-legacy-shared-to-sharedv4-service=%t", on)
+	pxctlCmdFull = fmt.Sprintf("cluster options update --migrate-legacy-shared-to-sharedv4-service=%t", on)
 	_, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 	log.FailOnError(err, fmt.Sprintf("error updating cluster option"))
 	// Sleep so that the config variable can be updated on all nodes.
