@@ -4395,7 +4395,20 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	for _, vol := range vols {
 		log.Infof("K8s.GetVolumes() found volume %s for app %s", vol.Name, ctx.App.Key)
 	}
-	return vols, nil
+	// Filtering out duplicate volumes
+	var uniqueVols []*volume.Volume
+	// vol.Name is used as the key because GetVolumes might be called before the PVC
+	// is bound, leaving vol.ID empty
+	var volNameTrackerMap = make(map[string]bool)
+	for _, vol := range vols {
+		if _, found := volNameTrackerMap[vol.Name]; found {
+			log.Warnf("duplicate volume found ID: [%s], Name: [%s], Namespace: [%s]", vol.ID, vol.Name, vol.Namespace)
+			continue
+		}
+		volNameTrackerMap[vol.Name] = true
+		uniqueVols = append(uniqueVols, vol)
+	}
+	return uniqueVols, nil
 }
 
 // GetPureVolumes  Get the Pure volumes (if enabled) by type (PureFile or PureBlock)
