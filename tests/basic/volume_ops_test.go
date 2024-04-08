@@ -3259,6 +3259,12 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 	// check the size left in the node
 	itLog := "honor OverCommitPercent when resizing the volume"
 	It(itLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plflcs-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 		poolIDToResize = pickPoolToResize()
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
@@ -3287,8 +3293,6 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			log.InfoD("The Current Cluster options: %v", output)
 			log.InfoD("Successfully set cluster options")
 		})
-		// check the overall storage pool capacity of a particular node
-
 		// create a volume with a base size , for eg: 10 GB
 		stepLog = "Create a volume with a base size , for eg: 10 GB"
 		Step(stepLog, func() {
