@@ -80,7 +80,6 @@ func CreateStorageConfigTemplate(tenantId string, dsName string, templateConfigs
 }
 
 func CreateResourceConfigTemplate(tenantId string, dsName string, templateConfigs ResourceConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
-	log.InfoD("DSNAME fetched is- [%v]", dsName)
 	revisionUid, err := GetRevisionUidForApplication(dsName)
 	templateName := "pdsAutoResTemp" + utilities.RandomString(5)
 	templateValue := structToMap(templateConfigs)

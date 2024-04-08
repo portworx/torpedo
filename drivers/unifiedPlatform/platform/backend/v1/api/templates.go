@@ -70,16 +70,12 @@ func (template *PLATFORM_API_V1) CreateTemplates(templateReq *PlatformTemplatesR
 			TemplateValues:  templateReq.Create.Template.Config.TemplateValues,
 		},
 	}
-	log.InfoD("tenantID fetched is- %v", templateReq.Create.TenantId)
 	templateCreateRequest := client.TemplateServiceCreateTemplate(ctx, templateReq.Create.TenantId)
 	templateCreateRequest = templateCreateRequest.V1Template(tempValueBody)
-	log.InfoD("Template create req formed is- %v", templateCreateRequest)
 	templateModel, res, err := templateCreateRequest.Execute()
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `TemplateServiceCreateTemplateExecute`: %v\n.Full HTTP response: %v", err, res)
 	}
-	log.InfoD("response got is- %v", *templateModel)
-	log.InfoD("App config ID- %v", *templateModel.Meta.Uid)
 	err = utilities.CopyStruct(templateModel, &templateResponse.Create)
 	return &templateResponse, err
 }

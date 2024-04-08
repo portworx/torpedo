@@ -84,7 +84,6 @@ func (tempDef *PDS_API_V1) ListTemplateRevisions() (*TemplateDefinitionResponse,
 	var tempRevisionReq tempDefv1.ApiTemplateDefinitionServiceListRevisionsRequest
 	tempRevisionReq = tempRevisionReq.ApiService.TemplateDefinitionServiceListRevisions(ctx)
 	tempRevisions, res, err := client.TemplateDefinitionServiceListRevisionsExecute(tempRevisionReq)
-	log.InfoD("rEVISON IS- [%v]", tempRevisions)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `TemplateDefinitionServiceGetRevision`: %v\n.Full HTTP response: %v", err, res)
 	}

@@ -19,7 +19,6 @@ type CustomTemplates struct {
 func (cusTemp *CustomTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *parameters.NewPDSParams, dsName string) (string, string, string, error) {
 
 	//Todo: Mechanism to populate dynamic/Unknown key-value pairs for App config
-	//ToDo: Take configurationValue incrementation count from user/testcase
 
 	//Initializing the parameters required for template generation
 	appConfigParams := pdslibs.ServiceConfiguration{
