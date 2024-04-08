@@ -3278,10 +3278,8 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		targetSizeInBytes = originalSizeInBytes - SubtractSize
 		targetSizeGiB = targetSizeInBytes / units.GiB
 		log.InfoD("Target size of the pool %s is %d", poolIDToResize, targetSizeGiB)
-		TargetsizeCeilValue := math.Ceil(float64(targetSizeGiB))
-		log.InfoD("TargetsizeCeilValue of the pool %s is %f", poolIDToResize, TargetsizeCeilValue)
-		TargetSizeFloorValue := math.Floor(float64(targetSizeGiB))
-		log.InfoD("TargetSizeFloorValue of the pool %s is %f", poolIDToResize, TargetSizeFloorValue)
+		ExceededTargetSize := targetSizeGiB + 1
+		log.InfoD("Exceeded Target size of the pool %s is %d", poolIDToResize, ExceededTargetSize)
 
 		stepLog := "Update the pxctl cluster with cluster option OverCommitPercent with the maximum storage percentage volumes can provision against backing storage set to 100(Enabeling Thick Provisioning)"
 		Step(stepLog, func() {
@@ -3312,7 +3310,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			volName := fmt.Sprintf("overcommit-test-%d", 0)
-			pxctlVolResizeCmd := fmt.Sprintf("volume update %s --size %f", volName, TargetSizeFloorValue)
+			pxctlVolResizeCmd := fmt.Sprintf("volume update %s --size %f", volName, targetSizeGiB)
 			_, err := runPxctlCommand(pxctlVolResizeCmd, *selectedNode, nil)
 			log.FailOnError(err, "Failed to resize volume: %v", volName)
 			log.InfoD("Succesfully resized volume: %v", volName)
@@ -3325,7 +3323,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			volName := fmt.Sprintf("overcommit-test-%d", 0)
-			pxctlVolResizeCmd := fmt.Sprintf("volume update %s --size %f", volName, TargetsizeCeilValue)
+			pxctlVolResizeCmd := fmt.Sprintf("volume update %s --size %f", volName, ExceededTargetSize)
 			_, err := runPxctlCommand(pxctlVolResizeCmd, node.GetStorageDriverNodes()[0], nil)
 			log.FailOnError(err, "Failed to resize volume: %v", volName)
 			log.InfoD("Succesfully resized volume: %v", volName)
