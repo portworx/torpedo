@@ -91,7 +91,7 @@ var _ = Describe("{CreateAndGetCloudCredentials}", func() {
 			log.FailOnError(err, "error occured while fetching tenantID")
 			credResp, err := platformLibs.CreateCloudCredentials(tenantId, NewPdsParams.BackUpAndRestore.TargetLocation)
 			log.FailOnError(err, "error while creating cloud creds")
-			log.Infof("creds resp [%+v]", credResp.Create.Config.Credentials.S3Credentials.AccessKey)
+			log.Infof("creds resp [%+v]", credResp.Create.Config.S3Credentials.AccessKey)
 			log.Infof("creds id [%+v]", *credResp.Create.Meta.Uid)
 
 			isconfigRequiredTrue, err := platformLibs.GetCloudCredentials(*credResp.Create.Meta.Uid, NewPdsParams.BackUpAndRestore.TargetLocation, true)
