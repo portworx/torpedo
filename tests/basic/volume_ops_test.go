@@ -3278,7 +3278,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		targetSizeInBytes = originalSizeInBytes - SubtractSize
 		targetSizeGiB = targetSizeInBytes / units.GiB
 		log.InfoD("Target size of the pool %s is %d", poolIDToResize, targetSizeGiB)
-		ExceededTargetSize := targetSizeGiB + 1
+		ExceededTargetSize := targetSizeGiB + 10
 		log.InfoD("Exceeded Target size of the pool %s is %d", poolIDToResize, ExceededTargetSize)
 
 		stepLog := "Update the pxctl cluster with cluster option OverCommitPercent with the maximum storage percentage volumes can provision against backing storage set to 100(Enabeling Thick Provisioning)"
