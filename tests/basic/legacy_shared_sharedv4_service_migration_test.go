@@ -150,9 +150,7 @@ func checkMapOfPods(sharedVolPods map[types.UID]bool, ctx *scheduler.Context) {
 			log.FailOnError(err, "Failed to get pods using Volume %v", vol.ID)
 			for _, pod := range pods {
 				_, ok := sharedVolPods[pod.UID]
-				if ok {
-					dash.VerifyFatal(ok, true, fmt.Sprintf("pod using shared volume prior to migration remains after migration [%v]", pod.Name))
-				}
+				dash.VerifyFatal(ok, false, fmt.Sprintf("pod using shared volume prior to migration remains after migration [%v]", pod.Name))
 			}
 		}
 	}
