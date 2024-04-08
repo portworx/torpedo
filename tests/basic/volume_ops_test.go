@@ -3277,6 +3277,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		SubtractSize := (SnapshotPercent * originalSizeInBytes) / 100
 		targetSizeInBytes = originalSizeInBytes - SubtractSize
 		targetSizeGiB = targetSizeInBytes / units.GiB
+		log.InfoD("Target size of the pool %s is %d", poolIDToResize, targetSizeGiB)
 		TargetsizeCeilValue := math.Ceil(float64(targetSizeGiB))
 		log.InfoD("TargetsizeCeilValue of the pool %s is %f", poolIDToResize, TargetsizeCeilValue)
 		TargetSizeFloorValue := math.Floor(float64(targetSizeGiB))
@@ -3288,10 +3289,10 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			//clusterOpts := make(map[string]string)
 			//clusterOpts["--provisioning-commit-labels"] = "'[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30} ]'\n\n\n"
 			//err := Inst().V.SetClusterOpts(*selectedNode, clusterOpts)
-			SetClusterOptionscmd := "pxctl cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30} ]'"
+			SetClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30} ]'"
 			_, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
 			log.FailOnError(err, "Failed to set cluster options")
-			ClusterOptionsValidationcmd := "pxctl cluster options list -j | jq -r '.ProvisionCommitRule'"
+			ClusterOptionsValidationcmd := "cluster options list -j | jq -r '.ProvisionCommitRule'"
 			output, err := runPxctlCommand(ClusterOptionsValidationcmd, *selectedNode, nil)
 			log.InfoD("The Current Cluster options: %v", output)
 			log.InfoD("Successfully set cluster options")
@@ -3311,7 +3312,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			volName := fmt.Sprintf("overcommit-test-%d", 0)
-			pxctlVolResizeCmd := fmt.Sprintf("pxctl vol update %s --size %f", volName, TargetSizeFloorValue)
+			pxctlVolResizeCmd := fmt.Sprintf("volume update %s --size %f", volName, TargetSizeFloorValue)
 			_, err := runPxctlCommand(pxctlVolResizeCmd, *selectedNode, nil)
 			log.FailOnError(err, "Failed to resize volume: %v", volName)
 			log.InfoD("Succesfully resized volume: %v", volName)
@@ -3324,7 +3325,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			volName := fmt.Sprintf("overcommit-test-%d", 0)
-			pxctlVolResizeCmd := fmt.Sprintf("pxctl v update %s --size %f", volName, TargetsizeCeilValue)
+			pxctlVolResizeCmd := fmt.Sprintf("volume update %s --size %f", volName, TargetsizeCeilValue)
 			_, err := runPxctlCommand(pxctlVolResizeCmd, node.GetStorageDriverNodes()[0], nil)
 			log.FailOnError(err, "Failed to resize volume: %v", volName)
 			log.InfoD("Succesfully resized volume: %v", volName)
@@ -3334,9 +3335,8 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		stepLog = "Revert back the imposed cluster options"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			clusterOpts := make(map[string]string)
-			clusterOpts["--provisioning-commit-labels"] = "\n'[]'"
-			err := Inst().V.SetClusterOpts(*selectedNode, clusterOpts)
+			SetClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[]'"
+			_, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
 			log.FailOnError(err, "Failed to set cluster options")
 			log.InfoD("Successfully set cluster options")
 		})
