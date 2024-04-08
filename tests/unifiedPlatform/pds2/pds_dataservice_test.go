@@ -3,7 +3,7 @@ package tests
 import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -16,8 +16,8 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 		StartTorpedoTest("DeployDataServicesOnDemandAndScaleUp", "Deploy data services and perform scale up", nil, 0)
 	})
 	var (
-		workflowDataservice stworkflows.WorkflowDataService
-		workFlowTemplates   stworkflows.CustomTemplates
+		workflowDataservice pds.WorkflowDataService
+		workFlowTemplates   pds.CustomTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 		updateDeployment    *automationModels.PDSDeploymentResponse
 		err                 error
@@ -90,8 +90,8 @@ var _ = Describe("{UpgradeDataServiceImageAndVersion}", func() {
 		StartTorpedoTest("UpgradeDataServiceImage", "Upgrade Data Service Version and Image", nil, 0)
 	})
 	var (
-		workflowDataservice stworkflows.WorkflowDataService
-		workFlowTemplates   stworkflows.CustomTemplates
+		workflowDataservice pds.WorkflowDataService
+		workFlowTemplates   pds.CustomTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 		err                 error
 	)
@@ -162,8 +162,8 @@ var _ = Describe("{ScaleUpCpuMemLimitsOfDS}", func() {
 		StartTorpedoTest("ScaleUpCpuMemLimitsOfDS", "Deploy a dataservice and scale up its CPU/MEM limits by editing the respective template", nil, 0)
 	})
 	var (
-		workflowDataservice stworkflows.WorkflowDataService
-		workFlowTemplates   stworkflows.CustomTemplates
+		workflowDataservice pds.WorkflowDataService
+		workFlowTemplates   pds.CustomTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 	)
 	It("Deploy and Validate DataService", func() {
@@ -214,8 +214,8 @@ var _ = Describe("{IncreasePVCby1gb}", func() {
 		StartTorpedoTest("IncreasePVCby1gb", "Deploy a dataservice and increase it Storage Size by 1gb  by applying new Storage template", nil, 0)
 	})
 	var (
-		workflowDataservice stworkflows.WorkflowDataService
-		workFlowTemplates   stworkflows.CustomTemplates
+		workflowDataservice pds.WorkflowDataService
+		workFlowTemplates   pds.CustomTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 	)
 	It("Deploy and Validate DataService", func() {

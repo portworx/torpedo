@@ -1,4 +1,4 @@
-package stworkflows
+package platform
 
 import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"

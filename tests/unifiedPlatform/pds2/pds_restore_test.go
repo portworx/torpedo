@@ -4,7 +4,8 @@ import (
 	"fmt"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -17,9 +18,9 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		StartTorpedoTest("PerformRestoreToSameCluster", "Deploy data services and perform backup and restore on the same cluster", nil, 0)
 	})
 	var (
-		workflowDataService  stworkflows.WorkflowDataService
-		workflowBackUpConfig stworkflows.WorkflowPDSBackupConfig
-		workflowRestore      stworkflows.WorkflowPDSRestore
+		workflowDataService  pds.WorkflowDataService
+		workflowBackUpConfig pds.WorkflowPDSBackupConfig
+		workflowRestore      pds.WorkflowPDSRestore
 		deployment           *automationModels.PDSDeploymentResponse
 		restoreDeployment    *automationModels.PDSRestoreResponse
 		pdsBackupConfigName  string
@@ -117,9 +118,9 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 		StartTorpedoTest("PerformRestoreToDifferentClusterSameProject", "Deploy data services and perform backup and restore on a different cluster on the same project", nil, 0)
 	})
 	var (
-		workflowDataService  stworkflows.WorkflowDataService
-		workflowBackUpConfig stworkflows.WorkflowPDSBackupConfig
-		workflowRestore      stworkflows.WorkflowPDSRestore
+		workflowDataService  pds.WorkflowDataService
+		workflowBackUpConfig pds.WorkflowPDSBackupConfig
+		workflowRestore      pds.WorkflowPDSRestore
 		deployment           *automationModels.PDSDeploymentResponse
 		restoreDeployment    *automationModels.PDSRestoreResponse
 		pdsBackupConfigName  string
@@ -222,10 +223,10 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 		StartTorpedoTest("UpgradeDataServiceImageAndVersionWithBackUpRestore", "Upgrade Data Service Version and Image", nil, 0)
 	})
 	var (
-		workflowDataservice  stworkflows.WorkflowDataService
-		workFlowTemplates    stworkflows.CustomTemplates
-		workflowBackUpConfig stworkflows.WorkflowPDSBackupConfig
-		workflowRestore      stworkflows.WorkflowPDSRestore
+		workflowDataservice  pds.WorkflowDataService
+		workFlowTemplates    pds.CustomTemplates
+		workflowBackUpConfig pds.WorkflowPDSBackupConfig
+		workflowRestore      pds.WorkflowPDSRestore
 		deployment           *automationModels.PDSDeploymentResponse
 		updatedDeployment    *automationModels.PDSDeploymentResponse
 		restoreDeployment    *automationModels.PDSRestoreResponse
@@ -352,13 +353,13 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 
 var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 	var (
-		workflowDataService       stworkflows.WorkflowDataService
-		workflowBackUpConfig      stworkflows.WorkflowPDSBackupConfig
-		workflowRestore           stworkflows.WorkflowPDSRestore
+		workflowDataService       pds.WorkflowDataService
+		workflowBackUpConfig      pds.WorkflowPDSBackupConfig
+		workflowRestore           pds.WorkflowPDSRestore
 		deployment                *automationModels.PDSDeploymentResponse
 		restoreDeployment         *automationModels.PDSRestoreResponse
-		workflowProjectDest       stworkflows.WorkflowProject       // Workflow for destination project
-		workflowTargetClusterDest stworkflows.WorkflowTargetCluster // Workflow for destination target cluster
+		workflowProjectDest       platform.WorkflowProject       // Workflow for destination project
+		workflowTargetClusterDest platform.WorkflowTargetCluster // Workflow for destination target cluster
 		pdsBackupConfigName       string
 		err                       error
 	)
@@ -478,13 +479,13 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 		StartTorpedoTest("PerformRestoreAfterPVCResize", "Deploy data services, increase PVC Size and perform backup and restore on the same cluster", nil, 0)
 	})
 	var (
-		workflowDataService  stworkflows.WorkflowDataService
-		workflowBackUpConfig stworkflows.WorkflowPDSBackupConfig
-		workflowRestore      stworkflows.WorkflowPDSRestore
+		workflowDataService  pds.WorkflowDataService
+		workflowBackUpConfig pds.WorkflowPDSBackupConfig
+		workflowRestore      pds.WorkflowPDSRestore
 		deployment           *automationModels.PDSDeploymentResponse
 		restoreDeployment    *automationModels.PDSRestoreResponse
 
-		workFlowTemplates stworkflows.CustomTemplates
+		workFlowTemplates pds.CustomTemplates
 		tempList          []string
 
 		pdsBackupConfigName string
