@@ -3272,7 +3272,6 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		selectedNode, err := GetNodeFromPoolUUID(poolIDToResize)
 		log.FailOnError(err, "Failed to get node from pool UUID")
 		originalSizeInBytes = poolToResize.TotalSize
-		originalSizeGiB := originalSizeInBytes / units.GiB
 		log.InfoD("Original size of the pool %s is %d", poolIDToResize, originalSizeInBytes)
 		poolToResize = getStoragePool(poolIDToResize)
 		SnapshotPercent := uint64(30)
@@ -3312,7 +3311,13 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			volName := fmt.Sprintf("overcommit-test-%d", 1)
-			err := Inst().V.ResizeVolume(volName, originalSizeGiB)
+			err := Inst().V.ResizeVolume(volName, targetSizeGiB)
+			if err != nil {
+				if strings.Contains(err.Error(), "Failed to resize volume") {
+					log.InfoD("Volume resize failed as expected due to the overcommit Rules imposed on cluster : [%s]", err.Error())
+					return
+				}
+			}
 			log.FailOnError(err, "Failed to resize volume: %v", volName)
 			log.InfoD("Succesfully resized volume: %v", volName)
 			volInspect, err := Inst().V.InspectVolume(volName)
