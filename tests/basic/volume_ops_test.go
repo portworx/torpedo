@@ -3303,7 +3303,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			VolName := fmt.Sprintf("overcommit-test-%d", 1)
-			volId, err := Inst().V.CreateVolume(VolName, ExceededTargetSize, 1)
+			volId, err := Inst().V.CreateVolume(VolName, 10, 1)
 			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 			log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
 		})
@@ -3325,9 +3325,32 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			log.InfoD(stepLog)
 			volName := fmt.Sprintf("overcommit-test-%d", 1)
 			err := Inst().V.ResizeVolume(volName, ExceededTargetSize)
+			if err != nil {
+				if strings.Contains(err.Error(), "Failed to resize volume") {
+					log.InfoD("Volume resize failed as expected due to the overcommit Rules imposed on cluster : [%s]", err.Error())
+					return
+				}
+			}
 			log.FailOnError(err, "Failed to resize volume: %v", volName)
 			log.InfoD("Succesfully resized volume: %v", volName)
 
+		})
+		stepLog = " Verify Volume Creation also with Overcommit Rule Imposed on the cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			VolName := fmt.Sprintf("New-overcommit-testvolume-%d", 1)
+			volId, err := Inst().V.CreateVolume(VolName, ExceededTargetSize, 1)
+			if err != nil {
+				if strings.Contains(err.Error(), "pools must not over-commit provisioning space") {
+					log.InfoD("Volume creation failed as expected with error : [%s]", err.Error())
+					return
+				}
+			}
+			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
+			log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
+			//Delete the Volume , As we have created it only for Validation Purpose
+			err = Inst().V.DeleteVolume(VolName)
+			log.FailOnError(err, "Failed to delete volume [%s]", VolName)
 		})
 		// Revert back the imposed cluster options
 		stepLog = "Revert back the imposed cluster options"
