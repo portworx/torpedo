@@ -309,7 +309,7 @@ var _ = Describe("{LegacySharedVolumeAppMigrateBasic}", func() {
 	})
 })
 
-var _ = Describe("{LegacySharedToSharedv4ServiceMigrationBasicMany", func() {
+var _ = Describe("{LegacySharedToSharedv4ServiceMigrationBasicMany}", func() {
 	var testrailID = 296728
 	var runID int
 	JustBeforeEach(func() {
@@ -355,7 +355,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationBasicMany", func() {
 	})
 })
 
-var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart", func() {
+var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart}", func() {
 	var testrailID = 296736
 	var runID int
 	JustBeforeEach(func() {
@@ -412,7 +412,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart", func() {
 	})
 })
 
-var _ = Describe("{LegacySharedToSharedv4ServicePxRestart", func() {
+var _ = Describe("{LegacySharedToSharedv4ServicePxRestart}", func() {
 	var testrailID = 296732
 	var runID int
 	JustBeforeEach(func() {
@@ -472,7 +472,7 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestart", func() {
 	})
 })
 
-var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission", func() {
+var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 	var testrailID = 296732
 	var runID int
 	JustBeforeEach(func() {
@@ -532,7 +532,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission", func() {
 	})
 })
 
-var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator", func() {
+var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator}", func() {
 	var testrailID = 296732
 	var runID int
 	JustBeforeEach(func() {
@@ -597,7 +597,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator", func() {
 	})
 })
 
-var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones", func() {
+var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() {
 	var testrailID = 0
 	var runID int
 	JustBeforeEach(func() {
