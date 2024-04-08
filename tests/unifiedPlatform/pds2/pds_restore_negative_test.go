@@ -95,6 +95,7 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			log.InfoD("Kill set of pods of Dataservice to validate HA- [%v]", ds.Name)
 			err = workflowDataService.KillDBMasterNodeToValidateHA(ds.Name, *deployment.Create.Meta.Name)
+			log.FailOnError(err, "Error occured while Killing pods to validate HA")
 		}
 	})
 	It("Perform adhoc backup, restore after killing few pods to validate HA", func() {

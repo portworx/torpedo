@@ -223,9 +223,13 @@ func KillDbMasterNode(namespace string, dsName string, kubeconfigPath string, de
 		}
 	} else {
 		podName, err := GetAnyPodName(deploymentName, namespace)
-		log.FailOnError(err, "Failed while fetching pod for stateful set %v.", deploymentName)
+		if err != nil {
+			return fmt.Errorf("failed while fetching pod for stateful set %v ", deploymentName)
+		}
 		err = KillPodsInNamespace(namespace, podName)
-		log.FailOnError(err, "Failed while deleting pod.")
+		if err != nil {
+			return fmt.Errorf("failed while deleting pod %v ", deploymentName)
+		}
 		//validate DataService Deployment here
 	}
 	return nil
