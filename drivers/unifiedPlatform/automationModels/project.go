@@ -18,7 +18,11 @@ type PlaformProjectResponse struct {
 }
 
 type PlatformListProject struct {
-	TenantId string `copier:"must,nopanic"`
+	TenantId             string `copier:"must,nopanic"`
+	PaginationPageNumber string `copier:"must,nopanic"`
+	PaginationPageSize   string `copier:"must,nopanic"`
+	SortSortBy           string `copier:"must,nopanic"`
+	SortSortOrder        string `copier:"must,nopanic"`
 }
 
 type PlatformCreateProject struct {
@@ -87,5 +91,6 @@ type ProjectServiceDisassociateResourcesBody struct {
 }
 
 type V1ListProjectsResponse struct {
-	Projects []V1Project `copier:"must,nopanic"`
+	Projects   []V1Project                    `copier:"must,nopanic"`
+	Pagination *V1PageBasedPaginationResponse `copier:"must,nopanic"`
 }

@@ -48,6 +48,25 @@ func ListTargetClusters(tenantId string) (*automationModels.V1ListTargetClusters
 	if err != nil {
 		return &tcList.ListTargetClusters, err
 	}
+
+	totalRecords := *tcList.ListTargetClusters.Pagination.TotalRecords
+	log.Infof("Total target clusters under [%s] are [%s]", tenantId, totalRecords)
+
+	wfRequest = automationModels.PlatformTargetClusterRequest{
+		ListTargetClusters: automationModels.PlatformListTargetCluster{
+			TenantId:             tenantId,
+			PaginationPageSize:   totalRecords,
+			PaginationPageNumber: DEFAULT_PAGE_NUMBER,
+			SortSortOrder:        DEFAULT_SORT_ORDER,
+			SortSortBy:           DEFAULT_SORT_BY,
+		},
+	}
+
+	tcList, err = v2Components.Platform.ListTargetClusters(&wfRequest)
+	if err != nil {
+		return &tcList.ListTargetClusters, err
+	}
+
 	return &tcList.ListTargetClusters, nil
 }
 
