@@ -167,8 +167,11 @@ func waitAllSharedVolumesToGetMigrated(contexts []*scheduler.Context, maxWaitTim
 			time.Sleep(time.Minute)
 			i++
 			log.Infof("There are [%d] Legacy Shared Volumes. Waiting for them to be migrated", count)
+		} else {
+			break
 		}
 	}
+	return
 }
 
 func createSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffix string) error {
