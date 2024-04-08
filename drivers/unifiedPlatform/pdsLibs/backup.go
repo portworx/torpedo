@@ -41,6 +41,7 @@ func GetBackup(backupId string) (*automationModels.PDSBackupResponse, error) {
 // ListBackup lists backup config for the deployment
 func ListBackup(backupConfigId string) (*automationModels.PDSBackupResponse, error) {
 
+	log.Infof("Backup config ID: [%s]", backupConfigId)
 	listBackup := automationModels.PDSBackupRequest{
 		List: automationModels.PDSListBackup{
 			BackupConfigId: backupConfigId,
