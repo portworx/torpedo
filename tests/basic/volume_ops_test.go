@@ -3302,14 +3302,13 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			VolName := fmt.Sprintf("overcommit-test-%d", 1)
-			appVolumes, err := Inst().S.GetVolumes(contexts[0])
-			for _, appVol := range appVolumes {
-				if appVol.Name == VolName {
-					//delete the volume
+			volId, err := Inst().V.CreateVolume(VolName, 10, 1)
+			if err != nil {
+				if strings.Contains(err.Error(), "AlreadyExists") {
+					log.InfoD("Volume already exists with name [%s] so deleting it", VolName)
 					Inst().V.DeleteVolume(VolName)
 				}
 			}
-			volId, err := Inst().V.CreateVolume(VolName, 10, 1)
 			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 			log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
 		})
@@ -3351,14 +3350,6 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			VolName := fmt.Sprintf("New-overcommit-testvolume-%d", 1)
-			//check there is no volume with that name
-			appVolumes, err := Inst().S.GetVolumes(contexts[0])
-			for _, appVol := range appVolumes {
-				if appVol.Name == VolName {
-					//delete the volume
-					Inst().V.DeleteVolume(VolName)
-				}
-			}
 			volId, err := Inst().V.CreateVolume(VolName, ExceededTargetSize, 1)
 			if err != nil {
 				if strings.Contains(err.Error(), "pools must not over-commit provisioning space") {
