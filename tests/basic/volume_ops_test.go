@@ -3251,6 +3251,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		    5. Check vol size is successful or not
 		    6. Now try to increase the volume size by 1 more GB, it should fail , as it exceeds the storage pool capacity
 			7. Revert back the imposed cluster options
+			8. Create A volume after disabling thick provisioning , just to validate volume creation is happening as expected
 
 	*/
 	JustBeforeEach(func() {
@@ -3301,7 +3302,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		stepLog = "Create a volume with a base size"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			VolName := fmt.Sprintf("overcommit-test-%d", 0)
+			VolName := fmt.Sprintf("overcommit-test-%d", 1)
 			volId, err := Inst().V.CreateVolume(VolName, ExceededTargetSize, 1)
 			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 			log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
@@ -3310,7 +3311,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		stepLog = "Now update the volume size upto the maximum limit of the storage pool"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			volName := fmt.Sprintf("overcommit-test-%d", 0)
+			volName := fmt.Sprintf("overcommit-test-%d", 1)
 			err := Inst().V.ResizeVolume(volName, originalSizeGiB)
 			log.FailOnError(err, "Failed to resize volume: %v", volName)
 			log.InfoD("Succesfully resized volume: %v", volName)
@@ -3322,7 +3323,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		stepLog = "Now try to increase the volume size  more than the capacity of storage pool"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			volName := fmt.Sprintf("overcommit-test-%d", 0)
+			volName := fmt.Sprintf("overcommit-test-%d", 1)
 			err := Inst().V.ResizeVolume(volName, ExceededTargetSize)
 			log.FailOnError(err, "Failed to resize volume: %v", volName)
 			log.InfoD("Succesfully resized volume: %v", volName)
@@ -3340,7 +3341,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		stepLog = "Create a volume again with size greater than Storage pool size as we have disabled the thick provisioning (Should Be created)"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			VolName := fmt.Sprintf("overcommit-test-%d", 0)
+			VolName := fmt.Sprintf("overcommit-test-%d", 1)
 			volId, err := Inst().V.CreateVolume(VolName, ExceededTargetSize, 1)
 			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 			log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
