@@ -3274,8 +3274,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		log.InfoD("Original size of the pool %s is %d", poolIDToResize, originalSizeInBytes)
 		poolToResize = getStoragePool(poolIDToResize)
 		SnapshotPercent := uint64(30)
-		SubtractSize := ((SnapshotPercent * originalSizeInBytes) / 100) * units.GiB
-		originalSizeInBytes = poolToResize.TotalSize
+		SubtractSize := (SnapshotPercent * originalSizeInBytes) / 100
 		targetSizeInBytes = originalSizeInBytes - SubtractSize
 		targetSizeGiB = targetSizeInBytes / units.GiB
 		log.InfoD("Target size of the pool %s is %d", poolIDToResize, targetSizeInBytes)
@@ -3285,7 +3284,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			clusterOpts := make(map[string]string)
-			clusterOpts["--overcommit-percent"] = "'[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30} ]'\n\n\n"
+			clusterOpts["--provisioning-commit-labels"] = "'[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30} ]'\n\n\n"
 			err := Inst().V.SetClusterOpts(*selectedNode, clusterOpts)
 			log.FailOnError(err, "Failed to set cluster options")
 			ClusterOptionsValidationcmd := "pxctl cluster options list -j | jq -r '.ProvisionCommitRule'"
@@ -3338,7 +3337,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			clusterOpts := make(map[string]string)
-			clusterOpts["--overcommit-percent"] = "\n'[]'"
+			clusterOpts["--provisioning-commit-labels"] = "\n'[]'"
 			err := Inst().V.SetClusterOpts(*selectedNode, clusterOpts)
 			log.FailOnError(err, "Failed to set cluster options")
 			log.InfoD("Successfully set cluster options")
