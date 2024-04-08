@@ -5,6 +5,7 @@ metadata:
   labels:
     app: containerized-data-importer
   annotations:
+    torpedo.io/autopilot-enabled: "true"
     cdi.kubevirt.io/storage.import.endpoint: http://kubevirt-disk-registry.pwx.dev.purestorage.com/more_images/fio-and-yes-workload.qcow2
     cdi.kubevirt.io/storage.bind.immediate.requested: "true"
 spec:
@@ -13,4 +14,4 @@ spec:
     - ReadWriteMany
   resources:
     requests:
-      storage: 500Gi
+      storage: 50Gi
