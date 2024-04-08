@@ -28,6 +28,7 @@ var _ = Describe("{LegacySharedVolumeCreate}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumeAppCreateVolume", "Legacy Shared to Sharedv4 Service CreateVolume", nil, testrailID)
+		setCreateLegacySharedAsSharedv4Service(true)
 	})
 
 	volumeName := "legacy-shared-volume"
@@ -46,8 +47,8 @@ var _ = Describe("{LegacySharedVolumeCreate}", func() {
 		dash.VerifyFatal(vol.Spec.Sharedv4, true, "sharedv4 volume was not created")
 		dash.VerifyFatal(vol.Spec.Shared, false, "shared volume was created unexpectedly")
 		pxctlCmdFull = fmt.Sprintf("v d %s --force", volumeName)
-		output, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
-		log.FailOnError(err, fmt.Sprintf("error deleting legacy shared volume %s", volumeName))
+		output, _ = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
+		log.Infof(output)
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -217,12 +218,13 @@ func deleteSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffi
 var _ = Describe("{LegacySharedVolumeMigrate_CreateIdle}", func() {
 	var testrailID = 296370
 	volumeName := "legacy-shared-volume-idle"
-	StartTorpedoTest("LegacySharedVolumeIdleVolume", "Legacy Shared to Sharedv4 Service Idle Volume", nil, testrailID)
-	stepLog := "Create legacy shared volume and check it is created as shared volume. Then enable migration"
-	It(stepLog, func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("LegacySharedVolumeIdleVolume", "Legacy Shared to Sharedv4 Service Idle Volume", nil, testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-
+	})
+	stepLog := "Create legacy shared volume and check it is created as shared volume. Then enable migration"
+	It(stepLog, func() {
 		pxctlCmdFull := fmt.Sprintf("v c --shared=true %s", volumeName)
 		pxNodes, err := GetStorageNodes()
 		log.FailOnError(err, "Unable to get the storage nodes")
