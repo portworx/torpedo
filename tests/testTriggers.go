@@ -39,8 +39,6 @@ import (
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/portworx/torpedo/drivers/vcluster"
-	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/monitor/prometheus"
 	"github.com/portworx/torpedo/drivers/node"
@@ -49,6 +47,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/drivers/vcluster"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/applicationbackup"
@@ -57,6 +56,7 @@ import (
 	"github.com/portworx/torpedo/pkg/email"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/pkg/stats"
 	"github.com/portworx/torpedo/pkg/units"
 )
@@ -1321,6 +1321,7 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 	setMetrics(*event)
 
 	expReplMap := make(map[*volume.Volume]int64)
+	volumeCtxMap := make(map[string]*scheduler.Context)
 	stepLog := "get volumes for all apps in test and increase replication factor"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
@@ -1335,9 +1336,54 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 				if len(appVolumes) == 0 {
 					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 				}
+				for _, appVol := range appVolumes {
+					volumeCtxMap[appVol.ID] = ctx
+				}
 			})
 			opts := volume.Options{
 				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+			}
+
+			// getContextAndPVC retrieves the scheduler context and PVC spec associated with a given volume
+			getContextAndPVC := func(vol *apios.Volume) (*scheduler.Context, *v1.PersistentVolumeClaim, error) {
+				pvcName := vol.Spec.VolumeLabels["pvc"]
+				namespace := vol.Spec.VolumeLabels["namespace"]
+				pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to get PVC [%s/%s] spec", pvcName, namespace)
+				}
+				if ctx, ok := volumeCtxMap[vol.Id]; !ok {
+					return nil, nil, fmt.Errorf("context associated with PVC [%s/%s] not found", pvcName, namespace)
+				} else {
+					return ctx, pvc, nil
+				}
+			}
+			// getPVCSize returns the requested storage size of the given PVC in bytes
+			getPVCSize := func(pvc *v1.PersistentVolumeClaim) (uint64, error) {
+				resourceStorage, ok := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+				if !ok {
+					return 0, fmt.Errorf("failed to get storage resource request from PVC [%v]", pvc)
+				}
+				return uint64(resourceStorage.Value()), nil
+			}
+			// resizePVC resizes the given PVC using K8s API
+			resizePVC := func(vol *apios.Volume, newSize uint64) error {
+				ctx, pvc, err := getContextAndPVC(vol)
+				if err != nil {
+					return fmt.Errorf("failed to get pvc from contexts. Err: [%v]", err)
+				}
+				pvcSize, err := getPVCSize(pvc)
+				if err != nil {
+					return fmt.Errorf("failed to get pvc [%v] size. Err: [%v]", pvc, err)
+				}
+				// adjustedSize ensures ResizePVC sets the volume to newSize
+				adjustedSize := newSize - pvcSize
+				log.Infof("Adjusted size for resizing volume [%s/%s] is [%d]", vol.Id, vol.Locator.Name, adjustedSize)
+				_, err = Inst().S.ResizePVC(ctx, pvc, adjustedSize/units.GiB)
+				if err != nil {
+					return fmt.Errorf("failed to resize volume [%s/%s] from [%d] to [%d]. Err: [%v]", vol.Id, vol.Locator.Name, pvcSize, newSize, err)
+				}
+				return nil
 			}
 
 			volumeResize := func(vol *volume.Volume) error {
@@ -1352,7 +1398,7 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 				log.Infof("Initiating volume size increase on volume [%v] by size [%v] to [%v]",
 					vol.ID, curSize/units.GiB, newSize/units.GiB)
 
-				err = Inst().V.ResizeVolume(vol.ID, newSize)
+				err = resizePVC(apiVol, newSize)
 				if err != nil {
 					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failure of resizing the volume", vol.Name, vol.ID, vol.Namespace)
 					PrintInspectVolume(vol.ID)
@@ -9498,6 +9544,7 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 		ValidateApplications(*contexts)
 
 		allVolsCreated := []*volume.Volume{}
+		volumeCtxMap := make(map[string]*scheduler.Context)
 		for _, eachContext := range *contexts {
 			vols, err := Inst().S.GetVolumes(eachContext)
 			if err != nil {
@@ -9513,6 +9560,7 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 				// Pick volumes with aggr level > 1
 				if aggrLevel > 1 {
 					allVolsCreated = append(allVolsCreated, eachVol)
+					volumeCtxMap[eachVol.ID] = eachContext
 				}
 			}
 		}
@@ -9588,6 +9636,48 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 			setReplFactor(eachVol)
 		}
 
+		// getContextAndPVC retrieves the scheduler context and PVC spec associated with a given volume
+		getContextAndPVC := func(vol *apios.Volume) (*scheduler.Context, *v1.PersistentVolumeClaim, error) {
+			pvcName := vol.Spec.VolumeLabels["pvc"]
+			namespace := vol.Spec.VolumeLabels["namespace"]
+			pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to get PVC [%s/%s] spec", pvcName, namespace)
+			}
+			if ctx, ok := volumeCtxMap[vol.Id]; !ok {
+				return nil, nil, fmt.Errorf("context associated with PVC [%s/%s] not found", pvcName, namespace)
+			} else {
+				return ctx, pvc, nil
+			}
+		}
+		// getPVCSize returns the requested storage size of the given PVC in bytes
+		getPVCSize := func(pvc *v1.PersistentVolumeClaim) (uint64, error) {
+			resourceStorage, ok := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+			if !ok {
+				return 0, fmt.Errorf("failed to get storage resource request from PVC [%v]", pvc)
+			}
+			return uint64(resourceStorage.Value()), nil
+		}
+		// resizePVC resizes the given PVC using K8s API
+		resizePVC := func(vol *apios.Volume, newSize uint64) error {
+			ctx, pvc, err := getContextAndPVC(vol)
+			if err != nil {
+				return fmt.Errorf("failed to get pvc from contexts. Err: [%v]", err)
+			}
+			pvcSize, err := getPVCSize(pvc)
+			if err != nil {
+				return fmt.Errorf("failed to get pvc [%v] size. Err: [%v]", pvc, err)
+			}
+			// adjustedSize ensures ResizePVC sets the volume to newSize
+			adjustedSize := newSize - pvcSize
+			log.Infof("Adjusted size for resizing volume [%s/%s] is [%d]", vol.Id, vol.Locator.Name, adjustedSize)
+			_, err = Inst().S.ResizePVC(ctx, pvc, adjustedSize/units.GiB)
+			if err != nil {
+				return fmt.Errorf("failed to resize volume [%s/%s] from [%d] to [%d]. Err: [%v]", vol.Id, vol.Locator.Name, pvcSize, newSize, err)
+			}
+			return nil
+		}
+
 		log.InfoD("Initiate Volume resize continuously")
 		volumeResize := func(vol *volume.Volume) error {
 
@@ -9601,7 +9691,7 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 			log.Infof("Initiating volume size increase on volume [%v] by size [%v] to [%v]",
 				vol.ID, curSize/units.GiB, newSize/units.GiB)
 
-			err = Inst().V.ResizeVolume(vol.ID, newSize)
+			err = resizePVC(apiVol, newSize)
 			if err != nil {
 				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after resize", vol.Name, vol.ID, vol.Namespace)
 				PrintInspectVolume(vol.ID)
