@@ -60,24 +60,24 @@ func CreateCloudCredentials(tenantId, backupType string) (*automationModels.Clou
 	switch backupType {
 	case "s3":
 		createReq.Create.Config.Provider.CloudProvider = PROVIDER_S3
-		createReq.Create.Config.Credentials.S3Credentials.AccessKey = os.Getenv(envAwsAccessKey)
-		createReq.Create.Config.Credentials.S3Credentials.SecretKey = os.Getenv(envAwsSecretKey)
+		createReq.Create.Config.S3Credentials.AccessKey = os.Getenv(envAwsAccessKey)
+		createReq.Create.Config.S3Credentials.SecretKey = os.Getenv(envAwsSecretKey)
 	case "azure":
 		createReq.Create.Config.Provider.CloudProvider = PROVIDER_AZURE
-		createReq.Create.Config.Credentials.AzureCredentials.AccountKey = os.Getenv(envAzurePrimaryAccountKey)
-		createReq.Create.Config.Credentials.AzureCredentials.AccountName = os.Getenv(envAzureStorageAccountName)
+		createReq.Create.Config.AzureCredentials.AccountKey = os.Getenv(envAzurePrimaryAccountKey)
+		createReq.Create.Config.AzureCredentials.AccountName = os.Getenv(envAzureStorageAccountName)
 	case "gcp":
 		createReq.Create.Config.Provider.CloudProvider = PROVIDER_AZURE
-		createReq.Create.Config.Credentials.GcpCredentials.ProjectId = os.Getenv(envGcpProjectId)
-		createReq.Create.Config.Credentials.GcpCredentials.Key = os.Getenv(envGcpJsonPath)
+		createReq.Create.Config.GoogleCredentials.ProjectId = os.Getenv(envGcpProjectId)
+		createReq.Create.Config.GoogleCredentials.Key = os.Getenv(envGcpJsonPath)
 	case "s3-comp":
 		createReq.Create.Config.Provider.CloudProvider = PROVIDER_S3
-		createReq.Create.Config.Credentials.S3Credentials.AccessKey = os.Getenv(envMinioAccessKey)
-		createReq.Create.Config.Credentials.S3Credentials.SecretKey = os.Getenv(envMinioSecretKey)
+		createReq.Create.Config.S3Credentials.AccessKey = os.Getenv(envMinioAccessKey)
+		createReq.Create.Config.S3Credentials.SecretKey = os.Getenv(envMinioSecretKey)
 	default:
 		createReq.Create.Config.Provider.CloudProvider = PROVIDER_S3
-		createReq.Create.Config.Credentials.S3Credentials.AccessKey = os.Getenv(envMinioAccessKey)
-		createReq.Create.Config.Credentials.S3Credentials.SecretKey = os.Getenv(envMinioSecretKey)
+		createReq.Create.Config.S3Credentials.AccessKey = os.Getenv(envMinioAccessKey)
+		createReq.Create.Config.S3Credentials.SecretKey = os.Getenv(envMinioSecretKey)
 	}
 
 	wfResponse, err := v2Components.Platform.CreateCloudCredentials(&createReq)
