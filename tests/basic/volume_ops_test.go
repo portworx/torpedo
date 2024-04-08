@@ -3265,12 +3265,14 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		selectedNode, err := GetNodeFromPoolUUID(poolIDToResize)
 		log.FailOnError(err, "Failed to get node from pool UUID")
 		originalSizeInBytes = poolToResize.TotalSize
+		log.InfoD("Original size of the pool %s is %d", poolIDToResize, originalSizeInBytes)
 		poolToResize = getStoragePool(poolIDToResize)
 		SnapshotPercent := uint64(30)
 		SubtractSize := ((SnapshotPercent * originalSizeInBytes) / 100) * units.GiB
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes - SubtractSize
 		targetSizeGiB = targetSizeInBytes / units.GiB
+		log.InfoD("Target size of the pool %s is %d", poolIDToResize, targetSizeInBytes)
 
 		// update the cluster options
 		stepLog := "Update the pxctl cluster with cluster option OverCommitPercent with the maximum storage percentage volumes can provision against backing storage set to 100(Enabeling Thick Provisioning)"
@@ -3280,6 +3282,9 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			clusterOpts["--overcommit-percent"] = "'[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30} ]'\n\n\n"
 			err := Inst().V.SetClusterOpts(*selectedNode, clusterOpts)
 			log.FailOnError(err, "Failed to set cluster options")
+			ClusterOptionsValidationcmd := "pxctl cluster options list -j | jq -r '.ProvisionCommitRule'"
+			output, err := runPxctlCommand(ClusterOptionsValidationcmd, *selectedNode, nil)
+			log.InfoD("The Current Cluster options: %v", output)
 			log.InfoD("Successfully set cluster options")
 		})
 		// check the overall storage pool capacity of a particular node
