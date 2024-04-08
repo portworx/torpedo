@@ -1,7 +1,7 @@
 package tests
 
 import (
-	"bufio"
+    "bufio"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
@@ -23,15 +23,38 @@ import (
 	"strings"
 	"sync"
 	"time"
+	context1 "context"
+	// import ssh driver to invoke it's init
+	// import backup driver to invoke it's init
+	// import aws driver to invoke it's init
+	// import vsphere driver to invoke it's init
+	// import ibm driver to invoke it's init
+	// import oracle driver to invoke it's init
+	// import ssh driver to invoke it's init
+	// import scheduler drivers to invoke it's init
+	// import ocp scheduler driver to invoke it's init
+	// import aks scheduler driver to invoke it's init
+	// import scheduler drivers to invoke it's init
+	// import gke scheduler driver to invoke it's init
+	// import rke scheduler drivers to invoke it's init
+	// import portworx driver to invoke it's init
+	// import gce driver to invoke it's init
+	// import aws driver to invoke it's init
+	// import azure driver to invoke it's init
+	// import generic csi driver to invoke it's init
+	// import driver to invoke it's init
+	// import driver to invoke it's init
+	// import scheduler drivers to invoke it's init
+	// import pso driver to invoke it's init
+	// import ibm driver to invoke it's init
+	// import scheduler drivers to invoke it's init
+	// import ocp driver to invoke it's init
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/hashicorp/go-version"
 	pxapi "github.com/libopenstorage/operator/api/px"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
-
-	context1 "context"
-
 	"cloud.google.com/go/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/aws/aws-sdk-go/aws"
@@ -60,28 +83,6 @@ import (
 	k8sStorage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers"
-	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
-	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/monitor"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"github.com/portworx/torpedo/drivers/pds"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
-	appUtils "github.com/portworx/torpedo/drivers/utilities"
-	"github.com/portworx/torpedo/drivers/volume"
-	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/asyncdr"
-	"github.com/portworx/torpedo/pkg/jirautils"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/portworx/torpedo/pkg/pureutils"
-	"github.com/portworx/torpedo/pkg/s3utils"
-	"github.com/portworx/torpedo/pkg/stats"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
-	"github.com/portworx/torpedo/pkg/units"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/sirupsen/logrus"
 	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
@@ -110,83 +111,65 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"k8s.io/client-go/tools/clientcmd"
+	"github.com/portworx/sched-ops/k8s/stork"
 
-	// import ssh driver to invoke it's init
+	"github.com/portworx/torpedo/drivers"
+	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
+	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
+	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/monitor"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/pds"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	appUtils "github.com/portworx/torpedo/drivers/utilities"
+	"github.com/portworx/torpedo/drivers/volume"
+	torpedovolume "github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/asyncdr"
+	"github.com/portworx/torpedo/pkg/jirautils"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/pureutils"
+	"github.com/portworx/torpedo/pkg/s3utils"
+	"github.com/portworx/torpedo/pkg/stats"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
+	"github.com/portworx/torpedo/pkg/units"
 	"github.com/portworx/torpedo/drivers/node/ssh"
-
-	// import backup driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/backup/portworx"
-	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aws"
-	// import vsphere driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/vsphere"
-	// import ibm driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/node/ibm"
 	_ "github.com/portworx/torpedo/drivers/node/ibm"
-
-	// import oracle driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/oracle"
-
-	// import ssh driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
-
-	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
-
-	// import ocp scheduler driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
-
-	// import aks scheduler driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/aks"
-
-	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/eks"
-
-	// import gke scheduler driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
-
 	_ "github.com/portworx/torpedo/drivers/scheduler/oke"
-
-	// import rke scheduler drivers to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/rke"
-
-	// import portworx driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
-	// import gce driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/gce"
-	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/aws"
-	// import azure driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/azure"
-
-	// import generic csi driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
-
-	// import driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/monitor/prometheus"
-
-	// import driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/pds/dataservice"
-
-	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/anthos"
-
-	// import pso driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/pso"
-
-	// import ibm driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ibm"
-
-	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/iks"
-
-	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
 )
+
 
 const (
 	// SkipClusterScopedObjects describes option for skipping deletion of cluster wide objects
@@ -580,6 +563,7 @@ var (
 	includeVolumesFlag    = true
 	startApplicationsFlag = true
 	tempDir               = "/tmp"
+	bidirectionalClusterPairDir = "bidirectional-cluster-pair"
 	migrationList         []*storkapi.Migration
 )
 
@@ -3643,6 +3627,14 @@ func SetDestinationKubeConfig() error {
 	return SetClusterContext(destClusterConfigPath)
 }
 
+func SetCustomKubeConfig(clusterConfigIndex int) error {
+	customClusterConfigPath, err := GetCustomClusterConfigPath(clusterConfigIndex)
+	if err != nil {
+		return err
+	}
+	return SetClusterContext(customClusterConfigPath)
+}
+
 // ScheduleValidateClusterPair Schedule a clusterpair by creating a yaml file and validate it
 func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, clusterPairDir string, reverse bool) error {
 	var kubeConfigPath string
@@ -3773,6 +3765,287 @@ func CreateClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig 
 
 	return addStorageOptions(pairInfo, clusterPairFileName)
 }
+
+func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string, mode string, sourceCluster int, destCluster int) error {
+	//var token string
+	// Setting kubeconfig to source because we will create bidirectional cluster pair based on source as reference
+	err := SetCustomKubeConfig(sourceCluster)
+	if err != nil {
+		return err
+	}
+
+	// Create namespace for the cluster pair on source cluster
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cpNamespace,
+			Labels: map[string]string{
+				"creator": "stork-test",
+			},
+		},
+	})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return fmt.Errorf("Failed to create namespace %s on source cluster", cpNamespace)
+	}
+
+	srcKubeConfigPath, err := GetCustomClusterConfigPath(sourceCluster)
+
+	defer func() {
+		config, err := clientcmd.BuildConfigFromFlags("", srcKubeConfigPath)
+		if err != nil {
+			log.Infof("Unable to reset config")
+		}
+		core.Instance().SetConfig(config)
+		apps.Instance().SetConfig(config)
+		stork.Instance().SetConfig(config)
+	}()
+
+	err = SetCustomKubeConfig(destCluster)
+	if err != nil {
+		return err
+	}
+
+	// Create namespace for the cluster pair on destination cluster
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cpNamespace,
+			Labels: map[string]string{
+				"creator": "stork-test",
+			},
+		},
+	})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return fmt.Errorf("Failed to create namespace %s on destination cluster", cpNamespace)
+	}
+
+	destKubeConfigPath, err := GetCustomClusterConfigPath(destCluster)
+
+	err = SetCustomKubeConfig(sourceCluster)
+	if err != nil {
+		return err
+	}
+	nodes, err := core.Instance().GetNodes()
+	log.Infof("Nodes is ==========================> %v", nodes.Items[0].Name)
+
+	// Create source --> destination and destination --> cluster pairs using storkctl
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
+	cmdArgs := []string{"create", "clusterpair", "-n", cpNamespace, cpName,
+	    "--kubeconfig", srcKubeConfigPath,
+		"--src-kube-file", srcKubeConfigPath,
+		"--dest-kube-file", destKubeConfigPath,
+	}
+
+	if mode == "sync-dr" {
+		cmdArgs = []string{"create", "clusterpair", "-n", cpNamespace, cpName,
+		    "--kubeconfig", srcKubeConfigPath,
+			"--src-kube-file", srcKubeConfigPath,
+			"--dest-kube-file", destKubeConfigPath,
+			"--mode", "sync-dr",
+	    }
+	}
+
+	if projectMappings != "" {
+		cmdArgs = append(cmdArgs, "--project-mappings")
+		cmdArgs = append(cmdArgs, projectMappings)
+	}
+
+	// Get external object store details and append to the command accordingily
+	if objectStoreType != "" {
+		// Get external object store details and append to the command accordingily
+		objectStoreArgs, err := getObjectStoreArgs(objectStoreType, secretName)
+		if err != nil {
+			return fmt.Errorf("failed to get  %s secret in configmap secret-config in default namespace", objectStoreType)
+		}
+		cmdArgs = append(cmdArgs, objectStoreArgs...)
+	}
+
+	cmd.SetArgs(cmdArgs)
+	log.InfoD("Following is the bidirectional command: %v", cmdArgs)
+	if err := cmd.Execute(); err != nil {
+		return fmt.Errorf("Creation of bidirectional cluster pair using storkctl failed: %v", err)
+	}
+	
+	nodes, err = core.Instance().GetNodes()
+	log.Infof("Nodes is ==========================> %v", nodes.Items[0].Name)
+
+	return nil
+}
+
+func getObjectStoreArgs(objectStoreType storkv1.BackupLocationType, secretName string) ([]string, error) {
+	var objectStoreArgs []string
+	secretData, err := core.Instance().GetSecret(secretName, "default")
+	if err != nil {
+		return objectStoreArgs, fmt.Errorf("error getting secret %s in default namespace: %v", secretName, err)
+	}
+	if objectStoreType == storkv1.BackupLocationS3 {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "s3",
+				"--s3-access-key", string(secretData.Data["accessKeyID"]),
+				"--s3-secret-key", string(secretData.Data["secretAccessKey"]),
+				"--s3-region", string(secretData.Data["region"]),
+				"--s3-endpoint", string(secretData.Data["endpoint"]),
+			}...)
+		if val, ok := secretData.Data["disableSSL"]; ok && string(val) == "true" {
+			objectStoreArgs = append(objectStoreArgs, "--disable-ssl")
+		}
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	} else if objectStoreType == storkv1.BackupLocationAzure {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "azure", "--azure-account-name", string(secretData.Data["storageAccountName"]),
+				"--azure-account-key", string(secretData.Data["storageAccountKey"])}...)
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	} else if objectStoreType == storkv1.BackupLocationGoogle {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "google", "--google-project-id", string(secretData.Data["projectID"]), "--google-key-file-path", string(secretData.Data["accountKey"])}...)
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	}
+
+	return objectStoreArgs, nil
+}
+
+// ScheduleValidateClusterPair Schedule a clusterpair by creating a yaml file and validate it
+func ScheduleValidateClusterPairCustom(ctx *scheduler.Context, skipStorage, resetConfig bool, clusterPairDir string, reverse bool, pairName string, sourceCluster int, destCluster int) error {
+	var kubeConfigPath string
+	var err error
+	if reverse {
+		err = SetCustomKubeConfig(sourceCluster)
+		if err != nil {
+			return err
+		}
+		// get the kubeconfig path to get the correct pairing info
+		kubeConfigPath, err = GetCustomClusterConfigPath(sourceCluster)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = SetCustomKubeConfig(destCluster)
+		if err != nil {
+			return err
+		}
+		// get the kubeconfig path to get the correct pairing info
+		kubeConfigPath, err = GetCustomClusterConfigPath(destCluster)
+		if err != nil {
+			return err
+		}
+	}
+
+	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "", IsEksCluster(), reverse)
+	if err != nil {
+		log.Errorf("Error writing to clusterpair.yml: %v", err)
+		return err
+	}
+
+	err = CreateCustomClusterPairFile(pairInfo, skipStorage, resetConfig, clusterPairDir, kubeConfigPath, pairName, sourceCluster, destCluster)
+	if err != nil {
+		log.Errorf("Error creating cluster Spec: %v", err)
+		return err
+	}
+	err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+	if err != nil {
+		log.Errorf("Unable to parse spec dir: %v", err)
+		return err
+	}
+
+	// Set the correct cluster context to apply the cluster pair spec
+	if reverse {
+		err = SetCustomKubeConfig(destCluster)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = SetCustomKubeConfig(sourceCluster)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = Inst().S.AddTasks(ctx,
+		scheduler.ScheduleOptions{AppKeys: []string{clusterPairDir}})
+	if err != nil {
+		log.Errorf("Failed to schedule Cluster Pair Specs: %v", err)
+		return err
+	}
+
+	time.Sleep(30*time.Second)
+
+	err = Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		log.Errorf("Error waiting to get cluster pair in ready state: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+// CreateClusterPairFile creates a cluster pair yaml file inside the stork test pod in path 'clusterPairDir'
+func CreateCustomClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig bool, clusterPairDir string, kubeConfigPath string, pairName string, sourceCluster int, destCluster int) error {
+	log.Infof("Entering cluster pair")
+	err := os.MkdirAll(path.Join(Inst().SpecDir, clusterPairDir), 0777)
+	if err != nil {
+		log.Errorf("Unable to make directory (%v) for cluster pair spec: %v", Inst().SpecDir+"/"+clusterPairDir, err)
+		return err
+	}
+	clusterPairFileName := path.Join(Inst().SpecDir, clusterPairDir, pairFileName)
+	pairFile, err := os.Create(clusterPairFileName)
+	if err != nil {
+		log.Errorf("Unable to create clusterPair.yaml: %v", err)
+		return err
+	}
+	defer func() {
+		err := pairFile.Close()
+		if err != nil {
+			log.Errorf("Error closing pair file: %v", err)
+		}
+	}()
+
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, pairFile, os.Stderr)
+	cmd.SetArgs([]string{"generate", "clusterpair", pairName, "--kubeconfig", kubeConfigPath})
+	if err := cmd.Execute(); err != nil {
+		log.Errorf("Execute storkctl failed: %v", err)
+		return err
+	}
+
+	truncCmd := `sed -i "$((` + "`wc -l " + clusterPairFileName + "|awk '{print $1}'`" + `-4)),$ d" ` + clusterPairFileName
+	log.Infof("trunc cmd: %v", truncCmd)
+	err = exec.Command("sh", "-c", truncCmd).Run()
+	if err != nil {
+		log.Errorf("truncate failed %v", err)
+		return err
+	}
+
+	if resetConfig {
+		// storkctl generate command sets sched-ops to source cluster config
+		err = SetCustomKubeConfig(sourceCluster)
+		if err != nil {
+			return err
+		}
+	} else {
+		// Change kubeconfig to destination cluster config
+		err = SetCustomKubeConfig(destCluster)
+		if err != nil {
+			return err
+		}
+	}
+
+	if skipStorage {
+		log.Info("cluster-pair.yml created")
+		return nil
+	}
+
+	return addStorageOptions(pairInfo, clusterPairFileName)
+}
+
+
 
 func addStorageOptions(pairInfo map[string]string, clusterPairFileName string) error {
 	file, err := os.OpenFile(clusterPairFileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
@@ -5572,6 +5845,23 @@ func GetDestinationClusterConfigPath() (string, error) {
 
 	log.Infof("Destination config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]))
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]), nil
+}
+
+func GetCustomClusterConfigPath(clusterConfigIndex int) (string, error) {
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	if kubeconfigs == "" {
+		return "", fmt.Errorf("empty KUBECONFIGS environment variable")
+	}
+
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	log.Infof("Kubeconfig list and index is: %v, %v", kubeconfigList, clusterConfigIndex)
+	if len(kubeconfigList) < 2 {
+		return "", fmt.Errorf(`Failed to get source config path.
+				At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
+	}
+
+	log.Infof("config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[clusterConfigIndex]))
+	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[clusterConfigIndex]), nil
 }
 
 // GetAzureCredsFromEnv get creds for azure

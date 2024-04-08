@@ -7,32 +7,38 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/torpedo/pkg/log"
-
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	//"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/scheduler"
-
-	//"github.com/portworx/torpedo/drivers/scheduler/spec"
-	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/portworx/sched-ops/task"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/asyncdr"
+	"github.com/portworx/torpedo/pkg/log"
+	//"github.com/portworx/torpedo/driver	"github.com/portworx/torpedo/drivers/scheduler"
+	//"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
-
-	//appsapi "k8s.io/api/apps/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
 	migrationRetryTimeout  = 10 * time.Minute
 	migrationRetryInterval = 10 * time.Second
 	defaultClusterPairDir  = "cluster-pair"
+	defaultClusterPairDirNew = "cluster-pair-new"
 	defaultClusterPairName = "remoteclusterpair"
+	defaultClusterPairNameNew = "remoteclusterpairnew"
+	defaultBackupLocation = "s3"
+	defaultSecret = "s3secret"
 
 	migrationKey = "async-dr-"
+	metromigrationKey = "metro-dr-"
+	FirstCluster = 0
+	SecondCluster = 1
+	ThirdCluster = 2
 )
 
 // This test performs basic test of starting an application, creating cluster pair,
@@ -146,6 +152,257 @@ var _ = Describe("{MigrateDeployment}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{MigrateDeploymentMetroAsync}", func() {
+	// var testrailID = 50803
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35258
+	// var runID int
+
+	var kubeConfigWritten bool
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+	// JustBeforeEach(func() {
+	// 	StartTorpedoTest("MigrateDeployment", "Migration of application to destination cluster", nil, testrailID)
+	// 	runID = testrailuttils.AddRunsToMilestone(testrailID)
+	// })
+
+	var (
+		contexts              []*scheduler.Context
+		migrationNamespaces   []string
+		taskNamePrefix        = "metro-async-dr-mig"
+		allMigrationsMetro         []*storkapi.Migration
+		allMigrationsAsync         []*storkapi.Migration
+		includeResourcesFlag  = true
+		includeVolumesFlagMetro = false
+		includeVolumesFlagAsync = true
+		startApplicationsFlag = false
+	)
+
+	listCdsTask := func() (interface{}, bool, error) {
+		// Fetch the cluster domains
+		cdses, err := storkops.Instance().ListClusterDomainStatuses()
+		if err != nil || len(cdses.Items) == 0 {
+			log.Infof("Failed to list cluster domains statuses. Error: %v. List of cluster domains: %v", err, len(cdses.Items))
+			return "", true, fmt.Errorf("failed to list cluster domains statuses")
+		}
+		cds := cdses.Items[0]
+		if len(cds.Status.ClusterDomainInfos) == 0 {
+			log.Infof("Found 0 cluster domain info objects in cluster domain status.")
+			return "", true, fmt.Errorf("failed to list cluster domains statuses")
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(listCdsTask, migrationRetryTimeout, migrationRetryInterval)
+	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to get doamin status"))
+
+	It("has to deploy app, create cluster pair, migrate app", func() {
+		Step("Deploy applications", func() {
+			err = SetCustomKubeConfig(FirstCluster)
+            log.FailOnError(err, "Switching context to first cluster failed")
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+				log.Infof("Task name %s\n", taskName)
+				appContexts := ScheduleApplications(taskName)
+				contexts = append(contexts, appContexts...)
+				ValidateApplications(contexts)
+				for _, ctx := range contexts {
+					// Override default App readiness time out of 5 mins with 10 mins
+					ctx.ReadinessTimeout = appReadinessTimeout
+					namespace := GetAppNamespace(ctx, taskName)
+					migrationNamespaces = append(migrationNamespaces, namespace)
+					log.Infof("Creating clusterpair between first and second cluster")
+					nodes, err := core.Instance().GetNodes()
+					log.Infof("Nodes is ==========================> %v", nodes.Items[0].Name)
+					err = ScheduleBidirectionalClusterPair(defaultClusterPairName, namespace, "", "", "", "sync-dr", FirstCluster, SecondCluster)
+					log.Infof("Error is: %v", err)
+					nodes, err = core.Instance().GetNodes()
+					log.Infof("Nodes is ==========================> %v", nodes.Items[0].Name)
+					err = SetCustomKubeConfig(FirstCluster)
+                    log.FailOnError(err, "Switching context to first cluster failed")
+					nodes, err = core.Instance().GetNodes()
+					log.Infof("Nodes is ==========================> %v", nodes.Items[0].Name)
+				}
+			}
+			log.Infof("Migration Namespaces: %v", migrationNamespaces)
+		})
+
+		log.Infof("Start migration Metro")
+		time.Sleep(time.Minute * 1)
+
+		for i, currMigNamespace := range migrationNamespaces {
+			migrationName := metromigrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
+			nodes, err := core.Instance().GetNodes()
+		    log.Infof("Nodes is ==========================> %v", nodes.Items[0].Name)
+			currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, defaultClusterPairName, currMigNamespace, &includeVolumesFlagMetro, &includeResourcesFlag, &startApplicationsFlag, nil)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("failed to create migration: %s in namespace %s. Error: [%v]",
+					migrationKey, currMigNamespace, err))
+			allMigrationsMetro = append(allMigrationsMetro, currMig)
+		}
+	
+		// Validate all migrations
+		for _, mig := range allMigrationsMetro {
+			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("failed to validate migration: %s in namespace %s. Error: [%v]",
+					mig.Name, mig.Namespace, err))
+		}
+
+		err = SetCustomKubeConfig(SecondCluster)
+        log.FailOnError(err, "Switching context to second cluster failed")
+
+		log.Infof("Start Async migration from Second DR to Third DR")
+
+		for i, currMigNamespace := range migrationNamespaces {
+			log.Infof("Creating clusterpair between second and third cluster")
+			ScheduleBidirectionalClusterPair(defaultClusterPairNameNew, currMigNamespace, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", SecondCluster, ThirdCluster)
+			err = SetCustomKubeConfig(SecondCluster)
+            log.FailOnError(err, "Switching context to second cluster failed")
+			time.Sleep(time.Minute * 1)
+			migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
+			currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, defaultClusterPairNameNew, currMigNamespace, &includeVolumesFlagAsync, &includeResourcesFlag, &startApplicationsFlag, nil)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("failed to create migration: %s in namespace %s. Error: [%v]",
+					migrationKey, currMigNamespace, err))
+			allMigrationsAsync = append(allMigrationsAsync, currMig)
+		}
+
+		for _, mig := range allMigrationsAsync {
+			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("failed to validate migration: %s in namespace %s. Error: [%v]",
+					mig.Name, mig.Namespace, err))
+		}
+	})
+})
+
+var _ = Describe("{MigrateDeploymentMetroAsyncOlderWay}", func() {
+	// var testrailID = 50803
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35258
+	// var runID int
+
+	var kubeConfigWritten bool
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+	// JustBeforeEach(func() {
+	// 	StartTorpedoTest("MigrateDeployment", "Migration of application to destination cluster", nil, testrailID)
+	// 	runID = testrailuttils.AddRunsToMilestone(testrailID)
+	// })
+
+	var (
+		contexts              []*scheduler.Context
+		migrationNamespaces   []string
+		taskNamePrefix        = "metro-async-dr-mig"
+		allMigrationsMetro         []*storkapi.Migration
+		allMigrationsAsync         []*storkapi.Migration
+		includeResourcesFlag  = true
+		includeVolumesFlagMetro = false
+		includeVolumesFlagAsync = true
+		startApplicationsFlag = false
+	)
+
+	listCdsTask := func() (interface{}, bool, error) {
+		// Fetch the cluster domains
+		cdses, err := storkops.Instance().ListClusterDomainStatuses()
+		if err != nil || len(cdses.Items) == 0 {
+			log.Infof("Failed to list cluster domains statuses. Error: %v. List of cluster domains: %v", err, len(cdses.Items))
+			return "", true, fmt.Errorf("failed to list cluster domains statuses")
+		}
+		cds := cdses.Items[0]
+		if len(cds.Status.ClusterDomainInfos) == 0 {
+			log.Infof("Found 0 cluster domain info objects in cluster domain status.")
+			return "", true, fmt.Errorf("failed to list cluster domains statuses")
+		}
+		return "", false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(listCdsTask, migrationRetryTimeout, migrationRetryInterval)
+	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed tp get migration status"))
+	It("has to deploy app, create cluster pair, migrate app", func() {
+		Step("Deploy applications", func() {
+
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+				log.Infof("Task name %s\n", taskName)
+				appContexts := ScheduleApplications(taskName)
+				contexts = append(contexts, appContexts...)
+				ValidateApplications(contexts)
+				for _, ctx := range contexts {
+					// Override default App readiness time out of 5 mins with 10 mins
+					ctx.ReadinessTimeout = appReadinessTimeout
+					namespace := GetAppNamespace(ctx, taskName)
+					migrationNamespaces = append(migrationNamespaces, namespace)
+				}
+				Step("Create cluster pair between source and destination clusters", func() {
+					// Set cluster context to cluster where torpedo is running
+					ScheduleValidateClusterPair(contexts[0], true, true, defaultClusterPairDir, false)
+				})
+			}
+			log.Infof("Migration Namespaces: %v", migrationNamespaces)
+		})
+
+		log.Infof("Start migration Metro")
+
+		for i, currMigNamespace := range migrationNamespaces {
+			migrationName := metromigrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
+			currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, defaultClusterPairName, currMigNamespace, &includeVolumesFlagMetro, &includeResourcesFlag, &startApplicationsFlag, nil)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("failed to create migration: %s in namespace %s. Error: [%v]",
+					migrationKey, currMigNamespace, err))
+			allMigrationsMetro = append(allMigrationsMetro, currMig)
+		}
+	
+		// Validate all migrations
+		for _, mig := range allMigrationsMetro {
+			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("failed to validate migration: %s in namespace %s. Error: [%v]",
+					mig.Name, mig.Namespace, err))
+		}
+
+		err := SetDestinationKubeConfig()
+		log.FailOnError(err, "Switching context to first destination cluster failed")
+
+		Step("Create cluster pair between first dest and second destination clusters", func() {
+			// Set cluster context to cluster where torpedo is running
+			ScheduleValidateClusterPairCustom(contexts[0], false, true, defaultClusterPairDirNew, false, defaultClusterPairNameNew, 1, 2)
+		})
+
+		log.Infof("Start Async migration from 2nd DR to 3rd DR")
+
+		for i, currMigNamespace := range migrationNamespaces {
+			log.Infof("Entered in mig loop, mig namespace is %v", currMigNamespace)
+			time.Sleep(1*time.Minute)
+			migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
+			currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, defaultClusterPairNameNew, currMigNamespace, &includeVolumesFlagAsync, &includeResourcesFlag, &startApplicationsFlag, nil)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("failed to create migration: %s in namespace %s. Error: [%v]",
+					migrationKey, currMigNamespace, err))
+			allMigrationsAsync = append(allMigrationsAsync, currMig)
+		}
+
+		for _, mig := range allMigrationsAsync {
+			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("failed to validate migration: %s in namespace %s. Error: [%v]",
+					mig.Name, mig.Namespace, err))
+		}
 	})
 })
 
