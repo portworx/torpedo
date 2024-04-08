@@ -4395,6 +4395,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	for _, vol := range vols {
 		log.Infof("K8s.GetVolumes() found volume %s for app %s", vol.Name, ctx.App.Key)
 	}
+	log.Infof("The number of volumes found for app %s is %d", ctx.App.Key, len(vols))
 	// Filtering out duplicate volumes
 	var uniqueVols []*volume.Volume
 	// vol.Name is used as the key because GetVolumes might be called before the PVC
