@@ -3311,7 +3311,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			volName := fmt.Sprintf("overcommit-test-%d", 0)
-			pxctlVolResizeCmd := fmt.Sprintf("pxctl vol update %s --size %v", volName, TargetSizeFloorValue)
+			pxctlVolResizeCmd := fmt.Sprintf("pxctl vol update %s --size %f", volName, TargetSizeFloorValue)
 			_, err := runPxctlCommand(pxctlVolResizeCmd, *selectedNode, nil)
 			log.FailOnError(err, "Failed to resize volume: %v", volName)
 			log.InfoD("Succesfully resized volume: %v", volName)
@@ -3324,7 +3324,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			volName := fmt.Sprintf("overcommit-test-%d", 0)
-			pxctlVolResizeCmd := fmt.Sprintf("pxctl v update %s --size %v", volName, TargetsizeCeilValue)
+			pxctlVolResizeCmd := fmt.Sprintf("pxctl v update %s --size %f", volName, TargetsizeCeilValue)
 			_, err := runPxctlCommand(pxctlVolResizeCmd, node.GetStorageDriverNodes()[0], nil)
 			log.FailOnError(err, "Failed to resize volume: %v", volName)
 			log.InfoD("Succesfully resized volume: %v", volName)
