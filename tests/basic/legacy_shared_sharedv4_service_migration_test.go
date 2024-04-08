@@ -183,7 +183,7 @@ func createSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffi
 		log.FailOnError(err, "Failed to Inspect volume [%v]", vol)
 		cloneName := fmt.Sprintf("%s-%s", vol, cloneSuffix)
 		snapshotName := fmt.Sprintf("%s-%s", vol, snapshotSuffix)
-		pxctlCloneCmd := fmt.Sprintf("volume clone create %s --name %s", apiVol.Id, cloneName)
+		pxctlCloneCmd := fmt.Sprintf("volume clone %s --name %s", apiVol.Id, cloneName)
 		pxctlSnapshotCmd := fmt.Sprintf("volume snapshot create %s --name %s", apiVol.Id, snapshotName)
 		output, err := Inst().V.GetPxctlCmdOutput(pxNode, pxctlCloneCmd)
 		log.FailOnError(err, fmt.Sprintf("error creating clone for volumes %s", apiVol.Id))
