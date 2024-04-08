@@ -3282,7 +3282,6 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		TargetSizeFloorValue := math.Floor(float64(targetSizeGiB))
 		log.InfoD("TargetSizeFloorValue of the pool %s is %d", poolIDToResize, TargetSizeFloorValue)
 
-		// update the cluster options
 		stepLog := "Update the pxctl cluster with cluster option OverCommitPercent with the maximum storage percentage volumes can provision against backing storage set to 100(Enabeling Thick Provisioning)"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -3297,8 +3296,8 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			log.InfoD("The Current Cluster options: %v", output)
 			log.InfoD("Successfully set cluster options")
 		})
-		// create a volume with a base size , for eg: 10 GB
-		stepLog = "Create a volume with a base size , for eg: 10 GB"
+
+		stepLog = "Create a volume with a base size"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			volName := fmt.Sprintf("overcommit-test-%d", 0)
@@ -3307,8 +3306,8 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			log.FailOnError(err, "Failed to create volume using pxctl")
 			log.InfoD("Successfully created volume: %v", output)
 		})
-		// Now update the volume size upto the maximum limit of the storage pool eg: if storage pool has a capacity of 200 GB left , increase vol size by 200
-		stepLog = "Now update the volume size upto the maximum limit of the storage pool eg: if storage pool has a capacity of 200 GB left , increase vol size by 200"
+
+		stepLog = "Now update the volume size upto the maximum limit of the storage pool"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			volName := fmt.Sprintf("overcommit-test-%d", 0)
@@ -3316,18 +3315,12 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			_, err := runPxctlCommand(pxctlVolResizeCmd, *selectedNode, nil)
 			log.FailOnError(err, "Failed to resize volume: %v", volName)
 			log.InfoD("Succesfully resized volume: %v", volName)
-		})
-		// Check vol size is successful or not
-		stepLog = "Check vol size is successful or not"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			volName := fmt.Sprintf("overcommit-test-%d", 0)
 			volInspect, err := Inst().V.InspectVolume(volName)
 			log.FailOnError(err, "Failed to inspect volume")
 			log.InfoD("Volume size: %v", volInspect.Spec.Size)
 		})
-		// Now try to increase the volume size by 1 more GB, it should fail , as it exceeds the storage pool capacity
-		stepLog = "Now try to increase the volume size by 1 more GB, it should fail , as it exceeds the storage pool capacity"
+
+		stepLog = "Now try to increase the volume size  more than the capacity of storage pool"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			volName := fmt.Sprintf("overcommit-test-%d", 0)
