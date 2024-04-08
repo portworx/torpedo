@@ -128,6 +128,16 @@ func (wfDataService *WorkflowDataService) DeleteDeployment() error {
 	return dslibs.DeleteDeployment(wfDataService.DataServiceDeployment)
 }
 
+func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId string) error {
+	deployment, err := dslibs.GetDeployment(deploymentId)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Deployment Response [+%v]", deployment)
+	return nil
+}
+
 func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(params *parameters.NewPDSParams) error {
 
 	//Initializing the parameters required for workload generation
