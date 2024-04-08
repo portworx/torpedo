@@ -13,6 +13,7 @@ import (
 type WorkflowDataService struct {
 	Namespace                     WorkflowNamespace
 	PDSTemplates                  CustomTemplates
+	TargetCluster                 WorkflowTargetCluster
 	NamespaceName                 string
 	DataServiceDeployment         map[string]string
 	RestoredDataServiceDeployment map[string]string
@@ -225,5 +226,31 @@ func ValidateDeploymentResources(resourceTemp dslibs.ResourceSettingTemplate, st
 
 func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string, deployment map[string]string, sizeInGb uint64) error {
 	_, err := k8utils.IncreasePVCby1Gig(namespace, deployment, sizeInGb)
+	return err
+}
+
+func (wfDataService *WorkflowDataService) GetDbMasterNode(namespace string, dsName string, deployment map[string]string) (string, bool) {
+	kubeconfigpath := wfDataService.TargetCluster.KubeConfig
+	newDbMaster, _ := k8utils.GetDbMasterNode(namespace, dsName, deployment, kubeconfigpath)
+	return newDbMaster, true
+}
+
+// DeleteK8sPods deletes the pods in given namespace
+func (wfDataService *WorkflowDataService) DeleteK8sPods(pod string, namespace string, kubeConfigPath string) error {
+	err := k8utils.DeleteK8sPods(pod, namespace, kubeConfigPath)
+	return err
+}
+
+func (wfDataService *WorkflowDataService) GetAnyPodName(statefulName, namespace string) (string, error) {
+	pod, err := k8utils.GetAnyPodName(statefulName, namespace)
+	if err != nil {
+		return "", err
+	}
+	return pod, nil
+
+}
+
+func (wfDataService *WorkflowDataService) KillPodsInNamespace(namespace string, pod string) error {
+	err := k8utils.KillPodsInNamespace(namespace, pod)
 	return err
 }
