@@ -17,7 +17,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	})
 	var (
 		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.CustomTemplates
+		workFlowTemplates   pds.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 		updateDeployment    *automationModels.PDSDeploymentResponse
 		err                 error
@@ -91,7 +91,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersion}", func() {
 	})
 	var (
 		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.CustomTemplates
+		workFlowTemplates   pds.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 		err                 error
 	)
@@ -163,7 +163,7 @@ var _ = Describe("{ScaleUpCpuMemLimitsOfDS}", func() {
 	})
 	var (
 		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.CustomTemplates
+		workFlowTemplates   pds.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 	)
 	It("Deploy and Validate DataService", func() {
@@ -215,7 +215,7 @@ var _ = Describe("{IncreasePVCby1gb}", func() {
 	})
 	var (
 		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.CustomTemplates
+		workFlowTemplates   pds.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 	)
 	It("Deploy and Validate DataService", func() {

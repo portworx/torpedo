@@ -9,14 +9,14 @@ import (
 	"strconv"
 )
 
-type CustomTemplates struct {
+type WorkflowPDSTemplates struct {
 	Platform                platform.WorkflowPlatform
 	ResourceTemplateId      string
 	StorageTemplateId       string
 	ServiceConfigTemplateId string
 }
 
-func (cusTemp *CustomTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *parameters.NewPDSParams, updateTemplate bool) (string, string, string, error) {
+func (cusTemp *WorkflowPDSTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *parameters.NewPDSParams, updateTemplate bool) (string, string, string, error) {
 
 	//Todo: Mechanism to populate dynamic/Unknown key-value pairs for App config
 	//ToDo: Take configurationValue incrementation count from user/testcase
@@ -73,7 +73,7 @@ func (cusTemp *CustomTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *p
 	return *appConfigId, *stConfigId, *resourceConfigId, nil
 }
 
-func (cusTemp *CustomTemplates) DeleteCreatedCustomPdsTemplates(tempList []string) error {
+func (cusTemp *WorkflowPDSTemplates) DeleteCreatedCustomPdsTemplates(tempList []string) error {
 	for _, id := range tempList {
 		err := pdslibs.DeleteTemplate(id)
 		if err != nil {

@@ -224,7 +224,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 	})
 	var (
 		workflowDataservice  pds.WorkflowDataService
-		workFlowTemplates    pds.CustomTemplates
+		workFlowTemplates    pds.WorkflowPDSTemplates
 		workflowBackUpConfig pds.WorkflowPDSBackupConfig
 		workflowRestore      pds.WorkflowPDSRestore
 		deployment           *automationModels.PDSDeploymentResponse
@@ -485,7 +485,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 		deployment           *automationModels.PDSDeploymentResponse
 		restoreDeployment    *automationModels.PDSRestoreResponse
 
-		workFlowTemplates pds.CustomTemplates
+		workFlowTemplates pds.WorkflowPDSTemplates
 		tempList          []string
 
 		pdsBackupConfigName string

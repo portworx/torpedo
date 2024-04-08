@@ -1,7 +1,6 @@
 package pds
 
 import (
-	"fmt"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 )
@@ -11,21 +10,19 @@ type WorkflowPDSBackup struct {
 }
 
 // GetBackupIDByName returns the ID of given backup
-func (backup WorkflowPDSBackup) GetBackupIDByName(name string, backupConfigName string) (string, error) {
+func (backup WorkflowPDSBackup) GetLatestBackup(backupConfigName string) (automationModels.V1Backup, error) {
+
+	var latestBackup automationModels.V1Backup
 
 	allBackups, err := pdslibs.ListBackup(*backup.WorkflowBackupConfig.Backups[backupConfigName].Meta.Uid)
 
 	if err != nil {
-		return "", err
+		return latestBackup, err
 	}
 
-	for _, eachBackup := range allBackups.List.Backups {
-		if *eachBackup.Meta.Name == name {
-			return *eachBackup.Meta.Uid, nil
-		}
-	}
+	latestBackup = allBackups.List.Backups[0]
 
-	return "", fmt.Errorf("[%s] - Backup not found ", name)
+	return latestBackup, nil
 }
 
 // GetBackupIDByName deletes the given backup
@@ -34,14 +31,15 @@ func (backup WorkflowPDSBackup) DeleteBackup(id string) error {
 	return err
 }
 
-// ListAllBackups returns the list of all backups
-func (backup WorkflowPDSBackup) ListAllBackups(backupConfigName string) (*automationModels.PDSBackupResponse, error) {
+func (backup WorkflowPDSBackup) ListAllBackups(backupConfigName string) ([]automationModels.V1Backup, error) {
 
-	list, err := pdslibs.ListBackup(*backup.WorkflowBackupConfig.Backups[backupConfigName].Meta.Uid)
+	allBackups := make([]automationModels.V1Backup, 0)
+
+	response, err := pdslibs.ListBackup(*backup.WorkflowBackupConfig.Backups[backupConfigName].Meta.Uid)
 
 	if err != nil {
-		return nil, err
+		return allBackups, err
 	}
 
-	return list, nil
+	return response.List.Backups, nil
 }

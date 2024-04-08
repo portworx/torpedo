@@ -13,7 +13,7 @@ var _ = Describe("{MultiplyNumDuringSummation}", func() {
 		StartTorpedoTest("MultiplyNumDuringSummation", "TestResiliencyDummy", nil, 0)
 	})
 	var (
-		workflowResiliency  pds.WorkflowResiliency
+		workflowResiliency  pds.WorkflowPDSResiliency
 		workflowDataservice pds.WorkflowDataService
 	)
 	It("Deploy and DS and Stop Px During Storage/PVC Resize", func() {
