@@ -40,7 +40,11 @@ type PlatformGetTargetClusterManifest struct {
 }
 
 type PlatformListTargetCluster struct {
-	TenantId string `copier:"must,nopanic"`
+	TenantId             string `copier:"must,nopanic"`
+	PaginationPageNumber string `copier:"must,nopanic"`
+	PaginationPageSize   string `copier:"must,nopanic"`
+	SortSortBy           string `copier:"must,nopanic"`
+	SortSortOrder        string `copier:"must,nopanic"`
 }
 
 type PlatformDeleteTargetCluster struct {
@@ -48,7 +52,8 @@ type PlatformDeleteTargetCluster struct {
 }
 
 type V1ListTargetClustersResponse struct {
-	Clusters []V1TargetCluster `copier:"must,nopanic"`
+	Clusters   []V1TargetCluster              `copier:"must,nopanic"`
+	Pagination *V1PageBasedPaginationResponse `copier:"must,nopanic"`
 }
 
 type V1TargetCluster struct {

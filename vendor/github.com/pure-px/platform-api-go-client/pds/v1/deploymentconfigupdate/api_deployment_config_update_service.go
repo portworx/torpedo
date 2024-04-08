@@ -27,12 +27,12 @@ type ApiDeploymentConfigUpdateServiceCreateDeploymentConfigUpdateRequest struct 
 	ctx context.Context
 	ApiService *DeploymentConfigUpdateServiceAPIService
 	deploymentConfigUpdateConfigDeploymentMetaUid string
-	configOfTheDeploymentForWhichConfigUpdateIsRequested *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested
+	deploymentConfigUpdateOfTheDeploymentUpdateRequest *DeploymentConfigUpdateOfTheDeploymentUpdateRequest
 }
 
-// Config of the deployment for which config update is requested.
-func (r ApiDeploymentConfigUpdateServiceCreateDeploymentConfigUpdateRequest) ConfigOfTheDeploymentForWhichConfigUpdateIsRequested(configOfTheDeploymentForWhichConfigUpdateIsRequested ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) ApiDeploymentConfigUpdateServiceCreateDeploymentConfigUpdateRequest {
-	r.configOfTheDeploymentForWhichConfigUpdateIsRequested = &configOfTheDeploymentForWhichConfigUpdateIsRequested
+// DeploymentConfigUpdate of the deployment update request.
+func (r ApiDeploymentConfigUpdateServiceCreateDeploymentConfigUpdateRequest) DeploymentConfigUpdateOfTheDeploymentUpdateRequest(deploymentConfigUpdateOfTheDeploymentUpdateRequest DeploymentConfigUpdateOfTheDeploymentUpdateRequest) ApiDeploymentConfigUpdateServiceCreateDeploymentConfigUpdateRequest {
+	r.deploymentConfigUpdateOfTheDeploymentUpdateRequest = &deploymentConfigUpdateOfTheDeploymentUpdateRequest
 	return r
 }
 
@@ -76,8 +76,8 @@ func (a *DeploymentConfigUpdateServiceAPIService) DeploymentConfigUpdateServiceC
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
-	if r.configOfTheDeploymentForWhichConfigUpdateIsRequested == nil {
-		return localVarReturnValue, nil, reportError("configOfTheDeploymentForWhichConfigUpdateIsRequested is required and must be specified")
+	if r.deploymentConfigUpdateOfTheDeploymentUpdateRequest == nil {
+		return localVarReturnValue, nil, reportError("deploymentConfigUpdateOfTheDeploymentUpdateRequest is required and must be specified")
 	}
 
 	// to determine the Content-Type header
@@ -98,7 +98,7 @@ func (a *DeploymentConfigUpdateServiceAPIService) DeploymentConfigUpdateServiceC
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
 	// body params
-	localVarPostBody = r.configOfTheDeploymentForWhichConfigUpdateIsRequested
+	localVarPostBody = r.deploymentConfigUpdateOfTheDeploymentUpdateRequest
 	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
 	if err != nil {
 		return localVarReturnValue, nil, err

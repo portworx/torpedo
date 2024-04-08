@@ -27,6 +27,7 @@ type PDSBackupConfigResponse struct {
 
 type ListPDSBackupResponse struct {
 	BackupConfigs []V1BackupConfig
+	Pagination    *V1PageBasedPaginationResponse `copier:"must,nopanic"`
 }
 
 type CreatePDSBackupConfig struct {
@@ -50,16 +51,11 @@ type DeletePDSBackupConfig struct {
 }
 
 type ListPDSBackupConfig struct {
-	AccountId            *string
-	TenantId             *string
-	ProjectId            *string
-	TargetClusterId      *string
-	NamespaceId          *string
-	DeploymentId         *string
-	PaginationPageNumber *string
-	PaginationPageSize   *string
-	SortSortBy           *string
-	SortSortOrder        *string
+	TenantId             string
+	PaginationPageNumber string
+	PaginationPageSize   string
+	SortSortBy           string
+	SortSortOrder        string
 }
 
 type V1BackupConfig struct {

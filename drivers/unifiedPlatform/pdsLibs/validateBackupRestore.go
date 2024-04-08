@@ -14,11 +14,11 @@ const (
 )
 
 // ValidateAdhocBackup triggers the adhoc backup for given ds and store at the given backup target and validate them
-func ValidateAdhocBackup(backup BackupParams) error {
+func ValidateAdhocBackup(deploymentId string, backupConfigId string) error {
 	var bkpJobs *automationModels.PDSBackupResponse
 
 	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
-		bkpJobs, err = ListBackup(backup)
+		bkpJobs, err = ListBackup(backupConfigId)
 		if err != nil {
 			return false, err
 		}
@@ -35,7 +35,7 @@ func ValidateAdhocBackup(backup BackupParams) error {
 
 	log.Infof("Created adhoc backup successfully for %v,"+
 		" backup job: %v, backup job creation time: %v, backup job completion time: %v",
-		backup.DeploymentID, *bkpJobs.List.Backups[0].Meta.Name, *bkpJobs.List.Backups[0].Status.StartTime, *bkpJobs.List.Backups[0].Status.CompletionTime)
+		deploymentId, *bkpJobs.List.Backups[0].Meta.Name, *bkpJobs.List.Backups[0].Status.StartTime, *bkpJobs.List.Backups[0].Status.CompletionTime)
 	return nil
 }
 
@@ -49,7 +49,7 @@ func ValidateRestoreDeployment(restoreId, namespace string) error {
 	newDeployment := make(map[string]string)
 	newDeployment[*restore.Get.Meta.Name] = restore.Get.Config.DestinationReferences.DeploymentId
 
-	err = ValidateDataServiceDeployment(newDeployment, namespace)
+	err = ValidateDataServiceDeployment(restore.Get.Config.DestinationReferences.DeploymentId, namespace)
 	if err != nil {
 		return fmt.Errorf("error while validating restored deployment readiness")
 	}

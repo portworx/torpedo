@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
 	"path/filepath"
@@ -13,7 +13,7 @@ import (
 const (
 	EnvControlPlaneUrl     = "CONTROL_PLANE_URL"
 	DefaultTestAccount     = "pds-qa"
-	DefaultProject         = "px-system-project"
+	DefaultProject         = "PDS Project - Madan"
 	DefaultTenant          = "px-system-tenant"
 	EnvPlatformAccountName = "PLATFORM_ACCOUNT_NAME"
 	EnvAccountDisplayName  = "PLATFORM_ACCOUNT_DISPLAY_NAME"
@@ -31,12 +31,12 @@ var (
 )
 
 var (
-	WorkflowPlatform      stworkflows.WorkflowPlatform
-	WorkflowTargetCluster stworkflows.WorkflowTargetCluster
-	WorkflowProject       stworkflows.WorkflowProject
-	WorkflowNamespace     stworkflows.WorkflowNamespace
-	WorkflowCc            stworkflows.WorkflowCloudCredentials
-	WorkflowbkpLoc        stworkflows.WorkflowBackupLocation
+	WorkflowPlatform      platform.WorkflowPlatform
+	WorkflowTargetCluster platform.WorkflowTargetCluster
+	WorkflowProject       platform.WorkflowProject
+	WorkflowNamespace     platform.WorkflowNamespace
+	WorkflowCc            platform.WorkflowCloudCredentials
+	WorkflowbkpLoc        platform.WorkflowBackupLocation
 	NewPdsParams          *parameters.NewPDSParams
 	PdsLabels             = make(map[string]string)
 )

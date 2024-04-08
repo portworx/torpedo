@@ -1,15 +1,113 @@
 package automationModels
 
+type V1StatusHealth string
+type V1StatusPhase string
+type V1DeploymentTopologyStatusHealth string
+type V1DeploymentTopologyStatusPhase string
+type Pdsdeploymentconfigupdatev1StatusPhase string
+
 type PDSDeploymentRequest struct {
 	Create PDSDeployment
-	Update PDSDeployment
+	Update PDSDeploymentUpdate
 }
 
 type PDSDeploymentResponse struct {
 	Create V1Deployment
-	Update V1Deployment
-	Get    V1Deployment
+	Update V1DeploymentUpdate
+	Get    V1DeploymentGet
 	List   []V1Deployment
+}
+
+type V1DeploymentUpdate struct {
+	Meta   Meta
+	Config DeploymentUpdateConfig
+	Status DeploymentUpdateStatus
+}
+
+// Pdsdeploymentconfigupdatev1Status Status of the deployment config update.
+type DeploymentUpdateStatus struct {
+	// Error Code is a short string that represents the error.
+	ErrorCode *string `copier:"must,nopanic"`
+	// Error Message is a description of the error.
+	ErrorMessage *string `copier:"must,nopanic"`
+	// Number of times the deployment config update has been retried.
+	RetryCount *int32                                  `copier:"must,nopanic"`
+	Phase      *Pdsdeploymentconfigupdatev1StatusPhase `copier:"must,nopanic"`
+}
+
+type DeploymentUpdateConfig struct {
+	DeploymentMeta   Meta      `copier:"must,nopanic"`
+	DeploymentConfig V1Config1 `copier:"must,nopanic"`
+}
+
+type V1Deployment struct {
+	Meta   Meta               `copier:"must,nopanic"`
+	Config V1Config1          `copier:"must,nopanic"`
+	Status Deploymentv1Status `copier:"must,nopanic"`
+}
+
+type V1DeploymentGet struct {
+	Meta   Meta               `copier:"must,nopanic"`
+	Config V1Config1          `copier:"must,nopanic"`
+	Status Deploymentv1Status `copier:"must,nopanic"`
+}
+
+// Deploymentv1Status Status of the Deployment.
+type Deploymentv1Status struct {
+	Health *V1StatusHealth `copier:"must,nopanic"`
+	Phase  *V1StatusPhase  `copier:"must,nopanic"`
+	// ConnectionDetails urls, ports, credentials, etc for connecting to the data service.
+	ConnectionInfo map[string]interface{} `copier:"must,nopanic"`
+	// Initialize used to control startup scripts.
+	Initialized *string `copier:"must,nopanic"`
+	// Status of the deployment topology.
+	DeploymentTopologyStatus []V1DeploymentTopologyStatus `copier:"must,nopanic"`
+}
+
+// V1DeploymentTopologyStatus Status of the deployment topology. It is consumed in Deployment.
+type V1DeploymentTopologyStatus struct {
+	Health *V1DeploymentTopologyStatusHealth `copier:"must,nopanic"`
+	Phase  *V1DeploymentTopologyStatusPhase  `copier:"must,nopanic"`
+	// Number of replicas reported by Target Cluster that are up and running.
+	ReadyReplicas  *string           `copier:"must,nopanic"`
+	ConnectionInfo *V1ConnectionInfo `copier:"must,nopanic"`
+}
+
+// V1ConnectionInfo Connection Information for the Deployment Topology.
+type V1ConnectionInfo struct {
+	// Ready pods.
+	Pods []V1PodInfo `copier:"must,nopanic"`
+	// Pods that are not ready.
+	NotReadyPods      []V1PodInfo          `copier:"must,nopanic"`
+	ConnectionDetails *V1ConnectionDetails `copier:"must,nopanic"`
+	// Stores details about the cluster.
+	ClusterDetails map[string]interface{} `copier:"must,nopanic"`
+}
+
+// V1PodInfo PodInfo contains information about a pod.
+type V1PodInfo struct {
+	// The IP of a pod.
+	Ip *string `copier:"must,nopanic"`
+	// Name is the Hostname of a pod.
+	Name *string `copier:"must,nopanic"`
+	// Node that hosts a particular pod.
+	WorkerNode *string `copier:"must,nopanic"`
+}
+
+// V1ConnectionDetails ConnectionDetails of data service.
+type V1ConnectionDetails struct {
+	// Nodes of the data service.
+	Nodes []string `copier:"must,nopanic"`
+	// Ports provided by the data service (name and number).
+	Ports *map[string]int32 `copier:"must,nopanic"`
+}
+
+type V1Config1 struct {
+	References Reference `copier:"must,nopanic"`
+	// Flag to enable TLS for the Data Service.
+	TlsEnabled *bool `copier:"must,nopanic"`
+	// A deployment topology contains a number of nodes that have various attributes as a collective group.
+	DeploymentTopologies []DeploymentTopology `copier:"must,nopanic"`
 }
 
 type DeploymentTopology struct {
@@ -53,4 +151,10 @@ type PDSDeployment struct {
 	NamespaceID  string       `copier:"must,nopanic"`
 	ProjectID    string       `copier:"must,nopanic"`
 	V1Deployment V1Deployment `copier:"must,nopanic"`
+}
+
+type PDSDeploymentUpdate struct {
+	NamespaceID  string             `copier:"must,nopanic"`
+	ProjectID    string             `copier:"must,nopanic"`
+	V1Deployment V1DeploymentUpdate `copier:"must,nopanic"`
 }

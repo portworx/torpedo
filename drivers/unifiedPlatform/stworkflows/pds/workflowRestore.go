@@ -1,15 +1,16 @@
-package stworkflows
+package pds
 
 import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
 type WorkflowPDSRestore struct {
 	WorkflowDataService    WorkflowDataService
-	Destination            WorkflowTargetCluster
-	WorkflowBackupLocation WorkflowBackupLocation
+	Destination            platform.WorkflowTargetCluster
+	WorkflowBackupLocation platform.WorkflowBackupLocation
 	SkipValidatation       map[string]bool
 }
 

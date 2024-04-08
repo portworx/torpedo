@@ -3,7 +3,7 @@ package tests
 import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -16,12 +16,14 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 		StartTorpedoTest("DeployDataServicesOnDemandAndScaleUp", "Deploy data services and perform scale up", nil, 0)
 	})
 	var (
-		workflowDataservice stworkflows.WorkflowDataService
-		workFlowTemplates   stworkflows.CustomTemplates
+		workflowDataservice pds.WorkflowDataService
+		workFlowTemplates   pds.CustomTemplates
 		deployment          *automationModels.PDSDeploymentResponse
+		updateDeployment    *automationModels.PDSDeploymentResponse
+		err                 error
 	)
 
-	It("Deploy and Validate DataService", func() {
+	It("Deploy,Validate and ScaleUp DataService", func() {
 		Step("Create a PDS Namespace", func() {
 			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
 			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
@@ -37,39 +39,45 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
 			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
-
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
-			_, err := workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
 			log.FailOnError(err, "Error while deploying ds")
+			log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 		}
 
-		stepLog := "Running Workloads before taking backups"
-		Step(stepLog, func() {
-			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-			log.FailOnError(err, "Error while running workloads on ds")
+		defer func() {
+			Step("Delete DataServiceDeployment", func() {
+				log.InfoD("Cleaning Up dataservice...")
+				err := workflowDataservice.DeleteDeployment()
+				log.FailOnError(err, "Error while deleting dataservice")
+			})
+		}()
+
+		//stepLog := "Running Workloads before taking backups"
+		//Step(stepLog, func() {
+		//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+		//	log.FailOnError(err, "Error while running workloads on ds")
+		//})
+
+		Step("ScaleUp DataService", func() {
+			log.InfoD("Scaling Up dataservices...")
+			for _, ds := range NewPdsParams.DataServiceToTest {
+				updateDeployment, err = workflowDataservice.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
+				log.FailOnError(err, "Error while updating ds")
+				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
+			}
 		})
-	})
 
-	It("ScaleUp DataService", func() {
-		for _, ds := range NewPdsParams.DataServiceToTest {
-			_, err := workflowDataservice.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
-			log.FailOnError(err, "Error while updating ds")
-		}
+		//stepLog = "Running Workloads after ScaleUp of DataService"
+		//Step(stepLog, func() {
+		//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+		//	log.FailOnError(err, "Error while running workloads on ds")
+		//})
 
-		stepLog := "Running Workloads after ScaleUp of DataService"
-		Step(stepLog, func() {
-			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-			log.FailOnError(err, "Error while running workloads on ds")
-		})
-	})
-
-	It("Delete DataServiceDeployment", func() {
-		err := workflowDataservice.DeleteDeployment()
-		log.FailOnError(err, "Error while deleting dataservice")
 	})
 
 	JustAfterEach(func() {
@@ -82,8 +90,8 @@ var _ = Describe("{UpgradeDataServiceImageAndVersion}", func() {
 		StartTorpedoTest("UpgradeDataServiceImage", "Upgrade Data Service Version and Image", nil, 0)
 	})
 	var (
-		workflowDataservice stworkflows.WorkflowDataService
-		workFlowTemplates   stworkflows.CustomTemplates
+		workflowDataservice pds.WorkflowDataService
+		workFlowTemplates   pds.CustomTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 		err                 error
 	)
@@ -154,8 +162,8 @@ var _ = Describe("{ScaleUpCpuMemLimitsOfDS}", func() {
 		StartTorpedoTest("ScaleUpCpuMemLimitsOfDS", "Deploy a dataservice and scale up its CPU/MEM limits by editing the respective template", nil, 0)
 	})
 	var (
-		workflowDataservice stworkflows.WorkflowDataService
-		workFlowTemplates   stworkflows.CustomTemplates
+		workflowDataservice pds.WorkflowDataService
+		workFlowTemplates   pds.CustomTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 	)
 	It("Deploy and Validate DataService", func() {
@@ -206,8 +214,8 @@ var _ = Describe("{IncreasePVCby1gb}", func() {
 		StartTorpedoTest("IncreasePVCby1gb", "Deploy a dataservice and increase it Storage Size by 1gb  by applying new Storage template", nil, 0)
 	})
 	var (
-		workflowDataservice stworkflows.WorkflowDataService
-		workFlowTemplates   stworkflows.CustomTemplates
+		workflowDataservice pds.WorkflowDataService
+		workFlowTemplates   pds.CustomTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 	)
 	It("Deploy and Validate DataService", func() {

@@ -22,6 +22,19 @@ func (ProjectV1 *PLATFORM_API_V1) GetProjectList(listProject *PlaformProjectRequ
 	var getRequest projectv1.ApiProjectServiceListProjectsRequest
 	getRequest = getRequest.ApiService.ProjectServiceListProjects(ctx).TenantId(listProject.List.TenantId)
 
+	if listProject.List.SortSortBy != "" {
+		getRequest = getRequest.SortSortBy(listProject.List.SortSortBy)
+	}
+	if listProject.List.SortSortOrder != "" {
+		getRequest = getRequest.SortSortOrder(listProject.List.SortSortOrder)
+	}
+	if listProject.List.PaginationPageNumber != "" {
+		getRequest = getRequest.PaginationPageNumber(listProject.List.PaginationPageNumber)
+	}
+	if listProject.List.PaginationPageSize != "" {
+		getRequest = getRequest.PaginationPageSize(listProject.List.PaginationPageSize)
+	}
+
 	projectsList, res, err := client.ProjectServiceListProjectsExecute(getRequest)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ProjectServiceListProjectsExecute`: %v\n.Full HTTP response: %v", err, res)

@@ -24,7 +24,7 @@ type V1Template struct {
 	// Resource version of the template.
 	ResourceVersion *string `json:"resourceVersion,omitempty"`
 	// Values required for template.
-	Values *map[string]ProtobufAny `json:"values,omitempty"`
+	Values *map[string]string `json:"values,omitempty"`
 }
 
 // NewV1Template instantiates a new V1Template object
@@ -109,9 +109,9 @@ func (o *V1Template) SetResourceVersion(v string) {
 }
 
 // GetValues returns the Values field value if set, zero value otherwise.
-func (o *V1Template) GetValues() map[string]ProtobufAny {
+func (o *V1Template) GetValues() map[string]string {
 	if o == nil || IsNil(o.Values) {
-		var ret map[string]ProtobufAny
+		var ret map[string]string
 		return ret
 	}
 	return *o.Values
@@ -119,7 +119,7 @@ func (o *V1Template) GetValues() map[string]ProtobufAny {
 
 // GetValuesOk returns a tuple with the Values field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *V1Template) GetValuesOk() (*map[string]ProtobufAny, bool) {
+func (o *V1Template) GetValuesOk() (*map[string]string, bool) {
 	if o == nil || IsNil(o.Values) {
 		return nil, false
 	}
@@ -135,8 +135,8 @@ func (o *V1Template) HasValues() bool {
 	return false
 }
 
-// SetValues gets a reference to the given map[string]ProtobufAny and assigns it to the Values field.
-func (o *V1Template) SetValues(v map[string]ProtobufAny) {
+// SetValues gets a reference to the given map[string]string and assigns it to the Values field.
+func (o *V1Template) SetValues(v map[string]string) {
 	o.Values = &v
 }
 

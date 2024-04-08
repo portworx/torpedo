@@ -55,6 +55,25 @@ func GetProjectList(tenantId string) (*automationModels.V1ListProjectsResponse, 
 	if err != nil {
 		return nil, err
 	}
+
+	totalRecords := projects.List.Pagination.TotalRecords
+	log.Infof("Total projects present under [%s] - [%s]", tenantId, *projects.List.Pagination.TotalRecords)
+
+	request = automationModels.PlaformProjectRequest{
+		List: automationModels.PlatformListProject{
+			TenantId:             tenantId,
+			PaginationPageSize:   *totalRecords,
+			PaginationPageNumber: DEFAULT_PAGE_NUMBER,
+			SortSortBy:           DEFAULT_SORT_BY,
+			SortSortOrder:        DEFAULT_SORT_ORDER,
+		},
+	}
+
+	projects, err = v2Components.Platform.GetProjectList(&request)
+
+	if err != nil {
+		return nil, err
+	}
 	return &projects.List, nil
 }
 

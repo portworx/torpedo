@@ -86,6 +86,7 @@ Class | Method | HTTP request | Description
 *ImageServiceAPI* | [**ImageServiceGetImage**](docs/ImageServiceAPI.md#imageservicegetimage) | **Get** /pds/v1/catalog/images/{id} | GetImage API returns the information about the specified image.
 *ImageServiceAPI* | [**ImageServiceListImages**](docs/ImageServiceAPI.md#imageservicelistimages) | **Get** /pds/v1/catalog/images | ListImages API lists the data service images.
 *TemplateDefinitionServiceAPI* | [**TemplateDefinitionServiceGetRevision**](docs/TemplateDefinitionServiceAPI.md#templatedefinitionservicegetrevision) | **Get** /pds/v1/catalog/templateDefinition/revisions:get | GetRevision gets the revision details, containing the actual schema.
+*TemplateDefinitionServiceAPI* | [**TemplateDefinitionServiceGetTemplateSample**](docs/TemplateDefinitionServiceAPI.md#templatedefinitionservicegettemplatesample) | **Get** /pds/v1/catalog/templateDefinition/samples/{id} | GetTemplateSample API returns the template sample for a given template id.
 *TemplateDefinitionServiceAPI* | [**TemplateDefinitionServiceGetTemplateType**](docs/TemplateDefinitionServiceAPI.md#templatedefinitionservicegettemplatetype) | **Get** /pds/v1/catalog/templateDefinition/types/{id} | GetTemplateType API returns the template type by id.
 *TemplateDefinitionServiceAPI* | [**TemplateDefinitionServiceListRevisions**](docs/TemplateDefinitionServiceAPI.md#templatedefinitionservicelistrevisions) | **Get** /pds/v1/catalog/templateDefinition/revisions | ListRevisions list the revisions.
 *TemplateDefinitionServiceAPI* | [**TemplateDefinitionServiceListTemplateKinds**](docs/TemplateDefinitionServiceAPI.md#templatedefinitionservicelisttemplatekinds) | **Get** /pds/v1/catalog/templateDefinition/kinds | ListTemplateKindRequest: Used to list unique template kind(names).
@@ -130,6 +131,8 @@ Class | Method | HTTP request | Description
  - [V1Selector](docs/V1Selector.md)
  - [V1Sort](docs/V1Sort.md)
  - [V1Sort1](docs/V1Sort1.md)
+ - [V1Sort2](docs/V1Sort2.md)
+ - [V1Sort3](docs/V1Sort3.md)
  - [V1SortOrderValue](docs/V1SortOrderValue.md)
  - [V1TemplateSample](docs/V1TemplateSample.md)
  - [V1TemplateType](docs/V1TemplateType.md)

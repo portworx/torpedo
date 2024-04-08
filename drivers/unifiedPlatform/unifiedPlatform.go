@@ -247,6 +247,7 @@ func GetPDSRESTClientForAutomation(controlPlaneURL string, AccountId string) (pd
 	backupV1Conf := backupV1.NewConfiguration()
 	backupV1Conf.Host = endpointURL.Host
 	backupV1Conf.Scheme = endpointURL.Scheme
+	log.Debugf("scheme [%s]", endpointURL.Scheme)
 	backupV1APIClient := backupV1.NewAPIClient(backupV1Conf)
 
 	// Creating PDS BackupConfig REST Client
@@ -276,7 +277,8 @@ func GetPDSRESTClientForAutomation(controlPlaneURL string, AccountId string) (pd
 	// Creating PDS Catalog REST Client
 	catalogV1Conf := catalogV1.NewConfiguration()
 	catalogV1Conf.Host = endpointURL.Host
-	restoreV1Conf.Scheme = endpointURL.Scheme
+	catalogV1Conf.Scheme = endpointURL.Scheme
+	log.Debugf("scheme [%s]", endpointURL.Scheme)
 	catalogV1APIClient := catalogV1.NewAPIClient(catalogV1Conf)
 
 	return pdsapi.PDS_API_V1{

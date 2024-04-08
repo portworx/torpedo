@@ -17,11 +17,10 @@ import (
 // checks if the ConfigOfTheDeploymentForWhichConfigUpdateIsRequested type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &ConfigOfTheDeploymentForWhichConfigUpdateIsRequested{}
 
-// ConfigOfTheDeploymentForWhichConfigUpdateIsRequested struct for ConfigOfTheDeploymentForWhichConfigUpdateIsRequested
+// ConfigOfTheDeploymentForWhichConfigUpdateIsRequested Config of the deployment for which config update is requested.
 type ConfigOfTheDeploymentForWhichConfigUpdateIsRequested struct {
-	Meta *V1Meta `json:"meta,omitempty"`
-	Config *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested `json:"config,omitempty"`
-	Status *Pdsdeploymentconfigupdatev1Status `json:"status,omitempty"`
+	DeploymentMeta *MetadataOfTheDeploymentResource `json:"deploymentMeta,omitempty"`
+	DeploymentConfig *Pdsdeploymentv1Config `json:"deploymentConfig,omitempty"`
 }
 
 // NewConfigOfTheDeploymentForWhichConfigUpdateIsRequested instantiates a new ConfigOfTheDeploymentForWhichConfigUpdateIsRequested object
@@ -41,100 +40,68 @@ func NewConfigOfTheDeploymentForWhichConfigUpdateIsRequestedWithDefaults() *Conf
 	return &this
 }
 
-// GetMeta returns the Meta field value if set, zero value otherwise.
-func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) GetMeta() V1Meta {
-	if o == nil || IsNil(o.Meta) {
-		var ret V1Meta
+// GetDeploymentMeta returns the DeploymentMeta field value if set, zero value otherwise.
+func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) GetDeploymentMeta() MetadataOfTheDeploymentResource {
+	if o == nil || IsNil(o.DeploymentMeta) {
+		var ret MetadataOfTheDeploymentResource
 		return ret
 	}
-	return *o.Meta
+	return *o.DeploymentMeta
 }
 
-// GetMetaOk returns a tuple with the Meta field value if set, nil otherwise
+// GetDeploymentMetaOk returns a tuple with the DeploymentMeta field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) GetMetaOk() (*V1Meta, bool) {
-	if o == nil || IsNil(o.Meta) {
+func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) GetDeploymentMetaOk() (*MetadataOfTheDeploymentResource, bool) {
+	if o == nil || IsNil(o.DeploymentMeta) {
 		return nil, false
 	}
-	return o.Meta, true
+	return o.DeploymentMeta, true
 }
 
-// HasMeta returns a boolean if a field has been set.
-func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) HasMeta() bool {
-	if o != nil && !IsNil(o.Meta) {
+// HasDeploymentMeta returns a boolean if a field has been set.
+func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) HasDeploymentMeta() bool {
+	if o != nil && !IsNil(o.DeploymentMeta) {
 		return true
 	}
 
 	return false
 }
 
-// SetMeta gets a reference to the given V1Meta and assigns it to the Meta field.
-func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) SetMeta(v V1Meta) {
-	o.Meta = &v
+// SetDeploymentMeta gets a reference to the given MetadataOfTheDeploymentResource and assigns it to the DeploymentMeta field.
+func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) SetDeploymentMeta(v MetadataOfTheDeploymentResource) {
+	o.DeploymentMeta = &v
 }
 
-// GetConfig returns the Config field value if set, zero value otherwise.
-func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) GetConfig() ConfigOfTheDeploymentForWhichConfigUpdateIsRequested {
-	if o == nil || IsNil(o.Config) {
-		var ret ConfigOfTheDeploymentForWhichConfigUpdateIsRequested
+// GetDeploymentConfig returns the DeploymentConfig field value if set, zero value otherwise.
+func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) GetDeploymentConfig() Pdsdeploymentv1Config {
+	if o == nil || IsNil(o.DeploymentConfig) {
+		var ret Pdsdeploymentv1Config
 		return ret
 	}
-	return *o.Config
+	return *o.DeploymentConfig
 }
 
-// GetConfigOk returns a tuple with the Config field value if set, nil otherwise
+// GetDeploymentConfigOk returns a tuple with the DeploymentConfig field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) GetConfigOk() (*ConfigOfTheDeploymentForWhichConfigUpdateIsRequested, bool) {
-	if o == nil || IsNil(o.Config) {
+func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) GetDeploymentConfigOk() (*Pdsdeploymentv1Config, bool) {
+	if o == nil || IsNil(o.DeploymentConfig) {
 		return nil, false
 	}
-	return o.Config, true
+	return o.DeploymentConfig, true
 }
 
-// HasConfig returns a boolean if a field has been set.
-func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) HasConfig() bool {
-	if o != nil && !IsNil(o.Config) {
+// HasDeploymentConfig returns a boolean if a field has been set.
+func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) HasDeploymentConfig() bool {
+	if o != nil && !IsNil(o.DeploymentConfig) {
 		return true
 	}
 
 	return false
 }
 
-// SetConfig gets a reference to the given ConfigOfTheDeploymentForWhichConfigUpdateIsRequested and assigns it to the Config field.
-func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) SetConfig(v ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) {
-	o.Config = &v
-}
-
-// GetStatus returns the Status field value if set, zero value otherwise.
-func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) GetStatus() Pdsdeploymentconfigupdatev1Status {
-	if o == nil || IsNil(o.Status) {
-		var ret Pdsdeploymentconfigupdatev1Status
-		return ret
-	}
-	return *o.Status
-}
-
-// GetStatusOk returns a tuple with the Status field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) GetStatusOk() (*Pdsdeploymentconfigupdatev1Status, bool) {
-	if o == nil || IsNil(o.Status) {
-		return nil, false
-	}
-	return o.Status, true
-}
-
-// HasStatus returns a boolean if a field has been set.
-func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) HasStatus() bool {
-	if o != nil && !IsNil(o.Status) {
-		return true
-	}
-
-	return false
-}
-
-// SetStatus gets a reference to the given Pdsdeploymentconfigupdatev1Status and assigns it to the Status field.
-func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) SetStatus(v Pdsdeploymentconfigupdatev1Status) {
-	o.Status = &v
+// SetDeploymentConfig gets a reference to the given Pdsdeploymentv1Config and assigns it to the DeploymentConfig field.
+func (o *ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) SetDeploymentConfig(v Pdsdeploymentv1Config) {
+	o.DeploymentConfig = &v
 }
 
 func (o ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) MarshalJSON() ([]byte, error) {
@@ -147,14 +114,11 @@ func (o ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) MarshalJSON() ([]b
 
 func (o ConfigOfTheDeploymentForWhichConfigUpdateIsRequested) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.Meta) {
-		toSerialize["meta"] = o.Meta
+	if !IsNil(o.DeploymentMeta) {
+		toSerialize["deploymentMeta"] = o.DeploymentMeta
 	}
-	if !IsNil(o.Config) {
-		toSerialize["config"] = o.Config
-	}
-	if !IsNil(o.Status) {
-		toSerialize["status"] = o.Status
+	if !IsNil(o.DeploymentConfig) {
+		toSerialize["deploymentConfig"] = o.DeploymentConfig
 	}
 	return toSerialize, nil
 }

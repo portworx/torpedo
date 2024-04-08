@@ -5,7 +5,7 @@ import "time"
 type PDSBackupRequest struct {
 	Delete PDSDeleteBackup `copier:"must,nopanic"`
 	List   PDSListBackup   `copier:"must,nopanic"`
-	Get    PDSGetRestore   `copier:"must,nopanic"`
+	Get    PDSGetBackup    `copier:"must,nopanic"`
 }
 
 type PDSBackupResponse struct {
@@ -23,20 +23,21 @@ type PDSDeleteBackup struct {
 	Id string `copier:"must,nopanic"`
 }
 
+type PDSGetBackup struct {
+	Id string `copier:"must,nopanic"`
+}
+
 type PDSListBackup struct {
-	Meta            Meta
-	Config          Config
-	Status          Backupv1Status
-	Pagination      *PageBasedPaginationRequest `copier:"must,nopanic"`
-	Sort            *Sort                       `copier:"must,nopanic"`
-	BackupConfigId  string                      `copier:"must,nopanic"`
-	TargetClusterId string                      `copier:"must,nopanic"`
-	NamespaceId     string                      `copier:"must,nopanic"`
-	DeploymentId    string                      `copier:"must,nopanic"`
+	BackupConfigId       string `copier:"must,nopanic"`
+	PaginationPageNumber string `copier:"must,nopanic"`
+	PaginationPageSize   string `copier:"must,nopanic"`
+	SortSortBy           string `copier:"must,nopanic"`
+	SortSortOrder        string `copier:"must,nopanic"`
 }
 
 type PDSBackupListResponse struct {
-	Backups []V1Backup
+	Backups    []V1Backup
+	Pagination *V1PageBasedPaginationResponse `copier:"must,nopanic"`
 }
 
 // V1Config Desired configuration of the Backup.

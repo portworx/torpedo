@@ -19,13 +19,13 @@ var _ MappedNullable = &IAMServiceRevokeIAMBody{}
 
 // IAMServiceRevokeIAMBody RevokeIAMRequest to revoke/delete a role binding at tenant, project or account.
 type IAMServiceRevokeIAMBody struct {
-	// Account UID under which user wants to delete role binding.
+	// Account UID under which user wants to delete role .
 	AccountId *string `json:"accountId,omitempty"`
-	// Tenant UID  under which user wants to delete role binding.
+	// Tenant UID  under which user wants to delete role .
 	TenantId *string `json:"tenantId,omitempty"`
-	// Project UID under which user wants to delete role binding.
+	// Project UID under which user wants to delete role .
 	ProjectId *string `json:"projectId,omitempty"`
-	Iam *SpecifiesTheIAMRoleBindingThatNeedsToBeDeletedRevokedForTheUser `json:"iam,omitempty"`
+	AccessPolicy *V1AccessPolicy `json:"accessPolicy,omitempty"`
 }
 
 // NewIAMServiceRevokeIAMBody instantiates a new IAMServiceRevokeIAMBody object
@@ -141,36 +141,36 @@ func (o *IAMServiceRevokeIAMBody) SetProjectId(v string) {
 	o.ProjectId = &v
 }
 
-// GetIam returns the Iam field value if set, zero value otherwise.
-func (o *IAMServiceRevokeIAMBody) GetIam() SpecifiesTheIAMRoleBindingThatNeedsToBeDeletedRevokedForTheUser {
-	if o == nil || IsNil(o.Iam) {
-		var ret SpecifiesTheIAMRoleBindingThatNeedsToBeDeletedRevokedForTheUser
+// GetAccessPolicy returns the AccessPolicy field value if set, zero value otherwise.
+func (o *IAMServiceRevokeIAMBody) GetAccessPolicy() V1AccessPolicy {
+	if o == nil || IsNil(o.AccessPolicy) {
+		var ret V1AccessPolicy
 		return ret
 	}
-	return *o.Iam
+	return *o.AccessPolicy
 }
 
-// GetIamOk returns a tuple with the Iam field value if set, nil otherwise
+// GetAccessPolicyOk returns a tuple with the AccessPolicy field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *IAMServiceRevokeIAMBody) GetIamOk() (*SpecifiesTheIAMRoleBindingThatNeedsToBeDeletedRevokedForTheUser, bool) {
-	if o == nil || IsNil(o.Iam) {
+func (o *IAMServiceRevokeIAMBody) GetAccessPolicyOk() (*V1AccessPolicy, bool) {
+	if o == nil || IsNil(o.AccessPolicy) {
 		return nil, false
 	}
-	return o.Iam, true
+	return o.AccessPolicy, true
 }
 
-// HasIam returns a boolean if a field has been set.
-func (o *IAMServiceRevokeIAMBody) HasIam() bool {
-	if o != nil && !IsNil(o.Iam) {
+// HasAccessPolicy returns a boolean if a field has been set.
+func (o *IAMServiceRevokeIAMBody) HasAccessPolicy() bool {
+	if o != nil && !IsNil(o.AccessPolicy) {
 		return true
 	}
 
 	return false
 }
 
-// SetIam gets a reference to the given SpecifiesTheIAMRoleBindingThatNeedsToBeDeletedRevokedForTheUser and assigns it to the Iam field.
-func (o *IAMServiceRevokeIAMBody) SetIam(v SpecifiesTheIAMRoleBindingThatNeedsToBeDeletedRevokedForTheUser) {
-	o.Iam = &v
+// SetAccessPolicy gets a reference to the given V1AccessPolicy and assigns it to the AccessPolicy field.
+func (o *IAMServiceRevokeIAMBody) SetAccessPolicy(v V1AccessPolicy) {
+	o.AccessPolicy = &v
 }
 
 func (o IAMServiceRevokeIAMBody) MarshalJSON() ([]byte, error) {
@@ -192,8 +192,8 @@ func (o IAMServiceRevokeIAMBody) ToMap() (map[string]interface{}, error) {
 	if !IsNil(o.ProjectId) {
 		toSerialize["projectId"] = o.ProjectId
 	}
-	if !IsNil(o.Iam) {
-		toSerialize["iam"] = o.Iam
+	if !IsNil(o.AccessPolicy) {
+		toSerialize["accessPolicy"] = o.AccessPolicy
 	}
 	return toSerialize, nil
 }
