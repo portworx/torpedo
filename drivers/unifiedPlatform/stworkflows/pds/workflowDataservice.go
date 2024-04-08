@@ -1,10 +1,10 @@
-package pds
+package stworkflows
 
 import (
+	"fmt"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	k8utils "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
@@ -12,7 +12,7 @@ import (
 )
 
 type WorkflowDataService struct {
-	Namespace                     platform.WorkflowNamespace
+	Namespace                     WorkflowNamespace
 	PDSTemplates                  CustomTemplates
 	NamespaceName                 string
 	DataServiceDeployment         map[string]string
@@ -39,40 +39,44 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	resConfigId := wfDataService.PDSTemplates.ResourceTemplateId
 	stConfigId := wfDataService.PDSTemplates.StorageTemplateId
 	log.Infof("targetClusterId [%s]", targetClusterId)
+	log.InfoD("App config Id is - [AppConfig- %v]", appConfigId)
+	log.InfoD("res config Id is - [resConfigId- %v]", resConfigId)
+	log.InfoD("st config Id is - [stConfigId- %v]", stConfigId)
+
+	log.Infof("targetClusterId [%s]", targetClusterId)
 
 	imageId, err := dslibs.GetDataServiceImageId(ds.Name, image, version)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Debugf("DS Image id-[%s]", imageId)
 	deployment, err := dslibs.DeployDataService(ds, namespace, projectId, targetClusterId, imageId, appConfigId, resConfigId, stConfigId)
 	if err != nil {
 		return nil, err
 	}
-	wfDataService.DataServiceDeployment = make(map[string]string)
 	wfDataService.DataServiceDeployment[*deployment.Create.Meta.Name] = *deployment.Create.Meta.Uid
+
 	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
 		if value == true {
 			log.Infof("Skipping DataService Deployment  Validation")
 		}
 	} else {
 		// Validate the sts object and health of the pds deployment
-		err = dslibs.ValidateDataServiceDeployment(*deployment.Create.Meta.Uid, namespace)
+		err = dslibs.ValidateDataServiceDeployment(wfDataService.DataServiceDeployment, namespace)
 		if err != nil {
 			return nil, err
 		}
 
 		// Get deployment resources
-		//resourceTemp, storageOp, config, err := dslibs.GetDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, resConfigId, stConfigId, namespace)
-		//if err != nil {
-		//	return nil, err
-		//}
+		resourceTemp, storageOp, config, err := dslibs.GetDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, "resource-template-id", "storage-template-id", namespace)
+		if err != nil {
+			return nil, err
+		}
 
 		// Validate deployment resources
 		//TODO: Initialize the dataServiceVersionBuildMap once list ds version api is available
-		//var dataServiceVersionBuildMap = make(map[string][]string)
-		//ValidateDeploymentResources(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+		var dataServiceVersionBuildMap = make(map[string][]string)
+		ValidateDeploymentResources(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 	}
 
 	return deployment, nil
@@ -82,44 +86,39 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 	namespace := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
-	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
-	resConfigId := wfDataService.PDSTemplates.ResourceTemplateId
-	stConfigId := wfDataService.PDSTemplates.StorageTemplateId
 	log.Infof("targetClusterId [%s]", targetClusterId)
 
-	imageId, err := dslibs.GetDataServiceImageId(ds.Name, image, version)
+	imageId, err := dslibs.GetDataServiceImageId(ds.Name, ds.Image, ds.Version)
 	if err != nil {
 		return nil, err
 	}
 
-	deployment, err := dslibs.UpdateDataService(ds, deploymentId, namespace, projectId, imageId, appConfigId, resConfigId, stConfigId)
+	deployment, err := dslibs.UpdateDataService(ds, deploymentId, namespace, projectId, imageId)
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("Updated Deployment [%v]", deployment)
-	wfDataService.DataServiceDeployment = make(map[string]string)
-	wfDataService.DataServiceDeployment[*deployment.Update.Config.DeploymentMeta.Name] = *deployment.Update.Config.DeploymentMeta.Uid
+	wfDataService.DataServiceDeployment[*deployment.Create.Meta.Name] = *deployment.Create.Meta.Uid
 	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
 		if value == true {
 			log.Infof("Skipping Validation")
 		}
 	} else {
 		// Validate the sts object and health of the pds deployment
-		err = dslibs.ValidateDataServiceDeployment(deploymentId, namespace)
+		err = dslibs.ValidateDataServiceDeployment(wfDataService.DataServiceDeployment, namespace)
 		if err != nil {
 			return nil, err
 		}
 
 		// Get deployment resources
-		//resourceTemp, storageOp, config, err := dslibs.GetDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, "resource-template-id", "storage-template-id", namespace)
-		//if err != nil {
-		//	return nil, err
-		//}
+		resourceTemp, storageOp, config, err := dslibs.GetDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, "resource-template-id", "storage-template-id", namespace)
+		if err != nil {
+			return nil, err
+		}
 
 		// Validate deployment resources
 		//TODO: Initialize the dataServiceVersionBuildMap once list ds version api is available
-		//var dataServiceVersionBuildMap = make(map[string][]string)
-		//ValidateDeploymentResources(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+		var dataServiceVersionBuildMap = make(map[string][]string)
+		ValidateDeploymentResources(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 	}
 	return deployment, nil
 }
@@ -231,6 +230,27 @@ func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string,
 }
 
 func (wfDataService *WorkflowDataService) KillDBMasterNodeToValidateHA(dsName string, deploymentName string) error {
-	err := k8utils.KillDbMasterNode(wfDataService.NamespaceName, dsName, wfDataService.Namespace.TargetCluster.KubeConfig, deploymentName)
-	return err
+	dbMaster, isNativelyDistributed := k8utils.GetDbMasterNode(wfDataService.NamespaceName, dsName, deploymentName, wfDataService.Namespace.TargetCluster.KubeConfig)
+	if isNativelyDistributed {
+		err := k8utils.DeleteK8sPods(dbMaster, wfDataService.NamespaceName, wfDataService.Namespace.TargetCluster.KubeConfig)
+		if err != nil {
+			return err
+		}
+		//validate DataService Deployment here
+		newDbMaster, _ := k8utils.GetDbMasterNode(wfDataService.NamespaceName, dsName, deploymentName, wfDataService.Namespace.TargetCluster.KubeConfig)
+		if dbMaster == newDbMaster {
+			log.FailOnError(fmt.Errorf("leader node is not reassigned"), fmt.Sprintf("Leader pod %v", dbMaster))
+		}
+	} else {
+		podName, err := k8utils.GetAnyPodName(deploymentName, wfDataService.NamespaceName)
+		if err != nil {
+			return fmt.Errorf("failed while fetching pod for stateful set %v ", deploymentName)
+		}
+		err = k8utils.KillPodsInNamespace(wfDataService.NamespaceName, podName)
+		if err != nil {
+			return fmt.Errorf("failed while deleting pod %v ", deploymentName)
+		}
+		//validate DataService Deployment here
+	}
+	return nil
 }
