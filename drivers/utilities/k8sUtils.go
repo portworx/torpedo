@@ -208,29 +208,3 @@ func KillPodsInNamespace(ns string, podName string) error {
 	}
 	return err
 }
-
-func KillDbMasterNode(namespace string, dsName string, kubeconfigPath string, deploymentName string) error {
-	dbMaster, isNativelyDistributed := GetDbMasterNode(namespace, dsName, deploymentName, kubeconfigPath)
-	if isNativelyDistributed {
-		err := DeleteK8sPods(dbMaster, namespace, kubeconfigPath)
-		if err != nil {
-			return err
-		}
-		//validate DataService Deployment here
-		newDbMaster, _ := GetDbMasterNode(namespace, dsName, deploymentName, kubeconfigPath)
-		if dbMaster == newDbMaster {
-			log.FailOnError(fmt.Errorf("leader node is not reassigned"), fmt.Sprintf("Leader pod %v", dbMaster))
-		}
-	} else {
-		podName, err := GetAnyPodName(deploymentName, namespace)
-		if err != nil {
-			return fmt.Errorf("failed while fetching pod for stateful set %v ", deploymentName)
-		}
-		err = KillPodsInNamespace(namespace, podName)
-		if err != nil {
-			return fmt.Errorf("failed while deleting pod %v ", deploymentName)
-		}
-		//validate DataService Deployment here
-	}
-	return nil
-}
