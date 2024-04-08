@@ -3240,3 +3240,100 @@ func writeFioDataToVolume(volName string, n node.Node, size int64) error {
 	return nil
 
 }
+
+var _ = Describe("{OverCommitVolumeTest}", func() {
+	/*
+		    https://portworx.atlassian.net/browse/PTX-19103
+			1. Update the pxctl cluster with cluster option OverCommitPercent with the maximum storage percentage volumes can provision against backing storage set to 100(Enabeling Thick Provisioning)
+		    2. Check the overall storage pool capacity of a particular node
+		    3. create a volume with a base size , for eg: 10 GB
+		    4. Now update the volume size upto the maximum limit of the storage pool eg: if storage pool has a capacity of 200 GB left , increase vol size by 200
+		    5. Check vol size is successful or not
+		    6. Now try to increase the volume size by 1 more GB, it should fail , as it exceeds the storage pool capacity
+			7. Revert back the imposed cluster options
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("OverCommitVolumeTest", "Validate Overcommit volume size", nil, 0)
+	})
+	// check the size left in the node
+	itLog := "honor OverCommitPercent when resizing the volume"
+	It(itLog, func() {
+		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
+		poolToResize = getStoragePool(poolIDToResize)
+		selectedNode, err := GetNodeFromPoolUUID(poolIDToResize)
+		log.FailOnError(err, "Failed to get node from pool UUID")
+		originalSizeInBytes = poolToResize.TotalSize
+		poolToResize = getStoragePool(poolIDToResize)
+		SnapshotPercent := uint64(30)
+		SubtractSize := ((SnapshotPercent * originalSizeInBytes) / 100) * units.GiB
+		originalSizeInBytes = poolToResize.TotalSize
+		targetSizeInBytes = originalSizeInBytes - SubtractSize
+		targetSizeGiB = targetSizeInBytes / units.GiB
+
+		// update the cluster options
+		stepLog := "Update the pxctl cluster with cluster option OverCommitPercent with the maximum storage percentage volumes can provision against backing storage set to 100(Enabeling Thick Provisioning)"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			clusterOpts := make(map[string]string)
+			clusterOpts["--overcommit-percent"] = "'[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30} ]'\n\n\n"
+			err := Inst().V.SetClusterOpts(*selectedNode, clusterOpts)
+			log.FailOnError(err, "Failed to set cluster options")
+			log.InfoD("Successfully set cluster options")
+		})
+		// check the overall storage pool capacity of a particular node
+
+		// create a volume with a base size , for eg: 10 GB
+		stepLog = "Create a volume with a base size , for eg: 10 GB"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volName := fmt.Sprintf("overcommit-test-%d", 0)
+			pxctlCreateVolumeCmd := fmt.Sprintf("volume create --size %v %s", 10, volName)
+			output, err := runPxctlCommand(pxctlCreateVolumeCmd, *selectedNode, nil)
+			log.FailOnError(err, "Failed to create volume using pxctl")
+			log.InfoD("Successfully created volume: %v", output)
+		})
+		// Now update the volume size upto the maximum limit of the storage pool eg: if storage pool has a capacity of 200 GB left , increase vol size by 200
+		stepLog = "Now update the volume size upto the maximum limit of the storage pool eg: if storage pool has a capacity of 200 GB left , increase vol size by 200"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volName := fmt.Sprintf("overcommit-test-%d", 0)
+			pxctlVolResizeCmd := fmt.Sprintf("pxctl vol update %s --size %v", volName, targetSizeGiB)
+			_, err := runPxctlCommand(pxctlVolResizeCmd, *selectedNode, nil)
+			log.FailOnError(err, "Failed to resize volume: %v", volName)
+			log.InfoD("Succesfully resized volume: %v", volName)
+		})
+		// Check vol size is successful or not
+		stepLog = "Check vol size is successful or not"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volName := fmt.Sprintf("overcommit-test-%d", 0)
+			volInspect, err := Inst().V.InspectVolume(volName)
+			log.FailOnError(err, "Failed to inspect volume")
+			log.InfoD("Volume size: %v", volInspect.Spec.Size)
+		})
+		// Now try to increase the volume size by 1 more GB, it should fail , as it exceeds the storage pool capacity
+		stepLog = "Now try to increase the volume size by 1 more GB, it should fail , as it exceeds the storage pool capacity"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volName := fmt.Sprintf("overcommit-test-%d", 0)
+			pxctlVolResizeCmd := fmt.Sprintf("pxctl v update %s --size %v", volName, targetSizeGiB+1*units.GiB)
+			_, err := runPxctlCommand(pxctlVolResizeCmd, node.GetStorageDriverNodes()[0], nil)
+			log.FailOnError(err, "Failed to resize volume: %v", volName)
+			log.InfoD("Succesfully resized volume: %v", volName)
+
+		})
+		// Revert back the imposed cluster options
+		stepLog = "Revert back the imposed cluster options"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			clusterOpts := make(map[string]string)
+			clusterOpts["--overcommit-percent"] = "\n'[]'"
+			err := Inst().V.SetClusterOpts(*selectedNode, clusterOpts)
+			log.FailOnError(err, "Failed to set cluster options")
+			log.InfoD("Successfully set cluster options")
+		})
+
+	})
+})
