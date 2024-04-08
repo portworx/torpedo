@@ -19,8 +19,8 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		workflowDataService  pds.WorkflowDataService
 		workflowBackUpConfig pds.WorkflowPDSBackupConfig
 		workflowRestore      pds.WorkflowPDSRestore
-		deployment           *pds.PDSDeploymentResponse
-		restoreDeployment    *pds.PDSRestoreResponse
+		deployment           *automationModels.PDSDeploymentResponse
+		restoreDeployment    *automationModels.PDSRestoreResponse
 
 		workFlowTemplates pds.CustomTemplates
 		tempList          []string
