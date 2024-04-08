@@ -134,14 +134,13 @@ func (template *PLATFORM_API_V1) DeleteTemplate(templateReq *PlatformTemplatesRe
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	templateResponse := PlatformTemplatesResponse{}
-	templateModel, res, err := templateClient.TemplateServiceDeleteTemplate(ctx, templateReq.Delete.Id).Execute()
-	if err != nil && res.StatusCode != status.StatusOK {
-		return fmt.Errorf("Error when calling `templateServiceDeletetemplateExecute`: %v\n.Full HTTP response: %v", err, res)
+	templateResponse := PlatformTemplatesResponse{Delete: DeletePlatformTemplates{}}
+	templateDelRequest := templateClient.TemplateServiceDeleteTemplate(ctx, templateReq.Delete.Id)
+	log.InfoD("Template create req formed is- %v", templateDelRequest)
+	templateModel, res, err := templateDelRequest.Execute()
+	if err != nil || res.StatusCode != status.StatusOK {
+		return fmt.Errorf("Error when calling `TemplateServiceCreateTemplateExecute`: %v\n.Full HTTP response: %v", err, res)
 	}
-	log.InfoD("Successfully DELETED the template Roles")
-	log.Infof("Value of template - [%v]", templateModel)
-	err = utilities.CopyStruct(templateModel, &templateResponse)
-	log.Infof("Value of template after copy - [%v]", templateResponse)
+	err = utilities.CopyStruct(templateModel, &templateResponse.Create)
 	return nil
 }
