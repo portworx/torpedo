@@ -360,7 +360,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart}", func() {
 	var runID int
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumeAppMigrationRestart", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
-		namespacePrefix := "lstsv4m_restart"
+		namespacePrefix := "lstsv4m-re"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
@@ -417,7 +417,7 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestart}", func() {
 	var runID int
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumeAppMigrationRestart", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
-		namespacePrefix := "lstsv4m_px_restart"
+		namespacePrefix := "lstsv4m-px-res"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
@@ -477,7 +477,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 	var runID int
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumeAppMigrationRestart", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
-		namespacePrefix := "lstsv4m_node_decom"
+		namespacePrefix := "lstsv4m-node-decom"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
@@ -537,7 +537,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator}", func() {
 	var runID int
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumeAppRestartCoordinator", "Legacy Shared to Sharedv4 Service Migration and coordinator restart", nil, testrailID)
-		namespacePrefix := "lstsv4m_px_restart"
+		namespacePrefix := "lstsv4m-px-restart"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
@@ -602,7 +602,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() 
 	var runID int
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumeAppRestartCoordinator", "Legacy Shared to Sharedv4 Service Migration with creation of snapshots and clones", nil, testrailID)
-		namespacePrefix := "lstsv4m_snapshot_clone"
+		namespacePrefix := "lstsv4m-snap-clone"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
