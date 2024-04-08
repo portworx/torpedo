@@ -1,9 +1,10 @@
+{{- $defaultClaimsCount := 4 }}
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
   name: fio-vm-multi-disk
 spec:
-  running: false
+  running: true
   template:
     metadata:
       labels:
@@ -19,30 +20,19 @@ spec:
             - name: containervolume
               disk:
                 bus: virtio
-            - name: datavolume1
+            {{- if gt .ClaimsCount 0}}
+            {{- range $i := Iterate .ClaimsCount}}
+            - name: datavolume{{ $i }}
               disk:
                 bus: virtio
-            - name: datavolume2
+              {{- end}}
+            {{- else}}
+            {{- range $i := Iterate $defaultClaimsCount}}
+            - name: datavolume{{ $i }}
               disk:
                 bus: virtio
-            - name: datavolume3
-              disk:
-                bus: virtio
-            - name: datavolume4
-              disk:
-                bus: virtio
-            - name: datavolume5
-              disk:
-                bus: virtio
-            - name: datavolume6
-              disk:
-                bus: virtio
-            - name: datavolume7
-              disk:
-                bus: virtio
-            - name: datavolume8
-              disk:
-                bus: virtio
+              {{- end}}
+            {{- end}}
             - name: cloudinitvolume
               disk:
                 bus: virtio
@@ -64,30 +54,19 @@ spec:
         - name: containervolume
           persistentVolumeClaim:
             claimName: fio-boot-pvc
-        - name: datavolume1
-          dataVolume:
-            name: fio-disk-1
-        - name: datavolume2
-          dataVolume:
-            name: fio-disk-2
-        - name: datavolume3
-          dataVolume:
-            name: fio-disk-3
-        - name: datavolume4
-          dataVolume:
-            name: fio-disk-4
-        - name: datavolume5
-          dataVolume:
-            name: fio-disk-5
-        - name: datavolume6
-          dataVolume:
-            name: fio-disk-6
-        - name: datavolume7
-          dataVolume:
-            name: fio-disk-7
-        - name: datavolume8
-          dataVolume:
-            name: fio-disk-8
+        {{- if .ClaimsCount }}
+        {{- range $val := Iterate .ClaimsCount }}
+        - name: datavolume{{ $val }}
+          persistentVolumeClaim:
+            claimName: fio-disk-{{ $val }}
+          {{- end }}
+        {{- else }}
+        {{- range $val := Iterate $defaultClaimsCount }}
+        - name: datavolume{{ $val }}
+          persistentVolumeClaim:
+            claimName: fio-disk-{{ $val }}
+          {{- end }}
+        {{- end }}
         - name: cloudinitvolume
           cloudInitNoCloud:
             userData: |-

@@ -1,0 +1,36 @@
+{{- $defaultClaimsCount := 8 }}
+{{- if gt .ClaimsCount 0 }}
+{{- range $i := Iterate .ClaimsCount }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fio-disk-{{ $i }}
+annotations:
+  torpedo.io/autopilot-enabled: "true"
+spec:
+  storageClassName: test-yes-load-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
+{{- end }}
+{{- else }}
+{{- range $i := Iterate $defaultClaimsCount }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fio-disk-{{ $i }}
+annotations:
+  torpedo.io/autopilot-enabled: "true"
+spec:
+  storageClassName: test-yes-load-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
+{{- end }}
+{{- end }}

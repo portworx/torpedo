@@ -5,12 +5,13 @@ metadata:
   labels:
     app: containerized-data-importer
   annotations:
-    cdi.kubevirt.io/storage.import.endpoint: http://kubevirt-disk-registry.pwx.dev.purestorage.com/more_images/fio-multi-disk-low-load.qcow2
+    torpedo.io/autopilot-enabled: "true"
+    cdi.kubevirt.io/storage.import.endpoint: http://kubevirt-disk-registry.pwx.dev.purestorage.com/more_images/fio-and-yes-workload.qcow2
     cdi.kubevirt.io/storage.bind.immediate.requested: "true"
 spec:
-  storageClassName: test-multi-disk-low-load-sc
+  storageClassName: test-yes-load-sc
   accessModes:
     - ReadWriteMany
   resources:
     requests:
-      storage: 100Gi
+      storage: 50Gi
