@@ -3307,9 +3307,10 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 				if strings.Contains(err.Error(), "AlreadyExists") {
 					log.InfoD("Volume already exists with name [%s] so deleting it", VolName)
 					Inst().V.DeleteVolume(VolName)
+				} else {
+					log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 				}
 			}
-			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 			log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
 		})
 
