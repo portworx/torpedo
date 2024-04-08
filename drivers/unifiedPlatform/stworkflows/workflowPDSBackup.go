@@ -11,17 +11,9 @@ type WorkflowPDSBackup struct {
 }
 
 // GetBackupIDByName returns the ID of given backup
-func (backup WorkflowPDSBackup) GetBackupIDByName(name string, backupConfigName string, namespace string, deploymentName string) (string, error) {
+func (backup WorkflowPDSBackup) GetBackupIDByName(name string, backupConfigName string) (string, error) {
 
-	params := pdslibs.BackupParams{
-		ProjectId:       backup.WorkflowBackupConfig.WorkflowDataService.Namespace.TargetCluster.Project.ProjectId,
-		DeploymentID:    backup.WorkflowBackupConfig.WorkflowDataService.Namespace.TargetCluster.ClusterUID,
-		NamespaceId:     backup.WorkflowBackupConfig.WorkflowDataService.Namespace.Namespaces[namespace],
-		TargetClusterId: backup.WorkflowBackupConfig.WorkflowDataService.Namespace.TargetCluster.ClusterUID,
-		BackupConfigId:  *backup.WorkflowBackupConfig.Backups[backupConfigName].Meta.Uid,
-	}
-
-	allBackups, err := pdslibs.ListBackup(params)
+	allBackups, err := pdslibs.ListBackup(*backup.WorkflowBackupConfig.Backups[backupConfigName].Meta.Uid)
 
 	if err != nil {
 		return "", err
@@ -43,17 +35,9 @@ func (backup WorkflowPDSBackup) DeleteBackup(id string) error {
 }
 
 // ListAllBackups returns the list of all backups
-func (backup WorkflowPDSBackup) ListAllBackups(backupConfigName string, namespace string, deployment string) (*automationModels.PDSBackupResponse, error) {
+func (backup WorkflowPDSBackup) ListAllBackups(backupConfigName string) (*automationModels.PDSBackupResponse, error) {
 
-	params := pdslibs.BackupParams{
-		ProjectId:       backup.WorkflowBackupConfig.WorkflowDataService.Namespace.TargetCluster.Project.ProjectId,
-		DeploymentID:    backup.WorkflowBackupConfig.WorkflowDataService.Namespace.TargetCluster.ClusterUID,
-		NamespaceId:     backup.WorkflowBackupConfig.WorkflowDataService.Namespace.Namespaces[namespace],
-		TargetClusterId: backup.WorkflowBackupConfig.WorkflowDataService.Namespace.TargetCluster.ClusterUID,
-		BackupConfigId:  *backup.WorkflowBackupConfig.Backups[backupConfigName].Meta.Uid,
-	}
-
-	list, err := pdslibs.ListBackup(params)
+	list, err := pdslibs.ListBackup(*backup.WorkflowBackupConfig.Backups[backupConfigName].Meta.Uid)
 
 	if err != nil {
 		return nil, err

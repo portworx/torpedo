@@ -135,11 +135,20 @@ func (backupConf *PDS_API_V1) ListBackupConfig(listBackupConfigRequest *automati
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
 	backupListRequest := backupClient.BackupConfigServiceListBackupConfigs(ctx)
-	backupListRequest = backupListRequest.TenantId(*listBackupConfigRequest.List.TenantId)
-	backupListRequest = backupListRequest.AccountId(*listBackupConfigRequest.List.AccountId)
-	backupListRequest = backupListRequest.NamespaceId(*listBackupConfigRequest.List.NamespaceId)
-	backupListRequest = backupListRequest.TargetClusterId(*listBackupConfigRequest.List.TargetClusterId)
-	backupListRequest = backupListRequest.DeploymentId(*listBackupConfigRequest.List.DeploymentId)
+	backupListRequest = backupListRequest.TenantId(listBackupConfigRequest.List.TenantId)
+
+	if listBackupConfigRequest.List.SortSortBy != "" {
+		backupListRequest = backupListRequest.SortSortBy(listBackupConfigRequest.List.SortSortBy)
+	}
+	if listBackupConfigRequest.List.SortSortOrder != "" {
+		backupListRequest = backupListRequest.SortSortOrder(listBackupConfigRequest.List.SortSortOrder)
+	}
+	if listBackupConfigRequest.List.PaginationPageNumber != "" {
+		backupListRequest = backupListRequest.PaginationPageNumber(listBackupConfigRequest.List.PaginationPageNumber)
+	}
+	if listBackupConfigRequest.List.PaginationPageSize != "" {
+		backupListRequest = backupListRequest.PaginationPageSize(listBackupConfigRequest.List.PaginationPageSize)
+	}
 
 	backupModels, res, err := backupListRequest.Execute()
 	if err != nil || res.StatusCode != status.StatusOK {

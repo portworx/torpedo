@@ -37,12 +37,7 @@ func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, depl
 			log.Infof("Skipping Backup Validation")
 		}
 	} else {
-		var bkp pdslibs.BackupParams
-		bkp.BackupConfigId = *createBackup.Create.Meta.Uid
-		bkp.TargetClusterId = backupConfig.WorkflowDataService.Namespace.TargetCluster.ClusterUID
-		bkp.NamespaceId = backupConfig.WorkflowDataService.Namespace.Namespaces[backupConfig.WorkflowDataService.NamespaceName]
-		bkp.DeploymentID = backupConfig.WorkflowDataService.DataServiceDeployment[deploymentName]
-		err = pdslibs.ValidateAdhocBackup(bkp)
+		err = pdslibs.ValidateAdhocBackup(backupConfig.WorkflowDataService.DataServiceDeployment[deploymentName], *createBackup.Create.Meta.Uid)
 		if err != nil {
 			return nil, err
 		}
@@ -58,15 +53,8 @@ func (backupConfig WorkflowPDSBackupConfig) DeleteBackupConfig(name string) erro
 }
 
 // ListBackupConfig lists all backup config
-func (backupConfig WorkflowPDSBackupConfig) ListBackupConfig(namespceName string, deploymentName string) (*automationModels.PDSBackupConfigResponse, error) {
-	listBackups, err := pdslibs.ListBackupConfig(
-		backupConfig.WorkflowDataService.Namespace.TargetCluster.Project.Platform.AdminAccountId,
-		backupConfig.WorkflowDataService.Namespace.TargetCluster.Project.Platform.TenantId,
-		backupConfig.WorkflowDataService.Namespace.TargetCluster.Project.ProjectId,
-		backupConfig.WorkflowDataService.Namespace.TargetCluster.ClusterUID,
-		backupConfig.WorkflowDataService.Namespace.Namespaces[namespceName],
-		backupConfig.WorkflowDataService.DataServiceDeployment[deploymentName],
-	)
+func (backupConfig WorkflowPDSBackupConfig) ListBackupConfig(tenantId string) (*automationModels.PDSBackupConfigResponse, error) {
+	listBackups, err := pdslibs.ListBackupConfig(tenantId)
 	if err != nil {
 		return nil, err
 	}
