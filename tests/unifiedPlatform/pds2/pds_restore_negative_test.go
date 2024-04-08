@@ -123,9 +123,6 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 			cloudSnapId := ""
 			// Set the DestClusterId same as the current ClusterId
 			workflowRestore.Destination.DestinationClusterId = WorkflowTargetCluster.ClusterUID
-
-			log.FailOnError(err, "failed while registering destination target cluster")
-
 			workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
 			restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
 			log.FailOnError(err, "Error while taking restore")
