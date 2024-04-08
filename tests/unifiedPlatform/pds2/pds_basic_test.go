@@ -14,6 +14,8 @@ import (
 )
 
 var _ = BeforeSuite(func() {
+	var PDS_DEFAULT_NAMESPACE string
+	PDS_DEFAULT_NAMESPACE = "pds-namespace-" + RandomString(5)
 	steplog := "Get prerequisite params to run platform tests"
 	log.InfoD(steplog)
 	Step(steplog, func() {
@@ -67,6 +69,14 @@ var _ = BeforeSuite(func() {
 		WorkflowTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane(false)
 		log.FailOnError(err, "Unable to register target cluster")
 		log.Infof("Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
+	})
+
+	Step("Create a namespace for PDS", func() {
+		WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+		WorkflowNamespace.Namespaces = make(map[string]string)
+		_, err := WorkflowNamespace.CreateNamespaces(PDS_DEFAULT_NAMESPACE)
+		log.FailOnError(err, "Unable to create namespace")
+		log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
 	})
 
 	//Step("Create Buckets", func() {

@@ -6,15 +6,15 @@ import (
 )
 
 type WorkflowPDSBackup struct {
-	WorkflowBackupConfig WorkflowPDSBackupConfig
+	WorkflowDataService WorkflowDataService
 }
 
 // GetBackupIDByName returns the ID of given backup
-func (backup WorkflowPDSBackup) GetLatestBackup(backupConfigName string) (automationModels.V1Backup, error) {
+func (backup WorkflowPDSBackup) GetLatestBackup(deploymentName string) (automationModels.V1Backup, error) {
 
 	var latestBackup automationModels.V1Backup
 
-	allBackups, err := pdslibs.ListBackup(*backup.WorkflowBackupConfig.Backups[backupConfigName].Meta.Uid)
+	allBackups, err := pdslibs.ListBackup(backup.WorkflowDataService.DataServiceDeployment[deploymentName])
 
 	if err != nil {
 		return latestBackup, err
@@ -31,11 +31,11 @@ func (backup WorkflowPDSBackup) DeleteBackup(id string) error {
 	return err
 }
 
-func (backup WorkflowPDSBackup) ListAllBackups(backupConfigName string) ([]automationModels.V1Backup, error) {
+func (backup WorkflowPDSBackup) ListAllBackups(deploymentName string) ([]automationModels.V1Backup, error) {
 
 	allBackups := make([]automationModels.V1Backup, 0)
 
-	response, err := pdslibs.ListBackup(*backup.WorkflowBackupConfig.Backups[backupConfigName].Meta.Uid)
+	response, err := pdslibs.ListBackup(backup.WorkflowDataService.DataServiceDeployment[deploymentName])
 
 	if err != nil {
 		return allBackups, err

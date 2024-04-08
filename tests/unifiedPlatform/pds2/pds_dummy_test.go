@@ -2,47 +2,50 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	tests "github.com/portworx/torpedo/tests/unifiedPlatform"
 )
 
 var _ = Describe("{DummyBackupTest}", func() {
 
 	var (
-		workflowBackUpConfig pds.WorkflowPDSBackupConfig
-		workflowBackup       pds.WorkflowPDSBackup
-		backupConfigName     string
+		workflowDataservice pds.WorkflowDataService
+		workflowBackup      pds.WorkflowPDSBackup
+		workflowRestore     pds.WorkflowPDSRestore
+		deploymentName      string
+		latestBackupUid     string
 	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DummyBackupTest", "DummyBackupTest", nil, 0)
+		log.Infof("We are here")
+		workflowDataservice.DataServiceDeployment = make(map[string]string)
+		log.Infof("We are here")
+		deploymentName = "samore-pg-test-1"
+		log.Infof("We are here")
+		workflowDataservice.DataServiceDeployment[deploymentName] = "dep:fa70e52d-0563-4258-b96b-7d6ca6ed4799"
+		log.Infof("We are here")
+		workflowBackup.WorkflowDataService = workflowDataservice
 
-		workflowBackUpConfig.Backups = make(map[string]automationModels.V1BackupConfig)
-		backupConfigName = "pds-qa-bkp"
-		dummyBackupConfig := automationModels.V1BackupConfig{
-			Meta: &automationModels.Meta{
-				Uid:         PointerTo("bkc:ab9aa7b5-2240-474f-822e-d7ed1f276d9a"),
-				Name:        PointerTo(backupConfigName),
-				Description: PointerTo(""),
-			},
-		}
-
-		workflowBackUpConfig.Backups[backupConfigName] = dummyBackupConfig
-		workflowBackup.WorkflowBackupConfig = workflowBackUpConfig
+		workflowRestore.Destination = tests.WorkflowNamespace
 	})
 
 	It("Dummy to verify backup and restore creation", func() {
 
 		Step("Get latest backup from a backup config", func() {
-			backupResponse, err := workflowBackup.GetLatestBackup(backupConfigName)
+			log.Infof("We are here")
+			backupResponse, err := workflowBackup.GetLatestBackup(deploymentName)
+			log.Infof("We are here")
 			log.FailOnError(err, "Error occured while creating backup")
+			log.Infof("We are here")
+			latestBackupUid = *backupResponse.Meta.Uid
 			log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
 		})
 
 		Step("Get all backup from a backup config", func() {
-			backupResponse, err := workflowBackup.ListAllBackups(backupConfigName)
+			backupResponse, err := workflowBackup.ListAllBackups(deploymentName)
 			log.FailOnError(err, "Error occured while creating backup")
 			log.Infof("Number of backups - [%d]", len(backupResponse))
 
@@ -51,6 +54,16 @@ var _ = Describe("{DummyBackupTest}", func() {
 				log.Infof("Latest backup ID [%s], Name [%s]", *backup.Meta.Uid, *backup.Meta.Name)
 			}
 
+		})
+
+		Step("Create Restore", func() {
+			restoreName := "testing_restore_" + RandomString(5)
+			_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid)
+			if err != nil {
+				log.Infof("Error occurred during restore - [%s]", err.Error())
+			}
+
+			log.Infof("Restore created successfully with ID - [%s]", workflowRestore.Restores[restoreName].Meta.Uid)
 		})
 
 	})
