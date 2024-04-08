@@ -2,9 +2,10 @@ package api
 
 import (
 	"fmt"
+	status "net/http"
+
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/utilities"
-	status "net/http"
 )
 
 // DeleteBackup will delete backup for a given deployment
@@ -24,7 +25,7 @@ func (backup *PDS_API_V1) DeleteBackup(deleteBackupRequest *automationModels.PDS
 }
 
 // ListBackup will list backup for a given deployment
-func (backup *PDS_API_V1) ListBackup(listBackupConfigRequest *automationModels.PDSBackupRequest) (*automationModels.PDSBackupResponse, error) {
+func (backup *PDS_API_V1) ListBackup(listBackupRequest *automationModels.PDSBackupRequest) (*automationModels.PDSBackupResponse, error) {
 	bkpResponse := automationModels.PDSBackupResponse{
 		List: automationModels.PDSBackupListResponse{},
 	}
@@ -33,9 +34,22 @@ func (backup *PDS_API_V1) ListBackup(listBackupConfigRequest *automationModels.P
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
-	backupConfigId := listBackupConfigRequest.List.BackupConfigId
+	backupConfigId := listBackupRequest.List.BackupConfigId
 
 	listBkpRequest := bkpClient.BackupServiceListBackups(ctx).BackupConfigId(backupConfigId)
+
+	if listBackupRequest.List.SortSortBy != "" {
+		listBkpRequest = listBkpRequest.SortSortBy(listBackupRequest.List.SortSortBy)
+	}
+	if listBackupRequest.List.SortSortOrder != "" {
+		listBkpRequest = listBkpRequest.SortSortOrder(listBackupRequest.List.SortSortOrder)
+	}
+	if listBackupRequest.List.PaginationPageNumber != "" {
+		listBkpRequest = listBkpRequest.PaginationPageNumber(listBackupRequest.List.PaginationPageNumber)
+	}
+	if listBackupRequest.List.PaginationPageSize != "" {
+		listBkpRequest = listBkpRequest.PaginationPageSize(listBackupRequest.List.PaginationPageSize)
+	}
 
 	bkpModel, res, err := bkpClient.BackupServiceListBackupsExecute(listBkpRequest)
 	if err != nil || res.StatusCode != status.StatusOK {
@@ -50,7 +64,7 @@ func (backup *PDS_API_V1) ListBackup(listBackupConfigRequest *automationModels.P
 }
 
 // GetBackup will fetch backup for a given deployment
-func (backup *PDS_API_V1) GetBackup(getBackupConfigRequest *automationModels.PDSBackupRequest) (*automationModels.PDSBackupResponse, error) {
+func (backup *PDS_API_V1) GetBackup(getBackupRequest *automationModels.PDSBackupRequest) (*automationModels.PDSBackupResponse, error) {
 
 	response := automationModels.PDSBackupResponse{
 		Get: automationModels.V1Backup{},
@@ -60,8 +74,9 @@ func (backup *PDS_API_V1) GetBackup(getBackupConfigRequest *automationModels.PDS
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
-	getBackupRequest := backupClient.BackupServiceGetBackup(ctx, getBackupConfigRequest.Get.Id)
-	backupModel, res, err := getBackupRequest.Execute()
+
+	request := backupClient.BackupServiceGetBackup(ctx, getBackupRequest.Get.Id)
+	backupModel, res, err := request.Execute()
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `BackupServiceDeleteBackup`: %v\n.Full HTTP response: %v", err, res)
 	}

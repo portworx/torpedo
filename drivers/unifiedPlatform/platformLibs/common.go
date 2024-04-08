@@ -25,6 +25,12 @@ const (
 	envGcpJsonPath             = "GCP_JSON_PATH"
 )
 
+const (
+	DEFAULT_PAGE_NUMBER = "1"
+	DEFAULT_SORT_BY     = "CREATED_AT"
+	DEFAULT_SORT_ORDER  = "DESC"
+)
+
 var (
 	v2Components *unifiedPlatform.UnifiedPlatformComponents
 	err          error

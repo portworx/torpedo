@@ -21,6 +21,20 @@ func (tc *PLATFORM_API_V1) ListTargetClusters(tcRequest *PlatformTargetClusterRe
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
+
+	if tcRequest.ListTargetClusters.SortSortBy != "" {
+		req = req.SortSortBy(tcRequest.ListTargetClusters.SortSortBy)
+	}
+	if tcRequest.ListTargetClusters.SortSortOrder != "" {
+		req = req.SortSortOrder(tcRequest.ListTargetClusters.SortSortOrder)
+	}
+	if tcRequest.ListTargetClusters.PaginationPageNumber != "" {
+		req = req.PaginationPageNumber(tcRequest.ListTargetClusters.PaginationPageNumber)
+	}
+	if tcRequest.ListTargetClusters.PaginationPageSize != "" {
+		req = req.PaginationPageSize(tcRequest.ListTargetClusters.PaginationPageSize)
+	}
+
 	dtModels, res, err := dtClient.TargetClusterServiceListTargetClustersExecute(req)
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `TargetClusterServiceListTargetClusters`: %v\n.Full HTTP response: %v", err, res)

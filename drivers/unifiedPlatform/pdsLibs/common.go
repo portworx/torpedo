@@ -30,6 +30,12 @@ var (
 )
 
 const (
+	DEFAULT_PAGE_NUMBER = "1"
+	DEFAULT_SORT_BY     = "CREATED_AT"
+	DEFAULT_SORT_ORDER  = "DESC"
+)
+
+const (
 	validateDeploymentTimeOut      = 50 * time.Minute
 	validateDeploymentTimeInterval = 60 * time.Second
 	timeOut                        = 30 * time.Minute
