@@ -3,7 +3,7 @@ package tests
 import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -16,13 +16,13 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		StartTorpedoTest("PerformRestoreValidatingHA", "Deploy data services, Perform restore while validating HA on the same cluster", nil, 0)
 	})
 	var (
-		workflowDataService  stworkflows.WorkflowDataService
-		workflowBackUpConfig stworkflows.WorkflowPDSBackupConfig
-		workflowRestore      stworkflows.WorkflowPDSRestore
-		deployment           *automationModels.PDSDeploymentResponse
-		restoreDeployment    *automationModels.PDSRestoreResponse
+		workflowDataService  pds.WorkflowDataService
+		workflowBackUpConfig pds.WorkflowPDSBackupConfig
+		workflowRestore      pds.WorkflowPDSRestore
+		deployment           *pds.PDSDeploymentResponse
+		restoreDeployment    *pds.PDSRestoreResponse
 
-		workFlowTemplates stworkflows.CustomTemplates
+		workFlowTemplates pds.CustomTemplates
 		tempList          []string
 
 		pdsBackupConfigName string
