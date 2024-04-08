@@ -1,4 +1,4 @@
-package stworkflows
+package pds
 
 import (
 	resiLibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"

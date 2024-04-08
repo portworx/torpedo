@@ -7,6 +7,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strconv"
 	"strings"
 )
 
@@ -81,6 +82,26 @@ func ListNamespaces(tenantId string, label string, sortBy string, sortOrder stri
 	}
 
 	listResponse, err := v2Components.Platform.ListNamespaces(request)
+	if err != nil {
+		return listResponse, err
+	}
+
+	totalPages, err := strconv.Atoi(*listResponse.List.Pagination.TotalPages)
+	if err != nil {
+		return listResponse, fmt.Errorf("Unable to get total pages")
+	}
+	totalRecords, err := strconv.Atoi(*listResponse.List.Pagination.TotalRecords)
+	if err != nil {
+		return listResponse, fmt.Errorf("Unable to get total records")
+	}
+
+	log.Infof("Namespaces have [%d] pages and [%d] rescords", totalPages, totalRecords)
+
+	request.List.PaginationPageNumber = "1"
+	request.List.PaginationPageSize = *listResponse.List.Pagination.TotalRecords
+
+	listResponse, err = v2Components.Platform.ListNamespaces(request)
+	log.Infof("Total records found - [%d]", len(listResponse.List.Namespaces))
 	if err != nil {
 		return listResponse, err
 	}

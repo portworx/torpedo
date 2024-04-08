@@ -5,7 +5,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -15,12 +15,12 @@ import (
 
 var _ = Describe("{PlatformBasicTest}", func() {
 	var (
-		workflowPlatform       stworkflows.WorkflowPlatform
-		workflowTargetCluster  stworkflows.WorkflowTargetCluster
-		workflowProject        stworkflows.WorkflowProject
-		workflowNamespace      stworkflows.WorkflowNamespace
-		workflowCloudCreds     stworkflows.WorkflowCloudCredentials
-		workflowBackupLocation stworkflows.WorkflowBackupLocation
+		workflowPlatform       platform.WorkflowPlatform
+		workflowTargetCluster  platform.WorkflowTargetCluster
+		workflowProject        platform.WorkflowProject
+		workflowNamespace      platform.WorkflowNamespace
+		workflowCloudCreds     platform.WorkflowCloudCredentials
+		workflowBackupLocation platform.WorkflowBackupLocation
 		namespace              string
 		VARIABLE_FROM_JENKINS  string
 	)
@@ -49,7 +49,7 @@ var _ = Describe("{PlatformBasicTest}", func() {
 			// TODO: This needs to be removed once API support is added for cloud creds
 			if VARIABLE_FROM_JENKINS == unifiedPlatform.GRPC {
 				workflowCloudCreds.Platform = workflowPlatform
-				workflowCloudCreds.CloudCredentials = make(map[string]stworkflows.CloudCredentialsType)
+				workflowCloudCreds.CloudCredentials = make(map[string]platform.CloudCredentialsType)
 				_, err := workflowCloudCreds.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
 				log.FailOnError(err, "Unable to create cloud credentials")
 				for _, value := range workflowCloudCreds.CloudCredentials {
@@ -151,12 +151,12 @@ var _ = Describe("{PlatformBasicTest}", func() {
 
 var _ = Describe("{PlatformRBACTest}", func() {
 	var (
-		workflowPlatform       stworkflows.WorkflowPlatform
-		workflowTargetCluster  stworkflows.WorkflowTargetCluster
-		workflowProject        stworkflows.WorkflowProject
-		workflowProject1       stworkflows.WorkflowProject
-		workflowProject2       stworkflows.WorkflowProject
-		workflowServiceAccount stworkflows.WorkflowServiceAccount
+		workflowPlatform       platform.WorkflowPlatform
+		workflowTargetCluster  platform.WorkflowTargetCluster
+		workflowProject        platform.WorkflowProject
+		workflowProject1       platform.WorkflowProject
+		workflowProject2       platform.WorkflowProject
+		workflowServiceAccount platform.WorkflowServiceAccount
 		projectAdmin           string
 		tenantAdmin            string
 		user                   string
@@ -190,7 +190,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 		})
 
 		Step("Create project user", func() {
-			workflowServiceAccount.UserRoles = make(map[string]stworkflows.SeviceAccount)
+			workflowServiceAccount.UserRoles = make(map[string]platform.SeviceAccount)
 			workflowServiceAccount.WorkflowProject = workflowProject
 
 			_, err := workflowServiceAccount.CreateServiceAccount(
@@ -203,7 +203,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 		Step("Create project admin user", func() {
 			_, err := workflowServiceAccount.CreateServiceAccount(
 				projectAdmin,
-				[]string{stworkflows.ProjectAdmin},
+				[]string{platform.ProjectAdmin},
 			)
 			log.FailOnError(err, "Unable to create project Admin")
 		})
@@ -211,7 +211,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 		Step("Create tenant admin", func() {
 			_, err := workflowServiceAccount.CreateServiceAccount(
 				tenantAdmin,
-				[]string{stworkflows.TenantAdmin},
+				[]string{platform.TenantAdmin},
 			)
 			log.FailOnError(err, "Unable to create tenant Admin")
 		})

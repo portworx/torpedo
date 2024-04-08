@@ -4,7 +4,8 @@ import (
 	"fmt"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -19,15 +20,15 @@ var _ = Describe("{CreateAndGeBackupLocation}", func() {
 	It("CreateAndGeBackupLocation", func() {
 		Step("create credentials and backup location", func() {
 			var (
-				workflowCc     stworkflows.WorkflowCloudCredentials
-				workflowbkpLoc stworkflows.WorkflowBackupLocation
+				workflowCc     platform.WorkflowCloudCredentials
+				workflowbkpLoc platform.WorkflowBackupLocation
 			)
 
 			tenantId, err := platformLibs.GetDefaultTenantId(AccID)
 			log.FailOnError(err, "error occured while fetching tenantID")
 
 			workflowCc.Platform.TenantId = tenantId
-			workflowCc.CloudCredentials = make(map[string]stworkflows.CloudCredentialsType)
+			workflowCc.CloudCredentials = make(map[string]platform.CloudCredentialsType)
 			cc, err := workflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
 			log.FailOnError(err, "error occured while creating cloud credentials")
 
@@ -233,8 +234,8 @@ var _ = Describe("{CreateAndGetCloudCredentials}", func() {
 
 var _ = Describe("{TestRbacForPds}", func() {
 	var (
-		pdsRbac         stworkflows.WorkflowServiceAccount
-		workflowProject stworkflows.WorkflowProject
+		pdsRbac         platform.WorkflowServiceAccount
+		workflowProject platform.WorkflowProject
 		saName          string
 	)
 	JustBeforeEach(func() {
@@ -258,9 +259,9 @@ var _ = Describe("{TestRbacForPds}", func() {
 
 		Step("Create SVC Account", func() {
 			pdsRbac.WorkflowProject = workflowProject
-			pdsRbac.UserRoles = make(map[string]stworkflows.SeviceAccount)
+			pdsRbac.UserRoles = make(map[string]platform.SeviceAccount)
 			log.Infof("Tenant ID - [%s]", pdsRbac.WorkflowProject.Platform.TenantId)
-			_, err := pdsRbac.CreateServiceAccount(saName, []string{stworkflows.ProjectAdmin})
+			_, err := pdsRbac.CreateServiceAccount(saName, []string{platform.ProjectAdmin})
 			log.FailOnError(err, "Unable to create service account")
 			log.Infof("Service Account created")
 		})
@@ -305,7 +306,7 @@ var _ = Describe("{TestPlatformTemplates}", func() {
 	})
 
 	var (
-		workFlowTemplates stworkflows.CustomTemplates
+		workFlowTemplates pds.CustomTemplates
 		tempList          []string
 	)
 	It("TestPlatformTemplates", func() {

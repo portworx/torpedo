@@ -2,22 +2,17 @@ package pdslibs
 
 import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
-type BackupParams struct {
-	ProjectId       string
-	DeploymentID    string
-	NamespaceId     string
-	TargetClusterId string
-	BackupConfigId  string
-}
-
 // DeleteBackup deletes backup config of the deployment
-func DeleteBackup(backup BackupParams) error {
+func DeleteBackup(backupId string) error {
 
-	deleteBackupRequest := automationModels.PDSBackupRequest{}
-
-	deleteBackupRequest.Delete.Id = backup.BackupConfigId
+	deleteBackupRequest := automationModels.PDSBackupRequest{
+		Delete: automationModels.PDSDeleteBackup{
+			Id: backupId,
+		},
+	}
 
 	err := v2Components.PDS.DeleteBackup(&deleteBackupRequest)
 	if err != nil {
@@ -27,11 +22,13 @@ func DeleteBackup(backup BackupParams) error {
 }
 
 // GetBackup fetches backup config for the deployment
-func GetBackup(backup BackupParams) (*automationModels.PDSBackupResponse, error) {
+func GetBackup(backupId string) (*automationModels.PDSBackupResponse, error) {
 
-	getBackupRequest := automationModels.PDSBackupRequest{}
-
-	getBackupRequest.Get.Id = backup.BackupConfigId
+	getBackupRequest := automationModels.PDSBackupRequest{
+		Get: automationModels.PDSGetBackup{
+			Id: backupId,
+		},
+	}
 
 	backupResponse, err := v2Components.PDS.GetBackup(&getBackupRequest)
 	if err != nil {
@@ -42,18 +39,36 @@ func GetBackup(backup BackupParams) (*automationModels.PDSBackupResponse, error)
 }
 
 // ListBackup lists backup config for the deployment
-func ListBackup(backup BackupParams) (*automationModels.PDSBackupResponse, error) {
+func ListBackup(backupConfigId string) (*automationModels.PDSBackupResponse, error) {
 
-	listBackup := automationModels.PDSBackupRequest{}
-
-	listBackup.List.TargetClusterId = backup.TargetClusterId
-	listBackup.List.NamespaceId = backup.NamespaceId
-	listBackup.List.DeploymentId = backup.DeploymentID
-	listBackup.List.BackupConfigId = backup.BackupConfigId
+	listBackup := automationModels.PDSBackupRequest{
+		List: automationModels.PDSListBackup{
+			BackupConfigId: backupConfigId,
+		},
+	}
 
 	backupResponse, err := v2Components.PDS.ListBackup(&listBackup)
 	if err != nil {
 		return nil, err
 	}
+
+	totalRecords := *backupResponse.List.Pagination.TotalRecords
+	log.Infof("Total backup of  [%s] = [%s]", backupConfigId, totalRecords)
+
+	listBackup = automationModels.PDSBackupRequest{
+		List: automationModels.PDSListBackup{
+			BackupConfigId:       backupConfigId,
+			PaginationPageNumber: DEFAULT_PAGE_NUMBER,
+			PaginationPageSize:   totalRecords,
+			SortSortBy:           DEFAULT_SORT_BY,
+			SortSortOrder:        DEFAULT_SORT_ORDER,
+		},
+	}
+
+	backupResponse, err = v2Components.PDS.ListBackup(&listBackup)
+	if err != nil {
+		return nil, err
+	}
+
 	return backupResponse, err
 }

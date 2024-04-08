@@ -10,14 +10,17 @@ type PlatformNamespaceResponse struct {
 
 // ListNamespacesRequest struct
 type PlatformListNamespace struct {
-	TenantId      string `copier:"must,nopanic"`
-	Label         string `copier:"must,nopanic"`
-	SortSortBy    string `copier:"must,nopanic"`
-	SortSortOrder string `copier:"must,nopanic"`
+	TenantId             string `copier:"must,nopanic"`
+	Label                string `copier:"must,nopanic"`
+	SortSortBy           string `copier:"must,nopanic"`
+	SortSortOrder        string `copier:"must,nopanic"`
+	PaginationPageNumber string `copier:"must,nopanic"`
+	PaginationPageSize   string `copier:"must,nopanic"`
 }
 
 type V1ListNamespacesResponse struct {
-	Namespaces []V1Namespace `copier:"must,nopanic"`
+	Namespaces []V1Namespace                  `copier:"must,nopanic"`
+	Pagination *V1PageBasedPaginationResponse `copier:"must,nopanic"`
 }
 
 type V1Namespace struct {

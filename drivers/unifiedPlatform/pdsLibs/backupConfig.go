@@ -2,6 +2,7 @@ package pdslibs
 
 import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 var (
@@ -86,20 +87,36 @@ func GetBackupConfig(id string) (*automationModels.PDSBackupConfigResponse, erro
 }
 
 // ListBackupConfig lists backup config for the deployment
-func ListBackupConfig(accountId string, tenantId string, projectId string, targetClusterId string, namespaceId string, deploymentId string) (*automationModels.PDSBackupConfigResponse, error) {
+func ListBackupConfig(tenantId string) (*automationModels.PDSBackupConfigResponse, error) {
 
-	listBackupConfig := automationModels.PDSBackupConfigRequest{}
-
-	listBackupConfig.List.AccountId = &accountId
-	listBackupConfig.List.TenantId = &tenantId
-	listBackupConfig.List.ProjectId = &projectId
-	listBackupConfig.List.TargetClusterId = &targetClusterId
-	listBackupConfig.List.NamespaceId = &namespaceId
-	listBackupConfig.List.DeploymentId = &deploymentId
+	listBackupConfig := automationModels.PDSBackupConfigRequest{
+		List: automationModels.ListPDSBackupConfig{
+			TenantId: tenantId,
+		},
+	}
 
 	backupResponse, err := v2Components.PDS.ListBackupConfig(&listBackupConfig)
 	if err != nil {
 		return nil, err
 	}
+
+	totalRecords := *backupResponse.List.Pagination.TotalRecords
+	log.Infof("Total backup configs under [%s] = [%s]", tenantId, totalRecords)
+
+	listBackupConfig = automationModels.PDSBackupConfigRequest{
+		List: automationModels.ListPDSBackupConfig{
+			TenantId:             tenantId,
+			PaginationPageNumber: DEFAULT_PAGE_NUMBER,
+			PaginationPageSize:   totalRecords,
+			SortSortBy:           DEFAULT_SORT_BY,
+			SortSortOrder:        DEFAULT_SORT_ORDER,
+		},
+	}
+
+	backupResponse, err = v2Components.PDS.ListBackupConfig(&listBackupConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	return backupResponse, err
 }

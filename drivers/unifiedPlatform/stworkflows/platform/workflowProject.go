@@ -1,4 +1,4 @@
-package stworkflows
+package platform
 
 import (
 	"fmt"
