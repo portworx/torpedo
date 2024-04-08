@@ -93,7 +93,7 @@ func (cloudCredGrpcV1 *PlatformGrpc) GetCloudCredentials(getWorkflowRequest *Clo
 
 func cloudConfig(createRequest *CloudCredentialsRequest) *publiccloudcredapi.Config {
 	PROVIDER_TYPE := createRequest.Create.Config.Provider.CloudProvider
-	secret := createRequest.Create.Config.Credentials
+	secret := createRequest.Create.Config
 	switch PROVIDER_TYPE {
 	case PROVIDER_S3:
 		log.Debugf("creating s3 credentials")
@@ -129,8 +129,8 @@ func cloudConfig(createRequest *CloudCredentialsRequest) *publiccloudcredapi.Con
 			},
 			Credentials: &publiccloudcredapi.Config_GoogleCredentials{
 				GoogleCredentials: &publiccloudcredapi.GoogleCredentials{
-					ProjectId: secret.GcpCredentials.ProjectId,
-					JsonKey:   secret.GcpCredentials.Key,
+					ProjectId: secret.GoogleCredentials.ProjectId,
+					JsonKey:   secret.GoogleCredentials.Key,
 				},
 			},
 		}
@@ -161,29 +161,29 @@ func copyCloudCredResponse(providerType int32, cloudCredModel *publiccloudcredap
 	switch providerType {
 	case PROVIDER_S3:
 		log.Debugf("copying s3 credentials")
-		cloudCredResponse.Create.Config.Credentials.S3Credentials.AccessKey = cloudCredModel.Config.GetS3Credentials().AccessKey
-		cloudCredResponse.Create.Config.Credentials.S3Credentials.SecretKey = cloudCredModel.Config.GetS3Credentials().SecretKey
+		cloudCredResponse.Create.Config.S3Credentials.AccessKey = cloudCredModel.Config.GetS3Credentials().AccessKey
+		cloudCredResponse.Create.Config.S3Credentials.SecretKey = cloudCredModel.Config.GetS3Credentials().SecretKey
 		cloudCredResponse.Create.Meta.Uid = &cloudCredModel.Meta.Uid
 		cloudCredResponse.Create.Meta.Name = &cloudCredModel.Meta.Name
 
 	case PROVIDER_AZURE:
 		log.Debugf("copying azure credentials")
-		cloudCredResponse.Create.Config.Credentials.AzureCredentials.AccountKey = cloudCredModel.Config.GetAzureCredentials().StorageAccountKey
-		cloudCredResponse.Create.Config.Credentials.AzureCredentials.AccountName = cloudCredModel.Config.GetAzureCredentials().StorageAccountName
+		cloudCredResponse.Create.Config.AzureCredentials.AccountKey = cloudCredModel.Config.GetAzureCredentials().StorageAccountKey
+		cloudCredResponse.Create.Config.AzureCredentials.AccountName = cloudCredModel.Config.GetAzureCredentials().StorageAccountName
 		cloudCredResponse.Create.Meta.Uid = &cloudCredModel.Meta.Uid
 		cloudCredResponse.Create.Meta.Name = &cloudCredModel.Meta.Name
 
 	case PROVIDER_GOOGLE:
 		log.Debugf("copying gcp credentials")
-		cloudCredResponse.Create.Config.Credentials.GcpCredentials.ProjectId = cloudCredModel.Config.GetGoogleCredentials().ProjectId
-		cloudCredResponse.Create.Config.Credentials.GcpCredentials.Key = cloudCredModel.Config.GetGoogleCredentials().JsonKey
+		cloudCredResponse.Create.Config.GoogleCredentials.ProjectId = cloudCredModel.Config.GetGoogleCredentials().ProjectId
+		cloudCredResponse.Create.Config.GoogleCredentials.Key = cloudCredModel.Config.GetGoogleCredentials().JsonKey
 		cloudCredResponse.Create.Meta.Uid = &cloudCredModel.Meta.Uid
 		cloudCredResponse.Create.Meta.Name = &cloudCredModel.Meta.Name
 	}
 
 	//Test Print
-	log.Infof("access key after copy [%s]", cloudCredResponse.Create.Config.Credentials.S3Credentials.AccessKey)
-	log.Infof("secret key after copy [%s]", cloudCredResponse.Create.Config.Credentials.S3Credentials.SecretKey)
+	log.Infof("access key after copy [%s]", cloudCredResponse.Create.Config.S3Credentials.AccessKey)
+	log.Infof("secret key after copy [%s]", cloudCredResponse.Create.Config.S3Credentials.SecretKey)
 
 	return &cloudCredResponse
 }
