@@ -1610,7 +1610,7 @@ var _ = Describe("{KubevirtInPlaceRestoreWithReplaceAndRetain}", Label(TestCaseL
 			restoreNames = append(restoreNames, restoreName)
 			log.InfoD("Restoring the [%s] backup", backupName)
 			// Not restoring with validation as it will fail for all the VMs which are gone in scheduling state
-			err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyRetain)
+			err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyRetain)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreName, backupName))
 		})
 
@@ -1640,7 +1640,7 @@ var _ = Describe("{KubevirtInPlaceRestoreWithReplaceAndRetain}", Label(TestCaseL
 			restoreNames = append(restoreNames, restoreName)
 			log.InfoD("Restoring the [%s] backup", backupName)
 			// Not restoring with validation as it will fail for all the VMs which are gone in scheduling state
-			err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete)
+			err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreName, backupName))
 		})
 
@@ -2211,7 +2211,7 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 
 		Step("Create schedule policies", func() {
 			log.InfoD("Creating schedule policies")
-			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 2)
+			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(10, 15, 2)
 			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(periodicPolicyName, uuid.New(), BackupOrgID, periodicSchedulePolicyInfo)
 			dash.VerifyFatal(periodicPolicyStatus, nil, fmt.Sprintf("Creation of periodic schedule policy - %s", periodicPolicyName))
 		})
@@ -2667,11 +2667,11 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				vms, err := GetAllVMsInNamespace(namespace)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching VMs from namespace[%s]", namespace))
 				nonLabelScheduleName = fmt.Sprintf("%s-non-label-schedule-%s", BackupNamePrefix, RandomString(4))
+				scheduleNames = append(scheduleNames, nonLabelScheduleName)
 				_, err = CreateVMScheduledBackupWithValidation(nonLabelScheduleName, vms, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
 					labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", false, periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup [%s] of namespace", backupPreUpgrade))
 				nonLabelSchNamespaceMap[namespace] = nonLabelScheduleName
-				scheduleNames = append(scheduleNames, nonLabelScheduleName)
 			}
 		})
 
@@ -2683,11 +2683,11 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				vms, err := GetAllVMsInNamespace(namespace)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching VMs from namespace[%s]", namespace))
 				labelScheduleName = fmt.Sprintf("%s-label-schedule-%s", BackupNamePrefix, RandomString(4))
+				scheduleNames = append(scheduleNames, labelScheduleName)
 				_, err = CreateVMScheduleBackupWithNamespaceLabelWithValidation(ctx, labelScheduleName, vms, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
 					labelSelectors, BackupOrgID, "", "", "", "", nsLabelString, periodicSchedulePolicyName, periodicSchedulePolicyUid, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup [%s] with namespace label", labelScheduleName))
 				labelSchNamespaceMap[namespace] = labelScheduleName
-				scheduleNames = append(scheduleNames, labelScheduleName)
 			}
 		})
 
@@ -2713,7 +2713,7 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				defer GinkgoRecover()
 				defer wg.Done()
 				for _, namespace := range bkpNamespaces {
-					schBackupAfterVMDeletion, err := GetNextScheduleBackupName(nonLabelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval), ctx)
+					schBackupAfterVMDeletion, err := GetNextCompletedScheduleBackupName(ctx, nonLabelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval))
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching next non labelled schedule backup [%s] after VM deletion ", schBackupAfterVMDeletion))
 					bkpStatus, bkpReason, err := Inst().Backup.GetBackupStatusWithReason(schBackupAfterVMDeletion, ctx, BackupOrgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] status  ", schBackupAfterVMDeletion))
@@ -2730,7 +2730,7 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				defer GinkgoRecover()
 				defer wg.Done()
 				for _, namespace := range bkpNamespaces {
-					labelledSchBackupAfterVMDeletion, err := GetNextScheduleBackupName(labelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval), ctx)
+					labelledSchBackupAfterVMDeletion, err := GetNextCompletedScheduleBackupName(ctx, labelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval))
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching next labelled schedule [%s] backup after VM deletion ", labelledSchBackupAfterVMDeletion))
 					bkpStatus, bkpReason, err := Inst().Backup.GetBackupStatusWithReason(labelledSchBackupAfterVMDeletion, ctx, BackupOrgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] status  ", labelledSchBackupAfterVMDeletion))
@@ -2778,7 +2778,7 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				defer GinkgoRecover()
 				defer wg.Done()
 				for _, namespace := range bkpNamespaces {
-					schBackupAfterVMcreation, err := GetNextScheduleBackupName(nonLabelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval), ctx)
+					schBackupAfterVMcreation, err := GetNextCompletedScheduleBackupName(ctx, nonLabelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval))
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching next schedule backup [%s] after VM creation ", schBackupAfterVMcreation))
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 					err = GetUpdatedKubeVirtVMSpecForBackup(appContextsToBackup)
@@ -2792,7 +2792,7 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				defer GinkgoRecover()
 				defer wg.Done()
 				for _, namespace := range bkpNamespaces {
-					labelledSchBackupAfterVMcreation, err := GetNextScheduleBackupName(labelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval), ctx)
+					labelledSchBackupAfterVMcreation, err := GetNextCompletedScheduleBackupName(ctx, labelSchNamespaceMap[namespace], time.Duration(periodicSchedulePolicyInterval))
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying fetching next labelled schedule [%s] backup after VM creation ", labelledSchBackupAfterVMcreation))
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 					err = GetUpdatedKubeVirtVMSpecForBackup(appContextsToBackup)
@@ -2953,7 +2953,7 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 
 		Step("Create schedule policies", func() {
 			log.InfoD("Creating schedule policies")
-			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 2)
+			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(10, 15, 2)
 			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(periodicPolicyName, uuid.New(), BackupOrgID, periodicSchedulePolicyInfo)
 			dash.VerifyFatal(periodicPolicyStatus, nil, fmt.Sprintf("Creation of periodic schedule policy - %s", periodicPolicyName))
 		})
