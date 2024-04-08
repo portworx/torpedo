@@ -1,15 +1,16 @@
-package stworkflows
+package pds
 
 import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
 	"strconv"
 )
 
 type CustomTemplates struct {
-	Platform                WorkflowPlatform
+	Platform                platform.WorkflowPlatform
 	ResourceTemplateId      string
 	StorageTemplateId       string
 	ServiceConfigTemplateId string

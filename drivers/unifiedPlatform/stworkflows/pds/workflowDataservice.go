@@ -1,9 +1,10 @@
-package stworkflows
+package pds
 
 import (
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	k8utils "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
@@ -11,7 +12,7 @@ import (
 )
 
 type WorkflowDataService struct {
-	Namespace                     WorkflowNamespace
+	Namespace                     platform.WorkflowNamespace
 	PDSTemplates                  CustomTemplates
 	NamespaceName                 string
 	DataServiceDeployment         map[string]string

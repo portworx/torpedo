@@ -6,7 +6,7 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dsUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -92,7 +92,7 @@ var _ = BeforeSuite(func() {
 	Step("Create Cloud Credential and BackUpLocation", func() {
 		log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
 		WorkflowCc.Platform = WorkflowPlatform
-		WorkflowCc.CloudCredentials = make(map[string]stworkflows.CloudCredentialsType)
+		WorkflowCc.CloudCredentials = make(map[string]platform.CloudCredentialsType)
 		cc, err := WorkflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
 		log.FailOnError(err, "error occured while creating cloud credentials")
 		for _, value := range cc.CloudCredentials {

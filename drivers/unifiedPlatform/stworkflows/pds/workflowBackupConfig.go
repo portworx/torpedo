@@ -1,8 +1,9 @@
-package stworkflows
+package pds
 
 import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -10,7 +11,7 @@ type WorkflowPDSBackupConfig struct {
 	Backups                map[string]automationModels.V1BackupConfig
 	WorkflowDataService    WorkflowDataService
 	SkipValidatation       map[string]bool
-	WorkflowBackupLocation WorkflowBackupLocation
+	WorkflowBackupLocation platform.WorkflowBackupLocation
 }
 
 const (
