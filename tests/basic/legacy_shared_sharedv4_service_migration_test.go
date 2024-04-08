@@ -8,6 +8,7 @@ import (
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -128,17 +129,17 @@ func returnMapOfPodsUsingApiSharedVolumes(sharedVolPods map[types.UID]bool, shar
 	return
 }
 
-func checkVolsConvertedtoSharedv4Service(sharedVols map[string]bool) error {
+func checkVolsConvertedtoSharedv4Service(sharedVols map[string]bool) {
 	for v := range sharedVols {
 		apiVol, err := Inst().V.InspectVolume(v)
 		log.FailOnError(err, "Failed to Inspect Volume [%v]", v)
 		dash.VerifyFatal(apiVol.Spec.Shared, false, "legacy shared volume exists post migration")
 		dash.VerifyFatal(apiVol.Spec.Sharedv4, true, "legacy shared volume not migrated to sharedv4 service")
 	}
-	return nil
+	return
 }
 
-func checkMapOfPods(sharedVolPods map[types.UID]bool, ctx *scheduler.Context) error {
+func checkMapOfPods(sharedVolPods map[types.UID]bool, ctx *scheduler.Context) {
 	vols, err := Inst().S.GetVolumes(ctx)
 	log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
 	for _, vol := range vols {
@@ -151,12 +152,11 @@ func checkMapOfPods(sharedVolPods map[types.UID]bool, ctx *scheduler.Context) er
 				_, ok := sharedVolPods[pod.UID]
 				if ok {
 					dash.VerifyFatal(ok, true, fmt.Sprintf("pod using shared volume prior to migration remains after migration [%v]", pod.Name))
-					return fmt.Errorf("A pod using shared volume prior to migration remains after migration [%v]", pod.Name)
 				}
 			}
 		}
 	}
-	return nil
+	return
 }
 
 func waitAllSharedVolumesToGetMigrated(contexts []*scheduler.Context, maxWaitTime int) {
@@ -174,7 +174,7 @@ func waitAllSharedVolumesToGetMigrated(contexts []*scheduler.Context, maxWaitTim
 	return
 }
 
-func createSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffix string) error {
+func createSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffix string) {
 	storageNodes, err := GetStorageNodes()
 	log.FailOnError(err, "Unable to get the storage nodes")
 	pxNode := storageNodes[rand.Intn(len(storageNodes))]
@@ -192,10 +192,10 @@ func createSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffi
 		log.FailOnError(err, fmt.Sprintf("error creating snapshot for volumes %s", apiVol.Id))
 		log.Infof(output)
 	}
-	return nil
+	return
 }
 
-func deleteSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffix string) error {
+func deleteSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffix string) {
 	storageNodes, err := GetStorageNodes()
 	log.FailOnError(err, "Unable to get the storage nodes")
 	pxNode := storageNodes[rand.Intn(len(storageNodes))]
@@ -212,7 +212,7 @@ func deleteSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffi
 		log.FailOnError(err, fmt.Sprintf("error deleting snapshot for volumes %s, snapshot %s", apiVol.Id, snapshotName))
 		log.Infof(output)
 	}
-	return nil
+	return
 }
 
 // Create Legacy Shared Volumes.
@@ -503,28 +503,82 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 		setMigrateLegacySharedToSharedv4Service(true)
 		time.Sleep(210 * time.Second) // sleep 3.5 minutes.
 
+		storageNodes, err := GetStorageNodes()
+		log.FailOnError(err, "Unable to get the storage nodes")
+		pxNode := storageNodes[rand.Intn(len(storageNodes))]
+		err = Inst().S.PrepareNodeToDecommission(pxNode, Inst().Provisioner)
+		log.FailOnError(err, fmt.Sprintf("error preparing node %s for decommision", pxNode.Name))
 		stepLog := "Decommission Node while Migration is in Progress"
 		Step(stepLog, func() {
-			storageNodes, err := GetStorageNodes()
-			log.FailOnError(err, "Unable to get the storage nodes")
-			pxNode := storageNodes[rand.Intn(len(storageNodes))]
-			err = Inst().S.PrepareNodeToDecommission(pxNode, Inst().Provisioner)
-			log.FailOnError(err, fmt.Sprintf("error preparing node %s for decommision", pxNode.Name))
 			err = Inst().V.DecommissionNode(&pxNode)
 			log.FailOnError(err, fmt.Sprintf("error in decommision of node %s ", pxNode.Name))
 		})
 
-		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
-		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
-		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
-		countPostTimeout := getLegacySharedVolumeCount(contexts)
-		dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Post migration count is [%d] instead of 0", countPostTimeout))
-		checkVolsConvertedtoSharedv4Service(volMap)
-		for _, ctx := range contexts {
-			checkMapOfPods(podMap, ctx)
-		}
-		ValidateApplications(contexts)
+		stepLog = "Validate migration process after node Decommission"
+		Step(stepLog, func() {
+			totalSharedVolumes := getLegacySharedVolumeCount(contexts)
+			timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
+			waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
+			countPostTimeout := getLegacySharedVolumeCount(contexts)
+			dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Post migration count is [%d] instead of 0", countPostTimeout))
+			checkVolsConvertedtoSharedv4Service(volMap)
+			for _, ctx := range contexts {
+				checkMapOfPods(podMap, ctx)
+			}
+			ValidateApplications(contexts)
+		})
+		stepLog = fmt.Sprintf("Rejoin node %s", pxNode.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//reboot required to remove encrypted dm devices if any
+			err := Inst().N.RebootNode(pxNode, node.RebootNodeOpts{
+				Force: true,
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         defaultCommandTimeout,
+					TimeBeforeRetry: defaultRetryInterval,
+				},
+			})
+			log.FailOnError(err, fmt.Sprintf("error rebooting node %s", pxNode.Name))
+			err = Inst().V.RejoinNode(&pxNode)
+			dash.VerifyFatal(err, nil, "Validate node rejoin init")
+			var rejoinedNode *api.StorageNode
+			t := func() (interface{}, bool, error) {
+				drvNodes, err := Inst().V.GetDriverNodes()
+				if err != nil {
+					return false, true, err
+				}
+
+				for _, n := range drvNodes {
+					if n.Hostname == pxNode.Hostname {
+						rejoinedNode = n
+						return true, false, nil
+					}
+				}
+
+				return false, true, fmt.Errorf("node %s not joined yet", pxNode.Name)
+			}
+			_, err = task.DoRetryWithTimeout(t, 15*time.Minute, defaultRetryInterval)
+			log.FailOnError(err, fmt.Sprintf("error joining the node [%s]", pxNode.Name))
+			dash.VerifyFatal(rejoinedNode != nil, true, fmt.Sprintf("verify node [%s] rejoined PX cluster", pxNode.Name))
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing node registry")
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing storage drive endpoints")
+			decommissionedNode := node.Node{}
+			for _, n := range node.GetStorageDriverNodes() {
+				if n.Name == rejoinedNode.Hostname {
+					decommissionedNode = n
+					break
+				}
+			}
+			if decommissionedNode.Name == "" {
+				log.FailOnError(fmt.Errorf("rejoined node not found"), fmt.Sprintf("node [%s] not found in the node registry", rejoinedNode.Hostname))
+			}
+			err = Inst().V.WaitDriverUpOnNode(decommissionedNode, Inst().DriverStartTimeout)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate driver up on rejoined node [%s] after rejoining", decommissionedNode.Name))
+		})
 	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
@@ -645,6 +699,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() 
 			checkMapOfPods(podMap, ctx)
 		}
 		ValidateApplications(contexts)
+		deleteSnapshotsAndClones(volMap, "snapshot-2", "clone-2")
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
