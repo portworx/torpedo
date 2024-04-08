@@ -3271,6 +3271,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		selectedNode, err := GetNodeFromPoolUUID(poolIDToResize)
 		log.FailOnError(err, "Failed to get node from pool UUID")
 		originalSizeInBytes = poolToResize.TotalSize
+		originalSizeGiB := originalSizeInBytes / units.GiB
 		log.InfoD("Original size of the pool %s is %d", poolIDToResize, originalSizeInBytes)
 		poolToResize = getStoragePool(poolIDToResize)
 		SnapshotPercent := uint64(30)
@@ -3278,7 +3279,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		targetSizeInBytes = originalSizeInBytes - SubtractSize
 		targetSizeGiB = targetSizeInBytes / units.GiB
 		log.InfoD("Target size of the pool %s is %d", poolIDToResize, targetSizeGiB)
-		ExceededTargetSize := targetSizeGiB + 10
+		ExceededTargetSize := targetSizeGiB * 10
 		log.InfoD("Exceeded Target size of the pool %s is %d", poolIDToResize, ExceededTargetSize)
 
 		stepLog := "Update the pxctl cluster with cluster option OverCommitPercent with the maximum storage percentage volumes can provision against backing storage set to 100(Enabeling Thick Provisioning)"
@@ -3288,8 +3289,9 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			//clusterOpts["--provisioning-commit-labels"] = "'[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30} ]'\n\n\n"
 			//err := Inst().V.SetClusterOpts(*selectedNode, clusterOpts)
 			SetClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30} ]'"
-			_, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
+			clusterOptionsOutput, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
 			log.FailOnError(err, "Failed to set cluster options")
+			log.InfoD("The Cluster options output : %v", clusterOptionsOutput)
 			ClusterOptionsValidationcmd := "cluster options list -j | jq -r '.ProvisionCommitRule'"
 			output, err := runPxctlCommand(ClusterOptionsValidationcmd, *selectedNode, nil)
 			log.InfoD("The Current Cluster options: %v", output)
@@ -3299,19 +3301,17 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		stepLog = "Create a volume with a base size"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			volName := fmt.Sprintf("overcommit-test-%d", 0)
-			pxctlCreateVolumeCmd := fmt.Sprintf("volume create --size %v %s", 10, volName)
-			output, err := runPxctlCommand(pxctlCreateVolumeCmd, *selectedNode, nil)
-			log.FailOnError(err, "Failed to create volume using pxctl")
-			log.InfoD("Successfully created volume: %v", output)
+			VolName := fmt.Sprintf("overcommit-test-%d", 0)
+			volId, err := Inst().V.CreateVolume(VolName, ExceededTargetSize, 1)
+			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
+			log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
 		})
 
 		stepLog = "Now update the volume size upto the maximum limit of the storage pool"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			volName := fmt.Sprintf("overcommit-test-%d", 0)
-			pxctlVolResizeCmd := fmt.Sprintf("volume update %s --size %v", volName, targetSizeGiB)
-			_, err := runPxctlCommand(pxctlVolResizeCmd, *selectedNode, nil)
+			err := Inst().V.ResizeVolume(volName, originalSizeGiB)
 			log.FailOnError(err, "Failed to resize volume: %v", volName)
 			log.InfoD("Succesfully resized volume: %v", volName)
 			volInspect, err := Inst().V.InspectVolume(volName)
@@ -3323,8 +3323,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			volName := fmt.Sprintf("overcommit-test-%d", 0)
-			pxctlVolResizeCmd := fmt.Sprintf("volume update %s --size %v", volName, ExceededTargetSize)
-			_, err := runPxctlCommand(pxctlVolResizeCmd, *selectedNode, nil)
+			err := Inst().V.ResizeVolume(volName, ExceededTargetSize)
 			log.FailOnError(err, "Failed to resize volume: %v", volName)
 			log.InfoD("Succesfully resized volume: %v", volName)
 
@@ -3337,6 +3336,18 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			_, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
 			log.FailOnError(err, "Failed to set cluster options")
 			log.InfoD("Successfully set cluster options")
+		})
+		stepLog = "Create a volume again with size greater than Storage pool size as we have disabled the thick provisioning (Should Be created)"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			VolName := fmt.Sprintf("overcommit-test-%d", 0)
+			volId, err := Inst().V.CreateVolume(VolName, ExceededTargetSize, 1)
+			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
+			log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
+			//Delete the Volume , As we have created it only for Validation Purpose
+			err = Inst().V.DeleteVolume(VolName)
+			log.FailOnError(err, "Failed to delete volume [%s]", VolName)
+
 		})
 
 	})
