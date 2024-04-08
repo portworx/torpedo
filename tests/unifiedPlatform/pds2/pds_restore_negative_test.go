@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"fmt"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
@@ -94,27 +93,8 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 
 	It("Kill set of pods for HA.", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			log.InfoD("Dataservice on which the PVC needs to be resized is- [%v]", ds.Name)
-			dbMaster, isNativelyDistributed := workflowDataService.GetDbMasterNode(workflowDataService.NamespaceName, ds.Name, workflowDataService.DataServiceDeployment)
-			log.FailOnError(err, "Failed while fetching db master node.")
-			log.InfoD("dbMaster Node is %s", dbMaster)
-			if !isNativelyDistributed {
-				err = workflowDataService.DeleteK8sPods(dbMaster, workflowDataService.NamespaceName, workflowDataService.TargetCluster.KubeConfig)
-				log.FailOnError(err, "Failed while deleting db master pod.")
-				//err = dsTest.ValidateDataServiceDeployment(deployment, nsName)
-				log.FailOnError(err, "Failed while validating the deployment pods, post pod deletion.")
-				newDbMaster, _ := workflowDataService.GetDbMasterNode(workflowDataService.NamespaceName, ds.Name, workflowDataService.DataServiceDeployment)
-				if dbMaster == newDbMaster {
-					log.FailOnError(fmt.Errorf("leader node is not reassigned"), fmt.Sprintf("Leader pod %v", dbMaster))
-				}
-			} else {
-				podName, err := workflowDataService.GetAnyPodName(*deployment.Create.Meta.Name, workflowDataService.NamespaceName)
-				log.FailOnError(err, "Failed while fetching pod for stateful set %v.", *deployment.Create.Meta.Name)
-				err = workflowDataService.KillPodsInNamespace(workflowDataService.NamespaceName, podName)
-				log.FailOnError(err, "Failed while deleting pod.")
-				//err = dsTest.ValidateDataServiceDeployment(deployment, workflowDataService.NamespaceName)
-				log.FailOnError(err, "Failed while validating the deployment pods, post pod deletion.")
-			}
+			log.InfoD("Kill set of pods of Dataservice to validate HA- [%v]", ds.Name)
+			err = workflowDataService.KillDBMasterNodeToValidateHA(ds.Name, *deployment.Create.Meta.Name)
 		}
 	})
 	It("Perform adhoc backup, restore after killing few pods to validate HA", func() {

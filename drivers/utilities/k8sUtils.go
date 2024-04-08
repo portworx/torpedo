@@ -100,7 +100,7 @@ func GetVolumeCapacityInGB(namespace string, deployment map[string]string) (uint
 	return pvcCapacity, nil
 }
 
-func GetDbMasterNode(namespace string, dsName string, deployment map[string]string, kubeconfigPath string) (string, bool) {
+func GetDbMasterNode(namespace string, dsName string, deployment string, kubeconfigPath string) (string, bool) {
 	var command, dbMaster string
 	switch dsName {
 	case "deployment.Postgresql":
@@ -207,4 +207,26 @@ func KillPodsInNamespace(ns string, podName string) error {
 		log.InfoD("Successfully Killed Pod: %v", pod.Name)
 	}
 	return err
+}
+
+func KillDbMasterNode(namespace string, dsName string, kubeconfigPath string, deploymentName string) error {
+	dbMaster, isNativelyDistributed := GetDbMasterNode(namespace, dsName, deploymentName, kubeconfigPath)
+	if isNativelyDistributed {
+		err := DeleteK8sPods(dbMaster, namespace, kubeconfigPath)
+		if err != nil {
+			return err
+		}
+		//validate DataService Deployment here
+		newDbMaster, _ := GetDbMasterNode(namespace, dsName, deploymentName, kubeconfigPath)
+		if dbMaster == newDbMaster {
+			log.FailOnError(fmt.Errorf("leader node is not reassigned"), fmt.Sprintf("Leader pod %v", dbMaster))
+		}
+	} else {
+		podName, err := GetAnyPodName(deploymentName, namespace)
+		log.FailOnError(err, "Failed while fetching pod for stateful set %v.", deploymentName)
+		err = KillPodsInNamespace(namespace, podName)
+		log.FailOnError(err, "Failed while deleting pod.")
+		//validate DataService Deployment here
+	}
+	return nil
 }
