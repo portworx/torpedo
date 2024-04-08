@@ -730,6 +730,14 @@ var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
 			}
 			dash.VerifyFatal(resizedVolumeCount > 0, true, "No volumes resized")
 		})
+		Step("Verify bind mount after volume resize", func() {
+			log.InfoD("Verify bind mount after volume resize")
+			for _, ctx := range contexts {
+				isVmBindMounted, err := IsVMBindMounted(ctx, true)
+				log.FailOnError(err, fmt.Sprintf("failed to verify bind mount for app [%s]", ctx.App.Key))
+				dash.VerifyFatal(isVmBindMounted, true, fmt.Sprintf("failed to verify bind mount for app [%s]", ctx.App.Key))
+			}
+		})
 	})
 
 	JustAfterEach(func() {
