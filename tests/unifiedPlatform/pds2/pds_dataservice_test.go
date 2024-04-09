@@ -11,29 +11,6 @@ import (
 	"strings"
 )
 
-var _ = Describe("{ValidateDnsEndPoint}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("ValidateDnsEndPoint", "validate dns endpoint", nil, 0)
-	})
-
-	var (
-		workflowDataservice pds.WorkflowDataService
-		err                 error
-	)
-
-	It("ValidateDnsEndPoint", func() {
-		Step("validate dns endpoint", func() {
-			depId := "dep:fa70e52d-0563-4258-b96b-7d6ca6ed4799"
-			err = workflowDataservice.ValidateDNSEndpoint(depId)
-			log.FailOnError(err, "Error occurred while validating dns endpoint")
-		})
-	})
-
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-	})
-})
-
 var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeployDataServicesOnDemandAndScaleUp", "Deploy data services and perform scale up", nil, 0)

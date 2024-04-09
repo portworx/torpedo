@@ -85,11 +85,6 @@ func GetDeployment(deploymentId string) (*automationModels.PDSDeploymentResponse
 	return v2Components.PDS.GetDeployment(deploymentId)
 }
 
-//func ValidateDNSEndpoint(deployment *automationModels.PDSDeploymentResponse) error {
-//	deployment.Get.Status.ConnectionInfo[]
-//	return nil
-//}
-
 // DeployDataService Deploys the dataservices based on the given params
 func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterId, imageId, appConfigId, resConfigId, stConfigId string) (*automationModels.PDSDeploymentResponse, error) {
 	log.Info("Data service will be deployed as per the config map passed..")

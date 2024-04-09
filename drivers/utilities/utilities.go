@@ -447,3 +447,52 @@ func DeleteElementFromSlice(slice []string, element string) ([]string, error) {
 	// Delete the element by slicing the original slice
 	return append(slice[:index], slice[index+1:]...), nil
 }
+
+// GetDNSEndPoint takes interface as input and checks for the particular type and extracts the host and port information
+// Returns the host and port as dnsEndpoints
+func GetDNSEndPoint(clusterDetails interface{}) (string, error) {
+	var (
+		host        string
+		port        string
+		dnsEndPoint string
+		err         error
+	)
+	if detailsMap, ok := clusterDetails.(map[string]interface{}); ok {
+		log.Info("ClusterDetails")
+		for key, value := range detailsMap {
+			switch key {
+			case "host":
+				host, err = ConvertInterfacetoString(value)
+				if err != nil {
+					return "", err
+				}
+				log.Infof("%s: %v\n", key, value)
+			case "port":
+				port, err = ConvertInterfacetoString(value)
+				if err != nil {
+					return "", err
+				}
+				log.Infof("%s: %v\n", key, value)
+			}
+		}
+		dnsEndPoint = host + ":" + port
+		log.Infof("DataService endpoint is: [%s]", dnsEndPoint)
+	} else {
+		return "", fmt.Errorf("ClusterDetails is of not expected type")
+	}
+
+	return dnsEndPoint, nil
+}
+
+func ConvertInterfacetoString(value interface{}) (string, error) {
+	switch v := value.(type) {
+	case string:
+		return v, nil
+	case int:
+		return strconv.Itoa(v), nil
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64), nil
+	default:
+		return "", fmt.Errorf("unsupported type: %T", value)
+	}
+}

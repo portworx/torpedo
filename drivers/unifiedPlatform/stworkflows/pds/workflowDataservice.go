@@ -6,7 +6,7 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
-	k8utils "github.com/portworx/torpedo/drivers/utilities"
+	utils "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"strconv"
@@ -134,8 +134,20 @@ func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId strin
 	if err != nil {
 		return err
 	}
+	log.Infof("Deployment Response [+%v]", *deployment)
+	log.Infof("ConnectionInfo Response [+%v]", deployment.Get.Status.ConnectionInfo["clusterDetails"])
 
-	log.Infof("Deployment Response [+%v]", deployment)
+	clusterDetails := deployment.Get.Status.ConnectionInfo["clusterDetails"]
+	dnsEndPoint, err := utils.GetDNSEndPoint(clusterDetails)
+	if err != nil {
+		return err
+	}
+
+	err = dslibs.ValidateDNSEndPoint(dnsEndPoint)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -237,28 +249,28 @@ func ValidateDeploymentResources(resourceTemp dslibs.ResourceSettingTemplate, st
 }
 
 func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string, deployment map[string]string, sizeInGb uint64) error {
-	_, err := k8utils.IncreasePVCby1Gig(namespace, deployment, sizeInGb)
+	_, err := utils.IncreasePVCby1Gig(namespace, deployment, sizeInGb)
 	return err
 }
 
 func (wfDataService *WorkflowDataService) KillDBMasterNodeToValidateHA(dsName string, deploymentName string) error {
-	dbMaster, isNativelyDistributed := k8utils.GetDbMasterNode(wfDataService.NamespaceName, dsName, deploymentName, wfDataService.Namespace.TargetCluster.KubeConfig)
+	dbMaster, isNativelyDistributed := utils.GetDbMasterNode(wfDataService.NamespaceName, dsName, deploymentName, wfDataService.Namespace.TargetCluster.KubeConfig)
 	if isNativelyDistributed {
-		err := k8utils.DeleteK8sPods(dbMaster, wfDataService.NamespaceName, wfDataService.Namespace.TargetCluster.KubeConfig)
+		err := utils.DeleteK8sPods(dbMaster, wfDataService.NamespaceName, wfDataService.Namespace.TargetCluster.KubeConfig)
 		if err != nil {
 			return err
 		}
 		//validate DataService Deployment here
-		newDbMaster, _ := k8utils.GetDbMasterNode(wfDataService.NamespaceName, dsName, deploymentName, wfDataService.Namespace.TargetCluster.KubeConfig)
+		newDbMaster, _ := utils.GetDbMasterNode(wfDataService.NamespaceName, dsName, deploymentName, wfDataService.Namespace.TargetCluster.KubeConfig)
 		if dbMaster == newDbMaster {
 			log.FailOnError(fmt.Errorf("leader node is not reassigned"), fmt.Sprintf("Leader pod %v", dbMaster))
 		}
 	} else {
-		podName, err := k8utils.GetAnyPodName(deploymentName, wfDataService.NamespaceName)
+		podName, err := utils.GetAnyPodName(deploymentName, wfDataService.NamespaceName)
 		if err != nil {
 			return fmt.Errorf("failed while fetching pod for stateful set %v ", deploymentName)
 		}
-		err = k8utils.KillPodsInNamespace(wfDataService.NamespaceName, podName)
+		err = utils.KillPodsInNamespace(wfDataService.NamespaceName, podName)
 		if err != nil {
 			return fmt.Errorf("failed while deleting pod %v ", deploymentName)
 		}
