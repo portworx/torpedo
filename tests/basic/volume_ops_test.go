@@ -3300,7 +3300,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			VolName := fmt.Sprintf("overcommit-test-%d", 1)
 			err := Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, 10, 1)
 			if err != nil {
-				if strings.Contains(err.Error(), "AlreadyExists") {
+				if strings.Contains(err.Error(), "already exists") {
 					log.InfoD("Volume already exists with name [%s] so deleting it", VolName)
 					Inst().V.DeleteVolume(VolName)
 				} else {
