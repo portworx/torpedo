@@ -23,6 +23,7 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 	var namespace string
 	itLog := "Add a new disk to a kubevirtVM"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -92,6 +93,7 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 	var namespace string
 	itLog := "Live migrate a kubevirtVM"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		log.InfoD(stepLog)
 		appList := Inst().AppList

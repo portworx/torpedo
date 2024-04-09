@@ -536,3 +536,18 @@ func ValidateFileIntegrityInVM(virtualMachines []*scheduler.Context, namespace s
 	}
 	return nil
 }
+
+func ListEvents(namespace string) error {
+	k8sCore = core.Instance()
+	eventList, err := k8sCore.ListEvents(namespace, metav1.ListOptions{})
+	if err != nil {
+		log.Infof("Failed to list events in namespace %s: %v", namespace, err)
+		return err
+	}
+	log.Infof("Events in namespace %s:", namespace)
+	for _, event := range eventList.Items {
+		log.Infof("Time: %v, Event: %s, Type: %s, Reason: %s, Object: %s/%s, Message: %s",
+			event.FirstTimestamp, event.Name, event.Type, event.Reason, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Message)
+	}
+	return nil
+}
