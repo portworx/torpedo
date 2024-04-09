@@ -2,13 +2,13 @@ apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
   labels:
-    app: fio-vm-multidisk-wffc
+    app: fio-vm-multi-disk
     vm.kubevirt.io/template: fedora-server-small
     vm.kubevirt.io/template.namespace: openshift
-  name: fio-vm-multidisk-wffc
+  name: fio-vm-multi-disk
   annotations:
     pvc.source: "cloned"
-    username: "root"
+    username: "ubuntu"
 spec:
   running: true
   template:
@@ -19,7 +19,7 @@ spec:
         vm.kubevirt.io/workload: server
       labels:
         kubevirt.io/size: small
-        username: "root"
+        username: "ubuntu"
     spec:
       domain:
         cpu:

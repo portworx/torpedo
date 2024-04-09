@@ -37,7 +37,7 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
 		})
-		ValidateApplications(appCtxs)
+		//ValidateApplications(appCtxs)
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")

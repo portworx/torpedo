@@ -280,9 +280,12 @@ func IsVMBindMounted(virtualMachineCtx *scheduler.Context, wait bool) (bool, err
 	// The criteria to call the bind mount successful is to check if the replicaset of all volumes should be same and should be locally attached to the node
 	// check if the replicaset values is same as the global replicaset
 	// Here we are considering globalreplicaset to be source of truth for comparison
-
+	var vmPod *corev1.Pod
 	for _, vol := range vols {
-		err := IsVolumeBindMounted(virtualMachineCtx, vmNodeName, vol, wait)
+		if vmPod == nil {
+			vmPod, _ = GetVirtLauncherPodForVM(virtualMachineCtx, vol)
+		}
+		err := IsVolumeBindMounted(virtualMachineCtx, vmNodeName, vol, wait, vmPod)
 		if err != nil {
 			return false, err
 		}
@@ -390,7 +393,7 @@ func getVMDiskMountType(pod *corev1.Pod, vmDisk *volume.Volume, diskName string)
 }
 
 // IsVolumeBindMounted verifies if the volume is bind mounted on the VM pod or not
-func IsVolumeBindMounted(virtualMachineCtx *scheduler.Context, vmNodeName string, vol *volume.Volume, wait bool) error {
+func IsVolumeBindMounted(virtualMachineCtx *scheduler.Context, vmNodeName string, vol *volume.Volume, wait bool, vmPod *corev1.Pod) error {
 	volInspect, err := Inst().V.InspectVolume(vol.ID)
 	if err != nil {
 		return fmt.Errorf("failed to inspect volume [%s]: %w", vol.ID, err)
@@ -407,11 +410,13 @@ func IsVolumeBindMounted(virtualMachineCtx *scheduler.Context, vmNodeName string
 
 	isBindMounted := false
 	t := func() (interface{}, bool, error) {
-		vmPod, err := GetVirtLauncherPodForVM(virtualMachineCtx, vol)
-		if err != nil {
-			// this is expected while the live migration is running since there will be 2 VM pods
-			log.Infof("Could not get VM pod for %s for context %s: %v", vol.Name, virtualMachineCtx.App.Key, err)
-			return false, false, nil
+		if vmPod == nil {
+			vmPod, err = GetVirtLauncherPodForVM(virtualMachineCtx, vol)
+			if err != nil {
+				// this is expected while the live migration is running since there will be 2 VM pods
+				log.Infof("Could not get VM pod for %s for context %s: %v", vol.Name, virtualMachineCtx.App.Key, err)
+				return false, false, nil
+			}
 		}
 		log.Infof("Verifying bind mount for %s", vol)
 		diskName := ""
@@ -488,7 +493,7 @@ func CreateConfigMap() {
 				Name: "kubevirt-creds",
 			},
 			Data: map[string]string{
-				"fio-vm-multi-disk": "toor",
+				"fio-vm-multi-disk": "ubuntu",
 			},
 		}
 		_, err = core.Instance().CreateConfigMap(configMap)
