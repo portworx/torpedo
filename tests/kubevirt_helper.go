@@ -498,3 +498,41 @@ func CreateConfigMap() {
 		log.Infof("created config map kubevirt-creds")
 	}
 }
+
+func WriteFilesAndStoreMD5InVM(virtualMachines []*scheduler.Context, namespace string, fileCount int, maxFileSize int) error {
+	log.Infof("Creating %d files and storing their MD5 checksums in namespace %s", fileCount, namespace)
+	createFilesCmd := fmt.Sprintf("mkdir -p /tmp/testfiles && cd /tmp/testfiles && "+
+		"rm -f /tmp/file_checksums.md5 && for i in $(seq 1 %d); do "+
+		"head -c $(($RANDOM %% %d)) </dev/urandom >file$i; md5sum file$i >> /tmp/file_checksums.md5; done", fileCount, maxFileSize)
+	for _, appCtx := range virtualMachines {
+		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+		if err != nil {
+			return err
+		}
+		for _, v := range vms {
+			_, err := RunCmdInVM(v, createFilesCmd, context1.TODO())
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func ValidateFileIntegrityInVM(virtualMachines []*scheduler.Context, namespace string) error {
+	log.Infof("Validating file integrity in namespace %s", namespace)
+	validateFilesCmd := "cd /tmp/testfiles && md5sum -c /tmp/file_checksums.md5"
+	for _, appCtx := range virtualMachines {
+		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+		if err != nil {
+			return err
+		}
+		for _, v := range vms {
+			_, err := RunCmdInVM(v, validateFilesCmd, context1.TODO())
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}

@@ -29,7 +29,7 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-fio-low-load-with-ssh"}
+		Inst().AppList = []string{"kubevirt-fio-pvc-clone"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -42,7 +42,13 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 			log.FailOnError(err, "Failed to verify bind mount")
 			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 		}
-
+		stepLog = "Write some data in the VM and calculate it's md5sum"
+		Step(stepLog, func() {
+			err := WriteFilesAndStoreMD5InVM(appCtxs, namespace, 20, 250000000)
+			if err != nil {
+				log.FailOnError(err, "Failed to write files and store MD5 sums")
+			}
+		})
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -64,9 +70,14 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 				}
 			}
 		})
-
+		stepLog = "Validate md5sum of previously written data"
+		Step(stepLog, func() {
+			err = ValidateFileIntegrityInVM(appCtxs, namespace)
+			if err != nil {
+				log.FailOnError(err, "File integrity validation failed")
+			}
+		})
 	})
-
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
@@ -74,11 +85,9 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 })
 
 var _ = Describe("{KubeVirtLiveMigration}", func() {
-
 	JustBeforeEach(func() {
 		StartTorpedoTest("KubeVirtLiveMigration", "Live migrate a kubevirtVM", nil, 0)
 	})
-
 	var appCtxs []*scheduler.Context
 	var namespace string
 	itLog := "Live migrate a kubevirtVM"
@@ -89,7 +98,7 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 		defer func() {
 			Inst().AppList = appList
 		}()
-		Inst().AppList = []string{"kubevirt-fio-low-load-with-ssh"}
+		Inst().AppList = []string{"kubevirt-fio-pvc-clone"}
 
 		stepLog := "schedule a kubevirt VM"
 		Step(stepLog, func() {

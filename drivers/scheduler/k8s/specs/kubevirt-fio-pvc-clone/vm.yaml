@@ -1,0 +1,130 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  labels:
+    app: fio-vm-multidisk-wffc
+    vm.kubevirt.io/template: fedora-server-small
+    vm.kubevirt.io/template.namespace: openshift
+  name: fio-vm-multidisk-wffc
+  annotations:
+    pvc.source: "cloned"
+spec:
+  running: true
+  template:
+    metadata:
+      annotations:
+        vm.kubevirt.io/flavor: small
+        vm.kubevirt.io/os: fedora
+        vm.kubevirt.io/workload: server
+      labels:
+        kubevirt.io/size: small
+    spec:
+      domain:
+        cpu:
+          cores: 2
+          sockets: 2
+          threads: 2
+        devices:
+          disks:
+            - bootOrder: 1
+              disk:
+                bus: virtio
+              name: rootdisk
+            - bootOrder: 2
+              disk:
+                bus: virtio
+              name: cloudinitdisk
+          networkInterfaceMultiqueue: true
+          rng: {}
+        features:
+          acpi: {}
+          smm:
+            enabled: true
+        firmware:
+          bootloader:
+            efi: {}
+        machine:
+          type: pc-q35-rhel9.2.0
+        resources:
+          requests:
+            memory: 4Gi
+      evictionStrategy: LiveMigrate
+      terminationGracePeriodSeconds: 180
+      volumes:
+        - dataVolume:
+            name: fio-root-disk
+          name: rootdisk
+        - name: fio-data-disk-1
+          persistentVolumeClaim:
+            claimName: fio-data-disk-1
+        - name: fio-data-disk-2
+          persistentVolumeClaim:
+            claimName: fio-data-disk-2
+        - name: fio-data-disk-3
+          persistentVolumeClaim:
+            claimName: fio-data-disk-3
+        - cloudInitNoCloud:
+            userData: |-
+              #cloud-config
+              user: root
+              password: toor
+              chpasswd: { expire: False }
+          name: cloudinitdisk
+  dataVolumeTemplates:
+    - metadata:
+        name: fio-root-disk
+      spec:
+        source:
+          pvc:
+            name: fio-low-load-template-pvc
+            namespace: openshift-virtualization-os-images
+        pvc:
+          accessModes:
+            - ReadWriteMany
+          resources:
+            requests:
+              storage: 100Gi
+          storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
+          volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fio-data-disk-1
+  labels:
+    portworx.io/kubevirt: "true"
+spec:
+  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fio-data-disk-2
+  labels:
+    portworx.io/kubevirt: "true"
+spec:
+  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fio-data-disk-3
+  labels:
+    portworx.io/kubevirt: "true"
+spec:
+  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
