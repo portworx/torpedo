@@ -3281,6 +3281,9 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		log.InfoD("Target size of the pool %s is %d", poolIDToResize, targetSizeGiB)
 		ExceededTargetSize := targetSizeGiB * 10
 		log.InfoD("Exceeded Target size of the pool %s is %d", poolIDToResize, ExceededTargetSize)
+		id := uuid.New()
+		VolNameTest := fmt.Sprintf("volume_%s", id.String()[:8])
+		log.InfoD("volume name is : %s", VolNameTest)
 
 		stepLog := "Update the pxctl cluster with cluster option OverCommitPercent with the maximum storage percentage volumes can provision against backing storage set to 100(Enabeling Thick Provisioning)"
 		Step(stepLog, func() {
@@ -3297,33 +3300,24 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		stepLog = "Create a volume with a base size"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			VolName := fmt.Sprintf("overcommit-test-%d", 1)
-			err := Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, 10, 1)
-			if err != nil {
-				if strings.Contains(err.Error(), "already exists") {
-					log.InfoD("Volume already exists with name [%s] so deleting it", VolName)
-					Inst().V.DeleteVolume(VolName)
-				} else {
-					log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
-				}
-			}
-			log.InfoD("Volume created with name [%s]", VolName)
+			err := Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolNameTest, 10, 1)
+			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolNameTest)
+			log.InfoD("Volume created with name [%s]", VolNameTest)
 		})
 
 		stepLog = "Now update the volume size upto the maximum limit of the storage pool"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			volName := fmt.Sprintf("overcommit-test-%d", 1)
-			err := Inst().V.ResizeVolume(volName, targetSizeGiB)
+			err := Inst().V.ResizeVolume(VolNameTest, targetSizeGiB)
 			if err != nil {
 				if strings.Contains(err.Error(), "Failed to resize volume") {
 					log.InfoD("Volume resize failed as expected due to the overcommit Rules imposed on cluster : [%s]", err.Error())
 					return
 				}
 			}
-			log.FailOnError(err, "Failed to resize volume: %v", volName)
-			log.InfoD("Succesfully resized volume: %v", volName)
-			volInspect, err := Inst().V.InspectVolume(volName)
+			log.FailOnError(err, "Failed to resize volume: %v", VolNameTest)
+			log.InfoD("Succesfully resized volume: %v", VolNameTest)
+			volInspect, err := Inst().V.InspectVolume(VolNameTest)
 			log.FailOnError(err, "Failed to inspect volume")
 			log.InfoD("Volume size: %v", volInspect.Spec.Size)
 		})
@@ -3331,23 +3325,24 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		stepLog = "Now try to increase the volume size  more than the capacity of storage pool"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			volName := fmt.Sprintf("overcommit-test-%d", 1)
-			err := Inst().V.ResizeVolume(volName, ExceededTargetSize)
+			VolNameTest := fmt.Sprintf("overcommit-test-%d", 1)
+			err := Inst().V.ResizeVolume(VolNameTest, ExceededTargetSize)
 			if err != nil {
 				if strings.Contains(err.Error(), "Failed to resize volume") {
 					log.InfoD("Volume resize failed as expected due to the overcommit Rules imposed on cluster : [%s]", err.Error())
 					return
 				}
 			}
-			log.FailOnError(err, "Failed to resize volume: %v", volName)
-			log.InfoD("Succesfully resized volume: %v", volName)
+			log.FailOnError(err, "Failed to resize volume: %v", VolNameTest)
+			log.InfoD("Succesfully resized volume: %v", VolNameTest)
 		})
 		//create volume on a particular node
 
 		stepLog = " Verify Volume Creation also with Overcommit Rule Imposed on the cluster"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			VolName := fmt.Sprintf("New-overcommit-testvolume-%d", 1)
+			id := uuid.New()
+			VolName := fmt.Sprintf("volume_%s", id.String()[:8])
 			err := Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, ExceededTargetSize, 1)
 			if err != nil {
 				if strings.Contains(err.Error(), "pools must not over-commit provisioning space") {
@@ -3373,7 +3368,8 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		stepLog = "Create a volume again with size greater than Storage pool size as we have disabled the thick provisioning (Should Be created)"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			VolName := fmt.Sprintf("overcommit-test-%d", 1)
+			id := uuid.New()
+			VolName := fmt.Sprintf("volume_%s", id.String()[:8])
 			err := Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, ExceededTargetSize, 1)
 			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 			log.InfoD("Volume created with name [%s]", VolName)
