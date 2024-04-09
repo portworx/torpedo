@@ -3336,7 +3336,6 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			log.FailOnError(err, "Failed to resize volume: %v", VolNameTest)
 			log.InfoD("Succesfully resized volume: %v", VolNameTest)
 		})
-		//create volume on a particular node
 
 		stepLog = " Verify Volume Creation also with Overcommit Rule Imposed on the cluster"
 		Step(stepLog, func() {
@@ -3356,7 +3355,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			err = Inst().V.DeleteVolume(VolName)
 			log.FailOnError(err, "Failed to delete volume [%s]", VolName)
 		})
-		// Revert back the imposed cluster options
+
 		stepLog = "Revert back the imposed cluster options"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -3365,6 +3364,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			log.FailOnError(err, "Failed to set cluster options")
 			log.InfoD("Successfully set cluster options")
 		})
+
 		stepLog = "Create a volume again with size greater than Storage pool size as we have disabled the thick provisioning (Should Be created)"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
