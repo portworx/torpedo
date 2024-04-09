@@ -977,11 +977,11 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 	})
 })
 
-// blockiSCSIInterfaceOnNode block and revert iscsi interface on Node
-func blockiSCSIInterfaceOnNode(n *node.Node, revertRules bool) error {
+// blockiSCSIInterfaceOnNode blockRules and unblockRules iscsi interface on Node
+func blockiSCSIInterfaceOnNode(n *node.Node, block bool) error {
 
 	command := fmt.Sprintf("iptables -A INPUT -p tcp -s %v --dport 3260 -j DROP ", n.MgmtIp)
-	if revertRules {
+	if !block {
 		command = fmt.Sprintf("iptables -D INPUT -p tcp -s %v --dport 3260 -j DROP", n.MgmtIp)
 	}
 	log.InfoD("Triggering command [%s] from Node [%v]", command, n.Name)
@@ -991,7 +991,7 @@ func blockiSCSIInterfaceOnNode(n *node.Node, revertRules bool) error {
 	}
 
 	command = fmt.Sprintf("iptables -A OUTPUT -p tcp -s %v --dport 3260 -j DROP ", n.MgmtIp)
-	if revertRules {
+	if !block {
 		command = fmt.Sprintf("iptables -D OUTPUT -p tcp -s %v --dport 3260 -j DROP", n.MgmtIp)
 	}
 	log.InfoD("Triggering command [%s] from Node [%v]", command, n.Name)
@@ -1062,13 +1062,12 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 		// Pick all the Volumes with RWO Status, We check if the Volume is with Access Mode RWO and PureBlock Volume
 		vols := make([]*volume.Volume, 0)
 		for _, ctx := range contexts {
-			appVols, err := Inst().S.GetVolumes(ctx)
+			appVols, err := Inst().S.GetPureVolumes(ctx, "pure_block")
 			log.FailOnError(err, fmt.Sprintf("error getting volumes for app [%s]", ctx.App.Key))
 
 			for _, eachVol := range appVols {
 				accessModes, err := getPVCAccessMode(eachVol.Name, eachVol.Namespace)
 				log.FailOnError(err, "Failed to get AccessModes for the volume [%v]", eachVol.Name)
-
 				for _, eachAMode := range accessModes {
 					// Validate if the Volume is Pure Volume
 					boolVol, err := Inst().V.IsPureVolume(eachVol)
@@ -1109,12 +1108,12 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 
 			// Stop iscsi traffic on the Node
 			log.Infof("Blocking IPAddress on Node [%v]", podNode.Name)
-			err = blockiSCSIInterfaceOnNode(podNode, false)
-			log.FailOnError(err, "Failed to block iSCSI interface on Node ")
+			err = blockiSCSIInterfaceOnNode(podNode, true)
+			log.FailOnError(err, fmt.Sprintf("Failed to block iSCSI interface on Node [%v]", podNode.Name))
 
 			// Sleep for some time before checking the pod status
 			time.Sleep(180 * time.Second)
-			err = blockiSCSIInterfaceOnNode(podNode, true)
+			err = blockiSCSIInterfaceOnNode(podNode, false)
 
 			// Sleep for some time for Px to come up online and working
 			time.Sleep(10 * time.Minute)

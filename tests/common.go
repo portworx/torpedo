@@ -11358,7 +11358,6 @@ func IsVolumeTypePureBlock(ctx *scheduler.Context, volName string) (bool, error)
 	}
 	for vol, params := range vols {
 		log.Infof(fmt.Sprintf("Checking for Volume [%v]", vol))
-		log.Infof(fmt.Sprintf("Checking for Volume [%v]", vol))
 		if vol == volName && params["backend"] == k8s.PureBlock {
 			return true, nil
 		}
