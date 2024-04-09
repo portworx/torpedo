@@ -577,7 +577,6 @@ func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks 
 			return fmt.Errorf("failed to get VMs from context: %w", err)
 		}
 		for _, v := range vms {
-			// Assume GetStorageClassOfVmPVC and CreatePVCsForVM are implemented elsewhere
 			storageClass, err := GetStorageClassOfVmPVC(appCtx)
 			if err != nil {
 				return fmt.Errorf("failed to get storage class for VM [%s]: %w", v.Name, err)
@@ -617,7 +616,6 @@ func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks 
 				})
 			}
 
-			// Updating the VM to trigger the hot-add
 			_, err = k8sKubevirt.UpdateVirtualMachine(vm)
 			if err != nil {
 				return fmt.Errorf("failed to update VM [%s]: %w", vm.Name, err)
