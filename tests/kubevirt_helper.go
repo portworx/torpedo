@@ -3,6 +3,7 @@ package tests
 import (
 	context1 "context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"regexp"
 	"strings"
@@ -482,26 +483,39 @@ func AreVolumeReplicasCollocated(vol *volume.Volume, globalReplicSet []*api.Repl
 	return nil
 }
 
-func CreateConfigMap() {
+func CreateConfigMap() error {
+	k8sCore := core.Instance()
 	// Check if a config map named kubevirt-creds exist
-	configMap, err := core.Instance().GetConfigMap("kubevirt-creds", "default")
+	configMap, err := k8sCore.GetConfigMap("kubevirt-creds", "default")
 	log.Infof("configMap: %v", configMap)
 	log.Infof("err: %v", err)
 	if err != nil {
-		configMap = &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "kubevirt-creds",
-			},
-			Data: map[string]string{
-				"fio-vm-multi-disk": "ubuntu",
-			},
+		if errors.IsNotFound(err) {
+			// ConfigMap does not exist, so create it
+			configMap = &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "kubevirt-creds",
+					Namespace: "default",
+				},
+				Data: map[string]string{
+					"fio-vm-multi-disk": "ubuntu",
+				},
+			}
+			_, err = k8sCore.CreateConfigMap(configMap)
+			if err != nil {
+				log.Infof("Failed to create config map kubevirt-creds: %v", err)
+				return err
+			}
+			log.Infof("Created config map kubevirt-creds")
+		} else {
+			// An unexpected error occurred when retrieving the ConfigMap
+			log.Infof("Failed to retrieve config map kubevirt-creds: %v", err)
+			return err
 		}
-		_, err = core.Instance().CreateConfigMap(configMap)
-		if err != nil {
-			log.Fatalf("failed to create config map kubevirt-creds: %v", err)
-		}
-		log.Infof("created config map kubevirt-creds")
+	} else {
+		log.Infof("Config map kubevirt-creds already exists")
 	}
+	return nil
 }
 
 func WriteFilesAndStoreMD5InVM(virtualMachines []*scheduler.Context, namespace string, fileCount int, maxFileSize int) error {

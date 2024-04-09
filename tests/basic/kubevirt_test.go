@@ -45,16 +45,14 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 		}
 		stepLog = "Write some data in the VM and calculate it's md5sum"
 		Step(stepLog, func() {
-			err := WriteFilesAndStoreMD5InVM(appCtxs, namespace, 20, 250000000)
-			if err != nil {
-				log.FailOnError(err, "Failed to write files and store MD5 sums")
-			}
+			err = CreateConfigMap()
+			log.FailOnError(err, "Failed in creating Config map to login the VM")
+			err = WriteFilesAndStoreMD5InVM(appCtxs, namespace, 20, 250000000)
+			log.FailOnError(err, "Failed to write files and store MD5 sums")
 		})
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			// Create config-map with password to VM before calling AddDisksToKubevirtVM
-			CreateConfigMap()
 			success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "0.5Gi")
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
@@ -74,9 +72,7 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 		stepLog = "Validate md5sum of previously written data"
 		Step(stepLog, func() {
 			err = ValidateFileIntegrityInVM(appCtxs, namespace)
-			if err != nil {
-				log.FailOnError(err, "File integrity validation failed")
-			}
+			log.FailOnError(err, "File integrity validation failed")
 		})
 	})
 	JustAfterEach(func() {
