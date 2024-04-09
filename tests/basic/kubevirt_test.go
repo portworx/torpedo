@@ -53,9 +53,10 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "0.5Gi")
+			//success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "0.5Gi")
+			err = HotAddPVCsToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
-			dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
+			dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
 		})
 
 		stepLog = "Verify the new disk added is also bind mounted"

@@ -31,6 +31,7 @@ const (
 var (
 	defaultVmMountCheckTimeout       = 15 * time.Minute
 	defaultVmMountCheckRetryInterval = 30 * time.Second
+	k8sKubevirt                      = kubevirt.Instance()
 )
 
 // AddDisksToKubevirtVM is a function which takes number of disks to add and adds them to the kubevirt VMs passed (Please provide size in Gi)
@@ -484,7 +485,6 @@ func AreVolumeReplicasCollocated(vol *volume.Volume, globalReplicSet []*api.Repl
 }
 
 func CreateConfigMap() error {
-	k8sCore := core.Instance()
 	// Check if a config map named kubevirt-creds exist
 	configMap, err := k8sCore.GetConfigMap("kubevirt-creds", "default")
 	log.Infof("configMap: %v", configMap)
@@ -557,7 +557,6 @@ func ValidateFileIntegrityInVM(virtualMachines []*scheduler.Context, namespace s
 }
 
 func ListEvents(namespace string) error {
-	k8sCore = core.Instance()
 	eventList, err := k8sCore.ListEvents(namespace, metav1.ListOptions{})
 	if err != nil {
 		log.Infof("Failed to list events in namespace %s: %v", namespace, err)
@@ -567,6 +566,63 @@ func ListEvents(namespace string) error {
 	for _, event := range eventList.Items {
 		log.Infof("Time: %v, Event: %s, Type: %s, Reason: %s, Object: %s/%s, Message: %s",
 			event.FirstTimestamp, event.Name, event.Type, event.Reason, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Message)
+	}
+	return nil
+}
+
+func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks int, size string) error {
+	for _, appCtx := range virtualMachines {
+		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+		if err != nil {
+			return fmt.Errorf("failed to get VMs from context: %w", err)
+		}
+		for _, v := range vms {
+			// Assume GetStorageClassOfVmPVC and CreatePVCsForVM are implemented elsewhere
+			storageClass, err := GetStorageClassOfVmPVC(appCtx)
+			if err != nil {
+				return fmt.Errorf("failed to get storage class for VM [%s]: %w", v.Name, err)
+			}
+			pvcs, err := CreatePVCsForVM(v, numberOfDisks, storageClass, size)
+			if err != nil {
+				return fmt.Errorf("failed to create PVCs for VM [%s]: %w", v.Name, err)
+			}
+
+			vm, err := k8sKubevirt.GetVirtualMachine(v.Name, v.Namespace)
+			if err != nil {
+				return fmt.Errorf("failed to get VM [%s]: %w", v.Name, err)
+			}
+
+			for _, pvc := range pvcs {
+				diskName := fmt.Sprintf("disk-%s", pvc.Name)
+				// Appending the disk and volume definitions to the VM spec
+				vm.Spec.Template.Spec.Domain.Devices.Disks = append(vm.Spec.Template.Spec.Domain.Devices.Disks, kubevirtv1.Disk{
+					Name: diskName,
+					DiskDevice: kubevirtv1.DiskDevice{
+						Disk: &kubevirtv1.DiskTarget{
+							Bus: "virtio",
+						},
+					},
+				})
+
+				vm.Spec.Template.Spec.Volumes = append(vm.Spec.Template.Spec.Volumes, kubevirtv1.Volume{
+					Name: diskName,
+					VolumeSource: kubevirtv1.VolumeSource{
+						PersistentVolumeClaim: &kubevirtv1.PersistentVolumeClaimVolumeSource{
+							PersistentVolumeClaimVolumeSource: corev1.PersistentVolumeClaimVolumeSource{
+								ClaimName: pvc.Name,
+							},
+							Hotpluggable: true,
+						},
+					},
+				})
+			}
+
+			// Updating the VM to trigger the hot-add
+			_, err = k8sKubevirt.UpdateVirtualMachine(vm)
+			if err != nil {
+				return fmt.Errorf("failed to update VM [%s]: %w", vm.Name, err)
+			}
+		}
 	}
 	return nil
 }
