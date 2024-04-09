@@ -4,7 +4,6 @@ import (
 	context1 "context"
 	"fmt"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"regexp"
 	"strings"
 	"time"
@@ -20,6 +19,7 @@ import (
 
 	kubevirtdy "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
@@ -484,6 +484,7 @@ func AreVolumeReplicasCollocated(vol *volume.Volume, globalReplicSet []*api.Repl
 	return nil
 }
 
+// CreateConfigMap creates configmap for vm creds
 func CreateConfigMap() error {
 	// Check if a config map named kubevirt-creds exist
 	configMap, err := k8sCore.GetConfigMap("kubevirt-creds", "default")
@@ -518,6 +519,7 @@ func CreateConfigMap() error {
 	return nil
 }
 
+// WriteFilesAndStoreMD5InVM write few files in the VM and calculates the md5sum
 func WriteFilesAndStoreMD5InVM(virtualMachines []*scheduler.Context, namespace string, fileCount int, maxFileSize int) error {
 	log.Infof("Creating %d files and storing their MD5 checksums in namespace %s", fileCount, namespace)
 	createFilesCmd := fmt.Sprintf("mkdir -p /tmp/testfiles && cd /tmp/testfiles && "+
@@ -538,6 +540,7 @@ func WriteFilesAndStoreMD5InVM(virtualMachines []*scheduler.Context, namespace s
 	return nil
 }
 
+// ValidateFileIntegrityInVM validates the md5sum of files that we wrote in the VM
 func ValidateFileIntegrityInVM(virtualMachines []*scheduler.Context, namespace string) error {
 	log.Infof("Validating file integrity in namespace %s", namespace)
 	validateFilesCmd := "cd /tmp/testfiles && md5sum -c /tmp/file_checksums.md5"
@@ -556,6 +559,7 @@ func ValidateFileIntegrityInVM(virtualMachines []*scheduler.Context, namespace s
 	return nil
 }
 
+// ListEvents lists all events in a namespace in logs.
 func ListEvents(namespace string) error {
 	eventList, err := k8sCore.ListEvents(namespace, metav1.ListOptions{})
 	if err != nil {
@@ -570,6 +574,7 @@ func ListEvents(namespace string) error {
 	return nil
 }
 
+// HotAddPVCsToKubevirtVM hot adds disk to a running VM
 func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks int, size string) error {
 	for _, appCtx := range virtualMachines {
 		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
