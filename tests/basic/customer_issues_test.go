@@ -1100,13 +1100,12 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 
 		pods, err := k8sCore.GetPodsUsingPVC(volPicked.Name, volPicked.Namespace)
 		log.FailOnError(err, "unable to find the node from the pod")
-		log.Infof("Pod details [%v]", pods)
 
 		for _, eachPod := range pods {
 			log.Infof("Validating test on Pod [%v]", eachPod)
 			podNode, err := GetNodeFromIPAddress(eachPod.Status.HostIP)
 			log.FailOnError(err, "unable to find the node from the pod")
-			log.Infof("Pod with Node [%v] with IP [%v]", podNode.Name, eachPod.Status.HostIP)
+			log.Infof("Pod with Name [%v] placed on Host [%v]", podNode.Name, eachPod.Status.HostIP)
 
 			// Stop iscsi traffic on the Node
 			log.Infof("Blocking IPAddress on Node [%v]", podNode.Name)
@@ -1123,18 +1122,18 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 			// Pod details after blocking IP
 			podsAfterblk, err := k8sCore.GetPodsUsingPVC(volPicked.Name, volPicked.Namespace)
 			log.FailOnError(err, "unable to find the node from the pod")
-			log.Infof("Pod details [%v]", podsAfterblk)
 
 			for _, eachPodAfter := range podsAfterblk {
 				if eachPod.Name == eachPodAfter.Name && eachPod.Status.HostIP == eachPodAfter.Status.HostIP {
 					log.FailOnError(fmt.Errorf("Pod did not start on new Node OldNode [%v] and NewNode [%v]",
 						eachPod.Status.HostIP, eachPodAfter.Status.HostIP), "Pod Did not Start on new node")
+					log.Infof("Pod with Name [%v] placed on Host [%v]", eachPod.Name, eachPodAfter.Status.HostIP)
 				}
 			}
 
 			// Enter and Exit maintenance mode to bring Node up
 			log.FailOnError(Inst().V.RecoverDriver(*podNode), "Failed during Node maintenance cycle ")
-			
+
 			// Validate if Volume Driver is up on all the nodes
 			log.FailOnError(Inst().V.WaitDriverUpOnNode(*podNode, Inst().DriverStartTimeout),
 				"Node Didnot start within the time specified")
