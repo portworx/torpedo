@@ -3345,13 +3345,14 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			}
 			log.FailOnError(err, "Failed to resize volume: %v", volName)
 			log.InfoD("Succesfully resized volume: %v", volName)
-
 		})
+		//create volume on a particular node
+
 		stepLog = " Verify Volume Creation also with Overcommit Rule Imposed on the cluster"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			VolName := fmt.Sprintf("New-overcommit-testvolume-%d", 1)
-			volId, err := Inst().V.CreateVolume(VolName, ExceededTargetSize, 1)
+			err := Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, ExceededTargetSize, 1)
 			if err != nil {
 				if strings.Contains(err.Error(), "pools must not over-commit provisioning space") {
 					log.InfoD("Volume creation failed as expected with error : [%s]", err.Error())
@@ -3359,7 +3360,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 				}
 			}
 			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
-			log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
+			log.InfoD("Volume created with name [%s] ", VolName)
 			//Delete the Volume , As we have created it only for Validation Purpose
 			err = Inst().V.DeleteVolume(VolName)
 			log.FailOnError(err, "Failed to delete volume [%s]", VolName)
@@ -3377,9 +3378,9 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			VolName := fmt.Sprintf("overcommit-test-%d", 1)
-			volId, err := Inst().V.CreateVolume(VolName, ExceededTargetSize, 1)
+			err := Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, ExceededTargetSize, 1)
 			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
-			log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
+			log.InfoD("Volume created with name [%s]", VolName)
 			//Delete the Volume , As we have created it only for Validation Purpose
 			err = Inst().V.DeleteVolume(VolName)
 			log.FailOnError(err, "Failed to delete volume [%s]", VolName)
