@@ -3,8 +3,6 @@ kind: VirtualMachine
 metadata:
   labels:
     app: fio-vm-multi-disk
-    vm.kubevirt.io/template: fedora-server-small
-    vm.kubevirt.io/template.namespace: openshift
   name: fio-vm-multi-disk
   annotations:
     pvc.source: "cloned"
@@ -14,42 +12,39 @@ spec:
   template:
     metadata:
       annotations:
-        vm.kubevirt.io/flavor: small
-        vm.kubevirt.io/os: fedora
         vm.kubevirt.io/workload: server
       labels:
-        kubevirt.io/size: small
         username: "ubuntu"
     spec:
       domain:
         cpu:
           cores: 2
-          sockets: 2
-          threads: 2
         devices:
           disks:
             - bootOrder: 1
               disk:
                 bus: virtio
               name: rootdisk
-            - bootOrder: 2
-              disk:
-                bus: virtio
-              name: cloudinitdisk
+          interfaces:
+            - name: default
+              masquerade: {}
           networkInterfaceMultiqueue: true
           rng: {}
         features:
           acpi: {}
           smm:
             enabled: true
-        firmware:
-          bootloader:
-            efi: {}
-        machine:
-          type: pc-q35-rhel9.2.0
         resources:
           requests:
-            memory: 4Gi
+            cpu: 2
+            memory: 4096M
+      networks:
+        - name: default
+          pod: {}
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+          operator: Exists
       evictionStrategy: LiveMigrate
       terminationGracePeriodSeconds: 180
       volumes:
