@@ -3285,9 +3285,6 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		stepLog := "Update the pxctl cluster with cluster option OverCommitPercent with the maximum storage percentage volumes can provision against backing storage set to 100(Enabeling Thick Provisioning)"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			//clusterOpts := make(map[string]string)
-			//clusterOpts["--provisioning-commit-labels"] = "'[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30} ]'\n\n\n"
-			//err := Inst().V.SetClusterOpts(*selectedNode, clusterOpts)
 			SetClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30} ]'"
 			clusterOptionsOutput, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
 			log.FailOnError(err, "Failed to set cluster options")
@@ -3295,14 +3292,13 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			ClusterOptionsValidationcmd := "cluster options list -j | jq -r '.ProvisionCommitRule'"
 			output, err := runPxctlCommand(ClusterOptionsValidationcmd, *selectedNode, nil)
 			log.InfoD("The Current Cluster options: %v", output)
-			log.InfoD("Successfully set cluster options")
 		})
 
 		stepLog = "Create a volume with a base size"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			VolName := fmt.Sprintf("overcommit-test-%d", 1)
-			volId, err := Inst().V.CreateVolume(VolName, 10, 1)
+			err := Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, 10, 1)
 			if err != nil {
 				if strings.Contains(err.Error(), "AlreadyExists") {
 					log.InfoD("Volume already exists with name [%s] so deleting it", VolName)
@@ -3311,7 +3307,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 					log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 				}
 			}
-			log.InfoD("Volume created with name [%s] having id [%s]", VolName, volId)
+			log.InfoD("Volume created with name [%s]", VolName)
 		})
 
 		stepLog = "Now update the volume size upto the maximum limit of the storage pool"
