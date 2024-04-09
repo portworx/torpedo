@@ -3,6 +3,7 @@ package tests
 import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	tests "github.com/portworx/torpedo/tests/unifiedPlatform"
@@ -14,6 +15,7 @@ var _ = Describe("{DummyBackupTest}", func() {
 		workflowDataservice pds.WorkflowDataService
 		workflowBackup      pds.WorkflowPDSBackup
 		workflowRestore     pds.WorkflowPDSRestore
+		workflowProject     platform.WorkflowProject
 		deploymentName      string
 		latestBackupUid     string
 	)
@@ -27,9 +29,10 @@ var _ = Describe("{DummyBackupTest}", func() {
 		log.Infof("We are here")
 		workflowDataservice.DataServiceDeployment[deploymentName] = "dep:fa70e52d-0563-4258-b96b-7d6ca6ed4799"
 		log.Infof("We are here")
-		workflowBackup.WorkflowDataService = workflowDataservice
+		workflowProject.ProjectId = "prj:2eee1079-83f0-4b88-b61d-d8782c2bdbd4"
 
 		workflowRestore.Destination = tests.WorkflowNamespace
+		workflowRestore.WorkflowProject = workflowProject
 	})
 
 	It("Dummy to verify backup and restore creation", func() {
@@ -58,10 +61,8 @@ var _ = Describe("{DummyBackupTest}", func() {
 
 		Step("Create Restore", func() {
 			restoreName := "testing_restore_" + RandomString(5)
-			_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid)
-			if err != nil {
-				log.Infof("Error occurred during restore - [%s]", err.Error())
-			}
+			_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, tests.PDS_DEFAULT_NAMESPACE)
+			log.FailOnError(err, "Restore Failed")
 
 			log.Infof("Restore created successfully with ID - [%s]", workflowRestore.Restores[restoreName].Meta.Uid)
 		})

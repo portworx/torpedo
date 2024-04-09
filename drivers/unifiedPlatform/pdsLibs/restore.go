@@ -9,6 +9,11 @@ func CreateRestore(name string, backupId string, targetClusterId string, namespa
 
 	createRestoreRequest := automationModels.PDSRestoreRequest{
 		Create: automationModels.PDSCreateRestore{
+			Restore: &automationModels.PDSRestore{
+				Meta: &automationModels.Meta{
+					Name: &name,
+				},
+			},
 			ProjectId:             projectIdSource,
 			NamespaceId:           namespaceId,
 			SourceReferences:      &automationModels.SourceReferences{},
