@@ -1131,6 +1131,10 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 						eachPod.Status.HostIP, eachPodAfter.Status.HostIP), "Pod Did not Start on new node")
 				}
 			}
+
+			// Enter and Exit maintenance mode to bring Node up
+			log.FailOnError(Inst().V.RecoverDriver(*podNode), "Failed during Node maintenance cycle ")
+			
 			// Validate if Volume Driver is up on all the nodes
 			log.FailOnError(Inst().V.WaitDriverUpOnNode(*podNode, Inst().DriverStartTimeout),
 				"Node Didnot start within the time specified")
