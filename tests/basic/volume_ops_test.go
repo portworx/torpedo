@@ -3307,7 +3307,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		stepLog = "Now update the volume size upto the maximum limit of the storage pool"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			log.InfoD("Resize volume :%s to %s size", VolNameTest, targetSizeGiB)
+			log.InfoD("Resize volume :%s to %d size", VolNameTest, targetSizeGiB)
 			err := Inst().V.ResizeVolume(VolNameTest, targetSizeGiB)
 			if err != nil {
 				if strings.Contains(err.Error(), "Failed to resize volume") {
@@ -3325,7 +3325,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		stepLog = "Now try to increase the volume size  more than the capacity of storage pool"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			log.InfoD("Resize volume :%s to %s size", VolNameTest, ExceededTargetSize)
+			log.InfoD("Resize volume :%s to %d size", VolNameTest, ExceededTargetSize)
 			err := Inst().V.ResizeVolume(VolNameTest, ExceededTargetSize)
 			if err != nil {
 				if strings.Contains(err.Error(), "Failed to resize volume") {
