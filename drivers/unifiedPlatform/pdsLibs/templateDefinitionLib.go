@@ -10,19 +10,18 @@ import (
 )
 
 type StorageConfiguration struct {
-	FSType      string
-	ReplFactor  int32
+	FS          string
+	Repl        int32
 	Provisioner string
 	FG          bool
 	Secure      bool
 }
 type ResourceConfiguration struct {
-	CpuLimit       string
-	CpuRequest     string
-	MemoryLimit    string
-	MemoryRequest  string
-	StorageRequest string
-	NewStorageSize string
+	Cpu_Limit       string
+	Cpu_Request     string
+	Memory_Limit    string
+	Memory_Request  string
+	Storage_Request string
 }
 type ServiceConfiguration struct {
 	MaxConnection string
@@ -188,6 +187,12 @@ func structToMap(structType interface{}) map[string]interface{} {
 		value := field.Interface()
 		result[key] = value
 	}
-	log.InfoD("templateValue formed is- [%v]", result)
-	return result
+	// Convert keys to lowercase
+	lowercaseMap := make(map[string]interface{})
+	for key, value := range result {
+		lowercaseKey := strings.ToLower(key)
+		lowercaseMap[lowercaseKey] = value
+	}
+	log.InfoD("templateValue formed is- [%v]", lowercaseMap)
+	return lowercaseMap
 }
