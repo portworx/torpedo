@@ -9954,7 +9954,7 @@ func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *ch
 				dashStats := make(map[string]string)
 				dashStats["node"] = delNode.Name
 				updateLongevityStats(OCPStorageNodeRecycle, stats.NodeRecycleEventName, dashStats)
-				err := Inst().S.RecycleNode(delNode)
+				err := Inst().S.DeleteNode(delNode)
 				UpdateOutcome(event, err)
 			})
 		Step(fmt.Sprintf("Listing all nodes after recycling a storage node %s", delNode.Name), func() {
