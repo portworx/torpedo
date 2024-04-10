@@ -1321,13 +1321,13 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 	setMetrics(*event)
 
 	expReplMap := make(map[*volume.Volume]int64)
-	volumeCtxMap := make(map[string]*scheduler.Context)
 	stepLog := "get volumes for all apps in test and increase replication factor"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
+			volumeCtxMap := make(map[string]*scheduler.Context)
 			stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
@@ -1370,6 +1370,9 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 			resizePVC := func(vol *apios.Volume, newSize uint64) error {
 				ctx, pvc, err := getContextAndPVC(vol)
 				if err != nil {
+					log.Infof("The pvc [%s/%s] with ID [%s] is not found in the contexts", pvc.Namespace, pvc.Name, vol.Id)
+					log.Infof("The volume context map is [%v]", volumeCtxMap)
+					log.Infof("The volume context map is [%+v]", volumeCtxMap)
 					return fmt.Errorf("failed to get pvc from contexts. Err: [%v]", err)
 				}
 				pvcSize, err := getPVCSize(pvc)
