@@ -31,11 +31,8 @@ var _ = Describe("{DummyBackupTest}", func() {
 	It("Dummy to verify backup and restore creation", func() {
 
 		Step("Get latest backup from a backup config", func() {
-			log.Infof("We are here")
 			backupResponse, err := workflowBackup.GetLatestBackup(deploymentName)
-			log.Infof("We are here")
 			log.FailOnError(err, "Error occured while creating backup")
-			log.Infof("We are here")
 			latestBackupUid = *backupResponse.Meta.Uid
 			log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
 		})
