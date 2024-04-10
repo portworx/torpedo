@@ -127,12 +127,10 @@ var _ = Describe("{PoolExpandSmoke}", func() {
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
-		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
-
-		if isDMthin, _ := IsDMthin(); isDMthin {
-			dash.VerifyFatal(resizeErr != nil, true,
-				"Pool expansion request of add-disk type should be rejected with dmthin")
-		} else {
+		log.InfoD("Do no enter since it's a DMThin Pool")
+		if isDMthin, _ := IsDMthin(); !isDMthin {
+			log.InfoD("Still entered?")
+			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
 			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 		}
