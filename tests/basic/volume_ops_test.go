@@ -3295,7 +3295,6 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			if err != nil {
 				if strings.Contains(err.Error(), "Failed to resize volume") {
 					log.InfoD("Volume resize failed as expected with error : [%s]", err.Error())
-					return
 				}
 			}
 			err = Inst().V.DeleteVolume(VolName)
@@ -3308,7 +3307,6 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			if volerr != nil {
 				if strings.Contains(volerr.Error(), "pools must not over-commit provisioning space") {
 					log.InfoD("Volume creation failed as expected with error : [%s]", volerr.Error())
-					return
 				}
 			}
 			DisableClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[]'"
@@ -3421,7 +3419,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 					volerr := Inst().V.CreateVolumeUsingPxctlCmd(node, VolName, 3*targetSizeGiB, 1)
 					if volerr != nil {
 						if strings.Contains(volerr.Error(), "pools must not over-commit provisioning space") {
-							log.Errorf("Volume creation failed as expected with error : [%s]", volerr.Error())
+							log.InfoD("Volume creation failed as expected with error : [%s]", volerr.Error())
 						}
 					}
 				}
