@@ -4,6 +4,7 @@ import (
 	"fmt"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/utilities"
+	"github.com/portworx/torpedo/pkg/log"
 	tempDefv1 "github.com/pure-px/platform-api-go-client/pds/v1/catalog"
 	status "net/http"
 )
@@ -93,22 +94,19 @@ func (tempDef *PDS_API_V1) ListTemplateRevisions() (*TemplateDefinitionResponse,
 	return &tempDefResponse, nil
 }
 
-func (tempDef *PDS_API_V1) GetTemplateRevisions(revisionUid string) (*TemplateDefinitionResponse, error) {
+func (tempDef *PDS_API_V1) GetTemplateRevisions() (*TemplateDefinitionResponse, error) {
 	ctx, client, err := tempDef.getTemplateDefinitionClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	templateResponse := TemplateDefinitionResponse{}
-	var temGetRevisionReq tempDefv1.ApiTemplateDefinitionServiceGetRevisionRequest
-	temGetRevisionReq = temGetRevisionReq.ApiService.TemplateDefinitionServiceGetRevision(ctx)
-	temGetRevisionReq = temGetRevisionReq.Uid(revisionUid)
-	tempRevisions, res, err := client.TemplateDefinitionServiceGetRevisionExecute(temGetRevisionReq)
+	templateModel, res, err := client.TemplateDefinitionServiceGetRevision(ctx).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `TemplateDefinitionServiceGetRevision`: %v\n.Full HTTP response: %v", err, res)
 	}
-	err = utilities.CopyStruct(tempRevisions, &templateResponse.GetRevision)
-	if err != nil {
-		return nil, err
-	}
+	log.InfoD("Successfully fetched the template Roles")
+	log.Infof("Value of template - [%v]", templateModel)
+	err = utilities.CopyStruct(templateModel, templateResponse.GetRevision)
+	log.Infof("Value of template after copy - [%v]", templateResponse)
 	return &templateResponse, nil
 }
