@@ -635,7 +635,7 @@ func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks 
 			log.InfoD("Sleep for 5mins for vm to come up")
 			time.Sleep(5 * time.Minute)
 			NewDiskCountOutput, err := GetNumberOfDisksInVM(v)
-			if NewDiskCountOutput == diskCountOutput+numberOfDisks {
+			if NewDiskCountOutput == diskCountOutput {
 				log.Infof("Disk successfully added")
 			} else {
 				return fmt.Errorf("Disk cannot be added.")
