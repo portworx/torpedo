@@ -1144,7 +1144,6 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 			log.FailOnError(Inst().V.WaitDriverUpOnNode(*podNode, Inst().DriverStartTimeout),
 				"Node Didnot start within the time specified")
 		}
-
 	})
 
 	JustAfterEach(func() {
