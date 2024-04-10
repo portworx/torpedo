@@ -980,6 +980,7 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 // blockiSCSIInterfaceOnNode blockRules and unblockRules iscsi interface on Node
 func blockiSCSIInterfaceOnNode(n *node.Node, block bool) error {
 
+	// Block all InComing requests from port 3260 on specific Node
 	command := fmt.Sprintf("iptables -A INPUT -p tcp -s %v --dport 3260 -j DROP ", n.MgmtIp)
 	if !block {
 		command = fmt.Sprintf("iptables -D INPUT -p tcp -s %v --dport 3260 -j DROP", n.MgmtIp)
@@ -990,6 +991,7 @@ func blockiSCSIInterfaceOnNode(n *node.Node, block bool) error {
 		return err
 	}
 
+	// Block all Outgoing requests from port 3260 from specific Node
 	command = fmt.Sprintf("iptables -A OUTPUT -p tcp -s %v --dport 3260 -j DROP ", n.MgmtIp)
 	if !block {
 		command = fmt.Sprintf("iptables -D OUTPUT -p tcp -s %v --dport 3260 -j DROP", n.MgmtIp)
@@ -1003,6 +1005,7 @@ func blockiSCSIInterfaceOnNode(n *node.Node, block bool) error {
 	return nil
 }
 
+// getPVCAccessMode returns list of Accessmodes for the PVCs
 func getPVCAccessMode(pvcName string, pvcNameSpace string) ([]corev1.PersistentVolumeAccessMode, error) {
 	accessModes := []corev1.PersistentVolumeAccessMode{}
 	pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, pvcNameSpace)
@@ -1015,7 +1018,6 @@ func getPVCAccessMode(pvcName string, pvcNameSpace string) ([]corev1.PersistentV
 		accessModes = append(accessModes, mode)
 	}
 
-	//return nil, fmt.Errorf("Failed to get details of PVC Access mode ")
 	return accessModes, nil
 }
 
@@ -1035,9 +1037,14 @@ func flushAllIPtableRulesOnAllNodes() {
 var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 
 	/*
-			PTX : https://purestorage.atlassian.net/browse/PWX-31647
-		Test to check if the Pod bounces and Places in the new node when iscsi port fails to Send / Receive Traffic
-		Test is Specific to FADA Volume ,
+				PTX : https://purestorage.atlassian.net/browse/PWX-31647
+			Test to check if the Pod bounces and Places in the new node when iscsi port fails to Send / Receive Traffic
+			Specific to FADA Volumes with RWO type
+
+		Px Implementation :
+			A background task will periodically look for any readonly FADA volumes and those pods will be bounced.
+			The default period is 15 seconds and this period is configurable through a cluster option called ro-vol-pod-bounce-interval
+			If a volume was expected to be read-only during creation (e.g ReadOnlyMany PVCs), it’ll be excluded.
 
 	*/
 	JustBeforeEach(func() {
