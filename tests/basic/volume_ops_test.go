@@ -3293,11 +3293,11 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			id := uuid.New()
 			VolName := fmt.Sprintf("volume_%s", id.String()[:8])
 			log.InfoD("Create a volume with a size on %d times of targetsize on node [%s]", multiple, selectedNode.Name)
-			err = Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, targetSizeGiB, 1)
+			err = Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, multiple*targetSizeGiB, 1)
 			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 			log.InfoD("Volume created with name [%s]", VolName)
 			log.InfoD("Resize the volume more than %d times available capacity on the node [%s]", multiple, selectedNode.Name)
-			err = Inst().V.ResizeVolume(VolName, multiple*targetSizeGiB)
+			err = Inst().V.ResizeVolume(VolName, (multiple+1)*targetSizeGiB)
 			if err != nil {
 				if strings.Contains(err.Error(), "Failed to resize volume") {
 					log.InfoD("Volume resize failed as expected with error : [%s]", err.Error())
@@ -3383,7 +3383,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			log.InfoD("The Current Cluster options: %v", output)
 			CreateVolumeandValidate(selectedNode, 3, targetSizeGiB)
 
-			log.Info("Try Creating a New Volume with size more than 200% available capacity on any other node than node")
+			log.Info("Try Creating a New Volume with size more than 200% available capacity on any other node ")
 			stNodes := node.GetStorageDriverNodes()
 			for _, node := range stNodes {
 				if node.Name != selectedNode.Name {
