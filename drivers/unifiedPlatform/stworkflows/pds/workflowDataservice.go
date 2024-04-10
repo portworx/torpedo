@@ -14,7 +14,7 @@ import (
 
 type WorkflowDataService struct {
 	Namespace                     platform.WorkflowNamespace
-	PDSTemplates                  CustomTemplates
+	PDSTemplates                  WorkflowPDSTemplates
 	NamespaceName                 string
 	DataServiceDeployment         map[string]string
 	RestoredDataServiceDeployment map[string]string

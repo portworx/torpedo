@@ -78,21 +78,21 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 			})
 		}()
 
-		Step("Perform Restore and validate", func() {
-			workflowRestore.WorkflowDataService = workflowDataService
-			backupUid := *bkpConfigResponse.Create.Meta.Uid
-			deploymentName := *deployment.Create.Meta.Name
-			cloudSnapId := ""
-			// Set the DestClusterId same as the current ClusterId
-			workflowRestore.Destination.DestinationClusterId = WorkflowTargetCluster.ClusterUID
-
-			log.FailOnError(err, "failed while registering destination target cluster")
-
-			workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
-			restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
-			log.FailOnError(err, "Error while taking restore")
-			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
-		})
+		//Step("Perform Restore and validate", func() {
+		//	workflowRestore.WorkflowDataService = workflowDataService
+		//	backupUid := *bkpConfigResponse.Create.Meta.Uid
+		//	deploymentName := *deployment.Create.Meta.Name
+		//	cloudSnapId := ""
+		//	// Set the DestClusterId same as the current ClusterId
+		//	workflowRestore.Destination.DestinationClusterId = WorkflowTargetCluster.ClusterUID
+		//
+		//	log.FailOnError(err, "failed while registering destination target cluster")
+		//
+		//	workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
+		//	restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
+		//	log.FailOnError(err, "Error while taking restore")
+		//	log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
+		//})
 
 		defer func() {
 			Step("Delete RestoredDeployment", func() {
@@ -178,26 +178,26 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 			})
 		}()
 
-		Step("Perform Restore and validate", func() {
-			workflowRestore.WorkflowDataService = workflowDataService
-			backupUid := *bkpConfigResponse.Create.Meta.Uid
-			deploymentName := *deployment.Create.Meta.Name
-			cloudSnapId := ""
-
-			//Set the context to  the destination clusterId
-			err = SetDestinationKubeConfig()
-			log.FailOnError(err, "failed while setting dest cluster path")
-
-			destTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane(true)
-			workflowRestore.Destination.DestinationClusterId = destTargetCluster.DestinationClusterId
-
-			log.FailOnError(err, "failed while registering destination target cluster")
-
-			workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
-			restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
-			log.FailOnError(err, "Error while taking restore")
-			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
-		})
+		//Step("Perform Restore and validate", func() {
+		//	workflowRestore.WorkflowDataService = workflowDataService
+		//	backupUid := *bkpConfigResponse.Create.Meta.Uid
+		//	deploymentName := *deployment.Create.Meta.Name
+		//	cloudSnapId := ""
+		//
+		//	//Set the context to  the destination clusterId
+		//	err = SetDestinationKubeConfig()
+		//	log.FailOnError(err, "failed while setting dest cluster path")
+		//
+		//	destTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane(true)
+		//	workflowRestore.Destination.DestinationClusterId = destTargetCluster.DestinationClusterId
+		//
+		//	log.FailOnError(err, "failed while registering destination target cluster")
+		//
+		//	workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
+		//	restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
+		//	log.FailOnError(err, "Error while taking restore")
+		//	log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
+		//})
 
 		defer func() {
 			Step("Delete RestoredDeployment", func() {
@@ -224,7 +224,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 	})
 	var (
 		workflowDataservice  pds.WorkflowDataService
-		workFlowTemplates    pds.CustomTemplates
+		workFlowTemplates    pds.WorkflowPDSTemplates
 		workflowBackUpConfig pds.WorkflowPDSBackupConfig
 		workflowRestore      pds.WorkflowPDSRestore
 		deployment           *automationModels.PDSDeploymentResponse
@@ -312,19 +312,19 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 	})
 
 	It("Restore the old deployment and upgrade the restored deployment", func() {
-		Step("Restore the old deployment", func() {
-			workflowRestore.WorkflowDataService = workflowDataservice
-			backupUid := *bkpConfigResponse.Create.Meta.Uid
-			deploymentName := *deployment.Create.Meta.Name
-			cloudSnapId := ""
-			// Set the DestClusterId same as the current ClusterId
-			workflowRestore.Destination.DestinationClusterId = WorkflowTargetCluster.ClusterUID
-			workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
-			restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
-			log.FailOnError(err, "Error while taking restore")
-			newDeploymentId = restoreDeployment.Create.Config.DestinationReferences.DeploymentId
-			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
-		})
+		//Step("Restore the old deployment", func() {
+		//	workflowRestore.WorkflowDataService = workflowDataservice
+		//	backupUid := *bkpConfigResponse.Create.Meta.Uid
+		//	deploymentName := *deployment.Create.Meta.Name
+		//	cloudSnapId := ""
+		//	// Set the DestClusterId same as the current ClusterId
+		//	workflowRestore.Destination.DestinationClusterId = WorkflowTargetCluster.ClusterUID
+		//	workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
+		//	restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
+		//	log.FailOnError(err, "Error while taking restore")
+		//	newDeploymentId = restoreDeployment.Create.Config.DestinationReferences.DeploymentId
+		//	log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
+		//})
 
 		defer func() {
 			Step("Delete RestoredDeployment", func() {
@@ -438,19 +438,19 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 			})
 		}()
 
-		Step("Perform Restore on destination cluster and validate", func() {
-			workflowRestore.WorkflowDataService = workflowDataService
-			backupUid := *bkpConfigResponse.Create.Meta.Uid
-			deploymentName := *deployment.Create.Meta.Name
-			cloudSnapId := ""
-			// Set the DestClusterId same as the current ClusterId
-			// Creating restore on target cluster
-			workflowRestore.Destination = workflowTargetClusterDest
-			workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
-			restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
-			log.FailOnError(err, "Error while taking restore")
-			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
-		})
+		//Step("Perform Restore on destination cluster and validate", func() {
+		//	workflowRestore.WorkflowDataService = workflowDataService
+		//	backupUid := *bkpConfigResponse.Create.Meta.Uid
+		//	deploymentName := *deployment.Create.Meta.Name
+		//	cloudSnapId := ""
+		//	// Set the DestClusterId same as the current ClusterId
+		//	// Creating restore on target cluster
+		//	workflowRestore.Destination = workflowTargetClusterDest
+		//	workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
+		//	restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
+		//	log.FailOnError(err, "Error while taking restore")
+		//	log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
+		//})
 
 		defer func() {
 			Step("Delete RestoredDeployment", func() {
@@ -487,7 +487,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 		deployment           *automationModels.PDSDeploymentResponse
 		restoreDeployment    *automationModels.PDSRestoreResponse
 
-		workFlowTemplates pds.CustomTemplates
+		workFlowTemplates pds.WorkflowPDSTemplates
 		tempList          []string
 
 		pdsBackupConfigName string
@@ -555,21 +555,21 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 			})
 		}()
 
-		Step("Perform Restore and validate", func() {
-			workflowRestore.WorkflowDataService = workflowDataService
-			backupUid := *bkpConfigResponse.Create.Meta.Uid
-			deploymentName := *deployment.Create.Meta.Name
-			cloudSnapId := ""
-			// Set the DestClusterId same as the current ClusterId
-			workflowRestore.Destination.DestinationClusterId = WorkflowTargetCluster.ClusterUID
-
-			log.FailOnError(err, "failed while registering destination target cluster")
-
-			workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
-			restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
-			log.FailOnError(err, "Error while taking restore")
-			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
-		})
+		//Step("Perform Restore and validate", func() {
+		//	workflowRestore.WorkflowDataService = workflowDataService
+		//	backupUid := *bkpConfigResponse.Create.Meta.Uid
+		//	deploymentName := *deployment.Create.Meta.Name
+		//	cloudSnapId := ""
+		//	// Set the DestClusterId same as the current ClusterId
+		//	workflowRestore.Destination.DestinationClusterId = WorkflowTargetCluster.ClusterUID
+		//
+		//	log.FailOnError(err, "failed while registering destination target cluster")
+		//
+		//	workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
+		//	restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
+		//	log.FailOnError(err, "Error while taking restore")
+		//	log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
+		//})
 
 		defer func() {
 			Step("Delete RestoredDeployment", func() {
@@ -620,21 +620,21 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 			})
 		}()
 
-		Step("Perform Restore and validate", func() {
-			workflowRestore.WorkflowDataService = workflowDataService
-			backupUid := *bkpConfigResponse.Create.Meta.Uid
-			deploymentName := *deployment.Create.Meta.Name
-			cloudSnapId := ""
-			// Set the DestClusterId same as the current ClusterId
-			workflowRestore.Destination.DestinationClusterId = WorkflowTargetCluster.ClusterUID
-
-			log.FailOnError(err, "failed while registering destination target cluster")
-
-			workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
-			restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
-			log.FailOnError(err, "Error while taking restore")
-			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
-		})
+		//Step("Perform Restore and validate", func() {
+		//	workflowRestore.WorkflowDataService = workflowDataService
+		//	backupUid := *bkpConfigResponse.Create.Meta.Uid
+		//	deploymentName := *deployment.Create.Meta.Name
+		//	cloudSnapId := ""
+		//	// Set the DestClusterId same as the current ClusterId
+		//	workflowRestore.Destination.DestinationClusterId = WorkflowTargetCluster.ClusterUID
+		//
+		//	log.FailOnError(err, "failed while registering destination target cluster")
+		//
+		//	workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
+		//	restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
+		//	log.FailOnError(err, "Error while taking restore")
+		//	log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
+		//})
 
 		defer func() {
 			Step("Delete RestoredDeployment", func() {

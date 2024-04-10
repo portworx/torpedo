@@ -39,6 +39,7 @@ var (
 	WorkflowbkpLoc        platform.WorkflowBackupLocation
 	NewPdsParams          *parameters.NewPDSParams
 	PdsLabels             = make(map[string]string)
+	PDS_DEFAULT_NAMESPACE string
 )
 
 // ReadParams reads the params from given or default json

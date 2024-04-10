@@ -28,7 +28,7 @@ type PDSGetBackup struct {
 }
 
 type PDSListBackup struct {
-	BackupConfigId       string `copier:"must,nopanic"`
+	DeploymentId         string `copier:"must,nopanic"`
 	PaginationPageNumber string `copier:"must,nopanic"`
 	PaginationPageSize   string `copier:"must,nopanic"`
 	SortSortBy           string `copier:"must,nopanic"`

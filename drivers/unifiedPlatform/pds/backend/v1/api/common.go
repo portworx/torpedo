@@ -57,8 +57,8 @@ func (restore *PDS_API_V1) getRestoreClient() (context.Context, *restoreV1.Resto
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	restore.BackupV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	restore.BackupV1APIClient.GetConfig().DefaultHeader["px-account-id"] = restore.AccountID
+	restore.RestoreV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	restore.RestoreV1APIClient.GetConfig().DefaultHeader["px-account-id"] = restore.AccountID
 	client := restore.RestoreV1APIClient.RestoreServiceAPI
 
 	return ctx, client, nil

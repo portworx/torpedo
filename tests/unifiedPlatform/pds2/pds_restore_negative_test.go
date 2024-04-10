@@ -22,7 +22,7 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		deployment           *automationModels.PDSDeploymentResponse
 		restoreDeployment    *automationModels.PDSRestoreResponse
 
-		workFlowTemplates pds.CustomTemplates
+		workFlowTemplates pds.WorkflowPDSTemplates
 		tempList          []string
 
 		pdsBackupConfigName string
@@ -117,13 +117,12 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		}()
 
 		Step("Perform Restore and validate", func() {
-			workflowRestore.WorkflowDataService = workflowDataService
+			workflowRestore.WorkflowProject = WorkflowProject
 			backupUid := *bkpConfigResponse.Create.Meta.Uid
 			deploymentName := *deployment.Create.Meta.Name
 			cloudSnapId := ""
 			// Set the DestClusterId same as the current ClusterId
-			workflowRestore.Destination.DestinationClusterId = WorkflowTargetCluster.ClusterUID
-			workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
+			workflowRestore.Destination.TargetCluster.DestinationClusterId = WorkflowTargetCluster.ClusterUID
 			restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
 			log.FailOnError(err, "Error while taking restore")
 			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)

@@ -2,21 +2,22 @@ package pds
 
 import (
 	"fmt"
+	"strconv"
+
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
-	"strconv"
 )
 
-type CustomTemplates struct {
+type WorkflowPDSTemplates struct {
 	Platform                platform.WorkflowPlatform
 	ResourceTemplateId      string
 	StorageTemplateId       string
 	ServiceConfigTemplateId string
 }
 
-func (cusTemp *CustomTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *parameters.NewPDSParams, dsName string) (string, string, string, error) {
+func (cusTemp *WorkflowPDSTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *parameters.NewPDSParams, dsName string) (string, string, string, error) {
 
 	//Todo: Mechanism to populate dynamic/Unknown key-value pairs for App config
 
@@ -53,7 +54,7 @@ func (cusTemp *CustomTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *p
 	return *appConfigId, *stConfigId, *resourceConfigId, nil
 }
 
-func (cusTemp *CustomTemplates) DeleteCreatedCustomPdsTemplates(tempList []string) error {
+func (cusTemp *WorkflowPDSTemplates) DeleteCreatedCustomPdsTemplates(tempList []string) error {
 	for _, id := range tempList {
 		err := pdslibs.DeleteTemplate(id)
 		if err != nil {
@@ -63,7 +64,7 @@ func (cusTemp *CustomTemplates) DeleteCreatedCustomPdsTemplates(tempList []strin
 	return nil
 }
 
-func (cusTemp *CustomTemplates) CreateResourceTemplateWithCustomValue(templates *parameters.NewPDSParams, dsName string, updateValue int) (string, error) {
+func (cusTemp *WorkflowPDSTemplates) CreateResourceTemplateWithCustomValue(templates *parameters.NewPDSParams, dsName string, updateValue int) (string, error) {
 	resConfigParams := pdslibs.ResourceConfiguration{
 		CpuLimit:       templates.ResourceConfiguration.CpuLimit,
 		CpuRequest:     templates.ResourceConfiguration.CpuRequest,
