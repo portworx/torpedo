@@ -3382,7 +3382,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			volerr := Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, 3*targetSizeGiB, 1)
 			if volerr != nil {
 				if strings.Contains(volerr.Error(), "pools must not over-commit provisioning space") {
-					log.Errorf("Volume creation failed as expected with error : [%s]", volerr.Error())
+					log.InfoD("Volume creation failed as expected with error : [%s]", volerr.Error())
 
 				}
 			}
