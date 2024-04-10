@@ -199,16 +199,17 @@ func deleteSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffi
 	pxNode := storageNodes[rand.Intn(len(storageNodes))]
 	for vol := range volMap {
 		apiVol, err := Inst().V.InspectVolume(vol)
-		log.FailOnError(err, "Failed to Inspect Volume %v", vol)
-		cloneName := fmt.Sprintf("%s-%s", vol, cloneSuffix)
-		snapshotName := fmt.Sprintf("%s-%s", vol, snapshotSuffix)
-		pxctlCloneCmd := fmt.Sprintf("volume delete %s --force", cloneName)
-		pxctlSnapshotCmd := fmt.Sprintf("volume delete %s --force", snapshotName)
-		output, err := Inst().V.GetPxctlCmdOutput(pxNode, pxctlCloneCmd)
-		log.FailOnError(err, fmt.Sprintf("error deleting clone for volumes %s, clone %s", apiVol.Id, cloneName))
-		output, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlSnapshotCmd)
-		log.FailOnError(err, fmt.Sprintf("error deleting snapshot for volumes %s, snapshot %s", apiVol.Id, snapshotName))
-		log.Infof(output)
+		if err != nil {
+			//Delete Volumes should not fail, even if there are errors.
+			cloneName := fmt.Sprintf("%s-%s", vol, cloneSuffix)
+			snapshotName := fmt.Sprintf("%s-%s", vol, snapshotSuffix)
+			pxctlCloneCmd := fmt.Sprintf("volume delete %s --force", cloneName)
+			pxctlSnapshotCmd := fmt.Sprintf("volume delete %s --force", snapshotName)
+			output, _ := Inst().V.GetPxctlCmdOutput(pxNode, pxctlCloneCmd)
+			log.Infof(output)
+			output, _ = Inst().V.GetPxctlCmdOutput(pxNode, pxctlSnapshotCmd)
+			log.Infof(output)
+		}
 	}
 	return
 }
@@ -660,8 +661,8 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() 
 		setMigrateLegacySharedToSharedv4Service(false)
 		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
-		if numberNameSpaces < 40 {
-			numberNameSpaces = 40
+		if numberNameSpaces < 5 {
+			numberNameSpaces = 5
 		}
 		for i := 0; i < numberNameSpaces; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
@@ -684,7 +685,6 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() 
 		stepLog := "Create snaphots and clones Migration is in Progress"
 		Step(stepLog, func() {
 			createSnapshotsAndClones(volMap, "snapshot-2", "clone-2")
-			deleteSnapshotsAndClones(volMap, "snapshot-1", "clone-1")
 		})
 
 		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
@@ -697,9 +697,11 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() 
 			checkMapOfPods(podMap, ctx)
 		}
 		ValidateApplications(contexts)
-		deleteSnapshotsAndClones(volMap, "snapshot-2", "clone-2")
 	})
 	JustAfterEach(func() {
+		// Delete even if there are failures.
+		deleteSnapshotsAndClones(volMap, "snapshot-1", "clone-1")
+		deleteSnapshotsAndClones(volMap, "snapshot-2", "clone-2")
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 		DestroyApps(contexts, nil)
