@@ -1,6 +1,7 @@
 package pdslibs
 
 import (
+	"fmt"
 	automationModels "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
@@ -25,8 +26,11 @@ type ServiceConfiguration struct {
 }
 
 func CreateServiceConfigTemplate(tenantId string, dsName string, serviceConfig ServiceConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
-	log.InfoD("DSNAME fetched is- [%v]", dsName)
+	log.InfoD("DsName fetched is- [%v]", dsName)
 	revisionUid, err := GetRevisionUidForApplication(dsName)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch revisionUid for the dataservice - [%v] under test", dsName)
+	}
 	templateName := "pdsAutoSVCTemp" + utilities.RandomString(5)
 
 	keyValue := ServiceConfiguration{
@@ -54,13 +58,12 @@ func CreateServiceConfigTemplate(tenantId string, dsName string, serviceConfig S
 
 func CreateStorageConfigTemplate(tenantId string, dsName string, templateConfigs StorageConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
 	revisionUid, err := GetRevisionUidForApplication(dsName)
-	templateName := "pdsAutoSVCTemp" + utilities.RandomString(5)
-
-	templateValue := structToMap(templateConfigs)
-	log.InfoD("Temp value fromed in lib folder is- [%v]", templateValue)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to fetch revisionUid for the dataservice - [%v] under test", dsName)
 	}
+	templateName := "pdsAutoSVCTemp" + utilities.RandomString(5)
+	templateValue := structToMap(templateConfigs)
+	log.InfoD("Temp value formed is- [%v]", templateValue)
 	createReq := automationModels.PlatformTemplatesRequest{Create: automationModels.CreatePlatformTemplates{
 		TenantId: tenantId,
 		Template: &automationModels.V1Template{
@@ -81,11 +84,12 @@ func CreateStorageConfigTemplate(tenantId string, dsName string, templateConfigs
 
 func CreateResourceConfigTemplate(tenantId string, dsName string, templateConfigs ResourceConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
 	revisionUid, err := GetRevisionUidForApplication(dsName)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch revisionUid for the dataservice - [%v] under test", dsName)
+	}
 	templateName := "pdsAutoResTemp" + utilities.RandomString(5)
 	templateValue := structToMap(templateConfigs)
-	if err != nil {
-		return nil, err
-	}
+	log.InfoD("Temp value formed is- [%v]", templateValue)
 	createReq := automationModels.PlatformTemplatesRequest{Create: automationModels.CreatePlatformTemplates{
 		TenantId: tenantId,
 		Template: &automationModels.V1Template{
@@ -108,16 +112,16 @@ func CreateResourceConfigTemplate(tenantId string, dsName string, templateConfig
 func DeleteTemplate(id string) error {
 	delReq := automationModels.PlatformTemplatesRequest{Delete: automationModels.DeletePlatformTemplates{Id: id}}
 	log.InfoD("Template to be deleted is- [%v]", id)
-	templateResponse := v2Components.Platform.DeleteTemplate(&delReq)
+	err = v2Components.Platform.DeleteTemplate(&delReq)
 	if err != nil {
-		return templateResponse
+		return fmt.Errorf("unable to delete templates due to error - [%v]", err)
 	}
 	return nil
 }
 
 func GetRevisionUidForApplication(dsName string) (string, error) {
-	revisionList, err := v2Components.PDS.ListTemplateRevisions()
 	var revisionUid string
+	revisionList, err := v2Components.PDS.ListTemplateRevisions()
 	if err != nil {
 		return "", err
 	}
