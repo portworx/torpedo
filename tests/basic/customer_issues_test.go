@@ -1120,6 +1120,23 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 
 			// Sleep for some time before checking the pod status
 			time.Sleep(180 * time.Second)
+
+			// Pod details after blocking IP
+			podsOnBlock, err := k8sCore.GetPodsUsingPVC(volPicked.Name, volPicked.Namespace)
+			log.FailOnError(err, "unable to find the node from the pod")
+
+			// Verify that Pod Bounces and not in Running state till the time iscsi rules are not reverted
+			for _, eachPodAfter := range podsOnBlock {
+				if eachPod.Name == eachPodAfter.Name &&
+					eachPodAfter.Status.Phase == "Running" {
+					log.FailOnError(fmt.Errorf("pod is in Running State  [%v]",
+						eachPodAfter.Status.HostIP), "Pod is in Running state")
+				}
+				log.Infof("Pod with Name [%v] placed on Host [%v] and Phase [%v]",
+					eachPod.Name, eachPodAfter.Status.HostIP, eachPodAfter.Status.Phase)
+			}
+
+			// Revert iscsi rules that was set on the node
 			err = blockiSCSIInterfaceOnNode(podNode, false)
 
 			// Sleep for some time for Px to come up online and working
@@ -1130,11 +1147,14 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 			log.FailOnError(err, "unable to find the node from the pod")
 
 			for _, eachPodAfter := range podsAfterblk {
-				if eachPod.Name == eachPodAfter.Name && eachPod.Status.HostIP == eachPodAfter.Status.HostIP {
-					log.FailOnError(fmt.Errorf("Pod did not start on new Node OldNode [%v] and NewNode [%v]",
-						eachPod.Status.HostIP, eachPodAfter.Status.HostIP), "Pod Did not Start on new node")
-					log.Infof("Pod with Name [%v] placed on Host [%v]", eachPod.Name, eachPodAfter.Status.HostIP)
+				if eachPod.Name == eachPodAfter.Name &&
+					eachPod.Status.StartTime == eachPodAfter.Status.StartTime &&
+					eachPodAfter.Status.Phase != "Running" {
+					log.FailOnError(fmt.Errorf("Pod didn't bounce on the node [%v]",
+						eachPodAfter.Status.HostIP), "Pod din't bounce on the node")
 				}
+				log.Infof("Pod with Name [%v] placed on Host [%v] and Phase [%v]",
+					eachPod.Name, eachPodAfter.Status.HostIP, eachPodAfter.Status.Phase)
 			}
 
 			// Enter and Exit maintenance mode to bring Node up
