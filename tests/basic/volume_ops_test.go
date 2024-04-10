@@ -3274,7 +3274,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 		runPxctlCommandOnNode := func(selectedNode node.Node, volName string, targetSizeGiB uint64, haSize uint64) error {
-			cmd := fmt.Sprintf("volume create --size %d --repl %d --nodes %s %s", targetSizeGiB, haSize, selectedNode.Name, volName)
+			cmd := fmt.Sprintf("volume create --size %d --repl %d --nodes %s %s", targetSizeGiB, haSize, selectedNode.Id, volName)
 			_, disable_err := runPxctlCommand(cmd, selectedNode, nil)
 			if disable_err != nil {
 				log.FailOnError(disable_err, "Failed to create volume [%s]", volName)
