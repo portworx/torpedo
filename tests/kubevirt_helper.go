@@ -582,6 +582,8 @@ func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks 
 			return fmt.Errorf("failed to get VMs from context: %w", err)
 		}
 		for _, v := range vms {
+			diskCountOutput, err := GetNumberOfDisksInVM(v)
+			log.Infof("Currently having %v number of disks in the VM", diskCountOutput)
 			storageClass, err := GetStorageClassOfVmPVC(appCtx)
 			if err != nil {
 				return fmt.Errorf("failed to get storage class for VM [%s]: %w", v.Name, err)
@@ -624,6 +626,19 @@ func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks 
 			_, err = k8sKubevirt.UpdateVirtualMachine(vm)
 			if err != nil {
 				return fmt.Errorf("failed to update VM [%s]: %w", vm.Name, err)
+			}
+
+			err = RestartKubevirtVM(v.Name, v.Namespace, true)
+			if err != nil {
+				return err
+			}
+			log.InfoD("Sleep for 5mins for vm to come up")
+			time.Sleep(5 * time.Minute)
+			NewDiskCountOutput, err := GetNumberOfDisksInVM(v)
+			if NewDiskCountOutput == diskCountOutput+numberOfDisks {
+				log.Infof("Disk successfully added")
+			} else {
+				return fmt.Errorf("Disk cannot be added.")
 			}
 		}
 	}
