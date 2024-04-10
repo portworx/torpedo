@@ -3323,7 +3323,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			selectedNode, targetSizeGiB := getRandoomPoolandCalculateSize(30)
-			SetClusterOptionscmdOnNode := fmt.Sprintf("cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30,\"LabelSelector\": {\"node\": \"%s\"} ]'", selectedNode.Id)
+			SetClusterOptionscmdOnNode := fmt.Sprintf("cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30,\"LabelSelector\": {\"node\": \"%s\"}} ]'", selectedNode.Id)
 			_, err := runPxctlCommand(SetClusterOptionscmdOnNode, *selectedNode, nil)
 			log.FailOnError(err, "Failed to set cluster options")
 			log.InfoD("Successfully set cluster options")
@@ -3400,7 +3400,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			selectedNode, targetSizeGiB := getRandoomPoolandCalculateSize(30)
-			SetClusterOptionscmd := fmt.Sprintf("cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 300, \"SnapReservePercent\": 30,\"LabelSelector\": {{\"node\": \"%s\"}, {\"OverCommitPercent\": 200, \"SnapReservePercent\": 15}]'", selectedNode.Id)
+			SetClusterOptionscmd := fmt.Sprintf("cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 300, \"SnapReservePercent\": 30,\"LabelSelector\": {\"node\": \"%s\"}}, {\"OverCommitPercent\": 200, \"SnapReservePercent\": 15}]'", selectedNode.Id)
 			_, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
 			log.FailOnError(err, "Failed to set cluster options")
 			log.InfoD("Successfully set cluster options")
@@ -3413,7 +3413,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			stNodes := node.GetStorageDriverNodes()
 			for _, node := range stNodes {
 				if node.Name != selectedNode.Name {
-					SetClusterOptionscmd := fmt.Sprintf("cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 300, \"SnapReservePercent\": 30,\"LabelSelector\": {\"node\": \"%s\"}, {\"OverCommitPercent\": 200, \"SnapReservePercent\": 15}]'", selectedNode.Id)
+					SetClusterOptionscmd := fmt.Sprintf("cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 300, \"SnapReservePercent\": 30,\"LabelSelector\": {\"node\": \"%s\"}}, {\"OverCommitPercent\": 200, \"SnapReservePercent\": 15}]'", selectedNode.Id)
 					_, err := runPxctlCommand(SetClusterOptionscmd, node, nil)
 					log.FailOnError(err, "Failed to set cluster options")
 					id := uuid.New()
