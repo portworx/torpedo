@@ -1,10 +1,13 @@
 package pdslibs
 
 import (
+	"fmt"
+	"github.com/portworx/torpedo/drivers/pds/parameters"
 	automationModels "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	"reflect"
+	"strconv"
 )
 
 const (
@@ -200,4 +203,27 @@ func structToMap(structType interface{}) map[string]interface{} {
 	}
 	log.InfoD("templateValue formed is- [%v]", result)
 	return result
+}
+
+func UpdateAppStorageAndFetchIds(templates *parameters.NewPDSParams, tenantId string) (string, error) {
+
+	//Todo: Mechanism to populate dynamic/Unknown key-value pairs for App config
+	//ToDo: Take configurationValue incrementation count from user/testcase
+
+	resConfigParams := ResourceConfiguration{
+		CpuLimit:       templates.ResourceConfiguration.CpuLimit,
+		CpuRequest:     templates.ResourceConfiguration.CpuRequest,
+		MemoryLimit:    templates.ResourceConfiguration.MemoryLimit,
+		MemoryRequest:  templates.ResourceConfiguration.MemoryRequest,
+		StorageRequest: templates.StorageConfiguration.StorageRequest,
+		NewStorageSize: templates.StorageConfiguration.NewStorageSize,
+	}
+	//create new templates with new storage Req-
+	newStorageReq, _ := strconv.Atoi(templates.StorageConfiguration.NewStorageSize)
+	templates.StorageConfiguration.StorageRequest = fmt.Sprint(string(rune(newStorageReq+1))) + "G"
+
+	resConfig, _ := CreateResourceConfigTemplate(tenantId, resConfigParams)
+	log.InfoD("resConfig ID-  %v", *resConfig.Create.Meta.Uid)
+	resourceConfigId := resConfig.Create.Meta.Uid
+	return *resourceConfigId, nil
 }
