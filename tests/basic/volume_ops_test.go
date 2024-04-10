@@ -3275,7 +3275,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		defer appsValidateAndDestroy(contexts)
 
 		runPxctlCommandOnNode := func(selectedNode node.Node, volName string, targetSizeGiB uint64, haSize uint64) error {
-			cmd := fmt.Sprintf("volume create --size %d --repl %d --nodes %s %s", targetSizeGiB, haSize, selectedNode.Id, volName)
+			cmd := fmt.Sprintf("pxctl volume create --size %d --repl %d --nodes %s %s", targetSizeGiB, haSize, selectedNode.Id, volName)
 			cmdConnectionOpts := node.ConnectionOpts{
 				Timeout:         15 * time.Second,
 				TimeBeforeRetry: 5 * time.Second,
