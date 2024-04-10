@@ -1055,6 +1055,7 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 	var contexts []*scheduler.Context
 	stepLog := "App Stuck in ContainerCreation State with Device Exists in the backend"
 	It(stepLog, func() {
+
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fapodrecovery-%d", i))...)
@@ -1151,7 +1152,7 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 					eachPod.Status.StartTime == eachPodAfter.Status.StartTime &&
 					eachPodAfter.Status.Phase != "Running" {
 					log.FailOnError(fmt.Errorf("Pod didn't bounce on the node [%v]",
-						eachPodAfter.Status.HostIP), "Pod din't bounce on the node")
+						eachPodAfter.Status.HostIP), "Pod didn't bounce on the node")
 				}
 				log.Infof("Pod with Name [%v] placed on Host [%v] and Phase [%v]",
 					eachPod.Name, eachPodAfter.Status.HostIP, eachPodAfter.Status.Phase)
@@ -1162,7 +1163,7 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 
 			// Validate if Volume Driver is up on all the nodes
 			log.FailOnError(Inst().V.WaitDriverUpOnNode(*podNode, Inst().DriverStartTimeout),
-				"Node Didnot start within the time specified")
+				"Node did not start within the time specified")
 		}
 	})
 
