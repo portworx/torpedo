@@ -248,16 +248,18 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
 			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
 
-			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
-			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
-			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
+
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+
 			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
 			log.FailOnError(err, "Error while deploying ds")
 		}
@@ -506,7 +508,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataService.Namespace = WorkflowNamespace
 			workflowDataService.NamespaceName = Namespace
-			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
 			workflowDataService.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
 			workflowDataService.PDSTemplates.StorageTemplateId = stConfigId

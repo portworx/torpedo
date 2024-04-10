@@ -43,7 +43,7 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataService.Namespace = WorkflowNamespace
 			workflowDataService.NamespaceName = Namespace
-			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
 			workflowDataService.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
 			workflowDataService.PDSTemplates.StorageTemplateId = stConfigId

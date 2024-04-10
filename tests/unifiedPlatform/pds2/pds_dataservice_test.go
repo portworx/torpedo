@@ -34,16 +34,18 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
 			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
 
-			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
-			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
-			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
+
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+
 			deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
 			log.FailOnError(err, "Error while deploying ds")
 			log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
@@ -93,7 +95,6 @@ var _ = Describe("{UpgradeDataServiceImageAndVersion}", func() {
 		workflowDataservice pds.WorkflowDataService
 		workFlowTemplates   pds.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
-		err                 error
 	)
 
 	It("Deploy and Validate DataService", func() {
@@ -107,16 +108,18 @@ var _ = Describe("{UpgradeDataServiceImageAndVersion}", func() {
 			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
 			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
 
-			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
-			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
-			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
+
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+
 			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
 			log.FailOnError(err, "Error while deploying ds")
 		}
@@ -178,23 +181,23 @@ var _ = Describe("{ScaleUpCpuMemLimitsOfDS}", func() {
 			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
 		})
 
-		serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
-		log.FailOnError(err, "Unable to create Custom Templates for PDS")
-		workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
-		workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
-		workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
-
-		log.InfoD("Original Resource Template ID- [resTempId- %v]", resConfigId)
-
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
+
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+			log.InfoD("Original Resource Template ID- [resTempId- %v]", resConfigId)
+
 			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
 			log.FailOnError(err, "Error while deploying ds")
 		}
 
 		//Update Ds With New Values of Resource Templates
-		_, _, resConfigIdUpdated, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, true)
+		resConfigIdUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Meta.Name, 1)
 		log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
 		log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdated)
@@ -230,27 +233,28 @@ var _ = Describe("{IncreasePVCby1gb}", func() {
 			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
 		})
 
-		serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
-		log.FailOnError(err, "Unable to create Custom Templates for PDS")
-		workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
-		workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
-		workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
-
-		log.InfoD("Original Storage Template ID- [resTempId- %v]", stConfigId)
-
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
-			_, err := workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+
+			log.InfoD("Original Storage Template ID- [resTempId- %v]", stConfigId)
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
 			log.FailOnError(err, "Error while deploying ds")
 		}
 
 		//Update Ds With New Values of Resource Templates
-		_, stConfigIdUpdated, _, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, true)
+		//Update Ds With New Values of Resource Templates
+		resConfigIdUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Meta.Name, 1)
 		log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
-		log.InfoD("Updated Storage Template ID- [updated- %v]", stConfigIdUpdated)
-		workflowDataservice.PDSTemplates.StorageTemplateId = stConfigIdUpdated
+		log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdated)
+		workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigIdUpdated
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			_, err := workflowDataservice.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.OldImage, ds.OldVersion)
 			log.FailOnError(err, "Error while updating ds")
