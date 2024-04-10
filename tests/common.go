@@ -11338,6 +11338,17 @@ func PrereqForNodeDecomm(nodeToDecommission node.Node, suspendedScheds []*storka
 	return nil
 }
 
+// ValidatePXStatus validates if PX is running on all nodes
+func ValidatePXStatus() error {
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := Inst().V.WaitDriverUpOnNode(n, 30*time.Second); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // GetNodeFromIPAddress returns node details from the provided IP Address
 func GetNodeFromIPAddress(ipaddress string) (*node.Node, error) {
 	for _, eachNode := range node.GetNodes() {
@@ -11347,7 +11358,7 @@ func GetNodeFromIPAddress(ipaddress string) (*node.Node, error) {
 			return &eachNode, nil
 		}
 	}
-	return nil, fmt.Errorf("Unable to fetch Ipaddress for not ipaddress [%v]", ipaddress)
+	return nil, fmt.Errorf("Unable to fetch Node details from ipaddress [%v]", ipaddress)
 }
 
 // IsVolumeTypePureBlock Returns true if the volume type if pureBlock
