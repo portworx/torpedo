@@ -1,6 +1,7 @@
 package pds
 
 import (
+	"fmt"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
@@ -228,4 +229,30 @@ func ValidateDeploymentResources(resourceTemp dslibs.ResourceSettingTemplate, st
 func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string, deployment map[string]string, sizeInGb uint64) error {
 	_, err := k8utils.IncreasePVCby1Gig(namespace, deployment, sizeInGb)
 	return err
+}
+
+func (wfDataService *WorkflowDataService) KillDBMasterNodeToValidateHA(dsName string, deploymentName string) error {
+	dbMaster, isNativelyDistributed := k8utils.GetDbMasterNode(wfDataService.NamespaceName, dsName, deploymentName, wfDataService.Namespace.TargetCluster.KubeConfig)
+	if isNativelyDistributed {
+		err := k8utils.DeleteK8sPods(dbMaster, wfDataService.NamespaceName, wfDataService.Namespace.TargetCluster.KubeConfig)
+		if err != nil {
+			return err
+		}
+		//validate DataService Deployment here
+		newDbMaster, _ := k8utils.GetDbMasterNode(wfDataService.NamespaceName, dsName, deploymentName, wfDataService.Namespace.TargetCluster.KubeConfig)
+		if dbMaster == newDbMaster {
+			log.FailOnError(fmt.Errorf("leader node is not reassigned"), fmt.Sprintf("Leader pod %v", dbMaster))
+		}
+	} else {
+		podName, err := k8utils.GetAnyPodName(deploymentName, wfDataService.NamespaceName)
+		if err != nil {
+			return fmt.Errorf("failed while fetching pod for stateful set %v ", deploymentName)
+		}
+		err = k8utils.KillPodsInNamespace(wfDataService.NamespaceName, podName)
+		if err != nil {
+			return fmt.Errorf("failed while deleting pod %v ", deploymentName)
+		}
+		//validate DataService Deployment here
+	}
+	return nil
 }

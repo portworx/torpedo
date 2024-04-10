@@ -9,7 +9,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/Masterminds/semver/v3"
 	"github.com/hashicorp/go-version"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -143,6 +146,8 @@ import (
 	// import gke scheduler driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
+
+	_ "github.com/portworx/torpedo/drivers/scheduler/oke"
 
 	// import rke scheduler drivers to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/rke"
@@ -601,6 +606,10 @@ func PrintPxctlStatus() {
 	PrintCommandOutput("pxctl status")
 }
 
+func PrintInspectVolume(volID string) {
+	PrintCommandOutput(fmt.Sprintf("pxctl volume inspect %s", volID))
+}
+
 func PrintCommandOutput(cmnd string) {
 	output, err := Inst().N.RunCommand(node.GetStorageNodes()[0], cmnd, node.ConnectionOpts{
 		IgnoreError:     false,
@@ -682,6 +691,39 @@ func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 		})
 	})
+}
+
+func IsPoolAddDiskSupported() bool {
+	DMthin, err := IsDMthin()
+	log.FailOnError(err, "Error occured while checking if DMthin is enabled")
+	if DMthin {
+		dmthinSupportedPxVersion, px_err := semver.NewVersion("3.1.0")
+		if px_err != nil {
+			log.FailOnError(px_err, "Error occured :%s")
+		}
+		driverVersion, version_err := Inst().V.GetDriverVersion()
+		if version_err != nil {
+			log.FailOnError(version_err, "Error occured while fetching current version")
+		}
+		var new_trimmedVersion string
+		parts := strings.Split(driverVersion, "-")
+		trimmedVersion := strings.Split(parts[0], ".")
+		if len(trimmedVersion) > 3 {
+			new_trimmedVersion = strings.Join(trimmedVersion[:3], ".")
+		} else {
+			new_trimmedVersion = parts[0]
+		}
+		currentPxVersionOnCluster, semver_err := semver.NewVersion(new_trimmedVersion)
+		if semver_err != nil {
+			log.FailOnError(semver_err, "Error occured while comparing the current and expected version")
+		}
+		log.InfoD(fmt.Sprintf("The current version on the cluster is :%s", currentPxVersionOnCluster))
+		if currentPxVersionOnCluster.GreaterThan(dmthinSupportedPxVersion) {
+			log.Errorf("drive add to existing pool not supported for px-storev2 or px-cache pools as the current version is:%s", currentPxVersionOnCluster)
+			return false
+		}
+	}
+	return true
 }
 
 // ValidateContext is the ginkgo spec for validating a scheduled context
@@ -7786,11 +7828,14 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 		}
 		if err != nil {
 			return createdVolIDs, fmt.Errorf("failed to creared volume %s, due to error : %v ", volName, err)
+
 		}
 		volPath = fmt.Sprintf("%v", out)
 		createdVolIDs[volId] = volPath
 		log.Infof("Volume %s attached to path %s", volId, volPath)
 		count--
+		log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s  after creating the volume", volName, volId)
+		PrintInspectVolume(volId)
 	}
 	return createdVolIDs, nil
 }
@@ -11096,6 +11141,26 @@ func GetVolumesOnNode(nodeId string) ([]string, error) {
 	}
 
 	return volumes, nil
+}
+
+// IsKubevirtInstalled returns true if Kubevirt is installed else returns false
+func IsKubevirtInstalled() bool {
+	k8sApiExtensions := apiextensions.Instance()
+	crdList, err := k8sApiExtensions.ListCRDs()
+	if err != nil {
+		return false
+	}
+	for _, crd := range crdList.Items {
+		if crd.Name == "kubevirts.kubevirt.io" {
+			k8sKubevirt := kubevirt.Instance()
+			version, err := k8sKubevirt.GetVersion()
+			if err == nil && version != "" {
+				log.InfoD("Version %s", version)
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // IsCloudsnapBackupActiveOnVolume returns true is cloudsnap backup is active on the volume

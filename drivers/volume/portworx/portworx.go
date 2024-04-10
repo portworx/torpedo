@@ -1525,12 +1525,40 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				}
 			}
 		case api.SpecIoProfile:
-			if requestedSpec.IoProfile != vol.DerivedIoProfile &&
-				vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_DB_REMOTE {
-				//there is intermittent issue occurring for io profile , keeping this to check when the issue occurs again
-				log.Infof("requested Spec: %+v", requestedSpec)
-				log.Infof("actual Spec: %+v", vol)
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
+			// Reference: https://docs.portworx.com/portworx-enterprise/concepts/io-profiles
+			if requestedSpec.IoProfile != vol.DerivedIoProfile {
+				switch requestedSpec.IoProfile {
+				case api.IoProfile_IO_PROFILE_AUTO:
+					// The profile auto-selects "db_remote" for volumes with a replication factor is
+					// greater than or equal to 2, and "none" otherwise, based on configuration details.
+					if vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_DB_REMOTE && vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_NONE {
+						log.Infof("requested Spec: %+v", requestedSpec)
+						log.Infof("actual Spec: %+v", vol)
+						return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
+					}
+				case api.IoProfile_IO_PROFILE_AUTO_JOURNAL:
+					// The auto_journal IO profile adjusts a volume to use "journal" or "none"
+					// settings based on analyzing 24-second write pattern intervals to optimize
+					// performance.
+					if vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_JOURNAL && vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_NONE {
+						log.Infof("requested Spec: %+v", requestedSpec)
+						log.Infof("actual Spec: %+v", vol)
+						return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
+					}
+				case api.IoProfile_IO_PROFILE_DB_REMOTE:
+					// The write-back flush coalescing algorithm consolidates syncs within 100ms into
+					// a single operation, necessitating at least two replications (HA factor) for
+					// reliability.
+					if vol.Spec.HaLevel >= 2 {
+						log.Infof("requested Spec: %+v", requestedSpec)
+						log.Infof("actual Spec: %+v", vol)
+						return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
+					}
+				default:
+					log.Infof("requested Spec: %+v", requestedSpec)
+					log.Infof("actual Spec: %+v", vol)
+					return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
+				}
 			}
 		case api.SpecSize:
 			if requestedSpec.Size != vol.Spec.Size {
@@ -2599,6 +2627,19 @@ func (d *portworx) GetDriveSet(n *node.Node) (*torpedovolume.DriveSet, error) {
 	return &driveSetInspect, nil
 }
 
+func (d *portworx) PrintCommandOutput(cmnd string, n node.Node) {
+	output, err := d.nodeDriver.RunCommand(n, cmnd, node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+		Sudo:            true,
+	})
+	if err != nil {
+		log.Errorf("failed to run command [%s], Err: %v", cmnd, err)
+	}
+	log.Infof(output)
+
+}
+
 // WaitDriverUpOnNode waits for PX to be up on a given node
 func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
 	log.Debugf("Waiting for PX node to be up [%s/%s]", n.Name, n.VolDriverNodeID)
@@ -2657,6 +2698,9 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		return "", false, nil
 	}
 	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
+		log.InfoD(fmt.Sprintf("------Printing the px logs on the node:%s ----------", n.Name))
+		d.PrintCommandOutput("journalctl -lu portworx* -n 100 --no-pager ", n)
+		log.InfoD(fmt.Sprintf("------Finished Printing the px logs on the node:%s ----------", n.Name))
 		return fmt.Errorf("PX failed to come up on node [%s/%s], Err: %v", n.Name, n.VolDriverNodeID, err)
 	}
 

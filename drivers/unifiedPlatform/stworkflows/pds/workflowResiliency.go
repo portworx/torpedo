@@ -9,6 +9,7 @@ type WorkflowPDSResiliency struct {
 	ScenarioType   string
 	ErrorType      error
 	ResiliencyFlag bool
+	WfDataService  *WorkflowDataService
 }
 
 // MarkResiliencyTC Function to enable Resiliency Test
@@ -16,11 +17,20 @@ func (wkflwResi *WorkflowPDSResiliency) MarkResiliencyTC(resiliency bool) {
 	wkflwResi.ResiliencyFlag = resiliency
 	log.InfoD("Execution of a Resiliency TestCase Begins ...")
 }
-func (wkflwResi *WorkflowPDSResiliency) InduceFailureAndExecuteResiliencyScenario(namespace string, failureType string) error {
-	err := resiLibs.InduceFailureAfterWaitingForCondition(namespace, failureType, wkflwResi.ResiliencyFlag)
+func (wkflwResi *WorkflowPDSResiliency) InduceFailureAndExecuteResiliencyScenario(ds resiLibs.PDSDataService, failureType string) error {
+	wfDataService := wkflwResi.WfDataService
+	namespace := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
+	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
+	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
+	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
+	resConfigId := wfDataService.PDSTemplates.ResourceTemplateId
+	stConfigId := wfDataService.PDSTemplates.StorageTemplateId
+	image := ds.OldImage
+	version := ds.OldImage
+	imageId, err := resiLibs.GetDataServiceImageId(ds.Name, image, version)
+	err = resiLibs.InduceFailureAfterWaitingForCondition(ds, namespace, projectId, targetClusterId, imageId, appConfigId, resConfigId, stConfigId, namespace, failureType, wkflwResi.ResiliencyFlag)
 	if err != nil {
 		return err
 	}
-
 	return nil
 }

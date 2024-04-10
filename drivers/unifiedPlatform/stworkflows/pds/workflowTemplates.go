@@ -2,11 +2,12 @@ package pds
 
 import (
 	"fmt"
+	"strconv"
+
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
-	"strconv"
 )
 
 type WorkflowPDSTemplates struct {
@@ -69,8 +70,34 @@ func (cusTemp *WorkflowPDSTemplates) CreatePdsCustomTemplatesAndFetchIds(templat
 	resConfig, _ := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, resConfigParams)
 	log.InfoD("resConfig ID-  %v", *resConfig.Create.Meta.Uid)
 	resourceConfigId := resConfig.Create.Meta.Uid
-	cusTemp.ResourceTemplateId = *stConfigId
+	cusTemp.ResourceTemplateId = *resourceConfigId
 	return *appConfigId, *stConfigId, *resourceConfigId, nil
+}
+
+func (cusTemp *WorkflowPDSTemplates) IncreaseStorageAndFetchIds(templates *parameters.NewPDSParams) (string, error) {
+
+	//Todo: Mechanism to populate dynamic/Unknown key-value pairs for App config
+	//ToDo: Take configurationValue incrementation count from user/testcase
+
+	//Initializing the parameters required for template generation
+	resConfigParams := pdslibs.ResourceConfiguration{
+		CpuLimit:       templates.ResourceConfiguration.CpuLimit,
+		CpuRequest:     templates.ResourceConfiguration.CpuRequest,
+		MemoryLimit:    templates.ResourceConfiguration.MemoryLimit,
+		MemoryRequest:  templates.ResourceConfiguration.MemoryRequest,
+		StorageRequest: templates.StorageConfiguration.StorageRequest,
+		NewStorageSize: templates.StorageConfiguration.NewStorageSize,
+	}
+
+	//create new templates with new storage Req-
+	newStorageReq, _ := strconv.Atoi(templates.StorageConfiguration.NewStorageSize)
+	templates.StorageConfiguration.StorageRequest = fmt.Sprint(string(rune(newStorageReq+1))) + "G"
+
+	resConfig, _ := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, resConfigParams)
+	log.InfoD("resConfig ID-  %v", *resConfig.Create.Meta.Uid)
+	resourceConfigId := resConfig.Create.Meta.Uid
+	cusTemp.ResourceTemplateId = *resourceConfigId
+	return *resourceConfigId, nil
 }
 
 func (cusTemp *WorkflowPDSTemplates) DeleteCreatedCustomPdsTemplates(tempList []string) error {
