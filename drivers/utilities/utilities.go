@@ -3,6 +3,7 @@ package utilities
 import (
 	"context"
 	"fmt"
+	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -14,6 +15,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	"math/rand"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -50,6 +52,11 @@ type AwsStorageClient struct {
 	Region    string
 }
 
+type AzureStorageClient struct {
+	AccountName string
+	AccountKey  string
+}
+
 const (
 	svcAnnotationKey                = "startDataSupported"
 	userAnnotationKey               = "username"
@@ -72,6 +79,26 @@ func RandomString(length int) string {
 	}
 	randomString := string(randomBytes)
 	return randomString
+}
+
+func (azureObj *AzureStorageClient) CreateAzureBucket(bucketName string) error {
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", azureObj.AccountName, bucketName)
+	log.Infof("Create container url %s", urlStr)
+	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
+	u, _ := url.Parse(urlStr)
+	credential, err := azblob.NewSharedKeyCredential(azureObj.AccountName, azureObj.AccountKey)
+	if err != nil {
+		return fmt.Errorf("Failed to create shared key credential [%v]", err)
+	}
+
+	containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
+	ctx := context.Background()
+
+	_, err = containerURL.Create(ctx, azblob.Metadata{}, azblob.PublicAccessNone)
+	if err != nil {
+		return fmt.Errorf("Failed to create container. Error: [%v]", err)
+	}
+	return nil
 }
 
 func (awsObj *AwsStorageClient) CreateS3Bucket(bucketName string) error {

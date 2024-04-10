@@ -98,3 +98,17 @@ func CreateS3Bucket(bucketName string) error {
 	}
 	return nil
 }
+
+// CreateAzureBucket creates bucket in Azure
+func CreateAzureBucket(bucketName string) error {
+	azureClient := utilities.AzureStorageClient{
+		AccountName: utilities.GetEnv(envAzureStorageAccountName, envMinioAccessKey),
+		AccountKey:  utilities.GetEnv(envAzurePrimaryAccountKey, envMinioSecretKey),
+	}
+
+	err := azureClient.CreateAzureBucket(bucketName)
+	if err != nil {
+		return fmt.Errorf("Failed to create bucket: %v\n", err)
+	}
+	return nil
+}

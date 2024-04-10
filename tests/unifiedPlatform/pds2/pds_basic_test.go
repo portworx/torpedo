@@ -82,6 +82,9 @@ var _ = BeforeSuite(func() {
 			case "s3":
 				err := platformUtils.CreateS3Bucket(PDSBucketName)
 				log.FailOnError(err, "error while creating s3 bucket")
+			case "azure":
+				err := platformUtils.CreateAzureBucket(PDSBucketName)
+				log.FailOnError(err, "error while creating azure bucket")
 			default:
 				err := platformUtils.CreateS3CompBucket(PDSBucketName)
 				log.FailOnError(err, "error while creating s3-comp bucket")
