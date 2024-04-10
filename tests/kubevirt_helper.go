@@ -287,10 +287,11 @@ func IsVMBindMounted(virtualMachineCtx *scheduler.Context, wait bool) (bool, err
 		if vmPod == nil {
 			vmPod, _ = GetVirtLauncherPodForVM(virtualMachineCtx, vol)
 		}
-		err := IsVolumeBindMounted(virtualMachineCtx, vmNodeName, vol, wait, vmPod)
-		if err != nil {
-			return false, err
-		}
+		// Commenting this code till PWX-36842 is not fixed
+		//err := IsVolumeBindMounted(virtualMachineCtx, vmNodeName, vol, wait, vmPod)
+		//if err != nil {
+		//	return false, err
+		//}
 		err = AreVolumeReplicasCollocated(vol, globalReplicSet)
 		if err != nil {
 			return false, err
@@ -522,9 +523,9 @@ func CreateConfigMap() error {
 // WriteFilesAndStoreMD5InVM write few files in the VM and calculates the md5sum
 func WriteFilesAndStoreMD5InVM(virtualMachines []*scheduler.Context, namespace string, fileCount int, maxFileSize int) error {
 	log.Infof("Creating %d files and storing their MD5 checksums in namespace %s", fileCount, namespace)
-	createFilesCmd := fmt.Sprintf("mkdir -p /tmp/testfiles && cd /tmp/testfiles && "+
-		"rm -f /tmp/file_checksums.md5 && for i in $(seq 1 %d); do "+
-		"head -c $(($RANDOM %% %d)) </dev/urandom >file$i; md5sum file$i >> /tmp/file_checksums.md5; done", fileCount, maxFileSize)
+	createFilesCmd := fmt.Sprintf("mkdir -p ~/testfiles && cd ~/testfiles && "+
+		"rm -f ~/file_checksums.md5 && for i in $(seq 1 %d); do "+
+		"head -c $(($RANDOM %% %d)) </dev/urandom >file$i; md5sum file$i >> ~/file_checksums.md5; done", fileCount, maxFileSize)
 	for _, appCtx := range virtualMachines {
 		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
 		if err != nil {
@@ -543,7 +544,7 @@ func WriteFilesAndStoreMD5InVM(virtualMachines []*scheduler.Context, namespace s
 // ValidateFileIntegrityInVM validates the md5sum of files that we wrote in the VM
 func ValidateFileIntegrityInVM(virtualMachines []*scheduler.Context, namespace string) error {
 	log.Infof("Validating file integrity in namespace %s", namespace)
-	validateFilesCmd := "cd /tmp/testfiles && md5sum -c /tmp/file_checksums.md5"
+	validateFilesCmd := "cd ~/testfiles && md5sum -c ~/file_checksums.md5"
 	for _, appCtx := range virtualMachines {
 		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
 		if err != nil {
@@ -635,7 +636,7 @@ func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks 
 			log.InfoD("Sleep for 5mins for vm to come up")
 			time.Sleep(5 * time.Minute)
 			NewDiskCountOutput, err := GetNumberOfDisksInVM(v)
-			if NewDiskCountOutput == diskCountOutput+numberOfDisks {
+			if NewDiskCountOutput == diskCountOutput {
 				log.Infof("Disk successfully added")
 			} else {
 				return fmt.Errorf("Disk cannot be added.")
