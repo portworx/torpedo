@@ -3273,6 +3273,16 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
+		runPxctlCommandOnNode := func(selectedNode node.Node, volName string, targetSizeGiB uint64, haSize uint64) error {
+			cmd := fmt.Sprintf("volume create --size %d --repl %d--node %s %s", targetSizeGiB, haSize, selectedNode.Name, volName)
+			_, disable_err := runPxctlCommand(cmd, selectedNode, nil)
+			if disable_err != nil {
+				log.FailOnError(disable_err, "Failed to create volume [%s]", volName)
+
+			}
+			return nil
+
+		}
 		getRandoomPoolandCalculateSize := func(snapshotPercent uint64) (selectedNode *node.Node, targetSizeGiB uint64) {
 			stNodes := node.GetStorageDriverNodes()
 			index := rand.Intn(len(stNodes))
@@ -3293,7 +3303,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			id := uuid.New()
 			VolName := fmt.Sprintf("volume_%s", id.String()[:8])
 			log.InfoD("Create a volume with a size on %d times of targetsize on node [%s]", multiple, selectedNode.Name)
-			err = Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, multiple*targetSizeGiB, 1)
+			err = runPxctlCommandOnNode(*selectedNode, VolName, multiple*targetSizeGiB, 1)
 			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 			log.InfoD("Volume created with name [%s]", VolName)
 			log.InfoD("Resize the volume more than %d times available capacity on the node [%s]", multiple, selectedNode.Name)
@@ -3309,7 +3319,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			log.InfoD("Try Creating a New Volume with size more than %d times available capacity on the node [%s]", multiple, selectedNode.Name)
 			id = uuid.New()
 			VolName = fmt.Sprintf("volume_%s", id.String()[:8])
-			volerr := Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, (multiple+1)*targetSizeGiB, 1)
+			volerr := runPxctlCommandOnNode(*selectedNode, VolName, (multiple+1)*targetSizeGiB, 1)
 			if volerr != nil {
 				if strings.Contains(volerr.Error(), "pools must not over-commit provisioning space") {
 					log.InfoD("Volume creation failed as expected with error : [%s]", volerr.Error())
@@ -3392,7 +3402,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 					log.FailOnError(err, "Failed to set cluster options")
 					id := uuid.New()
 					VolName := fmt.Sprintf("volume_%s", id.String()[:8])
-					volerr := Inst().V.CreateVolumeUsingPxctlCmd(node, VolName, 3*targetSizeGiB, 1)
+					volerr := runPxctlCommandOnNode(node, VolName, 3*targetSizeGiB, 1)
 					if volerr != nil {
 						if strings.Contains(volerr.Error(), "pools must not over-commit provisioning space") {
 							log.InfoD("Volume creation failed as expected with error : [%s]", volerr.Error())
