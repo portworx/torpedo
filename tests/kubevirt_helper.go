@@ -287,10 +287,10 @@ func IsVMBindMounted(virtualMachineCtx *scheduler.Context, wait bool) (bool, err
 		if vmPod == nil {
 			vmPod, _ = GetVirtLauncherPodForVM(virtualMachineCtx, vol)
 		}
-		err := IsVolumeBindMounted(virtualMachineCtx, vmNodeName, vol, wait, vmPod)
-		if err != nil {
-			return false, err
-		}
+		//err := IsVolumeBindMounted(virtualMachineCtx, vmNodeName, vol, wait, vmPod)
+		//if err != nil {
+		//	return false, err
+		//}
 		err = AreVolumeReplicasCollocated(vol, globalReplicSet)
 		if err != nil {
 			return false, err
