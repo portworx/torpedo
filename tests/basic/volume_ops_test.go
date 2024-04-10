@@ -3243,15 +3243,21 @@ func writeFioDataToVolume(volName string, n node.Node, size int64) error {
 
 var _ = Describe("{OverCommitVolumeTest}", func() {
 	/*
-		    https://portworx.atlassian.net/browse/PTX-19103
-			1. Update the pxctl cluster with cluster option OverCommitPercent with the maximum storage percentage volumes can provision against backing storage set to 100(Enabeling Thick Provisioning)
-		    2. Check the overall storage pool capacity of a particular node
-		    3. create a volume with a base size , for eg: 10 GB
-		    4. Now update the volume size upto the maximum limit of the storage pool eg: if storage pool has a capacity of 200 GB left , increase vol size by 200
-		    5. Check vol size is successful or not
-		    6. Now try to increase the volume size more than the capacity and it will fail as it exceeds the storage pool capacity
-			7. Revert back the imposed cluster options
-			8. Create A volume after disabling thick provisioning , just to validate volume creation is happening as expected
+						    https://portworx.atlassian.net/browse/PTX-19103
+							Total 5 scenarios Tested
+							1. Verify Thick Provisioning (Global) OverCommitPercent when resizing the volume are honoured
+							2.Verify Thick Provisioning on Specific Nodes when resizing the volume are honoured
+							3.Update the pxctl cluster with cluster option OverCommitPercent with 200(Enabeling Thick Provisioning) on a specific Node and thin provisioning on the other nodes
+							4. Verify Thick Provisioning on Specific Nodes when resizing the volume are honoured
+							5.Disable all imposed cluster options and try creating thin provisioned volumes
+		                    Process:
+							1. Update the pxctl cluster with cluster option OverCommitPercent
+						    2. Check the overall storage pool capacity of a particular node
+						    3. create a volume with max of target size of the pool
+						    4. Now update the volume size more than size of the storage pool
+						    5. Check vol size is successful or not
+						    6. Also validate the creation of volume with size more than available capacity on the node
+
 
 	*/
 	JustBeforeEach(func() {
