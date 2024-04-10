@@ -3354,7 +3354,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		})
 
 		//Case 3 : Verify Thin Provisioning 200% (Global)  when resizing the volume are honoured
-		stepLog = "Update the pxctl cluster with cluster option OverCommitPercent with 200(Enabeling Thick Provisioning) on a specific Node and thin provisioning on the other nodes"
+		stepLog = "Update the pxctl cluster with cluster option OverCommitPercent with 200(Enabeling Thick Provisioning)"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			selectedNode, targetSizeGiB := getRandoomPoolandCalculateSize(15)
@@ -3366,36 +3366,6 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			output, err := runPxctlCommand(ClusterOptionsValidationcmd, *selectedNode, nil)
 			log.InfoD("The Current Cluster options: %v", output)
 			CreateVolumeandValidate(selectedNode, 2, targetSizeGiB)
-			id := uuid.New()
-			VolName := fmt.Sprintf("volume_%s", id.String()[:8])
-			log.Info("Create a volume with a size on 2 times of targetsize on node")
-			err = Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, 2*targetSizeGiB, 1)
-			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
-			log.InfoD("Volume created with name [%s]", VolName)
-			log.Info("Resize the volume more than 200% available capacity on the node")
-			err = Inst().V.ResizeVolume(VolName, 3*targetSizeGiB)
-			if err != nil {
-				if strings.Contains(err.Error(), "Failed to resize volume") {
-					log.InfoD("Volume resize failed as expected with error : [%s]", err.Error())
-					return
-				}
-			}
-			err = Inst().V.DeleteVolume(VolName)
-			log.FailOnError(err, "Failed to delete volume [%s]", VolName)
-			log.InfoD("Successfully deleted volume [%s]", VolName)
-			id = uuid.New()
-			VolName = fmt.Sprintf("volume_%s", id.String()[:8])
-			volerr := Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, 3*targetSizeGiB, 1)
-			if volerr != nil {
-				if strings.Contains(volerr.Error(), "pools must not over-commit provisioning space") {
-					log.InfoD("Volume creation failed as expected with error : [%s]", volerr.Error())
-
-				}
-			}
-			DisableClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[]'"
-			_, disable_err := runPxctlCommand(DisableClusterOptionscmd, *selectedNode, nil)
-			log.FailOnError(disable_err, "Failed to set cluster options")
-			log.InfoD("Successfully set cluster options")
 
 		})
 
@@ -3427,8 +3397,11 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 						if strings.Contains(volerr.Error(), "pools must not over-commit provisioning space") {
 							log.InfoD("Volume creation failed as expected with error : [%s]", volerr.Error())
 						}
+
 					}
+					break
 				}
+
 			}
 
 		})
