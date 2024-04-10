@@ -26,16 +26,18 @@ func (cusTemp *WorkflowPDSTemplates) CreatePdsCustomTemplatesAndFetchIds(templat
 		MaxConnection: templates.ServiceConfiguration.MaxConnection,
 	}
 	stConfigParams := pdslibs.StorageConfiguration{
-		FSType:     templates.StorageConfiguration.FSType,
-		ReplFactor: templates.StorageConfiguration.ReplFactor,
+		FS:          templates.StorageConfiguration.FS,
+		Repl:        templates.StorageConfiguration.Repl,
+		Provisioner: templates.StorageConfiguration.Provisioner,
+		FG:          templates.StorageConfiguration.FG,
+		Secure:      templates.StorageConfiguration.Secure,
 	}
 	resConfigParams := pdslibs.ResourceConfiguration{
-		CpuLimit:       templates.ResourceConfiguration.CpuLimit,
-		CpuRequest:     templates.ResourceConfiguration.CpuRequest,
-		MemoryLimit:    templates.ResourceConfiguration.MemoryLimit,
-		MemoryRequest:  templates.ResourceConfiguration.MemoryRequest,
-		StorageRequest: templates.ResourceConfiguration.StorageRequest,
-		NewStorageSize: templates.ResourceConfiguration.NewStorageSize,
+		Cpu_Limit:       templates.ResourceConfiguration.Cpu_Limit,
+		Cpu_Request:     templates.ResourceConfiguration.Cpu_Request,
+		Memory_Limit:    templates.ResourceConfiguration.Memory_Limit,
+		Memory_Request:  templates.ResourceConfiguration.Memory_Request,
+		Storage_Request: templates.ResourceConfiguration.Storage_Request,
 	}
 	appConfig, _ := pdslibs.CreateServiceConfigTemplate(cusTemp.Platform.TenantId, dsName, appConfigParams)
 	log.InfoD("appConfig ID-  %v", *appConfig.Create.Meta.Uid)
@@ -66,27 +68,26 @@ func (cusTemp *WorkflowPDSTemplates) DeleteCreatedCustomPdsTemplates(tempList []
 
 func (cusTemp *WorkflowPDSTemplates) CreateResourceTemplateWithCustomValue(templates *parameters.NewPDSParams, dsName string, updateValue int) (string, error) {
 	resConfigParams := pdslibs.ResourceConfiguration{
-		CpuLimit:       templates.ResourceConfiguration.CpuLimit,
-		CpuRequest:     templates.ResourceConfiguration.CpuRequest,
-		MemoryLimit:    templates.ResourceConfiguration.MemoryLimit,
-		MemoryRequest:  templates.ResourceConfiguration.MemoryRequest,
-		StorageRequest: templates.ResourceConfiguration.StorageRequest,
-		NewStorageSize: templates.ResourceConfiguration.NewStorageSize,
+		Cpu_Limit:       templates.ResourceConfiguration.Cpu_Limit,
+		Cpu_Request:     templates.ResourceConfiguration.Cpu_Request,
+		Memory_Limit:    templates.ResourceConfiguration.Memory_Limit,
+		Memory_Request:  templates.ResourceConfiguration.Memory_Request,
+		Storage_Request: templates.ResourceConfiguration.Storage_Request,
 	}
-	newCpuLimits, _ := strconv.Atoi(templates.ResourceConfiguration.CpuLimit)
-	templates.ResourceConfiguration.CpuLimit = fmt.Sprint(string(rune(newCpuLimits + updateValue)))
-	newCpuReq, _ := strconv.Atoi(templates.ResourceConfiguration.CpuLimit)
-	templates.ResourceConfiguration.CpuRequest = fmt.Sprint(string(rune(newCpuReq + updateValue)))
+	newCpuLimits, _ := strconv.Atoi(templates.ResourceConfiguration.Cpu_Limit)
+	templates.ResourceConfiguration.Cpu_Limit = fmt.Sprint(string(rune(newCpuLimits + updateValue)))
+	newCpuReq, _ := strconv.Atoi(templates.ResourceConfiguration.Cpu_Limit)
+	templates.ResourceConfiguration.Cpu_Request = fmt.Sprint(string(rune(newCpuReq + updateValue)))
 
 	//create new templates with changed values of MEM Values -
-	newMemLimits, _ := strconv.Atoi(templates.ResourceConfiguration.MemoryLimit)
-	templates.ResourceConfiguration.MemoryLimit = fmt.Sprint(string(rune(newMemLimits + updateValue)))
-	newMemReq, _ := strconv.Atoi(templates.ResourceConfiguration.MemoryLimit)
-	templates.ResourceConfiguration.MemoryRequest = fmt.Sprint(string(rune(newMemReq + updateValue)))
+	newMemLimits, _ := strconv.Atoi(templates.ResourceConfiguration.Memory_Limit)
+	templates.ResourceConfiguration.Memory_Limit = fmt.Sprint(string(rune(newMemLimits + updateValue)))
+	newMemReq, _ := strconv.Atoi(templates.ResourceConfiguration.Memory_Limit)
+	templates.ResourceConfiguration.Memory_Request = fmt.Sprint(string(rune(newMemReq + updateValue)))
 
 	//create new templates with new storage Req-
-	newStorageReq, _ := strconv.Atoi(templates.ResourceConfiguration.NewStorageSize)
-	templates.ResourceConfiguration.StorageRequest = fmt.Sprint(string(rune(newStorageReq+1))) + "G"
+	newStorageReq, _ := strconv.Atoi(templates.ResourceConfiguration.Storage_Request)
+	templates.ResourceConfiguration.Storage_Request = fmt.Sprint(string(rune(newStorageReq+1))) + "G"
 	resConfig, _ := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, dsName, resConfigParams)
 	log.InfoD("resConfig ID-  %v", *resConfig.Create.Meta.Uid)
 	resourceConfigId := resConfig.Create.Meta.Uid

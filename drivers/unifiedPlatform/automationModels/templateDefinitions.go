@@ -3,7 +3,8 @@ package automationModels
 import structpb "google.golang.org/protobuf/types/known/structpb"
 
 type TemplateDefinitionRequest struct {
-	GetType GetTemplateDefinitionType `copier:"must,nopanic"`
+	GetType     GetTemplateDefinitionType `copier:"must,nopanic"`
+	GetRevision GetTemplateRevisions      `copier:"must,nopanic"`
 }
 
 type TemplateDefinitionResponse struct {
@@ -17,6 +18,10 @@ type TemplateDefinitionResponse struct {
 
 type GetTemplateDefinitionType struct {
 	Id string `copier:"must,nopanic"`
+}
+
+type GetTemplateRevisions struct {
+	Uid string `copier:"must,nopanic"`
 }
 
 type V1TemplateType struct {
