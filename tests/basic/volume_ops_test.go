@@ -3364,11 +3364,11 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			CreateVolumeandValidate(selectedNode, 2, targetSizeGiB)
 			id := uuid.New()
 			VolName := fmt.Sprintf("volume_%s", id.String()[:8])
-			log.InfoD("Create a volume with a size on 2 times of targetsize on node [%s]", selectedNode.Name)
+			log.InfoD("Create a volume with a size on 2 times of targetsize on node [%s]", &selectedNode.Name)
 			err = Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, 2*targetSizeGiB, 1)
 			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 			log.InfoD("Volume created with name [%s]", VolName)
-			log.InfoD("Resize the volume more than 200% available capacity on the node [%s]", selectedNode.Name)
+			log.InfoD("Resize the volume more than 200% available capacity on the node [%s]", &selectedNode.Name)
 			err = Inst().V.ResizeVolume(VolName, 3*targetSizeGiB)
 			if err != nil {
 				if strings.Contains(err.Error(), "Failed to resize volume") {
@@ -3379,7 +3379,6 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			err = Inst().V.DeleteVolume(VolName)
 			log.FailOnError(err, "Failed to delete volume [%s]", VolName)
 			log.InfoD("Successfully deleted volume [%s]", VolName)
-			log.InfoD("Try Creating a New Volume with size more than 200% available capacity on the node [%s]", selectedNode.Name)
 			id = uuid.New()
 			VolName = fmt.Sprintf("volume_%s", id.String()[:8])
 			volerr := Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, 3*targetSizeGiB, 1)
@@ -3410,7 +3409,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			log.InfoD("The Current Cluster options: %v", output)
 			CreateVolumeandValidate(selectedNode, 3, targetSizeGiB)
 
-			log.InfoD("Try Creating a New Volume with size more than 200% available capacity on any other node than node [%s]", selectedNode.Name)
+			log.InfoD("Try Creating a New Volume with size more than 200% available capacity on any other node than node %s", &selectedNode.Name)
 			stNodes := node.GetStorageDriverNodes()
 			for _, node := range stNodes {
 				if node.Name != selectedNode.Name {
