@@ -198,7 +198,7 @@ func deleteSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffi
 	log.FailOnError(err, "Unable to get the storage nodes")
 	pxNode := storageNodes[rand.Intn(len(storageNodes))]
 	for vol := range volMap {
-		apiVol, err := Inst().V.InspectVolume(vol)
+		_, err := Inst().V.InspectVolume(vol)
 		if err != nil {
 			//Delete Volumes should not fail, even if there are errors.
 			cloneName := fmt.Sprintf("%s-%s", vol, cloneSuffix)
@@ -653,6 +653,8 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator}", func() {
 var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() {
 	var testrailID = 0
 	var runID int
+	podMap := make(map[types.UID]bool)
+	volMap := make(map[string]bool)
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumeAppRestartCoordinator", "Legacy Shared to Sharedv4 Service Migration with creation of snapshots and clones", nil, testrailID)
 		namespacePrefix := "lstsv4m-snap-clone"
@@ -673,19 +675,18 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() 
 
 	ItLog := "Start Migration "
 	It(ItLog, func() {
-		podMap := make(map[types.UID]bool)
-		volMap := make(map[string]bool)
 		for _, ctx := range contexts {
 			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
 		}
+		defer func() {
+			deleteSnapshotsAndClones(volMap, "snapshot-1", "clone-1")
+			deleteSnapshotsAndClones(volMap, "snapshot-2", "clone-2")
+		}()
 		createSnapshotsAndClones(volMap, "snapshot-1", "clone-1")
 		setMigrateLegacySharedToSharedv4Service(true)
 		time.Sleep(120 * time.Second) // sleep 2 minutes.
 
-		stepLog := "Create snaphots and clones Migration is in Progress"
-		Step(stepLog, func() {
-			createSnapshotsAndClones(volMap, "snapshot-2", "clone-2")
-		})
+		createSnapshotsAndClones(volMap, "snapshot-2", "clone-2")
 
 		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
 		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
@@ -700,8 +701,6 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() 
 	})
 	JustAfterEach(func() {
 		// Delete even if there are failures.
-		deleteSnapshotsAndClones(volMap, "snapshot-1", "clone-1")
-		deleteSnapshotsAndClones(volMap, "snapshot-2", "clone-2")
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 		DestroyApps(contexts, nil)
