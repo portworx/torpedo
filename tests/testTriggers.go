@@ -10548,14 +10548,13 @@ func TriggerSetDiscardMounts(contexts *[]*scheduler.Context, recordChan *chan *E
 			if err != nil {
 				UpdateOutcome(event, err)
 				continue
-			} else {
-				// Verify if the cluster options set for run time parameters
-				optionsMap := []string{"NodeRuntimeOptions"}
-				cOptions, err := Inst().V.GetClusterOpts(appNode, optionsMap)
-				if !strings.Contains(cOptions["NodeRuntimeOptions"], "discard_mount_force:1") {
-					UpdateOutcome(event, err)
-					continue
-				}
+			}
+			// Verify if the cluster options set for run time parameters
+			optionsMap := []string{"NodeRuntimeOptions"}
+			cOptions, err := Inst().V.GetClusterOpts(appNode, optionsMap)
+			if !strings.Contains(cOptions["NodeRuntimeOptions"], "discard_mount_force:1") {
+				UpdateOutcome(event, err)
+				continue
 			}
 		}
 	})
@@ -10596,14 +10595,13 @@ func TriggerResetDiscardMounts(contexts *[]*scheduler.Context, recordChan *chan 
 			if err != nil {
 				UpdateOutcome(event, err)
 				continue
-			} else {
-				// Verify if the cluster options set for run time parameters
-				optionsMap := []string{"NodeRuntimeOptions"}
-				cOptions, err := Inst().V.GetClusterOpts(appNode, optionsMap)
-				if !strings.Contains(cOptions["NodeRuntimeOptions"], "discard_mount_force:0") {
-					UpdateOutcome(event, err)
-					continue
-				}
+			}
+			// Verify if the cluster options set for run time parameters
+			optionsMap := []string{"NodeRuntimeOptions"}
+			cOptions, err := Inst().V.GetClusterOpts(appNode, optionsMap)
+			if !strings.Contains(cOptions["NodeRuntimeOptions"], "discard_mount_force:0") {
+				UpdateOutcome(event, err)
+				continue
 			}
 		}
 	})

@@ -19,8 +19,6 @@ import (
 	"time"
 )
 
-var k8sCore = core.Instance()
-
 func runCommand(cmd string, n node.Node) error {
 	_, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
 		Timeout:         20 * time.Second,
@@ -978,7 +976,7 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 })
 
 // blockiSCSIInterfaceOnNode blockRules and unblockRules iscsi interface on Node
-func blockiSCSIInterfaceOnNode(n *node.Node, block bool) error {
+func blockiSCSIPortOnNode(n *node.Node, block bool) error {
 
 	// Block all InComing requests from port 3260 on specific Node
 	command := fmt.Sprintf("iptables -A INPUT -p tcp -s %v --dport 3260 -j DROP ", n.MgmtIp)
@@ -1007,6 +1005,7 @@ func blockiSCSIInterfaceOnNode(n *node.Node, block bool) error {
 
 // getPVCAccessMode returns list of Accessmodes for the PVCs
 func getPVCAccessMode(pvcName string, pvcNameSpace string) ([]corev1.PersistentVolumeAccessMode, error) {
+	var k8sCore = core.Instance()
 	accessModes := []corev1.PersistentVolumeAccessMode{}
 	pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, pvcNameSpace)
 	if err != nil {
@@ -1053,118 +1052,128 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 			nil, 0)
 	})
 	var contexts []*scheduler.Context
-	stepLog := "App Stuck in ContainerCreation State with Device Exists in the backend"
-	It(stepLog, func() {
+	var k8sCore = core.Instance()
 
-		contexts = make([]*scheduler.Context, 0)
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fapodrecovery-%d", i))...)
-		}
+	itLog := "FADAPodRecoveryAfterBounce"
+	stepLog := "App Stuck in ContainerCreation State with Device Exists in the backend"
+	It(itLog, func() {
+		log.Infof(stepLog)
+
+		// Pick all the Volumes with RWO Status, We check if the Volume is with Access Mode RWO and PureBlock Volume
+		vols := make([]*volume.Volume, 0)
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fapodrecovery-%d", i))...)
+			}
+		})
+
 		ValidateApplications(contexts)
 		defer DestroyApps(contexts, nil)
 		defer flushAllIPtableRulesOnAllNodes()
 
-		// Wait for 2 min for pods to get settle down before proceeding further
-		time.Sleep(2 * time.Minute)
+		stepLog = "Get all Pure Volumes and Validate "
+		Step(stepLog, func() {
+			for _, ctx := range contexts {
+				appVols, err := Inst().S.GetPureVolumes(ctx, "pure_block")
+				log.FailOnError(err, fmt.Sprintf("error getting volumes for app [%s]", ctx.App.Key))
 
-		// Pick all the Volumes with RWO Status, We check if the Volume is with Access Mode RWO and PureBlock Volume
-		vols := make([]*volume.Volume, 0)
-		for _, ctx := range contexts {
-			appVols, err := Inst().S.GetPureVolumes(ctx, "pure_block")
-			log.FailOnError(err, fmt.Sprintf("error getting volumes for app [%s]", ctx.App.Key))
+				for _, eachVol := range appVols {
+					accessModes, err := getPVCAccessMode(eachVol.Name, eachVol.Namespace)
+					log.FailOnError(err, "Failed to get AccessModes for the volume [%v]", eachVol.Name)
+					for _, eachAMode := range accessModes {
+						// Validate if the Volume is Pure Volume
+						boolVol, err := Inst().V.IsPureVolume(eachVol)
+						log.FailOnError(err, "Failed to get details on the volume [%v]", eachVol.Name)
 
-			for _, eachVol := range appVols {
-				accessModes, err := getPVCAccessMode(eachVol.Name, eachVol.Namespace)
-				log.FailOnError(err, "Failed to get AccessModes for the volume [%v]", eachVol.Name)
-				for _, eachAMode := range accessModes {
-					// Validate if the Volume is Pure Volume
-					boolVol, err := Inst().V.IsPureVolume(eachVol)
-					log.FailOnError(err, "Failed to get details on the volume [%v]", eachVol.Name)
+						// Get Details of the volume , check if the volume is PureBlock Volume
+						pureVol, err := IsVolumeTypePureBlock(ctx, eachVol.ID)
+						log.FailOnError(err, "Failed to get details on the volume [%v]", eachVol.Name)
 
-					// Get Details of the volume , check if the volume is PureBlock Volume
-					pureVol, err := IsVolumeTypePureBlock(ctx, eachVol.ID)
-					log.FailOnError(err, "Failed to get details on the volume [%v]", eachVol.Name)
-
-					if eachAMode == "ReadWriteOnce" && boolVol && pureVol {
-						vols = append(vols, eachVol)
+						if eachAMode == "ReadWriteOnce" && boolVol && pureVol {
+							vols = append(vols, eachVol)
+						}
 					}
 				}
 			}
-		}
+		})
 
-		// Check if the Volume Counts matched criteria is > 0 , if not Fail the test
-		log.Infof("List of all volumes present in the cluster [%v]", vols)
-		dash.VerifyFatal(len(vols) != 0, true, fmt.Sprintf("failed to get list of Volumes belongs to Pure"))
+		stepLog = "Validate Pod Bounce on blocking network interface"
+		Step(stepLog, func() {
+			// Check if the Volume Counts matched criteria is > 0 , if not Fail the test
+			log.Infof("List of all volumes present in the cluster [%v]", vols)
+			dash.VerifyFatal(len(vols) != 0, true, fmt.Sprintf("failed to get list of Volumes belongs to Pure"))
 
-		// Pick a random Volume to check the pod bounce
-		randomIndex := rand.Intn(len(vols))
-		volPicked := vols[randomIndex]
-		log.Infof("Validating test scenario with Selected volumes [%v]", volPicked)
+			// Pick a random Volume to check the pod bounce
+			randomIndex := rand.Intn(len(vols))
+			volPicked := vols[randomIndex]
+			log.Infof("Validating test scenario with Selected volumes [%v]", volPicked)
 
-		inspectVolume, err := Inst().V.InspectVolume(volPicked.ID)
-		log.FailOnError(err, "Volumes inspect errored out")
-		log.Infof("VOLUME Inspect output [%v]", inspectVolume)
+			inspectVolume, err := Inst().V.InspectVolume(volPicked.ID)
+			log.FailOnError(err, "Volumes inspect errored out")
+			log.Infof("VOLUME Inspect output [%v]", inspectVolume)
 
-		pods, err := k8sCore.GetPodsUsingPVC(volPicked.Name, volPicked.Namespace)
-		log.FailOnError(err, "unable to find the node from the pod")
-
-		for _, eachPod := range pods {
-			log.Infof("Validating test on Pod [%v]", eachPod)
-			podNode, err := GetNodeFromIPAddress(eachPod.Status.HostIP)
-			log.FailOnError(err, "unable to find the node from the pod")
-			log.Infof("Pod with Name [%v] placed on Host [%v]", podNode.Name, eachPod.Status.HostIP)
-
-			// Stop iscsi traffic on the Node
-			log.Infof("Blocking IPAddress on Node [%v]", podNode.Name)
-			err = blockiSCSIInterfaceOnNode(podNode, true)
-			log.FailOnError(err, fmt.Sprintf("Failed to block iSCSI interface on Node [%v]", podNode.Name))
-
-			// Sleep for some time before checking the pod status
-			time.Sleep(180 * time.Second)
-
-			// Pod details after blocking IP
-			podsOnBlock, err := k8sCore.GetPodsUsingPVC(volPicked.Name, volPicked.Namespace)
+			pods, err := k8sCore.GetPodsUsingPVC(volPicked.Name, volPicked.Namespace)
 			log.FailOnError(err, "unable to find the node from the pod")
 
-			// Verify that Pod Bounces and not in Running state till the time iscsi rules are not reverted
-			for _, eachPodAfter := range podsOnBlock {
-				if eachPod.Name == eachPodAfter.Name &&
-					eachPodAfter.Status.Phase == "Running" {
-					log.FailOnError(fmt.Errorf("pod is in Running State  [%v]",
-						eachPodAfter.Status.HostIP), "Pod is in Running state")
+			for _, eachPod := range pods {
+				log.Infof("Validating test on Pod [%v]", eachPod)
+				podNode, err := GetNodeFromIPAddress(eachPod.Status.HostIP)
+				log.FailOnError(err, "unable to find the node from the pod")
+				log.Infof("Pod with Name [%v] placed on Host [%v]", podNode.Name, eachPod.Status.HostIP)
+
+				// Stop iscsi traffic on the Node
+				log.Infof("Blocking IPAddress on Node [%v]", podNode.Name)
+				err = blockiSCSIPortOnNode(podNode, true)
+				log.FailOnError(err, fmt.Sprintf("Failed to block iSCSI interface on Node [%v]", podNode.Name))
+
+				// Sleep for some time before checking the pod status
+				time.Sleep(180 * time.Second)
+
+				// Pod details after blocking IP
+				podsOnBlock, err := k8sCore.GetPodsUsingPVC(volPicked.Name, volPicked.Namespace)
+				log.FailOnError(err, "unable to find the node from the pod")
+
+				// Verify that Pod Bounces and not in Running state till the time iscsi rules are not reverted
+				for _, eachPodAfter := range podsOnBlock {
+					if eachPod.Name == eachPodAfter.Name &&
+						eachPodAfter.Status.Phase == "Running" {
+						log.FailOnError(fmt.Errorf("pod is in Running State  [%v]",
+							eachPodAfter.Status.HostIP), "Pod is in Running state")
+					}
+					log.Infof("Pod with Name [%v] placed on Host [%v] and Phase [%v]",
+						eachPod.Name, eachPodAfter.Status.HostIP, eachPodAfter.Status.Phase)
 				}
-				log.Infof("Pod with Name [%v] placed on Host [%v] and Phase [%v]",
-					eachPod.Name, eachPodAfter.Status.HostIP, eachPodAfter.Status.Phase)
-			}
 
-			// Revert iscsi rules that was set on the node
-			err = blockiSCSIInterfaceOnNode(podNode, false)
+				// Revert iscsi rules that was set on the node
+				err = blockiSCSIPortOnNode(podNode, false)
 
-			// Sleep for some time for Px to come up online and working
-			time.Sleep(10 * time.Minute)
+				// Sleep for some time for Px to come up online and working
+				time.Sleep(10 * time.Minute)
 
-			// Pod details after blocking IP
-			podsAfterblk, err := k8sCore.GetPodsUsingPVC(volPicked.Name, volPicked.Namespace)
-			log.FailOnError(err, "unable to find the node from the pod")
+				// Pod details after blocking IP
+				podsAfterblk, err := k8sCore.GetPodsUsingPVC(volPicked.Name, volPicked.Namespace)
+				log.FailOnError(err, "unable to find the node from the pod")
 
-			for _, eachPodAfter := range podsAfterblk {
-				if eachPod.Name == eachPodAfter.Name &&
-					eachPod.Status.StartTime == eachPodAfter.Status.StartTime &&
-					eachPodAfter.Status.Phase != "Running" {
-					log.FailOnError(fmt.Errorf("Pod didn't bounce on the node [%v]",
-						eachPodAfter.Status.HostIP), "Pod didn't bounce on the node")
+				for _, eachPodAfter := range podsAfterblk {
+					if eachPod.Name == eachPodAfter.Name &&
+						eachPod.Status.StartTime == eachPodAfter.Status.StartTime &&
+						eachPodAfter.Status.Phase != "Running" {
+						log.FailOnError(fmt.Errorf("Pod didn't bounce on the node [%v]",
+							eachPodAfter.Status.HostIP), "Pod didn't bounce on the node")
+					}
+					log.Infof("Pod with Name [%v] placed on Host [%v] and Phase [%v]",
+						eachPod.Name, eachPodAfter.Status.HostIP, eachPodAfter.Status.Phase)
 				}
-				log.Infof("Pod with Name [%v] placed on Host [%v] and Phase [%v]",
-					eachPod.Name, eachPodAfter.Status.HostIP, eachPodAfter.Status.Phase)
+				// Enter and Exit maintenance mode to bring Node up
+				log.FailOnError(Inst().V.RecoverDriver(*podNode), "Failed during Node maintenance cycle ")
+
+				// Validate if Volume Driver is up on all the nodes
+				log.FailOnError(Inst().V.WaitDriverUpOnNode(*podNode, Inst().DriverStartTimeout),
+					"Node did not start within the time specified")
 			}
-
-			// Enter and Exit maintenance mode to bring Node up
-			log.FailOnError(Inst().V.RecoverDriver(*podNode), "Failed during Node maintenance cycle ")
-
-			// Validate if Volume Driver is up on all the nodes
-			log.FailOnError(Inst().V.WaitDriverUpOnNode(*podNode, Inst().DriverStartTimeout),
-				"Node did not start within the time specified")
-		}
+		})
 	})
 
 	JustAfterEach(func() {
