@@ -1,22 +1,17 @@
 package pdslibs
 
 import (
+	"fmt"
 	automationModels "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	"reflect"
-)
-
-const (
-	defaultPXProvisioner = "pxd.portworx.com"
-	defaultVolGroup      = false
-	defaultVolSecure     = false
+	"strings"
 )
 
 type StorageConfiguration struct {
-	FSType      string
-	ReplFactor  int32
-	Provisioner string
+	FSType     string
+	ReplFactor int32
 }
 type ResourceConfiguration struct {
 	CpuLimit       string
@@ -27,35 +22,27 @@ type ResourceConfiguration struct {
 	NewStorageSize string
 }
 type ServiceConfiguration struct {
-	HeapSize int
-	Username string
-	Password string
+	MaxConnection string
 }
 
-func CreateServiceConfigTemplate(tenantId string, serviceConfig ServiceConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
-	//revisionUid, err := GetRevisionUidForApplication() PDS APIs not Available
-	//templateKind, err := GetTemplateKind()
-
-	//Dummy values for testing
-	revisionUid := utilities.RandomString(12)
-	templateKind := utilities.RandomString(12)
+func CreateServiceConfigTemplate(tenantId string, dsName string, serviceConfig ServiceConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
+	log.InfoD("DsName fetched is- [%v]", dsName)
+	revisionUid, err := GetRevisionUidForApplication(dsName)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch revisionUid for the dataservice - [%v] under test", dsName)
+	}
 	templateName := "pdsAutoSVCTemp" + utilities.RandomString(5)
 
 	keyValue := ServiceConfiguration{
-		HeapSize: serviceConfig.HeapSize,
-		Username: serviceConfig.Username,
-		Password: serviceConfig.Password,
+		MaxConnection: serviceConfig.MaxConnection,
 	}
 	templateValue := structToMap(keyValue)
-	if err != nil {
-		return nil, err
-	}
+	log.InfoD("Tenant is- [%v]", tenantId)
 	createReq := automationModels.PlatformTemplatesRequest{Create: automationModels.CreatePlatformTemplates{
 		TenantId: tenantId,
 		Template: &automationModels.V1Template{
 			Meta: &automationModels.V1Meta{Name: &templateName},
 			Config: &automationModels.V1Config{
-				Kind:           &templateKind,
 				RevisionUid:    &revisionUid,
 				TemplateValues: templateValue,
 			},
@@ -69,35 +56,21 @@ func CreateServiceConfigTemplate(tenantId string, serviceConfig ServiceConfigura
 	return templateResponse, nil
 }
 
-func CreateStorageConfigTemplate(tenantId string, templateConfigs StorageConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
-	//PDS APIs not Available
-	//templateKind, err := GetTemplateKind()
-	//semanticVersion, err := GetSemanticVersion()
-
-	//Dummy values for testing
-	semanticVersion := utilities.RandomString(12)
-	templateKind := utilities.RandomString(12)
-
-	var templateValue map[string]interface{}
-	templateValue["fs"] = templateConfigs.FSType
-	templateValue["repl"] = templateConfigs.ReplFactor
-	templateValue["provisioner"] = defaultPXProvisioner
-	templateValue["fg"] = defaultVolGroup
-	templateValue["secure"] = defaultVolSecure
-
-	templateName := "pdsAutoStTemp" + utilities.RandomString(5)
-	log.InfoD("Temp value formed in lib folder is- [%v]", templateValue)
+func CreateStorageConfigTemplate(tenantId string, dsName string, templateConfigs StorageConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
+	revisionUid, err := GetRevisionUidForApplication(dsName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to fetch revisionUid for the dataservice - [%v] under test", dsName)
 	}
+	templateName := "pdsAutoSVCTemp" + utilities.RandomString(5)
+	templateValue := structToMap(templateConfigs)
+	log.InfoD("Temp value formed is- [%v]", templateValue)
 	createReq := automationModels.PlatformTemplatesRequest{Create: automationModels.CreatePlatformTemplates{
 		TenantId: tenantId,
 		Template: &automationModels.V1Template{
 			Meta: &automationModels.V1Meta{Name: &templateName},
 			Config: &automationModels.V1Config{
-				Kind:            &templateKind,
-				SemanticVersion: &semanticVersion,
-				TemplateValues:  templateValue,
+				TemplateValues: templateValue,
+				RevisionUid:    &revisionUid,
 			},
 		},
 	}}
@@ -109,34 +82,21 @@ func CreateStorageConfigTemplate(tenantId string, templateConfigs StorageConfigu
 	return templateResponse, nil
 }
 
-func CreateResourceConfigTemplate(tenantId string, templateConfigs ResourceConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
-	//PDS APIs not Available
-	//templateKind, err := GetTemplateKind()
-	//semanticVersion, err := GetSemanticVersion()
-
-	//Dummy values for testing
-	semanticVersion := utilities.RandomString(12)
-	templateKind := utilities.RandomString(12)
-	templateName := "pdsAutoResTemp" + utilities.RandomString(5)
-
-	var templateValue map[string]interface{}
-	templateValue["cpu_limit"] = templateConfigs.CpuLimit
-	templateValue["cpu_request"] = templateConfigs.CpuRequest
-	templateValue["memory_limit"] = templateConfigs.MemoryLimit
-	templateValue["memory_request"] = templateConfigs.MemoryRequest
-	templateValue["storage_request"] = templateConfigs.StorageRequest
-
+func CreateResourceConfigTemplate(tenantId string, dsName string, templateConfigs ResourceConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
+	revisionUid, err := GetRevisionUidForApplication(dsName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to fetch revisionUid for the dataservice - [%v] under test", dsName)
 	}
+	templateName := "pdsAutoResTemp" + utilities.RandomString(5)
+	templateValue := structToMap(templateConfigs)
+	log.InfoD("Temp value formed is- [%v]", templateValue)
 	createReq := automationModels.PlatformTemplatesRequest{Create: automationModels.CreatePlatformTemplates{
 		TenantId: tenantId,
 		Template: &automationModels.V1Template{
 			Meta: &automationModels.V1Meta{Name: &templateName},
 			Config: &automationModels.V1Config{
-				Kind:            &templateKind,
-				SemanticVersion: &semanticVersion,
-				TemplateValues:  templateValue,
+				RevisionUid:    &revisionUid,
+				TemplateValues: templateValue,
 			},
 			Status: nil,
 		},
@@ -151,38 +111,30 @@ func CreateResourceConfigTemplate(tenantId string, templateConfigs ResourceConfi
 
 func DeleteTemplate(id string) error {
 	delReq := automationModels.PlatformTemplatesRequest{Delete: automationModels.DeletePlatformTemplates{Id: id}}
-	templateResponse := v2Components.Platform.DeleteTemplate(&delReq)
+	log.InfoD("Template to be deleted is- [%v]", id)
+	err = v2Components.Platform.DeleteTemplate(&delReq)
 	if err != nil {
-		return templateResponse
+		return fmt.Errorf("unable to delete templates due to error - [%v]", err)
 	}
 	return nil
 }
-func GetRevisionUidForApplication() (string, error) {
-	revision, err := v2Components.PDS.GetTemplateRevisions()
+
+func GetRevisionUidForApplication(dsName string) (string, error) {
+	var revisionUid string
+	revisionList, err := v2Components.PDS.ListTemplateRevisions()
 	if err != nil {
 		return "", err
 	}
-	revisionUuid := revision.GetRevision.Meta.Uid
-	return *revisionUuid, nil
-
-}
-
-func GetSemanticVersion() (string, error) {
-	semantic, err := v2Components.PDS.GetTemplateRevisions()
-	if err != nil {
-		return "", err
+	for _, revision := range revisionList.ListRevision.Revisions {
+		mainStringLower := strings.ToLower(*revision.Meta.Name)
+		subStringLower := strings.ToLower(dsName)
+		if strings.Contains(mainStringLower, subStringLower) {
+			revisionUid = *revision.Meta.Uid
+		}
 	}
-	semanticVersion := semantic.GetRevision.Info.SemanticVersion
-	return semanticVersion, nil
-}
+	log.InfoD("RevisionUid for the ds under test [%v] is- [%v]", dsName, revisionUid)
+	return revisionUid, nil
 
-func GetTemplateKind() (string, error) {
-	semantic, err := v2Components.PDS.GetTemplateRevisions()
-	if err != nil {
-		return "", err
-	}
-	kind := semantic.GetRevision.Meta.Name
-	return *kind, nil
 }
 
 func structToMap(structType interface{}) map[string]interface{} {
@@ -193,10 +145,7 @@ func structToMap(structType interface{}) map[string]interface{} {
 		field := val.Field(i)
 		key := typ.Field(i).Name
 		value := field.Interface()
-		log.InfoD("templateValue key is- [KEY- %v]", key)
-		log.InfoD("templateValue value is- [KEY- %v]", value)
 		result[key] = value
-		log.InfoD("templateValue key-value pair formed is- [%v]", result)
 	}
 	log.InfoD("templateValue formed is- [%v]", result)
 	return result
