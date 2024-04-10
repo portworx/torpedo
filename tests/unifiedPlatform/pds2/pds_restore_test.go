@@ -11,6 +11,7 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 	"strings"
+	"sync"
 )
 
 var _ = Describe("{PerformRestoreToSameCluster}", func() {
@@ -797,6 +798,132 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 			log.FailOnError(err, "Error while taking restore")
 			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
 		})
+
+		defer func() {
+			Step("Delete RestoredDeployment", func() {
+				err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while deleting restore")
+			})
+		}()
+
+		Step("Validate md5hash for the restored deployments", func() {
+			err := workflowDataservice.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)
+			log.FailOnError(err, "Error occured in ValidateDataServiceWorkloads method")
+		})
+
+	})
+
+	It("Delete DataServiceDeployment", func() {
+		err := workflowDataservice.DeleteDeployment()
+		log.FailOnError(err, "Error while deleting data Service")
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("PerformSimultaneousBackupRestoreForMultipleDeployments", "Perform multiple backup and restore simultaneously for different deployments.", nil, 0)
+	})
+	var (
+		workflowDataservice  pds.WorkflowDataService
+		workFlowTemplates    pds.WorkflowPDSTemplates
+		workflowBackUpConfig pds.WorkflowPDSBackupConfig
+		workflowBackup       pds.WorkflowPDSBackup
+		deployment           *automationModels.PDSDeploymentResponse
+		workflowRestore      pds.WorkflowPDSRestore
+		restoreDeployment    *automationModels.PDSRestoreResponse
+		pdsBackupConfigNames []string
+		latestBackupUid      string
+		numberOfIterations   int
+	)
+
+	It("Deploy and Validate DataService", func() {
+		Step("Create a PDS Namespace", func() {
+			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
+			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			workFlowTemplates.Platform = WorkflowPlatform
+			WorkflowNamespace.Namespaces = make(map[string]string)
+			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
+			log.FailOnError(err, "Unable to create namespace")
+			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
+			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
+
+		})
+
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.NamespaceName = Namespace
+
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+			log.FailOnError(err, "Error while deploying ds")
+		}
+
+		stepLog := "Running Workloads before upgrading the ds image"
+		Step(stepLog, func() {
+			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			log.FailOnError(err, "Error while running workloads on ds")
+		})
+	})
+
+	It("Perform adhoc backup, restore and validate - Multiple Backup and Restores", func() {
+		workflowBackUpConfig.WorkflowDataService = workflowDataservice
+		workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
+		numberOfIterations = 10
+
+		Step("Start Multiple Backup Simultaneously", func() {
+			var wg sync.WaitGroup
+			for i := 0; i < numberOfIterations; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					pdsBackupConfigName := strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
+					bkpConfigResponse, err := workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
+					log.FailOnError(err, "Error occured while creating backupConfig")
+					log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", bkpConfigResponse.Create.Meta.Name, bkpConfigResponse.Create.Meta.Uid)
+					pdsBackupConfigNames = append(pdsBackupConfigNames, pdsBackupConfigName)
+
+				}()
+			}
+			wg.Wait()
+			log.Infof("All backups are completed successfully")
+		})
+
+		Step("Trigger multiple restores simultaneously", func() {
+			// TODO: Keeping restores as sequential, needs to be changed to parallel later as multiple ns will be required
+			allBackups, err := workflowBackup.ListAllBackups(*deployment.Create.Meta.Name)
+			log.FailOnError(err, "Error occured while creating backup")
+			log.Infof("Number of backups - [%d]", len(allBackups))
+
+			for _, eachBackup := range allBackups {
+				latestBackupUid = *eachBackup.Meta.Uid
+				log.Infof("Current backup ID [%s], Name [%s]", *eachBackup.Meta.Uid, *eachBackup.Meta.Name)
+				restoreName := "pds-restore-before-update-" + RandomString(5)
+				workflowRestore.Destination = WorkflowNamespace
+				restoreDeployment, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, Namespace)
+				log.FailOnError(err, "Error while taking restore")
+				log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
+			}
+
+		})
+
+		defer func() {
+			Step("Delete Backups", func() {
+				for _, eachBackup := range pdsBackupConfigNames {
+					err := workflowBackUpConfig.DeleteBackupConfig(eachBackup)
+					log.FailOnError(err, "Error while deleting BackupConfig [%s]", eachBackup)
+				}
+			})
+		}()
 
 		defer func() {
 			Step("Delete RestoredDeployment", func() {
