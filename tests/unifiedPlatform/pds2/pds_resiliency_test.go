@@ -2,6 +2,7 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
@@ -18,7 +19,7 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 		workflowResiliency  pds.WorkflowResiliency
 		workflowDataservice pds.WorkflowDataService
 		workFlowTemplates   pds.CustomTemplates
-		//deployment          *automationModels.PDSDeploymentResponse
+		deployment          *automationModels.PDSDeploymentResponse
 	)
 	workflowResiliency.WfDataService = &workflowDataservice
 	It("Deploy and Validate DataService", func() {
@@ -33,18 +34,17 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
 		})
 
-		serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
-		log.FailOnError(err, "Unable to create Custom Templates for PDS")
-		workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
-		workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
-		workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
-
-		log.InfoD("Original Storage Template ID- [resTempId- %v]", stConfigId)
-
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
-			_, err := workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
 			log.FailOnError(err, "Error while deploying ds")
 		}
 
@@ -55,7 +55,7 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 		})
 
 		//Update Ds With New Values of Resource Templates
-		resourceConfigUpdated, err := workFlowTemplates.IncreaseStorageAndFetchIds(NewPdsParams)
+		resourceConfigUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Meta.Name, 1)
 		log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
 		log.InfoD("Updated Storage Template ID- [updated- %v]", resourceConfigUpdated)

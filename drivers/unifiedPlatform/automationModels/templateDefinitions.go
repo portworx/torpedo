@@ -26,8 +26,7 @@ type V1TemplateType struct {
 }
 
 type ListRevisionResponse struct {
-	Meta *Meta         `copier:"must,nopanic"`
-	Info *RevisionInfo `copier:"must,nopanic"`
+	Revisions []Revision
 }
 
 type RevisionInfo struct {
