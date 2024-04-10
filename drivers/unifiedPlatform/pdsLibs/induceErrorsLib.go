@@ -5,6 +5,10 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 )
 
+var (
+	ResiliencyFlag = false
+)
+
 func PerformMultiplication() error {
 	log.InfoD("Error Injection begins here .. ")
 	mul := 1
