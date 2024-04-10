@@ -3293,8 +3293,8 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		CreateVolumeandValidate := func(selectedNode *node.Node, multiple uint64, targetSizeGiB uint64) {
 			id := uuid.New()
 			VolName := fmt.Sprintf("volume_%s", id.String()[:8])
-			log.InfoD("Create a volume with a size on %d times of targetsize on node [%s]", multiple, selectedNode.Name)
-			cmd := fmt.Sprintf("volume create --size %d  --nodes %s %s", multiple*targetSizeGiB, selectedNode.Id, VolName)
+			log.InfoD("Create a volume with a size of %d time of targetsize on node [%s]", multiple, selectedNode.Name)
+			cmd := fmt.Sprintf("volume create --size %d  --nodes %s %s", targetSizeGiB, selectedNode.Id, VolName)
 			_, err := runPxctlCommand(cmd, *selectedNode, nil)
 			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 			log.InfoD("Volume created with name [%s]", VolName)
