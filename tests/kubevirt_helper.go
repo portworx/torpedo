@@ -574,7 +574,7 @@ func ListEvents(namespace string) error {
 	return nil
 }
 
-// HotAddPVCsToKubevirtVM hot adds disk to a running VM
+// HotAddPVCsToKubevirtVM hot adds disk to a running VM (but still needs a restart)
 func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks int, size string) error {
 	for _, appCtx := range virtualMachines {
 		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
