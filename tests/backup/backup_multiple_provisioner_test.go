@@ -59,7 +59,7 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", Label
 
 		// Deploy multiple application in a single namespace using different provisioner
 		taskName := fmt.Sprintf("%s-%s", TaskNamePrefix, RandomString(randomStringLength))
-		for provisioner, _ := range provisionerDefaultSnapshotClassMap {
+		for provisioner := range provisionerDefaultSnapshotClassMap {
 			appSpecList, err := GetApplicationSpecForProvisioner(clusterProviderName, provisioner)
 			log.FailOnError(err, fmt.Sprintf("Fetching application spec for provisioner %s", provisioner))
 			for _, appSpec := range appSpecList {
