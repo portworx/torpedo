@@ -180,8 +180,11 @@ type NewPDSParams struct {
 		Iterations     int
 	} `json:"StorageConfigurationsSSIE"`
 	StorageConfiguration struct {
-		FSType     string `json:"FSType"`
-		ReplFactor int32  `json:"ReplFactor"`
+		FSType      string `json:"FSType"`
+		ReplFactor  int32  `json:"ReplFactor"`
+		Provisioner string `json:"Provisioner"`
+		FG          bool   `json:"FG"`
+		Secure      bool   `json:"Secure"`
 	} `json:"StorageConfiguration"`
 	ResourceConfiguration struct {
 		CpuLimit       string `json:"CpuLimit"`

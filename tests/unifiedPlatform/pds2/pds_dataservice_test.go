@@ -20,6 +20,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 		workFlowTemplates   pds.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 		updateDeployment    *automationModels.PDSDeploymentResponse
+		templates           []string
 		err                 error
 	)
 
@@ -44,6 +45,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
 			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+			templates = []string{serviceConfigId, stConfigId, resConfigId}
 
 			deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
 			log.FailOnError(err, "Error while deploying ds")
@@ -54,6 +56,15 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 			Step("Delete DataServiceDeployment", func() {
 				log.InfoD("Cleaning Up dataservice...")
 				err := workflowDataservice.DeleteDeployment()
+				log.FailOnError(err, "Error while deleting dataservice")
+			})
+		}()
+
+		defer func() {
+			Step("Delete PDS CustomTemplates", func() {
+				log.InfoD("Cleaning Up templates...")
+
+				err := workFlowTemplates.DeleteCreatedCustomPdsTemplates(templates)
 				log.FailOnError(err, "Error while deleting dataservice")
 			})
 		}()

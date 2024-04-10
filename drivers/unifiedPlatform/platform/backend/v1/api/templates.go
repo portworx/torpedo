@@ -64,10 +64,8 @@ func (template *PLATFORM_API_V1) CreateTemplates(templateReq *PlatformTemplatesR
 	tempValueBody := templatesv1.V1Template{
 		Meta: &templatesv1.V1Meta{Name: templateReq.Create.Template.Meta.Name},
 		Config: &templatesv1.V1Config{
-			Kind:            templateReq.Create.Template.Config.Kind,
-			SemanticVersion: templateReq.Create.Template.Config.SemanticVersion,
-			RevisionUid:     templateReq.Create.Template.Config.RevisionUid,
-			TemplateValues:  templateReq.Create.Template.Config.TemplateValues,
+			RevisionUid:    templateReq.Create.Template.Config.RevisionUid,
+			TemplateValues: templateReq.Create.Template.Config.TemplateValues,
 		},
 	}
 	templateCreateRequest := client.TemplateServiceCreateTemplate(ctx, templateReq.Create.TenantId)

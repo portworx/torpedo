@@ -10,8 +10,11 @@ import (
 )
 
 type StorageConfiguration struct {
-	FSType     string
-	ReplFactor int32
+	FSType      string
+	ReplFactor  int32
+	Provisioner string
+	FG          bool
+	Secure      bool
 }
 type ResourceConfiguration struct {
 	CpuLimit       string
@@ -24,6 +27,11 @@ type ResourceConfiguration struct {
 type ServiceConfiguration struct {
 	MaxConnection string
 }
+
+const (
+	STORAGE_OPTIONS   = "storage_options"
+	RESOURCE_SETTINGS = "resource_settings"
+)
 
 func CreateServiceConfigTemplate(tenantId string, dsName string, serviceConfig ServiceConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
 	log.InfoD("DsName fetched is- [%v]", dsName)
@@ -57,7 +65,7 @@ func CreateServiceConfigTemplate(tenantId string, dsName string, serviceConfig S
 }
 
 func CreateStorageConfigTemplate(tenantId string, dsName string, templateConfigs StorageConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
-	revisionUid, err := GetRevisionUidForApplication(dsName)
+	revisionUid, err := GetRevisionUidForStorageOptions()
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch revisionUid for the dataservice - [%v] under test", dsName)
 	}
@@ -83,7 +91,7 @@ func CreateStorageConfigTemplate(tenantId string, dsName string, templateConfigs
 }
 
 func CreateResourceConfigTemplate(tenantId string, dsName string, templateConfigs ResourceConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
-	revisionUid, err := GetRevisionUidForApplication(dsName)
+	revisionUid, err := GetRevisionUidForResourceConfig()
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch revisionUid for the dataservice - [%v] under test", dsName)
 	}
@@ -134,7 +142,40 @@ func GetRevisionUidForApplication(dsName string) (string, error) {
 	}
 	log.InfoD("RevisionUid for the ds under test [%v] is- [%v]", dsName, revisionUid)
 	return revisionUid, nil
+}
 
+func GetRevisionUidForStorageOptions() (string, error) {
+	var revisionUid string
+	revisionList, err := v2Components.PDS.ListTemplateRevisions()
+	if err != nil {
+		return "", err
+	}
+	for _, revision := range revisionList.ListRevision.Revisions {
+		mainStringLower := strings.ToLower(*revision.Meta.Name)
+		subStringLower := strings.ToLower(STORAGE_OPTIONS)
+		if strings.Contains(mainStringLower, subStringLower) {
+			revisionUid = *revision.Meta.Uid
+		}
+	}
+	log.InfoD("RevisionUid for the ds under test [%v] is- [%v]", STORAGE_OPTIONS, revisionUid)
+	return revisionUid, nil
+}
+
+func GetRevisionUidForResourceConfig() (string, error) {
+	var revisionUid string
+	revisionList, err := v2Components.PDS.ListTemplateRevisions()
+	if err != nil {
+		return "", err
+	}
+	for _, revision := range revisionList.ListRevision.Revisions {
+		mainStringLower := strings.ToLower(*revision.Meta.Name)
+		subStringLower := strings.ToLower(RESOURCE_SETTINGS)
+		if strings.Contains(mainStringLower, subStringLower) {
+			revisionUid = *revision.Meta.Uid
+		}
+	}
+	log.InfoD("RevisionUid for the ds under test [%v] is- [%v]", RESOURCE_SETTINGS, revisionUid)
+	return revisionUid, nil
 }
 
 func structToMap(structType interface{}) map[string]interface{} {

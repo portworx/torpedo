@@ -26,8 +26,11 @@ func (cusTemp *WorkflowPDSTemplates) CreatePdsCustomTemplatesAndFetchIds(templat
 		MaxConnection: templates.ServiceConfiguration.MaxConnection,
 	}
 	stConfigParams := pdslibs.StorageConfiguration{
-		FSType:     templates.StorageConfiguration.FSType,
-		ReplFactor: templates.StorageConfiguration.ReplFactor,
+		FSType:      templates.StorageConfiguration.FSType,
+		ReplFactor:  templates.StorageConfiguration.ReplFactor,
+		Provisioner: templates.StorageConfiguration.Provisioner,
+		FG:          templates.StorageConfiguration.FG,
+		Secure:      templates.StorageConfiguration.Secure,
 	}
 	resConfigParams := pdslibs.ResourceConfiguration{
 		CpuLimit:       templates.ResourceConfiguration.CpuLimit,
