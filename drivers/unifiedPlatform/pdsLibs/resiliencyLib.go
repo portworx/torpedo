@@ -14,10 +14,7 @@ const (
 	StopPXDuringStorageResize = "stop-px-during-storage-resize"
 )
 
-// FunctionMap stores functions by their names
-var FunctionMap = map[string]error{
-	StopPXDuringStorageResize: k8utils.StopPxOnReplicaVolumeNode(),
-}
+var FunctionMap map[string]error
 
 var (
 	wg                        sync.WaitGroup
@@ -47,6 +44,9 @@ func CloseResiliencyChannel() {
 
 // InduceFailure Function to wait for event to induce failure
 func InduceFailure(failure TypeOfFailure, ns string) {
+	FunctionMap = map[string]error{
+		StopPXDuringStorageResize: k8utils.StopPxOnReplicaVolumeNode(),
+	}
 	isResiliencyConditionset := <-ResiliencyCondition
 	if isResiliencyConditionset {
 		err := failure.Method()

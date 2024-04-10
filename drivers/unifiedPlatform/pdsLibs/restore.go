@@ -5,25 +5,29 @@ import (
 )
 
 // CreateRestore creates restore for the backup
-func CreateRestore(backupId string, targetClusterId string, deploymentId string, projectId string, cloudSnapId string, backupLocationId string) (*automationModels.PDSRestoreResponse, error) {
+func CreateRestore(name string, backupId string, targetClusterId string, namespaceId string, projectIdSource string, projectIdDest string) (*automationModels.PDSRestoreResponse, error) {
 
 	createRestoreRequest := automationModels.PDSRestoreRequest{
-		Create: automationModels.PDSCreateRestore{},
+		Create: automationModels.PDSCreateRestore{
+			Restore: &automationModels.PDSRestore{
+				Meta: &automationModels.Meta{
+					Name: &name,
+				},
+			},
+			ProjectId:             projectIdSource,
+			NamespaceId:           namespaceId,
+			SourceReferences:      &automationModels.SourceReferences{},
+			DestinationReferences: &automationModels.DestinationReferences{},
+		},
 	}
 
 	createRestoreRequest.Create.SourceReferences = &automationModels.SourceReferences{
-		BackupId:         backupId,
-		DeploymentId:     deploymentId,
-		CloudsnapId:      cloudSnapId,
-		BackupLocationId: backupLocationId,
+		BackupId: backupId,
 	}
 	createRestoreRequest.Create.DestinationReferences = &automationModels.DestinationReferences{
 		TargetClusterId: targetClusterId,
-		DeploymentId:    deploymentId,
-		ProjectId:       projectId,
+		ProjectId:       projectIdDest,
 	}
-	createRestoreRequest.Create.SourceReferences.BackupId = "SomeBackupID"
-	createRestoreRequest.Create.DestinationReferences.TargetClusterId = "SomeClusterID"
 
 	restoreResponse, err := v2Components.PDS.CreateRestore(&createRestoreRequest)
 	if err != nil {

@@ -13,6 +13,11 @@ const (
 	bkpJobCompleted = "COMPLETED"
 )
 
+const (
+	restoreCompleted = "SUCCESSFUL"
+	restoreFailed    = "FAILED"
+)
+
 // ValidateAdhocBackup triggers the adhoc backup for given ds and store at the given backup target and validate them
 func ValidateAdhocBackup(deploymentId string, backupConfigId string) error {
 	var bkpJobs *automationModels.PDSBackupResponse
@@ -124,9 +129,13 @@ func ValidateRestoreStatus(restoreId string) (*automationModels.PDSRestoreRespon
 			return false, err
 		}
 		log.Infof("Restore status -  %v", state)
-		if strings.ToLower(state) != strings.ToLower("Successful") {
+		if strings.ToLower(state) == strings.ToLower(restoreFailed) {
+			return true, fmt.Errorf("Restore [%s] failed. Phase - [%s]", *restoreResp.Get.Meta.Name, state)
+		}
+		if strings.ToLower(state) != strings.ToLower(restoreCompleted) {
 			return false, nil
 		}
+
 		return true, nil
 	})
 	if err != nil {

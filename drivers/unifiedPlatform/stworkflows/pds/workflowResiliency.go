@@ -5,7 +5,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 )
 
-type WorkflowResiliency struct {
+type WorkflowPDSResiliency struct {
 	ScenarioType   string
 	ErrorType      error
 	ResiliencyFlag bool
@@ -13,11 +13,11 @@ type WorkflowResiliency struct {
 }
 
 // MarkResiliencyTC Function to enable Resiliency Test
-func (wkflwResi *WorkflowResiliency) MarkResiliencyTC(resiliency bool) {
+func (wkflwResi *WorkflowPDSResiliency) MarkResiliencyTC(resiliency bool) {
 	wkflwResi.ResiliencyFlag = resiliency
 	log.InfoD("Execution of a Resiliency TestCase Begins ...")
 }
-func (wkflwResi *WorkflowResiliency) InduceFailureAndExecuteResiliencyScenario(ds resiLibs.PDSDataService, failureType string) error {
+func (wkflwResi *WorkflowPDSResiliency) InduceFailureAndExecuteResiliencyScenario(ds resiLibs.PDSDataService, failureType string) error {
 	wfDataService := wkflwResi.WfDataService
 	namespace := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId

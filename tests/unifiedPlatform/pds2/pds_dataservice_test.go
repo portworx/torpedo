@@ -17,7 +17,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	})
 	var (
 		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.CustomTemplates
+		workFlowTemplates   pds.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 		updateDeployment    *automationModels.PDSDeploymentResponse
 		err                 error
@@ -33,7 +33,6 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 			log.FailOnError(err, "Unable to create namespace")
 			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
 			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
-
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
@@ -93,7 +92,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersion}", func() {
 	})
 	var (
 		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.CustomTemplates
+		workFlowTemplates   pds.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 	)
 
@@ -166,7 +165,7 @@ var _ = Describe("{ScaleUpCpuMemLimitsOfDS}", func() {
 	})
 	var (
 		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.CustomTemplates
+		workFlowTemplates   pds.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 	)
 	It("Deploy and Validate DataService", func() {
@@ -218,7 +217,7 @@ var _ = Describe("{IncreasePVCby1gb}", func() {
 	})
 	var (
 		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.CustomTemplates
+		workFlowTemplates   pds.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 	)
 	It("Deploy and Validate DataService", func() {

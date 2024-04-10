@@ -17,6 +17,7 @@ import (
 )
 
 var _ = BeforeSuite(func() {
+	PDS_DEFAULT_NAMESPACE = "pds-namespace-" + RandomString(5)
 	steplog := "Get prerequisite params to run platform tests"
 	log.InfoD(steplog)
 	Step(steplog, func() {
@@ -70,6 +71,28 @@ var _ = BeforeSuite(func() {
 		WorkflowTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane(false)
 		log.FailOnError(err, "Unable to register target cluster")
 		log.Infof("Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
+	})
+
+	Step("Create a namespace for PDS", func() {
+		WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+		WorkflowNamespace.Namespaces = make(map[string]string)
+		_, err := WorkflowNamespace.CreateNamespaces(PDS_DEFAULT_NAMESPACE)
+		log.FailOnError(err, "Unable to create namespace")
+		log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
+	})
+
+	Step("Associate namespace and cluster to Project", func() {
+		// TODO: Hardocded values needs to be removed while stabilizing the actual tests
+		err := WorkflowProject.Associate(
+			[]string{WorkflowTargetCluster.ClusterUID},
+			[]string{WorkflowNamespace.Namespaces[PDS_DEFAULT_NAMESPACE]},
+			[]string{"cred:2fb8c4b9-a864-4a8c-b580-649b564c1c7f"},
+			[]string{"bloc:176e6f31-5b76-46d9-887c-7fa80634d1fe"},
+			[]string{},
+			[]string{},
+		)
+		log.FailOnError(err, "Unable to associate Cluster to Project")
+		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
 	})
 
 	Step("Create Buckets", func() {

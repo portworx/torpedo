@@ -214,9 +214,15 @@ func GetVolumeNodesOnWhichPxIsRunning() []node.Node {
 		nodesToStopPx []node.Node
 		stopPxNode    []node.Node
 	)
+	// Initialise the slices
+	nodesToStopPx = make([]node.Node, 0)
+	stopPxNode = make([]node.Node, 0)
+
 	stopPxNode = node.GetStorageNodes()
 	log.InfoD("PX the node with vol running found is-  %v ", stopPxNode)
-	nodesToStopPx = append(nodesToStopPx, stopPxNode[0])
+	if len(stopPxNode) > 0 {
+		nodesToStopPx = append(nodesToStopPx, stopPxNode[0])
+	}
 	return nodesToStopPx
 }
 

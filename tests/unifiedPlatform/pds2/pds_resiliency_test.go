@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"strings"
+
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
@@ -8,7 +10,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
-	"strings"
 )
 
 var _ = Describe("{StopPXDuringStorageResize}", func() {
@@ -16,9 +17,9 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 		StartTorpedoTest("StopPXDuringStorageResize", "Deploy data services, Run workloads, and Stop PX on the node while Storage resize is happening", nil, 0)
 	})
 	var (
-		workflowResiliency  pds.WorkflowResiliency
+		workflowResiliency  pds.WorkflowPDSResiliency
 		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.CustomTemplates
+		workFlowTemplates   pds.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 	)
 	workflowResiliency.WfDataService = &workflowDataservice

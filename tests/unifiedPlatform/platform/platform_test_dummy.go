@@ -306,7 +306,7 @@ var _ = Describe("{TestPlatformTemplates}", func() {
 	})
 
 	var (
-		workFlowTemplates pds.CustomTemplates
+		workFlowTemplates pds.WorkflowPDSTemplates
 		tempList          []string
 	)
 	It("TestPlatformTemplates", func() {
