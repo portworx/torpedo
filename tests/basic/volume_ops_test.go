@@ -3282,11 +3282,11 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			poolToResize := pools[rand.Intn(len(pools))]
 			poolIDToResize := poolToResize.Uuid
 			originalSizeInBytes := poolToResize.TotalSize
-			originalSizeGiB := originalSizeInBytes / units.GiB
-			log.InfoD("Original size of the pool %s is %d", poolIDToResize, originalSizeGiB)
+			log.InfoD("Original size of the pool %s is %d", poolIDToResize, originalSizeInBytes)
 			SnapshotPercent := snapshotPercent
-			SubtractSize := (SnapshotPercent / 100) * originalSizeGiB
-			targetSizeGiB = originalSizeGiB - SubtractSize
+			SubtractSize := (SnapshotPercent * originalSizeInBytes) / 100
+			targetSizeInBytes := originalSizeInBytes - SubtractSize
+			targetSizeGiB = targetSizeInBytes / units.GiB
 			log.InfoD("Target size of the pool %s is %d", poolIDToResize, targetSizeGiB)
 			return selectedNode, targetSizeGiB
 		}
