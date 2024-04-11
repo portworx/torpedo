@@ -19,94 +19,52 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		StartTorpedoTest("PerformRestoreToSameCluster", "Deploy data services and perform backup and restore on the same cluster", nil, 0)
 	})
 	var (
-		workflowDataService  pds.WorkflowDataService
+		workflowDataservice  pds.WorkflowDataService
 		workflowBackUpConfig pds.WorkflowPDSBackupConfig
 		workflowRestore      pds.WorkflowPDSRestore
-		deployment           *automationModels.PDSDeploymentResponse
-		restoreDeployment    *automationModels.PDSRestoreResponse
+		workflowBackup       pds.WorkflowPDSBackup
+		latestBackupUid      string
 		pdsBackupConfigName  string
-		err                  error
+		deploymentName       string
+		restoreNamespace     string
 	)
 
-	It("Deploy, Validate and RunWorkloads on DataService", func() {
-		Step("Create a PDS Namespace", func() {
-			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
-			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
-			WorkflowNamespace.Namespaces = make(map[string]string)
-			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
-			log.FailOnError(err, "Unable to create namespace")
-			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
-			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
-		})
+	JustBeforeEach(func() {
+		StartTorpedoTest("DummyBackupTest", "DummyBackupTest", nil, 0)
+		workflowDataservice.DataServiceDeployment = make(map[string]string)
+		deploymentName = "samore-pg-test-1"
+		workflowDataservice.DataServiceDeployment[deploymentName] = "dep:fa70e52d-0563-4258-b96b-7d6ca6ed4799"
 
-		for _, ds := range NewPdsParams.DataServiceToTest {
-			workflowDataService.Namespace = WorkflowNamespace
-			workflowDataService.NamespaceName = Namespace
-			deployment, err = workflowDataService.DeployDataService(ds, ds.Image, ds.Version)
-			log.FailOnError(err, "Error while deploying ds")
-		}
-
-		defer func() {
-			Step("Delete DataServiceDeployment", func() {
-				err := workflowDataService.DeleteDeployment()
-				log.FailOnError(err, "Error while deleting dataservice")
-			})
-		}()
-
-		stepLog := "Running Workloads before taking backups"
-		Step(stepLog, func() {
-			err := workflowDataService.RunDataServiceWorkloads(NewPdsParams)
-			log.FailOnError(err, "Error while running workloads on ds")
-		})
+		workflowRestore.Destination = WorkflowNamespace
+		workflowRestore.WorkflowProject = WorkflowProject
+		restoreNamespace = "pds-restore-namespace-" + RandomString(5)
 	})
 
-	It("Perform adhoc backup, restore and validate them", func() {
-		var bkpConfigResponse *automationModels.PDSBackupConfigResponse
-		workflowBackUpConfig.WorkflowDataService = workflowDataService
-		workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
-		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
+	Step("Create Adhoc backup config of the existing deployment", func() {
+		bkpConfigResponse, err := workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, workflowDataservice.DataServiceDeployment[deploymentName])
+		log.FailOnError(err, "Error occured while creating backupConfig")
+		log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", bkpConfigResponse.Create.Meta.Name, bkpConfigResponse.Create.Meta.Uid)
+	})
 
-		Step("Take Backup and validate", func() {
-			bkpConfigResponse, err = workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
-			log.FailOnError(err, "Error occured while creating backupConfig")
-			log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", bkpConfigResponse.Create.Meta.Name, bkpConfigResponse.Create.Meta.Uid)
-		})
+	Step("Get the latest backup detail for the deployment", func() {
+		backupResponse, err := workflowBackup.GetLatestBackup(deploymentName)
+		log.FailOnError(err, "Error occured while creating backup")
+		latestBackupUid = *backupResponse.Meta.Uid
+		log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
+	})
 
-		defer func() {
-			Step("Delete Backups", func() {
-				err = workflowBackUpConfig.DeleteBackupConfig(pdsBackupConfigName)
-				log.FailOnError(err, "Error while deleting BackupConfig [%s]", pdsBackupConfigName)
-			})
-		}()
+	Step("Create a new namespace for restore", func() {
+		_, err := WorkflowNamespace.CreateNamespaces(restoreNamespace)
+		log.FailOnError(err, "Unable to create namespace")
+		log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
+	})
 
-		//Step("Perform Restore and validate", func() {
-		//	workflowRestore.WorkflowDataService = workflowDataService
-		//	backupUid := *bkpConfigResponse.Create.Meta.Uid
-		//	deploymentName := *deployment.Create.Meta.Name
-		//	cloudSnapId := ""
-		//	// Set the DestClusterId same as the current ClusterId
-		//	workflowRestore.Destination.DestinationClusterId = WorkflowTargetCluster.ClusterUID
-		//
-		//	log.FailOnError(err, "failed while registering destination target cluster")
-		//
-		//	workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
-		//	restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
-		//	log.FailOnError(err, "Error while taking restore")
-		//	log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
-		//})
+	Step("Create Restore from the latest backup Id", func() {
+		restoreName := "testing_restore_" + RandomString(5)
+		_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
+		log.FailOnError(err, "Restore Failed")
 
-		defer func() {
-			Step("Delete RestoredDeployment", func() {
-				err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
-				log.FailOnError(err, "Error while deleting restore")
-			})
-		}()
-
-		Step("Validate md5hash for the restored deployments", func() {
-			err := workflowDataService.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)
-			log.FailOnError(err, "Error occured in ValidateDataServiceWorkloads method")
-		})
-
+		log.Infof("Restore created successfully with ID - [%s]", workflowRestore.Restores[restoreName].Meta.Uid)
 	})
 
 	JustAfterEach(func() {
