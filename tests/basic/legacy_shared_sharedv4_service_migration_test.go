@@ -678,10 +678,6 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() 
 		for _, ctx := range contexts {
 			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
 		}
-		defer func() {
-			deleteSnapshotsAndClones(volMap, "snapshot-1", "clone-1")
-			deleteSnapshotsAndClones(volMap, "snapshot-2", "clone-2")
-		}()
 		createSnapshotsAndClones(volMap, "snapshot-1", "clone-1")
 		setMigrateLegacySharedToSharedv4Service(true)
 		time.Sleep(120 * time.Second) // sleep 2 minutes.
@@ -702,6 +698,8 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() 
 	JustAfterEach(func() {
 		// Delete even if there are failures.
 		defer EndTorpedoTest()
+		deleteSnapshotsAndClones(volMap, "snapshot-1", "clone-1")
+		deleteSnapshotsAndClones(volMap, "snapshot-2", "clone-2")
 		AfterEachTest(contexts, testrailID, runID)
 		DestroyApps(contexts, nil)
 	})
