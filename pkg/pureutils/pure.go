@@ -89,6 +89,15 @@ func GetApiTokenForMgmtEndpoints(secret PXPureSecret, mgmtEndPoint string) strin
 	return ""
 }
 
+// CreateVolumeOnFABackend Creates Volume on FA Backend
+func CreateVolumeOnFABackend(faClient *flasharray.Client, volName string, size int) (*flasharray.Volume, error) {
+	volume, err := faClient.Volumes.CreateVolume(volName, size)
+	if err != nil {
+		return nil, err
+	}
+	return volume, nil
+}
+
 // ListAllTheVolumesFromSpecificFA returns list of all the volumes from the FA Specified
 func ListAllTheVolumesFromSpecificFA(faClient *flasharray.Client) ([]flasharray.Volume, error) {
 	volumes, err := faClient.Volumes.ListVolumes(nil)
@@ -127,6 +136,24 @@ func ListAllHosts(faClient *flasharray.Client) ([]flasharray.Host, error) {
 		return nil, err
 	}
 	return hostGroup, nil
+}
+
+// CreateNewHostOnFA Creates New Host on FA
+func CreateNewHostOnFA(faClient *flasharray.Client, hostName string) (*flasharray.Host, error) {
+	host, err := faClient.Hosts.CreateHost(hostName, nil)
+	if err != nil {
+		return nil, err
+	}
+	return host, nil
+}
+
+// ConnectVolumeToHost Connects Volume to Host
+func ConnectVolumeToHost(faClient *flasharray.Client, hostName string, volName string) (*flasharray.ConnectedVolume, error) {
+	connectedVol, err := faClient.Hosts.ConnectHost(hostName, volName, nil)
+	if err != nil {
+		return nil, err
+	}
+	return connectedVol, nil
 }
 
 // GetIqnFromHosts returns list of IQNs associated with the hosts
@@ -238,3 +265,5 @@ func DisableNetworkInterface(faClient *flasharray.Client, iface string) (bool, e
 	}
 	return false, fmt.Errorf("Failed to disable network interface [%v]", iface)
 }
+
+
