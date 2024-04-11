@@ -3297,7 +3297,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			basicVolumeCreate := fmt.Sprintf("volume create --nodes %s %s", selectedNode.Id, VolName)
 			_, err := runPxctlCommand(basicVolumeCreate, *selectedNode, nil)
 			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
-			log.InfoD("Now Resize volume with a size of %d time of targetsize of pool on node [%s] as %d overcommit percent imposed", multiple, selectedNode.Name, multiple*100)
+			log.InfoD("Now Resize volume with a size of %d %d time of targetsize of pool on node [%s] as %d overcommit percent imposed", multiple*targetSizeGiB, multiple, selectedNode.Name, multiple*100)
 			volCreateErr := Inst().V.ResizeVolume(VolName, multiple*targetSizeGiB)
 			log.FailOnError(volCreateErr, "volume resize failed  on the cluster with volume name [%s]", VolName)
 			log.InfoD("Volume created with name [%s]", VolName)
