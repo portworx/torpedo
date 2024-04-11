@@ -247,16 +247,26 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			VolumeResize:         TriggerVolumeResize,
 			CloudSnapShotRestore: TriggerCloudSnapshotRestore,
 			LocalSnapShotRestore: TriggerLocalSnapshotRestore,
-			AddStorageNode:       TriggerAddOCPStorageNode,
+			CoreChecker:          TriggerCoreChecker,
 		}
 		// disruptiveTriggerFunctions are mapped to their respective handlers and are invoked by a separate testTrigger
 		disruptiveTriggerFunctions = map[string]TriggerFunction{
-			RebootNode:           TriggerRebootNodes,
-			RestartVolDriver:     TriggerRestartVolDriver,
-			CrashNode:            TriggerCrashNodes,
-			RestartKvdbVolDriver: TriggerRestartKvdbVolDriver,
-			NodeDecommission:     TriggerNodeDecommission,
-			AppTasksDown:         TriggerAppTasksDown,
+			RebootNode:            TriggerRebootNodes,
+			RestartVolDriver:      TriggerRestartVolDriver,
+			CrashNode:             TriggerCrashNodes,
+			HAIncreaseAndReboot:   TriggerHAIncreaseAndReboot,
+			RestartKvdbVolDriver:  TriggerRestartKvdbVolDriver,
+			NodeDecommission:      TriggerNodeDecommission,
+			AppTasksDown:          TriggerAppTasksDown,
+			NodeRejoin:            TriggerNodeRejoin,
+			KVDBFailover:          TriggerKVDBFailover,
+			RestartManyVolDriver:  TriggerRestartManyVolDriver,
+			RebootManyNodes:       TriggerRebootManyNodes,
+			CrashVolDriver:        TriggerCrashVolDriver,
+			CrashPXDaemon:         TriggerCrashPXDaemon,
+			AddStorageNode:        TriggerAddOCPStorageNode,
+			AddStoragelessNode:    TriggerAddOCPStoragelessNode,
+			OCPStorageNodeRecycle: TriggerOCPStorageNodeRecycle,
 		}
 		// Creating a distinct trigger to make sure email triggers at regular intervals
 		emailTriggerFunction = map[string]func(){
