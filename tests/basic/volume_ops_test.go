@@ -3282,25 +3282,24 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			poolToResize := pools[rand.Intn(len(pools))]
 			poolIDToResize := poolToResize.Uuid
 			originalSizeInBytes := poolToResize.TotalSize
-			log.InfoD("Original size of the pool %s is %d", poolIDToResize, originalSizeInBytes)
+			originalSizeGiB := originalSizeInBytes / units.GiB
+			log.InfoD("Original size of the pool %s is %d", poolIDToResize, originalSizeGiB)
 			SnapshotPercent := snapshotPercent
-			SubtractSize := (SnapshotPercent * originalSizeInBytes) / 100
-			targetSizeInBytes := originalSizeInBytes - SubtractSize
-			targetSizeGiB = targetSizeInBytes / units.GiB
+			SubtractSize := (SnapshotPercent / 100) * originalSizeGiB
+			targetSizeGiB = originalSizeGiB - SubtractSize
 			log.InfoD("Target size of the pool %s is %d", poolIDToResize, targetSizeGiB)
 			return selectedNode, targetSizeGiB
 		}
 		CreateVolumeandValidate := func(selectedNode *node.Node, multiple uint64, targetSizeGiB uint64) {
 			id := uuid.New()
 			VolName := fmt.Sprintf("volume_%s", id.String()[:8])
-			log.InfoD("Create a volume with a min size of 10G on node [%s]", selectedNode.Name)
-			basicVolumeCreate := fmt.Sprintf("volume create --size 10  --nodes %s %s", selectedNode.Id, VolName)
+			log.InfoD("Create a volume with a min size on node [%s]", selectedNode.Name)
+			basicVolumeCreate := fmt.Sprintf("volume create --nodes %s %s", selectedNode.Id, VolName)
 			_, err := runPxctlCommand(basicVolumeCreate, *selectedNode, nil)
 			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
 			log.InfoD("Now Resize volume with a size of %d time of targetsize of pool on node [%s] as %d overcommit percent imposed", multiple, selectedNode.Name, multiple*100)
-			cmd := fmt.Sprintf("volume update --size %d  %s", multiple*targetSizeGiB, VolName)
-			_, volCreateErr := runPxctlCommand(cmd, *selectedNode, nil)
-			log.FailOnError(volCreateErr, "volume creation failed on the cluster with volume name [%s]", VolName)
+			volCreateErr := Inst().V.ResizeVolume(VolName, multiple*targetSizeGiB)
+			log.FailOnError(volCreateErr, "volume resize failed  on the cluster with volume name [%s]", VolName)
 			log.InfoD("Volume created with name [%s]", VolName)
 			log.InfoD("Resize the volume more than %d times available capacity on the node [%s]", multiple, selectedNode.Name)
 			err = Inst().V.ResizeVolume(VolName, (multiple+1)*targetSizeGiB)
