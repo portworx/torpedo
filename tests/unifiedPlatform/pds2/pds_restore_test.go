@@ -15,14 +15,13 @@ import (
 )
 
 var _ = Describe("{PerformRestoreToSameCluster}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("PerformRestoreToSameCluster", "Deploy data services and perform backup and restore on the same cluster", nil, 0)
-	})
 	var (
 		workflowDataservice  pds.WorkflowDataService
 		workflowBackUpConfig pds.WorkflowPDSBackupConfig
 		workflowRestore      pds.WorkflowPDSRestore
 		workflowBackup       pds.WorkflowPDSBackup
+		workFlowTemplates    pds.WorkflowPDSTemplates
+		deployment           *automationModels.PDSDeploymentResponse
 		latestBackupUid      string
 		pdsBackupConfigName  string
 		deploymentName       string
@@ -30,45 +29,84 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DummyBackupTest", "DummyBackupTest", nil, 0)
+		StartTorpedoTest("PerformRestoreToSameCluster", "Deploy data services and perform backup and restore on the same cluster", nil, 0)
 		workflowDataservice.DataServiceDeployment = make(map[string]string)
-		deploymentName = "samore-pg-test-1"
-		workflowDataservice.DataServiceDeployment[deploymentName] = "dep:fa70e52d-0563-4258-b96b-7d6ca6ed4799"
 
 		workflowRestore.Destination = WorkflowNamespace
 		workflowRestore.WorkflowProject = WorkflowProject
 		restoreNamespace = "pds-restore-namespace-" + RandomString(5)
 	})
 
-	Step("Create Adhoc backup config of the existing deployment", func() {
-		bkpConfigResponse, err := workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, workflowDataservice.DataServiceDeployment[deploymentName])
-		log.FailOnError(err, "Error occured while creating backupConfig")
-		log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", bkpConfigResponse.Create.Meta.Name, bkpConfigResponse.Create.Meta.Uid)
-	})
+	It("Deploy data services and perform backup and restore on the same cluster", func() {
 
-	Step("Get the latest backup detail for the deployment", func() {
-		backupResponse, err := workflowBackup.GetLatestBackup(deploymentName)
-		log.FailOnError(err, "Error occured while creating backup")
-		latestBackupUid = *backupResponse.Meta.Uid
-		log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
-	})
+		Step("Deploy dataservice", func() {
+			for _, ds := range NewPdsParams.DataServiceToTest {
 
-	Step("Create a new namespace for restore", func() {
-		_, err := WorkflowNamespace.CreateNamespaces(restoreNamespace)
-		log.FailOnError(err, "Unable to create namespace")
-		log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
-	})
+				workFlowTemplates.Platform = WorkflowPlatform
 
-	Step("Create Restore from the latest backup Id", func() {
-		restoreName := "testing_restore_" + RandomString(5)
-		_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
-		log.FailOnError(err, "Restore Failed")
+				workflowDataservice.Namespace = WorkflowNamespace
+				workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
 
-		log.Infof("Restore created successfully with ID - [%s]", workflowRestore.Restores[restoreName].Meta.Uid)
-	})
+				//serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+				//log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
+				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = "tmpl:467d65b1-86eb-4c36-a240-f968d14f104e"
+				workflowDataservice.PDSTemplates.StorageTemplateId = "tmpl:b2dead78-5d31-4b83-bcec-b8f1c9c1d83e"
+				workflowDataservice.PDSTemplates.ResourceTemplateId = "tmpl:a1517bc0-26b4-4c06-874d-4e36bbffb305"
+
+				//workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+				//workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+				//workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+
+				var err error
+
+				deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
+				log.FailOnError(err, "Error while deploying ds")
+			}
+
+			//stepLog := "Running Workloads on deployment"
+			//Step(stepLog, func() {
+			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			//	log.FailOnError(err, "Error while running workloads on ds")
+			//})
+		})
+
+		Step("Create Adhoc backup config of the existing deployment", func() {
+			workflowBackUpConfig.WorkflowDataService = workflowDataservice
+			workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
+			pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
+			workflowBackUpConfig.Backups = make(map[string]automationModels.V1BackupConfig)
+			bkpConfigResponse, err := workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
+			log.FailOnError(err, "Error occured while creating backupConfig")
+			log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", bkpConfigResponse.Create.Meta.Name, bkpConfigResponse.Create.Meta.Uid)
+		})
+
+		Step("Get the latest backup detail for the deployment", func() {
+			workflowBackup.WorkflowDataService = workflowDataservice
+			backupResponse, err := workflowBackup.GetLatestBackup(deploymentName)
+			log.FailOnError(err, "Error occured while creating backup")
+			latestBackupUid = *backupResponse.Meta.Uid
+			log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
+		})
+
+		Step("Create a new namespace for restore", func() {
+			_, err := WorkflowNamespace.CreateNamespaces(restoreNamespace)
+			log.FailOnError(err, "Unable to create namespace")
+			log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
+		})
+
+		Step("Create Restore from the latest backup Id", func() {
+			restoreName := "testing_restore_" + RandomString(5)
+			_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
+			log.FailOnError(err, "Restore Failed")
+
+			log.Infof("Restore created successfully with ID - [%s]", workflowRestore.Restores[restoreName].Meta.Uid)
+		})
+
+		JustAfterEach(func() {
+			defer EndTorpedoTest()
+		})
+
 	})
 })
 

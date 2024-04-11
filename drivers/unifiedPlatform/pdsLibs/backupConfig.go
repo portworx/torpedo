@@ -10,7 +10,7 @@ var (
 	defaultBackupType          = "ADHOC"
 	defaultBackupLevel         = "SNAPSHOT"
 	defaultBackupRetainPolicy  = "RETAIN"
-	defaultBackJobHistoryLimit = int32(10)
+	defaultBackJobHistoryLimit = int32(3)
 )
 
 // CreateBackupConfig created backup config for the deployment
