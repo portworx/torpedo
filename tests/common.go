@@ -2633,41 +2633,44 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 // ValidateClusterSize validates number of storage nodes in given cluster
 // using total cluster size `count` and max_storage_nodes_per_zone
 func ValidateClusterSize(count int64) {
-	zones, err := Inst().N.GetZones()
+	zones, err := Inst().S.GetZones()
 	log.FailOnError(err, "Zones empty")
 	log.InfoD("ASG is running in [%+v] zones\n", zones)
-	perZoneCount := count / int64(len(zones))
+
+	volDriverSpec, err := Inst().V.GetDriver()
+	log.FailOnError(err, "error getting storage cluster volDriverSpec")
+	perZoneCount := *volDriverSpec.Spec.CloudStorage.MaxStorageNodesPerZone
 
 	// Validate total node count
-	currentNodeCount, err := Inst().N.GetASGClusterSize()
+	currentNodeCount, err := Inst().S.GetASGClusterSize()
 	log.FailOnError(err, "Failed to Get ASG Cluster Size")
 
-	dash.VerifyFatal(currentNodeCount, perZoneCount*int64(len(zones)), "ASG cluster size is as expected?")
+	dash.VerifyFatal(currentNodeCount, count, "ASG cluster size is as expected?")
 
 	// Validate storage node count
-	var expectedStorageNodesPerZone int
-	if Inst().MaxStorageNodesPerAZ <= int(perZoneCount) {
-		expectedStorageNodesPerZone = Inst().MaxStorageNodesPerAZ
-	} else {
-		expectedStorageNodesPerZone = int(perZoneCount)
+	totalStorageNodesAllowed := int(perZoneCount) * len(zones)
+	expectedStoragesNodes := totalStorageNodesAllowed
+
+	if totalStorageNodesAllowed > int(count) {
+		expectedStoragesNodes = int(count)
 	}
 	storageNodes := node.GetStorageNodes()
-	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones), "Storage nodes matches the expected number?")
+	dash.VerifyFatal(len(storageNodes), expectedStoragesNodes, "Storage nodes matches the expected number?")
 }
 
 // GetStorageNodes get storage nodes in the cluster
 func GetStorageNodes() ([]node.Node, error) {
 
-	storageNodes := []node.Node{}
+	var storageNodes []node.Node
 	nodes := node.GetStorageDriverNodes()
 
-	for _, node := range nodes {
-		devices, err := Inst().V.GetStorageDevices(node)
+	for _, n := range nodes {
+		devices, err := Inst().V.GetStorageDevices(n)
 		if err != nil {
 			return nil, err
 		}
 		if len(devices) > 0 {
-			storageNodes = append(storageNodes, node)
+			storageNodes = append(storageNodes, n)
 		}
 	}
 	return storageNodes, nil
@@ -8698,7 +8701,7 @@ func AsgKillNode(nodeToKill node.Node) error {
 			})
 
 		} else {
-			err = Inst().N.DeleteNode(nodeToKill, 5*time.Minute)
+			err = Inst().S.DeleteNode(nodeToKill)
 		}
 
 	})
@@ -11334,6 +11337,59 @@ func PrereqForNodeDecomm(nodeToDecommission node.Node, suspendedScheds []*storka
 		if err != nil {
 			return fmt.Errorf("error moving replica from node [%s] to volume [%s],Err: %v ", nodeToDecommission.VolDriverNodeID, newReplicaNode, err)
 		}
+	}
+	return nil
+}
+
+// ValidatePXStatus validates if PX is running on all nodes
+func ValidatePXStatus() error {
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := Inst().V.WaitDriverUpOnNode(n, 30*time.Second); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// GetNodeFromIPAddress returns node details from the provided IP Address
+func GetNodeFromIPAddress(ipaddress string) (*node.Node, error) {
+	for _, eachNode := range node.GetNodes() {
+		log.Infof(fmt.Sprintf("Comparing [%v] with [%v]", eachNode.GetMgmtIp(), ipaddress))
+		if eachNode.GetMgmtIp() == ipaddress {
+			log.Infof("Matched IP Address [%v]", eachNode.MgmtIp)
+			return &eachNode, nil
+		}
+	}
+	return nil, fmt.Errorf("Unable to fetch Node details from ipaddress [%v]", ipaddress)
+}
+
+// IsVolumeTypePureBlock Returns true if the volume type if pureBlock
+func IsVolumeTypePureBlock(ctx *scheduler.Context, volName string) (bool, error) {
+	vols, err := Inst().S.GetVolumeParameters(ctx)
+	if err != nil {
+		return false, err
+	}
+	for vol, params := range vols {
+		log.Infof(fmt.Sprintf("Checking for Volume [%v]", vol))
+		if vol == volName && params["backend"] == k8s.PureBlock {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// SetUnSetDiscardMountRTOptions Set discard mount run time options on the Node
+func SetUnSetDiscardMountRTOptions(n *node.Node, unset bool) error {
+	rtOptions := 1
+	if !unset {
+		rtOptions = 0
+	}
+	optionsMap := make(map[string]string)
+	optionsMap["discard_mount_force"] = fmt.Sprintf("%v", rtOptions)
+	err := Inst().V.SetClusterRunTimeOpts(*n, optionsMap)
+	if err != nil {
+		return err
 	}
 	return nil
 }
