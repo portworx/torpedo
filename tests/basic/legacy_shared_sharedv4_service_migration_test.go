@@ -20,6 +20,10 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
+const (
+	numApps = 30
+)
+
 // Legacy Shared Volume Create
 // Automatically it should get created as Sharedv4 service volume.
 
@@ -319,8 +323,8 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationBasicMany}", func() {
 		setMigrateLegacySharedToSharedv4Service(false)
 		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
-		if numberNameSpaces < 40 {
-			numberNameSpaces = 40
+		if numberNameSpaces < numApps {
+			numberNameSpaces = numApps
 		}
 		for i := 0; i < numberNameSpaces; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
@@ -365,8 +369,8 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart}", func() {
 		setMigrateLegacySharedToSharedv4Service(false)
 		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
-		if numberNameSpaces < 40 {
-			numberNameSpaces = 40
+		if numberNameSpaces < numApps {
+			numberNameSpaces = numApps
 		}
 		for i := 0; i < numberNameSpaces; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
@@ -422,8 +426,8 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestart}", func() {
 		setMigrateLegacySharedToSharedv4Service(false)
 		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
-		if numberNameSpaces < 40 {
-			numberNameSpaces = 40
+		if numberNameSpaces < numApps {
+			numberNameSpaces = numApps
 		}
 		for i := 0; i < numberNameSpaces; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
@@ -482,8 +486,8 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 		setMigrateLegacySharedToSharedv4Service(false)
 		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
-		if numberNameSpaces < 40 {
-			numberNameSpaces = 40
+		if numberNameSpaces < numApps {
+			numberNameSpaces = numApps
 		}
 		for i := 0; i < numberNameSpaces; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
@@ -596,8 +600,8 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator}", func() {
 		setMigrateLegacySharedToSharedv4Service(false)
 		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
-		if numberNameSpaces < 40 {
-			numberNameSpaces = 40
+		if numberNameSpaces < numApps {
+			numberNameSpaces = numApps
 		}
 		for i := 0; i < numberNameSpaces; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
