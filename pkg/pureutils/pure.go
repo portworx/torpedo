@@ -156,6 +156,17 @@ func ConnectVolumeToHost(faClient *flasharray.Client, hostName string, volName s
 	return connectedVol, nil
 }
 
+// UpdateIQNOnSpecificHosts Updates IQN on specific hosts
+func UpdateIQNOnSpecificHosts(faClient *flasharray.Client, hostName string, iqnValue string) (*flasharray.Host, error) {
+	data1 := make(map[string][]string)
+	data1["iqnlist"] = []string{iqnValue}
+	host, err := faClient.Hosts.SetHost(hostName, data1)
+	if err != nil {
+		return nil, err
+	}
+	return host, nil
+}
+
 // GetIqnFromHosts returns list of IQNs associated with the hosts
 func GetIqnFromHosts(faClient *flasharray.Client, hostName string) ([]string, error) {
 	hosts, err := ListAllHosts(faClient)
@@ -168,30 +179,6 @@ func GetIqnFromHosts(faClient *flasharray.Client, hostName string) ([]string, er
 		}
 	}
 	return nil, fmt.Errorf("Unable to fetch iqn details for the host specified [%v]", hostName)
-}
-
-// GetSpecificLunIdForVolume returns list of iqn for the volume specified
-func GetIqnIdForSpecificVolume(faClient *flasharray.Client, volName string) ([]string, error) {
-	HostsGroups, err := GetAllHostGroups(faClient)
-	if err != nil {
-		return nil, err
-	}
-	for _, eachHostGroup := range HostsGroups {
-		hostGroupConnection, err := ListAllHostGroupConnections(faClient, eachHostGroup.Name)
-		if err != nil {
-			return nil, err
-		}
-		for _, eachHost := range hostGroupConnection {
-			if eachHost.Vol == volName {
-				iqn, err := GetIqnFromHosts(faClient, eachHost.Name)
-				if err != nil {
-					return nil, err
-				}
-				return iqn, nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("Unable to get details of IQN for the volume Specified [%v]", volName)
 }
 
 // ListAllNetworkInterfacesOnFA returns all the list of Network Interfaces present
@@ -265,5 +252,3 @@ func DisableNetworkInterface(faClient *flasharray.Client, iface string) (bool, e
 	}
 	return false, fmt.Errorf("Failed to disable network interface [%v]", iface)
 }
-
-
