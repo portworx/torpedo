@@ -201,6 +201,7 @@ func deleteSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffi
 	storageNodes, err := GetStorageNodes()
 	log.FailOnError(err, "Unable to get the storage nodes")
 	pxNode := storageNodes[rand.Intn(len(storageNodes))]
+	log.Infof("Deleting Snapshots and Clones that were created")
 	for vol := range volMap {
 		_, err := Inst().V.InspectVolume(vol)
 		if err != nil {
@@ -209,8 +210,10 @@ func deleteSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffi
 			snapshotName := fmt.Sprintf("%s-%s", vol, snapshotSuffix)
 			pxctlCloneCmd := fmt.Sprintf("volume delete %s --force", cloneName)
 			pxctlSnapshotCmd := fmt.Sprintf("volume delete %s --force", snapshotName)
+			log.Infof("Deleting clone %s", cloneName)
 			output, _ := Inst().V.GetPxctlCmdOutput(pxNode, pxctlCloneCmd)
 			log.Infof(output)
+			log.Infof("Deleting snapshot %s", snapshotName)
 			output, _ = Inst().V.GetPxctlCmdOutput(pxNode, pxctlSnapshotCmd)
 			log.Infof(output)
 		}
@@ -698,6 +701,8 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() 
 			checkMapOfPods(podMap, ctx)
 		}
 		ValidateApplications(contexts)
+		deleteSnapshotsAndClones(volMap, "snapshot-1", "clone-1")
+		deleteSnapshotsAndClones(volMap, "snapshot-2", "clone-2")
 	})
 	JustAfterEach(func() {
 		// Delete even if there are failures.
