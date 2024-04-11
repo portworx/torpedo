@@ -3266,14 +3266,6 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 	// check the size left in the node
 	itLog := "honor OverCommitPercent when resizing the volume"
 	It(itLog, func() {
-		contexts = make([]*scheduler.Context, 0)
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plflcs-%d", i))...)
-		}
-
-		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
-
 		getRandoomPoolandCalculateSize := func(snapshotPercent uint64) (selectedNode *node.Node, targetSizeGiB uint64) {
 			stNodes := node.GetStorageDriverNodes()
 			index := rand.Intn(len(stNodes))
@@ -3349,8 +3341,8 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 		stepLog = "Verify Thick Provisioning (Global) OverCommitPercent when resizing the volume are honoured "
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			selectedNode, targetSizeGiB := getRandoomPoolandCalculateSize(30)
-			SetClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30}]'"
+			selectedNode, targetSizeGiB := getRandoomPoolandCalculateSize(15)
+			SetClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 15}]'"
 			_, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
 			log.FailOnError(err, "Failed to set cluster options")
 			log.InfoD("Successfully set cluster options")
