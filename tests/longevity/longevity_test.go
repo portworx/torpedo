@@ -254,9 +254,13 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			RebootNode:           TriggerRebootNodes,
 			RestartVolDriver:     TriggerRestartVolDriver,
 			CrashNode:            TriggerCrashNodes,
+			HAIncreaseAndReboot:  TriggerHAIncreaseAndReboot,
 			RestartKvdbVolDriver: TriggerRestartKvdbVolDriver,
 			NodeDecommission:     TriggerNodeDecommission,
 			AppTasksDown:         TriggerAppTasksDown,
+			NodeRejoin:           TriggerNodeRejoin,
+			KVDBFailover:         TriggerKVDBFailover,
+			RestartManyVolDriver: TriggerRestartManyVolDriver,
 		}
 		// Creating a distinct trigger to make sure email triggers at regular intervals
 		emailTriggerFunction = map[string]func(){
