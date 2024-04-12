@@ -88,7 +88,6 @@ func GetDeployment(deploymentId string) (*automationModels.PDSDeploymentResponse
 // DeployDataService Deploys the dataservices based on the given params
 func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterId, imageId, appConfigId, resConfigId, stConfigId string) (*automationModels.PDSDeploymentResponse, error) {
 	log.Info("Data service will be deployed as per the config map passed..")
-	log.InfoD("ProjectId is - [%v]", projectId)
 	depInputs := &automationModels.PDSDeploymentRequest{
 		Create: automationModels.PDSDeployment{
 			NamespaceID: namespaceId,
