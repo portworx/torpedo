@@ -3202,6 +3202,84 @@ var _ = Describe("{FioClonedVolumeFaultInjection}", func() {
 		}
 	})
 })
+var _ = Describe("{volumeprecheck}", func() {
+	/*
+			https://portworx.atlassian.net/browse/PTX-20557
+			1. Deploy a basic volume on the cluster
+			2. Now we need to test the ha-update of the volume with different cases
+			scenarios :
+		    1. Test the ha-update sources option with an uuid of other nodes on which node is not present
+		    2. Test the ha-update sources option with an ip of nodes
+			3. Test the ha-update sources option with an invalid uuid of the node on which the repl of the volume is present
+		    4. Test the ha-update sources option with a valid uuid of the node on which the repl of the volume is present
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("volumeprecheck", "Precheck for volume operations", nil, 0)
+	})
+
+	It("volumeprecheck", func() {
+		log.InfoD("volumeprecheck")
+		stepLog := "Create a volume and perform a precheck for sources options"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			stNodes := node.GetStorageDriverNodes()
+			nodesuuidWithoutReplica := make([]string, 0)
+			nodesIP := make([]string, 0)
+			index := rand.Intn(len(stNodes))
+			selectedNode := &stNodes[index]
+			for _, stNode := range stNodes {
+				if stNode.Name != selectedNode.Name {
+					nodesuuidWithoutReplica = append(nodesuuidWithoutReplica, stNode.Id)
+					nodesIP = append(nodesIP, stNode.Addresses[0])
+				}
+			}
+			id := uuid.New()
+			VolName := fmt.Sprintf("volume_%s", id.String()[:8])
+			log.InfoD("Create a volume with a min size on node [%s]", selectedNode.Name)
+			basicVolumeCreate := fmt.Sprintf("volume create --nodes %s %s", selectedNode.Id, VolName)
+			_, err := runPxctlCommand(basicVolumeCreate, *selectedNode, nil)
+			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
+			log.InfoD("Base Volume creation with volume name %s successful", VolName)
+			log.InfoD("Test the ha-update sources option with a uuid of other nodes on which node is not present")
+			wrongUuidcmd := fmt.Sprintf("v ha-update %s --repl 2 --sources %s", VolName, nodesuuidWithoutReplica[rand.Intn(len(nodesuuidWithoutReplica))])
+			_, err = runPxctlCommand(wrongUuidcmd, node.GetStorageDriverNodes()[0], nil)
+			if err != nil {
+				isExpectedError := strings.Contains(err.Error(), "does not belong to volume's replication set")
+				dash.VerifyFatal(isExpectedError, true, fmt.Sprintf("Expected error: %v", err))
+
+			}
+
+			log.InfoD("Test the ha-update sources option with a ip of nodes ")
+			wrongIPcmd := fmt.Sprintf("v ha-update %s --repl 2 --sources %s", VolName, nodesIP[rand.Intn(len(nodesIP))])
+			_, err = runPxctlCommand(wrongIPcmd, node.GetStorageDriverNodes()[0], nil)
+			if err != nil {
+				isExpectedError := strings.Contains(err.Error(), "could not find any node with id")
+				dash.VerifyFatal(isExpectedError, true, fmt.Sprintf("Expected error: %v", err))
+
+			}
+
+			log.InfoD("Test the ha-update sources option with an invalid uuid of the node on which the repl of the volume is present")
+			randomUUID := uuid.New()
+			invalidUuidcmd := fmt.Sprintf("v ha-update %s --repl 2 --sources %s", VolName, randomUUID)
+			_, err = runPxctlCommand(invalidUuidcmd, node.GetStorageDriverNodes()[0], nil)
+			if err != nil {
+				isExpectedError := strings.Contains(err.Error(), "Failed to update volume: could not find any pool with id")
+				dash.VerifyFatal(isExpectedError, true, fmt.Sprintf("Expected error: %v", err))
+
+			}
+
+			log.InfoD("Test the ha-update sources option with a valid uuid of the node on which the repl of the volume is present")
+			validUuidcmd := fmt.Sprintf("v ha-update %s --repl 2 --sources %s", VolName, selectedNode.Id)
+			_, err = runPxctlCommand(validUuidcmd, node.GetStorageDriverNodes()[0], nil)
+
+			log.InfoD("Delete the volume that is created for the test")
+			deleteVolumeCmd := fmt.Sprintf("volume delete %s", VolName)
+			_, err = runPxctlCommand(deleteVolumeCmd, *selectedNode, nil)
+			log.FailOnError(err, "Failed to delete volume: %v", VolName)
+		})
+	})
+})
 
 func writeFioDataToVolume(volName string, n node.Node, size int64) error {
 	mountPath := fmt.Sprintf("/var/lib/osd/mounts/%s", volName)

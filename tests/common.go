@@ -11589,3 +11589,66 @@ func SplitStorageDriverUpgradeURL(upgradeURL string) (string, string, error) {
 	pxVersion := pathSegments[len(pathSegments)-1]
 	return endpoint.String(), pxVersion, nil
 }
+
+func volumePreCheckForHA(v volume.Volume) error {
+	//get node on which volume is placed
+	currReplicaSets, err := Inst().V.GetReplicaSets(&v)
+	log.FailOnError(err, "Failed to get vol %s replica sets", v.Name)
+	dash.VerifyFatal(len(currReplicaSets) > 0, true, fmt.Sprintf(" Vol %s repl sets exist?", v.Name))
+	replicaSetNodes := currReplicaSets[0].Nodes
+	SelectedNode := replicaSetNodes[rand.Intn(len(replicaSetNodes))]
+	var nodesuuidWithoutReplica []string
+	var nodesIP []string
+	for _, n := range node.GetStorageDriverNodes() {
+		if SelectedNode != n.Id {
+			nodesuuidWithoutReplica = append(nodesuuidWithoutReplica, n.Id)
+			nodesIP = append(nodesIP, n.Addresses[0])
+
+		}
+	}
+
+	log.InfoD("Test the ha-update sources option with a uuid of other nodes on which node is not present")
+	wrongUuidcmd := fmt.Sprintf("v ha-update %s --repl %d --sources %s", v.Name, strconv.Itoa(len(replicaSetNodes)+1), nodesuuidWithoutReplica[rand.Intn(len(nodesuuidWithoutReplica))])
+	_, err = Inst().N.RunCommand(node.GetStorageDriverNodes()[0], wrongUuidcmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		isExpectedError := strings.Contains(err.Error(), "does not belong to volume's replication set")
+		dash.VerifyFatal(isExpectedError, true, fmt.Sprintf("Expected error: %v", err))
+
+	}
+
+	log.InfoD("Test the ha-update sources option with a ip of nodes ")
+	wrongIPcmd := fmt.Sprintf("v ha-update %s --repl %d --sources %s", v.Name, strconv.Itoa(len(replicaSetNodes)+1), nodesIP[rand.Intn(len(nodesIP))])
+	_, err = Inst().N.RunCommand(node.GetStorageDriverNodes()[0], wrongIPcmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		isExpectedError := strings.Contains(err.Error(), "could not find any node with id")
+		dash.VerifyFatal(isExpectedError, true, fmt.Sprintf("Expected error: %v", err))
+
+	}
+	log.InfoD("Test the ha-update sources option with an invalid uuid of the node on which the repl of the volume is present")
+	randomUUID := uuid.New()
+	invalidUuidcmd := fmt.Sprintf("v ha-update %s --repl %d --sources %s", v.Name, randomUUID)
+	_, err = Inst().N.RunCommand(node.GetStorageDriverNodes()[0], invalidUuidcmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		isExpectedError := strings.Contains(err.Error(), "Failed to update volume: could not find any pool with id")
+		dash.VerifyFatal(isExpectedError, true, fmt.Sprintf("Expected error: %v", err))
+
+	}
+
+	log.InfoD("Test the ha-update sources option with a valid uuid of the node on which the repl of the volume is present")
+	validUuidcmd := fmt.Sprintf("v ha-update %s --repl %d --sources %s", v.Name, strconv.Itoa(len(replicaSetNodes)+1), SelectedNode)
+	_, err = Inst().N.RunCommand(node.GetStorageDriverNodes()[0], validUuidcmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	dash.VerifyFatal(err, nil, err.Error())
+	return nil
+
+}
