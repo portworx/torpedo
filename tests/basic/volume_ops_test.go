@@ -3299,10 +3299,10 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			resizeVolumeGreaterThanPoolSizeCmd := fmt.Sprintf("volume update --size %d %s", (multiple+1)*targetSizeGiB, VolName)
 			_, err = runPxctlCommand(resizeVolumeGreaterThanPoolSizeCmd, *selectedNode, nil)
 			if err != nil {
-				if strings.Contains(err.Error(), "Failed to resize volume") {
-					log.InfoD("Volume resize failed as expected with error : [%s]", err.Error())
-				}
+				IsExpectederr := strings.Contains(err.Error(), "Failed to resize volume")
+				dash.VerifyFatal(IsExpectederr, true, err.Error())
 			}
+
 			err = Inst().V.DeleteVolume(VolName)
 			log.FailOnError(err, "Failed to delete volume [%s]", VolName)
 			log.InfoD("Successfully deleted volume [%s]", VolName)
@@ -3312,9 +3312,8 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			volCreatecmd := fmt.Sprintf("volume create --size %d --nodes %s %s", (multiple+1)*targetSizeGiB, selectedNode.Id, VolName)
 			_, volerr := runPxctlCommand(volCreatecmd, *selectedNode, nil)
 			if volerr != nil {
-				if strings.Contains(volerr.Error(), "pools must not over-commit provisioning space") {
-					log.InfoD("Volume creation failed as expected with error : [%s]", volerr.Error())
-				}
+				IsExpectederr := strings.Contains(volerr.Error(), "pools must not over-commit provisioning space")
+				dash.VerifyFatal(IsExpectederr, true, volerr.Error())
 			}
 			DisableClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[]'"
 			_, disable_err := runPxctlCommand(DisableClusterOptionscmd, *selectedNode, nil)
@@ -3396,9 +3395,8 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 					volCreatecmd := fmt.Sprintf("volume create --size %d --nodes %s %s", 3*targetSizeGiB, node.Id, VolName)
 					_, volerr := runPxctlCommand(volCreatecmd, node, nil)
 					if volerr != nil {
-						if strings.Contains(volerr.Error(), "pools must not over-commit provisioning space") {
-							log.InfoD("Volume creation failed as expected with error : [%s]", volerr.Error())
-						}
+						IsExpectederr := strings.Contains(volerr.Error(), "pools must not over-commit provisioning space")
+						dash.VerifyFatal(IsExpectederr, true, volerr.Error())
 
 					}
 					break
