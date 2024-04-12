@@ -21,14 +21,10 @@ func (restore *PDS_API_V1) CreateRestore(createRestoreRequest *automationModels.
 	}
 
 	sourceReference := restoreV1.NewV1SourceReferences(createRestoreRequest.Create.SourceReferences.BackupId)
-	sourceReference.DeploymentId = &createRestoreRequest.Create.SourceReferences.DeploymentId
-	sourceReference.CloudsnapId = &createRestoreRequest.Create.SourceReferences.CloudsnapId
-	sourceReference.BackupLocationId = &createRestoreRequest.Create.SourceReferences.BackupLocationId
 
 	destinationReference := restoreV1.NewV1DestinationReferences()
 	destinationReference.TargetClusterId = &createRestoreRequest.Create.DestinationReferences.TargetClusterId
 	destinationReference.ProjectId = &createRestoreRequest.Create.DestinationReferences.ProjectId
-	destinationReference.DeploymentId = &createRestoreRequest.Create.DestinationReferences.DeploymentId
 
 	restoreRequest := restoreClient.RestoreServiceCreateRestore(ctx, createRestoreRequest.Create.NamespaceId)
 	restoreRequest = restoreRequest.RestoreServiceCreateRestoreBody(
@@ -46,7 +42,8 @@ func (restore *PDS_API_V1) CreateRestore(createRestoreRequest *automationModels.
 		},
 	)
 
-	restoreModel, res, err := restoreRequest.Execute()
+	restoreModel, res, err := restoreClient.RestoreServiceCreateRestoreExecute(restoreRequest)
+
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `RestoreServiceCreateRestore`: %v\n.Full HTTP response: %v", err, res)
 	}

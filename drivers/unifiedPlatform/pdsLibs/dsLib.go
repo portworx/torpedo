@@ -81,6 +81,10 @@ func DeleteDeployment(deployment map[string]string) error {
 	return v2Components.PDS.DeleteDeployment(deploymentId)
 }
 
+func GetDeployment(deploymentId string) (*automationModels.PDSDeploymentResponse, error) {
+	return v2Components.PDS.GetDeployment(deploymentId)
+}
+
 // DeployDataService Deploys the dataservices based on the given params
 func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterId, imageId, appConfigId, resConfigId, stConfigId string) (*automationModels.PDSDeploymentResponse, error) {
 	log.Info("Data service will be deployed as per the config map passed..")
@@ -102,8 +106,9 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 					TlsEnabled: nil,
 					DeploymentTopologies: []automationModels.DeploymentTopology{
 						{
-							Name:     StringPtr("pds-qa-test-topology"),
-							Replicas: intToPointerString(ds.Replicas),
+							Name:        StringPtr("pds-qa-test-topology"),
+							Replicas:    intToPointerString(ds.Replicas),
+							ServiceType: StringPtr(ds.ServiceType),
 							ResourceSettings: &automationModels.PdsTemplates{
 								Id: &resConfigId,
 							},

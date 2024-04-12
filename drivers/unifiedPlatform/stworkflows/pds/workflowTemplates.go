@@ -2,78 +2,61 @@ package pds
 
 import (
 	"fmt"
+	"strconv"
+
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
-	"strconv"
 )
 
-type CustomTemplates struct {
+type WorkflowPDSTemplates struct {
 	Platform                platform.WorkflowPlatform
 	ResourceTemplateId      string
 	StorageTemplateId       string
 	ServiceConfigTemplateId string
 }
 
-func (cusTemp *CustomTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *parameters.NewPDSParams, updateTemplate bool) (string, string, string, error) {
+func (cusTemp *WorkflowPDSTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *parameters.NewPDSParams, dsName string) (string, string, string, error) {
 
 	//Todo: Mechanism to populate dynamic/Unknown key-value pairs for App config
-	//ToDo: Take configurationValue incrementation count from user/testcase
 
 	//Initializing the parameters required for template generation
 	appConfigParams := pdslibs.ServiceConfiguration{
-		HeapSize: templates.ServiceConfiguration.HeapSize,
-		Username: templates.ServiceConfiguration.Username,
-		Password: templates.ServiceConfiguration.Password,
+		MaxConnection: templates.ServiceConfiguration.MaxConnection,
 	}
 	stConfigParams := pdslibs.StorageConfiguration{
-		FSType:     templates.StorageConfiguration.FSType,
-		ReplFactor: templates.StorageConfiguration.ReplFactor,
+		FS:          templates.StorageConfiguration.FS,
+		Repl:        templates.StorageConfiguration.Repl,
+		Provisioner: templates.StorageConfiguration.Provisioner,
+		FG:          templates.StorageConfiguration.FG,
+		Secure:      templates.StorageConfiguration.Secure,
 	}
 	resConfigParams := pdslibs.ResourceConfiguration{
-		CpuLimit:       templates.ResourceConfiguration.CpuLimit,
-		CpuRequest:     templates.ResourceConfiguration.CpuRequest,
-		MemoryLimit:    templates.ResourceConfiguration.MemoryLimit,
-		MemoryRequest:  templates.ResourceConfiguration.MemoryRequest,
-		StorageRequest: templates.StorageConfiguration.StorageRequest,
-		NewStorageSize: templates.StorageConfiguration.NewStorageSize,
+		Cpu_Limit:       templates.ResourceConfiguration.Cpu_Limit,
+		Cpu_Request:     templates.ResourceConfiguration.Cpu_Request,
+		Memory_Limit:    templates.ResourceConfiguration.Memory_Limit,
+		Memory_Request:  templates.ResourceConfiguration.Memory_Request,
+		Storage_Request: templates.ResourceConfiguration.Storage_Request,
 	}
-	if updateTemplate {
-		//create new templates with changed values of CPU Values -
-		newCpuLimits, _ := strconv.Atoi(templates.ResourceConfiguration.CpuLimit)
-		templates.ResourceConfiguration.CpuLimit = fmt.Sprint(string(rune(newCpuLimits + 1)))
-		newCpuReq, _ := strconv.Atoi(templates.ResourceConfiguration.CpuLimit)
-		templates.ResourceConfiguration.CpuRequest = fmt.Sprint(string(rune(newCpuReq + 1)))
-
-		//create new templates with changed values of MEM Values -
-		newMemLimits, _ := strconv.Atoi(templates.ResourceConfiguration.MemoryLimit)
-		templates.ResourceConfiguration.MemoryLimit = fmt.Sprint(string(rune(newMemLimits + 1)))
-		newMemReq, _ := strconv.Atoi(templates.ResourceConfiguration.MemoryLimit)
-		templates.ResourceConfiguration.MemoryRequest = fmt.Sprint(string(rune(newMemReq + 1)))
-
-		//create new templates with new storage Req-
-		newStorageReq, _ := strconv.Atoi(templates.StorageConfiguration.NewStorageSize)
-		templates.StorageConfiguration.StorageRequest = fmt.Sprint(string(rune(newStorageReq+1))) + "G"
-	}
-	appConfig, _ := pdslibs.CreateServiceConfigTemplate(cusTemp.Platform.TenantId, appConfigParams)
+	appConfig, _ := pdslibs.CreateServiceConfigTemplate(cusTemp.Platform.TenantId, dsName, appConfigParams)
 	log.InfoD("appConfig ID-  %v", *appConfig.Create.Meta.Uid)
 	appConfigId := appConfig.Create.Meta.Uid
 	cusTemp.ServiceConfigTemplateId = *appConfigId
 
-	stConfig, _ := pdslibs.CreateStorageConfigTemplate(cusTemp.Platform.TenantId, stConfigParams)
+	stConfig, _ := pdslibs.CreateStorageConfigTemplate(cusTemp.Platform.TenantId, dsName, stConfigParams)
 	log.InfoD("stConfig ID-  %v", *stConfig.Create.Meta.Uid)
 	stConfigId := stConfig.Create.Meta.Uid
 	cusTemp.StorageTemplateId = *stConfigId
 
-	resConfig, _ := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, resConfigParams)
+	resConfig, _ := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, dsName, resConfigParams)
 	log.InfoD("resConfig ID-  %v", *resConfig.Create.Meta.Uid)
 	resourceConfigId := resConfig.Create.Meta.Uid
-	cusTemp.ResourceTemplateId = *stConfigId
+	cusTemp.ResourceTemplateId = *resourceConfigId
 	return *appConfigId, *stConfigId, *resourceConfigId, nil
 }
 
-func (cusTemp *CustomTemplates) DeleteCreatedCustomPdsTemplates(tempList []string) error {
+func (cusTemp *WorkflowPDSTemplates) DeleteCreatedCustomPdsTemplates(tempList []string) error {
 	for _, id := range tempList {
 		err := pdslibs.DeleteTemplate(id)
 		if err != nil {
@@ -81,4 +64,33 @@ func (cusTemp *CustomTemplates) DeleteCreatedCustomPdsTemplates(tempList []strin
 		}
 	}
 	return nil
+}
+
+func (cusTemp *WorkflowPDSTemplates) CreateResourceTemplateWithCustomValue(templates *parameters.NewPDSParams, dsName string, updateValue int) (string, error) {
+	resConfigParams := pdslibs.ResourceConfiguration{
+		Cpu_Limit:       templates.ResourceConfiguration.Cpu_Limit,
+		Cpu_Request:     templates.ResourceConfiguration.Cpu_Request,
+		Memory_Limit:    templates.ResourceConfiguration.Memory_Limit,
+		Memory_Request:  templates.ResourceConfiguration.Memory_Request,
+		Storage_Request: templates.ResourceConfiguration.Storage_Request,
+	}
+	newCpuLimits, _ := strconv.Atoi(templates.ResourceConfiguration.Cpu_Limit)
+	templates.ResourceConfiguration.Cpu_Limit = fmt.Sprint(string(rune(newCpuLimits + updateValue)))
+	newCpuReq, _ := strconv.Atoi(templates.ResourceConfiguration.Cpu_Limit)
+	templates.ResourceConfiguration.Cpu_Request = fmt.Sprint(string(rune(newCpuReq + updateValue)))
+
+	//create new templates with changed values of MEM Values -
+	newMemLimits, _ := strconv.Atoi(templates.ResourceConfiguration.Memory_Limit)
+	templates.ResourceConfiguration.Memory_Limit = fmt.Sprint(string(rune(newMemLimits + updateValue)))
+	newMemReq, _ := strconv.Atoi(templates.ResourceConfiguration.Memory_Limit)
+	templates.ResourceConfiguration.Memory_Request = fmt.Sprint(string(rune(newMemReq + updateValue)))
+
+	//create new templates with new storage Req-
+	newStorageReq, _ := strconv.Atoi(templates.ResourceConfiguration.Storage_Request)
+	templates.ResourceConfiguration.Storage_Request = fmt.Sprint(string(rune(newStorageReq+1))) + "G"
+	resConfig, _ := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, dsName, resConfigParams)
+	log.InfoD("resConfig ID-  %v", *resConfig.Create.Meta.Uid)
+	resourceConfigId := resConfig.Create.Meta.Uid
+	cusTemp.ResourceTemplateId = *resourceConfigId
+	return *resourceConfigId, nil
 }

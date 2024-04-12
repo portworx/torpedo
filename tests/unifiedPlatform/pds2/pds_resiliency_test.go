@@ -1,46 +1,71 @@
 package tests
 
 import (
-	"fmt"
+	"strings"
+
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
+	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 )
 
-var _ = Describe("{MultiplyNumDuringSummation}", func() {
+var _ = Describe("{StopPXDuringStorageResize}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("MultiplyNumDuringSummation", "TestResiliencyDummy", nil, 0)
+		StartTorpedoTest("StopPXDuringStorageResize", "Deploy data services, Run workloads, and Stop PX on the node while Storage resize is happening", nil, 0)
 	})
 	var (
-		workflowResiliency  pds.WorkflowResiliency
+		workflowResiliency  pds.WorkflowPDSResiliency
 		workflowDataservice pds.WorkflowDataService
+		workFlowTemplates   pds.WorkflowPDSTemplates
+		deployment          *automationModels.PDSDeploymentResponse
 	)
-	It("Deploy and DS and Stop Px During Storage/PVC Resize", func() {
+	workflowResiliency.WfDataService = &workflowDataservice
+	It("Deploy and Validate DataService", func() {
 		Step("Create a PDS Namespace", func() {
-			//Mark testcase as Resiliency
-			workflowResiliency.MarkResiliencyTC(true)
-
-			log.InfoD("Deploy dataservice")
+			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
+			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			workFlowTemplates.Platform = WorkflowPlatform
+			WorkflowNamespace.Namespaces = make(map[string]string)
+			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
+			log.FailOnError(err, "Unable to create namespace")
+			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
+			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
 		})
 
-		stepLog := "Running Workloads before taking backups"
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.NamespaceName = Namespace
+
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+			log.FailOnError(err, "Error while deploying ds")
+		}
+
+		stepLog := "Running Workloads before Storage Resize"
 		Step(stepLog, func() {
-			log.InfoD("Run Workloads")
+			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			log.FailOnError(err, "Error while running workloads on ds")
 		})
 
-		Step("Induce errors while some PDS operation is going on", func() {
-			err := workflowResiliency.InduceFailureAndExecuteResiliencyScenario(workflowDataservice.NamespaceName, MultiplyNumDuringSummation)
-			log.FailOnError(err, fmt.Sprintf("Error happened"))
+		//Update Ds With New Values of Resource Templates
+		resourceConfigUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Meta.Name, 1)
+		log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
-		})
-
-		Step("Running Workloads", func() {
-			log.InfoD("Run Workloads")
-		})
-		Step("Clean up workload deployments", func() {
-			log.InfoD("Cleanup Deployed dataservice")
-		})
+		log.InfoD("Updated Storage Template ID- [updated- %v]", resourceConfigUpdated)
+		workflowDataservice.PDSTemplates.ResourceTemplateId = resourceConfigUpdated
+		// Run bot Storage Resize and Stop PX concurrently
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			err := workflowResiliency.InduceFailureAndExecuteResiliencyScenario(ds, "StopPXDuringStorageResize")
+			log.FailOnError(err, "Error while updating ds")
+		}
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()

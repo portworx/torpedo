@@ -10,12 +10,12 @@ type PlatformTemplatesRequest struct {
 }
 
 type PlatformTemplatesResponse struct {
-	Create        V1Template             `copier:"must,nopanic"`
-	List          V1ListTemplateResopnse `copier:"must,nopanic"`
-	ListForTenant V1ListTemplateResopnse `copier:"must,nopanic"`
-	Update        V1Template             `copier:"must,nopanic"`
-	Get           V1Template             `copier:"must,nopanic"`
-	Delete        V1Template             `copier:"must,nopanic"`
+	Create        V1Template              `copier:"must,nopanic"`
+	List          V1ListTemplateResopnse  `copier:"must,nopanic"`
+	ListForTenant V1ListTemplateResopnse  `copier:"must,nopanic"`
+	Update        V1Template              `copier:"must,nopanic"`
+	Get           V1Template              `copier:"must,nopanic"`
+	Delete        DeletePlatformTemplates `copier:"must,nopanic"`
 }
 
 type CreatePlatformTemplates struct {

@@ -3,6 +3,7 @@ package utilities
 import (
 	"context"
 	"fmt"
+	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -14,6 +15,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	"math/rand"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -50,6 +52,11 @@ type AwsStorageClient struct {
 	Region    string
 }
 
+type AzureStorageClient struct {
+	AccountName string
+	AccountKey  string
+}
+
 const (
 	svcAnnotationKey                = "startDataSupported"
 	userAnnotationKey               = "username"
@@ -72,6 +79,27 @@ func RandomString(length int) string {
 	}
 	randomString := string(randomBytes)
 	return randomString
+}
+
+func (azureObj *AzureStorageClient) CreateAzureBucket(bucketName string) error {
+	log.Debugf("Creating azure bucket with name [%s]", bucketName)
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", azureObj.AccountName, bucketName)
+	log.Infof("Create container url %s", urlStr)
+	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
+	u, _ := url.Parse(urlStr)
+	credential, err := azblob.NewSharedKeyCredential(azureObj.AccountName, azureObj.AccountKey)
+	if err != nil {
+		return fmt.Errorf("Failed to create shared key credential [%v]", err)
+	}
+
+	containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
+	ctx := context.Background()
+
+	_, err = containerURL.Create(ctx, azblob.Metadata{}, azblob.PublicAccessNone)
+	if err != nil {
+		return fmt.Errorf("Failed to create container. Error: [%v]", err)
+	}
+	return nil
 }
 
 func (awsObj *AwsStorageClient) CreateS3Bucket(bucketName string) error {
@@ -446,4 +474,53 @@ func DeleteElementFromSlice(slice []string, element string) ([]string, error) {
 
 	// Delete the element by slicing the original slice
 	return append(slice[:index], slice[index+1:]...), nil
+}
+
+// GetDNSEndPoint takes interface as input and checks for the particular type and extracts the host and port information
+// Returns the host and port as dnsEndpoints
+func GetDNSEndPoint(clusterDetails interface{}) (string, error) {
+	var (
+		host        string
+		port        string
+		dnsEndPoint string
+		err         error
+	)
+	if detailsMap, ok := clusterDetails.(map[string]interface{}); ok {
+		log.Info("ClusterDetails")
+		for key, value := range detailsMap {
+			switch key {
+			case "host":
+				host, err = ConvertInterfacetoString(value)
+				if err != nil {
+					return "", err
+				}
+				log.Infof("%s: %v\n", key, value)
+			case "port":
+				port, err = ConvertInterfacetoString(value)
+				if err != nil {
+					return "", err
+				}
+				log.Infof("%s: %v\n", key, value)
+			}
+		}
+		dnsEndPoint = host + ":" + port
+		log.Infof("DataService endpoint is: [%s]", dnsEndPoint)
+	} else {
+		return "", fmt.Errorf("ClusterDetails is of not expected type")
+	}
+
+	return dnsEndPoint, nil
+}
+
+func ConvertInterfacetoString(value interface{}) (string, error) {
+	switch v := value.(type) {
+	case string:
+		return v, nil
+	case int:
+		return strconv.Itoa(v), nil
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64), nil
+	default:
+		return "", fmt.Errorf("unsupported type: %T", value)
+	}
 }
