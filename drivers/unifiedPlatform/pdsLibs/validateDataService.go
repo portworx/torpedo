@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"net"
 	"strings"
 	"time"
 )
@@ -336,6 +337,19 @@ func ReadChecksum(podName, namespace, mode string) (string, error) {
 func DeleteWorkloadDeployments(wlDep *v1.Deployment) error {
 	err = k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
 	return err
+}
+
+func ValidateDNSEndPoint(dnsEndPoint string) error {
+	//log.Debugf("sleeping for 5 min, before validating dns endpoint")
+	//time.Sleep(5 * time.Minute)
+	_, err = net.Dial("tcp", dnsEndPoint)
+	if err != nil {
+		return fmt.Errorf("Failed to connect to the dns endpoint with err: %v", err)
+	} else {
+		log.Infof("DNS endpoint is reachable and ready to accept connections")
+	}
+
+	return nil
 }
 
 // GetDataServiceImageId returns the pds dsImageId for the given ds version and image build

@@ -85,6 +85,29 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	})
 })
 
+var _ = Describe("{ValidateDnsEndPoint}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateDnsEndPoint", "validate dns endpoint", nil, 0)
+	})
+
+	var (
+		workflowDataservice pds.WorkflowDataService
+		err                 error
+	)
+
+	It("ValidateDnsEndPoint", func() {
+		Step("validate dns endpoint", func() {
+			depId := "dep:0426d58a-66b8-4d3a-9ee4-db1367ab6813"
+			err = workflowDataservice.ValidateDNSEndpoint(depId)
+			log.FailOnError(err, "Error occurred while validating dns endpoint")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 var _ = Describe("{UpgradeDataServiceImageAndVersion}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("UpgradeDataServiceImage", "Upgrade Data Service Version and Image", nil, 0)

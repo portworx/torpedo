@@ -200,6 +200,28 @@ func GetDeploymentNameAndId(deployment map[string]string) (string, string) {
 
 }
 
+func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId string) error {
+	deployment, err := dslibs.GetDeployment(deploymentId)
+	if err != nil {
+		return err
+	}
+	log.Infof("Deployment Response [+%v]", *deployment)
+	log.Infof("ConnectionInfo Response [+%v]", deployment.Get.Status.ConnectionInfo["clusterDetails"])
+
+	clusterDetails := deployment.Get.Status.ConnectionInfo["clusterDetails"]
+	dnsEndPoint, err := k8utils.GetDNSEndPoint(clusterDetails)
+	if err != nil {
+		return err
+	}
+
+	err = dslibs.ValidateDNSEndPoint(dnsEndPoint)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func ValidateDeploymentResources(resourceTemp dslibs.ResourceSettingTemplate, storageOp dslibs.StorageOptions, config dslibs.StorageClassConfig, replicas int, dataServiceVersionBuildMap map[string][]string) {
 	log.InfoD("filesystem used %v ", config.Parameters.Fs)
 	log.InfoD("storage replicas used %v ", config.Parameters.Fg)
