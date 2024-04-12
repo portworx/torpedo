@@ -66,7 +66,7 @@ func (backup *PDS_API_V1) ListBackup(listBackupRequest *automationModels.PDSBack
 // GetBackup will fetch backup for a given deployment
 func (backup *PDS_API_V1) GetBackup(getBackupRequest *automationModels.PDSBackupRequest) (*automationModels.PDSBackupResponse, error) {
 
-	response := automationModels.PDSBackupResponse{
+	getBackupResponse := automationModels.PDSBackupResponse{
 		Get: automationModels.V1Backup{},
 	}
 
@@ -80,10 +80,10 @@ func (backup *PDS_API_V1) GetBackup(getBackupRequest *automationModels.PDSBackup
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `BackupServiceDeleteBackup`: %v\n.Full HTTP response: %v", err, res)
 	}
-	err = utilities.CopyStruct(backupModel, &response)
+	err = utilities.CopyStruct(backupModel, &getBackupResponse.Get)
 	if err != nil {
 		return nil, err
 	}
 
-	return &response, err
+	return &getBackupResponse, err
 }

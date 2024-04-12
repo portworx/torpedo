@@ -62,6 +62,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 
 				deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while deploying ds")
+				log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
 			}
 
 			//stepLog := "Running Workloads on deployment"
@@ -79,14 +80,18 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 			bkpConfigResponse, err := workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
 			log.FailOnError(err, "Error occured while creating backupConfig")
 			log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", bkpConfigResponse.Create.Meta.Name, bkpConfigResponse.Create.Meta.Uid)
+			log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
 		})
 
 		Step("Get the latest backup detail for the deployment", func() {
 			workflowBackup.WorkflowDataService = workflowDataservice
+			log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
 			backupResponse, err := workflowBackup.GetLatestBackup(deploymentName)
 			log.FailOnError(err, "Error occured while creating backup")
 			latestBackupUid = *backupResponse.Meta.Uid
 			log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
+			err = workflowBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
+			log.FailOnError(err, "Error occured while waiting for backup to complete")
 		})
 
 		Step("Create a new namespace for restore", func() {
@@ -95,8 +100,23 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 			log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
 		})
 
+		Step("Associate restore namespace to Project", func() {
+			err := WorkflowProject.Associate(
+				[]string{},
+				[]string{WorkflowNamespace.Namespaces[restoreNamespace]},
+				[]string{},
+				[]string{},
+				[]string{},
+				[]string{},
+			)
+			log.FailOnError(err, "Unable to associate Cluster to Project")
+			log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+		})
+
 		Step("Create Restore from the latest backup Id", func() {
 			restoreName := "testing_restore_" + RandomString(5)
+			workflowRestore.Destination = WorkflowNamespace
+			workflowRestore.WorkflowProject = WorkflowProject
 			_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
 			log.FailOnError(err, "Restore Failed")
 

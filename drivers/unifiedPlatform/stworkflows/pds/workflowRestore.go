@@ -20,6 +20,13 @@ const (
 
 func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, namespace string) (*automationModels.PDSRestoreResponse, error) {
 
+	log.Infof("Name of restore - [%s]", name)
+	log.Infof("Backup UUID - [%s]", backupUid)
+	log.Infof("Destination Cluster Id - [%s]", restore.Destination.TargetCluster.ClusterUID)
+	log.Infof("Destination Namespace Id - [%s]", restore.Destination.Namespaces[namespace])
+	log.Infof("Source project Id - [%s]", restore.WorkflowProject.ProjectId)
+	log.Infof("Destination project Id - [%s]", restore.Destination.TargetCluster.Project.ProjectId)
+
 	createRestore, err := pdslibs.CreateRestore(
 		name,
 		backupUid, restore.Destination.TargetCluster.DestinationClusterId,
@@ -43,6 +50,9 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 		}
 	}
 
+	if restore.Restores == nil {
+		restore.Restores = make(map[string]automationModels.PDSRestore)
+	}
 	restore.Restores[name] = createRestore.Create
 	log.Infof("Updated the restores")
 

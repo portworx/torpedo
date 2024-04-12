@@ -75,9 +75,11 @@ func DeleteBackupConfig(id string) error {
 // GetBackupConfig fetches backup config for the deployment
 func GetBackupConfig(id string) (*automationModels.PDSBackupConfigResponse, error) {
 
-	getBackupConfigRequest := automationModels.PDSBackupConfigRequest{}
-
-	getBackupConfigRequest.Get.Id = id
+	getBackupConfigRequest := automationModels.PDSBackupConfigRequest{
+		Get: automationModels.GetPDSBackupConfig{
+			Id: id,
+		},
+	}
 
 	backupResponse, err := v2Components.PDS.GetBackupConfig(&getBackupConfigRequest)
 	if err != nil {
