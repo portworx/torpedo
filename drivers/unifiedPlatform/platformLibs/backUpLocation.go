@@ -41,10 +41,12 @@ func CreateBackupLocation(tenantId, cloudCredId, bucketName, bkpLocation string)
 
 	case "azure":
 		createReq.Create.Config.Provider.CloudProvider = PROVIDER_AZURE
+		createReq.Create.Config.CloudCredentialsId = cloudCredId
 		createReq.Create.Config.BkpLocation.AzureStorage.ContainerName = bucketName
 
 	case "gcp":
 		createReq.Create.Config.Provider.CloudProvider = PROVIDER_GOOGLE
+		createReq.Create.Config.CloudCredentialsId = cloudCredId
 		createReq.Create.Config.BkpLocation.GoogleStorage.BucketName = bucketName
 
 	default:

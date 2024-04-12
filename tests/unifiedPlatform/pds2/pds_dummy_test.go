@@ -2,11 +2,19 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	tests "github.com/portworx/torpedo/tests/unifiedPlatform"
 )
+
+var _ = Describe("{CleanUpDeployments}", func() {
+	It("Delete all deployments", func() {
+		err := pdslibs.DeleteAllDeployments(tests.ProjectId)
+		log.FailOnError(err, "error while deleting deployment")
+	})
+})
 
 var _ = Describe("{DummyBackupTest}", func() {
 

@@ -106,8 +106,9 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 					TlsEnabled: nil,
 					DeploymentTopologies: []automationModels.DeploymentTopology{
 						{
-							Name:     StringPtr("pds-qa-test-topology"),
-							Replicas: intToPointerString(ds.Replicas),
+							Name:        StringPtr("pds-qa-test-topology"),
+							Replicas:    intToPointerString(ds.Replicas),
+							ServiceType: StringPtr(ds.ServiceType),
 							ResourceSettings: &automationModels.PdsTemplates{
 								Id: &resConfigId,
 							},

@@ -82,6 +82,7 @@ func RandomString(length int) string {
 }
 
 func (azureObj *AzureStorageClient) CreateAzureBucket(bucketName string) error {
+	log.Debugf("Creating azure bucket with name [%s]", bucketName)
 	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", azureObj.AccountName, bucketName)
 	log.Infof("Create container url %s", urlStr)
 	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
