@@ -2363,3 +2363,293 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 
 	})
 })
+
+var _ = Describe("{VolAttachFAPxRestart}", func() {
+	/*
+				https://purestorage.atlassian.net/browse/PTX-21440
+			    1. Create a host in the FA whose secret is not present in pure secret
+		        2. Create a volume and attach it to the host created in step 1
+		        3. using iscsiadm commands run commands to login to the controllers
+		        4. check multipath -ll output
+		        5. Restart portworx
+		        6. The multipath entry for the volume attached from a different FA shouldn't vanish
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolAttachFAPxRestart", "Attach a vol from a FA, restart portworx and check multipath consistency", nil, 0)
+	})
+
+	var (
+		hostName               = "torpedo-host"
+		volumeName             = "torpedo-vol"
+		faMgmtEndPoint         string
+		faAPIToken             string
+		FAclient               *flasharray.Client
+		MultipathBeforeRestart string
+	)
+
+	itLog := "Attach a volume from a different FA, restart portworx and check multipath consistency"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		// select a random node to run the test
+		n := node.GetStorageDriverNodes()[0]
+
+		stepLog := "get the secrete of FA which is not present in pure secret"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//get the flash array details
+			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+
+			NonPxPureSecret, err := pureutils.GetNonPxPureSecret(volDriverNamespace)
+			log.FailOnError(err, "Failed to get secret %v", NonPxPureSecret)
+			flashArrays := NonPxPureSecret.Arrays
+
+			if len(flashArrays) == 0 {
+				log.InfoD("Please create a flasharray secret named: [%v] in file: [%v] which is not present in px-pure-secret", "px-non-pure-secret", "non-pure.json")
+				log.FailOnError(fmt.Errorf("no FlashArrays details found"), fmt.Sprintf("error getting FlashArrays creds from %s [%s]", "px-non-pure-secret", NonPxPureSecret))
+			}
+
+			pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+			log.FailOnError(err, "Failed to get secret %v", pxPureSecret)
+			flashArraysInSecret := pxPureSecret.Arrays
+
+			if len(flashArrays) == 0 {
+				log.FailOnError(fmt.Errorf("no FlashArrays details found"), fmt.Sprintf("error getting FlashArrays creds from %s [%s]", PureSecretName, pxPureSecret))
+			}
+			secretFlashArrayMap := make(map[string]string)
+
+			for _, fa := range flashArraysInSecret {
+				secretFlashArrayMap[fa.MgmtEndPoint] = fa.APIToken
+			}
+			// pick a flasharray secret which is not present in the pure secret
+
+			for _, fa := range flashArrays {
+				if _, ok := secretFlashArrayMap[fa.MgmtEndPoint]; !ok {
+					faMgmtEndPoint = fa.MgmtEndPoint
+					faAPIToken = fa.APIToken
+					break
+				}
+			}
+		})
+
+		stepLog = "Create a volume, create a host, attach the volume to the host, update iqn of the host and attach the volume to the host"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			iqn, err := GetIQNOfNode(n)
+			log.FailOnError(err, "Failed to get iqn of the node %v", n.Name)
+			log.InfoD("Iqn of the node: %v", iqn)
+
+			//create a connections to the FA
+			FAclient, err = pureutils.PureCreateClientAndConnect(faMgmtEndPoint, faAPIToken)
+			log.FailOnError(err, "Failed to create client and connect to FA")
+
+			//create a volume on the FA
+			volume, err := pureutils.CreateVolumeOnFABackend(FAclient, volumeName, 1048576)
+			log.FailOnError(err, "Failed to create volume on FA")
+			log.InfoD("Volume created on FA: %v", volume.Name)
+
+			//create a host in the FA
+			host, err := pureutils.CreateNewHostOnFA(FAclient, hostName)
+			log.FailOnError(err, "Failed to create host on FA")
+			log.InfoD("Host created on FA: %v", host.Name)
+
+			//Update iqn of the specific host
+			_, err = pureutils.UpdateIQNOnSpecificHosts(FAclient, hostName, iqn)
+			log.FailOnError(err, "Failed to update iqn on host %v", hostName)
+			log.InfoD("Updated iqn on host %v", hostName)
+
+			//Attach the volume to the host
+			connectedVolume, err := pureutils.ConnectVolumeToHost(FAclient, hostName, volumeName)
+			log.FailOnError(err, "Failed to connect volume to host")
+			log.InfoD("Volume connected to host: %v", connectedVolume.Name)
+
+		})
+		stepLog = "Run iscsiadm commands to login to the controllers"
+		Step(stepLog, func() {
+
+			//Run iscsiadm commands to login to the controllers
+			networkInterfaces, err := pureutils.ListAllNetworkInterfacesOnFA(FAclient)
+			log.FailOnError(err, "Failed to list all network interfaces on FA")
+
+			//run multipath before login
+			cmd := "multipath -ll"
+			output, err := runCmd(cmd, n)
+			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
+			log.InfoD("Output of multipath -ll command: %v", output)
+
+			err = LoginIntoAllControllers(n, networkInterfaces)
+			log.FailOnError(err, "Failed to login into all controllers")
+
+			// run multipath after login
+			cmd = "multipath -ll"
+			MultipathBeforeRestart, err = runCmd(cmd, n)
+			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
+			log.InfoD("Output of multipath -ll command: %v", output)
+
+		})
+
+		stepLog = "Restart portworx and check multipath consistency"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().V.RestartDriver(n, nil)
+			log.FailOnError(err, fmt.Sprintf("error restarting px on node [%s]", n.Name))
+			err = Inst().V.WaitDriverUpOnNode(n, addDriveUpTimeOut)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node [%s]", n.Name))
+			dash.VerifyFatal(err == nil, true,
+				fmt.Sprintf("PX is up after restarting on node [%s]", n.Name))
+
+			//run multipath after restart
+			cmd := "multipath -ll"
+			multipathAfterRestart, err := runCmd(cmd, n)
+			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
+
+			//check if the multipath entries are same before and after restart
+			dash.VerifyFatal(MultipathBeforeRestart == multipathAfterRestart, true, "Multipath entries are same before and after restart")
+
+		})
+
+		stepLog = "Delete the volume and host from the FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//log out of all the controllers
+			//Run iscsiadm commands to login to the controllers
+			networkInterfaces, err := pureutils.ListAllNetworkInterfacesOnFA(FAclient)
+			log.FailOnError(err, "Failed to list all network interfaces on FA")
+
+			err = logOutOfAllControllers(n, networkInterfaces)
+			log.FailOnError(err, "Failed to logout from all controllers")
+			log.InfoD("successfully logged out of all the controllers")
+
+			//disconnect volume from host
+			_, err = pureutils.DisConnectVolumeFromHost(FAclient, hostName, volumeName)
+			log.FailOnError(err, "Failed to disconnect volume from host")
+			log.InfoD("Volume disconnected from host: %v", volumeName)
+
+			//Delete the volume
+			_, err = pureutils.DeleteVolumeOnFABackend(FAclient, volumeName)
+			log.FailOnError(err, "Failed to delete volume on FA")
+			log.InfoD("Volume deleted on FA: %v", volumeName)
+
+			//Delete the host from FAbackend
+			_, err = pureutils.DeleteHostOnFA(FAclient, hostName)
+			log.FailOnError(err, "Failed to delete host on FA")
+			log.InfoD("Host deleted on FA: %v", hostName)
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+func LoginIntoAllControllers(n node.Node, networkInterfaces []flasharray.NetworkInterface) error {
+	var ip string
+	breakOuterLoop := false
+	for _, networkInterface := range networkInterfaces {
+		for _, service := range networkInterface.Services {
+			if service == "iscsi" {
+				ip = networkInterface.Address
+				log.InfoD("IP address of the iscsi service: %v", ip)
+				breakOuterLoop = true
+				break
+			}
+		}
+		if breakOuterLoop {
+			break
+		}
+	}
+	cmd := fmt.Sprintf("iscsiadm -m discovery -t st -p %s", ip)
+	output, err := runCmd(cmd, n)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Output of iscsiadm discovery command: %v", output)
+
+	// Split the input text by newline character to get each line
+	controllers := strings.Split(output, "\n")
+
+	// Loop through each line
+	for _, controller := range controllers {
+		// Split the line by space
+		parts := strings.Split(controller, " ")
+		if len(parts) == 2 {
+			// Extract the IP address and IQN
+			ipAddress := strings.Split(parts[0], ":")[0]
+			iqn := parts[1]
+			fmt.Printf("IP Address: %s, IQN: %s\n", ipAddress, iqn)
+			// run the iscsi login command
+			cmd := fmt.Sprintf("iscsiadm -m node -P %s -p %s -l", iqn, ipAddress)
+			iscsiAdmOutput, err := runCmd(cmd, n)
+			if err != nil {
+				return err
+			}
+			log.InfoD("Output of iscsiadm login command: %v", iscsiAdmOutput)
+		}
+	}
+	return nil
+}
+
+func logOutOfAllControllers(n node.Node, networkInterfaces []flasharray.NetworkInterface) error {
+	var ip string
+	breakOuterLoop := false
+
+	for _, networkInterface := range networkInterfaces {
+		for _, service := range networkInterface.Services {
+			if service == "iscsi" {
+				ip = networkInterface.Address
+				log.InfoD("IP address of the iscsi service: %v", ip)
+				breakOuterLoop = true
+				break
+			}
+		}
+		if breakOuterLoop {
+			break
+		}
+	}
+	cmd := fmt.Sprintf("iscsiadm -m discovery -t st -p %s", ip)
+	output, err := runCmd(cmd, n)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Output of iscsiadm discovery command: %v", output)
+
+	// Split the input text by newline character to get each line
+	controllers := strings.Split(output, "\n")
+
+	// Loop through each line
+	for _, controller := range controllers {
+		// Split the line by space
+		parts := strings.Split(controller, " ")
+		if len(parts) == 2 {
+			// Extract the IP address and IQN
+			ipAddress := strings.Split(parts[0], ":")[0]
+			iqn := parts[1]
+			fmt.Printf("IP Address: %s, IQN: %s\n", ipAddress, iqn)
+			// run the iscsi login command
+			cmd := fmt.Sprintf("iscsiadm -m node -P %s -p %s --logout", iqn, ipAddress)
+			iscsiAdmOutput, err := runCmd(cmd, n)
+			if err != nil {
+				return err
+			}
+			log.InfoD("Output of iscsiadm logout command: %v", iscsiAdmOutput)
+		}
+	}
+	return nil
+}
+
+func GetIQNOfNode(n node.Node) (string, error) {
+	cmd := "cat /etc/iscsi/initiatorname.iscsi"
+	output, err := runCmd(cmd, n)
+	if err != nil {
+		return "", err
+	}
+
+	for _, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, "InitiatorName") {
+			return strings.Split(line, "=")[1], nil
+		}
+	}
+	return "", fmt.Errorf("iqn not found")
+}
