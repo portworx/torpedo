@@ -4,17 +4,21 @@ import (
 	"fmt"
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
 )
+
+var k8sCore = core.Instance()
 
 var _ = Describe("{DecommissionNode}", func() {
 
@@ -363,6 +367,90 @@ var _ = Describe("{KvdbDecommissionNode}", func() {
 			}
 		})
 
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+// Add a test to detach all the disks from a node and then reattach them to a different node
+var _ = Describe("{NodeDiskDetachAttach}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("NodeDiskDetachAttach", "Validate disk detach and attach", nil, 0)
+	})
+	var contexts []*scheduler.Context
+
+	testName := "nodediskdetachattach"
+	stepLog := "has to detach all disks from a node and reattach them to a different node"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
+		}
+
+		randomNum := rand.New(rand.NewSource(time.Now().Unix()))
+
+		ValidateApplications(contexts)
+		// Fetch the node where PX is not started
+		nonPXNodes := node.GetPXDisabledNodes()
+		randNonPxNode := nonPXNodes[randomNum.Intn(len(nonPXNodes))]
+
+		// Fetch a random node from the StorageNodes
+		storageNodes := node.GetStorageNodes()
+		randomStorageNode := storageNodes[randomNum.Intn(len(storageNodes))]
+
+		// Fetch random storage node and detach the disks attached to that node
+		var disksDetached []string
+		var oldNodeIDtoMatch string
+		var newNodeIDtoMatch string
+		Step(fmt.Sprintf("detach disks attached from a random storage node %s", randomStorageNode.Name), func() {
+			// ToDo - Ensure the above selected node has volumes/apps running on it
+			// Store the Node ID of randomStorageNode for future use
+			oldNodeIDtoMatch = randomStorageNode.Id
+
+			disksDetached, err = Inst().N.DetachAllDisks(randomStorageNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to detach disks for the node %s", randomStorageNode.Name))
+			dash.VerifyFatal(len(disksDetached) > 0, true, fmt.Sprintf("Found drives length %d", len(disksDetached)))
+		})
+
+		Step(fmt.Sprintf("attach disks to the node %s where PX is not started and start PX", randNonPxNode.Name), func() {
+			err = Inst().N.AttachDisks(randNonPxNode, disksDetached)
+			log.FailOnError(err, fmt.Sprintf("Failed to attach disks to the node %s", randNonPxNode.Name))
+
+			// Start PX on the node
+			err = k8sCore.AddLabelOnNode(randNonPxNode.Name, schedops.PXEnabledLabelKey, "true")
+			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=true on node %s", schedops.PXEnabledLabelKey, randNonPxNode.Name))
+			err = k8sCore.AddLabelOnNode(randNonPxNode.Name, schedops.PXServiceLabelKey, "start")
+			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=start on node %s", schedops.PXServiceLabelKey, randNonPxNode.Name))
+			// Verify the node ID is same as earlier stored Node ID
+			newNodeIDtoMatch = randNonPxNode.Id
+
+			if oldNodeIDtoMatch != newNodeIDtoMatch {
+				log.FailOnError(fmt.Errorf("node ID mismatch"), fmt.Sprintf("Node ID mismatch for node %s", randNonPxNode.Name))
+				dash.VerifyFatal(false, true, fmt.Sprintf("Node ID mismatch for node %s after moving the disks", randNonPxNode.Name))
+			}
+		})
+
+		Step(fmt.Sprintf("decommission and rejoin the node %s", randomStorageNode.Name), func() {
+			err = Inst().V.DecommissionNode(&randomStorageNode)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate node [%s] decommission init", randomStorageNode.Name))
+			err = Inst().V.RejoinNode(&randomStorageNode)
+			dash.VerifyFatal(err, nil, "Validate node rejoin init")
+		})
+
+		// ToDo - Verify the integrity of apps, cluster and volumes
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()

@@ -480,3 +480,76 @@ func init() {
 func (v *vsphere) GetSupportedDriveTypes() ([]string, error) {
 	return []string{"thin", "zeroedthick", "eagerzeroedthick", "lazyzeroedthick"}, nil
 }
+
+// MoveDisks detaches all disks from the source VM and attaches it to the target
+func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
+	// Reestablish connection to avoid session timeout.
+	err := v.connect()
+	if err != nil {
+		return err
+	}
+
+	sourceVM, ok := vmMap[sourceNode.Name]
+	if !ok {
+		return fmt.Errorf("could not fetch VM for node: %s", sourceNode.Name)
+	}
+
+	targetVM, ok := vmMap[targetNode.Name]
+	if !ok {
+		return fmt.Errorf("could not fetch VM for node: %s", targetNode.Name)
+	}
+
+	devices, err := sourceVM.Device(v.ctx)
+	if err != nil {
+		return err
+	}
+
+	var disks []*types.VirtualDisk
+	for _, device := range devices {
+		if disk, ok := device.(*types.VirtualDisk); ok {
+			disks = append(disks, disk)
+
+			config := &types.VirtualMachineConfigSpec{
+				DeviceChange: []types.BaseVirtualDeviceConfigSpec{
+					&types.VirtualDeviceConfigSpec{
+						Operation: types.VirtualDeviceConfigSpecOperationRemove,
+						Device:    disk,
+					},
+				},
+			}
+
+			event, err := sourceVM.Reconfigure(v.ctx, *config)
+			if err != nil {
+				return err
+			}
+
+			err = event.Wait(v.ctx)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, disk := range disks {
+		config := &types.VirtualMachineConfigSpec{
+			DeviceChange: []types.BaseVirtualDeviceConfigSpec{
+				&types.VirtualDeviceConfigSpec{
+					Operation: types.VirtualDeviceConfigSpecOperationAdd,
+					Device:    disk,
+				},
+			},
+		}
+
+		event, err := targetVM.Reconfigure(v.ctx, *config)
+		if err != nil {
+			return err
+		}
+
+		err = event.Wait(v.ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

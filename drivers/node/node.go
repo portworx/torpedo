@@ -201,6 +201,12 @@ type Driver interface {
 	// DestroyVM powers VM
 	DestroyVM(node Node) error
 
+	// DetachAllDisks all disks from VM and returns the disk IDs
+	DetachAllDisks(node Node) ([]string, error)
+
+	// AttachDisks all disks to VM with the provided disk IDs
+	AttachDisks(node Node, diskIDs []string) error
+
 	// SystemctlUnitExist checks if a given service exists in a node
 	SystemctlUnitExist(n Node, service string, options SystemctlOpts) (bool, error)
 
