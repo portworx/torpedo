@@ -30,7 +30,7 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"fio-vm-multi-disk"}
+		Inst().AppList = []string{"kubevirt-fio-pvc-clone"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
