@@ -156,6 +156,33 @@ func ConnectVolumeToHost(faClient *flasharray.Client, hostName string, volName s
 	return connectedVol, nil
 }
 
+// DisConnectVolumeFromHost Disconnects Volume from Host
+func DisConnectVolumeFromHost(faClient *flasharray.Client, hostName string, volName string) (*flasharray.ConnectedVolume, error) {
+	connectedVol, err := faClient.Hosts.DisconnectHost(hostName, volName)
+	if err != nil {
+		return nil, err
+	}
+	return connectedVol, nil
+}
+
+// DeleteVolumeOnFABackend Deletes Volume on FA Backend
+func DeleteVolumeOnFABackend(faClient *flasharray.Client, volName string) (*flasharray.Volume, error) {
+	volume, err := faClient.Volumes.DeleteVolume(volName)
+	if err != nil {
+		return nil, err
+	}
+	return volume, nil
+}
+
+// DeleteHostOnFA Deletes Host on FA
+func DeleteHostOnFA(faClient *flasharray.Client, hostName string) (*flasharray.Host, error) {
+	host, err := faClient.Hosts.DeleteHost(hostName)
+	if err != nil {
+		return nil, err
+	}
+	return host, nil
+}
+
 // UpdateIQNOnSpecificHosts Updates IQN on specific hosts
 func UpdateIQNOnSpecificHosts(faClient *flasharray.Client, hostName string, iqnValue string) (*flasharray.Host, error) {
 	data1 := make(map[string][]string)
