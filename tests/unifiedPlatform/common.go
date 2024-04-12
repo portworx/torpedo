@@ -13,7 +13,7 @@ import (
 const (
 	EnvControlPlaneUrl     = "CONTROL_PLANE_URL"
 	DefaultTestAccount     = "pds-qa"
-	DefaultProject         = "PDS Project - Madan"
+	DefaultProject         = "PDS-Project"
 	DefaultTenant          = "px-system-tenant"
 	EnvPlatformAccountName = "PLATFORM_ACCOUNT_NAME"
 	EnvAccountDisplayName  = "PLATFORM_ACCOUNT_DISPLAY_NAME"
