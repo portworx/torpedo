@@ -194,7 +194,7 @@ type NewPDSParams struct {
 		Storage_Request string `json:"Storage_Request"`
 	} `json:"ResourceConfiguration"`
 	ServiceConfiguration struct {
-		MaxConnection string `json:"MaxConnection"`
+		MAX_CONNECTIONS string `json:"MAX_CONNECTIONS"`
 	} `json:"ServiceConfiguration"`
 	RbacParams struct {
 		RunWithRbac bool   //true
