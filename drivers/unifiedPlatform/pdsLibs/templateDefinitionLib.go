@@ -11,10 +11,10 @@ import (
 
 type StorageConfiguration struct {
 	FS          string
-	Repl        int32
+	Repl        string
 	Provisioner string
-	FG          bool
-	Secure      bool
+	FG          string
+	Secure      string
 }
 type ResourceConfiguration struct {
 	Cpu_Limit       string

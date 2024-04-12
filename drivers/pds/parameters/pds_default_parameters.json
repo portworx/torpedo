@@ -131,21 +131,22 @@
     "Replicas": 1
   },
   "StorageConfiguration"  :{
-    "FSType"   :      "ext4",
-    "ReplFactor":     2,
-    "StorageRequest": "1G",
-    "NewStorageSize": "5G"
+    "FS"   :      "xfs",
+    "Repl":     "2",
+    "Provisioner": "pxd.portworx.com",
+    "FG": "true",
+    "Secure": "false"
   },
   "ResourceConfiguration" :  {
-    "CpuLimit"  :     "2",
-    "CpuRequest":     "1",
-    "MemoryLimit":    "4G",
-    "MemoryRequest":  "2G"
+    "Cpu_Limit"  :     "2",
+    "Cpu_Request":     "1",
+    "Memory_Limit":    "4G",
+    "Memory_Request":  "2G",
+    "Storage_Request": "1G"
+
   },
   "ServiceConfiguration" : {
-    "HeapSize": 3,
-    "KAFKA_LOG_DIRS":"/kafka/logs1",
-    "KAFKA_AUTO_CREATE_TOPICS_ENABLE": false
+    "MAX_CONNECTIONS" : "100"
   },
   "ResiliencyTest": {
     "CheckTillReplica": 1

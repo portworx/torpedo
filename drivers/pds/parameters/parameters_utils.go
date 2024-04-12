@@ -181,10 +181,10 @@ type NewPDSParams struct {
 	} `json:"StorageConfigurationsSSIE"`
 	StorageConfiguration struct {
 		FS          string `json:"FS"`
-		Repl        int32  `json:"Repl"`
+		Repl        string `json:"Repl"`
 		Provisioner string `json:"Provisioner"`
-		FG          bool   `json:"FG"`
-		Secure      bool   `json:"Secure"`
+		FG          string `json:"FG"`
+		Secure      string `json:"Secure"`
 	} `json:"StorageConfiguration"`
 	ResourceConfiguration struct {
 		Cpu_Limit       string `json:"Cpu_Limit"`
