@@ -9,6 +9,14 @@ import (
 	status "net/http"
 )
 
+const (
+	PROVIDER_UNSPECIFIED  int32 = 0
+	PROVIDER_AZURE        int32 = 1
+	PROVIDER_GOOGLE       int32 = 2
+	PROVIDER_S3           int32 = 3
+	PROVIDER_UNSTRUCTURED int32 = 4
+)
+
 // ListCloudCredentials return list of cloud credentials
 func (cloudCred *PLATFORM_API_V1) ListCloudCredentials(request *CloudCredentialsRequest) (*CloudCredentialsResponse, error) {
 	ctx, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
@@ -33,51 +41,42 @@ func (cloudCred *PLATFORM_API_V1) ListCloudCredentials(request *CloudCredentials
 
 // GetCloudCredentials gets cloud credentials by ts id
 func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(getReq *CloudCredentialsRequest) (*CloudCredentialsResponse, error) {
-	_, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
+	ctx, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	cloudCredsResponse := CloudCredentialsResponse{}
-	var getCloudCredReq cloudCredentialv1.ApiCloudCredentialServiceGetCloudCredentialRequest
-	err = copier.Copy(&getCloudCredReq, getReq)
-	if err != nil {
-		return nil, err
-	}
-	cloudCredModel, res, err := cloudCredsClient.CloudCredentialServiceGetCloudCredentialExecute(getCloudCredReq)
+
+	cloudCredModel, res, err := cloudCredsClient.CloudCredentialServiceGetCloudCredential(ctx, getReq.Get.CloudCredentialsId).IncludeConfig(getReq.Get.IsConfigRequired).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `CloudCredentialServiceGetCloudCredential`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("Value of cloudCredentials - [%v]", cloudCredModel)
-	err = copier.Copy(&cloudCredsResponse, cloudCredModel)
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredModel)
-	return &cloudCredsResponse, nil
+	cloudCredResponse := copyCloudCredResponse(getReq.Create.Config.Provider.CloudProvider, cloudCredModel)
+
+	return cloudCredResponse, nil
 }
 
 // CreateCloudCredentials return newly created cloud credentials
 func (cloudCred *PLATFORM_API_V1) CreateCloudCredentials(createRequest *CloudCredentialsRequest) (*CloudCredentialsResponse, error) {
-	_, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
+	ctx, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	cloudCredsResponse := CloudCredentialsResponse{}
-	var createCloudCredRequest cloudCredentialv1.ApiCloudCredentialServiceCreateCloudCredentialRequest
-	err = copier.Copy(&createCloudCredRequest, createRequest)
-	if err != nil {
-		return nil, err
+
+	v1CloudCred := cloudCredentialv1.V1CloudCredential{
+		Meta: &cloudCredentialv1.V1Meta{
+			Name: createRequest.Create.Meta.Name,
+		},
+		Config: cloudConfig(createRequest),
 	}
-	cloudCredModel, _, err := cloudCredsClient.CloudCredentialServiceCreateCloudCredentialExecute(createCloudCredRequest)
-	if err != nil {
-		return nil, fmt.Errorf("error when called `CloudCredentialServiceCreateCloudCredential` to create cloud credential - %v", err)
+
+	cloudCredModel, res, err := cloudCredsClient.CloudCredentialServiceCreateCloudCredential(ctx, createRequest.Create.TenantID).V1CloudCredential(v1CloudCred).Execute()
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `CloudCredentialServiceCreateCloudCredential`: %v\n.Full HTTP response: %v", err, res)
 	}
-	err = copier.Copy(&cloudCredsResponse, cloudCredModel)
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredsResponse)
-	return &cloudCredsResponse, nil
+	cloudCredResponse := copyCloudCredResponse(createRequest.Create.Config.Provider.CloudProvider, cloudCredModel)
+
+	return cloudCredResponse, nil
 }
 
 // UpdateCloudCredentials return updated created cloud credentials
@@ -115,4 +114,93 @@ func (cloudCred *PLATFORM_API_V1) DeleteCloudCredential(cloudCreds *CloudCredent
 		return fmt.Errorf("Error when calling `CloudCredentialServiceDeleteCloudCredential`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return nil
+}
+
+func cloudConfig(createRequest *CloudCredentialsRequest) *cloudCredentialv1.V1Config {
+	PROVIDER_TYPE := createRequest.Create.Config.Provider.CloudProvider
+	secret := createRequest.Create.Config
+	switch PROVIDER_TYPE {
+	case PROVIDER_S3:
+		log.Debugf("creating s3 credentials")
+		return &cloudCredentialv1.V1Config{
+			Provider: &cloudCredentialv1.V1Provider{
+				CloudProvider: cloudCredentialv1.V1ProviderType.Ptr("S3COMPATIBLE"),
+			},
+			S3Credentials: &cloudCredentialv1.V1S3Credentials{
+				ConfigS3AccessKey: &secret.S3Credentials.AccessKey,
+				ConfigS3SecretKey: &secret.S3Credentials.SecretKey,
+			},
+		}
+	case PROVIDER_AZURE:
+		log.Debugf("creating azure credentials")
+		return &cloudCredentialv1.V1Config{
+			Provider: &cloudCredentialv1.V1Provider{
+				CloudProvider: cloudCredentialv1.V1ProviderType.Ptr("AZURE"),
+			},
+			AzureCredentials: &cloudCredentialv1.V1AzureCredentials{
+				ConfigAzureStorageAccountKey:  &secret.AzureCredentials.AccountKey,
+				ConfigAzureStorageAccountName: &secret.AzureCredentials.AccountName,
+			},
+		}
+	case PROVIDER_GOOGLE:
+		log.Debugf("creating gcp credentials")
+		return &cloudCredentialv1.V1Config{
+			Provider: &cloudCredentialv1.V1Provider{
+				CloudProvider: cloudCredentialv1.V1ProviderType.Ptr("GOOGLE"),
+			},
+			GoogleCredentials: &cloudCredentialv1.V1GoogleCredentials{
+				ConfigGoogleJsonKey:   &secret.GoogleCredentials.Key,
+				ConfigGoogleProjectId: &secret.GoogleCredentials.ProjectId,
+			},
+		}
+
+	default:
+		log.Debugf("creating s3 credentials by default")
+		return &cloudCredentialv1.V1Config{
+			Provider: &cloudCredentialv1.V1Provider{
+				CloudProvider: cloudCredentialv1.V1ProviderType.Ptr("S3COMPATIBLE"),
+			},
+			S3Credentials: &cloudCredentialv1.V1S3Credentials{
+				ConfigS3AccessKey: &secret.S3Credentials.AccessKey,
+				ConfigS3SecretKey: &secret.S3Credentials.SecretKey,
+			},
+		}
+	}
+}
+
+func copyCloudCredResponse(providerType int32, cloudCredModel *cloudCredentialv1.V1CloudCredential) *CloudCredentialsResponse {
+	cloudCredResponse := CloudCredentialsResponse{}
+
+	switch providerType {
+	case PROVIDER_S3:
+		//Test Print
+		log.Debugf("access key before copy [%s]", *cloudCredModel.Config.GetS3Credentials().ConfigS3AccessKey)
+		log.Debugf("secret key before copy [%s]", *cloudCredModel.Config.GetS3Credentials().ConfigS3SecretKey)
+		log.Debugf("copying s3 credentials")
+
+		cloudCredResponse.Create.Config.S3Credentials.AccessKey = *cloudCredModel.Config.GetS3Credentials().ConfigS3AccessKey
+		cloudCredResponse.Create.Config.S3Credentials.SecretKey = *cloudCredModel.Config.GetS3Credentials().ConfigS3SecretKey
+		cloudCredResponse.Create.Meta.Uid = cloudCredModel.Meta.Uid
+		cloudCredResponse.Create.Meta.Name = cloudCredModel.Meta.Name
+
+		//Test Print
+		log.Infof("access key after copy [%s]", cloudCredResponse.Create.Config.S3Credentials.AccessKey)
+		log.Infof("secret key after copy [%s]", cloudCredResponse.Create.Config.S3Credentials.SecretKey)
+
+	case PROVIDER_AZURE:
+		log.Debugf("copying azure credentials")
+		cloudCredResponse.Create.Config.AzureCredentials.AccountKey = *cloudCredModel.Config.GetAzureCredentials().ConfigAzureStorageAccountKey
+		cloudCredResponse.Create.Config.AzureCredentials.AccountName = *cloudCredModel.Config.GetAzureCredentials().ConfigAzureStorageAccountName
+		cloudCredResponse.Create.Meta.Uid = cloudCredModel.Meta.Uid
+		cloudCredResponse.Create.Meta.Name = cloudCredModel.Meta.Name
+
+	case PROVIDER_GOOGLE:
+		log.Debugf("copying gcp credentials")
+		cloudCredResponse.Create.Config.GoogleCredentials.ProjectId = *cloudCredModel.Config.GetGoogleCredentials().ConfigGoogleProjectId
+		cloudCredResponse.Create.Config.GoogleCredentials.Key = *cloudCredModel.Config.GetGoogleCredentials().ConfigGoogleJsonKey
+		cloudCredResponse.Create.Meta.Uid = cloudCredModel.Meta.Uid
+		cloudCredResponse.Create.Meta.Name = cloudCredModel.Meta.Name
+	}
+
+	return &cloudCredResponse
 }

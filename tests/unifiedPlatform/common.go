@@ -13,7 +13,7 @@ import (
 const (
 	EnvControlPlaneUrl     = "CONTROL_PLANE_URL"
 	DefaultTestAccount     = "pds-qa"
-	DefaultProject         = "PDS Project - Madan"
+	DefaultProject         = "PDS-Project"
 	DefaultTenant          = "px-system-tenant"
 	EnvPlatformAccountName = "PLATFORM_ACCOUNT_NAME"
 	EnvAccountDisplayName  = "PLATFORM_ACCOUNT_DISPLAY_NAME"
@@ -39,6 +39,7 @@ var (
 	WorkflowbkpLoc        platform.WorkflowBackupLocation
 	NewPdsParams          *parameters.NewPDSParams
 	PdsLabels             = make(map[string]string)
+	PDS_DEFAULT_NAMESPACE string
 )
 
 // ReadParams reads the params from given or default json

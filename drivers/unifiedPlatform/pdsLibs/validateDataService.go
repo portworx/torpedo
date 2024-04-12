@@ -112,33 +112,6 @@ func GetDeploymentResources(deployment map[string]string, dataService, dataServi
 
 // ValidateDataServiceDeployment takes the deployment map(name and id), namespace and returns error
 func ValidateDataServiceDeployment(deploymentId, namespace string) error {
-	//var ss *v1.StatefulSet
-
-	//deploymentName, deploymentId := GetDeploymentNameAndId(deployment)
-	//log.Debugf("deployment name [%s] in namespace [%s]", deploymentName, namespace)
-	log.Debugf("deployment Id [%s] ", deploymentId)
-
-	//TODO: Add validation for sts
-	//err = wait.Poll(validateDeploymentTimeInterval, validateDeploymentTimeOut, func() (bool, error) {
-	//	ss, err = k8sApps.GetStatefulSet(deploymentName, namespace)
-	//	if err != nil {
-	//		log.Warnf("An Error Occured while getting statefulsets %v", err)
-	//		return false, nil
-	//	}
-	//	return true, nil
-	//})
-	//if err != nil {
-	//	log.Errorf("An Error Occured while getting statefulsets %v", err)
-	//	return err
-	//}
-	//
-	////validate the statefulset deployed in the k8s namespace
-	//err = k8sApps.ValidateStatefulSet(ss, validateDeploymentTimeOut)
-	//if err != nil {
-	//	log.Errorf("An Error Occured while validating statefulsets %v", err)
-	//	return err
-	//}
-
 	log.Infof("DeploymentId [%s]", deploymentId)
 	err = wait.Poll(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
 		res, err := v2Components.PDS.GetDeployment(deploymentId)
@@ -339,19 +312,6 @@ func DeleteWorkloadDeployments(wlDep *v1.Deployment) error {
 	return err
 }
 
-func ValidateDNSEndPoint(dnsEndPoint string) error {
-	//log.Debugf("sleeping for 5 min, before validating dns endpoint")
-	//time.Sleep(5 * time.Minute)
-	_, err = net.Dial("tcp", dnsEndPoint)
-	if err != nil {
-		return fmt.Errorf("Failed to connect to the dns endpoint with err: %v", err)
-	} else {
-		log.Infof("DNS endpoint is reachable and ready to accept connections")
-	}
-
-	return nil
-}
-
 // GetDataServiceImageId returns the pds dsImageId for the given ds version and image build
 func GetDataServiceImageId(dsName, dsImageTag, dsVersionBuild string) (string, error) {
 	dsId, err := GetDataServiceId(dsName)
@@ -394,4 +354,17 @@ func GetDataServiceImageId(dsName, dsImageTag, dsVersionBuild string) (string, e
 	}
 
 	return dsImageId, nil
+}
+
+func ValidateDNSEndPoint(dnsEndPoint string) error {
+	//log.Debugf("sleeping for 5 min, before validating dns endpoint")
+	//time.Sleep(5 * time.Minute)
+	_, err = net.Dial("tcp", dnsEndPoint)
+	if err != nil {
+		return fmt.Errorf("Failed to connect to the dns endpoint with err: %v", err)
+	} else {
+		log.Infof("DNS endpoint is reachable and ready to accept connections")
+	}
+
+	return nil
 }

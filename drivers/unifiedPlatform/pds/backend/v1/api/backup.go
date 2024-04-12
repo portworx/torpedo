@@ -34,9 +34,9 @@ func (backup *PDS_API_V1) ListBackup(listBackupRequest *automationModels.PDSBack
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
-	backupConfigId := listBackupRequest.List.BackupConfigId
+	deploymentId := listBackupRequest.List.DeploymentId
 
-	listBkpRequest := bkpClient.BackupServiceListBackups(ctx).BackupConfigId(backupConfigId)
+	listBkpRequest := bkpClient.BackupServiceListBackups(ctx).DeploymentId(deploymentId)
 
 	if listBackupRequest.List.SortSortBy != "" {
 		listBkpRequest = listBkpRequest.SortSortBy(listBackupRequest.List.SortSortBy)
@@ -55,7 +55,7 @@ func (backup *PDS_API_V1) ListBackup(listBackupRequest *automationModels.PDSBack
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `BackupServiceListBackupsExecute`: %v\n.Full HTTP response: %v", err, res)
 	}
-	err = utilities.CopyStruct(bkpModel.Backups, &bkpResponse.List.Backups)
+	err = utilities.CopyStruct(bkpModel, &bkpResponse.List)
 	if err != nil {
 		return nil, fmt.Errorf("Error occured while copying the backup response: %v\n", err)
 	}

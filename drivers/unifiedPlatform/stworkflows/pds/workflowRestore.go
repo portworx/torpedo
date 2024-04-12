@@ -8,23 +8,25 @@ import (
 )
 
 type WorkflowPDSRestore struct {
-	WorkflowDataService    WorkflowDataService
-	Destination            platform.WorkflowTargetCluster
-	WorkflowBackupLocation platform.WorkflowBackupLocation
-	SkipValidatation       map[string]bool
+	WorkflowProject  platform.WorkflowProject
+	Destination      platform.WorkflowNamespace
+	SkipValidatation map[string]bool
+	Restores         map[string]automationModels.PDSRestore
 }
 
 const (
 	ValidatePdsRestore = "VALIDATE_PDS_RESTORE"
 )
 
-func (restore WorkflowPDSRestore) CreateRestore(backupUid string, deploymentName string, cloudSnapId string) (*automationModels.PDSRestoreResponse, error) {
+func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, namespace string) (*automationModels.PDSRestoreResponse, error) {
+
 	createRestore, err := pdslibs.CreateRestore(
-		backupUid, restore.Destination.ClusterUID,
-		restore.WorkflowDataService.DataServiceDeployment[deploymentName],
-		restore.Destination.Project.ProjectId,
-		cloudSnapId, // This needs to be replaced with clodSnapID
-		restore.WorkflowBackupLocation.BkpLocation.BkpLocationId)
+		name,
+		backupUid, restore.Destination.TargetCluster.DestinationClusterId,
+		restore.Destination.Namespaces[namespace],
+		restore.WorkflowProject.ProjectId,
+		restore.Destination.TargetCluster.Project.ProjectId,
+	)
 
 	if err != nil {
 		return nil, err
@@ -35,11 +37,14 @@ func (restore WorkflowPDSRestore) CreateRestore(backupUid string, deploymentName
 			log.Infof("Skipping Restore Validation")
 		}
 	} else {
-		err = pdslibs.ValidateRestoreDeployment(*createRestore.Create.Meta.Uid, restore.WorkflowDataService.NamespaceName)
+		err = pdslibs.ValidateRestoreDeployment(*createRestore.Create.Meta.Uid, namespace)
 		if err != nil {
 			return nil, err
 		}
 	}
+
+	restore.Restores[name] = createRestore.Create
+	log.Infof("Updated the restores")
 
 	return createRestore, nil
 }

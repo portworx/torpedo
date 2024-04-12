@@ -92,7 +92,7 @@ var _ = Describe("{CreateAndGetCloudCredentials}", func() {
 			log.FailOnError(err, "error occured while fetching tenantID")
 			credResp, err := platformLibs.CreateCloudCredentials(tenantId, NewPdsParams.BackUpAndRestore.TargetLocation)
 			log.FailOnError(err, "error while creating cloud creds")
-			log.Infof("creds resp [%+v]", credResp.Create.Config.Credentials.S3Credentials.AccessKey)
+			log.Infof("creds resp [%+v]", credResp.Create.Config.S3Credentials.AccessKey)
 			log.Infof("creds id [%+v]", *credResp.Create.Meta.Uid)
 
 			isconfigRequiredTrue, err := platformLibs.GetCloudCredentials(*credResp.Create.Meta.Uid, NewPdsParams.BackUpAndRestore.TargetLocation, true)
@@ -306,18 +306,20 @@ var _ = Describe("{TestPlatformTemplates}", func() {
 	})
 
 	var (
-		workFlowTemplates pds.CustomTemplates
+		workFlowTemplates pds.WorkflowPDSTemplates
 		tempList          []string
 	)
 	It("TestPlatformTemplates", func() {
 		Step("create custom templates for PDS", func() {
 			workFlowTemplates.Platform = WorkflowPlatform
-			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-			log.InfoD("Created serviceConfig Template ID- [serviceConfigId- %v]", serviceConfigId)
-			log.InfoD("Created stConfig Template ID- [stConfigId- %v]", stConfigId)
-			log.InfoD("Created resConfig Template ID- [resConfigId- %v]", resConfigId)
-			tempList = append(tempList, serviceConfigId, stConfigId, resConfigId)
+			for _, ds := range NewPdsParams.DataServiceToTest {
+				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+				log.FailOnError(err, "Unable to create Custom Templates for PDS")
+				log.InfoD("Created serviceConfig Template ID- [serviceConfigId- %v]", serviceConfigId)
+				log.InfoD("Created stConfig Template ID- [stConfigId- %v]", stConfigId)
+				log.InfoD("Created resConfig Template ID- [resConfigId- %v]", resConfigId)
+				tempList = append(tempList, serviceConfigId, stConfigId, resConfigId)
+			}
 		})
 		Step("Cleanup Created Templates after dissociating linked resources", func() {
 			err := workFlowTemplates.DeleteCreatedCustomPdsTemplates(tempList)

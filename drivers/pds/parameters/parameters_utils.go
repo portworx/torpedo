@@ -180,21 +180,21 @@ type NewPDSParams struct {
 		Iterations     int
 	} `json:"StorageConfigurationsSSIE"`
 	StorageConfiguration struct {
-		FSType         string `json:"FSType"`
-		ReplFactor     int32  `json:"ReplFactor"`
-		StorageRequest string `json:"StorageRequest"`
-		NewStorageSize string `json:"NewStorageSize"`
+		FS          string `json:"FS"`
+		Repl        int32  `json:"Repl"`
+		Provisioner string `json:"Provisioner"`
+		FG          bool   `json:"FG"`
+		Secure      bool   `json:"Secure"`
 	} `json:"StorageConfiguration"`
 	ResourceConfiguration struct {
-		CpuLimit      string `json:"CpuLimit"`
-		CpuRequest    string `json:"CpuRequest"`
-		MemoryLimit   string `json:"MemoryLimit"`
-		MemoryRequest string `json:"MemoryRequest"`
+		Cpu_Limit       string `json:"Cpu_Limit"`
+		Cpu_Request     string `json:"Cpu_Request"`
+		Memory_Limit    string `json:"Memory_Limit"`
+		Memory_Request  string `json:"Memory_Request"`
+		Storage_Request string `json:"Storage_Request"`
 	} `json:"ResourceConfiguration"`
 	ServiceConfiguration struct {
-		HeapSize int    `json:"HeapSize"`
-		Username string `json:"Username"`
-		Password string `json:"Password"`
+		MaxConnection string `json:"MaxConnection"`
 	} `json:"ServiceConfiguration"`
 	RbacParams struct {
 		RunWithRbac bool   //true
