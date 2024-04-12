@@ -296,6 +296,7 @@ func (k *K8s) String() string {
 
 // Init Initialize the driver
 func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
+	log.InfoD("SNIgdha: Inside K8")
 	k.NodeDriverName = schedOpts.NodeDriverName
 	k.VolDriverName = schedOpts.VolDriverName
 	k.secretConfigMapName = schedOpts.SecretConfigMapName

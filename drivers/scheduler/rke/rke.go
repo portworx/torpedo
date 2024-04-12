@@ -45,6 +45,7 @@ func (r *Rancher) String() string {
 
 // Init Initializes the driver
 func (r *Rancher) Init(scheduleOpts scheduler.InitOptions) error {
+	log.InfoD(" Inside RKE scheduler : Snigdha Agrawal")
 	var err error
 	err = r.K8s.Init(scheduleOpts)
 	if err != nil {
@@ -81,6 +82,7 @@ func (r *Rancher) GetRancherClusterParametersValue() (*RancherClusterParameters,
 	endpoint := "https://" + masterNodeName + "/v3"
 	rkeParameters.Endpoint = endpoint
 	rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
+
 	if rkeToken == "" {
 		return nil, fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
 	}
@@ -99,11 +101,13 @@ func (r *Rancher) UpdateRancherClient(clusterName string) error {
 	endpoint := "https://" + masterNodeName + "/v3"
 	if clusterName == "destination-config" {
 		rkeToken = os.Getenv("DESTINATION_RKE_TOKEN")
+
 		if rkeToken == "" {
 			return fmt.Errorf("env variable DESTINATION_RKE_TOKEN should not be empty")
 		}
 	} else if clusterName == "source-config" {
 		rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
+		
 		if rkeToken == "" {
 			return fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
 		}
