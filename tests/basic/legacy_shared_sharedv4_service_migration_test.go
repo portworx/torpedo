@@ -701,8 +701,6 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() 
 			checkMapOfPods(podMap, ctx)
 		}
 		ValidateApplications(contexts)
-		deleteSnapshotsAndClones(volMap, "snapshot-1", "clone-1")
-		deleteSnapshotsAndClones(volMap, "snapshot-2", "clone-2")
 	})
 	JustAfterEach(func() {
 		// Delete even if there are failures.
