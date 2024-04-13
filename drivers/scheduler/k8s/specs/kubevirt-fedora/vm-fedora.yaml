@@ -134,7 +134,7 @@ spec:
             name: app-config-{{ $val }}
         - name: app-secret-disk-{{ $val }}
           secret:
-            name: app-secret-{{ $val }}
+            secretName: app-secret-{{ $val }}
         {{- end }}
         {{ else }}
         - name: datavolume
@@ -143,9 +143,9 @@ spec:
         - name: app-config-disk
           configMap:
             name: app-config
-        - secret:
+        - name: app-secret-disk
+          secret:
             secretName: app-secret
-          name: app-secret-disk
         {{- end }}
         - cloudInitNoCloud:
             userData: |-
