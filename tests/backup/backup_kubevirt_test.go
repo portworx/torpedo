@@ -3288,3 +3288,50 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+var _ = Describe("{AppDeployment}", func() {
+	var (
+		// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
+		//controlChannel       chan string
+		//errorGroup           *errgroup.Group
+		scheduledAppContexts []*scheduler.Context
+		numberOfVolumes      int
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("AppDeployment", "Just deploy Apps",
+			nil, 0, Mkoppal, Q1FY25)
+
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		appList := Inst().AppList
+		numberOfVolumes = 5
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-fedora"}
+		Inst().CustomAppConfig["kubevirt-fedora"] = scheduler.AppConfig{
+			ClaimsCount: numberOfVolumes,
+		}
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
+		taskName := fmt.Sprintf("%d", 123)
+		appContexts := ScheduleApplications(taskName)
+		for _, appCtx := range appContexts {
+			appCtx.ReadinessTimeout = AppReadinessTimeout
+			scheduledAppContexts = append(scheduledAppContexts, appCtx)
+		}
+	})
+
+	It("Verify the restore of VM backup on the destination cluster in a namespace where the same VM is already running with Replace/Retain option by changing the number of disks", func() {
+
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
+			//ctx, err := backup.GetAdminCtxFromSecret()
+			//log.FailOnError(err, "Fetching px-central-admin ctx")
+			//controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			ValidateApplications(scheduledAppContexts)
+		})
+	})
+})
