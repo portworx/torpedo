@@ -3264,7 +3264,7 @@ var _ = Describe("{volumeprecheck}", func() {
 			invalidUuidcmd := fmt.Sprintf("v ha-update %s --repl 2 --sources %s", VolName, randomUUID)
 			_, err = runPxctlCommand(invalidUuidcmd, node.GetStorageDriverNodes()[0], nil)
 			if err != nil {
-				isExpectedError := strings.Contains(err.Error(), "Failed to update volume: could not find any pool with id")
+				isExpectedError := strings.Contains(err.Error(), "Failed to update volume: could not find any node with id")
 				dash.VerifyFatal(isExpectedError, true, fmt.Sprintf("Expected error: %v", err))
 
 			}

@@ -11600,10 +11600,8 @@ func volumePreCheckForHA(v volume.Volume) error {
 	var nodesuuidWithoutReplica []string
 	var nodesIP []string
 	for _, n := range node.GetStorageDriverNodes() {
-		if SelectedNode != n.Id {
-			nodesuuidWithoutReplica = append(nodesuuidWithoutReplica, n.Id)
-			nodesIP = append(nodesIP, n.Addresses[0])
-
+		if !Contains(replicaSetNodes, n.VolDriverNodeID) {
+			nodesuuidWithoutReplica = append(nodesuuidWithoutReplica, n.VolDriverNodeID)
 		}
 	}
 
@@ -11635,7 +11633,7 @@ func volumePreCheckForHA(v volume.Volume) error {
 		Sudo: true,
 	})
 	if err != nil {
-		isExpectedError := strings.Contains(err.Error(), "Failed to update volume: could not find any pool with id")
+		isExpectedError := strings.Contains(err.Error(), "Failed to update volume: could not find any node with id")
 		dash.VerifyFatal(isExpectedError, true, fmt.Sprintf("Expected error: %v", err))
 
 	}
