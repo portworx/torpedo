@@ -204,7 +204,7 @@ func deleteSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffi
 	log.Infof("Deleting Snapshots and Clones that were created")
 	for vol := range volMap {
 		_, err := Inst().V.InspectVolume(vol)
-		if err != nil {
+		if err == nil {
 			//Delete Volumes should not fail, even if there are errors.
 			cloneName := fmt.Sprintf("%s-%s", vol, cloneSuffix)
 			snapshotName := fmt.Sprintf("%s-%s", vol, snapshotSuffix)
