@@ -188,6 +188,7 @@ func structToMap(structType interface{}, tempType string) map[string]interface{}
 		value := field.Interface()
 		result[key] = value
 	}
+
 	if tempType == SERVICE_OPTIONS {
 		log.InfoD("templateValue formed is- [%v]", result)
 		return result

@@ -107,7 +107,7 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 						{
 							Name:        StringPtr("pds-qa-test-topology"),
 							Replicas:    intToPointerString(ds.Replicas),
-							ServiceType: StringPtr("ClusterIP"),
+							ServiceType: StringPtr(ds.ServiceType),
 							ResourceSettings: &automationModels.PdsTemplates{
 								Id: &resConfigId,
 							},

@@ -70,10 +70,6 @@ func (cloudCred *PLATFORM_API_V1) CreateCloudCredentials(createRequest *CloudCre
 		Config: cloudConfig(createRequest),
 	}
 
-	log.Debugf("After copy cloud cred [%+v]", v1CloudCred)
-	log.Debugf("cloud provider [%s]", v1CloudCred.Config.Provider.GetCloudProvider())
-	log.Debugf("cloud access key [%s]", v1CloudCred.Config.S3Credentials.GetConfigS3AccessKey())
-
 	cloudCredModel, res, err := cloudCredsClient.CloudCredentialServiceCreateCloudCredential(ctx, createRequest.Create.TenantID).V1CloudCredential(v1CloudCred).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `CloudCredentialServiceCreateCloudCredential`: %v\n.Full HTTP response: %v", err, res)
@@ -142,8 +138,8 @@ func cloudConfig(createRequest *CloudCredentialsRequest) *cloudCredentialv1.V1Co
 				CloudProvider: cloudCredentialv1.V1ProviderType.Ptr("AZURE"),
 			},
 			AzureCredentials: &cloudCredentialv1.V1AzureCredentials{
-				ConfigAzureStorageAccountKey:  &secret.S3Credentials.AccessKey,
-				ConfigAzureStorageAccountName: &secret.S3Credentials.SecretKey,
+				ConfigAzureStorageAccountKey:  &secret.AzureCredentials.AccountKey,
+				ConfigAzureStorageAccountName: &secret.AzureCredentials.AccountName,
 			},
 		}
 	case PROVIDER_GOOGLE:
@@ -153,8 +149,8 @@ func cloudConfig(createRequest *CloudCredentialsRequest) *cloudCredentialv1.V1Co
 				CloudProvider: cloudCredentialv1.V1ProviderType.Ptr("GOOGLE"),
 			},
 			GoogleCredentials: &cloudCredentialv1.V1GoogleCredentials{
-				ConfigGoogleJsonKey:   &secret.S3Credentials.AccessKey,
-				ConfigGoogleProjectId: &secret.S3Credentials.SecretKey,
+				ConfigGoogleJsonKey:   &secret.GoogleCredentials.Key,
+				ConfigGoogleProjectId: &secret.GoogleCredentials.ProjectId,
 			},
 		}
 
@@ -175,17 +171,21 @@ func cloudConfig(createRequest *CloudCredentialsRequest) *cloudCredentialv1.V1Co
 func copyCloudCredResponse(providerType int32, cloudCredModel *cloudCredentialv1.V1CloudCredential) *CloudCredentialsResponse {
 	cloudCredResponse := CloudCredentialsResponse{}
 
-	//Test Print
-	log.Infof("access key before copy [%s]", *cloudCredModel.Config.GetS3Credentials().ConfigS3AccessKey)
-	log.Infof("secret key before copy [%s]", *cloudCredModel.Config.GetS3Credentials().ConfigS3SecretKey)
-
 	switch providerType {
 	case PROVIDER_S3:
+		//Test Print
+		log.Debugf("access key before copy [%s]", *cloudCredModel.Config.GetS3Credentials().ConfigS3AccessKey)
+		log.Debugf("secret key before copy [%s]", *cloudCredModel.Config.GetS3Credentials().ConfigS3SecretKey)
 		log.Debugf("copying s3 credentials")
+
 		cloudCredResponse.Create.Config.S3Credentials.AccessKey = *cloudCredModel.Config.GetS3Credentials().ConfigS3AccessKey
 		cloudCredResponse.Create.Config.S3Credentials.SecretKey = *cloudCredModel.Config.GetS3Credentials().ConfigS3SecretKey
 		cloudCredResponse.Create.Meta.Uid = cloudCredModel.Meta.Uid
 		cloudCredResponse.Create.Meta.Name = cloudCredModel.Meta.Name
+
+		//Test Print
+		log.Infof("access key after copy [%s]", cloudCredResponse.Create.Config.S3Credentials.AccessKey)
+		log.Infof("secret key after copy [%s]", cloudCredResponse.Create.Config.S3Credentials.SecretKey)
 
 	case PROVIDER_AZURE:
 		log.Debugf("copying azure credentials")
@@ -201,10 +201,6 @@ func copyCloudCredResponse(providerType int32, cloudCredModel *cloudCredentialv1
 		cloudCredResponse.Create.Meta.Uid = cloudCredModel.Meta.Uid
 		cloudCredResponse.Create.Meta.Name = cloudCredModel.Meta.Name
 	}
-
-	//Test Print
-	log.Infof("access key after copy [%s]", cloudCredResponse.Create.Config.S3Credentials.AccessKey)
-	log.Infof("secret key after copy [%s]", cloudCredResponse.Create.Config.S3Credentials.SecretKey)
 
 	return &cloudCredResponse
 }

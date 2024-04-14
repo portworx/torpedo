@@ -20,6 +20,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 		workFlowTemplates   pds.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 		updateDeployment    *automationModels.PDSDeploymentResponse
+		templates           []string
 		err                 error
 	)
 
@@ -33,7 +34,6 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 			log.FailOnError(err, "Unable to create namespace")
 			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
 			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
-
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
@@ -42,6 +42,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+
 			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
 			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
@@ -55,6 +56,15 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 			Step("Delete DataServiceDeployment", func() {
 				log.InfoD("Cleaning Up dataservice...")
 				err := workflowDataservice.DeleteDeployment()
+				log.FailOnError(err, "Error while deleting dataservice")
+			})
+		}()
+
+		defer func() {
+			Step("Delete PDS CustomTemplates", func() {
+				log.InfoD("Cleaning Up templates...")
+
+				err := workFlowTemplates.DeleteCreatedCustomPdsTemplates(templates)
 				log.FailOnError(err, "Error while deleting dataservice")
 			})
 		}()
@@ -168,6 +178,7 @@ var _ = Describe("{ScaleUpCpuMemLimitsOfDS}", func() {
 		workflowDataservice pds.WorkflowDataService
 		workFlowTemplates   pds.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
+		err                 error
 	)
 	It("Deploy and Validate DataService", func() {
 		Step("Create a PDS Namespace", func() {
@@ -191,6 +202,9 @@ var _ = Describe("{ScaleUpCpuMemLimitsOfDS}", func() {
 			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 			log.InfoD("Original Resource Template ID- [resTempId- %v]", resConfigId)
+
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
 			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
 			log.FailOnError(err, "Error while deploying ds")

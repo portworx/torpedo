@@ -41,10 +41,12 @@ func CreateBackupLocation(tenantId, cloudCredId, bucketName, bkpLocation string)
 
 	case "azure":
 		createReq.Create.Config.Provider.CloudProvider = PROVIDER_AZURE
+		createReq.Create.Config.CloudCredentialsId = cloudCredId
 		createReq.Create.Config.BkpLocation.AzureStorage.ContainerName = bucketName
 
 	case "gcp":
 		createReq.Create.Config.Provider.CloudProvider = PROVIDER_GOOGLE
+		createReq.Create.Config.CloudCredentialsId = cloudCredId
 		createReq.Create.Config.BkpLocation.GoogleStorage.BucketName = bucketName
 
 	default:
@@ -93,6 +95,20 @@ func CreateS3Bucket(bucketName string) error {
 		Region:    utilities.GetEnv(envAwsRegion, envMinioRegion),
 	}
 	err := awsS3Client.CreateS3Bucket(bucketName)
+	if err != nil {
+		return fmt.Errorf("Failed to create bucket: %v\n", err)
+	}
+	return nil
+}
+
+// CreateAzureBucket creates bucket in Azure
+func CreateAzureBucket(bucketName string) error {
+	azureClient := utilities.AzureStorageClient{
+		AccountName: utilities.GetEnv(envAzureStorageAccountName, envMinioAccessKey),
+		AccountKey:  utilities.GetEnv(envAzurePrimaryAccountKey, envMinioSecretKey),
+	}
+
+	err := azureClient.CreateAzureBucket(bucketName)
 	if err != nil {
 		return fmt.Errorf("Failed to create bucket: %v\n", err)
 	}
