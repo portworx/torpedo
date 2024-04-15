@@ -1219,11 +1219,12 @@ var _ = Describe("{FADAPodRecoveryAllPathDownUsingIptableRule}", func() {
 			"Verify Pod Recovers from RO mode after Bounce after blocking iptable Rules",
 			nil, 0)
 	})
-	var contexts []*scheduler.Context
-	var k8sCore = core.Instance()
 
 	itLog := "FADAPodRecoveryAllPathDownUsingIptableRule"
 	It(itLog, func() {
+
+		var contexts []*scheduler.Context
+		var k8sCore = core.Instance()
 
 		// Pick all the Volumes with RWO Status, We check if the Volume is with Access Mode RWO and PureBlock Volume
 		vols := make([]*volume.Volume, 0)
