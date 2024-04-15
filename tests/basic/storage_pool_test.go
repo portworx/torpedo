@@ -12026,7 +12026,7 @@ var _ = Describe("{PoolDeleteMultiplePools}", func() {
 		stepLog = "4. Verify reboot"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			err = RebootNodeAndWait(*testNode)
+			err = RebootNodeAndWaitForPxUp(*testNode)
 			log.FailOnError(err, "Failed to reboot node and wait till it is up")
 			log.Info("Verify reboot succeed")
 		})
