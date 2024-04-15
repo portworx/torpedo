@@ -1073,12 +1073,11 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 			"Verify Pod Recovers from RO mode after Bounce",
 			nil, 0)
 	})
-	var contexts []*scheduler.Context
-	var k8sCore = core.Instance()
 
 	itLog := "FADAPodRecoveryAfterBounce"
 	It(itLog, func() {
-		log.Infof(stepLog)
+		var contexts []*scheduler.Context
+		var k8sCore = core.Instance()
 
 		// Pick all the Volumes with RWO Status, We check if the Volume is with Access Mode RWO and PureBlock Volume
 		vols := make([]*volume.Volume, 0)
@@ -1225,7 +1224,6 @@ var _ = Describe("{FADAPodRecoveryAllPathDownUsingIptableRule}", func() {
 
 	itLog := "FADAPodRecoveryAllPathDownUsingIptableRule"
 	It(itLog, func() {
-		log.Infof(stepLog)
 
 		// Pick all the Volumes with RWO Status, We check if the Volume is with Access Mode RWO and PureBlock Volume
 		vols := make([]*volume.Volume, 0)
