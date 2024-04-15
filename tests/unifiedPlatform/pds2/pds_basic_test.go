@@ -1,6 +1,10 @@
 package tests
 
 import (
+	"os"
+	"strings"
+	"testing"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
@@ -11,9 +15,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
-	"os"
-	"strings"
-	"testing"
 )
 
 var _ = BeforeSuite(func() {
@@ -120,7 +121,7 @@ var _ = BeforeSuite(func() {
 		log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
 	})
 
-	Step("Associate namespace and cluster to Project", func() {
+	Step("Associate resources to Project", func() {
 		err := WorkflowProject.Associate(
 			[]string{WorkflowTargetCluster.ClusterUID},
 			[]string{WorkflowNamespace.Namespaces[PDS_DEFAULT_NAMESPACE]},
@@ -129,7 +130,7 @@ var _ = BeforeSuite(func() {
 			[]string{},
 			[]string{},
 		)
-		log.FailOnError(err, "Unable to associate Cluster to Project")
+		log.FailOnError(err, "Unable to associate resources to Project")
 		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
 	})
 

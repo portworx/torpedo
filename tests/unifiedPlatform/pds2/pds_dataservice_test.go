@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"strings"
+
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
@@ -8,7 +10,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
-	"strings"
 )
 
 var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {

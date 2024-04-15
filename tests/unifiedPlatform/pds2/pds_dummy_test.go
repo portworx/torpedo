@@ -2,7 +2,7 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"

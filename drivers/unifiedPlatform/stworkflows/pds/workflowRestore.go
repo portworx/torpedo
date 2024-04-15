@@ -20,9 +20,16 @@ const (
 
 func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, namespace string) (*automationModels.PDSRestoreResponse, error) {
 
+	log.Infof("Name of restore - [%s]", name)
+	log.Infof("Backup UUID - [%s]", backupUid)
+	log.Infof("Destination Cluster Id - [%s]", restore.Destination.TargetCluster.ClusterUID)
+	log.Infof("Destination Namespace Id - [%s]", restore.Destination.Namespaces[namespace])
+	log.Infof("Source project Id - [%s]", restore.WorkflowProject.ProjectId)
+	log.Infof("Destination project Id - [%s]", restore.Destination.TargetCluster.Project.ProjectId)
+
 	createRestore, err := pdslibs.CreateRestore(
 		name,
-		backupUid, restore.Destination.TargetCluster.DestinationClusterId,
+		backupUid, restore.Destination.TargetCluster.ClusterUID,
 		restore.Destination.Namespaces[namespace],
 		restore.WorkflowProject.ProjectId,
 		restore.Destination.TargetCluster.Project.ProjectId,
@@ -37,12 +44,16 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 			log.Infof("Skipping Restore Validation")
 		}
 	} else {
+		log.Infof("Restore UID - [%s]", *createRestore.Create.Meta.Uid)
 		err = pdslibs.ValidateRestoreDeployment(*createRestore.Create.Meta.Uid, namespace)
 		if err != nil {
 			return nil, err
 		}
 	}
 
+	if restore.Restores == nil {
+		restore.Restores = make(map[string]automationModels.PDSRestore)
+	}
 	restore.Restores[name] = createRestore.Create
 	log.Infof("Updated the restores")
 

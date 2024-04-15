@@ -102,7 +102,7 @@ func (restore *PDS_API_V1) GetRestore(getRestoreRequest *automationModels.PDSRes
 
 	restoreRequest := restoreClient.RestoreServiceGetRestore(ctx, getRestoreRequest.Get.Id)
 
-	restoreModel, res, err := restoreRequest.Execute()
+	restoreModel, res, err := restoreClient.RestoreServiceGetRestoreExecute(restoreRequest)
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `RestoreServiceGetRestore`: %v\n.Full HTTP response: %v", err, res)
 	}

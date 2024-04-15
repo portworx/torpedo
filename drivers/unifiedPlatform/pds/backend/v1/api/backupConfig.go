@@ -100,7 +100,7 @@ func (backupConf *PDS_API_V1) GetBackupConfig(getBackupConfigRequest *automation
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `BackupConfigServiceGetBackupConfig`: %v\n.Full HTTP response: %v", err, res)
 	}
-	err = utilities.CopyStruct(backupModel, response)
+	err = utilities.CopyStruct(backupModel, &response.Get)
 	if err != nil {
 		return nil, err
 	}
