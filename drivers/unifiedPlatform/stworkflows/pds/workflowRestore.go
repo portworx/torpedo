@@ -29,7 +29,7 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 
 	createRestore, err := pdslibs.CreateRestore(
 		name,
-		backupUid, restore.Destination.TargetCluster.DestinationClusterId,
+		backupUid, restore.Destination.TargetCluster.ClusterUID,
 		restore.Destination.Namespaces[namespace],
 		restore.WorkflowProject.ProjectId,
 		restore.Destination.TargetCluster.Project.ProjectId,
@@ -44,6 +44,7 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 			log.Infof("Skipping Restore Validation")
 		}
 	} else {
+		log.Infof("Restore UID - [%s]", *createRestore.Create.Meta.Uid)
 		err = pdslibs.ValidateRestoreDeployment(*createRestore.Create.Meta.Uid, namespace)
 		if err != nil {
 			return nil, err

@@ -1,6 +1,10 @@
 package tests
 
 import (
+	"os"
+	"strings"
+	"testing"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
@@ -11,9 +15,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
-	"os"
-	"strings"
-	"testing"
 )
 
 var _ = BeforeSuite(func() {
@@ -30,7 +31,7 @@ var _ = BeforeSuite(func() {
 		PdsLabels["clusterType"] = infraParams.ClusterType
 
 		log.InfoD("Get Account ID")
-		AccID = "acc:e9272122-9d7e-4c20-b257-bee7ebb9561a"
+		AccID = "acc:8b6e5023-2ec9-474f-acda-7ab662987409"
 
 		err = platformUtils.InitUnifiedApiComponents(os.Getenv(EnvControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
@@ -91,6 +92,9 @@ var _ = BeforeSuite(func() {
 			case "s3":
 				err := platformUtils.CreateS3Bucket(PDSBucketName)
 				log.FailOnError(err, "error while creating s3 bucket")
+			case "azure":
+				err := platformUtils.CreateAzureBucket(PDSBucketName)
+				log.FailOnError(err, "error while creating azure bucket")
 			default:
 				err := platformUtils.CreateS3CompBucket(PDSBucketName)
 				log.FailOnError(err, "error while creating s3-comp bucket")

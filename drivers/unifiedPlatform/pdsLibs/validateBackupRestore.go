@@ -2,11 +2,12 @@ package pdslibs
 
 import (
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"reflect"
-	"strings"
 )
 
 const (

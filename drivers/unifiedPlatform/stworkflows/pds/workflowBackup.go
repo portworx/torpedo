@@ -2,12 +2,13 @@ package pds
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
-	"time"
 )
 
 type WorkflowPDSBackup struct {
@@ -23,8 +24,6 @@ const (
 func (backup WorkflowPDSBackup) GetLatestBackup(deploymentName string) (automationModels.V1Backup, error) {
 
 	var latestBackup automationModels.V1Backup
-
-	log.Infof("All deployments - [%+v]", backup.WorkflowDataService.DataServiceDeployment)
 
 	allBackups, err := pdslibs.ListBackup(backup.WorkflowDataService.DataServiceDeployment[deploymentName])
 
@@ -48,6 +47,7 @@ func (backup WorkflowPDSBackup) WaitForBackupToComplete(backupId string) error {
 			return nil, true, fmt.Errorf("Backup is not completed yet, Phase - [%s]", *backupModel.Get.Status.Phase)
 		} else {
 			log.Infof("Backup completed successfully - [%s]", *backupModel.Get.Meta.Name)
+			log.Infof("Backup Status - [%s]", *backupModel.Get.Status.CloudSnapId)
 			return nil, false, nil
 		}
 	}

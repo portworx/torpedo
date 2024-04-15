@@ -2,12 +2,14 @@ package api
 
 import (
 	"fmt"
+
 	"github.com/jinzhu/copier"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/pure-px/platform-api-go-client/platform/v1/backuplocation"
 
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	status "net/http"
+
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
 // ListBackupLocations return lis of backup locatiobackuploc
@@ -67,7 +69,7 @@ func backupLocationConfig(request *BackupLocationRequest) *backuplocation.Platfo
 
 	switch PROVIDER_TYPE {
 	case PROVIDER_S3:
-		log.Debugf("creating s3 credentials")
+		log.Debugf("creating s3 bkpLocation")
 		return &backuplocation.Platformbackuplocationv1Config{
 			Provider: &backuplocation.V1Provider{
 				CloudProvider: backuplocation.V1ProviderType.Ptr("S3COMPATIBLE"),
@@ -81,7 +83,7 @@ func backupLocationConfig(request *BackupLocationRequest) *backuplocation.Platfo
 		}
 
 	case PROVIDER_AZURE:
-		log.Debugf("creating azure credentials")
+		log.Debugf("creating azure bkpLocation")
 		return &backuplocation.Platformbackuplocationv1Config{
 			Provider: &backuplocation.V1Provider{
 				CloudProvider: backuplocation.V1ProviderType.Ptr("AZURE"),
@@ -93,7 +95,7 @@ func backupLocationConfig(request *BackupLocationRequest) *backuplocation.Platfo
 		}
 
 	case PROVIDER_GOOGLE:
-		log.Debugf("creating gcp credentials")
+		log.Debugf("creating gcp bkpLocation")
 		return &backuplocation.Platformbackuplocationv1Config{
 			Provider: &backuplocation.V1Provider{
 				CloudProvider: backuplocation.V1ProviderType.Ptr("GOOGLE"),
@@ -105,7 +107,7 @@ func backupLocationConfig(request *BackupLocationRequest) *backuplocation.Platfo
 		}
 
 	default:
-		log.Debugf("creating s3 credentials by default")
+		log.Debugf("creating s3 bkpLocation by default")
 		return &backuplocation.Platformbackuplocationv1Config{
 			Provider: &backuplocation.V1Provider{
 				CloudProvider: backuplocation.V1ProviderType.Ptr("S3COMPATIBLE"),
@@ -125,15 +127,15 @@ func copyCloudLocationResponse(bkpLocation *backuplocation.V1BackupLocation) *Ba
 		Create: BackupLocation{},
 	}
 
-	//Test Print
-	log.Infof("bucket Name before copy [%s]", bkpLocation.Config.GetS3Storage().BucketName)
-	log.Infof("end point before copy [%s]", bkpLocation.Config.GetS3Storage().Endpoint)
-	log.Infof("region before copy [%s]", bkpLocation.Config.GetS3Storage().Region)
-	log.Infof("bkp location cloud provider [%s]", bkpLocation.Config.Provider.GetCloudProvider())
-
 	switch bkpLocation.Config.Provider.GetCloudProvider() {
 	case "S3COMPATIBLE":
 		log.Debugf("copying s3 location")
+		//Test Print
+		log.Infof("bucket Name before copy [%s]", bkpLocation.Config.GetS3Storage().BucketName)
+		log.Infof("end point before copy [%s]", bkpLocation.Config.GetS3Storage().Endpoint)
+		log.Infof("region before copy [%s]", bkpLocation.Config.GetS3Storage().Region)
+		log.Infof("bkp location cloud provider [%s]", bkpLocation.Config.Provider.GetCloudProvider())
+
 		bkpLocResp.Create.Meta.Uid = bkpLocation.Meta.Uid
 		bkpLocResp.Create.Meta.Name = bkpLocation.Meta.Name
 		bkpLocResp.Create.Config.CloudCredentialsId = bkpLocation.Config.GetCloudCredentialId()
@@ -141,20 +143,25 @@ func copyCloudLocationResponse(bkpLocation *backuplocation.V1BackupLocation) *Ba
 		bkpLocResp.Create.Config.BkpLocation.S3Storage.Endpoint = *bkpLocation.Config.GetS3Storage().Endpoint
 		bkpLocResp.Create.Config.BkpLocation.S3Storage.Region = *bkpLocation.Config.GetS3Storage().Region
 		bkpLocResp.Create.Config.Provider.Name = "s3"
+		//Test Print
+		log.Infof("bucket Name after copy [%s]", bkpLocResp.Create.Config.BkpLocation.S3Storage.BucketName)
+		log.Infof("end point after copy [%s]", bkpLocResp.Create.Config.BkpLocation.S3Storage.Endpoint)
+		log.Infof("region after copy [%s]", bkpLocResp.Create.Config.BkpLocation.S3Storage.Region)
 	case "AZURE":
 		log.Debugf("copying azure location")
+		bkpLocResp.Create.Meta.Uid = bkpLocation.Meta.Uid
+		bkpLocResp.Create.Meta.Name = bkpLocation.Meta.Name
 		bkpLocResp.Create.Config.BkpLocation.AzureStorage.ContainerName = *bkpLocation.Config.GetAzureStorage().ContainerName
+		bkpLocResp.Create.Config.CloudCredentialsId = bkpLocation.Config.GetCloudCredentialId()
 		bkpLocResp.Create.Config.Provider.Name = "azure"
 	case "GOOGLE":
 		log.Debugf("copying gcp credentials")
+		bkpLocResp.Create.Meta.Uid = bkpLocation.Meta.Uid
+		bkpLocResp.Create.Meta.Name = bkpLocation.Meta.Name
 		bkpLocResp.Create.Config.BkpLocation.GoogleStorage.BucketName = *bkpLocation.Config.GetGoogleStorage().BucketName
+		bkpLocResp.Create.Config.CloudCredentialsId = bkpLocation.Config.GetCloudCredentialId()
 		bkpLocResp.Create.Config.Provider.Name = "gcp"
 	}
-
-	//Test Print
-	log.Infof("bucket Name after copy [%s]", bkpLocResp.Create.Config.BkpLocation.S3Storage.BucketName)
-	log.Infof("end point after copy [%s]", bkpLocResp.Create.Config.BkpLocation.S3Storage.Endpoint)
-	log.Infof("region after copy [%s]", bkpLocResp.Create.Config.BkpLocation.S3Storage.Region)
 
 	return &bkpLocResp
 
@@ -172,10 +179,6 @@ func (backuploc *PLATFORM_API_V1) CreateBackupLocation(createReq *BackupLocation
 		},
 		Config: backupLocationConfig(createReq),
 	}
-
-	log.Infof("bucketName [%s]", *createBackupLoc.Config.S3Storage.BucketName)
-	log.Infof("region [%s]", *createBackupLoc.Config.S3Storage.Region)
-	log.Infof("endpoint [%s]", *createBackupLoc.Config.S3Storage.Endpoint)
 
 	backupLocationModel, res, err := backupLocationClient.BackupLocationServiceCreateBackupLocation(ctx, createReq.Create.TenantID).V1BackupLocation(*createBackupLoc).Execute()
 	if err != nil || res.StatusCode != status.StatusOK {

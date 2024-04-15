@@ -2,6 +2,9 @@ package tests
 
 import (
 	"fmt"
+	"strings"
+	"sync"
+
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
@@ -10,8 +13,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
-	"strings"
-	"sync"
 )
 
 var _ = Describe("{PerformRestoreToSameCluster}", func() {
@@ -24,7 +25,6 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		deployment           *automationModels.PDSDeploymentResponse
 		latestBackupUid      string
 		pdsBackupConfigName  string
-		deploymentName       string
 		restoreNamespace     string
 	)
 
@@ -52,9 +52,9 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 				//serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
 				//log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
-				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = "tmpl:467d65b1-86eb-4c36-a240-f968d14f104e"
-				workflowDataservice.PDSTemplates.StorageTemplateId = "tmpl:b2dead78-5d31-4b83-bcec-b8f1c9c1d83e"
-				workflowDataservice.PDSTemplates.ResourceTemplateId = "tmpl:a1517bc0-26b4-4c06-874d-4e36bbffb305"
+				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = "tmpl:d1ed6519-fe79-463f-8d8f-8e6aaedb2f79"
+				workflowDataservice.PDSTemplates.StorageTemplateId = "tmpl:a584ede7-811e-48bd-b000-ae799e3e084e"
+				workflowDataservice.PDSTemplates.ResourceTemplateId = "tmpl:04dab835-1fe2-4526-824f-d7a45694676c"
 
 				//workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
 				//workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
@@ -87,7 +87,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 			Step("Get the latest backup detail for the deployment", func() {
 				workflowBackup.WorkflowDataService = workflowDataservice
 				log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
-				backupResponse, err := workflowBackup.GetLatestBackup(deploymentName)
+				backupResponse, err := workflowBackup.GetLatestBackup(*deployment.Create.Meta.Name)
 				log.FailOnError(err, "Error occured while creating backup")
 				latestBackupUid = *backupResponse.Meta.Uid
 				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
@@ -144,7 +144,6 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 		destinationNamespace platform.WorkflowNamespace
 		latestBackupUid      string
 		pdsBackupConfigName  string
-		deploymentName       string
 		restoreNamespace     string
 	)
 
@@ -172,9 +171,9 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 				//serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
 				//log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
-				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = "tmpl:467d65b1-86eb-4c36-a240-f968d14f104e"
-				workflowDataservice.PDSTemplates.StorageTemplateId = "tmpl:b2dead78-5d31-4b83-bcec-b8f1c9c1d83e"
-				workflowDataservice.PDSTemplates.ResourceTemplateId = "tmpl:a1517bc0-26b4-4c06-874d-4e36bbffb305"
+				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = "tmpl:d1ed6519-fe79-463f-8d8f-8e6aaedb2f79"
+				workflowDataservice.PDSTemplates.StorageTemplateId = "tmpl:a584ede7-811e-48bd-b000-ae799e3e084e"
+				workflowDataservice.PDSTemplates.ResourceTemplateId = "tmpl:04dab835-1fe2-4526-824f-d7a45694676c"
 
 				//workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
 				//workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
@@ -207,7 +206,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 			Step("Get the latest backup detail for the deployment", func() {
 				workflowBackup.WorkflowDataService = workflowDataservice
 				log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
-				backupResponse, err := workflowBackup.GetLatestBackup(deploymentName)
+				backupResponse, err := workflowBackup.GetLatestBackup(*deployment.Create.Meta.Name)
 				log.FailOnError(err, "Error occured while creating backup")
 				latestBackupUid = *backupResponse.Meta.Uid
 				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
@@ -283,7 +282,6 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 		destinationNamespace platform.WorkflowNamespace
 		latestBackupUid      string
 		pdsBackupConfigName  string
-		deploymentName       string
 		restoreNamespace     string
 	)
 
@@ -312,9 +310,9 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 				//serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
 				//log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
-				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = "tmpl:467d65b1-86eb-4c36-a240-f968d14f104e"
-				workflowDataservice.PDSTemplates.StorageTemplateId = "tmpl:b2dead78-5d31-4b83-bcec-b8f1c9c1d83e"
-				workflowDataservice.PDSTemplates.ResourceTemplateId = "tmpl:a1517bc0-26b4-4c06-874d-4e36bbffb305"
+				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = "tmpl:d1ed6519-fe79-463f-8d8f-8e6aaedb2f79"
+				workflowDataservice.PDSTemplates.StorageTemplateId = "tmpl:a584ede7-811e-48bd-b000-ae799e3e084e"
+				workflowDataservice.PDSTemplates.ResourceTemplateId = "tmpl:04dab835-1fe2-4526-824f-d7a45694676c"
 
 				//workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
 				//workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
@@ -347,7 +345,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 			Step("Get the latest backup detail for the deployment", func() {
 				workflowBackup.WorkflowDataService = workflowDataservice
 				log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
-				backupResponse, err := workflowBackup.GetLatestBackup(deploymentName)
+				backupResponse, err := workflowBackup.GetLatestBackup(*deployment.Create.Meta.Name)
 				log.FailOnError(err, "Error occured while creating backup")
 				latestBackupUid = *backupResponse.Meta.Uid
 				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)

@@ -112,33 +112,6 @@ func GetDeploymentResources(deployment map[string]string, dataService, dataServi
 
 // ValidateDataServiceDeployment takes the deployment map(name and id), namespace and returns error
 func ValidateDataServiceDeployment(deploymentId, namespace string) error {
-	//var ss *v1.StatefulSet
-
-	//deploymentName, deploymentId := GetDeploymentNameAndId(deployment)
-	//log.Debugf("deployment name [%s] in namespace [%s]", deploymentName, namespace)
-	log.Debugf("deployment Id [%s] ", deploymentId)
-
-	//TODO: Add validation for sts
-	//err = wait.Poll(validateDeploymentTimeInterval, validateDeploymentTimeOut, func() (bool, error) {
-	//	ss, err = k8sApps.GetStatefulSet(deploymentName, namespace)
-	//	if err != nil {
-	//		log.Warnf("An Error Occured while getting statefulsets %v", err)
-	//		return false, nil
-	//	}
-	//	return true, nil
-	//})
-	//if err != nil {
-	//	log.Errorf("An Error Occured while getting statefulsets %v", err)
-	//	return err
-	//}
-	//
-	////validate the statefulset deployed in the k8s namespace
-	//err = k8sApps.ValidateStatefulSet(ss, validateDeploymentTimeOut)
-	//if err != nil {
-	//	log.Errorf("An Error Occured while validating statefulsets %v", err)
-	//	return err
-	//}
-
 	log.Infof("DeploymentId [%s]", deploymentId)
 	err = wait.Poll(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
 		res, err := v2Components.PDS.GetDeployment(deploymentId)
