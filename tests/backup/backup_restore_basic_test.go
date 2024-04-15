@@ -1079,7 +1079,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", Label(TestCaseLabelsMap[
 			namespaceMapping := make(map[string]string)
 			// Modifying namespaceMapping to restore only new namespaces
 			for _, namespace := range newAppNamespaces {
-				namespaceMapping[namespace] = namespace + "-restored"
+				namespaceMapping[namespace] = namespace + "-res"
 			}
 			log.InfoD("Namespace mapping used for restoring - %v", namespaceMapping)
 			restoreName = fmt.Sprintf("%s-%s", "test-restore", RandomString(4))
@@ -1837,9 +1837,9 @@ var _ = Describe("{AddMultipleNamespaceLabels}", Label(TestCaseLabelsMap[AddMult
 			scheduleRestoreMapping = make(map[string]string)
 			backupScheduleNamespace, err := FetchNamespacesFromBackup(ctx, firstScheduleBackupName, BackupOrgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching namespaces %s from schedule backup %s", backupScheduleNamespace, firstScheduleBackupName))
-			restoredNameSpace := fmt.Sprintf("%s-%v", backupScheduleNamespace[0], time.Now().Unix())
+			restoredNameSpace := fmt.Sprintf("%s-%v", backupScheduleNamespace[0], RandomString(5))
 			scheduleRestoreMapping[backupScheduleNamespace[0]] = restoredNameSpace
-			customRestoreName := fmt.Sprintf("%s-%v", scheduleName, time.Now().Unix())
+			customRestoreName := fmt.Sprintf("%s-%v", scheduleName, RandomString(5))
 			err = CreateRestoreWithValidation(ctx, customRestoreName, firstScheduleBackupName, scheduleRestoreMapping, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContextsExpectedToBeInBackup)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of restoring scheduled backups %s in custom namespace %v", customRestoreName, scheduleRestoreMapping))
 			restoreNames = append(restoreNames, customRestoreName)
