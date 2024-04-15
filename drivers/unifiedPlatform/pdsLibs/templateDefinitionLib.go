@@ -11,10 +11,10 @@ import (
 
 type StorageConfiguration struct {
 	FS          string
-	Repl        int32
+	Repl        string
 	Provisioner string
-	FG          bool
-	Secure      bool
+	FG          string
+	Secure      string
 }
 type ResourceConfiguration struct {
 	Cpu_Limit       string
@@ -24,12 +24,13 @@ type ResourceConfiguration struct {
 	Storage_Request string
 }
 type ServiceConfiguration struct {
-	MaxConnection string
+	MAX_CONNECTIONS string
 }
 
 const (
 	STORAGE_OPTIONS   = "storage_options"
 	RESOURCE_SETTINGS = "resource_settings"
+	SERVICE_OPTIONS   = "service_settings"
 )
 
 func CreateServiceConfigTemplate(tenantId string, dsName string, serviceConfig ServiceConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
@@ -41,9 +42,9 @@ func CreateServiceConfigTemplate(tenantId string, dsName string, serviceConfig S
 	templateName := "pdsAutoSVCTemp" + utilities.RandomString(5)
 
 	keyValue := ServiceConfiguration{
-		MaxConnection: serviceConfig.MaxConnection,
+		MAX_CONNECTIONS: serviceConfig.MAX_CONNECTIONS,
 	}
-	templateValue := structToMap(keyValue)
+	templateValue := structToMap(keyValue, SERVICE_OPTIONS)
 	log.InfoD("Tenant is- [%v]", tenantId)
 	createReq := automationModels.PlatformTemplatesRequest{Create: automationModels.CreatePlatformTemplates{
 		TenantId: tenantId,
@@ -69,7 +70,7 @@ func CreateStorageConfigTemplate(tenantId string, dsName string, templateConfigs
 		return nil, fmt.Errorf("unable to fetch revisionUid for the dataservice - [%v] under test", dsName)
 	}
 	templateName := "pdsAutoSVCTemp" + utilities.RandomString(5)
-	templateValue := structToMap(templateConfigs)
+	templateValue := structToMap(templateConfigs, STORAGE_OPTIONS)
 	log.InfoD("Temp value formed is- [%v]", templateValue)
 	createReq := automationModels.PlatformTemplatesRequest{Create: automationModels.CreatePlatformTemplates{
 		TenantId: tenantId,
@@ -95,7 +96,7 @@ func CreateResourceConfigTemplate(tenantId string, dsName string, templateConfig
 		return nil, fmt.Errorf("unable to fetch revisionUid for the dataservice - [%v] under test", dsName)
 	}
 	templateName := "pdsAutoResTemp" + utilities.RandomString(5)
-	templateValue := structToMap(templateConfigs)
+	templateValue := structToMap(templateConfigs, RESOURCE_SETTINGS)
 	log.InfoD("Temp value formed is- [%v]", templateValue)
 	createReq := automationModels.PlatformTemplatesRequest{Create: automationModels.CreatePlatformTemplates{
 		TenantId: tenantId,
@@ -177,7 +178,7 @@ func GetRevisionUidForResourceConfig() (string, error) {
 	return revisionUid, nil
 }
 
-func structToMap(structType interface{}) map[string]interface{} {
+func structToMap(structType interface{}, tempType string) map[string]interface{} {
 	result := make(map[string]interface{})
 	val := reflect.ValueOf(structType)
 	typ := reflect.TypeOf(structType)
@@ -186,6 +187,11 @@ func structToMap(structType interface{}) map[string]interface{} {
 		key := typ.Field(i).Name
 		value := field.Interface()
 		result[key] = value
+	}
+
+	if tempType == SERVICE_OPTIONS {
+		log.InfoD("templateValue formed is- [%v]", result)
+		return result
 	}
 	// Convert keys to lowercase
 	lowercaseMap := make(map[string]interface{})
