@@ -4,39 +4,59 @@ import (
 	"encoding/json"
 	"fmt"
 	pds "github.com/portworx/torpedo/drivers/pds/dataservice"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/pkg/log"
+	"google.golang.org/grpc"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"net"
 	"strings"
 	"time"
 )
 
 const (
 	PDS_DEPLOYMENT_AVAILABLE = "AVAILABLE"
+	CRGroup                  = "deployments.pds.portworx.com"
+	Version                  = "v1"
 )
 
-func GetDeploymentResources(deployment map[string]string, dataService, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace string) (ResourceSettingTemplate, StorageOptions, StorageClassConfig, error) {
+// GetDeploymentResources returns the Deployment related configurations
+func GetDeploymentResources(deployment map[string]string, dataService, resourceTemplateID, storageTemplateID, namespace string) (ResourceSettingTemplate, StorageOps, DeploymentConfig, error) {
 	var (
-		config       StorageClassConfig
 		resourceTemp ResourceSettingTemplate
-		storageOp    StorageOptions
-		dbConfig     DBConfig
-		docImage     string
+		storageOp    StorageOps
+		dbConfig     DeploymentConfig
 	)
-
 	deploymentName, deploymentId := GetDeploymentNameAndId(deployment)
+	log.Debugf("deployment Name [%s] and Id [%s]", deploymentName, deploymentId)
 
-	labelSelector := make(map[string]string)
-	labelSelector["name"] = deploymentName
-	storageClasses, err := k8sStorage.GetStorageClasses(labelSelector)
+	dbConfig, err = GetDeploymentConfigurations(namespace, dataService, deploymentName)
 	if err != nil {
-		log.FailOnError(err, "An error occured while getting storage classes")
+		return resourceTemp, storageOp, dbConfig, err
 	}
 
-	objects, err := GetCRObject(namespace, "deployments.pds.io", "v1", "databases")
+	log.Debugf("DbConfig [%v]", dbConfig)
+	resourceTemp, err = GetResourceTemplateConfigs(resourceTemplateID)
+	if err != nil {
+		return resourceTemp, storageOp, dbConfig, err
+	}
+
+	storageOp, err = GetStorageTemplateConfigs(storageTemplateID)
+	if err != nil {
+		return resourceTemp, storageOp, dbConfig, err
+	}
+
+	return resourceTemp, storageOp, dbConfig, nil
+}
+
+// GetDeploymentConfigurations returns the deployment CRObject response
+func GetDeploymentConfigurations(namespace, dataServiceName, deploymentName string) (DeploymentConfig, error) {
+	var dbConfig DeploymentConfig
+	objects, err := GetCRObject(namespace, CRGroup, Version, strings.ToLower(dataServiceName)+"s")
+	if err != nil {
+		return dbConfig, err
+	}
 
 	// Iterate over the CRD objects and print their names.
 	for _, object := range objects.Items {
@@ -44,74 +64,83 @@ func GetDeploymentResources(deployment map[string]string, dataService, dataServi
 		if object.GetName() == deploymentName {
 			crJsonObject, err := object.MarshalJSON()
 			if err != nil {
-				log.FailOnError(err, "An error occured while marshalling cr")
+				return dbConfig, err
 			}
 			err = json.Unmarshal(crJsonObject, &dbConfig)
 			if err != nil {
-				log.FailOnError(err, "An error occured while unmarshalling cr")
+				return dbConfig, err
 			}
 		}
 	}
-
-	//Get the ds version from the sts
-	if dataService == mssql {
-		docImage = dbConfig.Spec.StatefulSet.Template.Spec.Containers[1].Image
-	} else {
-		docImage = dbConfig.Spec.StatefulSet.Template.Spec.Containers[0].Image
-	}
-	log.Debugf("docImage [%v]", docImage)
-	dsVersionImageTag := strings.Split(docImage, ":")
-	log.Debugf("version tag %v", dsVersionImageTag[1])
-
-	scJsonData, err := json.Marshal(storageClasses)
-	if err != nil {
-		log.FailOnError(err, "An error occured while marshalling statefulset")
-	}
-	err = json.Unmarshal(scJsonData, &config)
-	if err != nil {
-		log.FailOnError(err, "An error occured while unmarshalling storage class")
-	}
-
-	//Assigning values to the custom struct of storageclass config
-	config.Resources.Requests.CPU = dbConfig.Spec.StatefulSet.Template.Spec.Containers[0].Resources.Requests.CPU
-	config.Resources.Requests.Memory = dbConfig.Spec.StatefulSet.Template.Spec.Containers[0].Resources.Requests.Memory
-	config.Resources.Requests.EphemeralStorage = dbConfig.Spec.Datastorage.PersistentVolumeSpec.Spec.Resources.Requests.Storage
-	config.Resources.Limits.CPU = dbConfig.Spec.StatefulSet.Template.Spec.Containers[0].Resources.Limits.CPU
-	config.Resources.Limits.Memory = dbConfig.Spec.StatefulSet.Template.Spec.Containers[0].Resources.Limits.Memory
-	config.Replicas = dbConfig.Status.Replicas
-	config.Version = dsVersionImageTag[1]
-
-	config.Parameters.Fg = dbConfig.Spec.Datastorage.StorageClass.Parameters.Fg
-	config.Parameters.Fs = dbConfig.Spec.Datastorage.StorageClass.Parameters.Fs
-	config.Parameters.Repl = dbConfig.Spec.Datastorage.StorageClass.Parameters.Repl
-
-	//TODO: Update the template details once the template api's are ready
-	log.Infof("deployment Id [%s]", deploymentId)
-	//rt, err := components.ResourceSettingsTemplate.GetTemplate(dataServiceDefaultResourceTemplateID)
-	//if err != nil {
-	//	log.Errorf("Error Occured while getting resource setting template %v", err)
-	//}
-	//resourceTemp.Resources.Requests.CPU = *rt.CpuRequest
-	//resourceTemp.Resources.Requests.Memory = *rt.MemoryRequest
-	//resourceTemp.Resources.Requests.Storage = *rt.StorageRequest
-	//resourceTemp.Resources.Limits.CPU = *rt.CpuLimit
-	//resourceTemp.Resources.Limits.Memory = *rt.MemoryLimit
-	//
-	//st, err := components.StorageSettingsTemplate.GetTemplate(storageTemplateID)
-	//if err != nil {
-	//	log.Errorf("Error Occured while getting storage template %v", err)
-	//	return resourceTemp, storageOp, config, err
-	//}
-	//storageOp.Filesystem = st.GetFs()
-	//storageOp.Replicas = st.GetRepl()
-	//storageOp.VolumeGroup = st.GetFg()
-
-	return resourceTemp, storageOp, config, nil
-
+	log.Debugf("depVersion [%v]", dbConfig.Spec.Version)
+	return dbConfig, nil
 }
 
-// ValidateDataServiceDeployment takes the deployment map(name and id), namespace and returns error
-func ValidateDataServiceDeployment(deploymentId, namespace string) error {
+// GetResourceTemplateConfigs returns the resourceTemplate configs
+func GetResourceTemplateConfigs(resourceTemplateID string) (ResourceSettingTemplate, error) {
+	var resourceTemp ResourceSettingTemplate
+	ResourceTemplateresp, err := platformLibs.GetTemplate(resourceTemplateID)
+	if err != nil {
+		return resourceTemp, err
+	}
+
+	log.Debug("ResourceTemplate Response")
+	for key, value := range ResourceTemplateresp.Get.Config.TemplateValues {
+		log.Debugf("key [%s]", key)
+		log.Debugf("value [%s]", value)
+		if key == "cpu_request" {
+			resourceTemp.Resources.Requests.CPU = value.(string)
+		}
+		if key == "memory_request" {
+			resourceTemp.Resources.Requests.Memory = value.(string)
+		}
+		if key == "storage_request" {
+			resourceTemp.Resources.Requests.Storage = value.(string)
+		}
+		if key == "cpu_limit" {
+			resourceTemp.Resources.Limits.CPU = value.(string)
+		}
+		if key == "memory_limit" {
+			resourceTemp.Resources.Limits.Memory = value.(string)
+		}
+	}
+	return resourceTemp, nil
+}
+
+// GetStorageTemplateConfigs returns the storageTemplate configs
+func GetStorageTemplateConfigs(storageTemplateID string) (StorageOps, error) {
+	var storageOp StorageOps
+
+	stResponse, err := platformLibs.GetTemplate(storageTemplateID)
+	if err != nil {
+		return storageOp, err
+	}
+	log.Debug("StorageTemplate Response")
+	for key, value := range stResponse.Get.Config.TemplateValues {
+		log.Debugf("key [%s]", key)
+		log.Debugf("value [%s]", value)
+		if key == "fs" {
+			storageOp.Filesystem = value.(string)
+		}
+		if key == "provisioner" {
+			storageOp.Provisioner = value.(string)
+		}
+		if key == "repl" {
+			storageOp.Replicas = value.(string)
+		}
+		if key == "fg" {
+			storageOp.VolumeGroup = value.(string)
+		}
+		if key == "secure" {
+			storageOp.Secure = value.(string)
+		}
+	}
+	return storageOp, nil
+}
+
+// ValidateDataServiceDeploymentHealth takes the deployment map(name and id), namespace and returns error
+func ValidateDataServiceDeploymentHealth(deploymentId, namespace string) (string, error) {
+	var deploymentName string
 	log.Infof("DeploymentId [%s]", deploymentId)
 	err = wait.Poll(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
 		res, err := v2Components.PDS.GetDeployment(deploymentId)
@@ -126,7 +155,7 @@ func ValidateDataServiceDeployment(deploymentId, namespace string) error {
 		log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Replicas, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
 		return true, nil
 	})
-	return err
+	return deploymentName, err
 }
 
 // ValidateDataMd5Hash validates the hash of the data service deployments
@@ -359,12 +388,14 @@ func GetDataServiceImageId(dsName, dsImageTag, dsVersionBuild string) (string, e
 func ValidateDNSEndPoint(dnsEndPoint string) error {
 	//log.Debugf("sleeping for 5 min, before validating dns endpoint")
 	//time.Sleep(5 * time.Minute)
-	_, err = net.Dial("tcp", dnsEndPoint)
+	conn, err := grpc.Dial(dnsEndPoint, grpc.WithInsecure())
 	if err != nil {
 		return fmt.Errorf("Failed to connect to the dns endpoint with err: %v", err)
 	} else {
 		log.Infof("DNS endpoint is reachable and ready to accept connections")
 	}
+
+	defer conn.Close()
 
 	return nil
 }

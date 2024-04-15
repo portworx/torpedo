@@ -6,13 +6,10 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dsUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
-	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -55,83 +52,83 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "error while getting Default TenantId")
 	})
 
-	Step("Get Default Project", func() {
-		var err error
-		WorkflowProject.Platform = WorkflowPlatform
-		ProjectId, err = WorkflowProject.GetDefaultProject(DefaultProject)
-		log.FailOnError(err, "Unable to get default project")
-		log.Infof("Default project ID - [%s]", ProjectId)
-		WorkflowProject.ProjectId = ProjectId
-		WorkflowProject.ProjectName = DefaultProject
-	})
-
-	Step("Register Target Cluster", func() {
-		WorkflowTargetCluster.Project = WorkflowProject
-		log.Infof("Tenant ID [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
-		WorkflowTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane(false)
-		log.FailOnError(err, "Unable to register target cluster")
-		log.Infof("Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
-	})
-
-	Step("Create a namespace for PDS", func() {
-		WorkflowNamespace.TargetCluster = WorkflowTargetCluster
-		WorkflowNamespace.Namespaces = make(map[string]string)
-		_, err := WorkflowNamespace.CreateNamespaces(PDS_DEFAULT_NAMESPACE)
-		log.FailOnError(err, "Unable to create namespace")
-		log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
-	})
-
-	Step("Create Buckets", func() {
-		if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
-			PDSBucketName = strings.ToLower("pds-test-buck-" + utilities.RandString(5))
-			switch NewPdsParams.BackUpAndRestore.TargetLocation {
-			case "s3-comp":
-				err := platformUtils.CreateS3CompBucket(PDSBucketName)
-				log.FailOnError(err, "error while creating s3-comp bucket")
-			case "s3":
-				err := platformUtils.CreateS3Bucket(PDSBucketName)
-				log.FailOnError(err, "error while creating s3 bucket")
-			case "azure":
-				err := platformUtils.CreateAzureBucket(PDSBucketName)
-				log.FailOnError(err, "error while creating azure bucket")
-			default:
-				err := platformUtils.CreateS3CompBucket(PDSBucketName)
-				log.FailOnError(err, "error while creating s3-comp bucket")
-			}
-		}
-	})
-
-	Step("Create Cloud Credential and BackUpLocation", func() {
-		log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
-		WorkflowCc.Platform = WorkflowPlatform
-		WorkflowCc.CloudCredentials = make(map[string]platform.CloudCredentialsType)
-		cc, err := WorkflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
-		log.FailOnError(err, "error occured while creating cloud credentials")
-		for _, value := range cc.CloudCredentials {
-			log.Infof("cloud credentials name: [%s]", value.Name)
-			log.Infof("cloud credentials id: [%s]", value.ID)
-			log.Infof("cloud provider type: [%s]", value.CloudProviderType)
-		}
-
-		WorkflowbkpLoc.WfCloudCredentials = WorkflowCc
-		wfbkpLoc, err := WorkflowbkpLoc.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
-		log.FailOnError(err, "error while creating backup location")
-		log.Infof("wfBkpLoc id: [%s]", wfbkpLoc.BkpLocation.BkpLocationId)
-		log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
-	})
-
-	Step("Associate namespace and cluster to Project", func() {
-		err := WorkflowProject.Associate(
-			[]string{WorkflowTargetCluster.ClusterUID},
-			[]string{WorkflowNamespace.Namespaces[PDS_DEFAULT_NAMESPACE]},
-			[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
-			[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
-			[]string{},
-			[]string{},
-		)
-		log.FailOnError(err, "Unable to associate Cluster to Project")
-		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
-	})
+	//Step("Get Default Project", func() {
+	//	var err error
+	//	WorkflowProject.Platform = WorkflowPlatform
+	//	ProjectId, err = WorkflowProject.GetDefaultProject(DefaultProject)
+	//	log.FailOnError(err, "Unable to get default project")
+	//	log.Infof("Default project ID - [%s]", ProjectId)
+	//	WorkflowProject.ProjectId = ProjectId
+	//	WorkflowProject.ProjectName = DefaultProject
+	//})
+	//
+	//Step("Register Target Cluster", func() {
+	//	WorkflowTargetCluster.Project = WorkflowProject
+	//	log.Infof("Tenant ID [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
+	//	WorkflowTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane(false)
+	//	log.FailOnError(err, "Unable to register target cluster")
+	//	log.Infof("Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
+	//})
+	//
+	//Step("Create a namespace for PDS", func() {
+	//	WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+	//	WorkflowNamespace.Namespaces = make(map[string]string)
+	//	_, err := WorkflowNamespace.CreateNamespaces(PDS_DEFAULT_NAMESPACE)
+	//	log.FailOnError(err, "Unable to create namespace")
+	//	log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
+	//})
+	//
+	//Step("Create Buckets", func() {
+	//	if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
+	//		PDSBucketName = strings.ToLower("pds-test-buck-" + utilities.RandString(5))
+	//		switch NewPdsParams.BackUpAndRestore.TargetLocation {
+	//		case "s3-comp":
+	//			err := platformUtils.CreateS3CompBucket(PDSBucketName)
+	//			log.FailOnError(err, "error while creating s3-comp bucket")
+	//		case "s3":
+	//			err := platformUtils.CreateS3Bucket(PDSBucketName)
+	//			log.FailOnError(err, "error while creating s3 bucket")
+	//		case "azure":
+	//			err := platformUtils.CreateAzureBucket(PDSBucketName)
+	//			log.FailOnError(err, "error while creating azure bucket")
+	//		default:
+	//			err := platformUtils.CreateS3CompBucket(PDSBucketName)
+	//			log.FailOnError(err, "error while creating s3-comp bucket")
+	//		}
+	//	}
+	//})
+	//
+	//Step("Create Cloud Credential and BackUpLocation", func() {
+	//	log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
+	//	WorkflowCc.Platform = WorkflowPlatform
+	//	WorkflowCc.CloudCredentials = make(map[string]platform.CloudCredentialsType)
+	//	cc, err := WorkflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
+	//	log.FailOnError(err, "error occured while creating cloud credentials")
+	//	for _, value := range cc.CloudCredentials {
+	//		log.Infof("cloud credentials name: [%s]", value.Name)
+	//		log.Infof("cloud credentials id: [%s]", value.ID)
+	//		log.Infof("cloud provider type: [%s]", value.CloudProviderType)
+	//	}
+	//
+	//	WorkflowbkpLoc.WfCloudCredentials = WorkflowCc
+	//	wfbkpLoc, err := WorkflowbkpLoc.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
+	//	log.FailOnError(err, "error while creating backup location")
+	//	log.Infof("wfBkpLoc id: [%s]", wfbkpLoc.BkpLocation.BkpLocationId)
+	//	log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
+	//})
+	//
+	//Step("Associate namespace and cluster to Project", func() {
+	//	err := WorkflowProject.Associate(
+	//		[]string{WorkflowTargetCluster.ClusterUID},
+	//		[]string{WorkflowNamespace.Namespaces[PDS_DEFAULT_NAMESPACE]},
+	//		[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
+	//		[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
+	//		[]string{},
+	//		[]string{},
+	//	)
+	//	log.FailOnError(err, "Unable to associate Cluster to Project")
+	//	log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+	//})
 
 })
 

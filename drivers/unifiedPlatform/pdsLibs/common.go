@@ -105,12 +105,20 @@ type ResourceSettingTemplate struct {
 	} `json:"resources"`
 }
 
-// StorageOptions struct used to store template values
-type StorageOptions struct {
+// StorageOps struct used to store template values
+type StorageOps struct {
 	Filesystem  string
-	ForceSpread string
-	Replicas    int32
-	VolumeGroup bool
+	Secure      string
+	Replicas    string
+	VolumeGroup string
+	Provisioner string
+}
+
+type StorageOptions struct {
+	Filesystem  string `json:"filesystem"`
+	ForceSpread string `json:"forceSpread"`
+	Replicas    string `json:"replicas"`
+	Secure      string `json:"secure"`
 }
 
 type StorageClassConfig struct {
@@ -137,6 +145,154 @@ type StorageClassConfig struct {
 			Memory           string `yaml:"memory"`
 		} `yaml:"requests"`
 	} `yaml:"resources"`
+}
+
+type DeploymentConfig struct {
+	APIVersion string   `json:"apiVersion"`
+	Kind       string   `json:"kind"`
+	Metadata   Metadata `json:"metadata"`
+	Spec       Spec     `json:"spec"`
+	Status     Status   `json:"status"`
+}
+
+type Metadata struct {
+	Annotations       Annotations `json:"annotations"`
+	CreationTimestamp time.Time   `json:"creationTimestamp"`
+	Finalizers        []string    `json:"finalizers"`
+	Generation        int         `json:"generation"`
+	Labels            Labels      `json:"labels"`
+	Name              string      `json:"name"`
+	Namespace         string      `json:"namespace"`
+	ResourceVersion   string      `json:"resourceVersion"`
+	UID               string      `json:"uid"`
+}
+
+type Annotations struct {
+	KubectlKubernetesIoLastAppliedConfiguration string `json:"kubectl.kubernetes.io/last-applied-configuration"`
+	PdsProjectID                                string `json:"pds/project-id"`
+	PdsResourceSettingTemplateID                string `json:"pds/resource-setting-template-id"`
+	PdsResourceSettingTemplateVersion           string `json:"pds/resource-setting-template-version"`
+	PdsServiceConfigurationTemplateID           string `json:"pds/service-configuration-template-id"`
+	PdsServiceConfigurationTemplateVersion      string `json:"pds/service-configuration-template-version"`
+	PdsStorageOptionsTemplateID                 string `json:"pds/storage-options-template-id"`
+	PdsStorageOptionsTemplateVersion            string `json:"pds/storage-options-template-version"`
+}
+
+type Labels struct {
+	Name                           string `json:"name"`
+	Namespace                      string `json:"namespace"`
+	PdsMutatorAdmit                string `json:"pds.mutator/admit"`
+	PdsMutatorInjectCustomRegistry string `json:"pds.mutator/injectCustomRegistry"`
+	PdsDeploymentID                string `json:"pds/deployment-id"`
+	PdsDeploymentName              string `json:"pds/deployment-name"`
+	PdsEnvironment                 string `json:"pds/environment"`
+}
+
+type Spec struct {
+	Image       string     `json:"image"`
+	ImageBuild  string     `json:"imageBuild"`
+	TLSEnabled  bool       `json:"tlsEnabled"`
+	TLSIssuer   string     `json:"tlsIssuer"`
+	Topologies  []Topology `json:"topologies"`
+	Version     string     `json:"version"`
+	VersionName string     `json:"versionName"`
+}
+
+type Topology struct {
+	Capabilities   Capabilities   `json:"capabilities"`
+	Configuration  Configuration  `json:"configuration"`
+	DNSZone        string         `json:"dnsZone"`
+	Initialize     string         `json:"initialize"`
+	Nodes          int            `json:"nodes"`
+	Resources      Resources      `json:"resources"`
+	ServiceType    string         `json:"serviceType"`
+	StorageClass   StorageClass   `json:"storageClass"`
+	StorageOptions StorageOptions `json:"storageOptions"`
+}
+
+type Capabilities struct {
+	FullBackup        string `json:"full_backup"`
+	IncrementalBackup string `json:"incremental_backup"`
+	ParallelPod       string `json:"parallel_pod"`
+	PdsRestore        string `json:"pds_restore"`
+	PDSSystemUsers    string `json:"pds_system_users"`
+	TLS               string `json:"tls"`
+}
+
+type Configuration struct {
+	MAXCONNECTIONS string `json:"MAX_CONNECTIONS"`
+}
+
+type Resources struct {
+	Limits   Limits   `json:"limits"`
+	Requests Requests `json:"requests"`
+}
+
+type Limits struct {
+	CPU    string `json:"cpu"`
+	Memory string `json:"memory"`
+}
+
+type Requests struct {
+	CPU     string `json:"cpu"`
+	Memory  string `json:"memory"`
+	Storage string `json:"storage"`
+}
+
+type StorageClass struct {
+	Provisioner string `json:"provisioner"`
+}
+
+type Status struct {
+	ClusterDetails    ClusterDetails    `json:"clusterDetails"`
+	ConnectionDetails ConnectionDetails `json:"connectionDetails"`
+	Health            string            `json:"health"`
+	Initialized       string            `json:"initialized"`
+	Pods              []Pod             `json:"pods"`
+	ReadyReplicas     int               `json:"readyReplicas"`
+	Replicas          int               `json:"replicas"`
+	Resources         []Resource        `json:"resources"`
+}
+
+type ClusterDetails struct {
+	Host    string `json:"host"`
+	Port    int    `json:"port"`
+	Version string `json:"version"`
+}
+
+type ConnectionDetails struct {
+	Nodes []string `json:"nodes"`
+	Ports Ports    `json:"ports"`
+}
+
+type Ports struct {
+	Patroni    int `json:"patroni"`
+	Postgresql int `json:"postgresql"`
+	SSHD       int `json:"sshd"`
+}
+
+type Pod struct {
+	IP         string `json:"ip"`
+	Name       string `json:"name"`
+	WorkerNode string `json:"workerNode"`
+}
+
+type Resource struct {
+	Conditions []Condition  `json:"conditions"`
+	Resource   ResourceItem `json:"resource"`
+}
+
+type Condition struct {
+	LastTransitionTime time.Time `json:"lastTransitionTime"`
+	Message            string    `json:"message"`
+	Reason             string    `json:"reason"`
+	Status             string    `json:"status"`
+	Type               string    `json:"type"`
+}
+
+type ResourceItem struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
 }
 
 type DBConfig struct {

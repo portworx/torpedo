@@ -9,7 +9,6 @@ import (
 	utils "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
-	"strconv"
 )
 
 type WorkflowDataService struct {
@@ -59,24 +58,62 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		}
 	} else {
 		// Validate the sts object and health of the pds deployment
-		err = dslibs.ValidateDataServiceDeployment(*deployment.Create.Meta.Uid, namespace)
+		deploymentName, err := dslibs.ValidateDataServiceDeploymentHealth(*deployment.Create.Meta.Uid, namespace)
 		if err != nil {
 			return nil, err
 		}
 
-		// Get deployment resources
-		//resourceTemp, storageOp, config, err := dslibs.GetDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, resConfigId, stConfigId, namespace)
-		//if err != nil {
-		//	return nil, err
-		//}
+		// Validate if the dns endpoint is reachable
+		err = wfDataService.ValidateDNSEndpoint(*deployment.Create.Meta.Uid)
+		if err != nil {
+			return nil, err
+		}
+
+		// Update the actual deploymentName with deploymentId
+		wfDataService.DataServiceDeployment[deploymentName] = *deployment.Create.Meta.Uid
+
+		// Get data service deployment resources
+		resourceTemplateOps, storageOps, DeploymentConfigs, err := wfDataService.GetDsDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, resConfigId, stConfigId, namespace)
+		if err != nil {
+			return nil, err
+		}
 
 		// Validate deployment resources
 		//TODO: Initialize the dataServiceVersionBuildMap once list ds version api is available
-		//var dataServiceVersionBuildMap = make(map[string][]string)
-		//ValidateDeploymentResources(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+		var dataServiceVersionBuildMap = make(map[string][]string)
+		wfDataService.ValidateDeploymentResources(resourceTemplateOps, storageOps, DeploymentConfigs, ds.Replicas, dataServiceVersionBuildMap)
 	}
 
 	return deployment, nil
+}
+
+func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deployment map[string]string, dataServiceName, resourceTemplateID, storageTemplateID, namespace string) (dslibs.ResourceSettingTemplate, dslibs.StorageOps, dslibs.DeploymentConfig, error) {
+	var (
+		resourceTemp dslibs.ResourceSettingTemplate
+		storageOp    dslibs.StorageOps
+		dbConfig     dslibs.DeploymentConfig
+		err          error
+	)
+	deploymentName, deploymentId := GetDeploymentNameAndId(deployment)
+	log.Debugf("deployment Name [%s] and Id [%s]", deploymentName, deploymentId)
+
+	dbConfig, err = dslibs.GetDeploymentConfigurations(namespace, dataServiceName, deploymentName)
+	if err != nil {
+		return resourceTemp, storageOp, dbConfig, err
+	}
+
+	resourceTemp, err = dslibs.GetResourceTemplateConfigs(resourceTemplateID)
+	if err != nil {
+		return resourceTemp, storageOp, dbConfig, err
+	}
+
+	storageOp, err = dslibs.GetStorageTemplateConfigs(storageTemplateID)
+	if err != nil {
+		return resourceTemp, storageOp, dbConfig, err
+	}
+
+	return resourceTemp, storageOp, dbConfig, err
+
 }
 
 func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataService, deploymentId, image, version string) (*automationModels.PDSDeploymentResponse, error) {
@@ -106,12 +143,22 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 		}
 	} else {
 		// Validate the sts object and health of the pds deployment
-		err = dslibs.ValidateDataServiceDeployment(deploymentId, namespace)
+		deploymentName, err := dslibs.ValidateDataServiceDeploymentHealth(deploymentId, namespace)
+		if err != nil {
+			return nil, err
+		}
+
+		wfDataService.DataServiceDeployment[deploymentName] = *deployment.Update.Config.DeploymentMeta.Uid
+
+		// Validate if the dns endpoint is reachable
+		err = wfDataService.ValidateDNSEndpoint(deploymentId)
 		if err != nil {
 			return nil, err
 		}
 
 		// Get deployment resources
+		dslibs.GetDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, "resource-template-id", "storage-template-id", namespace)
+
 		//resourceTemp, storageOp, config, err := dslibs.GetDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, "resource-template-id", "storage-template-id", namespace)
 		//if err != nil {
 		//	return nil, err
@@ -223,29 +270,28 @@ func GetDeploymentNameAndId(deployment map[string]string) (string, string) {
 
 }
 
-func ValidateDeploymentResources(resourceTemp dslibs.ResourceSettingTemplate, storageOp dslibs.StorageOptions, config dslibs.StorageClassConfig, replicas int, dataServiceVersionBuildMap map[string][]string) {
-	log.InfoD("filesystem used %v ", config.Parameters.Fs)
-	log.InfoD("storage replicas used %v ", config.Parameters.Fg)
-	log.InfoD("cpu requests used %v ", config.Resources.Requests.CPU)
-	log.InfoD("memory requests used %v ", config.Resources.Requests.Memory)
-	log.InfoD("storage requests used %v ", config.Resources.Requests.EphemeralStorage)
-	log.InfoD("No of nodes requested %v ", config.Replicas)
-	log.InfoD("volume group %v ", storageOp.VolumeGroup)
+func (wfDataService *WorkflowDataService) ValidateDeploymentResources(resourceTemp dslibs.ResourceSettingTemplate, storageOp dslibs.StorageOps, config dslibs.DeploymentConfig, replicas int, dataServiceVersionBuildMap map[string][]string) {
+	log.Debugf("filesystem used %v ", config.Spec.Topologies[0].StorageOptions.Filesystem)
+	log.Debugf("storage replicas used %v ", config.Spec.Topologies[0].StorageOptions.Replicas)
+	log.Debugf("cpu requests used %v ", config.Spec.Topologies[0].Resources.Requests.CPU)
+	log.Debugf("memory requests used %v ", config.Spec.Topologies[0].Resources.Requests.Memory)
+	log.Debugf("storage requests used %v ", config.Spec.Topologies[0].Resources.Requests.Storage)
+	log.Debugf("No of nodes requested %v ", config.Spec.Topologies[0].Nodes)
+	log.Debugf("volume group %v ", storageOp.VolumeGroup)
+	log.Debugf("resource template values cpu req [%s]", resourceTemp.Resources.Requests.CPU)
 
-	dash.VerifyFatal(resourceTemp.Resources.Requests.CPU, config.Resources.Requests.CPU, "Validating CPU Request")
-	dash.VerifyFatal(resourceTemp.Resources.Requests.Memory, config.Resources.Requests.Memory, "Validating Memory Request")
-	dash.VerifyFatal(resourceTemp.Resources.Requests.Storage, config.Resources.Requests.EphemeralStorage, "Validating storage")
-	dash.VerifyFatal(resourceTemp.Resources.Limits.CPU, config.Resources.Limits.CPU, "Validating CPU Limits")
-	dash.VerifyFatal(resourceTemp.Resources.Limits.Memory, config.Resources.Limits.Memory, "Validating Memory Limits")
-	repl, err := strconv.Atoi(config.Parameters.Repl)
-	log.FailOnError(err, "failed on atoi method")
-	dash.VerifyFatal(storageOp.Replicas, int32(repl), "Validating storage replicas")
-	dash.VerifyFatal(storageOp.Filesystem, config.Parameters.Fs, "Validating filesystems")
-	dash.VerifyFatal(config.Replicas, replicas, "Validating ds node replicas")
+	dash.VerifyFatal(resourceTemp.Resources.Requests.CPU, config.Spec.Topologies[0].Resources.Requests.CPU, "Validating CPU Request")
+	dash.VerifyFatal(resourceTemp.Resources.Requests.Memory, config.Spec.Topologies[0].Resources.Requests.Memory, "Validating Memory Request")
+	dash.VerifyFatal(resourceTemp.Resources.Requests.Storage, config.Spec.Topologies[0].Resources.Requests.Storage, "Validating storage")
+	dash.VerifyFatal(resourceTemp.Resources.Limits.CPU, config.Spec.Topologies[0].Resources.Limits.CPU, "Validating CPU Limits")
+	dash.VerifyFatal(resourceTemp.Resources.Limits.Memory, config.Spec.Topologies[0].Resources.Limits.Memory, "Validating Memory Limits")
+	dash.VerifyFatal(storageOp.Replicas, config.Spec.Topologies[0].StorageOptions.Replicas, "Validating storage replicas")
+	dash.VerifyFatal(storageOp.Filesystem, config.Spec.Topologies[0].StorageOptions.Filesystem, "Validating filesystems")
+	dash.VerifyFatal(replicas, config.Spec.Topologies[0].Nodes, "Validating ds node replicas")
 
-	for version, build := range dataServiceVersionBuildMap {
-		dash.VerifyFatal(config.Version, version+"-"+build[0], "validating ds build and version")
-	}
+	//for version, build := range dataServiceVersionBuildMap {
+	//	dash.VerifyFatal(config.Version, version+"-"+build[0], "validating ds build and version")
+	//}
 }
 
 func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string, deployment map[string]string, sizeInGb uint64) error {

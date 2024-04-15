@@ -16,6 +16,48 @@ var _ = Describe("{CleanUpDeployments}", func() {
 	})
 })
 
+var _ = Describe("{GetCRObject}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("GetCRObject", "get the cr object", nil, 0)
+	})
+
+	var wfDataService pds.WorkflowDataService
+
+	It("Get the CR object", func() {
+		for _, ds := range tests.NewPdsParams.DataServiceToTest {
+			wfDataService.DataServiceDeployment = make(map[string]string)
+			wfDataService.DataServiceDeployment["pg-qa-bxgoxo"] = "dep:8965032c-c8e3-447f-af05-9b7a4badf5a9"
+			resourceSettings, storageOps, deploymentConfig, err := pdslibs.GetDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, "tmpl:04dab835-1fe2-4526-824f-d7a45694676c", "tmpl:a584ede7-811e-48bd-b000-ae799e3e084e", "pds-namespace-fdrey")
+			log.FailOnError(err, "Error occured while getting deployment resources")
+			var dataServiceVersionBuildMap = make(map[string][]string)
+			wfDataService.ValidateDeploymentResources(resourceSettings, storageOps, deploymentConfig, ds.Replicas, dataServiceVersionBuildMap)
+		}
+	})
+})
+
+var _ = Describe("{ValidateDnsEndPoint}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateDnsEndPoint", "validate dns endpoint", nil, 0)
+	})
+
+	var (
+		workflowDataservice pds.WorkflowDataService
+		err                 error
+	)
+
+	It("ValidateDnsEndPoint", func() {
+		Step("validate dns endpoint", func() {
+			depId := "dep:8965032c-c8e3-447f-af05-9b7a4badf5a9"
+			err = workflowDataservice.ValidateDNSEndpoint(depId)
+			log.FailOnError(err, "Error occurred while validating dns endpoint")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 var _ = Describe("{DummyBackupTest}", func() {
 
 	var (
