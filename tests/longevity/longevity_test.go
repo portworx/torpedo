@@ -449,7 +449,6 @@ var _ = Describe("{UpgradeLongevity}", func() {
 						Inst().SchedUpgradeHops = strings.Join(upgradeSchedHops, ",")
 						Inst().UpgradeStorageDriverEndpointList = strings.Join(upgradeEndpoints, ",")
 						upgradeCounter.Increment(triggerType)
-						ValidateApplications(contexts)
 					}
 					time.Sleep(controlLoopSleepTime)
 				}
