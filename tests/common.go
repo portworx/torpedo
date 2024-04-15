@@ -9,7 +9,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/Masterminds/semver/v3"
 	"github.com/hashicorp/go-version"
+	pxapi "github.com/libopenstorage/operator/api/px"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"io/ioutil"
@@ -145,6 +147,8 @@ import (
 	// import gke scheduler driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
+
+	_ "github.com/portworx/torpedo/drivers/scheduler/oke"
 
 	// import rke scheduler drivers to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/rke"
@@ -397,6 +401,124 @@ const (
 
 const (
 	pxctlCDListCmd = "pxctl cd list"
+)
+
+const (
+	IBMHelmRepoName   = "ibm-helm-portworx"
+	IBMHelmRepoURL    = "https://raw.githubusercontent.com/portworx/ibm-helm/master/repo/stable"
+	IBMHelmValuesFile = "/tmp/values.yaml"
+)
+
+const (
+	ValidateStorageClusterTimeout = 40 * time.Minute
+)
+
+// LabLabel used to name the licensing features
+type LabLabel string
+
+const (
+	IBMTestLicenseSKU   = "PX-Enterprise IBM Cloud (test)"
+	IBMTestLicenseDRSKU = "PX-Enterprise IBM Cloud DR (test)"
+	IBMProdLicenseSKU   = "PX-Enterprise IBM Cloud"
+	IBMProdLicenseDRSKU = "PX-Enterprise IBM Cloud DR"
+)
+
+const (
+	// LabNodes - Number of nodes maximum
+	LabNodes LabLabel = "Nodes"
+	// LabVolumeSize - Volume capacity [TB] maximum
+	LabVolumeSize LabLabel = "VolumeSize"
+	// LabVolumes - Number of volumes per cluster maximum
+	LabVolumes LabLabel = "Volumes"
+	// LabSnapshots - Number of snapshots per volume maximum
+	LabSnapshots LabLabel = "Snapshots"
+	// LabHaLevel - Volume replica count
+	LabHaLevel LabLabel = "HaLevel"
+	// LabSharedVol - Shared volumes
+	LabSharedVol LabLabel = "SharedVolume"
+	// LabEncryptedVol - BYOK data encryption
+	LabEncryptedVol LabLabel = "EncryptedVolume"
+	// LabScaledVol - Volume sets
+	LabScaledVol LabLabel = "ScaledVolume"
+	// LabAggregatedVol - Storage aggregation
+	LabAggregatedVol LabLabel = "AggregatedVolume"
+	// LabResizeVolume - Resize volumes on demand
+	LabResizeVolume LabLabel = "ResizeVolume"
+	// LabCloudSnap - Snapshot to object store [CloudSnap]
+	LabCloudSnap LabLabel = "SnapshotToObjectStore"
+	// LabCloudSnapDaily - Number of CloudSnaps daily per volume maximum
+	LabCloudSnapDaily LabLabel = "SnapshotToObjectStoreDaily"
+	// LabCloudMigration -Cluster-level migration [Kube-motion/Data Migration]
+	LabCloudMigration LabLabel = "CloudMigration"
+	// LabDisasterRecovery - Disaster Recovery [PX-DR]
+	LabDisasterRecovery LabLabel = "DisasterRecovery"
+	// LabAUTCapacityMgmt - Autopilot Capacity Management
+	LabAUTCapacityMgmt LabLabel = "AUTCapacityManagement"
+	// LabPlatformBare - Bare-metal hosts
+	LabPlatformBare LabLabel = "EnablePlatformBare"
+	// LabPlatformVM - Virtual machine hosts
+	LabPlatformVM LabLabel = "EnablePlatformVM"
+	// LabNodeCapacity - Node disk capacity [TB] maximum
+	LabNodeCapacity LabLabel = "NodeCapacity"
+	// LabNodeCapacityExtend - Node disk capacity extension
+	LabNodeCapacityExtend LabLabel = "NodeCapacityExtension"
+	// LabLocalAttaches - Number of attached volumes per node maximum
+	LabLocalAttaches LabLabel = "LocalVolumeAttaches"
+	// LabOIDCSecurity - OIDC Security
+	LabOIDCSecurity LabLabel = "OIDCSecurity"
+	// LabGlobalSecretsOnly - Limit BYOK encryption to cluster-wide secrets
+	LabGlobalSecretsOnly LabLabel = "GlobalSecretsOnly"
+	// LabFastPath - FastPath extension [PX-FAST]
+	LabFastPath LabLabel = "FastPath"
+	// UnlimitedNumber represents the unlimited number of licensed resource.
+	// note - the max # Flex counts handle, is actually 999999999999999990
+	UnlimitedNumber = int64(0x7FFFFFFF) // C.FLX_FEATURE_UNCOUNTED_VALUE = 0x7FFFFFFF  (=2147483647)
+	Unlimited       = int64(0x7FFFFFFFFFFFFFFF)
+
+	// -- Testing maximums below
+
+	// MaxNumNodes is a maximum nodes in a cluster
+	MaxNumNodes = int64(1000)
+	// MaxNumVolumes is a maximum number of volumes in a cluster
+	MaxNumVolumes = int64(100000)
+	// MaxVolumeSize is a maximum volume size for single volume [in TB]
+	MaxVolumeSize = int64(40)
+	// MaxNodeCapacity defines the maximum node's disk capacity [in TB]
+	MaxNodeCapacity = int64(256)
+	// MaxLocalAttachCount is a maximum number of local volume attaches
+	MaxLocalAttachCount = int64(256)
+	// MaxHaLevel is a maximum replication factor
+	MaxHaLevel = int64(3)
+	// MaxNumSnapshots is a maximum number of snapshots
+	MaxNumSnapshots = int64(64)
+)
+
+var (
+	IBMLicense = map[LabLabel]interface{}{
+		LabNodes:              &pxapi.LicensedFeature_Count{Count: 1000},
+		LabVolumeSize:         &pxapi.LicensedFeature_CapacityTb{CapacityTb: 40},
+		LabVolumes:            &pxapi.LicensedFeature_Count{Count: 16384},
+		LabHaLevel:            &pxapi.LicensedFeature_Count{Count: MaxHaLevel},
+		LabSnapshots:          &pxapi.LicensedFeature_Count{Count: 64},
+		LabAggregatedVol:      &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabSharedVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabEncryptedVol:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabGlobalSecretsOnly:  &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabScaledVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabResizeVolume:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnap:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnapDaily:     &pxapi.LicensedFeature_Count{Count: Unlimited},
+		LabCloudMigration:     &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabDisasterRecovery:   &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabPlatformBare:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabPlatformVM:         &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabNodeCapacity:       &pxapi.LicensedFeature_CapacityTb{CapacityTb: 256},
+		LabNodeCapacityExtend: &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabLocalAttaches:      &pxapi.LicensedFeature_Count{Count: 256},
+		LabOIDCSecurity:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabAUTCapacityMgmt:    &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabFastPath:           &pxapi.LicensedFeature_Enabled{Enabled: false},
+	}
 )
 
 var pxRuntimeOpts string
@@ -688,6 +810,39 @@ func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 		})
 	})
+}
+
+func IsPoolAddDiskSupported() bool {
+	DMthin, err := IsDMthin()
+	log.FailOnError(err, "Error occured while checking if DMthin is enabled")
+	if DMthin {
+		dmthinSupportedPxVersion, px_err := semver.NewVersion("3.1.0")
+		if px_err != nil {
+			log.FailOnError(px_err, "Error occured :%s")
+		}
+		driverVersion, version_err := Inst().V.GetDriverVersion()
+		if version_err != nil {
+			log.FailOnError(version_err, "Error occured while fetching current version")
+		}
+		var new_trimmedVersion string
+		parts := strings.Split(driverVersion, "-")
+		trimmedVersion := strings.Split(parts[0], ".")
+		if len(trimmedVersion) > 3 {
+			new_trimmedVersion = strings.Join(trimmedVersion[:3], ".")
+		} else {
+			new_trimmedVersion = parts[0]
+		}
+		currentPxVersionOnCluster, semver_err := semver.NewVersion(new_trimmedVersion)
+		if semver_err != nil {
+			log.FailOnError(semver_err, "Error occured while comparing the current and expected version")
+		}
+		log.InfoD(fmt.Sprintf("The current version on the cluster is :%s", currentPxVersionOnCluster))
+		if currentPxVersionOnCluster.GreaterThan(dmthinSupportedPxVersion) {
+			log.Errorf("drive add to existing pool not supported for px-storev2 or px-cache pools as the current version is:%s", currentPxVersionOnCluster)
+			return false
+		}
+	}
+	return true
 }
 
 // ValidateContext is the ginkgo spec for validating a scheduled context
@@ -2597,41 +2752,44 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 // ValidateClusterSize validates number of storage nodes in given cluster
 // using total cluster size `count` and max_storage_nodes_per_zone
 func ValidateClusterSize(count int64) {
-	zones, err := Inst().N.GetZones()
+	zones, err := Inst().S.GetZones()
 	log.FailOnError(err, "Zones empty")
 	log.InfoD("ASG is running in [%+v] zones\n", zones)
-	perZoneCount := count / int64(len(zones))
+
+	volDriverSpec, err := Inst().V.GetDriver()
+	log.FailOnError(err, "error getting storage cluster volDriverSpec")
+	perZoneCount := *volDriverSpec.Spec.CloudStorage.MaxStorageNodesPerZone
 
 	// Validate total node count
-	currentNodeCount, err := Inst().N.GetASGClusterSize()
+	currentNodeCount, err := Inst().S.GetASGClusterSize()
 	log.FailOnError(err, "Failed to Get ASG Cluster Size")
 
-	dash.VerifyFatal(currentNodeCount, perZoneCount*int64(len(zones)), "ASG cluster size is as expected?")
+	dash.VerifyFatal(currentNodeCount, count, "ASG cluster size is as expected?")
 
 	// Validate storage node count
-	var expectedStorageNodesPerZone int
-	if Inst().MaxStorageNodesPerAZ <= int(perZoneCount) {
-		expectedStorageNodesPerZone = Inst().MaxStorageNodesPerAZ
-	} else {
-		expectedStorageNodesPerZone = int(perZoneCount)
+	totalStorageNodesAllowed := int(perZoneCount) * len(zones)
+	expectedStoragesNodes := totalStorageNodesAllowed
+
+	if totalStorageNodesAllowed > int(count) {
+		expectedStoragesNodes = int(count)
 	}
 	storageNodes := node.GetStorageNodes()
-	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones), "Storage nodes matches the expected number?")
+	dash.VerifyFatal(len(storageNodes), expectedStoragesNodes, "Storage nodes matches the expected number?")
 }
 
 // GetStorageNodes get storage nodes in the cluster
 func GetStorageNodes() ([]node.Node, error) {
 
-	storageNodes := []node.Node{}
+	var storageNodes []node.Node
 	nodes := node.GetStorageDriverNodes()
 
-	for _, node := range nodes {
-		devices, err := Inst().V.GetStorageDevices(node)
+	for _, n := range nodes {
+		devices, err := Inst().V.GetStorageDevices(n)
 		if err != nil {
 			return nil, err
 		}
 		if len(devices) > 0 {
-			storageNodes = append(storageNodes, node)
+			storageNodes = append(storageNodes, n)
 		}
 	}
 	return storageNodes, nil
@@ -8662,7 +8820,7 @@ func AsgKillNode(nodeToKill node.Node) error {
 			})
 
 		} else {
-			err = Inst().N.DeleteNode(nodeToKill, 5*time.Minute)
+			err = Inst().S.DeleteNode(nodeToKill)
 		}
 
 	})
@@ -10114,7 +10272,7 @@ func ValidateCRMigration(pods *v1.PodList, appData *asyncdr.AppData) error {
 	log.InfoD("Create cluster pair between source and destination clusters")
 	ScheduleValidateClusterPair(emptyCtx, false, true, defaultClusterPairDir, false)
 	migName := migrationKey + time.Now().Format("15h03m05s")
-	mig, err := asyncdr.CreateMigration(migName, appData.Ns, asyncdr.DefaultClusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+	mig, err := asyncdr.CreateMigration(migName, appData.Ns, asyncdr.DefaultClusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 	if err != nil {
 		return err
 	}
@@ -11300,4 +11458,114 @@ func PrereqForNodeDecomm(nodeToDecommission node.Node, suspendedScheds []*storka
 		}
 	}
 	return nil
+}
+
+// ValidatePXStatus validates if PX is running on all nodes
+func ValidatePXStatus() error {
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := Inst().V.WaitDriverUpOnNode(n, 30*time.Second); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// GetNodeFromIPAddress returns node details from the provided IP Address
+func GetNodeFromIPAddress(ipaddress string) (*node.Node, error) {
+	for _, eachNode := range node.GetNodes() {
+		log.Infof(fmt.Sprintf("Comparing [%v] with [%v]", eachNode.GetMgmtIp(), ipaddress))
+		if eachNode.GetMgmtIp() == ipaddress {
+			log.Infof("Matched IP Address [%v]", eachNode.MgmtIp)
+			return &eachNode, nil
+		}
+	}
+	return nil, fmt.Errorf("Unable to fetch Node details from ipaddress [%v]", ipaddress)
+}
+
+// IsVolumeTypePureBlock Returns true if the volume type if pureBlock
+func IsVolumeTypePureBlock(ctx *scheduler.Context, volName string) (bool, error) {
+	vols, err := Inst().S.GetVolumeParameters(ctx)
+	if err != nil {
+		return false, err
+	}
+	for vol, params := range vols {
+		log.Infof(fmt.Sprintf("Checking for Volume [%v]", vol))
+		if vol == volName && params["backend"] == k8s.PureBlock {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// SetUnSetDiscardMountRTOptions Set discard mount run time options on the Node
+func SetUnSetDiscardMountRTOptions(n *node.Node, unset bool) error {
+	rtOptions := 1
+	if !unset {
+		rtOptions = 0
+	}
+	optionsMap := make(map[string]string)
+	optionsMap["discard_mount_force"] = fmt.Sprintf("%v", rtOptions)
+	err := Inst().V.SetClusterRunTimeOpts(*n, optionsMap)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ValidatePxLicenseSummary validates the license summary by comparing SKU and feature quantities
+func ValidatePxLicenseSummary() error {
+	summary, err := Inst().V.GetLicenseSummary()
+	if err != nil {
+		return fmt.Errorf("failed to get license summary. Err: [%v]", err)
+	}
+	log.Infof("License summary: %v", summary)
+	switch {
+	case IsIksCluster():
+		log.Infof("Get SKU and compare with IBM cloud license activated using catalog")
+		// Get SKU and compare with IBM cloud license
+		isValidLicense := summary.SKU == IBMTestLicenseSKU || summary.SKU == IBMTestLicenseDRSKU || summary.SKU == IBMProdLicenseSKU || summary.SKU == IBMProdLicenseDRSKU
+		if !isValidLicense {
+			return fmt.Errorf("license type is not valid: %v", summary.SKU)
+		}
+		log.InfoD("Compare with PX IBM cloud licensed features")
+		isTestOrProdSKU := summary.SKU == IBMTestLicenseSKU || summary.SKU == IBMProdLicenseSKU
+		for _, feature := range summary.Features {
+			if limit, ok := IBMLicense[LabLabel(feature.Name)]; ok {
+				// Special handling for DisasterRecovery feature and certain SKUs
+				if !isTestOrProdSKU && LabLabel(feature.Name) == LabDisasterRecovery {
+					limit = &pxapi.LicensedFeature_Enabled{Enabled: true}
+				}
+				if !reflect.DeepEqual(feature.Quantity, limit) {
+					return fmt.Errorf("verifying quantity for [%v]: actual [%v], expected [%v]", feature.Name, feature.Quantity, limit)
+				}
+			}
+		}
+		log.Infof("Validated IBM cloud license successfully")
+	case IsAksCluster():
+		return fmt.Errorf("license validation is not supported on AKS cluster")
+	case IsEksCluster():
+		return fmt.Errorf("license validation is not supported on EKS cluster")
+	case IsOkeCluster():
+		return fmt.Errorf("license validation is not supported on OKE cluster")
+	case IsPksCluster():
+		return fmt.Errorf("license validation is not supported on PKS cluster")
+	default:
+		return fmt.Errorf("license validation is not supported on Unknown cluster")
+	}
+	return nil
+}
+
+// SplitStorageDriverUpgradeURL splits the given storage driver upgrade URL into endpoint and version
+// For the upgradeURL https://install.portworx.com/3.1.1, this returns Endpoint: https://install.portworx.com and Version: 3.1.1
+func SplitStorageDriverUpgradeURL(upgradeURL string) (string, string, error) {
+	parsedURL, err := url.Parse(upgradeURL)
+	if err != nil {
+		return "", "", err
+	}
+	pathSegments := strings.Split(strings.TrimSuffix(parsedURL.Path, "/"), "/")
+	endpoint := *parsedURL
+	endpoint.Path = strings.Join(pathSegments[:len(pathSegments)-1], "/")
+	pxVersion := pathSegments[len(pathSegments)-1]
+	return endpoint.String(), pxVersion, nil
 }
