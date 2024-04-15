@@ -1,6 +1,9 @@
 package tests
 
 import (
+	"os"
+	"testing"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
@@ -9,8 +12,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
-	"os"
-	"testing"
 )
 
 var _ = BeforeSuite(func() {
@@ -18,6 +19,8 @@ var _ = BeforeSuite(func() {
 	steplog := "Get prerequisite params to run platform tests"
 	log.InfoD(steplog)
 	Step(steplog, func() {
+		InitInstance()
+		dash = Inst().Dash
 		// Read pds params from the configmap
 		var err error
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")

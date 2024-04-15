@@ -6,6 +6,10 @@ import (
 )
 
 const (
+	COMPLETED = "COMPLETED"
+)
+
+const (
 	envPlatformAccountName = "PLATFORM_ACCOUNT_NAME"
 	envAccountDisplayName  = "PLATFORM_ACCOUNT_DISPLAY_NAME"
 	envUserMailId          = "USER_MAIL_ID"

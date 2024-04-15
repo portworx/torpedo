@@ -2,7 +2,7 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -30,6 +30,7 @@ var _ = Describe("{GetCRObject}", func() {
 			resourceSettings, storageOps, deploymentConfig, err := pdslibs.GetDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, "tmpl:04dab835-1fe2-4526-824f-d7a45694676c", "tmpl:a584ede7-811e-48bd-b000-ae799e3e084e", "pds-namespace-fdrey")
 			log.FailOnError(err, "Error occured while getting deployment resources")
 			var dataServiceVersionBuildMap = make(map[string][]string)
+			wfDataService.Dash = dash
 			wfDataService.ValidateDeploymentResources(resourceSettings, storageOps, deploymentConfig, ds.Replicas, dataServiceVersionBuildMap)
 		}
 	})

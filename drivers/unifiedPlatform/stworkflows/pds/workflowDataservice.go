@@ -20,15 +20,12 @@ type WorkflowDataService struct {
 	SkipValidatation              map[string]bool
 	SourceDeploymentMd5Hash       map[string]string
 	RestoredDeploymentMd5Hash     map[string]string
+	Dash                          *aetosutil.Dashboard
 }
 
 const (
 	ValidatePdsDeployment = "VALIDATE_PDS_DEPLOYMENT"
 	ValidatePdsWorkloads  = "VALIDATE_PDS_WORKLOADS"
-)
-
-var (
-	dash *aetosutil.Dashboard
 )
 
 func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService, image, version string) (*automationModels.PDSDeploymentResponse, error) {
@@ -249,8 +246,7 @@ func (wfDataService *WorkflowDataService) ValidateDataServiceWorkloads(params *p
 	wfDataService.RestoredDeploymentMd5Hash[deploymentName] = chkSum
 
 	result := dslibs.ValidateDataMd5Hash(wfDataService.SourceDeploymentMd5Hash, wfDataService.RestoredDeploymentMd5Hash)
-
-	dash.VerifyFatal(result, true, "Validate md5 hash after restore")
+	wfDataService.Dash.VerifyFatal(result, true, "Validate md5 hash after restore")
 
 	return dslibs.DeleteWorkloadDeployments(wlDep)
 }
@@ -280,14 +276,14 @@ func (wfDataService *WorkflowDataService) ValidateDeploymentResources(resourceTe
 	log.Debugf("volume group %v ", storageOp.VolumeGroup)
 	log.Debugf("resource template values cpu req [%s]", resourceTemp.Resources.Requests.CPU)
 
-	dash.VerifyFatal(resourceTemp.Resources.Requests.CPU, config.Spec.Topologies[0].Resources.Requests.CPU, "Validating CPU Request")
-	dash.VerifyFatal(resourceTemp.Resources.Requests.Memory, config.Spec.Topologies[0].Resources.Requests.Memory, "Validating Memory Request")
-	dash.VerifyFatal(resourceTemp.Resources.Requests.Storage, config.Spec.Topologies[0].Resources.Requests.Storage, "Validating storage")
-	dash.VerifyFatal(resourceTemp.Resources.Limits.CPU, config.Spec.Topologies[0].Resources.Limits.CPU, "Validating CPU Limits")
-	dash.VerifyFatal(resourceTemp.Resources.Limits.Memory, config.Spec.Topologies[0].Resources.Limits.Memory, "Validating Memory Limits")
-	dash.VerifyFatal(storageOp.Replicas, config.Spec.Topologies[0].StorageOptions.Replicas, "Validating storage replicas")
-	dash.VerifyFatal(storageOp.Filesystem, config.Spec.Topologies[0].StorageOptions.Filesystem, "Validating filesystems")
-	dash.VerifyFatal(replicas, config.Spec.Topologies[0].Nodes, "Validating ds node replicas")
+	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Requests.CPU, config.Spec.Topologies[0].Resources.Requests.CPU, "Validating CPU Request")
+	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Requests.Memory, config.Spec.Topologies[0].Resources.Requests.Memory, "Validating Memory Request")
+	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Requests.Storage, config.Spec.Topologies[0].Resources.Requests.Storage, "Validating storage")
+	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Limits.CPU, config.Spec.Topologies[0].Resources.Limits.CPU, "Validating CPU Limits")
+	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Limits.Memory, config.Spec.Topologies[0].Resources.Limits.Memory, "Validating Memory Limits")
+	wfDataService.Dash.VerifyFatal(storageOp.Replicas, config.Spec.Topologies[0].StorageOptions.Replicas, "Validating storage replicas")
+	wfDataService.Dash.VerifyFatal(storageOp.Filesystem, config.Spec.Topologies[0].StorageOptions.Filesystem, "Validating filesystems")
+	wfDataService.Dash.VerifyFatal(replicas, config.Spec.Topologies[0].Nodes, "Validating ds node replicas")
 
 	//for version, build := range dataServiceVersionBuildMap {
 	//	dash.VerifyFatal(config.Version, version+"-"+build[0], "validating ds build and version")

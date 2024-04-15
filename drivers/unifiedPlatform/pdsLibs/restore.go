@@ -14,19 +14,16 @@ func CreateRestore(name string, backupId string, targetClusterId string, namespa
 					Name: &name,
 				},
 			},
-			ProjectId:             projectIdSource,
-			NamespaceId:           namespaceId,
-			SourceReferences:      &automationModels.SourceReferences{},
-			DestinationReferences: &automationModels.DestinationReferences{},
+			ProjectId:   projectIdSource,
+			NamespaceId: namespaceId,
+			SourceReferences: &automationModels.SourceReferences{
+				BackupId: backupId,
+			},
+			DestinationReferences: &automationModels.DestinationReferences{
+				TargetClusterId: targetClusterId,
+				ProjectId:       projectIdDest,
+			},
 		},
-	}
-
-	createRestoreRequest.Create.SourceReferences = &automationModels.SourceReferences{
-		BackupId: backupId,
-	}
-	createRestoreRequest.Create.DestinationReferences = &automationModels.DestinationReferences{
-		TargetClusterId: targetClusterId,
-		ProjectId:       projectIdDest,
 	}
 
 	restoreResponse, err := v2Components.PDS.CreateRestore(&createRestoreRequest)
@@ -76,10 +73,10 @@ func DeleteRestore(id string) error {
 func GetRestore(id string) (*automationModels.PDSRestoreResponse, error) {
 
 	getRestoreRequest := automationModels.PDSRestoreRequest{
-		Get: automationModels.PDSGetRestore{},
+		Get: automationModels.PDSGetRestore{
+			Id: id,
+		},
 	}
-
-	getRestoreRequest.Get.Id = id
 
 	restoreResponse, err := v2Components.PDS.GetRestore(&getRestoreRequest)
 	if err != nil {

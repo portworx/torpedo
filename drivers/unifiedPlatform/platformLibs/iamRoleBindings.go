@@ -44,6 +44,6 @@ func CreatePlatformServiceAccountIamRoles(iamName, actorId string, nsRoleBinding
 	if err != nil {
 		return nil, err
 	}
-	log.InfoD("IAM Roles created - %v", iamModel)
+	log.Infof("IAM Roles created - %v", iamModel)
 	return iamModel, nil
 }

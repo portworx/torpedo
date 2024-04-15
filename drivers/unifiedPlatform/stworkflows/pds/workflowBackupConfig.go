@@ -20,6 +20,12 @@ const (
 
 // CreateBackupConfig creates a backup config
 func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, deploymentName string) (*automationModels.PDSBackupConfigResponse, error) {
+
+	log.Infof("Backup name - [%s]", name)
+	log.Infof("Delplyment UID - [%s]", backupConfig.WorkflowDataService.DataServiceDeployment[deploymentName])
+	log.Infof("Project Id - [%s]", backupConfig.WorkflowDataService.Namespace.TargetCluster.Project.ProjectId)
+	log.Infof("Backup Location Id - [%s]", backupConfig.WorkflowBackupLocation.BkpLocation.BkpLocationId)
+
 	createBackup, err := pdslibs.CreateBackupConfig(name,
 		backupConfig.WorkflowDataService.DataServiceDeployment[deploymentName],
 		backupConfig.WorkflowDataService.Namespace.TargetCluster.Project.ProjectId,

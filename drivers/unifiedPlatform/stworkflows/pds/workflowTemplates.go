@@ -23,7 +23,7 @@ func (cusTemp *WorkflowPDSTemplates) CreatePdsCustomTemplatesAndFetchIds(templat
 
 	//Initializing the parameters required for template generation
 	appConfigParams := pdslibs.ServiceConfiguration{
-		MaxConnection: templates.ServiceConfiguration.MaxConnection,
+		MAX_CONNECTIONS: templates.ServiceConfiguration.MAX_CONNECTIONS,
 	}
 	stConfigParams := pdslibs.StorageConfiguration{
 		FS:          templates.StorageConfiguration.FS,

@@ -2,15 +2,16 @@ package pdslibs
 
 import (
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"reflect"
-	"strings"
 )
 
 const (
-	bkpJobCompleted = "COMPLETED"
+	bkpJobCompleted = "APPLIED"
 )
 
 const (
@@ -20,15 +21,15 @@ const (
 
 // ValidateAdhocBackup triggers the adhoc backup for given ds and store at the given backup target and validate them
 func ValidateAdhocBackup(deploymentId string, backupConfigId string) error {
-	var bkpJobs *automationModels.PDSBackupResponse
+	var bkpJobs *automationModels.PDSBackupConfigResponse
 
 	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
-		bkpJobs, err = ListBackup(backupConfigId)
+		bkpJobs, err = GetBackupConfig(backupConfigId)
 		if err != nil {
 			return false, err
 		}
-		log.Infof("[Backup job: %v] Status: %v", *bkpJobs.List.Backups[0].Meta.Name, *bkpJobs.List.Backups[0].Status.Phase)
-		if *bkpJobs.List.Backups[0].Status.Phase == bkpJobCompleted {
+		log.Infof("[Backup job: %s] Name: %s", *bkpJobs.Get.Status.Phase, *bkpJobs.Get.Meta.Name)
+		if *bkpJobs.Get.Status.Phase == bkpJobCompleted {
 			return true, nil
 		} else {
 			return false, nil
@@ -39,8 +40,8 @@ func ValidateAdhocBackup(deploymentId string, backupConfigId string) error {
 	}
 
 	log.Infof("Created adhoc backup successfully for %v,"+
-		" backup job: %v, backup job creation time: %v, backup job completion time: %v",
-		deploymentId, *bkpJobs.List.Backups[0].Meta.Name, *bkpJobs.List.Backups[0].Status.StartTime, *bkpJobs.List.Backups[0].Status.CompletionTime)
+		" backup job: %v",
+		deploymentId, *bkpJobs.Get.Meta.Name)
 	return nil
 }
 

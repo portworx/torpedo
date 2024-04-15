@@ -1,13 +1,24 @@
 package pds
 
 import (
+	"fmt"
+	"time"
+
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 type WorkflowPDSBackup struct {
 	WorkflowDataService WorkflowDataService
 }
+
+const (
+	defaultRetryInterval = 10 * time.Second
+	backupTimeOut        = 20 * time.Minute
+)
 
 // GetBackupIDByName returns the ID of given backup
 func (backup WorkflowPDSBackup) GetLatestBackup(deploymentName string) (automationModels.V1Backup, error) {
@@ -23,6 +34,28 @@ func (backup WorkflowPDSBackup) GetLatestBackup(deploymentName string) (automati
 	latestBackup = allBackups.List.Backups[0]
 
 	return latestBackup, nil
+}
+
+func (backup WorkflowPDSBackup) WaitForBackupToComplete(backupId string) error {
+
+	waitforBackupToComplete := func() (interface{}, bool, error) {
+		backupModel, err := pdslibs.GetBackup(backupId)
+		if err != nil {
+			return nil, false, fmt.Errorf("Some error occurred while polling for backup. Error - [%s]", err.Error())
+		}
+		if *backupModel.Get.Status.Phase != stworkflows.COMPLETED {
+			return nil, true, fmt.Errorf("Backup is not completed yet, Phase - [%s]", *backupModel.Get.Status.Phase)
+		} else {
+			log.Infof("Backup completed successfully - [%s]", *backupModel.Get.Meta.Name)
+			log.Infof("Backup Status - [%s]", *backupModel.Get.Status.CloudSnapId)
+			return nil, false, nil
+		}
+	}
+
+	_, err := task.DoRetryWithTimeout(waitforBackupToComplete, backupTimeOut, defaultRetryInterval)
+
+	return err
+
 }
 
 // GetBackupIDByName deletes the given backup
