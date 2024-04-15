@@ -51,7 +51,7 @@ var _ = Describe("{PlatformBasicTest}", func() {
 				workflowCloudCreds.Platform = workflowPlatform
 				workflowCloudCreds.CloudCredentials = make(map[string]platform.CloudCredentialsType)
 				_, err := workflowCloudCreds.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Cloud credentials created successfully"))
+				log.FailOnError(err, "Unable to create cloud creds")
 				for _, value := range workflowCloudCreds.CloudCredentials {
 					log.InfoD("cloud credentials name: [%s]", value.Name)
 					log.InfoD("cloud credentials id: [%s]", value.ID)
@@ -65,7 +65,7 @@ var _ = Describe("{PlatformBasicTest}", func() {
 			if VARIABLE_FROM_JENKINS == unifiedPlatform.GRPC {
 				workflowBackupLocation.WfCloudCredentials = workflowCloudCreds
 				_, err := workflowBackupLocation.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Backup location created successfully"))
+				log.FailOnError(err, "Unable to create backup location")
 				log.InfoD("wfBkpLoc id: [%s]", workflowBackupLocation.BkpLocation.BkpLocationId)
 				log.InfoD("wfBkpLoc name: [%s]", workflowBackupLocation.BkpLocation.Name)
 			}
@@ -75,21 +75,24 @@ var _ = Describe("{PlatformBasicTest}", func() {
 			workflowProject.Platform = workflowPlatform
 			workflowProject.ProjectName = fmt.Sprintf("project-%s", utilities.RandomString(5))
 			workflowProject, err := workflowProject.CreateProject()
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Project created with ID - [%s]", workflowProject.ProjectId))
+			log.FailOnError(err, "Unable to create project")
+			log.InfoD("Project created with ID - [%s]", workflowProject.ProjectId)
 		})
 
 		Step("Register Target Cluster", func() {
 			workflowTargetCluster.Project = workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
 			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane(false)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Target cluster registered with uid - [%s]", workflowTargetCluster.ClusterUID))
+			log.FailOnError(err, "Unable to register target cluster")
+			log.InfoD("Target cluster registered with uid - [%s]", workflowTargetCluster.ClusterUID)
 		})
 
 		Step("Create a PDS Namespace", func() {
 			workflowNamespace.TargetCluster = workflowTargetCluster
 			workflowNamespace.Namespaces = make(map[string]string)
 			_, err := workflowNamespace.CreateNamespaces(namespace)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Namespaces created - [%s]", workflowNamespace.Namespaces))
+			log.FailOnError(err, "Unable to create PDS namespace")
+			log.InfoD("Namespaces created - [%s]", workflowNamespace.Namespaces)
 		})
 
 		Step("Associate namespace and cluster to Project", func() {
@@ -101,7 +104,7 @@ var _ = Describe("{PlatformBasicTest}", func() {
 				[]string{},
 				[]string{},
 			)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Associated Resources"))
+			log.FailOnError(err, "Unable to create Associate resources to project")
 			log.InfoD("Associated Resources - [%+v]", workflowProject.AssociatedResources)
 		})
 
@@ -114,7 +117,7 @@ var _ = Describe("{PlatformBasicTest}", func() {
 				[]string{},
 				[]string{},
 			)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Dissociated Resources"))
+			log.FailOnError(err, "Unable to create dissociate resources to project")
 			log.InfoD("Dissociated Clusters - [%s]", workflowTargetCluster.ClusterUID)
 			log.InfoD("Dissociated namespaces - [%s]", workflowNamespace.Namespaces[namespace])
 			log.InfoD("Current Associated Resources - [%+v]", workflowProject.AssociatedResources)
@@ -122,13 +125,14 @@ var _ = Describe("{PlatformBasicTest}", func() {
 
 		Step("Delete PDS Namespace", func() {
 			err := workflowNamespace.DeleteNamespace(namespace)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Namespaces deleted - [%s]", namespace))
-			log.Infof("Namespaces - [%+v]", workflowNamespace.Namespaces)
+			log.FailOnError(err, "Unable to delete namespace")
+			log.InfoD("Namespaces Deleted - [%s]", namespace)
 		})
 
 		Step("Delete Project", func() {
 			err := workflowProject.DeleteProject()
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Project Deleted Successfully"))
+			log.FailOnError(err, "Unable to delete project")
+			log.InfoD("Project Deleted Successfully")
 		})
 
 		//Step("Install PDS Applications", func() {
@@ -172,14 +176,16 @@ var _ = Describe("{PlatformRBACTest}", func() {
 			workflowProject.Platform = workflowPlatform
 			workflowProject.ProjectName = fmt.Sprintf("project-%s", utilities.RandomString(5))
 			workflowProject, err := workflowProject.CreateProject()
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Project created with ID - [%s]", workflowProject.ProjectId))
+			log.FailOnError(err, "Unable to create project")
+			log.InfoD("Project created with ID - [%s]", workflowProject.ProjectId)
 		})
 
 		Step("Register Target Cluster", func() {
 			workflowTargetCluster.Project = workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
 			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane(false)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Target cluster registered with uid - [%s]", workflowTargetCluster.ClusterUID))
+			log.FailOnError(err, "Unable to register target cluster")
+			log.InfoD("Target cluster registered with uid - [%s]", workflowTargetCluster.ClusterUID)
 		})
 
 		Step("Create project user", func() {
@@ -190,7 +196,8 @@ var _ = Describe("{PlatformRBACTest}", func() {
 				user,
 				[]string{},
 			)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Created project user - [%s]", user))
+			log.FailOnError(err, "Unable to create Project User")
+			log.InfoD("Project User Account Created - [%s]", user)
 		})
 
 		Step("Create project admin user", func() {
@@ -198,7 +205,8 @@ var _ = Describe("{PlatformRBACTest}", func() {
 				projectAdmin,
 				[]string{platform.ProjectAdmin},
 			)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Created project admin - [%s]", projectAdmin))
+			log.FailOnError(err, "Unable to create Project Admin")
+			log.InfoD("Project Admin Account Created - [%s]", projectAdmin)
 		})
 
 		Step("Create tenant admin", func() {
@@ -206,7 +214,8 @@ var _ = Describe("{PlatformRBACTest}", func() {
 				tenantAdmin,
 				[]string{platform.TenantAdmin},
 			)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Created tenant admin - [%s]", tenantAdmin))
+			log.FailOnError(err, "Unable to create Tenant Admin")
+			log.InfoD("Tenant Admin Account Created - [%s]", tenantAdmin)
 		})
 
 		Step("Create Project with User - Expected Failure", func() {
@@ -239,7 +248,8 @@ var _ = Describe("{PlatformRBACTest}", func() {
 			workflowProject2.Platform = workflowPlatform
 			workflowProject2.ProjectName = fmt.Sprintf("project-%s", utilities.RandomString(5))
 			_, err := workflowProject2.CreateProject()
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Project created with ID - [%s] - Tenant Admin", workflowProject2.ProjectId))
+			log.FailOnError(err, "Unable to Create Project - Tenant Admin Admin")
+			log.InfoD("Project created with ID - [%s] - Tenant Admin", workflowProject2.ProjectId)
 		})
 
 		Step("Register Target Cluster - Project Admin", func() {
@@ -277,7 +287,8 @@ var _ = Describe("{PlatformRBACTest}", func() {
 				[]string{},
 				[]string{},
 			)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Associated target cluster - Project Admin"))
+			log.FailOnError(err, "Unable to Associate target cluster - Project Admin")
+			log.InfoD("Associated target cluster - Project Admin")
 		})
 
 		Step("Dissociate target cluster from Project Admin", func() {
@@ -293,7 +304,8 @@ var _ = Describe("{PlatformRBACTest}", func() {
 				[]string{},
 				[]string{},
 			)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Dissociated target cluster - Project Admin"))
+			log.FailOnError(err, "Unable to Dissociate target cluster - Project Admin")
+			log.InfoD("Dissociated target cluster - Project Admin")
 		})
 
 		Step("Associate target cluster to Project - Tenant Admin", func() {
@@ -309,7 +321,8 @@ var _ = Describe("{PlatformRBACTest}", func() {
 				[]string{},
 				[]string{},
 			)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Associated target cluster - Tenant Admin"))
+			log.FailOnError(err, "Unable to Associate target cluster - Tenant Admin")
+			log.InfoD("Associated target cluster - Tenant Admin")
 		})
 
 		Step("Dissociate target cluster from Project - Tenant Admin", func() {
@@ -325,7 +338,8 @@ var _ = Describe("{PlatformRBACTest}", func() {
 				[]string{},
 				[]string{},
 			)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Dissociated target cluster - Tenant Admin"))
+			log.FailOnError(err, "Unable to Dissociate target cluster - Tenant Admin")
+			log.InfoD("Dissociated target cluster - Tenant Admin")
 		})
 
 		Step("Associate target cluster to Project - User", func() {
@@ -366,7 +380,8 @@ var _ = Describe("{PlatformRBACTest}", func() {
 			}()
 			workflowServiceAccount.SwitchToServiceAccount(projectAdmin)
 			err := workflowProject.DeleteProject()
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Project - [%s] - deleted with project admin", workflowProject.ProjectName))
+			log.FailOnError(err, "Unable to delete project - Project Admin")
+			log.InfoD("Project - [%s] - deleted with project admin", workflowProject.ProjectName)
 
 			err = workflowProject2.DeleteProject() // Delete project without access
 			dash.VerifyFatal(strings.Contains(err.Error(), "403 Forbidden"), true, "Delete project on another project - 403 Forbidden")
@@ -378,7 +393,8 @@ var _ = Describe("{PlatformRBACTest}", func() {
 			}()
 			workflowServiceAccount.SwitchToServiceAccount(tenantAdmin)
 			err := workflowProject2.DeleteProject() // Delete project without access
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Project - [%s] - deleted with tenant admin", workflowProject2.ProjectName))
+			log.FailOnError(err, "Unable to delete project - Tenant Admin")
+			log.InfoD("Project Deleted - Tenant Admin")
 		})
 
 	})
