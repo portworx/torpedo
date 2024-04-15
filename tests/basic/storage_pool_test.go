@@ -10228,7 +10228,8 @@ func selectPoolDeletableNodes() []node.Node {
 	for _, n := range kvdbMembers {
 		kvdbNodesIDs = append(kvdbNodesIDs, n.Name)
 	}
-
+ 
+	// testNodes for pool deletable: [non-kvdb-nodes] + [kvdb-nodes with >= 2 pools]
 	// collect non-kvdb firsts
 	for _, n := range stNodes {
 		if !Contains(kvdbNodesIDs, n.Id) { // non kvdb node	 
@@ -10254,8 +10255,8 @@ func selectPoolDeletableNodes() []node.Node {
  			}
 		}
 	}
-
-	if len(testNodes) == 0 {
+	
+	if len(testNodes) == 0 { // it means all nodes are kvdb-nodes with 1 pools
 		testNode := stNodes[0]
 		log.InfoD("select kvdb node %v for test, the node need to have at least 2 pools", testNode.Name)
 		poolsMap, err := Inst().V.GetPoolDrives(&testNode)
