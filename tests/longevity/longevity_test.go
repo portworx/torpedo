@@ -371,6 +371,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
+				defer GinkgoRecover()
 				start := time.Now().Local()
 				timeout := Inst().MinRunTimeMins * 60
 				currentUpgradeIndex := 0
