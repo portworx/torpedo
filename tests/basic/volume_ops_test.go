@@ -3245,11 +3245,11 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 	/*
 						    https://portworx.atlassian.net/browse/PTX-19103
 							Total 5 scenarios Tested
-							1. Verify Thick Provisioning (Global) OverCommitPercent when resizing the volume are honoured
-							2.Verify Thick Provisioning on Specific Nodes when resizing the volume are honoured
-							3.Update the pxctl cluster with cluster option OverCommitPercent with 200(Enabeling Thick Provisioning) on a specific Node and thin provisioning on the other nodes
-							4. Verify Thick Provisioning on Specific Nodes when resizing the volume are honoured
-							5.Disable all imposed cluster options and try creating thin provisioned volumes
+							1. Verify Thick Provisioning on Specific Nodes when resizing the volume are honoured
+							2. Verify Thick Provisioning (Global) OverCommitPercent when resizing the volume are honoured
+							3. Update the pxctl cluster with cluster option OverCommitPercent with 200(Enabeling Thick Provisioning) on a specific Node and thin provisioning on the other nodes
+							4. Thin Provisioning with Global and Node Specific Settings [300% on a certain node and 200% over commit on the other nodes]
+							5. Disable all imposed cluster options and try creating thin provisioned volumes
 		                    Process:
 							1. Update the pxctl cluster with cluster option OverCommitPercent
 						    2. Check the overall storage pool capacity of a particular node
@@ -3266,6 +3266,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 	// check the size left in the node
 	itLog := "honor OverCommitPercent when resizing the volume"
 	It(itLog, func() {
+		log.InfoD(itLog)
 		getRandomPoolandCalculateSize := func(snapshotPercent uint64) (selectedNode *node.Node, targetSizeGiB uint64) {
 			stNodes := node.GetStorageDriverNodes()
 			index := rand.Intn(len(stNodes))
@@ -3274,7 +3275,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			poolToResize := pools[rand.Intn(len(pools))]
 			poolIDToResize := poolToResize.Uuid
 			originalSizeInBytes := poolToResize.TotalSize
-			log.InfoD("Original size of the pool %s is %d", poolIDToResize, originalSizeInBytes)
+			log.InfoD("Original size of the pool %s is %d of node %s ", poolIDToResize, originalSizeInBytes, selectedNode.Name)
 			SnapshotPercent := snapshotPercent
 			SubtractSize := (SnapshotPercent * originalSizeInBytes) / 100
 			targetSizeInBytes := originalSizeInBytes - SubtractSize
@@ -3314,6 +3315,10 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			if volerr != nil {
 				IsExpectederr := strings.Contains(volerr.Error(), "pools must not over-commit provisioning space")
 				dash.VerifyFatal(IsExpectederr, true, volerr.Error())
+			} else {
+				log.InfoD("Volume should not be created  as we have imposed the cluster options,so we deleting the volume")
+				err := Inst().V.DeleteVolume(VolName)
+				log.FailOnError(err, "Failed to delete volume [%s]", VolName)
 			}
 			DisableClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[]'"
 			_, disable_err := runPxctlCommand(DisableClusterOptionscmd, *selectedNode, nil)
