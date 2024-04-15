@@ -83,7 +83,7 @@ type tokenResponse struct {
 
 const (
 	// pxbServiceName is the name of the PxBackup service in kubernetes
-	pxbServiceName = "px-backup"
+	pxbServiceName = "central"
 )
 
 var (
