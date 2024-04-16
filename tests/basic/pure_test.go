@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
+	"os"
 
 	"math/rand"
 	"sort"
@@ -2403,34 +2404,29 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
 
-			NonPxPureSecret, err := pureutils.GetNonPxPureSecret(volDriverNamespace)
-			log.FailOnError(err, "Failed to get secret %v", NonPxPureSecret)
-			flashArrays := NonPxPureSecret.Arrays
-
-			if len(flashArrays) == 0 {
-				log.InfoD("Please create a flasharray secret named: [%v] in file: [%v] which is not present in px-pure-secret", "px-non-pure-secret", "non-pure.json")
-				log.FailOnError(fmt.Errorf("no FlashArrays details found"), fmt.Sprintf("error getting FlashArrays creds from %s [%s]", "px-non-pure-secret", NonPxPureSecret))
-			}
-
 			pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
 			log.FailOnError(err, "Failed to get secret %v", pxPureSecret)
 			flashArraysInSecret := pxPureSecret.Arrays
 
-			if len(flashArrays) == 0 {
+			if len(flashArraysInSecret) == 0 {
 				log.FailOnError(fmt.Errorf("no FlashArrays details found"), fmt.Sprintf("error getting FlashArrays creds from %s [%s]", PureSecretName, pxPureSecret))
 			}
-			secretFlashArrayMap := make(map[string]string)
+
+			// Get the flash array details which is not present in the secret
+			if os.Getenv("PURE_FA_MGMT_ENDPOINT") == "" {
+				log.FailOnError(fmt.Errorf("PURE_FA_MGMT_ENDPOINT is not set"), "PURE_FA_MGMT_ENDPOINT should be set")
+			}
+			if os.Getenv("PURE_FA_API_TOKEN") == "" {
+				log.FailOnError(fmt.Errorf("PURE_FA_API_TOKEN is not set"), "PURE_FA_API_TOKEN should be set")
+			}
+			faMgmtEndPoint = os.Getenv("PURE_FA_MGMT_ENDPOINT")
+			faAPIToken = os.Getenv("PURE_FA_API_TOKEN")
+			log.InfoD("FA Mgmt End Point: %v", faMgmtEndPoint)
+			log.InfoD("FA API Token: %v", faAPIToken)
 
 			for _, fa := range flashArraysInSecret {
-				secretFlashArrayMap[fa.MgmtEndPoint] = fa.APIToken
-			}
-			// pick a flasharray secret which is not present in the pure secret
-
-			for _, fa := range flashArrays {
-				if _, ok := secretFlashArrayMap[fa.MgmtEndPoint]; !ok {
-					faMgmtEndPoint = fa.MgmtEndPoint
-					faAPIToken = fa.APIToken
-					break
+				if fa.MgmtEndPoint == faMgmtEndPoint {
+					log.FailOnError(fmt.Errorf("Flash Array details present in secret"), "Flash Array details should not be present in the secret")
 				}
 			}
 		})
@@ -2639,19 +2635,4 @@ func logOutOfAllControllers(n node.Node, networkInterfaces []flasharray.NetworkI
 		}
 	}
 	return nil
-}
-
-func GetIQNOfNode(n node.Node) (string, error) {
-	cmd := "cat /etc/iscsi/initiatorname.iscsi"
-	output, err := runCmd(cmd, n)
-	if err != nil {
-		return "", err
-	}
-
-	for _, line := range strings.Split(output, "\n") {
-		if strings.Contains(line, "InitiatorName") {
-			return strings.Split(line, "=")[1], nil
-		}
-	}
-	return "", fmt.Errorf("iqn not found")
 }

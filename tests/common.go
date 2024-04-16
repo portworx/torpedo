@@ -9,11 +9,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/Masterminds/semver/v3"
-	"github.com/hashicorp/go-version"
-	pxapi "github.com/libopenstorage/operator/api/px"
-	"github.com/portworx/sched-ops/k8s/apiextensions"
-	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -28,6 +23,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Masterminds/semver/v3"
+	"github.com/hashicorp/go-version"
+	pxapi "github.com/libopenstorage/operator/api/px"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 
 	context1 "context"
 
@@ -11568,4 +11569,20 @@ func SplitStorageDriverUpgradeURL(upgradeURL string) (string, string, error) {
 	endpoint.Path = strings.Join(pathSegments[:len(pathSegments)-1], "/")
 	pxVersion := pathSegments[len(pathSegments)-1]
 	return endpoint.String(), pxVersion, nil
+}
+
+// GetIQNOfNode returns the IQN of the given node in a FA setup
+func GetIQNOfNode(n node.Node) (string, error) {
+	cmd := "cat /etc/iscsi/initiatorname.iscsi"
+	output, err := runCmdGetOutput(cmd, n)
+	if err != nil {
+		return "", err
+	}
+
+	for _, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, "InitiatorName") {
+			return strings.Split(line, "=")[1], nil
+		}
+	}
+	return "", fmt.Errorf("iqn not found")
 }
