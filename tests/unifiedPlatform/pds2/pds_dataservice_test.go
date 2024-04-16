@@ -26,20 +26,21 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	)
 
 	It("Deploy,Validate and ScaleUp DataService", func() {
-		Step("Create a PDS Namespace", func() {
-			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
-			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
-			workFlowTemplates.Platform = WorkflowPlatform
-			WorkflowNamespace.Namespaces = make(map[string]string)
-			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
-			log.FailOnError(err, "Unable to create namespace")
-			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
-			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
-		})
+		//Step("Create a PDS Namespace", func() {
+		//Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
+		//WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+
+		//WorkflowNamespace.Namespaces = make(map[string]string)
+		//workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
+		//log.FailOnError(err, "Unable to create namespace")
+		//log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
+		//log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
+		//})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
+			workFlowTemplates.Platform = WorkflowPlatform
 			workflowDataservice.Namespace = WorkflowNamespace
-			workflowDataservice.NamespaceName = Namespace
+			workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
 
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")

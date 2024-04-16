@@ -39,7 +39,7 @@ func (workflowNamespace *WorkflowNamespace) CreateNamespaces(namespace string) (
 
 	workflowNamespace.Namespaces[namespace] = uid
 
-	log.Infof("Namespace Name - [%s], UID - [%s]", workflowNamespace.Namespaces[namespace], workflowNamespace.Namespaces[namespace])
+	log.Infof("Namespace Name - [%s], UID - [%s]", namespace, workflowNamespace.Namespaces[namespace])
 
 	return workflowNamespace, nil
 }

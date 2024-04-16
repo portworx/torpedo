@@ -1,0 +1,146 @@
+---
+# Source: platform-agent/charts/px-bootstrapper/templates/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: px-system
+  labels:
+    helm.sh/chart: px-bootstrapper-0.1.0
+    app.kubernetes.io/name: px-bootstrapper
+    app.kubernetes.io/instance: px-bootstrapper
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: platform-agent/charts/px-bootstrapper/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+imagePullSecrets:
+  - name: px-image-pull-secret
+metadata:
+  name: px-bootstrapper
+  namespace: px-system
+  labels:
+    helm.sh/chart: px-bootstrapper-0.1.0
+    app.kubernetes.io/name: px-bootstrapper
+    app.kubernetes.io/instance: px-bootstrapper
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: platform-agent/charts/px-bootstrapper/templates/secrets.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: px-auth-secret
+  namespace: px-system
+  labels:
+    helm.sh/chart: px-bootstrapper-0.1.0
+    app.kubernetes.io/name: px-bootstrapper
+    app.kubernetes.io/instance: px-bootstrapper
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+data:
+  token: ""
+  client_id: R09LdldpWWpOc2hkRzRWY0xqeUFQdjYvUjRjU2dyUmU=
+  client_secret: MmUxNTA5MjUxNTJkNGRhOWQ4ZGY0NjJlOTM0MjJhOWJiMDczMWM1NGMxZjFmM2Q1YzEwOTUyOWVkZTIyMmQ3ZQ==
+---
+# Source: platform-agent/charts/px-bootstrapper/templates/secrets.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: px-target-cluster-secret
+  namespace: px-system
+  labels:
+    helm.sh/chart: px-bootstrapper-0.1.0
+    app.kubernetes.io/name: px-bootstrapper
+    app.kubernetes.io/instance: px-bootstrapper
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+data:
+  tenant_id: dGVuOmFjYzo4YjZlNTAyMy0yZWM5LTQ3NGYtYWNkYS03YWI2NjI5ODc0MDk=
+  target_cluster_id: 
+  target_cluster_name: 
+  control_plane_address: c2lsdmVyLnBkcy1kZXYuaW86NDQz
+  image_registry: ZG9ja2VyLmlvL3BvcnR3b3J4
+  ca_certs: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUU4RENDQTlpZ0F3SUJBZ0lTQkRQbWRwUnNKdGlJdGkyS1pqL0Z4RkVSTUEwR0NTcUdTSWIzRFFFQkN3VUEKTURJeEN6QUpCZ05WQkFZVEFsVlRNUll3RkFZRFZRUUtFdzFNWlhRbmN5QkZibU55ZVhCME1Rc3dDUVlEVlFRRApFd0pTTXpBZUZ3MHlOREF6TVRneE1UTXhOREZhRncweU5EQTJNVFl4TVRNeE5EQmFNQnd4R2pBWUJnTlZCQU1UCkVYTnBiSFpsY2k1d1pITXRaR1YyTG1sdk1JSUJJakFOQmdrcWhraUc5dzBCQVFFRkFBT0NBUThBTUlJQkNnS0MKQVFFQXo1ZTBsMklLV2Z6MUFkOXlPN0U2MC94cVRlSGsrS2F6bTB3YS9OWW1MRm9QdmE0UFZ4SExsMzdSb2JydgpHTTFsN0tvbDBJa0FCc2hpdVFQdGdJYVBoWUlKcEtwMzhPWXhDQXdYOFMwVDdVV0UrRFdwQWRNMGdIUlZwTEhUClRGdTRzMjA1SXVSMzFaOWwrdDhQZkpjUldhd3UzcGJNS1BOMmZpYUh6WkxuS2djZWRWcVQ2V0hhM1FCR2orYnQKVHpXaS9lS1VaYWgyN2FTNnBCN2RqWFRmRTNVd2g2ckpkcjFacFpGNmo4UFpNQ1ExSFc3N1JrVDFHcWFzNTdidgowYmtQbjR0U2J4M1lWRDZZMElDVjNkZHdJbCtTNWplZzNZbVoxMTBiZnRxekxSVFNTT0dGajRndDVMSHRxSHNnCmtYcFRVOTR6cnBFSDRNaUtja1hpdnF6TFhRSURBUUFCbzRJQ0ZEQ0NBaEF3RGdZRFZSMFBBUUgvQkFRREFnV2cKTUIwR0ExVWRKUVFXTUJRR0NDc0dBUVVGQndNQkJnZ3JCZ0VGQlFjREFqQU1CZ05WSFJNQkFmOEVBakFBTUIwRwpBMVVkRGdRV0JCUndBdGdER05xUG8rUnp3SVlUcVNOWWplRE9QREFmQmdOVkhTTUVHREFXZ0JRVUxyTVh0MWhXCnk2NVFDVURtSDYrZGl4VEN4akJWQmdnckJnRUZCUWNCQVFSSk1FY3dJUVlJS3dZQkJRVUhNQUdHRldoMGRIQTYKTHk5eU15NXZMbXhsYm1OeUxtOXlaekFpQmdnckJnRUZCUWN3QW9ZV2FIUjBjRG92TDNJekxta3ViR1Z1WTNJdQpiM0puTHpBY0JnTlZIUkVFRlRBVGdoRnphV3gyWlhJdWNHUnpMV1JsZGk1cGJ6QVRCZ05WSFNBRUREQUtNQWdHCkJtZUJEQUVDQVRDQ0FRVUdDaXNHQVFRQjFua0NCQUlFZ2ZZRWdmTUE4UUIyQUR0VGQzVStMYm1BVG9zd1d3YisKUUR0bjJFL0Q5TWU5QUEwdGNtL2grdFFYQUFBQmpsR0wwK01BQUFRREFFY3dSUUloQU5PRk82Y1RXVnFIb3FiYwpuSGQ5NzZlaTdIdThMc3Mza1BxaHRlVkJzZ0xsQWlCQXB5Z3M4dVI0R2JxU2lmSDFOSm01SlNIaVAwSDcvZ3drCmxsU2FnY1M0ZWdCM0FLTGl2OVllM2k4dkI2RFdUbTAzcDl4bFE3REd0UzZpMnJlSytKcHQ5UmZZQUFBQmpsR0wKMC9FQUFBUURBRWd3UmdJaEFKVnRDWE1sQXFOOVQxVEFkbkR2L2JvdnVJQjJvSEtDZ3FBc0g5MHg2Z3huQWlFQQpyTU9kSUpWZ2EybEhRWitFdWhEdzFBbkxtVWN0SXA0ekhhQWdiWFVNSjI0d0RRWUpLb1pJaHZjTkFRRUxCUUFECmdnRUJBRTVEckVRbnZpUmdFWUZjQzVCSFNUQ1ZOcVBtYnB2V1NMdDcrYjJLUkRmQzBJVkswTklqMmVlV0s5S0kKQ05MS3R5ZHYyVW16dDJYdTVmcUJHa2VMcm9raitwaTlrbTJlREluT1UwWkUzM1pVdUxsc0craVFGREY0SkhMQgpublFjNG96dWlKWDc2S0YvOFBYN2lqUlRyUithYXAzdWliV0JOQ2dCZnFMMVUrRmdtbFRhRkl3eU85eDV1S3B2CmdDUHZzOHROVTEyZVdsa3o2UWd3YTJ2cldrVUw2bUdBSm5DVUFFTWZiYTBwRm9jMVJUam5pVEdWWW9NQjJ4T08KR1ZUalRwWU1NRDArRE4xUTZkMWtjZks1MWdOMFIvV0N4MEFHU0N3OEpwTXZnZlpLM0hUbk1TWXhFa2huUkpIdgpTT0JBNHhUSlVPS1l4L0JaL0hhcDhGbVhZMVU9Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+---
+# Source: platform-agent/charts/px-bootstrapper/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: px-bootstrapper
+  labels:
+    helm.sh/chart: px-bootstrapper-0.1.0
+    app.kubernetes.io/name: px-bootstrapper
+    app.kubernetes.io/instance: px-bootstrapper
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+# Source: platform-agent/charts/px-bootstrapper/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: px-bootstrapper
+  labels:
+    helm.sh/chart: px-bootstrapper-0.1.0
+    app.kubernetes.io/name: px-bootstrapper
+    app.kubernetes.io/instance: px-bootstrapper
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: px-bootstrapper
+subjects:
+  - kind: ServiceAccount
+    name: px-bootstrapper
+    namespace: px-system
+---
+# Source: platform-agent/charts/px-bootstrapper/templates/job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: px-bootstrapper
+  namespace: px-system
+  labels:
+    helm.sh/chart: px-bootstrapper-0.1.0
+    app.kubernetes.io/name: px-bootstrapper
+    app.kubernetes.io/instance: px-bootstrapper
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: px-bootstrapper
+        app.kubernetes.io/instance: px-bootstrapper
+    spec:
+      restartPolicy: Never
+      serviceAccountName: px-bootstrapper
+      securityContext:
+        {}
+      containers:
+        - name: manager
+          command:
+            - /manager
+          args:
+            - --leader-elect
+            - --skip-auth=true
+          securityContext:
+            {}
+          image: "docker.io/portworx/px-bootstrapper-manager:0c7e0d7"
+          imagePullPolicy: Always
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+---
+# Source: platform-agent/charts/px-bootstrapper/templates/secrets.yaml
+---
+

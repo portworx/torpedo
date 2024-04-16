@@ -28,6 +28,11 @@ func GetDeploymentConfigurations(namespace, dataServiceName, deploymentName stri
 	if err != nil {
 		return dbConfig, err
 	}
+	log.Debugf("namespace [%s]", namespace)
+	log.Debugf("CRGroup [%s]", CRGroup)
+	log.Debugf("Version [%s]", Version)
+	log.Debugf("dsName [%s]", strings.ToLower(dataServiceName)+"s")
+	log.Debugf("objects [%+v]", objects)
 
 	// Iterate over the CRD objects and print their names.
 	for _, object := range objects.Items {

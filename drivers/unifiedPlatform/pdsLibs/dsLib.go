@@ -107,9 +107,7 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 				},
 				Config: automationModels.V1Config1{
 					References: automationModels.Reference{
-						TargetClusterId: targetClusterId,
-						ProjectId:       &projectId,
-						ImageId:         &imageId,
+						ImageId: &imageId,
 					},
 					TlsEnabled: nil,
 					DeploymentTopologies: []automationModels.DeploymentTopology{
