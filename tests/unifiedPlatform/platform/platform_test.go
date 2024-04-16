@@ -135,6 +135,12 @@ var _ = Describe("{PlatformBasicTest}", func() {
 			log.InfoD("Project Deleted Successfully")
 		})
 
+		Step("Cleanup all resources", func() {
+			err := workflowNamespace.Purge()
+			log.FailOnError(err, "Unable to cleanup all namespaces")
+			log.InfoD("All namespaces cleaned up successfully")
+		})
+
 		//Step("Install PDS Applications", func() {
 		//	err := workflowTargetCluster.InstallPDSAppOnTC()
 		//	log.FailOnError(err, "Install PDS apps failed on Target cluster")

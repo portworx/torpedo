@@ -16,9 +16,10 @@ type WorkflowNamespace struct {
 }
 
 const (
-	retryTimeout  = 20 * time.Minute
-	retryInterval = 10 * time.Second
-	tombstoned    = "TOMBSTONED"
+	retryTimeout            = 20 * time.Minute
+	namespaceRemovalTimeout = 5 * time.Minute
+	retryInterval           = 10 * time.Second
+	tombstoned              = "TOMBSTONED"
 )
 
 func (workflowNamespace *WorkflowNamespace) CreateNamespaces(namespace string) (*WorkflowNamespace, error) {
@@ -73,6 +74,7 @@ func (workflowNamespace *WorkflowNamespace) DeleteNamespace(namespace string) er
 					return nil, true, fmt.Errorf("Waiting for [%s] to be %s, Current Phase - [%s]", namespace, tombstoned, *eachNamespace.Status.Phase)
 				} else {
 					err := platformLibs.DeleteNamespace(id)
+					time.Sleep(2 * time.Second) // Explicit delay for delete to remove entry from DB
 					if err != nil {
 						return nil, false, fmt.Errorf("Some error occurred while deleting [%s]. Error - [%s]", namespace, err.Error())
 					} else {
@@ -82,7 +84,6 @@ func (workflowNamespace *WorkflowNamespace) DeleteNamespace(namespace string) er
 						}
 						delete(workflowNamespace.Namespaces, namespace)
 						log.Infof("[%s] deleted successfully", namespace)
-						log.Infof("All Namespaces - [%+v]", workflowNamespace.Namespaces)
 					}
 				}
 			}
@@ -168,14 +169,15 @@ func (workflowNamespace *WorkflowNamespace) Purge() error {
 							return nil, true, fmt.Errorf("Waiting for [%s] to be %s, Current Phase - [%s]", namespace, tombstoned, *eachNamespace.Status.Phase)
 						} else {
 							err := platformLibs.DeleteNamespace(id)
+							time.Sleep(2 * time.Second) // Explicit delay for delete to remove entry from DB
 							if err != nil {
 								return nil, false, fmt.Errorf("Some error occurred while deleting [%s]. Error - [%s]", namespace, err.Error())
 							} else {
-								log.Infof("[%s] deleted successfully")
 								err := workflowNamespace.ValidateNamespaceDeletion(id)
 								if err != nil {
 									return nil, false, err
 								}
+								log.Infof("[%s] deleted successfully", namespace)
 								delete(workflowNamespace.Namespaces, namespace)
 							}
 						}
@@ -196,18 +198,24 @@ func (workflowNamespace *WorkflowNamespace) Purge() error {
 
 func (workflowNamespace *WorkflowNamespace) ValidateNamespaceDeletion(id string) error {
 
-	allNamespaces, err := workflowNamespace.ListNamespaces(
-		workflowNamespace.TargetCluster.Project.Platform.TenantId, "", "CREATED_AT", "DESC")
+	waitforNamepsaceToBeTombstoned := func() (interface{}, bool, error) {
+		allNamespaces, err := workflowNamespace.ListNamespaces(
+			workflowNamespace.TargetCluster.Project.Platform.TenantId, "", "CREATED_AT", "DESC")
 
-	if err != nil {
-		return err
-	}
-
-	for _, eachNamespace := range allNamespaces.List.Namespaces {
-		if *eachNamespace.Meta.Uid == id {
-			return fmt.Errorf("Namespace [%s] found after deletion", id)
+		if err != nil {
+			return nil, false, fmt.Errorf("Some error occurred while polling for namespaces. Error - [%s]", err.Error())
 		}
+
+		for _, eachNamespace := range allNamespaces.List.Namespaces {
+			if *eachNamespace.Meta.Uid == id {
+				return nil, true, fmt.Errorf("Namespace [%s] found after deletion", id)
+			}
+		}
+
+		return nil, false, nil
 	}
 
-	return nil
+	_, err := task.DoRetryWithTimeout(waitforNamepsaceToBeTombstoned, namespaceRemovalTimeout, retryInterval)
+
+	return err
 }

@@ -63,7 +63,6 @@ func (NamespaceGrpcV1 *PlatformGrpc) ListNamespaces(request *PlatformNamespace) 
 		return nil, err
 	}
 
-	log.Infof("Value of namespace after copy - [%v]", nsResponse)
 	for _, ten := range namespaceResponse.List.Namespaces {
 		log.Infof("namespace -  [%v]", ten.Meta.Name)
 	}

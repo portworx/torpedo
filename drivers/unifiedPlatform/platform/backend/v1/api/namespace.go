@@ -4,7 +4,6 @@ import (
 	"fmt"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/utilities"
-	"github.com/portworx/torpedo/pkg/log"
 	status "net/http"
 )
 
@@ -44,7 +43,6 @@ func (ns *PLATFORM_API_V1) ListNamespaces(request *PlatformNamespace) (*Platform
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Value of namespace after copy - [%v]", namespaceResponse)
 	return &namespaceResponse, nil
 }
 
