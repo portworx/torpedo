@@ -5,6 +5,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
+	k8utils "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	"time"
 )
@@ -15,8 +16,10 @@ type WorkflowNamespace struct {
 }
 
 const (
-	retryTimeout  = 10 * time.Minute
-	retryInterval = 30 * time.Second
+	retryTimeout            = 20 * time.Minute
+	namespaceRemovalTimeout = 5 * time.Minute
+	retryInterval           = 10 * time.Second
+	tombstoned              = "TOMBSTONED"
 )
 
 func (workflowNamespace *WorkflowNamespace) CreateNamespaces(namespace string) (*WorkflowNamespace, error) {
@@ -42,32 +45,55 @@ func (workflowNamespace *WorkflowNamespace) CreateNamespaces(namespace string) (
 }
 
 func (workflowNamespace *WorkflowNamespace) DeleteNamespace(namespace string) error {
-	err := platformLibs.DeleteNamespace(namespace)
+	err := k8utils.DeleteNamespace(namespace)
+
+	if err != nil {
+		return err
+	}
+	log.Infof("Delete [%s] from the cluster", namespace)
+
+	id, err := workflowNamespace.GetNamespaceUID(namespace)
 	if err != nil {
 		return err
 	}
 
-	// TODO: This needs to be enabled once deletion sync is fixed from platform side
-	//err = workflowNamespace.ValidateNamespaceDeletion(namespace)
-	//if err != nil {
-	//	return err
-	//}
+	log.Infof("Waiting for [%s] to get into TOMBSTONED phase.", namespace)
 
-	delete(workflowNamespace.Namespaces, namespace)
+	// Wait for namespaces to go in 'TOMBSTONED' phase and call delete API
+	waitforNamepsaceToBeTombstoned := func() (interface{}, bool, error) {
+		allNamespaces, err := workflowNamespace.ListNamespaces(
+			workflowNamespace.TargetCluster.Project.Platform.TenantId, "", "CREATED_AT", "DESC")
 
-	return nil
-}
-
-func (workflowNamespace *WorkflowNamespace) ValidateNamespaceDeletion(namespaceName string) error {
-	checkForNs := func() (interface{}, bool, error) {
-		_, err := workflowNamespace.GetNamespaceUID(namespaceName)
 		if err != nil {
-			return nil, false, nil
+			return nil, false, fmt.Errorf("Some error occurred while polling for namespaces. Error - [%s]", err.Error())
 		}
-		return nil, true, fmt.Errorf("Namespace [%s] still exists", namespaceName)
+
+		for _, eachNamespace := range allNamespaces.List.Namespaces {
+			if *eachNamespace.Meta.Name == namespace {
+				if *eachNamespace.Status.Phase != tombstoned {
+					return nil, true, fmt.Errorf("Waiting for [%s] to be %s, Current Phase - [%s]", namespace, tombstoned, *eachNamespace.Status.Phase)
+				} else {
+					err := platformLibs.DeleteNamespace(id)
+					time.Sleep(2 * time.Second) // Explicit delay for delete to remove entry from DB
+					if err != nil {
+						return nil, false, fmt.Errorf("Some error occurred while deleting [%s]. Error - [%s]", namespace, err.Error())
+					} else {
+						err := workflowNamespace.ValidateNamespaceDeletion(id)
+						if err != nil {
+							return nil, false, err
+						}
+						delete(workflowNamespace.Namespaces, namespace)
+						log.Infof("[%s] deleted successfully", namespace)
+					}
+				}
+			}
+		}
+
+		return nil, false, nil
+
 	}
 
-	_, err := task.DoRetryWithTimeout(checkForNs, retryTimeout, retryInterval)
+	_, err = task.DoRetryWithTimeout(waitforNamepsaceToBeTombstoned, retryTimeout, retryInterval)
 
 	return err
 }
@@ -111,4 +137,85 @@ func (workflowNamespace *WorkflowNamespace) GetNamespaceUID(namespace string) (s
 	}
 
 	return ns.(string), nil
+}
+
+func (workflowNamespace *WorkflowNamespace) Purge() error {
+
+	// Delete all namespaces from k8s cluster
+
+	for namespace, _ := range workflowNamespace.Namespaces {
+		err := k8utils.DeleteNamespace(namespace)
+		if err != nil {
+			return fmt.Errorf("Error occurred during deleting namespace from cluster. Error - [%s]", err.Error())
+		}
+		log.Infof("Deleted [%s] from the cluster", namespace)
+	}
+
+	// Wait for all namespaces to go in 'TOMBSTONED' phase and call delete API
+
+	waitforNamepsaceToBeTombstoned := func() (interface{}, bool, error) {
+		allNamespaces, err := workflowNamespace.ListNamespaces(
+			workflowNamespace.TargetCluster.Project.Platform.TenantId, "", "CREATED_AT", "DESC")
+
+		if err != nil {
+			return nil, false, fmt.Errorf("Some error occurred while polling for namespaces. Error - [%s]", err.Error())
+		}
+
+		if len(workflowNamespace.Namespaces) > 0 {
+			for _, eachNamespace := range allNamespaces.List.Namespaces {
+				for namespace, id := range workflowNamespace.Namespaces {
+					if *eachNamespace.Meta.Name == namespace {
+						if *eachNamespace.Status.Phase != tombstoned {
+							return nil, true, fmt.Errorf("Waiting for [%s] to be %s, Current Phase - [%s]", namespace, tombstoned, *eachNamespace.Status.Phase)
+						} else {
+							err := platformLibs.DeleteNamespace(id)
+							time.Sleep(2 * time.Second) // Explicit delay for delete to remove entry from DB
+							if err != nil {
+								return nil, false, fmt.Errorf("Some error occurred while deleting [%s]. Error - [%s]", namespace, err.Error())
+							} else {
+								err := workflowNamespace.ValidateNamespaceDeletion(id)
+								if err != nil {
+									return nil, false, err
+								}
+								log.Infof("[%s] deleted successfully", namespace)
+								delete(workflowNamespace.Namespaces, namespace)
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return nil, false, nil
+
+	}
+
+	_, err := task.DoRetryWithTimeout(waitforNamepsaceToBeTombstoned, retryTimeout, retryInterval)
+
+	return err
+
+}
+
+func (workflowNamespace *WorkflowNamespace) ValidateNamespaceDeletion(id string) error {
+
+	waitforNamepsaceToBeTombstoned := func() (interface{}, bool, error) {
+		allNamespaces, err := workflowNamespace.ListNamespaces(
+			workflowNamespace.TargetCluster.Project.Platform.TenantId, "", "CREATED_AT", "DESC")
+
+		if err != nil {
+			return nil, false, fmt.Errorf("Some error occurred while polling for namespaces. Error - [%s]", err.Error())
+		}
+
+		for _, eachNamespace := range allNamespaces.List.Namespaces {
+			if *eachNamespace.Meta.Uid == id {
+				return nil, true, fmt.Errorf("Namespace [%s] found after deletion", id)
+			}
+		}
+
+		return nil, false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(waitforNamepsaceToBeTombstoned, namespaceRemovalTimeout, retryInterval)
+
+	return err
 }

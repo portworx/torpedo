@@ -236,3 +236,13 @@ func StopPxOnReplicaVolumeNode() error {
 	log.InfoD("PX stopped successfully on node %v", nodesToStopPx)
 	return nil
 }
+
+// DeleteNamespace will delete the namespace from the cluster
+func DeleteNamespace(namespace string) error {
+	k8sCore := core.Instance()
+	err := k8sCore.DeleteNamespace(namespace)
+	if err != nil {
+		return fmt.Errorf("Error while deleting namespace [%s]", err.Error())
+	}
+	return nil
+}
