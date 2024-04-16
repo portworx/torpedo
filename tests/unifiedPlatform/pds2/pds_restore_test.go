@@ -409,6 +409,9 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 				err := SetSourceKubeConfig()
 				log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
 			}()
+			err := destinationProject.DeleteProject()
+			log.FailOnError(err, "Unable to delete destination project")
+			log.InfoD("Destination project deleted successfully")
 			defer EndTorpedoTest()
 		})
 

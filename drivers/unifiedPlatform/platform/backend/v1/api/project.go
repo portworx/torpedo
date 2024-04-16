@@ -4,7 +4,6 @@ import (
 	"fmt"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/utilities"
-	"github.com/portworx/torpedo/pkg/log"
 	projectv1 "github.com/pure-px/platform-api-go-client/platform/v1/project"
 	status "net/http"
 )
@@ -138,11 +137,7 @@ func (ProjectV1 *PLATFORM_API_V1) AssociateToProject(associateProject *PlaformPr
 		},
 	})
 
-	log.Infof("Associate request [%v]", associateReq)
 	projectDetails, res, err := client.ProjectServiceAssociateResourcesExecute(associateReq)
-	log.Infof("Project Details [%v]", projectDetails)
-	log.Infof("Project response [%v]", res)
-	log.Infof("Project error [%v]", err)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return &response, fmt.Errorf("Error when calling `ProjectServiceAssociateResourcesExecute`: %v\n.Full HTTP response: %v", err, res)
 	}

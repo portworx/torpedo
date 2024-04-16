@@ -2,10 +2,12 @@ package platform
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
+	"time"
 )
 
 type WorkflowProject struct {
@@ -25,6 +27,10 @@ type AssociatedResources struct {
 	Templates       []string `copier:"must,nopanic"`
 	BackupPolicies  []string `copier:"must,nopanic"`
 }
+
+const (
+	projectDeletionTimeout = 5 * time.Minute
+)
 
 // CreateProject will create a project with given project name
 func (workflowProject *WorkflowProject) CreateProject() (*WorkflowProject, error) {
@@ -57,9 +63,8 @@ func (workflowProject *WorkflowProject) DeleteProject() error {
 		return err
 	}
 
-	// TODO: This needs to be enabled once DS-8599 is resolved
-	//log.Infof("Project Deleted [%s]", workflowProject.ProjectId)
-	//err = ValidateProjectDeletion(workflowProject.ProjectId)
+	log.Infof("Project Deleted [%s]", workflowProject.ProjectId)
+	err = ValidateProjectDeletion(workflowProject.ProjectId)
 
 	return err
 }
@@ -156,10 +161,17 @@ func (workflowProject *WorkflowProject) Dissociate(clusters []string, namespaces
 // ValidateProjectDeletion will validate the project deletion
 func ValidateProjectDeletion(projectId string) error {
 	// Validate the project deletion
-	_, err := platformLibs.GetProject(projectId)
-	if err == nil {
-		return fmt.Errorf("Project [%s] is not deleted", projectId)
+	validateProjectDeletion := func() (interface{}, bool, error) {
+		project, err := platformLibs.GetProject(projectId)
+		if err == nil {
+			return nil, true, fmt.Errorf("Project [%s] is yet not deleted. Phase - [%s]", projectId, project.Status.Phase)
+		} else {
+			log.Infof("Project [%s] is deleted successfully", projectId)
+			return nil, false, nil
+		}
 	}
-	log.Infof("Project [%s] is deleted successfully", projectId)
-	return nil
+
+	_, err := task.DoRetryWithTimeout(validateProjectDeletion, projectDeletionTimeout, retryInterval)
+
+	return err
 }
