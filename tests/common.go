@@ -9,11 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/Masterminds/semver/v3"
-	"github.com/hashicorp/go-version"
-	pxapi "github.com/libopenstorage/operator/api/px"
-	"github.com/portworx/sched-ops/k8s/apiextensions"
-	"github.com/portworx/sched-ops/k8s/kubevirt"
+	"github.com/devans10/pugo/flasharray"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -28,6 +24,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Masterminds/semver/v3"
+	"github.com/hashicorp/go-version"
+	pxapi "github.com/libopenstorage/operator/api/px"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 
 	context1 "context"
 
@@ -308,6 +310,7 @@ const (
 	anthosInstPathCliFlag            = "anthos-inst-path"
 	skipSystemCheckCliFlag           = "torpedo-skip-system-checks"
 	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
+	faSecretCliFlag                  = "fa-secret"
 )
 
 // Dashboard params
@@ -6605,6 +6608,7 @@ type Torpedo struct {
 	AnthosAdminWorkStationNodeIP        string
 	AnthosInstPath                      string
 	SkipSystemChecks                    bool
+	FaSecret                            string
 }
 
 // ParseFlags parses command line flags
@@ -6664,6 +6668,8 @@ func ParseFlags() {
 	var torpedoJobType string
 	var anthosWsNodeIp string
 	var anthosInstPath string
+	var faSecret string
+
 	log.Infof("The default scheduler is %v", defaultScheduler)
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -6737,6 +6743,8 @@ func ParseFlags() {
 	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, defaultPdsDriver, "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
+	flag.StringVar(&faSecret, faSecretCliFlag, "", "comma seperated list of famanagementip=tokenValue pairs")
+
 	// System checks https://github.com/portworx/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
 	// should be skipped from AfterSuite() if this flag is set to true. This is to avoid distracting test failures due to
 	// unstable testing environments.
@@ -6972,6 +6980,7 @@ func ParseFlags() {
 				AnthosInstPath:                      anthosInstPath,
 				IsPDSApps:                           deployPDSApps,
 				SkipSystemChecks:                    skipSystemChecks,
+				FaSecret:                            faSecret,
 			}
 			if instance.S.String() == "openshift" {
 				instance.LogLoc = "/mnt"
@@ -11568,4 +11577,52 @@ func SplitStorageDriverUpgradeURL(upgradeURL string) (string, string, error) {
 	endpoint.Path = strings.Join(pathSegments[:len(pathSegments)-1], "/")
 	pxVersion := pathSegments[len(pathSegments)-1]
 	return endpoint.String(), pxVersion, nil
+}
+
+// GetIQNOfNode returns the IQN of the given node in a FA setup
+func GetIQNOfNode(n node.Node) (string, error) {
+	cmd := "cat /etc/iscsi/initiatorname.iscsi"
+	output, err := runCmdGetOutput(cmd, n)
+	if err != nil {
+		return "", err
+	}
+
+	for _, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, "InitiatorName") {
+			return strings.Split(line, "=")[1], nil
+		}
+	}
+	return "", fmt.Errorf("iqn not found")
+}
+
+// GetIQNOfFA gets the IQN of the FA
+func GetIQNOfFA(n node.Node, FAclient flasharray.Client) (string, error) {
+	//Run iscsiadm commands to login to the controllers
+	networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(&FAclient, "iscsi")
+	log.FailOnError(err, "Failed to get network interfaces based on service type")
+
+	for _, networkInterface := range networkInterfaces {
+		ip := networkInterface.Address
+		log.InfoD("IP address of the iscsi service: %v", ip)
+		cmd := fmt.Sprintf("iscsiadm -m discovery -t st -p %s", ip)
+		output, err := runCmdGetOutput(cmd, n)
+		if err != nil {
+			return "", err
+		}
+		log.InfoD("Output of iscsiadm discovery command: %v", output)
+		// Split the input text by newline character to get each line
+		controllers := strings.Split(output, "\n")
+		// Loop through each line
+		for _, controller := range controllers {
+			// Split the line by space
+			parts := strings.Split(controller, " ")
+			if len(parts) == 2 {
+				iqn := parts[1]
+				return iqn, nil
+			}
+		}
+
+	}
+	return "", fmt.Errorf("IQN not found")
+
 }

@@ -171,6 +171,12 @@ func DeleteVolumeOnFABackend(faClient *flasharray.Client, volName string) (*flas
 	if err != nil {
 		return nil, err
 	}
+
+	// Delete from Recycle Bin
+	_, err = faClient.Volumes.EradicateVolume(volName)
+	if err != nil {
+		return nil, err
+	}
 	return volume, nil
 }
 
@@ -206,6 +212,22 @@ func GetIqnFromHosts(faClient *flasharray.Client, hostName string) ([]string, er
 		}
 	}
 	return nil, fmt.Errorf("Unable to fetch iqn details for the host specified [%v]", hostName)
+}
+
+// IsIQNExistsOnFA returns True if IQN is already associated to some Node
+func IsIQNExistsOnFA(faClient *flasharray.Client, iqnName string) (bool, error) {
+	hosts, err := ListAllHosts(faClient)
+	if err != nil {
+		return false, err
+	}
+	for _, eachHosts := range hosts {
+		for _, eachIqn := range eachHosts.Iqn {
+			if eachIqn == iqnName {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 // ListAllNetworkInterfacesOnFA returns all the list of Network Interfaces present
@@ -279,3 +301,21 @@ func DisableNetworkInterface(faClient *flasharray.Client, iface string) (bool, e
 	}
 	return false, fmt.Errorf("Failed to disable network interface [%v]", iface)
 }
+
+// GetHostFromIqn returns host name from iqn
+func GetHostFromIqn(faClient *flasharray.Client, iqn string) (string, error) {
+	hosts, err := ListAllHosts(faClient)
+	if err != nil {
+		return "", err
+	}
+	for _, eachHost := range hosts {
+		for _, eachIqn := range eachHost.Iqn {
+			if eachIqn == iqn {
+				return eachHost.Name, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("Failed to get host name from iqn [%v]", iqn)
+}
+
+// GetFAIqn
