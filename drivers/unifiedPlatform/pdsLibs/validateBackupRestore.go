@@ -55,7 +55,7 @@ func ValidateRestoreDeployment(restoreId, namespace string) error {
 	newDeployment := make(map[string]string)
 	newDeployment[*restore.Get.Meta.Name] = restore.Get.Config.DestinationReferences.DeploymentId
 
-	_, err = ValidateDataServiceDeploymentHealth(restore.Get.Config.DestinationReferences.DeploymentId, namespace)
+	err = ValidateDataServiceDeploymentHealth(restore.Get.Config.DestinationReferences.DeploymentId, namespace)
 	if err != nil {
 		return fmt.Errorf("error while validating restored deployment readiness")
 	}

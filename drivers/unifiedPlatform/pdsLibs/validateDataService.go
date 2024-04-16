@@ -21,35 +21,6 @@ const (
 	Version                  = "v1"
 )
 
-// GetDeploymentResources returns the Deployment related configurations
-func GetDeploymentResources(deployment map[string]string, dataService, resourceTemplateID, storageTemplateID, namespace string) (ResourceSettingTemplate, StorageOps, DeploymentConfig, error) {
-	var (
-		resourceTemp ResourceSettingTemplate
-		storageOp    StorageOps
-		dbConfig     DeploymentConfig
-	)
-	deploymentName, deploymentId := GetDeploymentNameAndId(deployment)
-	log.Debugf("deployment Name [%s] and Id [%s]", deploymentName, deploymentId)
-
-	dbConfig, err = GetDeploymentConfigurations(namespace, dataService, deploymentName)
-	if err != nil {
-		return resourceTemp, storageOp, dbConfig, err
-	}
-
-	log.Debugf("DbConfig [%v]", dbConfig)
-	resourceTemp, err = GetResourceTemplateConfigs(resourceTemplateID)
-	if err != nil {
-		return resourceTemp, storageOp, dbConfig, err
-	}
-
-	storageOp, err = GetStorageTemplateConfigs(storageTemplateID)
-	if err != nil {
-		return resourceTemp, storageOp, dbConfig, err
-	}
-
-	return resourceTemp, storageOp, dbConfig, nil
-}
-
 // GetDeploymentConfigurations returns the deployment CRObject response
 func GetDeploymentConfigurations(namespace, dataServiceName, deploymentName string) (DeploymentConfig, error) {
 	var dbConfig DeploymentConfig
@@ -139,8 +110,7 @@ func GetStorageTemplateConfigs(storageTemplateID string) (StorageOps, error) {
 }
 
 // ValidateDataServiceDeploymentHealth takes the deployment map(name and id), namespace and returns error
-func ValidateDataServiceDeploymentHealth(deploymentId, namespace string) (string, error) {
-	var deploymentName string
+func ValidateDataServiceDeploymentHealth(deploymentId, namespace string) error {
 	log.Infof("DeploymentId [%s]", deploymentId)
 	err = wait.Poll(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
 		res, err := v2Components.PDS.GetDeployment(deploymentId)
@@ -155,7 +125,7 @@ func ValidateDataServiceDeploymentHealth(deploymentId, namespace string) (string
 		log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Replicas, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
 		return true, nil
 	})
-	return deploymentName, err
+	return err
 }
 
 // ValidateDataMd5Hash validates the hash of the data service deployments

@@ -47,41 +47,90 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	if err != nil {
 		return nil, err
 	}
-	wfDataService.DataServiceDeployment = make(map[string]string)
-	wfDataService.DataServiceDeployment[*deployment.Create.Meta.Name] = *deployment.Create.Meta.Uid
+
 	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
 		if value == true {
 			log.Infof("Skipping DataService Deployment  Validation")
 		}
 	} else {
-		// Validate the sts object and health of the pds deployment
-		deploymentName, err := dslibs.ValidateDataServiceDeploymentHealth(*deployment.Create.Meta.Uid, namespace)
+		err = wfDataService.ValidatePdsDataServiceDeployments(deployment, ds, resConfigId, stConfigId, namespace, version, image)
 		if err != nil {
 			return nil, err
 		}
-
-		// Validate if the dns endpoint is reachable
-		err = wfDataService.ValidateDNSEndpoint(*deployment.Create.Meta.Uid)
-		if err != nil {
-			return nil, err
-		}
-
-		// Update the actual deploymentName with deploymentId
-		wfDataService.DataServiceDeployment[deploymentName] = *deployment.Create.Meta.Uid
-
-		// Get data service deployment resources
-		resourceTemplateOps, storageOps, DeploymentConfigs, err := wfDataService.GetDsDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, resConfigId, stConfigId, namespace)
-		if err != nil {
-			return nil, err
-		}
-
-		// Validate deployment resources
-		//TODO: Initialize the dataServiceVersionBuildMap once list ds version api is available
-		var dataServiceVersionBuildMap = make(map[string][]string)
-		wfDataService.ValidateDeploymentResources(resourceTemplateOps, storageOps, DeploymentConfigs, ds.Replicas, dataServiceVersionBuildMap)
 	}
 
 	return deployment, nil
+}
+
+func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataService, deploymentId, image, version string) (*automationModels.PDSDeploymentResponse, error) {
+	namespace := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
+	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
+	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
+	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
+	resConfigId := wfDataService.PDSTemplates.ResourceTemplateId
+	stConfigId := wfDataService.PDSTemplates.StorageTemplateId
+	log.Infof("targetClusterId [%s]", targetClusterId)
+
+	imageId, err := dslibs.GetDataServiceImageId(ds.Name, image, version)
+	if err != nil {
+		return nil, err
+	}
+
+	deployment, err := dslibs.UpdateDataService(ds, deploymentId, namespace, projectId, imageId, appConfigId, resConfigId, stConfigId)
+	if err != nil {
+		return nil, err
+	}
+	log.Debugf("Updated Deployment [%v]", deployment)
+	wfDataService.DataServiceDeployment = make(map[string]string)
+	wfDataService.DataServiceDeployment[*deployment.Update.Config.DeploymentMeta.Name] = *deployment.Update.Config.DeploymentMeta.Uid
+	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
+		if value == true {
+			log.Infof("Skipping Validation")
+		}
+	} else {
+		err = wfDataService.ValidatePdsDataServiceDeployments(deployment, ds, resConfigId, stConfigId, namespace, version, image)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return deployment, nil
+}
+
+// ValidatePdsDataServiceDeployments validates the pds deployments resource, storage, deployment configurations and endpoints
+func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(deployment *automationModels.PDSDeploymentResponse, ds dslibs.PDSDataService, resConfigId, stConfigId, namespace, version, image string) error {
+	// Get the actual DeploymentName
+	_, deploymentName, err := dslibs.GetDeployment(*deployment.Create.Meta.Uid)
+	if err != nil {
+		return err
+	}
+
+	// Update the actual deploymentName with deploymentId
+	wfDataService.DataServiceDeployment = make(map[string]string)
+	wfDataService.DataServiceDeployment[deploymentName] = *deployment.Create.Meta.Uid
+
+	// Validate the sts object and health of the pds deployment
+	err = dslibs.ValidateDataServiceDeploymentHealth(*deployment.Create.Meta.Uid, namespace)
+	if err != nil {
+		return err
+	}
+
+	// Validate if the dns endpoint is reachable
+	err = wfDataService.ValidateDNSEndpoint(*deployment.Create.Meta.Uid)
+	if err != nil {
+		return err
+	}
+
+	// Get data service deployment resources
+	resourceTemplateOps, storageOps, DeploymentConfigs, err := wfDataService.GetDsDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, resConfigId, stConfigId, namespace)
+	if err != nil {
+		return err
+	}
+
+	// Validate deployment resources
+	dataServiceVersionBuild := version + "-" + image
+	wfDataService.ValidateDeploymentResources(resourceTemplateOps, storageOps, DeploymentConfigs, ds.Replicas, dataServiceVersionBuild)
+
+	return nil
 }
 
 func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deployment map[string]string, dataServiceName, resourceTemplateID, storageTemplateID, namespace string) (dslibs.ResourceSettingTemplate, dslibs.StorageOps, dslibs.DeploymentConfig, error) {
@@ -113,68 +162,12 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deployment ma
 
 }
 
-func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataService, deploymentId, image, version string) (*automationModels.PDSDeploymentResponse, error) {
-	namespace := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
-	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
-	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
-	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
-	resConfigId := wfDataService.PDSTemplates.ResourceTemplateId
-	stConfigId := wfDataService.PDSTemplates.StorageTemplateId
-	log.Infof("targetClusterId [%s]", targetClusterId)
-
-	imageId, err := dslibs.GetDataServiceImageId(ds.Name, image, version)
-	if err != nil {
-		return nil, err
-	}
-
-	deployment, err := dslibs.UpdateDataService(ds, deploymentId, namespace, projectId, imageId, appConfigId, resConfigId, stConfigId)
-	if err != nil {
-		return nil, err
-	}
-	log.Debugf("Updated Deployment [%v]", deployment)
-	wfDataService.DataServiceDeployment = make(map[string]string)
-	wfDataService.DataServiceDeployment[*deployment.Update.Config.DeploymentMeta.Name] = *deployment.Update.Config.DeploymentMeta.Uid
-	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
-		if value == true {
-			log.Infof("Skipping Validation")
-		}
-	} else {
-		// Validate the sts object and health of the pds deployment
-		deploymentName, err := dslibs.ValidateDataServiceDeploymentHealth(deploymentId, namespace)
-		if err != nil {
-			return nil, err
-		}
-
-		wfDataService.DataServiceDeployment[deploymentName] = *deployment.Update.Config.DeploymentMeta.Uid
-
-		// Validate if the dns endpoint is reachable
-		err = wfDataService.ValidateDNSEndpoint(deploymentId)
-		if err != nil {
-			return nil, err
-		}
-
-		// Get deployment resources
-		dslibs.GetDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, "resource-template-id", "storage-template-id", namespace)
-
-		//resourceTemp, storageOp, config, err := dslibs.GetDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, "resource-template-id", "storage-template-id", namespace)
-		//if err != nil {
-		//	return nil, err
-		//}
-
-		// Validate deployment resources
-		//TODO: Initialize the dataServiceVersionBuildMap once list ds version api is available
-		//var dataServiceVersionBuildMap = make(map[string][]string)
-		//ValidateDeploymentResources(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
-	}
-	return deployment, nil
-}
-
 func (wfDataService *WorkflowDataService) DeleteDeployment() error {
 	return dslibs.DeleteDeployment(wfDataService.DataServiceDeployment)
 }
 
 func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId string) error {
-	deployment, err := dslibs.GetDeployment(deploymentId)
+	deployment, _, err := dslibs.GetDeployment(deploymentId)
 	if err != nil {
 		return err
 	}
@@ -182,7 +175,7 @@ func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId strin
 	log.Infof("ConnectionInfo Response [+%v]", deployment.Get.Status.ConnectionInfo["clusterDetails"])
 
 	clusterDetails := deployment.Get.Status.ConnectionInfo["clusterDetails"]
-	dnsEndPoint, err := utils.GetDNSEndPoint(clusterDetails)
+	dnsEndPoint, err := utils.ParseInterfaceAndGetDetails(clusterDetails)
 	if err != nil {
 		return err
 	}
@@ -266,7 +259,7 @@ func GetDeploymentNameAndId(deployment map[string]string) (string, string) {
 
 }
 
-func (wfDataService *WorkflowDataService) ValidateDeploymentResources(resourceTemp dslibs.ResourceSettingTemplate, storageOp dslibs.StorageOps, config dslibs.DeploymentConfig, replicas int, dataServiceVersionBuildMap map[string][]string) {
+func (wfDataService *WorkflowDataService) ValidateDeploymentResources(resourceTemp dslibs.ResourceSettingTemplate, storageOp dslibs.StorageOps, config dslibs.DeploymentConfig, replicas int, dataServiceVersionBuild string) {
 	log.Debugf("filesystem used %v ", config.Spec.Topologies[0].StorageOptions.Filesystem)
 	log.Debugf("storage replicas used %v ", config.Spec.Topologies[0].StorageOptions.Replicas)
 	log.Debugf("cpu requests used %v ", config.Spec.Topologies[0].Resources.Requests.CPU)
@@ -278,16 +271,14 @@ func (wfDataService *WorkflowDataService) ValidateDeploymentResources(resourceTe
 
 	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Requests.CPU, config.Spec.Topologies[0].Resources.Requests.CPU, "Validating CPU Request")
 	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Requests.Memory, config.Spec.Topologies[0].Resources.Requests.Memory, "Validating Memory Request")
-	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Requests.Storage, config.Spec.Topologies[0].Resources.Requests.Storage, "Validating storage")
+	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Requests.Storage, config.Spec.Topologies[0].Resources.Requests.Storage, "Validating storage Request")
 	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Limits.CPU, config.Spec.Topologies[0].Resources.Limits.CPU, "Validating CPU Limits")
 	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Limits.Memory, config.Spec.Topologies[0].Resources.Limits.Memory, "Validating Memory Limits")
 	wfDataService.Dash.VerifyFatal(storageOp.Replicas, config.Spec.Topologies[0].StorageOptions.Replicas, "Validating storage replicas")
 	wfDataService.Dash.VerifyFatal(storageOp.Filesystem, config.Spec.Topologies[0].StorageOptions.Filesystem, "Validating filesystems")
+	wfDataService.Dash.VerifyFatal(storageOp.Secure, config.Spec.Topologies[0].StorageOptions.Secure, "Validating Secure Storage Option")
 	wfDataService.Dash.VerifyFatal(replicas, config.Spec.Topologies[0].Nodes, "Validating ds node replicas")
-
-	//for version, build := range dataServiceVersionBuildMap {
-	//	dash.VerifyFatal(config.Version, version+"-"+build[0], "validating ds build and version")
-	//}
+	wfDataService.Dash.VerifyFatal(dataServiceVersionBuild, config.Spec.Version, "Validating ds version")
 }
 
 func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string, deployment map[string]string, sizeInGb uint64) error {

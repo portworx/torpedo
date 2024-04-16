@@ -4,35 +4,18 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	tests "github.com/portworx/torpedo/tests/unifiedPlatform"
 )
 
+var dash *aetosutil.Dashboard
+
 var _ = Describe("{CleanUpDeployments}", func() {
 	It("Delete all deployments", func() {
 		err := pdslibs.DeleteAllDeployments(tests.ProjectId)
 		log.FailOnError(err, "error while deleting deployment")
-	})
-})
-
-var _ = Describe("{GetCRObject}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("GetCRObject", "get the cr object", nil, 0)
-	})
-
-	var wfDataService pds.WorkflowDataService
-
-	It("Get the CR object", func() {
-		for _, ds := range tests.NewPdsParams.DataServiceToTest {
-			wfDataService.DataServiceDeployment = make(map[string]string)
-			wfDataService.DataServiceDeployment["pg-qa-bxgoxo"] = "dep:8965032c-c8e3-447f-af05-9b7a4badf5a9"
-			resourceSettings, storageOps, deploymentConfig, err := pdslibs.GetDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, "tmpl:04dab835-1fe2-4526-824f-d7a45694676c", "tmpl:a584ede7-811e-48bd-b000-ae799e3e084e", "pds-namespace-fdrey")
-			log.FailOnError(err, "Error occured while getting deployment resources")
-			var dataServiceVersionBuildMap = make(map[string][]string)
-			wfDataService.Dash = dash
-			wfDataService.ValidateDeploymentResources(resourceSettings, storageOps, deploymentConfig, ds.Replicas, dataServiceVersionBuildMap)
-		}
 	})
 })
 
