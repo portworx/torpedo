@@ -423,8 +423,8 @@ func GetEnv(key, fallback string) string {
 
 // CopyStruct copies one struct to another and raise error if failed
 func CopyStruct(fromValue interface{}, toValue interface{}) error {
-	log.Infof("Copying from [%+v]", fromValue)
-	log.Infof("Copying to [%+v]", toValue)
+	// log.Infof("Copying from [%+v]", fromValue)
+	// log.Infof("Copying to [%+v]", toValue)
 	err := copier.CopyWithOption(toValue, fromValue, copier.Option{CaseSensitive: false})
 	return err
 }

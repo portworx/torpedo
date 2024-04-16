@@ -138,6 +138,10 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	//TODO: Steps to delete Backup location, Target and Bucket
+	err := WorkflowNamespace.Purge()
+	log.FailOnError(err, "Unable to cleanup all namespaces")
+	log.InfoD("All namespaces cleaned up successfully")
+
 	log.InfoD("Test Finished")
 })
 
