@@ -3316,6 +3316,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			if volerr != nil {
 				dash.VerifyFatal(IsExpectederr, true, volerr.Error())
 			} else {
+				PrintInspectVolume(VolName)
 				dash.VerifyFatal(volerr, fmt.Errorf("Volume Creation should be failed"), "Volume should not be created as we have imposed the cluster options")
 			}
 			DisableClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[]'"
