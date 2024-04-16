@@ -3312,13 +3312,11 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 			VolName = fmt.Sprintf("volume_%s", id.String()[:8])
 			volCreatecmd := fmt.Sprintf("volume create --size %d --nodes %s %s", (multiple+1)*targetSizeGiB, selectedNode.Id, VolName)
 			_, volerr := runPxctlCommand(volCreatecmd, *selectedNode, nil)
+			IsExpectederr := strings.Contains(volerr.Error(), "pools must not over-commit provisioning space")
 			if volerr != nil {
-				IsExpectederr := strings.Contains(volerr.Error(), "pools must not over-commit provisioning space")
 				dash.VerifyFatal(IsExpectederr, true, volerr.Error())
 			} else {
-				log.InfoD("Volume should not be created  as we have imposed the cluster options,so we deleting the volume")
-				err := Inst().V.DeleteVolume(VolName)
-				log.FailOnError(err, "Failed to delete volume [%s]", VolName)
+				dash.VerifyFatal(volerr, fmt.Errorf("Volume Creation should be failed"), "Volume should not be created as we have imposed the cluster options")
 			}
 			DisableClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[]'"
 			_, disable_err := runPxctlCommand(DisableClusterOptionscmd, *selectedNode, nil)
