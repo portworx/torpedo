@@ -404,7 +404,7 @@ var _ = Describe("{NodeDiskDetachAttach}", func() {
 		randomStorageNode := storageNodes[randomNum.Intn(len(storageNodes))]
 
 		// Fetch random storage node and detach the disks attached to that node
-		var disksDetached []string
+		//var disksDetached []string
 		var oldNodeIDtoMatch string
 		var newNodeIDtoMatch string
 		Step(fmt.Sprintf("detach disks attached from a random storage node %s", randomStorageNode.Name), func() {
@@ -412,14 +412,15 @@ var _ = Describe("{NodeDiskDetachAttach}", func() {
 			// Store the Node ID of randomStorageNode for future use
 			oldNodeIDtoMatch = randomStorageNode.Id
 
-			disksDetached, err = Inst().N.DetachAllDisks(randomStorageNode)
-			log.FailOnError(err, fmt.Sprintf("Failed to detach disks for the node %s", randomStorageNode.Name))
-			dash.VerifyFatal(len(disksDetached) > 0, true, fmt.Sprintf("Found drives length %d", len(disksDetached)))
-		})
+			//disksDetached, err = Inst().N.DetachAllDisks(randomStorageNode)
+			//log.FailOnError(err, fmt.Sprintf("Failed to detach disks for the node %s", randomStorageNode.Name))
+			//dash.VerifyFatal(len(disksDetached) > 0, true, fmt.Sprintf("Found drives length %d", len(disksDetached)))
+			//
+			//err = Inst().N.AttachDisks(randNonPxNode, disksDetached)
+			//log.FailOnError(err, fmt.Sprintf("Failed to attach disks to the node %s", randNonPxNode.Name))
 
-		Step(fmt.Sprintf("attach disks to the node %s where PX is not started and start PX", randNonPxNode.Name), func() {
-			err = Inst().N.AttachDisks(randNonPxNode, disksDetached)
-			log.FailOnError(err, fmt.Sprintf("Failed to attach disks to the node %s", randNonPxNode.Name))
+			err = Inst().N.MoveDisks(randomStorageNode, randNonPxNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to move disks from node %s to node %s", randomStorageNode.Name, randNonPxNode.Name))
 
 			// Start PX on the node
 			err = k8sCore.AddLabelOnNode(randNonPxNode.Name, schedops.PXEnabledLabelKey, "true")
