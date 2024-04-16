@@ -507,6 +507,10 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 	var disks []*types.VirtualDisk
 	for _, device := range devices {
 		if disk, ok := device.(*types.VirtualDisk); ok {
+			// skip the first/root disk
+			if *disk.UnitNumber == 0 {
+				continue
+			}
 			disks = append(disks, disk)
 
 			config := &types.VirtualMachineConfigSpec{
