@@ -288,10 +288,10 @@ func IsVMBindMounted(virtualMachineCtx *scheduler.Context, wait bool) (bool, err
 			vmPod, _ = GetVirtLauncherPodForVM(virtualMachineCtx, vol)
 		}
 		// Commenting this code till PWX-36842 is not fixed
-		//err := IsVolumeBindMounted(virtualMachineCtx, vmNodeName, vol, wait, vmPod)
-		//if err != nil {
-		//	return false, err
-		//}
+		err := IsVolumeBindMounted(virtualMachineCtx, vmNodeName, vol, wait, vmPod)
+		if err != nil {
+			return false, err
+		}
 		err = AreVolumeReplicasCollocated(vol, globalReplicSet)
 		if err != nil {
 			return false, err
