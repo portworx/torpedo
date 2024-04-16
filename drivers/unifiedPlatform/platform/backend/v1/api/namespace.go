@@ -47,3 +47,19 @@ func (ns *PLATFORM_API_V1) ListNamespaces(request *PlatformNamespace) (*Platform
 	log.Infof("Value of namespace after copy - [%v]", namespaceResponse)
 	return &namespaceResponse, nil
 }
+
+// DeleteNamespace will delete the namespace from control plane
+func (ns *PLATFORM_API_V1) DeleteNamespace(request *PlatformNamespace) error {
+	ctx, nsClient, err := ns.getNamespaceClient()
+	if err != nil {
+		return fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+
+	req := nsClient.NamespaceServiceDeleteNamespace(ctx, request.Delete.Id)
+	_, res, err := req.Execute()
+
+	if err != nil && res.StatusCode != status.StatusOK {
+		return fmt.Errorf("Error when calling `NamespaceServiceDeleteNamespace`: %v\n.Full HTTP response: %v", err, res)
+	}
+	return nil
+}

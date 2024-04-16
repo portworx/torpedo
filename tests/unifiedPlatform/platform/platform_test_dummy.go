@@ -330,3 +330,72 @@ var _ = Describe("{TestPlatformTemplates}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{NamepsaceDummyTest}", func() {
+	var (
+		workflowPlatform      platform.WorkflowPlatform
+		workflowTargetCluster platform.WorkflowTargetCluster
+		workflowProject       platform.WorkflowProject
+		workflowNamespace     platform.WorkflowNamespace
+		namespace             string
+	)
+	JustBeforeEach(func() {
+
+		StartTorpedoTest("NamepsaceDummyTest", "Delete and Purge Namespaces", nil, 0)
+		namespace = fmt.Sprintf("pds-namespace-%s", utilities.RandomString(5))
+		workflowPlatform.TenantInit()
+	})
+
+	It("Delete and Purge Namespaces", func() {
+
+		Step("Create Project", func() {
+			workflowProject.Platform = workflowPlatform
+			workflowProject.ProjectName = fmt.Sprintf("project-%s", utilities.RandomString(5))
+			workflowProject, err := workflowProject.CreateProject()
+			log.FailOnError(err, "Unable to create project")
+			log.InfoD("Project created with ID - [%s]", workflowProject.ProjectId)
+		})
+
+		Step("Register Target Cluster", func() {
+			workflowTargetCluster.Project = workflowProject
+			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
+			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane(false)
+			log.FailOnError(err, "Unable to register target cluster")
+			log.InfoD("Target cluster registered with uid - [%s]", workflowTargetCluster.ClusterUID)
+		})
+
+		Step("Create a PDS Namespace", func() {
+			workflowNamespace.TargetCluster = workflowTargetCluster
+			workflowNamespace.Namespaces = make(map[string]string)
+			_, err := workflowNamespace.CreateNamespaces(namespace)
+			log.FailOnError(err, "Unable to create PDS namespace")
+			log.InfoD("Namespaces created - [%s]", workflowNamespace.Namespaces)
+		})
+
+		Step("Delete PDS Namespace", func() {
+			err := workflowNamespace.DeleteNamespace(namespace)
+			log.FailOnError(err, "Unable to delete namespace")
+			log.InfoD("Namespaces Deleted - [%s]", namespace)
+		})
+
+		Step("Create Multiple Random Namespaces", func() {
+			for i := 0; i < 10; i++ {
+				namespace = "random-namespace-" + RandomString(5)
+				_, err := workflowNamespace.CreateNamespaces(namespace)
+				log.FailOnError(err, "Unable to create PDS namespace")
+				log.InfoD("Namespaces created - [%s]", workflowNamespace.Namespaces)
+			}
+		})
+
+		Step("Purge All Namespaces", func() {
+			err := workflowNamespace.Purge()
+			log.FailOnError(err, "Unable to cleanup all namespaces")
+			log.InfoD("All namespaces cleaned up successfully")
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})

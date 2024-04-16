@@ -70,3 +70,8 @@ func (NamespaceGrpcV1 *PlatformGrpc) ListNamespaces(request *PlatformNamespace) 
 
 	return &namespaceResponse, nil
 }
+
+// DeleteNamespace will delete the namespace from control plane
+func (ns *PlatformGrpc) DeleteNamespace(request *PlatformNamespace) error {
+	return fmt.Errorf("DeleteNamespace is not implemented for GRPC")
+}
