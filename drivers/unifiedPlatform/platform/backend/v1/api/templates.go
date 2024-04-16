@@ -105,20 +105,21 @@ func (template *PLATFORM_API_V1) UpdateTemplates(templateReq *PlatformTemplatesR
 
 // GetTemplates return template model.
 func (template *PLATFORM_API_V1) GetTemplates(templateReq *PlatformTemplatesRequest) (*PlatformTemplatesResponse, error) {
-
 	ctx, client, err := template.getTemplateClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	templateResponse := PlatformTemplatesResponse{}
+	templateResponse := PlatformTemplatesResponse{
+		Get: V1Template{},
+	}
 	templateModel, res, err := client.TemplateServiceGetTemplate(ctx, templateReq.Get.Id).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `TemplateServiceGetTemplateExecute`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.InfoD("Successfully fetched the template Roles")
 	log.Infof("Value of template - [%v]", templateModel)
-	err = utilities.CopyStruct(templateModel, &templateResponse)
-	log.Infof("Value of template after copy - [%v]", templateResponse)
+	err = utilities.CopyStruct(templateModel, &templateResponse.Get)
+	log.Infof("Value of template after copy - [%v]", templateResponse.Get)
 	return &templateResponse, nil
 }
 

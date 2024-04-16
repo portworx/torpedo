@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/portworx/sched-ops/k8s/core"
@@ -476,9 +477,9 @@ func DeleteElementFromSlice(slice []string, element string) ([]string, error) {
 	return append(slice[:index], slice[index+1:]...), nil
 }
 
-// GetDNSEndPoint takes interface as input and checks for the particular type and extracts the host and port information
+// ParseInterfaceAndGetDetails takes interface as input and checks for the particular type and extracts the host and port information
 // Returns the host and port as dnsEndpoints
-func GetDNSEndPoint(clusterDetails interface{}) (string, error) {
+func ParseInterfaceAndGetDetails(clusterDetails interface{}) (string, error) {
 	var (
 		host        string
 		port        string
@@ -504,12 +505,19 @@ func GetDNSEndPoint(clusterDetails interface{}) (string, error) {
 			}
 		}
 		dnsEndPoint = host + ":" + port
-		log.Infof("DataService endpoint is: [%s]", dnsEndPoint)
+		log.Debugf("DataService endpoint is: [%s]", dnsEndPoint)
 	} else {
 		return "", fmt.Errorf("ClusterDetails is of not expected type")
 	}
-
 	return dnsEndPoint, nil
+}
+
+func GetBasePodName(podName string) string {
+	parts := strings.Split(podName, "-")
+	if len(parts) > 1 {
+		return strings.Join(parts[:len(parts)-1], "-")
+	}
+	return podName
 }
 
 func ConvertInterfacetoString(value interface{}) (string, error) {
