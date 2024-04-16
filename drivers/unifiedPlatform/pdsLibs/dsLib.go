@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -81,8 +82,16 @@ func DeleteDeployment(deployment map[string]string) error {
 	return v2Components.PDS.DeleteDeployment(deploymentId)
 }
 
-func GetDeployment(deploymentId string) (*automationModels.PDSDeploymentResponse, error) {
-	return v2Components.PDS.GetDeployment(deploymentId)
+func GetDeployment(deploymentId string) (*automationModels.PDSDeploymentResponse, string, error) {
+	deployment, err := v2Components.PDS.GetDeployment(deploymentId)
+	if err != nil {
+		return nil, "", err
+	}
+	log.Debugf("deployment [%+v]", deployment)
+	pod := deployment.Get.Status.DeploymentTopologyStatus[0].ConnectionInfo.Pods[0].Name
+	log.Debugf("pods [%+v]", *pod)
+	podName := utilities.GetBasePodName(*pod)
+	return deployment, podName, err
 }
 
 // DeployDataService Deploys the dataservices based on the given params

@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
+	"github.com/portworx/torpedo/drivers/utilities"
 	"os"
 	"strings"
 	"testing"
@@ -10,8 +12,6 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dsUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
-	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
@@ -22,6 +22,8 @@ var _ = BeforeSuite(func() {
 	steplog := "Get prerequisite params to run platform tests"
 	log.InfoD(steplog)
 	Step(steplog, func() {
+		InitInstance()
+		dash = Inst().Dash
 		// Read pds params from the configmap
 		var err error
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
@@ -121,7 +123,7 @@ var _ = BeforeSuite(func() {
 		log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
 	})
 
-	Step("Associate resources to Project", func() {
+	Step("Associate namespace and cluster to Project", func() {
 		err := WorkflowProject.Associate(
 			[]string{WorkflowTargetCluster.ClusterUID},
 			[]string{WorkflowNamespace.Namespaces[PDS_DEFAULT_NAMESPACE]},
@@ -130,7 +132,7 @@ var _ = BeforeSuite(func() {
 			[]string{},
 			[]string{},
 		)
-		log.FailOnError(err, "Unable to associate resources to Project")
+		log.FailOnError(err, "Unable to associate Cluster to Project")
 		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
 	})
 
@@ -138,6 +140,10 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	//TODO: Steps to delete Backup location, Target and Bucket
+	err := WorkflowNamespace.Purge()
+	log.FailOnError(err, "Unable to cleanup all namespaces")
+	log.InfoD("All namespaces cleaned up successfully")
+
 	log.InfoD("Test Finished")
 })
 

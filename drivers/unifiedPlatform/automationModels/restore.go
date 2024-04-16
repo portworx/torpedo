@@ -47,9 +47,9 @@ type PDSListRestoreResponse struct {
 }
 
 type PDSRestore struct {
-	Meta   *Meta   `copier:"must,nopanic"`
+	Meta   *Meta          `copier:"must,nopanic"`
 	Config *RestoreConfig `copier:"must,nopanic"`
-	Status *Status `copier:"must,nopanic"`
+	Status *Status        `copier:"must,nopanic"`
 }
 
 // V1Config Desired configuration of the restore.
@@ -75,7 +75,6 @@ type PDSGetRestore struct {
 type PDSDeleteRestore struct {
 	Id string `copier:"must,nopanic"`
 }
-
 
 // Restorev1Status Status of the restore.
 type Restorev1Status struct {

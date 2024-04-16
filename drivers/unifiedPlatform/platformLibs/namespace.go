@@ -62,15 +62,6 @@ func ValidateLabel(namespace string) error {
 	return nil
 }
 
-func DeleteNamespace(namespace string) error {
-	k8sCore := core.Instance()
-	err := k8sCore.DeleteNamespace(namespace)
-	if err != nil {
-		return fmt.Errorf("Error while deleting namespace [%s]", err.Error())
-	}
-	return nil
-}
-
 func ListNamespaces(tenantId string, label string, sortBy string, sortOrder string) (*automationModels.PlatformNamespaceResponse, error) {
 	request := &automationModels.PlatformNamespace{
 		List: automationModels.PlatformListNamespace{
@@ -107,4 +98,17 @@ func ListNamespaces(tenantId string, label string, sortBy string, sortOrder stri
 	}
 
 	return listResponse, nil
+}
+
+// DeleteNamespace will delete the namespace from the control plane
+func DeleteNamespace(id string) error {
+
+	request := automationModels.PlatformNamespace{
+		Delete: automationModels.PlatformNamespaceDelete{
+			Id: id,
+		},
+	}
+
+	err := v2Components.Platform.DeleteNamespace(&request)
+	return err
 }

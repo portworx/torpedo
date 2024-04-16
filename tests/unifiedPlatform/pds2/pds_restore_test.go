@@ -264,6 +264,10 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 				log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
 			}()
 			defer EndTorpedoTest()
+
+			err := destinationNamespace.Purge()
+			log.FailOnError(err, "Unable to cleanup restore namespaces")
+
 		})
 
 	})
@@ -409,7 +413,9 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 				err := SetSourceKubeConfig()
 				log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
 			}()
-			err := destinationProject.DeleteProject()
+			err := destinationNamespace.Purge()
+			log.FailOnError(err, "Unable to cleanup restore namespaces")
+			err = destinationProject.DeleteProject()
 			log.FailOnError(err, "Unable to delete destination project")
 			log.InfoD("Destination project deleted successfully")
 			defer EndTorpedoTest()

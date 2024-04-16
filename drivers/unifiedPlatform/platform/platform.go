@@ -67,7 +67,8 @@ type CloudCredentialsInterface interface {
 	UpdateCloudCredentials(*CloudCredentialsRequest) (*CloudCredentialsResponse, error)
 }
 type NamespaceInterface interface {
-	ListNamespaces(namespace *PlatformNamespace) (*PlatformNamespaceResponse, error)
+	ListNamespaces(*PlatformNamespace) (*PlatformNamespaceResponse, error)
+	DeleteNamespace(*PlatformNamespace) error
 }
 
 type IamRoleBindingsInterface interface {

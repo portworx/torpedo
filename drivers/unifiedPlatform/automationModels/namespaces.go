@@ -1,7 +1,8 @@
 package automationModels
 
 type PlatformNamespace struct {
-	List PlatformListNamespace
+	List   PlatformListNamespace
+	Delete PlatformNamespaceDelete
 }
 
 type PlatformNamespaceResponse struct {
@@ -16,6 +17,10 @@ type PlatformListNamespace struct {
 	SortSortOrder        string `copier:"must,nopanic"`
 	PaginationPageNumber string `copier:"must,nopanic"`
 	PaginationPageSize   string `copier:"must,nopanic"`
+}
+
+type PlatformNamespaceDelete struct {
+	Id string `copier:"must,nopanic"`
 }
 
 type V1ListNamespacesResponse struct {
