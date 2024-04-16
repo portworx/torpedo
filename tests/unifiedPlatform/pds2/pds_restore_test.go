@@ -415,6 +415,9 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 			}()
 			err := destinationNamespace.Purge()
 			log.FailOnError(err, "Unable to cleanup restore namespaces")
+			err = destinationProject.DeleteProject()
+			log.FailOnError(err, "Unable to delete destination project")
+			log.InfoD("Destination project deleted successfully")
 			defer EndTorpedoTest()
 		})
 
