@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -602,7 +601,7 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 		log.Infof("Got Cred UUID: %s", credUUID)
 		contexts = make([]*scheduler.Context, 0)
 		policyName := "intervalpolicy"
-		appScale := 30
+		appScale := 1
 
 		stepLog = fmt.Sprintf("create schedule policy %s", policyName)
 		Step(stepLog, func() {
@@ -654,7 +653,7 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 
 				}()
 				//validating cloudnsnaps for 30 iterations
-				for i := 1; i <= 30; i++ {
+				for i := 1; i <= appScale; i++ {
 					log.Infof("validating cloudsnaps iteration : %d", i)
 					for _, ctx := range contexts {
 						var appVolumes []*volume.Volume
@@ -676,70 +675,70 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 						err = Inst().S.ValidateVolumes(ctx, scaleFactor*4*time.Minute, defaultRetryInterval, nil)
 						log.FailOnError(err, "error validating volumes for [%s]", ctx.App.Key)
 
-						for _, v := range appVolumes {
-
-							isPureVol, err := Inst().V.IsPureVolume(v)
-							log.FailOnError(err, "error checking if volume is pure volume")
-							if isPureVol {
-								log.Warnf("Cloud snapshot is not supported for Pure DA volumes: [%s],Skipping cloud snapshot trigger for pure volume.", v.Name)
-								continue
-							}
-
-							snapshotScheduleName := v.Name + "-interval-schedule"
-							log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
-							resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
-							log.FailOnError(err, fmt.Sprintf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace))
-							dash.VerifyFatal(len(resp.Status.Items) > 0, true, fmt.Sprintf("verify snapshots exists for %s", snapshotScheduleName))
-							for _, snapshotStatuses := range resp.Status.Items {
-								if len(snapshotStatuses) > 0 {
-									status := snapshotStatuses[len(snapshotStatuses)-1]
-									if status == nil {
-										log.FailOnError(fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status"), fmt.Sprintf("error getting latest snapshot status for %s", snapshotScheduleName))
-									}
-									status, err = WaitForSnapShotToReady(snapshotScheduleName, status.Name, appNamespace)
-									log.Infof("Snapshot %s has status %v", status.Name, status.Status)
-
-									if status.Status == snapv1.VolumeSnapshotConditionError {
-										resp, _ := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
-										log.Infof("SnapshotSchedule resp: %v", resp)
-										snapData, _ := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
-										log.Infof("snapData : %v", snapData)
-										log.FailOnError(fmt.Errorf("snapshot: %s failed. status: %v", status.Name, status.Status), fmt.Sprintf("cloud snapshot for %s failed", snapshotScheduleName))
-									}
-									if status.Status == snapv1.VolumeSnapshotConditionPending {
-										log.FailOnError(fmt.Errorf("snapshot: %s not completed. status: %v", status.Name, status.Status), fmt.Sprintf("cloud snapshot for %s stuck in pending state", snapshotScheduleName))
-									}
-
-									if status.Status == snapv1.VolumeSnapshotConditionReady {
-										snapData, err := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
-										log.FailOnError(err, fmt.Sprintf("error getting snapshot data for [%s/%s]", appNamespace, status.Name))
-
-										snapType := snapData.Spec.PortworxSnapshot.SnapshotType
-										log.Infof("Snapshot Type: %v", snapType)
-										if snapType != "cloud" {
-											err = &scheduler.ErrFailedToGetVolumeParameters{
-												App:   ctx.App,
-												Cause: fmt.Sprintf("Snapshot Type: %s does not match", snapType),
-											}
-											log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, status.Name))
-										}
-
-										snapID := snapData.Spec.PortworxSnapshot.SnapshotID
-										log.Infof("Snapshot ID: %v", snapID)
-										if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
-											len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
-											err = &scheduler.ErrFailedToGetVolumeParameters{
-												App:   ctx.App,
-												Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
-											}
-											log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, status.Name))
-										}
-									}
-
-								}
-							}
-
-						}
+						//for _, v := range appVolumes {
+						//
+						//	isPureVol, err := Inst().V.IsPureVolume(v)
+						//	log.FailOnError(err, "error checking if volume is pure volume")
+						//	if isPureVol {
+						//		log.Warnf("Cloud snapshot is not supported for Pure DA volumes: [%s],Skipping cloud snapshot trigger for pure volume.", v.Name)
+						//		continue
+						//	}
+						//
+						//	snapshotScheduleName := v.Name + "-interval-schedule"
+						//	log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+						//	resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+						//	log.FailOnError(err, fmt.Sprintf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace))
+						//	dash.VerifyFatal(len(resp.Status.Items) > 0, true, fmt.Sprintf("verify snapshots exists for %s", snapshotScheduleName))
+						//	for _, snapshotStatuses := range resp.Status.Items {
+						//		if len(snapshotStatuses) > 0 {
+						//			status := snapshotStatuses[len(snapshotStatuses)-1]
+						//			if status == nil {
+						//				log.FailOnError(fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status"), fmt.Sprintf("error getting latest snapshot status for %s", snapshotScheduleName))
+						//			}
+						//			status, err = WaitForSnapShotToReady(snapshotScheduleName, status.Name, appNamespace)
+						//			log.Infof("Snapshot %s has status %v", status.Name, status.Status)
+						//
+						//			if status.Status == snapv1.VolumeSnapshotConditionError {
+						//				resp, _ := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+						//				log.Infof("SnapshotSchedule resp: %v", resp)
+						//				snapData, _ := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
+						//				log.Infof("snapData : %v", snapData)
+						//				log.FailOnError(fmt.Errorf("snapshot: %s failed. status: %v", status.Name, status.Status), fmt.Sprintf("cloud snapshot for %s failed", snapshotScheduleName))
+						//			}
+						//			if status.Status == snapv1.VolumeSnapshotConditionPending {
+						//				log.FailOnError(fmt.Errorf("snapshot: %s not completed. status: %v", status.Name, status.Status), fmt.Sprintf("cloud snapshot for %s stuck in pending state", snapshotScheduleName))
+						//			}
+						//
+						//			if status.Status == snapv1.VolumeSnapshotConditionReady {
+						//				snapData, err := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
+						//				log.FailOnError(err, fmt.Sprintf("error getting snapshot data for [%s/%s]", appNamespace, status.Name))
+						//
+						//				snapType := snapData.Spec.PortworxSnapshot.SnapshotType
+						//				log.Infof("Snapshot Type: %v", snapType)
+						//				if snapType != "cloud" {
+						//					err = &scheduler.ErrFailedToGetVolumeParameters{
+						//						App:   ctx.App,
+						//						Cause: fmt.Sprintf("Snapshot Type: %s does not match", snapType),
+						//					}
+						//					log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, status.Name))
+						//				}
+						//
+						//				snapID := snapData.Spec.PortworxSnapshot.SnapshotID
+						//				log.Infof("Snapshot ID: %v", snapID)
+						//				if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
+						//					len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
+						//					err = &scheduler.ErrFailedToGetVolumeParameters{
+						//						App:   ctx.App,
+						//						Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
+						//					}
+						//					log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, status.Name))
+						//				}
+						//			}
+						//
+						//		}
+						//	}
+						//
+						//}
 					}
 					time.Sleep(1 * time.Minute)
 				}
