@@ -9,6 +9,7 @@ import (
 	utils "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	corev1 "k8s.io/api/core/v1"
 )
 
 type WorkflowDataService struct {
@@ -26,6 +27,7 @@ type WorkflowDataService struct {
 const (
 	ValidatePdsDeployment = "VALIDATE_PDS_DEPLOYMENT"
 	ValidatePdsWorkloads  = "VALIDATE_PDS_WORKLOADS"
+	PlatformNamespace     = "px-system"
 )
 
 func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService, image, version string) (*automationModels.PDSDeploymentResponse, error) {
@@ -308,6 +310,31 @@ func (wfDataService *WorkflowDataService) KillDBMasterNodeToValidateHA(dsName st
 			return fmt.Errorf("failed while deleting pod %v ", deploymentName)
 		}
 		//validate DataService Deployment here
+	}
+	return nil
+}
+
+func (wfDataService *WorkflowDataService) DeletePDSPods() error {
+	pdsPods := make([]corev1.Pod, 0)
+
+	podList, err := utils.GetPods(PlatformNamespace)
+	if err != nil {
+		return fmt.Errorf("Error while getting pods: %v", err)
+	}
+	log.Infof("PDS System Pods")
+	for _, pod := range podList.Items {
+		log.Infof("%v", pod.Name)
+		pdsPods = append(pdsPods, pod)
+	}
+	log.InfoD("Deleting PDS System Pods")
+	err = utils.DeletePods(pdsPods)
+	if err != nil {
+		return fmt.Errorf("Error while deleting pods: %\v ", err)
+	}
+	log.InfoD("Validating PDS System Pods")
+	err = utils.ValidatePods(PlatformNamespace, "")
+	if err != nil {
+		return fmt.Errorf("Error while validating pods: %v", err)
 	}
 	return nil
 }

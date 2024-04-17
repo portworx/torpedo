@@ -276,3 +276,68 @@ var _ = Describe("{IncreasePVCby1gb}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{DeletePDSPods}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataServices are not affected", nil, 0)
+	})
+	var (
+		workflowDataservice pds.WorkflowDataService
+		workFlowTemplates   pds.WorkflowPDSTemplates
+		deployment          *automationModels.PDSDeploymentResponse
+		err                 error
+		serviceConfigId     string
+		stConfigId          string
+		resConfigId         string
+	)
+	It("Delete pds pods and validate if its coming back online and dataserices are not affected", func() {
+
+		Step("Create a PDS Namespace", func() {
+			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
+			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			workFlowTemplates.Platform = WorkflowPlatform
+			WorkflowNamespace.Namespaces = make(map[string]string)
+			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
+			log.FailOnError(err, "Unable to create namespace")
+			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
+			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
+
+		})
+
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.NamespaceName = Namespace
+
+			serviceConfigId, stConfigId, resConfigId, err = workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+			log.FailOnError(err, "Error while deploying ds")
+		}
+
+		defer func() {
+			Step("Delete DataServiceDeployment", func() {
+				log.InfoD("Cleaning Up dataservice...")
+				err := workflowDataservice.DeleteDeployment()
+				log.FailOnError(err, "Error while deleting dataservice")
+			})
+		}()
+
+		//stepLog := "Running Workloads before deleting pods in Px-System namespace"
+		//Step(stepLog, func() {
+		//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+		//	log.FailOnError(err, "Error while running workloads on ds")
+		//})
+
+		Step("Delete PDSPods", func() {
+			err := workflowDataservice.DeletePDSPods()
+			log.FailOnError(err, "Error while deleting pds pods")
+			for _, ds := range NewPdsParams.DataServiceToTest {
+				err = workflowDataservice.ValidatePdsDataServiceDeployments(deployment, ds, resConfigId, stConfigId, workflowDataservice.NamespaceName, ds.OldVersion, ds.OldImage)
+			}
+		})
+	})
+})

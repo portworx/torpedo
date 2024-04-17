@@ -17,6 +17,11 @@ import (
 	"time"
 )
 
+const (
+	timeInterval = 10 * time.Second
+	timeOut      = 30 * time.Minute
+)
+
 var (
 	instance *Torpedo
 	k8sCores = core.Instance()
@@ -243,6 +248,47 @@ func DeleteNamespace(namespace string) error {
 	err := k8sCore.DeleteNamespace(namespace)
 	if err != nil {
 		return fmt.Errorf("Error while deleting namespace [%s]", err.Error())
+	}
+	return nil
+}
+
+// DeleteDeploymentPods deletes the given pods
+func DeletePods(podList []corev1.Pod) error {
+	err := k8sCores.DeletePods(podList, true)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ValidatePods returns err if pods are not up
+func ValidatePods(namespace string, podName string) error {
+
+	var newPods []corev1.Pod
+	newPodList, err := GetPods(namespace)
+	if err != nil {
+		return err
+	}
+
+	if podName != "" {
+		for _, pod := range newPodList.Items {
+			if strings.Contains(pod.Name, podName) {
+				log.Infof("%v", pod.Name)
+				newPods = append(newPods, pod)
+			}
+		}
+	} else {
+		//reinitializing the pods
+		newPods = append(newPods, newPodList.Items...)
+	}
+
+	//validate deployment pods are up and running
+	for _, pod := range newPods {
+		log.Infof("pds system pod name %v", pod.Name)
+		err = k8sCores.ValidatePod(&pod, timeOut, timeInterval)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
