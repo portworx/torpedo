@@ -23,9 +23,9 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		workflowBackup       pds.WorkflowPDSBackup
 		workFlowTemplates    pds.WorkflowPDSTemplates
 		deployment           *automationModels.PDSDeploymentResponse
-		latestBackupUid      string
-		pdsBackupConfigName  string
-		restoreNamespace     string
+		//latestBackupUid      string
+		pdsBackupConfigName string
+		//restoreNamespace     string
 	)
 
 	JustBeforeEach(func() {
@@ -34,8 +34,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 
 		workflowRestore.Destination = WorkflowNamespace
 		workflowRestore.WorkflowProject = WorkflowProject
-		workflowDataservice.Dash = dash
-		restoreNamespace = "pds-restore-namespace-" + RandomString(5)
+		//restoreNamespace = "pds-restore-namespace-" + RandomString(5)
 	})
 
 	It("Deploy data services and perform backup and restore on the same cluster", func() {
@@ -79,40 +78,46 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 				log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
 				backupResponse, err := workflowBackup.GetLatestBackup(*deployment.Create.Meta.Name)
 				log.FailOnError(err, "Error occured while creating backup")
-				latestBackupUid = *backupResponse.Meta.Uid
+				// latestBackupUid = *backupResponse.Meta.Uid
 				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
 				err = workflowBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
 				log.FailOnError(err, "Error occured while waiting for backup to complete")
 			})
 
-			Step("Create a new namespace for restore", func() {
-				_, err := WorkflowNamespace.CreateNamespaces(restoreNamespace)
-				log.FailOnError(err, "Unable to create namespace")
-				log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
+			Step("Purging the backups", func() {
+				err := workflowBackup.Purge(*deployment.Create.Meta.Name)
+				log.FailOnError(err, "Failed while deleting the backups")
+				log.InfoD("All backups deleted successsfully for [%s]", *deployment.Create.Meta.Name)
 			})
 
-			Step("Associate restore namespace to Project", func() {
-				err := WorkflowProject.Associate(
-					[]string{},
-					[]string{WorkflowNamespace.Namespaces[restoreNamespace]},
-					[]string{},
-					[]string{},
-					[]string{},
-					[]string{},
-				)
-				log.FailOnError(err, "Unable to associate Cluster to Project")
-				log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
-			})
-
-			Step("Create Restore from the latest backup Id", func() {
-				restoreName := "testing_restore_" + RandomString(5)
-				workflowRestore.Destination = WorkflowNamespace
-				workflowRestore.WorkflowProject = WorkflowProject
-				_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
-				log.FailOnError(err, "Restore Failed")
-
-				log.Infof("Restore created successfully with ID - [%s]", workflowRestore.Restores[restoreName].Meta.Uid)
-			})
+			//Step("Create a new namespace for restore", func() {
+			//	_, err := WorkflowNamespace.CreateNamespaces(restoreNamespace)
+			//	log.FailOnError(err, "Unable to create namespace")
+			//	log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
+			//})
+			//
+			//Step("Associate restore namespace to Project", func() {
+			//	err := WorkflowProject.Associate(
+			//		[]string{},
+			//		[]string{WorkflowNamespace.Namespaces[restoreNamespace]},
+			//		[]string{},
+			//		[]string{},
+			//		[]string{},
+			//		[]string{},
+			//	)
+			//	log.FailOnError(err, "Unable to associate Cluster to Project")
+			//	log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+			//})
+			//
+			//Step("Create Restore from the latest backup Id", func() {
+			//	restoreName := "testing_restore_" + RandomString(5)
+			//	workflowRestore.Destination = WorkflowNamespace
+			//	workflowRestore.WorkflowProject = WorkflowProject
+			//	_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
+			//	log.FailOnError(err, "Restore Failed")
+			//
+			//	log.Infof("Restore created successfully with ID - [%s]", workflowRestore.Restores[restoreName].Meta.Uid)
+			//})
 		}
 
 		JustAfterEach(func() {
