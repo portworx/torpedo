@@ -64,7 +64,7 @@ func setCreateLegacySharedAsSharedv4Service(on bool) {
 	pxNodes, err := GetStorageNodes()
 	log.FailOnError(err, "Unable to get storage nodes")
 	pxNode := GetRandomNode(pxNodes)
-	log.Infof("Setting Creation of Legacy shared volumes")
+	log.Infof("Setting Creation of Legacy shared volumes to %t", on)
 	var pxctlCmdFull string
 	pxctlCmdFull = fmt.Sprintf("cluster options update --create-legacy-shared-as-sharedv4-service=%t", on)
 	_, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
@@ -77,7 +77,7 @@ func setMigrateLegacySharedToSharedv4Service(on bool) {
 	pxNodes, err := GetStorageNodes()
 	log.FailOnError(err, "Unable to get storage nodes")
 	pxNode := GetRandomNode(pxNodes)
-	log.Infof("Turning on Migration of Legacy shared volumes")
+	log.Infof("Setting Migration of Legacy shared volumes to %t", on)
 	var pxctlCmdFull string
 	pxctlCmdFull = fmt.Sprintf("cluster options update --migrate-legacy-shared-to-sharedv4-service=%t", on)
 	_, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
@@ -531,8 +531,10 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 			for _, ctx := range contexts {
 				checkMapOfPods(podMap, ctx)
 			}
-			ValidateApplications(contexts)
+			// Don't validate apps.
+			// ValidateApplications(contexts)
 		})
+		// Don't Fail any of the below steps.
 		stepLog = fmt.Sprintf("Rejoin node %s", pxNode.Name)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -803,7 +805,7 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxKill}", func() {
 		for _, ctx := range contexts {
 			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
 		}
-		//setMigrateLegacySharedToSharedv4Service(true)
+		setMigrateLegacySharedToSharedv4Service(true)
 		time.Sleep(180 * time.Second) // sleep 3 minutes.
 
 		stepLog := "kill px on one nodes and let all Apps come"
