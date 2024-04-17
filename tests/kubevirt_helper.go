@@ -130,6 +130,67 @@ func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks in
 	return true, nil
 }
 
+// RunCmdInVirtLauncherPod runs a command in the virt-launcher pod of the VM
+func RunCmdInVirtLauncherPod(virtualMachineCtx *scheduler.Context, cmd []string) (string, error) {
+	vols, err := Inst().S.GetVolumes(virtualMachineCtx)
+	if err != nil {
+		return "", err
+	}
+
+	vmPod, err := GetVirtLauncherPodForVM(virtualMachineCtx, vols[0])
+	if err != nil {
+		return "", err
+	}
+	output, err := core.Instance().RunCommandInPod(cmd, vmPod.Name, "compute", vmPod.Namespace)
+	if err != nil {
+		return "", err
+	}
+	log.InfoD("Output of command: %s", output)
+	return core.Instance().RunCommandInPod(cmd, vmPod.Name, "compute", vmPod.Namespace)
+
+}
+
+// GetNumberOfDisksInVMViaVirtLauncherPod gets the number of disks in the VM via the virt-launcher pod
+func GetNumberOfDisksInVMViaVirtLauncherPod(virtualMachineCtx *scheduler.Context) (int, error) {
+	cmd := []string{"lsblk", "grep /run/kubevirt-private/vmi-disks/", "grep pxd"}
+
+	t := func() (interface{}, bool, error) {
+		output, err := RunCmdInVirtLauncherPod(virtualMachineCtx, cmd)
+		log.InfoD("Output of command: %s", output)
+		if err != nil {
+			return 0, false, err
+		}
+		// Splitting the output into lines
+		lines := strings.Split(output, `\n`)
+
+		// Count of lines containing "/run/kubevirt-private/vmi-disks/" and "pxd"
+		numberOfDisks := 0
+
+		// Loop through each line
+		for _, line := range lines {
+			// Check if the line contains "/run/kubevirt-private/vmi-disks/" and "pxd"
+			fmt.Println(line)
+			if strings.Contains(line, "/run/kubevirt-private/vmi-disks/") && strings.Contains(line, "pxd") {
+				// Increment count if both conditions are met
+				numberOfDisks++
+			}
+		}
+
+		if err != nil {
+			return 0, false, err
+		}
+		if numberOfDisks == 0 {
+			return 0, true, nil
+		}
+		return numberOfDisks, numberOfDisks == 0, nil
+	}
+	d, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		return 0, err
+	}
+	return d.(int), nil
+}
+
 // GetStorageClassOfVmPVC returns the storage class of pvc attached to the VM
 func GetStorageClassOfVmPVC(vm *scheduler.Context) (string, error) {
 	// Get the PVC object from the VM
@@ -583,7 +644,10 @@ func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks 
 			return fmt.Errorf("failed to get VMs from context: %w", err)
 		}
 		for _, v := range vms {
-			diskCountOutput, err := GetNumberOfDisksInVM(v)
+			diskCountOutput, err := GetNumberOfDisksInVMViaVirtLauncherPod(appCtx)
+			if err != nil {
+				return fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]: %w", v.Name, v.Namespace, err)
+			}
 			log.Infof("Currently having %v number of disks in the VM", diskCountOutput)
 			storageClass, err := GetStorageClassOfVmPVC(appCtx)
 			if err != nil {
@@ -635,7 +699,7 @@ func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks 
 			}
 			log.InfoD("Sleep for 5mins for vm to come up")
 			time.Sleep(5 * time.Minute)
-			NewDiskCountOutput, err := GetNumberOfDisksInVM(v)
+			NewDiskCountOutput, err := GetNumberOfDisksInVMViaVirtLauncherPod(appCtx)
 			if err != nil {
 				return fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]", v.Name, v.Namespace)
 			}
