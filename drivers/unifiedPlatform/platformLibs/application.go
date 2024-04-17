@@ -26,20 +26,16 @@ func ListAvailableApplicationsForTenant(clusterId string, tenantId string) ([]au
 	return availableApps, nil
 }
 
-func InstallApplication(applicationName string, applicationVersion string, clusterId string) (*automationModels.WorkFlowResponse, error) {
+func InstallApplication(applicationName string, clusterId string) (*automationModels.WorkFlowResponse, error) {
 	pdsAppRequest := automationModels.WorkFlowRequest{
 		PDSApplication: automationModels.PDSApplicaition{
 			Install: automationModels.PDSApplicationInstall{},
 		},
 	}
-
 	pdsAppRequest.PDSApplication.Install.ClusterId = clusterId
 	pdsAppRequest.PDSApplication.Install.V1Application1 = &automationModels.V1Application1{
 		Meta: &automationModels.V1Meta{
 			Name: &applicationName,
-		},
-		Config: &automationModels.AppConfig{
-			Version: applicationVersion,
 		},
 	}
 

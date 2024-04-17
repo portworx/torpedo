@@ -75,20 +75,26 @@ func (applications *PLATFORM_API_V1) GetApplicationByAppId(appReq *WorkFlowReque
 
 // InstallApplication installs the app model on given clusterId
 func (applications *PLATFORM_API_V1) InstallApplication(appInstallRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
-	var installRequest targetClusterv1.ApiApplicationServiceInstallApplicationRequest
-	_, appClient, err := applications.getClusterAppClient()
+	ctx, appClient, err := applications.getClusterAppClient()
+	appResponse := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	appResponse := WorkFlowResponse{}
-	err = copier.Copy(&installRequest, appInstallRequest)
-	if err != nil {
-		return nil, err
+	appName := *appInstallRequest.PDSApplication.Install.V1Application1.Meta.Name
+
+	app := targetClusterv1.V1Application{
+		Meta: &targetClusterv1.V1Meta{
+			Name: &appName,
+		},
 	}
+
+	installRequest := appClient.ApplicationServiceInstallApplication(ctx, appInstallRequest.PDSApplication.Install.ClusterId)
+	installRequest = installRequest.V1Application(app)
 	appModel, res, err := appClient.ApplicationServiceInstallApplicationExecute(installRequest)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApplicationServiceInstallApplication`: %v\n.Full HTTP response: %v", err, res)
 	}
+
 	err = copier.Copy(&appResponse, appModel)
 	if err != nil {
 		return nil, err

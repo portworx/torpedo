@@ -19,36 +19,19 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 
 func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, imageId, appConfigId, resConfigId, stConfigId string) (*automationModels.PDSDeploymentResponse, error) {
 	log.Info("Update Data service will be performed")
-	//depInputs := automationModels.PDSDeploymentRequest{}
-
 	depInputs := &automationModels.PDSDeploymentRequest{
 		Update: automationModels.PDSDeploymentUpdate{
 			NamespaceID: namespaceId,
 			ProjectID:   projectId,
 			V1Deployment: automationModels.V1DeploymentUpdate{
 				Meta: automationModels.Meta{
-					Uid:             &deploymentId,
-					Name:            &ds.DeploymentName,
-					Description:     nil,
-					ResourceVersion: nil,
-					CreateTime:      nil,
-					UpdateTime:      nil,
-					Labels:          nil,
-					Annotations:     nil,
+					Name: &ds.DeploymentName,
 				},
 				Config: automationModels.DeploymentUpdateConfig{
 					DeploymentMeta: automationModels.Meta{
-						Uid:             nil,
-						Name:            nil,
-						Description:     nil,
-						ResourceVersion: nil,
-						CreateTime:      nil,
-						UpdateTime:      nil,
-						Labels:          nil,
-						Annotations:     nil,
+						Description: StringPtr("pds-qa-tests"),
 					},
 					DeploymentConfig: automationModels.V1Config1{
-						TlsEnabled: nil,
 						DeploymentTopologies: []automationModels.DeploymentTopology{
 							{
 								Name:     StringPtr("pds-qa-test-topology"),
