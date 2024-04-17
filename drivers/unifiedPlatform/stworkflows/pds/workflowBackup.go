@@ -18,6 +18,7 @@ type WorkflowPDSBackup struct {
 const (
 	defaultRetryInterval = 10 * time.Second
 	backupTimeOut        = 20 * time.Minute
+	backupDeleteTimeOut  = 5 * time.Minute
 )
 
 // GetBackupIDByName returns the ID of given backup
@@ -64,6 +65,7 @@ func (backup WorkflowPDSBackup) DeleteBackup(id string) error {
 	return err
 }
 
+// ListAllBackups lists all backups
 func (backup WorkflowPDSBackup) ListAllBackups(deploymentName string) ([]automationModels.V1Backup, error) {
 
 	allBackups := make([]automationModels.V1Backup, 0)
@@ -75,4 +77,45 @@ func (backup WorkflowPDSBackup) ListAllBackups(deploymentName string) ([]automat
 	}
 
 	return response.List.Backups, nil
+}
+
+func (backup WorkflowPDSBackup) ValidateBackupDeletion(id string) error {
+
+	validateBackupDeletion := func() (interface{}, bool, error) {
+		backup, err := pdslibs.GetBackup(id)
+		if err == nil {
+			return nil, true, fmt.Errorf("Project [%s] is yet not deleted. Phase - [%v]", id, backup.Get.Status.Phase)
+		} else {
+			log.Infof("Backup [%s] is deleted successfully", id)
+			return nil, false, nil
+		}
+	}
+
+	_, err := task.DoRetryWithTimeout(validateBackupDeletion, backupDeleteTimeOut, defaultRetryInterval)
+
+	return err
+}
+
+// Purge deletes all backups for a given deployment
+func (backup WorkflowPDSBackup) Purge(deploymentName string) error {
+
+	allBackups, err := backup.ListAllBackups(deploymentName)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Total number of backups found for [%s] are [%d]", deploymentName, len(allBackups))
+
+	for _, eachBackup := range allBackups {
+		err := backup.DeleteBackup(*eachBackup.Meta.Uid)
+		if err != nil {
+			return err
+		}
+		err = backup.ValidateBackupDeletion(*eachBackup.Meta.Uid)
+		if err != nil {
+			return fmt.Errorf("Backup deleted but validation failed. Error - [%s]", err.Error())
+		}
+	}
+
+	return nil
 }
