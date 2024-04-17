@@ -52,6 +52,11 @@ var (
 	labels []map[string]string
 )
 
+var (
+	// StopLongevityChan is a channel to stop longevity tests
+	StopLongevityChan = make(chan struct{})
+)
+
 // TriggerFunction represents function signature of a testTrigger
 type TriggerFunction func(*[]*scheduler.Context, *chan *EventRecord)
 
@@ -232,6 +237,7 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 	setCreatedBeforeTimeForNsDeletion(configData)
 	setUpgradeStorageDriverEndpointList(configData)
 	setVclusterFioRunOptions(configData)
+	setSchedUpgradeHops(configData)
 
 	err := populateTriggers(configData)
 	if err != nil {
@@ -380,6 +386,23 @@ func setUpgradeStorageDriverEndpointList(configData *map[string]string) {
 		log.Infof("The UpgradeStorageDriverEndpointList is set to %s", Inst().UpgradeStorageDriverEndpointList)
 	}
 	delete(*configData, UpgradeEndpoints)
+}
+
+func setSchedUpgradeHops(configData *map[string]string) {
+	// Get scheduler upgrade hops from configMap
+	if schedUpgradeHops, ok := (*configData)[SchedUpgradeHops]; !ok {
+		log.Warnf("No [%s] field found in [%s] config-map in [%s] namespace.", SchedUpgradeHops, testTriggersConfigMap, configMapNS)
+	} else if schedUpgradeHops != "" {
+		currentCount := len(strings.Split(Inst().SchedUpgradeHops, ","))
+		newCount := len(strings.Split(schedUpgradeHops, ","))
+		if Inst().SchedUpgradeHops == "" || newCount >= currentCount {
+			Inst().SchedUpgradeHops = schedUpgradeHops
+		} else {
+			log.Warnf("schedUpgradeHops reduced from [%s] to [%s], removal not supported.", Inst().SchedUpgradeHops, schedUpgradeHops)
+		}
+		log.Infof("The SchedUpgradeHops is set to %s", Inst().SchedUpgradeHops)
+	}
+	delete(*configData, SchedUpgradeHops)
 }
 
 func populateTriggers(triggers *map[string]string) error {
@@ -535,6 +558,8 @@ func populateIntervals() {
 	triggerInterval[LocalSnapShot] = make(map[int]time.Duration)
 	triggerInterval[DeleteLocalSnapShot] = make(map[int]time.Duration)
 	triggerInterval[UpgradeVolumeDriver] = make(map[int]time.Duration)
+	triggerInterval[UpgradeVolumeDriverFromCatalog] = make(map[int]time.Duration)
+	triggerInterval[UpgradeCluster] = make(map[int]time.Duration)
 	triggerInterval[AppTasksDown] = make(map[int]time.Duration)
 	triggerInterval[AutoFsTrim] = make(map[int]time.Duration)
 	triggerInterval[UpdateVolume] = make(map[int]time.Duration)
@@ -591,6 +616,8 @@ func populateIntervals() {
 	triggerInterval[CreateAndRunFioOnVcluster] = make(map[int]time.Duration)
 	triggerInterval[CreateAndRunMultipleFioOnVcluster] = make(map[int]time.Duration)
 	triggerInterval[VolumeDriverDownVCluster] = make(map[int]time.Duration)
+	triggerInterval[SetDiscardMounts] = make(map[int]time.Duration)
+	triggerInterval[ResetDiscardMounts] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 
@@ -1426,6 +1453,28 @@ func populateIntervals() {
 	triggerInterval[VolumeDriverDownVCluster][2] = 24 * baseInterval
 	triggerInterval[VolumeDriverDownVCluster][1] = 27 * baseInterval
 
+	triggerInterval[SetDiscardMounts][10] = 1 * baseInterval
+	triggerInterval[SetDiscardMounts][9] = 3 * baseInterval
+	triggerInterval[SetDiscardMounts][8] = 6 * baseInterval
+	triggerInterval[SetDiscardMounts][7] = 9 * baseInterval
+	triggerInterval[SetDiscardMounts][6] = 12 * baseInterval
+	triggerInterval[SetDiscardMounts][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[SetDiscardMounts][4] = 18 * baseInterval
+	triggerInterval[SetDiscardMounts][3] = 21 * baseInterval
+	triggerInterval[SetDiscardMounts][2] = 24 * baseInterval
+	triggerInterval[SetDiscardMounts][1] = 27 * baseInterval
+
+	triggerInterval[ResetDiscardMounts][10] = 1 * baseInterval
+	triggerInterval[ResetDiscardMounts][9] = 3 * baseInterval
+	triggerInterval[ResetDiscardMounts][8] = 6 * baseInterval
+	triggerInterval[ResetDiscardMounts][7] = 9 * baseInterval
+	triggerInterval[ResetDiscardMounts][6] = 12 * baseInterval
+	triggerInterval[ResetDiscardMounts][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[ResetDiscardMounts][4] = 18 * baseInterval
+	triggerInterval[ResetDiscardMounts][3] = 21 * baseInterval
+	triggerInterval[ResetDiscardMounts][2] = 24 * baseInterval
+	triggerInterval[ResetDiscardMounts][1] = 27 * baseInterval
+
 	baseInterval = 300 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
@@ -1441,6 +1490,20 @@ func populateIntervals() {
 	triggerInterval[UpgradeVolumeDriver][7] = 4 * baseInterval
 	triggerInterval[UpgradeVolumeDriver][6] = 5 * baseInterval
 	triggerInterval[UpgradeVolumeDriver][5] = 6 * baseInterval
+
+	triggerInterval[UpgradeVolumeDriverFromCatalog][10] = 1 * baseInterval
+	triggerInterval[UpgradeVolumeDriverFromCatalog][9] = 2 * baseInterval
+	triggerInterval[UpgradeVolumeDriverFromCatalog][8] = 3 * baseInterval
+	triggerInterval[UpgradeVolumeDriverFromCatalog][7] = 4 * baseInterval
+	triggerInterval[UpgradeVolumeDriverFromCatalog][6] = 5 * baseInterval
+	triggerInterval[UpgradeVolumeDriverFromCatalog][5] = 6 * baseInterval
+
+	triggerInterval[UpgradeCluster][10] = 1 * baseInterval
+	triggerInterval[UpgradeCluster][9] = 2 * baseInterval
+	triggerInterval[UpgradeCluster][8] = 3 * baseInterval
+	triggerInterval[UpgradeCluster][7] = 4 * baseInterval
+	triggerInterval[UpgradeCluster][6] = 5 * baseInterval
+	triggerInterval[UpgradeCluster][5] = 6 * baseInterval
 
 	triggerInterval[KVDBFailover][10] = 1 * baseInterval
 	triggerInterval[KVDBFailover][9] = 2 * baseInterval
@@ -1640,6 +1703,8 @@ func populateIntervals() {
 	triggerInterval[StorageFullPoolExpansion][0] = 0
 	triggerInterval[HAIncreaseWithPVCResize][0] = 0
 	triggerInterval[ReallocateSharedMount][0] = 0
+	triggerInterval[SetDiscardMounts][0] = 0
+	triggerInterval[ResetDiscardMounts][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
@@ -1667,7 +1732,13 @@ func emailEventTrigger(wg *sync.WaitGroup,
 	lastInvocationTime := start
 
 	for {
-
+		select {
+		case <-StopLongevityChan:
+			log.InfoD("Received stop signal. Exiting longevity test trigger [%s] loop", triggerType)
+			return
+		default:
+			// Continuing the loop as no stop signal is received
+		}
 		// Get next interval of when trigger should happen
 		// This interval can dynamically change by editing configMap
 		waitTime, isTriggerEnabled := isTriggerEnabled(triggerType)
