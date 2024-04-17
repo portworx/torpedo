@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fio-disk-template
+  namespace: openshift-virtualization-os-images
+spec:
+  storageClassName: test-multi-disk-ea-build
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
