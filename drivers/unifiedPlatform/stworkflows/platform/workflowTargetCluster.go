@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	k8sutils "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"strings"
 	"time"
 )
 
@@ -156,26 +156,40 @@ func (targetCluster *WorkflowTargetCluster) ValidatePlatformComponents() error {
 	return nil
 }
 
-func (targetCluster *WorkflowTargetCluster) InstallPDSAppOnTC() error {
-
-	availableApps, err := platformLibs.ListAvailableApplicationsForTenant(targetCluster.ClusterUID, targetCluster.Project.Platform.TenantId)
+func (targetCluster *WorkflowTargetCluster) InstallPDSAppOnTC(clusterId string) error {
+	time.Sleep(10000)
+	appName := "pds"
+	// Check if PDS tcApp already exists
+	objects, err := k8sutils.GetCRObject(platformNamespace, "core.portworx.com", "v1", "targetclusterapplications")
 	if err != nil {
-		return fmt.Errorf("Failed to get list of available Apps: %v\n", err)
+		return err
 	}
-	var index int
-	for index = 0; index < len(availableApps); index++ {
-		if strings.Contains("PDS", *availableApps[index].Meta.Name) {
-			pdsApp := availableApps[index].Meta
-			appName := *pdsApp.Name
-			appVersion := *pdsApp.ResourceVersion
-			_, err := platformLibs.InstallApplication(appName, appVersion, targetCluster.ClusterUID)
-			if err != nil {
-				return fmt.Errorf("Failed to install App PDS: %v\n", err)
-			}
+	// Iterate over the CRD objects and print their names.
+	for _, object := range objects.Items {
+		log.Debugf("Objects created: %v", object.GetName())
+		if object.GetName() == appName {
+			log.Infof("PDS TCApp already exists in the cluster %v", clusterId)
 			return nil
 		}
 	}
-	return fmt.Errorf("PDS App not found in catalog")
+	_, err = platformLibs.InstallApplication(appName, clusterId)
+	if err != nil {
+		return fmt.Errorf("Failed to install App PDS: %v\n", err)
+	}
+
+	log.InfoD("Verify the health of all the deployments in %s namespace", platformNamespace)
+	err = wait.Poll(DefaultRetryInterval, targetClusterHealthTimeOut, func() (bool, error) {
+		err := targetCluster.ValidatePlatformComponents()
+		if err != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (targetCluster *WorkflowTargetCluster) GetClusterIdByName(clusterName string) (string, error) {
