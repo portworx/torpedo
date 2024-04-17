@@ -34,16 +34,14 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 
 		workflowRestore.Destination = WorkflowNamespace
 		workflowRestore.WorkflowProject = WorkflowProject
+		workflowDataservice.Dash = dash
 		restoreNamespace = "pds-restore-namespace-" + RandomString(5)
 	})
 
 	It("Deploy data services and perform backup and restore on the same cluster", func() {
-
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			Step("Deploy dataservice", func() {
-
 				workFlowTemplates.Platform = WorkflowPlatform
-
 				workflowDataservice.Namespace = WorkflowNamespace
 				workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
 
@@ -145,6 +143,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 
 		workflowRestore.Destination = WorkflowNamespace
 		workflowRestore.WorkflowProject = WorkflowProject
+		workflowDataservice.Dash = dash
 		restoreNamespace = "pds-restore-namespace-" + RandomString(5)
 	})
 
@@ -279,6 +278,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 
 		workflowRestore.Destination = WorkflowNamespace
 		workflowRestore.WorkflowProject = WorkflowProject
+		workflowDataservice.Dash = dash
 		restoreNamespace = "pds-restore-namespace-" + RandomString(5)
 		destinationProject.Platform = WorkflowPlatform
 	})
@@ -448,7 +448,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 
 		defer func() {
 			Step("Delete DataServiceDeployment", func() {
-				err := workflowDataservice.DeleteDeployment()
+				err := workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error while deleting dataservice")
 			})
 		}()
@@ -579,7 +579,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 
 		defer func() {
 			Step("Delete DataServiceDeployment", func() {
-				err := workflowDataService.DeleteDeployment()
+				err := workflowDataService.DeleteDeployment(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error while deleting dataservice")
 			})
 		}()
@@ -872,7 +872,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 	})
 
 	It("Delete DataServiceDeployment", func() {
-		err := workflowDataservice.DeleteDeployment()
+		err := workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
 		log.FailOnError(err, "Error while deleting data Service")
 	})
 
@@ -998,7 +998,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 	})
 
 	It("Delete DataServiceDeployment", func() {
-		err := workflowDataservice.DeleteDeployment()
+		err := workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
 		log.FailOnError(err, "Error while deleting data Service")
 	})
 

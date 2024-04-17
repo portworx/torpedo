@@ -1,6 +1,7 @@
 package tests
 
 import (
+	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -13,17 +14,19 @@ import (
 )
 
 var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("DeployDataServicesOnDemandAndScaleUp", "Deploy data services and perform scale up", nil, 0)
-	})
 	var (
 		workflowDataservice pds.WorkflowDataService
 		workFlowTemplates   pds.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
+		deployments         = make(map[dslibs.PDSDataService]*automationModels.PDSDeploymentResponse)
 		updateDeployment    *automationModels.PDSDeploymentResponse
 		templates           []string
 		err                 error
 	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeployDataServicesOnDemandAndScaleUp", "Deploy data services and perform scale up", nil, 0)
+	})
 
 	It("Deploy,Validate and ScaleUp DataService", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
@@ -38,27 +41,30 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
 			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+			templates = []string{serviceConfigId, stConfigId, resConfigId}
 
 			deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
 			log.FailOnError(err, "Error while deploying ds")
 			log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+			deployments[ds] = deployment
 		}
 
 		defer func() {
-			Step("Delete DataServiceDeployment", func() {
-				log.InfoD("Cleaning Up dataservice...")
-				err := workflowDataservice.DeleteDeployment()
+			Step("Delete PDS CustomTemplates", func() {
+				log.InfoD("Cleaning Up templates...")
+				err := workFlowTemplates.DeleteCreatedCustomPdsTemplates(templates)
 				log.FailOnError(err, "Error while deleting dataservice")
 			})
 		}()
 
 		defer func() {
-			Step("Delete PDS CustomTemplates", func() {
-				log.InfoD("Cleaning Up templates...")
-
-				err := workFlowTemplates.DeleteCreatedCustomPdsTemplates(templates)
-				log.FailOnError(err, "Error while deleting dataservice")
-			})
+			for _, deployment := range deployments {
+				Step("Delete DataServiceDeployment", func() {
+					log.InfoD("Cleaning Up dataservice...")
+					err := workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
+					log.FailOnError(err, "Error while deleting dataservice")
+				})
+			}
 		}()
 
 		//stepLog := "Running Workloads before taking backups"
@@ -69,7 +75,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 
 		Step("ScaleUp DataService", func() {
 			log.InfoD("Scaling Up dataservices...")
-			for _, ds := range NewPdsParams.DataServiceToTest {
+			for ds, deployment := range deployments {
 				updateDeployment, err = workflowDataservice.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while updating ds")
 				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
@@ -153,7 +159,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersion}", func() {
 	//TODO: Upgrade the restored deployment image to latest
 
 	It("Delete DataServiceDeployment", func() {
-		err := workflowDataservice.DeleteDeployment()
+		err := workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
 		log.FailOnError(err, "Error while deleting data Service")
 	})
 

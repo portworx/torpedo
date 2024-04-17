@@ -8,6 +8,8 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 )
 
+const DEPLOYMENT_TOPOLOGY = "pds-qa-test-topology"
+
 // InitUnifiedApiComponents
 func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 	v2Components, err = unifiedPlatform.NewUnifiedPlatformComponents(controlPlaneURL, accountID)
@@ -21,8 +23,9 @@ func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, 
 	log.Info("Update Data service will be performed")
 	depInputs := &automationModels.PDSDeploymentRequest{
 		Update: automationModels.PDSDeploymentUpdate{
-			NamespaceID: namespaceId,
-			ProjectID:   projectId,
+			NamespaceID:  namespaceId,
+			ProjectID:    projectId,
+			DeploymentID: deploymentId,
 			V1Deployment: automationModels.V1DeploymentUpdate{
 				Meta: automationModels.Meta{
 					Name: &ds.DeploymentName,
@@ -34,7 +37,7 @@ func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, 
 					DeploymentConfig: automationModels.V1Config1{
 						DeploymentTopologies: []automationModels.DeploymentTopology{
 							{
-								Name:     StringPtr("pds-qa-test-topology"),
+								Name:     StringPtr(DEPLOYMENT_TOPOLOGY),
 								Replicas: intToPointerString(ds.ScaleReplicas),
 								ResourceSettings: &automationModels.PdsTemplates{
 									Id: &resConfigId,
@@ -60,8 +63,7 @@ func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, 
 }
 
 // DeleteDeployment Deletes the given deployment
-func DeleteDeployment(deployment map[string]string) error {
-	_, deploymentId := GetDeploymentNameAndId(deployment)
+func DeleteDeployment(deploymentId string) error {
 	return v2Components.PDS.DeleteDeployment(deploymentId)
 }
 
@@ -95,7 +97,7 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 					TlsEnabled: nil,
 					DeploymentTopologies: []automationModels.DeploymentTopology{
 						{
-							Name:        StringPtr("pds-qa-test-topology"),
+							Name:        StringPtr(DEPLOYMENT_TOPOLOGY),
 							Replicas:    intToPointerString(ds.Replicas),
 							ServiceType: StringPtr(ds.ServiceType),
 							ResourceSettings: &automationModels.PdsTemplates{

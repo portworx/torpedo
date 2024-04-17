@@ -26,7 +26,7 @@ func (ds *PDS_API_V1) GetDeployment(deploymentId string) (*automationModels.PDSD
 
 	dsModel, res, err := dsClient.DeploymentServiceGetDeployment(ctx, deploymentId).Execute()
 	if err != nil || res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
+		return nil, fmt.Errorf("Error when calling `DeploymentServiceGetDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}
 
 	err = utilities.CopyStruct(dsModel, &dsResponse.Get)
