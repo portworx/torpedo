@@ -8563,7 +8563,7 @@ func ValidatePVCCleanup(pvcBefore, pvcAfter []string) error {
 	pvcBeforeSet := make(map[string]bool)
 	pvcAfterSet := make(map[string]bool)
 
-	// Populate sets for PVC names before and after cleanup
+	// Populate sets for PVC names before and after the run
 	for _, pvc := range pvcBefore {
 		pvcBeforeSet[pvc] = true
 	}
@@ -8572,18 +8572,18 @@ func ValidatePVCCleanup(pvcBefore, pvcAfter []string) error {
 		pvcAfterSet[pvc] = true
 	}
 
-	// Check for missing PVCs after cleanup
+	// Check for missing PVCs after the run
 	for pvc := range pvcBeforeSet {
 		if !pvcAfterSet[pvc] {
-			fmt.Printf("PVC '%s' is present before cleanup but not after\n", pvc)
+			fmt.Printf("PVC '%s' is present before the run but not after the run\n", pvc)
 			return fmt.Errorf("mismatch in PVC list before and after the run")
 		}
 	}
 
-	// Check for extra PVCs after cleanup
+	// Check for extra PVCs after the run
 	for pvc := range pvcAfterSet {
 		if !pvcBeforeSet[pvc] {
-			fmt.Printf("PVC '%s' is present after cleanup but not before\n", pvc)
+			fmt.Printf("PVC '%s' is present after the run but not before the run\n", pvc)
 			return fmt.Errorf("mismatch in PVC list before and after the run")
 		}
 	}
