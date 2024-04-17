@@ -8559,23 +8559,34 @@ func GetPVCListForNamespace(namespace string) ([]string, error) {
 }
 
 // ValidatePVCCleanup checks if there is a mismatch between the original PVC list and the current one.
-func ValidatePVCCleanup(pvcListBefore, pvcListAfter []string) error {
-	if len(pvcListBefore) != len(pvcListAfter) {
-		fmt.Println("Expected PVCs:", strings.Join(pvcListBefore, ", "))
-		fmt.Println("Actual PVCs:", strings.Join(pvcListAfter, ", "))
-		return fmt.Errorf("mismatch in PVC count")
+func ValidatePVCCleanup(pvcBefore, pvcAfter []string) error {
+	pvcBeforeSet := make(map[string]bool)
+	pvcAfterSet := make(map[string]bool)
+
+	// Populate sets for PVC names before and after cleanup
+	for _, pvc := range pvcBefore {
+		pvcBeforeSet[pvc] = true
 	}
-	var mismatchedPVCs []string
-	for i := 0; i < len(pvcListBefore); i++ {
-		if pvcListBefore[i] != pvcListAfter[i] {
-			mismatchedPVCs = append(mismatchedPVCs, pvcListBefore[i])
+
+	for _, pvc := range pvcAfter {
+		pvcAfterSet[pvc] = true
+	}
+
+	// Check for missing PVCs after cleanup
+	for pvc := range pvcBeforeSet {
+		if !pvcAfterSet[pvc] {
+			fmt.Printf("PVC '%s' is present before cleanup but not after\n", pvc)
+			return fmt.Errorf("mismatch in PVC list before and after the run")
 		}
 	}
-	if len(mismatchedPVCs) > 0 {
-		fmt.Println("Expected PVCs:", strings.Join(pvcListBefore, ", "))
-		fmt.Println("Actual PVCs:", strings.Join(pvcListAfter, ", "))
-		fmt.Println("Mismatched PVCs:", strings.Join(mismatchedPVCs, ", "))
-		return fmt.Errorf("mismatch in PVC list before and after the run")
+
+	// Check for extra PVCs after cleanup
+	for pvc := range pvcAfterSet {
+		if !pvcBeforeSet[pvc] {
+			fmt.Printf("PVC '%s' is present after cleanup but not before\n", pvc)
+			return fmt.Errorf("mismatch in PVC list before and after the run")
+		}
 	}
+
 	return nil
 }

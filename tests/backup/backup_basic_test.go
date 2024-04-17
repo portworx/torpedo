@@ -283,6 +283,7 @@ var _ = AfterSuite(func() {
 		PvcListAfterRun, err = GetPVCListForNamespace(pxBackupNamespace)
 		log.FailOnError(err, "failed to list PVCs after run")
 		log.Infof("PVC list after the run is [%s]", PvcListAfterRun)
+		
 		// Verify PVC Cleanup on PX-Backup namespace
 		if err := ValidatePVCCleanup(PvcListBeforeRun, PvcListAfterRun); err != nil {
 			log.FailOnError(err, "PVC cleanup validation failed")
