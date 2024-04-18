@@ -12,10 +12,9 @@
 
 
 - Messages
-    - [GetTemplateSampleRequest](#gettemplatesamplerequest)
     - [GetTemplateTypeRequest](#gettemplatetyperequest)
     - [Info](#info)
-    - [Info.TemplateValuesEntry](#infotemplatevaluesentry)
+    - [Info.ValuesEntry](#infovaluesentry)
     - [ListTemplateKindsRequest](#listtemplatekindsrequest)
     - [ListTemplateKindsResponse](#listtemplatekindsresponse)
     - [ListTemplateSamplesRequest](#listtemplatesamplesrequest)
@@ -72,27 +71,10 @@ GetTemplateType API returns the template type by id.
     [ListTemplateSamplesResponse](#listtemplatesamplesresponse)
 
 ListTemplateSamples: Used to list template sample schema.
-### GetTemplateSample {#methodpublicportworxpdscatalogtemplatedefinitionv1templatedefinitionservicegettemplatesample}
-
-> **rpc** GetTemplateSample([GetTemplateSampleRequest](#gettemplatesamplerequest))
-    [TemplateSample](#templatesample)
-
-GetTemplateSample API returns the template sample for a given template id.
  <!-- end methods -->
  <!-- end services -->
 
 ## Messages
-
-
-### GetTemplateSampleRequest {#gettemplatesamplerequest}
-Request to get the template sample resource.
-
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| id | [ string](#string) | UID of the template sample. |
- <!-- end Fields -->
- <!-- end HasFields -->
 
 
 ### GetTemplateTypeRequest {#gettemplatetyperequest}
@@ -113,12 +95,12 @@ Info of sample template.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | kind | [ string](#string) | Kind of the template |
-| template_values | [map Info.TemplateValuesEntry](#infotemplatevaluesentry) | template_values of the sample template. |
+| values | [map Info.ValuesEntry](#infovaluesentry) | values of the sample template. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
-### Info.TemplateValuesEntry {#infotemplatevaluesentry}
+### Info.ValuesEntry {#infovaluesentry}
 
 
 
@@ -163,7 +145,6 @@ ListTemplateSamplesRequest list templates samples request.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | kind | [ string](#string) | filter sample templates based on kind, this accepts wild card, eg: pds:service:postgre* |
-| pagination | [ public.portworx.common.v1.PageBasedPaginationRequest](#publicportworxcommonv1pagebasedpaginationrequest) | Pagination metadata for this request. |
  <!-- end Fields -->
  <!-- end HasFields -->
 

@@ -15,7 +15,6 @@
     - [Backup](#backup)
     - [Config](#config)
     - [DeleteBackupRequest](#deletebackuprequest)
-    - [DeploymentMetaData](#deploymentmetadata)
     - [GetBackupRequest](#getbackuprequest)
     - [ListBackupsRequest](#listbackupsrequest)
     - [ListBackupsResponse](#listbackupsresponse)
@@ -89,25 +88,6 @@ Request to delete the Backup resource.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | id | [ string](#string) | UID of the Backup. |
-| force | [ bool](#bool) | Force flag to delete backup from control plane only. |
- <!-- end Fields -->
- <!-- end HasFields -->
-
-
-### DeploymentMetaData {#deploymentmetadata}
-Deployment Meta Data contains the details of the deployment associated with the backup.
-
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| name | [ string](#string) | Name of the deployment. |
-| custom_resource_name | [ string](#string) | Custom Resource Name is the kubernetes resource name for the deployment meta data. |
-| deployment_target_name | [ string](#string) | Deployment Target Name associated with the backup. |
-| namespace_name | [ string](#string) | Namespace name to which the backup is associated. |
-| tls_enabled | [ bool](#bool) | Flag to check whether Transport Layer Security support is enabled or not. |
-| data_service_name | [ string](#string) | Name of the data service of deployment. |
-| data_service_version | [ string](#string) | Name of the version of data service. |
-| image_build | [ string](#string) | build tag of the image for the data service version. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -130,6 +110,8 @@ Request to list the Backup resources.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.deployment_id | [ string](#string) | Deployment ID for which the backups will be listed. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.target_cluster_id | [ string](#string) | Cluster ID for which the backups will be listed. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.namespace_id | [ string](#string) | Namespace ID for which the backups will be listed. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.backup_config_id | [ string](#string) | Backup Configuration ID for which the backups will be listed. |
 | pagination | [ public.portworx.common.v1.PageBasedPaginationRequest](#publicportworxcommonv1pagebasedpaginationrequest) | Pagination parameters for listing backups. |
 | sort | [ public.portworx.common.v1.Sort](#publicportworxcommonv1sort) | Sorting details using which requested list of backups to be sorted. |
@@ -173,7 +155,6 @@ Status of the Backup.
 | error_code | [ string](#string) | ErrorCode if CompletionStatus is "Failed". |
 | error_message | [ string](#string) | ErrorMessage associated with the ErrorCode. |
 | file_size | [ int64](#int64) | FileSize of the CloudSnap image. |
-| deployment_meta_data | [ DeploymentMetaData](#deploymentmetadata) | Deployment Meta Data. |
  <!-- end Fields -->
  <!-- end HasFields -->
  <!-- end messages -->

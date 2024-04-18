@@ -97,22 +97,6 @@
                             ],
                             "default": "VALUE_UNSPECIFIED"
                         }
-                    },
-                    {
-                        "name": "respData",
-                        "description": "Response data flags for listing backup policies.\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated.",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string",
-                            "enum": [
-                                "RESP_DATA_UNSPECIFIED",
-                                "INDEX",
-                                "LITE",
-                                "FULL"
-                            ],
-                            "default": "RESP_DATA_UNSPECIFIED"
-                        }
                     }
                 ],
                 "tags": [
@@ -578,9 +562,6 @@
                     },
                     "sort": {
                         "$ref": "#/components/schemas/v1Sort"
-                    },
-                    "respData": {
-                        "$ref": "#/components/schemas/v1RespData"
                     }
                 },
                 "description": "Request to list the backup policies for a tenant."
@@ -757,17 +738,6 @@
                     }
                 },
                 "description": "ResourceSelector is used to query resources using the associated infra resources."
-            },
-            "v1RespData": {
-                "type": "string",
-                "enum": [
-                    "RESP_DATA_UNSPECIFIED",
-                    "INDEX",
-                    "LITE",
-                    "FULL"
-                ],
-                "default": "RESP_DATA_UNSPECIFIED",
-                "description": "RespData provides flags which provides info about the fields that should be populated in the response.\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated."
             },
             "v1Schedule": {
                 "type": "object",

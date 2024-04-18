@@ -106,8 +106,9 @@ Desired config of the backup configuration.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | references | [ References](#references) | References to the associated objects for backup configuration. |
+| job_history_limit | [ int32](#int32) | Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1. |
 | backup_policy | [ BackupPolicy](#backuppolicy) | BackupPolicy associated with the backup config. |
-| suspend | [ bool](#bool) | Suspend flag is used to suspend a scheduled backup from creating new backups. |
+| suspend | [ bool](#bool) | Suspend flag is used to suspend a scheduled backup from creating new backup jobs. |
 | backup_type | [ Config.BackupType](#configbackuptype) | Backup Type for the backup configuration. |
 | backup_level | [ Config.BackupLevel](#configbackuplevel) | Backup Level for the backup configuration. |
 | reclaim_policy | [ Config.ReclaimPolicyType](#configreclaimpolicytype) | Reclaim Policy decides if the volume snapshots should get deleted when a Backup CR gets deleted. |
@@ -135,7 +136,6 @@ Request to delete a backup configuration.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | id | [ string](#string) | ID of the backup configuration. |
-| force | [ bool](#bool) | Force flag to delete backup configuration from control plane only. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -172,6 +172,7 @@ Request to list all the backup configurations.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.account_id | [ string](#string) | Account ID for which the backup configurations will be listed. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.tenant_id | [ string](#string) | Tenant ID for which the backup configurations will be listed. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.project_id | [ string](#string) | Project ID for which the backup configurations will be listed. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.target_cluster_id | [ string](#string) | Cluster ID for which the backup configurations will be listed. |
@@ -179,7 +180,6 @@ Request to list all the backup configurations.
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.deployment_id | [ string](#string) | Deployment ID for which the backup configurations will be listed. |
 | pagination | [ public.portworx.common.v1.PageBasedPaginationRequest](#publicportworxcommonv1pagebasedpaginationrequest) | Pagination metadata for listing backup configuration. |
 | sort | [ public.portworx.common.v1.Sort](#publicportworxcommonv1sort) | Sorting details using which requested list of backup configurations to be sorted. |
-| suspended | [ ListBackupConfigsRequest.Suspended](#listbackupconfigsrequestsuspended) | Filter data services based on suspended flag. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -232,7 +232,7 @@ Request to update a backup configuration.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | id | [ string](#string) | ID of the backup configuration. |
-| suspend | [ bool](#bool) | Suspend flag is used to suspend a scheduled backup from creating new backups. |
+| job_history_limit | [ int32](#int32) | Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1. |
 | labels | [map UpdateBackupConfigRequest.LabelsEntry](#updatebackupconfigrequestlabelsentry) | Labels to apply to the Backup Config object. |
 | annotations | [map UpdateBackupConfigRequest.AnnotationsEntry](#updatebackupconfigrequestannotationsentry) | Annotations for the Backup Config object. |
  <!-- end Fields -->
@@ -298,18 +298,6 @@ Enum for Reclaim Policy for the backup configuration.
 | RECLAIM_POLICY_TYPE_UNSPECIFIED | 0 | Unspecified. |
 | DELETE | 1 | Delete snapshot. |
 | RETAIN | 2 | Retain snapshot. |
-
-
-
-
-### ListBackupConfigsRequest.Suspended {#listbackupconfigsrequestsuspended}
-Suspended indicate list either all, suspended only or disabled only data services.
-
-| Name | Number | Description |
-| ---- | ------ | ----------- |
-| SUSPENDED_UNSPECIFIED | 0 | List all data services. |
-| TRUE | 1 | List only suspended data services. |
-| FALSE | 2 | List only disabled data services. |
 
 
 

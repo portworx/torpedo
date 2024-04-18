@@ -1,5 +1,5 @@
 // Please use the following editor setup for this file:
-// Tab size=2; Tabs as spaces; Clean up trailing whitespace
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
 //
 // In vim add: au FileType proto setl sw=2 ts=2 expandtab list
 //
@@ -610,7 +610,7 @@ func (x *CreateProjectRequest) GetProject() *Project {
 //
 //	aip.dev/not-precedent: We need to do this because reasons.
 //
-// we are only updating project meta--)
+// we are onlu updating project meta--)
 type UpdateProjectRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

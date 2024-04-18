@@ -314,11 +314,11 @@
                                         "$ref": "#/components/schemas/pdsdeploymentconfigupdatev1Status"
                                     }
                                 },
-                                "title": "DeploymentConfigUpdate of the deployment update request."
+                                "title": "Config of the deployment for which config update is requested."
                             }
                         }
                     },
-                    "description": "DeploymentConfigUpdate of the deployment update request.",
+                    "description": "Config of the deployment for which config update is requested.",
                     "required": true
                 },
                 "tags": [
@@ -661,11 +661,6 @@
                     "restoreId": {
                         "type": "string",
                         "description": "UID of the restore id for the Deployment.",
-                        "readOnly": true
-                    },
-                    "dataServiceId": {
-                        "type": "string",
-                        "title": "UID of the data service",
                         "readOnly": true
                     }
                 },

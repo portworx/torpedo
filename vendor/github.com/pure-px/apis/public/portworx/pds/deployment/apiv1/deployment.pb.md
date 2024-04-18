@@ -24,6 +24,7 @@
     - [References](#references)
     - [Status](#status)
     - [TLSConfig](#tlsconfig)
+    - [UpdateDeploymentRequest](#updatedeploymentrequest)
   
 
 
@@ -48,6 +49,12 @@ CreateDeployment API creates the Deployment resource.
     [Deployment](#deployment)
 
 GetDeployment API returns the Deployment resource.
+### UpdateDeployment {#methodpublicportworxpdsdeploymentv1deploymentserviceupdatedeployment}
+
+> **rpc** UpdateDeployment([UpdateDeploymentRequest](#updatedeploymentrequest))
+    [Deployment](#deployment)
+
+UpdateDeployment API updates the Deployment resource.
 ### DeleteDeployment {#methodpublicportworxpdsdeploymentv1deploymentservicedeletedeployment}
 
 > **rpc** DeleteDeployment([DeleteDeploymentRequest](#deletedeploymentrequest))
@@ -59,9 +66,6 @@ DeleteDeployment API deletes the Deployment resource.
 > **rpc** ListDeployments([ListDeploymentsRequest](#listdeploymentsrequest))
     [ListDeploymentsResponse](#listdeploymentsresponse)
 
-(-- api-linter: core::0132::http-body=disabled
-    api-linter: core::0132::http-method=disabled
-    aip.dev/not-precedent: We need to do this because we can't have advance filters as query params. --)
 ListDeployments API lists the Deployment resources.
 ### GetDeploymentCredentials {#methodpublicportworxpdsdeploymentv1deploymentservicegetdeploymentcredentials}
 
@@ -108,7 +112,6 @@ Request to delete the Deployment resource.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | id | [ string](#string) | UID of the Deployment. |
-| force | [ bool](#bool) | Force flag to delete backup configuration from control plane only. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -165,12 +168,13 @@ Request to list the Deployment resources.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| tenant_id | [ string](#string) | tenant ID for which deployments need to be fetched. |
-| label_selector | [ public.portworx.common.v1.Selector](#publicportworxcommonv1selector) | Provides the key in labels and associated values for which deployments need to be listed. |
-| field_selector | [ public.portworx.common.v1.Selector](#publicportworxcommonv1selector) | Field selector is used to filter deployments based on the fields in the deployments's proto message. |
-| infra_resource_selector | [ public.portworx.common.v1.ResourceSelector](#publicportworxcommonv1resourceselector) | Infra_resource_selector is used to filter deployments based on the infra resources associated with the deployments. Supported infra resource filters: PROJECT, CLUSTER, NAMESPACE. |
-| sort | [ public.portworx.common.v1.Sort](#publicportworxcommonv1sort) | Sorting details using which requested list of deployments to be sorted. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.account_id | [ string](#string) | UID of the account. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.tenant_id | [ string](#string) | UID of the tenant. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.cluster_id | [ string](#string) | UID of the target cluster. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.namespace_id | [ string](#string) | UID of the namespace. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.project_id | [ string](#string) | UID of the project. |
 | pagination | [ public.portworx.common.v1.PageBasedPaginationRequest](#publicportworxcommonv1pagebasedpaginationrequest) | Pagination parameters for listing deployments. |
+| sort | [ public.portworx.common.v1.Sort](#publicportworxcommonv1sort) | Sorting details using which requested list of deployments to be sorted. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -197,7 +201,6 @@ References to other resources.
 | image_id | [ string](#string) | UID of the image to be used for the Data Service Deployment. |
 | project_id | [ string](#string) | UID of the project to which DataService Deployment associated. |
 | restore_id | [ string](#string) | UID of the restore id for the Deployment. |
-| data_service_id | [ string](#string) | UID of the data service |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -213,7 +216,6 @@ Status of the Deployment.
 | connection_info | [ google.protobuf.Struct](#googleprotobufstruct) | ConnectionDetails urls, ports, credentials, etc for connecting to the data service. |
 | initialized | [ string](#string) | Initialize used to control startup scripts. |
 | deployment_topology_status | [repeated public.portworx.pds.deploymenttopology.v1.DeploymentTopologyStatus](#publicportworxpdsdeploymenttopologyv1deploymenttopologystatus) | Status of the deployment topology. |
-| custom_resource_name | [ string](#string) | Custom Resource Name is the kubernetes resource name for the deployment that is built from ID. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -226,6 +228,17 @@ TLS configuration for the Data Service.
 | ----- | ---- | ----------- |
 | enabled | [ bool](#bool) | Flag to enable TLS for the Data Service. |
 | issuer_name | [ string](#string) | Issuer (Certificate Authority) name for the TLS certificates. |
+ <!-- end Fields -->
+ <!-- end HasFields -->
+
+
+### UpdateDeploymentRequest {#updatedeploymentrequest}
+Request to update the Deployment resource.
+
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| deployment | [ Deployment](#deployment) | Deployment resource. |
  <!-- end Fields -->
  <!-- end HasFields -->
  <!-- end messages -->
@@ -242,7 +255,6 @@ Enum for Health of the Deployment.
 | AVAILABLE | 1 | Deployment is Available. |
 | PARTIALLY_AVAILABLE | 2 | Deployment is PartiallyAvailable. |
 | UNAVAILABLE | 3 | Deployment is Unavailable. |
-| NOT_APPLICABLE | 4 | Deployment is deleted from cluster. |
 
 
 
@@ -261,7 +273,6 @@ Enum for Status of the Deployment.
 | DEPLOYED | 6 | Deployment is Deployed. |
 | UPDATING | 7 | Deployment is Updating. |
 | TIMED_OUT | 8 | Deployment is Timeout. |
-| DELETED_FROM_CLUSTER | 9 | Deployment is deleted from cluster. |
 
 
  <!-- end Enums -->

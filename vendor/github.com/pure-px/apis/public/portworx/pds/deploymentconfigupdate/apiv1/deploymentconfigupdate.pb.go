@@ -109,7 +109,7 @@ type CreateDeploymentConfigUpdateRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// DeploymentConfigUpdate of the deployment update request.
+	// Config of the deployment for which config update is requested.
 	DeploymentConfigUpdate *DeploymentConfigUpdate `protobuf:"bytes,1,opt,name=deployment_config_update,json=deploymentConfigUpdate,proto3" json:"deployment_config_update,omitempty"`
 }
 

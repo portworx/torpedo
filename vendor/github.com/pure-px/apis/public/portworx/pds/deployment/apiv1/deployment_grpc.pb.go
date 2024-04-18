@@ -37,6 +37,7 @@ const _ = grpc.SupportPackageIsVersion7
 const (
 	DeploymentService_CreateDeployment_FullMethodName         = "/public.portworx.pds.deployment.v1.DeploymentService/CreateDeployment"
 	DeploymentService_GetDeployment_FullMethodName            = "/public.portworx.pds.deployment.v1.DeploymentService/GetDeployment"
+	DeploymentService_UpdateDeployment_FullMethodName         = "/public.portworx.pds.deployment.v1.DeploymentService/UpdateDeployment"
 	DeploymentService_DeleteDeployment_FullMethodName         = "/public.portworx.pds.deployment.v1.DeploymentService/DeleteDeployment"
 	DeploymentService_ListDeployments_FullMethodName          = "/public.portworx.pds.deployment.v1.DeploymentService/ListDeployments"
 	DeploymentService_GetDeploymentCredentials_FullMethodName = "/public.portworx.pds.deployment.v1.DeploymentService/GetDeploymentCredentials"
@@ -50,13 +51,10 @@ type DeploymentServiceClient interface {
 	CreateDeployment(ctx context.Context, in *CreateDeploymentRequest, opts ...grpc.CallOption) (*Deployment, error)
 	// GetDeployment API returns the Deployment resource.
 	GetDeployment(ctx context.Context, in *GetDeploymentRequest, opts ...grpc.CallOption) (*Deployment, error)
+	// UpdateDeployment API updates the Deployment resource.
+	UpdateDeployment(ctx context.Context, in *UpdateDeploymentRequest, opts ...grpc.CallOption) (*Deployment, error)
 	// DeleteDeployment API deletes the Deployment resource.
 	DeleteDeployment(ctx context.Context, in *DeleteDeploymentRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	// (-- api-linter: core::0132::http-body=disabled
-	//
-	//	api-linter: core::0132::http-method=disabled
-	//	aip.dev/not-precedent: We need to do this because we can't have advance filters as query params. --)
-	//
 	// ListDeployments API lists the Deployment resources.
 	ListDeployments(ctx context.Context, in *ListDeploymentsRequest, opts ...grpc.CallOption) (*ListDeploymentsResponse, error)
 	// GetDeploymentCredentials API returns the Credentials to be used to access the Deployment.
@@ -83,6 +81,15 @@ func (c *deploymentServiceClient) CreateDeployment(ctx context.Context, in *Crea
 func (c *deploymentServiceClient) GetDeployment(ctx context.Context, in *GetDeploymentRequest, opts ...grpc.CallOption) (*Deployment, error) {
 	out := new(Deployment)
 	err := c.cc.Invoke(ctx, DeploymentService_GetDeployment_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *deploymentServiceClient) UpdateDeployment(ctx context.Context, in *UpdateDeploymentRequest, opts ...grpc.CallOption) (*Deployment, error) {
+	out := new(Deployment)
+	err := c.cc.Invoke(ctx, DeploymentService_UpdateDeployment_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -124,13 +131,10 @@ type DeploymentServiceServer interface {
 	CreateDeployment(context.Context, *CreateDeploymentRequest) (*Deployment, error)
 	// GetDeployment API returns the Deployment resource.
 	GetDeployment(context.Context, *GetDeploymentRequest) (*Deployment, error)
+	// UpdateDeployment API updates the Deployment resource.
+	UpdateDeployment(context.Context, *UpdateDeploymentRequest) (*Deployment, error)
 	// DeleteDeployment API deletes the Deployment resource.
 	DeleteDeployment(context.Context, *DeleteDeploymentRequest) (*emptypb.Empty, error)
-	// (-- api-linter: core::0132::http-body=disabled
-	//
-	//	api-linter: core::0132::http-method=disabled
-	//	aip.dev/not-precedent: We need to do this because we can't have advance filters as query params. --)
-	//
 	// ListDeployments API lists the Deployment resources.
 	ListDeployments(context.Context, *ListDeploymentsRequest) (*ListDeploymentsResponse, error)
 	// GetDeploymentCredentials API returns the Credentials to be used to access the Deployment.
@@ -147,6 +151,9 @@ func (UnimplementedDeploymentServiceServer) CreateDeployment(context.Context, *C
 }
 func (UnimplementedDeploymentServiceServer) GetDeployment(context.Context, *GetDeploymentRequest) (*Deployment, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetDeployment not implemented")
+}
+func (UnimplementedDeploymentServiceServer) UpdateDeployment(context.Context, *UpdateDeploymentRequest) (*Deployment, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateDeployment not implemented")
 }
 func (UnimplementedDeploymentServiceServer) DeleteDeployment(context.Context, *DeleteDeploymentRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteDeployment not implemented")
@@ -202,6 +209,24 @@ func _DeploymentService_GetDeployment_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(DeploymentServiceServer).GetDeployment(ctx, req.(*GetDeploymentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DeploymentService_UpdateDeployment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateDeploymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DeploymentServiceServer).UpdateDeployment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DeploymentService_UpdateDeployment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DeploymentServiceServer).UpdateDeployment(ctx, req.(*UpdateDeploymentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -274,6 +299,10 @@ var DeploymentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetDeployment",
 			Handler:    _DeploymentService_GetDeployment_Handler,
+		},
+		{
+			MethodName: "UpdateDeployment",
+			Handler:    _DeploymentService_UpdateDeployment_Handler,
 		},
 		{
 			MethodName: "DeleteDeployment",

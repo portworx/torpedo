@@ -2494,8 +2494,8 @@ github.com/libopenstorage/operator v0.0.0-20200725001727-48d03e197117/go.mod h1:
 github.com/libopenstorage/operator v0.0.0-20210303221358-0bb211a9908c/go.mod h1:+83bY859mKGwHmWW8TPNYGrXAgt/hXOX2Ia7EytK17I=
 github.com/libopenstorage/operator v0.0.0-20221128182303-7bedcffb60e6/go.mod h1:j+xZSt4DMXB8MDDd72MwpwGlWURIUaKOtoldq+DPHMk=
 github.com/libopenstorage/operator v0.0.0-20230202214252-140e2e1fd86a/go.mod h1:Q66wsNUAekPawgGg9yh0Bs7eXWPa4/+c2JTefdiDciM=
-github.com/libopenstorage/operator v0.0.0-20240411205123-17cbbcb4a54e h1:iG0lpqGWh6OEij3wVS+WMxb+ID7MYtQn++um29vod6Q=
-github.com/libopenstorage/operator v0.0.0-20240411205123-17cbbcb4a54e/go.mod h1:KsLOFm0UNYBSWB4YMy96763QKTM56t8WKQw3A4Xm7Nw=
+github.com/libopenstorage/operator v0.0.0-20240417190906-af0509c9db88 h1:18WXQ6DEZp11xHNOG+ouxCvQpssbwrJR2BFfoTbBuWM=
+github.com/libopenstorage/operator v0.0.0-20240417190906-af0509c9db88/go.mod h1:KsLOFm0UNYBSWB4YMy96763QKTM56t8WKQw3A4Xm7Nw=
 github.com/libopenstorage/secrets v0.0.0-20190403224602-c282e8dc17bf/go.mod h1:4QOUUeRMHtTniKPj+biL3wlusahU/7OnMsGKc4FN/EY=
 github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67/go.mod h1:4QOUUeRMHtTniKPj+biL3wlusahU/7OnMsGKc4FN/EY=
 github.com/libopenstorage/secrets v0.0.0-20210908194121-a1d19aa9713a/go.mod h1:gE8rSd6lwLNXNbiW3DrRZjFMs+y4fDHy/6uiOO9cdzY=
@@ -3154,8 +3154,8 @@ github.com/prometheus/tsdb v0.7.1/go.mod h1:qhTCs0VvXwvX/y3TZrWD7rabWM+ijKTux40T
 github.com/prometheus/tsdb v0.8.0/go.mod h1:fSI0j+IUQrDd7+ZtR9WKIGtoYAYAJUKcKhYLG25tN4g=
 github.com/pseudomuto/protoc-gen-doc v1.3.2/go.mod h1:y5+P6n3iGrbKG+9O04V5ld71in3v/bX88wUwgt+U8EA=
 github.com/pseudomuto/protokit v0.2.0/go.mod h1:2PdH30hxVHsup8KpBTOXTBeMVhJZVio3Q8ViKSAXT0Q=
-github.com/pure-px/apis v0.0.0-20240417161615-2526fa9ff5ce h1:gkjLAC4S7zI/JpyMP2uzByW95h3U5GN1zlbnjxyNYRg=
-github.com/pure-px/apis v0.0.0-20240417161615-2526fa9ff5ce/go.mod h1:vuPbG0guw0Nl8/a4Dpb9LSHKMPtf5dGR7SQqnpMjU4o=
+github.com/pure-px/apis v0.0.0-20240326194748-e9f7f27de779 h1:4v0l3HWdp/odrm4yYFpN9FBeaXnJwjYTmvdDA2FAhaQ=
+github.com/pure-px/apis v0.0.0-20240326194748-e9f7f27de779/go.mod h1:vuPbG0guw0Nl8/a4Dpb9LSHKMPtf5dGR7SQqnpMjU4o=
 github.com/pure-px/platform-api-go-client v0.0.0-20240405095715-34babdd92c3c h1:QZsv/w3bfJMACsOkxN/zg0pC8w6ZV20K2kRt5exnLcs=
 github.com/pure-px/platform-api-go-client v0.0.0-20240405095715-34babdd92c3c/go.mod h1:1JYlDoZQvC6Q2T9LdXVWHCzBGgR9frA9JKTEz3aSQcQ=
 github.com/quasilyte/go-ruleguard v0.3.1-0.20210203134552-1b5a410e1cc8/go.mod h1:KsAh3x0e7Fkpgs+Q9pNLS5XpFSvYCEVl5gP9Pp1xp30=

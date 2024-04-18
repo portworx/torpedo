@@ -82,7 +82,7 @@ CreateDeploymentConfigUpdateRequest is the request for CreateDeploymentConfigUpd
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| deployment_config_update | [ DeploymentConfigUpdate](#deploymentconfigupdate) | DeploymentConfigUpdate of the deployment update request. |
+| deployment_config_update | [ DeploymentConfigUpdate](#deploymentconfigupdate) | Config of the deployment for which config update is requested. |
  <!-- end Fields -->
  <!-- end HasFields -->
 

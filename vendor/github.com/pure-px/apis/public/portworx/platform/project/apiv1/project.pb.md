@@ -299,7 +299,7 @@ Status represents the current state of the project.
 Request to update a project meta.
 (-- api-linter: core::0134::request-resource-required=disabled
     aip.dev/not-precedent: We need to do this because reasons.
-we are only updating project meta--)
+we are onlu updating project meta--)
 
 
 | Field | Type | Description |

@@ -69,7 +69,7 @@ service DeploymentConfigUpdateService {
 
 // CreateDeploymentConfigUpdateRequest is the request for CreateDeploymentConfigUpdate.
 message CreateDeploymentConfigUpdateRequest {
-  // DeploymentConfigUpdate of the deployment update request.
+  // Config of the deployment for which config update is requested.
   DeploymentConfigUpdate deployment_config_update = 1;
 }
 

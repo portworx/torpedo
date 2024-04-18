@@ -14,6 +14,7 @@
 - Messages
     - [Config](#config)
     - [CreateRestoreRequest](#createrestorerequest)
+    - [DeleteRestoreRequest](#deleterestorerequest)
     - [DestinationReferences](#destinationreferences)
     - [GetRestoreRequest](#getrestorerequest)
     - [ListRestoresRequest](#listrestoresrequest)
@@ -63,6 +64,12 @@ GetRestore API returns the Restore resource.
     [ListRestoresResponse](#listrestoresresponse)
 
 ListRestore API lists the Restore resources.
+### DeleteRestore {#methodpublicportworxpdsrestorev1restoreservicedeleterestore}
+
+> **rpc** DeleteRestore([DeleteRestoreRequest](#deleterestorerequest))
+    [.google.protobuf.Empty](#googleprotobufempty)
+
+DeleteRestore API deletes the restore.
 ### RecreateRestore {#methodpublicportworxpdsrestorev1restoreservicerecreaterestore}
 
 > **rpc** RecreateRestore([RecreateRestoreRequest](#recreaterestorerequest))
@@ -109,6 +116,17 @@ Request to create a restore.
  <!-- end HasFields -->
 
 
+### DeleteRestoreRequest {#deleterestorerequest}
+Request to delete a restore.
+
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| id | [ string](#string) | UID of the Restore. |
+ <!-- end Fields -->
+ <!-- end HasFields -->
+
+
 ### DestinationReferences {#destinationreferences}
 Destination references for the restore.
 
@@ -139,6 +157,7 @@ Request to list the restores.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.account_id | [ string](#string) | Account ID for which the restore will be listed. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.tenant_id | [ string](#string) | Tenant ID for which the restore will be listed. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.project_id | [ string](#string) | Project ID for which the restore will be listed. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.deployment_id | [ string](#string) | Deployment ID for which the restore will be listed. |
@@ -283,7 +302,6 @@ Status of the restore.
 | error_code | [ ErrorCode](#errorcode) | Error code of the restore from Target Cluster. |
 | error_message | [ string](#string) | Error message is description of the error in restore. |
 | phase | [ Phase](#phase) | Phase of the restore. |
-| custom_resource_name | [ string](#string) | Custom Resource Name is the kubernetes resource name for the restore that is built from ID. |
  <!-- end Fields -->
  <!-- end HasFields -->
  <!-- end messages -->

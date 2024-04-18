@@ -10,6 +10,254 @@
         }
     ],
     "paths": {
+        "/pds/v1/deployments": {
+            "get": {
+                "summary": "ListDeployments API lists the Deployment resources.",
+                "operationId": "DeploymentService_ListDeployments",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListDeploymentsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "accountId",
+                        "description": "UID of the account.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "tenantId",
+                        "description": "UID of the tenant.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "clusterId",
+                        "description": "UID of the target cluster.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "namespaceId",
+                        "description": "UID of the namespace.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "projectId",
+                        "description": "UID of the project.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageNumber",
+                        "description": "Page number is the page number to return based on the size.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageSize",
+                        "description": "Page size is the maximum number of records to include per page.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "sort.sortBy",
+                        "description": "Name of the attribute to sort results by.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "FIELD_UNSPECIFIED",
+                                "NAME",
+                                "CREATED_AT",
+                                "UPDATED_AT",
+                                "PHASE"
+                            ],
+                            "default": "FIELD_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "sort.sortOrder",
+                        "description": "Order of sorting to be applied on requested list.\nIf sort_by having some value and sort_order is not provided, by default ascending order will be used to sort the list.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "VALUE_UNSPECIFIED",
+                                "ASC",
+                                "DESC"
+                            ],
+                            "default": "VALUE_UNSPECIFIED"
+                        }
+                    }
+                ],
+                "tags": [
+                    "DeploymentService"
+                ]
+            }
+        },
+        "/pds/v1/deployments/{deployment.meta.uid}": {
+            "put": {
+                "summary": "UpdateDeployment API updates the Deployment resource.",
+                "operationId": "DeploymentService_UpdateDeployment",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1Deployment"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "deployment.meta.uid",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "meta": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "description": "Name of the resource."
+                                            },
+                                            "description": {
+                                                "type": "string",
+                                                "description": "Description of the resource."
+                                            },
+                                            "resourceVersion": {
+                                                "type": "string",
+                                                "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                                            },
+                                            "createTime": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "description": "Creation time of the object.",
+                                                "readOnly": true
+                                            },
+                                            "updateTime": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "description": "Update time of the object.",
+                                                "readOnly": true
+                                            },
+                                            "labels": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Labels to apply to the object."
+                                            },
+                                            "annotations": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Annotations for the object."
+                                            },
+                                            "parentReference": {
+                                                "$ref": "#/components/schemas/v1Reference"
+                                            },
+                                            "resourceNames": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                                                "readOnly": true
+                                            }
+                                        },
+                                        "description": "Metadata of the resource.",
+                                        "title": "Metadata of the resource."
+                                    },
+                                    "config": {
+                                        "$ref": "#/components/schemas/v1Config"
+                                    },
+                                    "status": {
+                                        "$ref": "#/components/schemas/deploymentv1Status"
+                                    }
+                                },
+                                "title": "Deployment resource."
+                            }
+                        }
+                    },
+                    "description": "Deployment resource.",
+                    "required": true
+                },
+                "tags": [
+                    "DeploymentService"
+                ]
+            }
+        },
         "/pds/v1/deployments/{id}": {
             "get": {
                 "summary": "GetDeployment API returns the Deployment resource.",
@@ -86,15 +334,6 @@
                         "schema": {
                             "type": "string"
                         }
-                    },
-                    {
-                        "name": "force",
-                        "description": "Force flag to delete backup configuration from control plane only.",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "boolean"
-                        }
                     }
                 ],
                 "tags": [
@@ -139,48 +378,6 @@
                         }
                     }
                 ],
-                "tags": [
-                    "DeploymentService"
-                ]
-            }
-        },
-        "/pds/v1/deployments:search": {
-            "post": {
-                "summary": "ListDeployments API lists the Deployment resources.",
-                "operationId": "DeploymentService_ListDeployments",
-                "responses": {
-                    "200": {
-                        "description": "A successful response.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/v1ListDeploymentsResponse"
-                                }
-                            }
-                        }
-                    },
-                    "default": {
-                        "description": "An unexpected error response.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/googlerpcStatus"
-                                }
-                            }
-                        }
-                    }
-                },
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/v1ListDeploymentsRequest"
-                            }
-                        }
-                    },
-                    "description": "Request to list the Deployment resources.",
-                    "required": true
-                },
                 "tags": [
                     "DeploymentService"
                 ]
@@ -254,55 +451,6 @@
                 },
                 "description": "Request to create the Deployment resource."
             },
-            "ResourceSelectorResourceFilter": {
-                "type": "object",
-                "properties": {
-                    "resourceType": {
-                        "$ref": "#/components/schemas/v1InfraResourceType"
-                    },
-                    "op": {
-                        "$ref": "#/components/schemas/SelectorOperator"
-                    },
-                    "values": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "description": "Value of key,value pair against which filtering needs to be performs."
-                    }
-                },
-                "description": "ResourceFilter is filter for a given resource type."
-            },
-            "SelectorFilter": {
-                "type": "object",
-                "properties": {
-                    "key": {
-                        "type": "string",
-                        "description": "Key of key,value pair against which filtering needs to be performs."
-                    },
-                    "op": {
-                        "$ref": "#/components/schemas/SelectorOperator"
-                    },
-                    "values": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "description": "Value of key,value pair against which filtering needs to be performs if operator is EXIST, value should be an empty array."
-                    }
-                },
-                "description": "Filter for a given key."
-            },
-            "SelectorOperator": {
-                "type": "string",
-                "enum": [
-                    "OPERATOR_UNSPECIFIED",
-                    "IN",
-                    "NOT_IN"
-                ],
-                "default": "OPERATOR_UNSPECIFIED",
-                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list."
-            },
             "SortByField": {
                 "type": "string",
                 "enum": [
@@ -338,10 +486,6 @@
                             "$ref": "#/components/schemas/v1DeploymentTopologyStatus"
                         },
                         "description": "Status of the deployment topology."
-                    },
-                    "customResourceName": {
-                        "type": "string",
-                        "description": "Custom Resource Name is the kubernetes resource name for the deployment that is built from ID."
                     }
                 },
                 "description": "Status of the Deployment."
@@ -562,51 +706,6 @@
                 "default": "PHASE_UNSPECIFIED",
                 "description": "Enum for Phase of the Deployment Topology.\n\n - PHASE_UNSPECIFIED: Unspecified status.\n - IN_PROGRESS: In progress Status.\n - PARTIAL_SUCCESS: Partial Success Status.\n - SUCCESS: Successful Status.\n - DELETE_PENDING: Delete is pending Status.\n - DELETING: Delete in progress Status.\n - FAILED: Failed Status.\n - TIMED_OUT: Timed Out Status."
             },
-            "v1InfraResourceType": {
-                "type": "string",
-                "enum": [
-                    "TYPE_UNSPECIFIED",
-                    "ACCOUNT",
-                    "TENANT",
-                    "PROJECT",
-                    "TARGET_CLUSTER",
-                    "NAMESPACE",
-                    "CREDENTIAL",
-                    "BACKUP_LOCATION",
-                    "BACKUP_POLICY",
-                    "TEMPLATE"
-                ],
-                "default": "TYPE_UNSPECIFIED",
-                "description": "Type of the resource.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACCOUNT: Currently supported infra resources.\nInfra resource of type account.\n - TENANT: Infra resource of type tenant.\n - PROJECT: Infra resource of type projects.\n - TARGET_CLUSTER: Infra resource target cluster.\n - NAMESPACE: Infra resource of type namespace.\n - CREDENTIAL: Infra resource of type credential.\n - BACKUP_LOCATION: Infra resource of type backup location.\n - BACKUP_POLICY: Infra resource of type backup policy.\n - TEMPLATE: Infra resource of type template."
-            },
-            "v1ListDeploymentsRequest": {
-                "type": "object",
-                "properties": {
-                    "tenantId": {
-                        "type": "string",
-                        "description": "tenant ID for which deployments need to be fetched."
-                    },
-                    "labelSelector": {
-                        "$ref": "#/components/schemas/v1Selector"
-                    },
-                    "fieldSelector": {
-                        "$ref": "#/components/schemas/v1Selector"
-                    },
-                    "infraResourceSelector": {
-                        "$ref": "#/components/schemas/v1ResourceSelector"
-                    },
-                    "sort": {
-                        "$ref": "#/components/schemas/v1Sort"
-                    },
-                    "pagination": {
-                        "$ref": "#/components/schemas/v1PageBasedPaginationRequest"
-                    }
-                },
-                "description": "Request to list the Deployment resources.",
-                "required": [
-                    "tenantId"
-                ]
-            },
             "v1ListDeploymentsResponse": {
                 "type": "object",
                 "properties": {
@@ -791,40 +890,9 @@
                         "type": "string",
                         "description": "UID of the restore id for the Deployment.",
                         "readOnly": true
-                    },
-                    "dataServiceId": {
-                        "type": "string",
-                        "title": "UID of the data service",
-                        "readOnly": true
                     }
                 },
                 "description": "References to other resources."
-            },
-            "v1ResourceSelector": {
-                "type": "object",
-                "properties": {
-                    "infraResourceFilters": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/ResourceSelectorResourceFilter"
-                        },
-                        "description": "Infra_resource_filters is the list of all filters that should be applied to fetch data related to infra resource.\nEach filter will have AND relationship."
-                    }
-                },
-                "description": "ResourceSelector is used to query resources using the associated infra resources."
-            },
-            "v1Selector": {
-                "type": "object",
-                "properties": {
-                    "filters": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/SelectorFilter"
-                        },
-                        "description": "FilterList is the list of all filters that should be applied."
-                    }
-                },
-                "description": "Selector is used to query resources using the associated labels or field names."
             },
             "v1Sort": {
                 "type": "object",
@@ -854,11 +922,10 @@
                     "HEALTH_UNSPECIFIED",
                     "AVAILABLE",
                     "PARTIALLY_AVAILABLE",
-                    "UNAVAILABLE",
-                    "NOT_APPLICABLE"
+                    "UNAVAILABLE"
                 ],
                 "default": "HEALTH_UNSPECIFIED",
-                "description": "Enum for Health of the Deployment.\n\n - HEALTH_UNSPECIFIED: Health is unspecified.\n - AVAILABLE: Deployment is Available.\n - PARTIALLY_AVAILABLE: Deployment is PartiallyAvailable.\n - UNAVAILABLE: Deployment is Unavailable.\n - NOT_APPLICABLE: Deployment is deleted from cluster."
+                "description": "Enum for Health of the Deployment.\n\n - HEALTH_UNSPECIFIED: Health is unspecified.\n - AVAILABLE: Deployment is Available.\n - PARTIALLY_AVAILABLE: Deployment is PartiallyAvailable.\n - UNAVAILABLE: Deployment is Unavailable."
             },
             "v1StatusPhase": {
                 "type": "string",
@@ -871,11 +938,10 @@
                     "DEPLOYING",
                     "DEPLOYED",
                     "UPDATING",
-                    "TIMED_OUT",
-                    "DELETED_FROM_CLUSTER"
+                    "TIMED_OUT"
                 ],
                 "default": "PHASE_UNSPECIFIED",
-                "description": "Enum for Status of the Deployment.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - RESTORING: Restore of Deployment is in progress.\n - FAILED: Deployment is Failed.\n - DELETING: Deployment is being deleted.\n - PREPARING: Deployment is Preparing.\n - DEPLOYING: Deployment is Deploying.\n - DEPLOYED: Deployment is Deployed.\n - UPDATING: Deployment is Updating.\n - TIMED_OUT: Deployment is Timeout.\n - DELETED_FROM_CLUSTER: Deployment is deleted from cluster."
+                "description": "Enum for Status of the Deployment.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - RESTORING: Restore of Deployment is in progress.\n - FAILED: Deployment is Failed.\n - DELETING: Deployment is being deleted.\n - PREPARING: Deployment is Preparing.\n - DEPLOYING: Deployment is Deploying.\n - DEPLOYED: Deployment is Deployed.\n - UPDATING: Deployment is Updating.\n - TIMED_OUT: Deployment is Timeout."
             },
             "v1TLSConfig": {
                 "type": "object",

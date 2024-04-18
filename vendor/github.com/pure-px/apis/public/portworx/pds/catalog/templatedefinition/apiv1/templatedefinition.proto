@@ -17,10 +17,12 @@ syntax = "proto3";
 package public.portworx.pds.catalog.templatedefinition.v1;
 
 import "google/api/field_behavior.proto";
+import "google/protobuf/timestamp.proto";
 import "google/api/annotations.proto";
 
 import "public/portworx/common/apiv1/meta.proto";
 import "public/portworx/common/apiv1/revision.proto";
+import "public/portworx/common/apiv1/selector.proto";
 import "public/portworx/common/apiv1/pagination.proto";
 import "public/portworx/common/apiv1/sort.proto";
 
@@ -79,20 +81,6 @@ service TemplateDefinitionService{
       get: "/pds/v1/catalog/templateDefinition/samples"
     };
   }
-
-  // GetTemplateSample API returns the template sample for a given template id.
-  rpc GetTemplateSample(GetTemplateSampleRequest)
-      returns (TemplateSample){
-    option(google.api.http) = {
-      get: "/pds/v1/catalog/templateDefinition/samples/{id}"
-    };
-  }
-}
-
-// Request to get the template sample resource.
-message GetTemplateSampleRequest {
-  // UID of the template sample.
-  string id = 1;
 }
 
 // ListTemplateKindResponse listing request.
@@ -161,9 +149,6 @@ message TemplateType {
 message ListTemplateSamplesRequest{
   // filter sample templates based on kind, this accepts wild card, eg: pds:service:postgre*
   string kind = 1 [(google.api.field_behavior) = OPTIONAL];
-
-  // Pagination metadata for this request.
-  public.portworx.common.v1.PageBasedPaginationRequest pagination = 2 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // ListTemplateSamplesResponse list templates samples response.
@@ -192,6 +177,6 @@ message Info {
   // Kind of the template
   string kind = 1;
 
-  // template_values of the sample template.
-  map<string, string> template_values = 2;
+  // values of the sample template.
+  map<string, string> values = 2;
 }

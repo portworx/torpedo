@@ -84,39 +84,30 @@ message GetBackupConfigRequest {
 message ListBackupConfigsRequest {
   // Specifies a filter to list the backup configurations.
   oneof list_by {
+    // Account ID for which the backup configurations will be listed.
+    string account_id = 1;
+
     // Tenant ID for which the backup configurations will be listed.
-    string tenant_id = 1;
+    string tenant_id = 2;
 
     // Project ID for which the backup configurations will be listed.
-    string project_id = 2;
+    string project_id = 3;
 
     // Cluster ID for which the backup configurations will be listed.
-    string target_cluster_id = 3;
+    string target_cluster_id = 4;
 
     // Namespace ID for which the backup configurations will be listed.
-    string namespace_id = 4;
+    string namespace_id = 5;
 
     // Deployment ID for which the backup configurations will be listed.
-    string deployment_id = 5;
+    string deployment_id = 6;
   }
 
   // Pagination metadata for listing backup configuration.
-  public.portworx.common.v1.PageBasedPaginationRequest pagination = 6;
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 7;
 
   // Sorting details using which requested list of backup configurations to be sorted.
-  public.portworx.common.v1.Sort sort = 7;
-
-  // Suspended indicate list either all, suspended only or disabled only data services.
-  enum Suspended {
-    // List all data services.
-    SUSPENDED_UNSPECIFIED = 0;
-    // List only suspended data services.
-    TRUE = 1;
-    // List only disabled data services.
-    FALSE = 2;
-  }
-  // Filter data services based on suspended flag.
-  Suspended suspended = 8 [(google.api.field_behavior) = OPTIONAL];
+  public.portworx.common.v1.Sort sort = 8;
 }
 
 // Response of list of backup configurations.
@@ -161,8 +152,8 @@ message UpdateBackupConfigRequest {
   // ID of the backup configuration.
   string id = 1;
 
-  // Suspend flag is used to suspend a scheduled backup from creating new backups.
-  bool suspend = 2;
+  // Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1.
+  int32 job_history_limit = 2;
 
   // Labels to apply to the Backup Config object.
   map<string, string> labels = 3;
@@ -175,9 +166,6 @@ message UpdateBackupConfigRequest {
 message DeleteBackupConfigRequest {
   // ID of the backup configuration.
   string id = 1;
-
-  // Force flag to delete backup configuration from control plane only.
-  bool force = 9 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // Resource representing the backup configuration for a backup.
@@ -197,11 +185,14 @@ message Config {
   // References to the associated objects for backup configuration.
   References references = 1;
 
-  // BackupPolicy associated with the backup config.
-  BackupPolicy backup_policy = 2 [(google.api.field_behavior) = OPTIONAL];
+  // Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1.
+  int32 job_history_limit = 2;
 
-  // Suspend flag is used to suspend a scheduled backup from creating new backups.
-  bool suspend = 3;
+  // BackupPolicy associated with the backup config.
+  BackupPolicy backup_policy = 3 [(google.api.field_behavior) = OPTIONAL];
+
+  // Suspend flag is used to suspend a scheduled backup from creating new backup jobs.
+  bool suspend = 4;
 
   // Enum for Backup Type of the backup configuration.
   enum BackupType {
@@ -216,7 +207,7 @@ message Config {
   }
 
   // Backup Type for the backup configuration.
-  BackupType backup_type = 4;
+  BackupType backup_type = 5;
 
   // Enum for Backup Level of the backup configuration.
   enum BackupLevel {
@@ -231,7 +222,7 @@ message Config {
   }
 
   // Backup Level for the backup configuration.
-  BackupLevel backup_level = 5;
+  BackupLevel backup_level = 6;
 
   // Enum for Reclaim Policy for the backup configuration.
   enum ReclaimPolicyType {
@@ -246,7 +237,7 @@ message Config {
   }
 
   // Reclaim Policy decides if the volume snapshots should get deleted when a Backup CR gets deleted.
-  ReclaimPolicyType reclaim_policy = 6;
+  ReclaimPolicyType reclaim_policy = 7;
 }
 
 // References to the associated resources for backup configuration.

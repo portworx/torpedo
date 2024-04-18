@@ -29,7 +29,7 @@ require (
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
-	github.com/libopenstorage/operator v0.0.0-20240411205123-17cbbcb4a54e
+	github.com/libopenstorage/operator v0.0.0-20240417190906-af0509c9db88
 	github.com/libopenstorage/stork v1.4.1-0.20230610103146-72cf75320066
 	github.com/onsi/gomega v1.31.1
 	github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
@@ -150,7 +150,7 @@ require (
 	github.com/jetstack/cert-manager v1.7.3
 	github.com/jinzhu/copier v0.4.0
 	github.com/onsi/ginkgo/v2 v2.15.0
-	github.com/pure-px/apis v0.0.0-20240417161615-2526fa9ff5ce
+	github.com/pure-px/apis v0.0.0-20240326194748-e9f7f27de779
 	github.com/pure-px/platform-api-go-client v0.0.0-20240405095715-34babdd92c3c
 	github.com/tektoncd/pipeline v0.56.0
 	go.mongodb.org/mongo-driver v1.14.0

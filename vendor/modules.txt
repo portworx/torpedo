@@ -1085,7 +1085,7 @@ github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
 github.com/libopenstorage/openstorage/volume
-# github.com/libopenstorage/operator v0.0.0-20240411205123-17cbbcb4a54e
+# github.com/libopenstorage/operator v0.0.0-20240417190906-af0509c9db88
 ## explicit; go 1.21
 github.com/libopenstorage/operator/api/px
 github.com/libopenstorage/operator/drivers/storage
@@ -1401,7 +1401,7 @@ github.com/prometheus/procfs/internal/util
 ## explicit; go 1.13
 github.com/prometheus/statsd_exporter/pkg/mapper
 github.com/prometheus/statsd_exporter/pkg/mapper/fsm
-# github.com/pure-px/apis v0.0.0-20240417161615-2526fa9ff5ce
+# github.com/pure-px/apis v0.0.0-20240326194748-e9f7f27de779
 ## explicit; go 1.21
 github.com/pure-px/apis/public/portworx/common/apiv1
 github.com/pure-px/apis/public/portworx/pds/backup/apiv1

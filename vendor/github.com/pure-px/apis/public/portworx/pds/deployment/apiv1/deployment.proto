@@ -23,7 +23,6 @@ import "google/api/field_behavior.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/struct.proto";
 import "public/portworx/common/apiv1/meta.proto";
-import "public/portworx/common/apiv1/selector.proto";
 import "public/portworx/pds/deploymenttopology/apiv1/deploymenttopology.proto";
 import "public/portworx/common/apiv1/pagination.proto";
 import "public/portworx/common/apiv1/sort.proto";
@@ -52,6 +51,15 @@ service DeploymentService {
     };
   }
 
+  // UpdateDeployment API updates the Deployment resource.
+  rpc UpdateDeployment(UpdateDeploymentRequest)
+    returns (Deployment) {
+    option(google.api.http) = {
+      put: "/pds/v1/deployments/{deployment.meta.uid}"
+      body: "deployment"
+    };
+  }
+
   // DeleteDeployment API deletes the Deployment resource.
   rpc DeleteDeployment(DeleteDeploymentRequest)
     returns (google.protobuf.Empty) {
@@ -60,21 +68,17 @@ service DeploymentService {
     };
   }
 
-  // (-- api-linter: core::0132::http-body=disabled
-  //     api-linter: core::0132::http-method=disabled
-  //     aip.dev/not-precedent: We need to do this because we can't have advance filters as query params. --)
   // ListDeployments API lists the Deployment resources.
   rpc ListDeployments(ListDeploymentsRequest)
     returns (ListDeploymentsResponse) {
     option(google.api.http) = {
-      post: "/pds/v1/deployments:search"
-      body: "*"
+      get: "/pds/v1/deployments"
     };
   }
 
   // GetDeploymentCredentials API returns the Credentials to be used to access the Deployment.
   rpc GetDeploymentCredentials(GetDeploymentCredentialsRequest)
-    returns (DeploymentCredentials) {
+      returns (DeploymentCredentials) {
     option(google.api.http) = {
       get: "/pds/v1/deployments/{id}:credentials"
     };
@@ -121,20 +125,17 @@ message TLSConfig {
 
 // References to other resources.
 message References {
-  // UID of the target cluster in which Data Service will be deployed.
-  string target_cluster_id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+    // UID of the target cluster in which Data Service will be deployed.
+    string target_cluster_id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
 
-  // UID of the image to be used for the Data Service Deployment.
-  string image_id = 2;
+    // UID of the image to be used for the Data Service Deployment.
+    string image_id = 2;
 
-  // UID of the project to which DataService Deployment associated.
-  string project_id = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+    // UID of the project to which DataService Deployment associated.
+    string project_id = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 
-  // UID of the restore id for the Deployment.
-  string restore_id = 4 [(google.api.field_behavior) = OUTPUT_ONLY];
-
-  // UID of the data service
-  string data_service_id = 5 [(google.api.field_behavior) = OUTPUT_ONLY];
+    // UID of the restore id for the Deployment.
+    string restore_id = 4 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 // Status of the Deployment.
@@ -152,9 +153,6 @@ message Status {
 
     // Deployment is Unavailable.
     UNAVAILABLE = 3;
-
-    // Deployment is deleted from cluster.
-    NOT_APPLICABLE = 4;
   }
 
   // Health of the Deployment.
@@ -188,9 +186,6 @@ message Status {
 
     // Deployment is Timeout.
     TIMED_OUT = 8;
-
-    // Deployment is deleted from cluster.
-    DELETED_FROM_CLUSTER = 9;
   }
 
   // Status of the Deployment.
@@ -205,8 +200,6 @@ message Status {
   // Status of the deployment topology.
   repeated public.portworx.pds.deploymenttopology.v1.DeploymentTopologyStatus deployment_topology_status = 5;
 
-  // Custom Resource Name is the kubernetes resource name for the deployment that is built from ID.
-  string custom_resource_name = 6;
 }
 
 // Request to get the Deployment resource.
@@ -225,9 +218,6 @@ message GetDeploymentCredentialsRequest {
 message DeleteDeploymentRequest {
   // UID of the Deployment.
   string id = 1;
-
-  // Force flag to delete backup configuration from control plane only.
-  bool force = 9 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // Request to create the Deployment resource.
@@ -247,21 +237,37 @@ message CreateDeploymentRequest {
   Deployment deployment = 3;
 }
 
+// Request to update the Deployment resource.
+message UpdateDeploymentRequest {
+  // Deployment resource.
+  Deployment deployment = 1;
+}
+
 // Request to list the Deployment resources.
 message ListDeploymentsRequest {
-  // tenant ID for which deployments need to be fetched.
-  string tenant_id = 1 [(google.api.field_behavior) = REQUIRED];
-  // Provides the key in labels and associated values for which deployments need to be listed.
-  public.portworx.common.v1.Selector label_selector = 2;
-  // Field selector is used to filter deployments based on the fields in the deployments's proto message.
-  public.portworx.common.v1.Selector field_selector = 3;
-  // Infra_resource_selector is used to filter deployments based on the infra resources associated with the deployments.
-  // Supported infra resource filters: PROJECT, CLUSTER, NAMESPACE.
-  public.portworx.common.v1.ResourceSelector infra_resource_selector = 4;
-  // Sorting details using which requested list of deployments to be sorted.
-  public.portworx.common.v1.Sort sort = 5 [(google.api.field_behavior) = OPTIONAL];
+  // Specifies a filter to list the Deployments.
+  oneof list_by {
+    // UID of the account.
+    string account_id = 1;
+
+    // UID of the tenant.
+    string tenant_id = 2;
+
+    // UID of the target cluster.
+    string cluster_id = 3;
+
+    // UID of the namespace.
+    string namespace_id = 4;
+
+    // UID of the project.
+    string project_id = 5;
+  }
+
   // Pagination parameters for listing deployments.
   public.portworx.common.v1.PageBasedPaginationRequest pagination = 6 [(google.api.field_behavior) = OPTIONAL];
+
+  // Sorting details using which requested list of deployments to be sorted.
+  public.portworx.common.v1.Sort sort = 7;
 }
 
 // Response to list Deployment request.

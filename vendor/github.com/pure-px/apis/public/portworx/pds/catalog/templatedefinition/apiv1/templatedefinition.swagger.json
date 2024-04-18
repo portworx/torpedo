@@ -293,68 +293,6 @@
                         "schema": {
                             "type": "string"
                         }
-                    },
-                    {
-                        "name": "pagination.pageNumber",
-                        "description": "Page number is the page number to return based on the size.",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string",
-                            "format": "int64"
-                        }
-                    },
-                    {
-                        "name": "pagination.pageSize",
-                        "description": "Page size is the maximum number of records to include per page.",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string",
-                            "format": "int64"
-                        }
-                    }
-                ],
-                "tags": [
-                    "TemplateDefinitionService"
-                ]
-            }
-        },
-        "/pds/v1/catalog/templateDefinition/samples/{id}": {
-            "get": {
-                "summary": "GetTemplateSample API returns the template sample for a given template id.",
-                "operationId": "TemplateDefinitionService_GetTemplateSample",
-                "responses": {
-                    "200": {
-                        "description": "A successful response.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/v1TemplateSample"
-                                }
-                            }
-                        }
-                    },
-                    "default": {
-                        "description": "An unexpected error response.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/rpcStatus"
-                                }
-                            }
-                        }
-                    }
-                },
-                "parameters": [
-                    {
-                        "name": "id",
-                        "description": "UID of the template sample.",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
                     }
                 ],
                 "tags": [
@@ -594,12 +532,12 @@
                         "type": "string",
                         "title": "Kind of the template"
                     },
-                    "templateValues": {
+                    "values": {
                         "type": "object",
                         "additionalProperties": {
                             "type": "string"
                         },
-                        "description": "template_values of the sample template."
+                        "description": "values of the sample template."
                     }
                 },
                 "description": "Info of sample template."

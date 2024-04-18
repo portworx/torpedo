@@ -173,7 +173,6 @@ Request to list the backup policies for a tenant.
 | field_selector | [ public.portworx.common.v1.Selector](#publicportworxcommonv1selector) | Field selector is used to filter backup policies based on the fields in the backup policy's proto message. |
 | infra_resource_selector | [ public.portworx.common.v1.ResourceSelector](#publicportworxcommonv1resourceselector) | Infra_resource_selector is used to filter backup policies based on the infra resources associated with the backup policy. Supported infra resource filters: PROJECT. |
 | sort | [ public.portworx.common.v1.Sort](#publicportworxcommonv1sort) | Sorting details using which requested list of backup policies to be sorted. |
-| resp_data | [ public.portworx.common.v1.RespData](#publicportworxcommonv1respdata) | Response data flags for listing backup policies. |
  <!-- end Fields -->
  <!-- end HasFields -->
 

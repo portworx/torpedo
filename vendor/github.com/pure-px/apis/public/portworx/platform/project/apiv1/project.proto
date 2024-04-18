@@ -1,5 +1,5 @@
 // Please use the following editor setup for this file:
-// Tab size=2; Tabs as spaces; Clean up trailing whitespace
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
 //
 // In vim add: au FileType proto setl sw=2 ts=2 expandtab list
 //
@@ -205,7 +205,7 @@ message CreateProjectRequest {
 // Request to update a project meta.
 // (-- api-linter: core::0134::request-resource-required=disabled
 //     aip.dev/not-precedent: We need to do this because reasons.
-// we are only updating project meta--)
+// we are onlu updating project meta--)
 message UpdateProjectRequest {
   // Metadata of the project.
   public.portworx.common.v1.Meta meta = 2;

@@ -4,8 +4,7 @@ PROTO_FILES = pagination.proto \
               sort.proto \
               platformresource.proto \
               selector.proto \
-              revision.proto \
-              healthcheck.proto
+			  revision.proto
 
 all: $(PROTO_FILES)
 

@@ -139,9 +139,6 @@ message ListBackupPoliciesRequest {
 
   // Sorting details using which requested list of backup policies to be sorted.
   public.portworx.common.v1.Sort sort = 6;
-
-  // Response data flags for listing backup policies.
-  public.portworx.common.v1.RespData resp_data = 7;
 }
 
 // Response of list backup policies.

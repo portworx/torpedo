@@ -38,6 +38,15 @@
                 },
                 "parameters": [
                     {
+                        "name": "accountId",
+                        "description": "Account ID for which the backup configurations will be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
                         "name": "tenantId",
                         "description": "Tenant ID for which the backup configurations will be listed.",
                         "in": "query",
@@ -133,21 +142,6 @@
                             ],
                             "default": "VALUE_UNSPECIFIED"
                         }
-                    },
-                    {
-                        "name": "suspended",
-                        "description": "Filter data services based on suspended flag.\n\n - SUSPENDED_UNSPECIFIED: List all data services.\n - TRUE: List only suspended data services.\n - FALSE: List only disabled data services.",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string",
-                            "enum": [
-                                "SUSPENDED_UNSPECIFIED",
-                                "TRUE",
-                                "FALSE"
-                            ],
-                            "default": "SUSPENDED_UNSPECIFIED"
-                        }
                     }
                 ],
                 "tags": [
@@ -230,15 +224,6 @@
                         "required": true,
                         "schema": {
                             "type": "string"
-                        }
-                    },
-                    {
-                        "name": "force",
-                        "description": "Force flag to delete backup configuration from control plane only.",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "boolean"
                         }
                     }
                 ],
@@ -372,9 +357,10 @@
             "BackupConfigServiceUpdateBackupConfigBody": {
                 "type": "object",
                 "properties": {
-                    "suspend": {
-                        "type": "boolean",
-                        "description": "Suspend flag is used to suspend a scheduled backup from creating new backups."
+                    "jobHistoryLimit": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1."
                     },
                     "labels": {
                         "type": "object",
@@ -422,16 +408,6 @@
                 ],
                 "default": "RECLAIM_POLICY_TYPE_UNSPECIFIED",
                 "description": "Enum for Reclaim Policy for the backup configuration.\n\n - RECLAIM_POLICY_TYPE_UNSPECIFIED: Unspecified.\n - DELETE: Delete snapshot.\n - RETAIN: Retain snapshot."
-            },
-            "ListBackupConfigsRequestSuspended": {
-                "type": "string",
-                "enum": [
-                    "SUSPENDED_UNSPECIFIED",
-                    "TRUE",
-                    "FALSE"
-                ],
-                "default": "SUSPENDED_UNSPECIFIED",
-                "description": "Suspended indicate list either all, suspended only or disabled only data services.\n\n - SUSPENDED_UNSPECIFIED: List all data services.\n - TRUE: List only suspended data services.\n - FALSE: List only disabled data services."
             },
             "SortByField": {
                 "type": "string",
@@ -550,12 +526,17 @@
                     "references": {
                         "$ref": "#/components/schemas/v1References"
                     },
+                    "jobHistoryLimit": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1."
+                    },
                     "backupPolicy": {
                         "$ref": "#/components/schemas/v1BackupPolicy"
                     },
                     "suspend": {
                         "type": "boolean",
-                        "description": "Suspend flag is used to suspend a scheduled backup from creating new backups."
+                        "description": "Suspend flag is used to suspend a scheduled backup from creating new backup jobs."
                     },
                     "backupType": {
                         "$ref": "#/components/schemas/ConfigBackupType"

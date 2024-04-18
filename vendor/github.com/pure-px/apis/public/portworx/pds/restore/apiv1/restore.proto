@@ -56,6 +56,14 @@ service RestoreService {
     };
   }
 
+  // DeleteRestore API deletes the restore.
+  rpc DeleteRestore(DeleteRestoreRequest)
+    returns(google.protobuf.Empty) {
+    option(google.api.http) = {
+      delete: "/pds/v1/restores/{id}"
+    };
+  }
+
   // RecreateRestore API recreates a already failed restore.
   rpc RecreateRestore(RecreateRestoreRequest)
     returns(Restore) {
@@ -99,7 +107,7 @@ message CreateRestoreRequest {
 }
 
 // Request to get a restore.
-message GetRestoreRequest {
+message GetRestoreRequest {  
   // UID of the restore.
   string id = 1;
 }
@@ -108,19 +116,21 @@ message GetRestoreRequest {
 message ListRestoresRequest {
   // Specifies a filter to list restores.
   oneof list_by {
+    // Account ID for which the restore will be listed.
+    string account_id = 1;
     // Tenant ID for which the restore will be listed.
-    string tenant_id = 1;
+    string tenant_id = 2;
     // Project ID for which the restore will be listed.
-    string project_id = 2;
+    string project_id = 3;
     // Deployment ID for which the restore will be listed.
-    string deployment_id = 3;
+    string deployment_id = 4;
     // Backup ID for which the restore will be listed.
-    string backup_id = 4;
+    string backup_id = 5;
   }
   // Sorting details using which requested list to be sorted.
-  public.portworx.common.v1.Sort sort = 5;
+  public.portworx.common.v1.Sort sort = 6;
   // Pagination metadata for this response.
-  public.portworx.common.v1.PageBasedPaginationRequest pagination = 6;
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 7;
 }
 
 // ListRestoresResponse represents list restores response.
@@ -131,6 +141,12 @@ message ListRestoresResponse {
   // (-- api-linter: core::0132::response-unknown-fields=disabled
   //     aip.dev/not-precedent: We need this field for pagination. --)
   public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
+
+// Request to delete a restore.
+message DeleteRestoreRequest {
+  // UID of the Restore.
+  string id = 2;
 }
 
 // Request to recreate a restore.
@@ -203,8 +219,6 @@ message Status {
   string error_message = 4;
   // Phase of the restore.
   Phase phase = 5;
-  // Custom Resource Name is the kubernetes resource name for the restore that is built from ID.
-  string custom_resource_name = 6;
 }
 
 // RestorabilityMatrix represents the compatibility matrix for restore.
@@ -249,7 +263,7 @@ enum Phase {
   DEPLOYMENT_ENTERING_NORMAL_MODE = 6;
   // Restore successful.
   SUCCESSFUL = 7;
-  // Restore failed.
+  // Restore failed. 
   FAILED = 8;
 }
 
