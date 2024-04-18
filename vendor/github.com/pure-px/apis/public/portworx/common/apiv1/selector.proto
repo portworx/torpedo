@@ -1,0 +1,78 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+
+syntax = "proto3";
+
+package public.portworx.common.v1;
+
+import "public/portworx/common/apiv1/platformresource.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/common/apiv1;common";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.common.v1";
+option java_outer_classname = "SelectorProto";
+
+// Selector is used to query resources using the associated labels or field names.
+message Selector{
+  // Operator specifies the relationship between the provided (key,value) pairs in the response.
+  enum Operator{
+    // Unspecified, do not use.
+    OPERATOR_UNSPECIFIED = 0;
+    // IN specifies that the key should be associated with atleast 1 of the element in value list.
+    IN = 1;
+    // NOT_IN specifies that the key should not be associated with any of the element in value list.
+    NOT_IN = 2;
+  }
+    
+  // Filter for a given key.
+  message Filter{
+    // Key of key,value pair against which filtering needs to be performs.
+    string key =101;
+    // Op provides the relationship between the key,value pair in the resp element(s).
+    Operator op =102;
+    // Value of key,value pair against which filtering needs to be performs if operator is EXIST, value should be an empty array.
+    repeated string values = 103;
+  }
+  // FilterList is the list of all filters that should be applied.
+  repeated Filter filters = 1;
+}
+
+// ResourceSelector is used to query resources using the associated infra resources.
+message ResourceSelector{
+  // ResourceFilter is filter for a given resource type.
+  message ResourceFilter{
+    // Key of key,value pair against which filtering needs to be performs based on associated infra resource type.
+    public.portworx.common.v1.InfraResource.Type resource_type = 101;
+    // Op provides the relationship between the key,value pair in the resp element(s).
+    Selector.Operator op = 102;
+    // Value of key,value pair against which filtering needs to be performs.
+    repeated string values = 103;
+  }
+  // Infra_resource_filters is the list of all filters that should be applied to fetch data related to infra resource.
+  // Each filter will have AND relationship.
+  repeated ResourceFilter infra_resource_filters = 1;
+}
+
+// RespData provides flags which provides info about the fields that should be populated in the response.
+enum RespData {
+  // RespData Unspecified. complete resource will be populated.
+  RESP_DATA_UNSPECIFIED = 0;
+  // only uid, name, labels should be populated.
+  INDEX = 1;
+  // only meta data should be populated.
+  LITE = 2;
+  // complete resource should be populated.
+  FULL = 3;
+}

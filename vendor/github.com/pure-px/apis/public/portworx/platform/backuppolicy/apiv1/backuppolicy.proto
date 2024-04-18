@@ -1,0 +1,244 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+syntax = "proto3";
+
+package public.portworx.platform.backuppolicy.v1;
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/empty.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "public/portworx/common/apiv1/meta.proto";
+import "public/portworx/common/apiv1/selector.proto";
+import "public/portworx/common/apiv1/pagination.proto";
+import "public/portworx/common/apiv1/sort.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/platform/backuppolicy/apiv1;backuppolicy";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.platform.backuppolicy.v1";
+option java_outer_classname = "BackupPolicyProto";
+
+// BackupPolicyService serves and manages the backup policies.
+service BackupPolicyService {
+  // Get API returns the backup policy for the given ID.
+  rpc GetBackupPolicy(GetBackupPolicyRequest)
+      returns(BackupPolicy) {
+    option(google.api.http) = {
+      get: "/core/v1/backupPolicies/{id}"
+    };
+  }
+
+  // Create API creates a backup policy for a tenant.
+  rpc CreateBackupPolicy(CreateBackupPolicyRequest)
+      returns(BackupPolicy) {
+    option(google.api.http) = {
+      post: "/core/v1/tenants/{tenant_id}/backupPolicies"
+      body: "backup_policy"
+    };
+  }
+
+  // Update API updates a the meta data of a backup policy.
+  // (-- api-linter: core::0134::response-message-name=disabled
+  //     aip.dev/not-precedent: We need to do this because we need to return the whole Schedule after the update. --)
+  // (-- api-linter: core::0136::http-method=disabled
+  //     aip.dev/not-precedent: We need to do this because we are updating only the meta data of the schedule and not config. --)
+  rpc UpdateBackupPolicyMeta(UpdateBackupPolicyMetaRequest)
+      returns(BackupPolicy) {
+    option(google.api.http) = {
+      put: "/core/v1/backupPolicies/{meta.uid}:metaUpdate"
+      body: "meta"
+    };
+  }
+  // (-- api-linter: core::0132::http-body=disabled
+  //     api-linter: core::0132::http-method=disabled
+  //     aip.dev/not-precedent: We need to do this because
+  // we can't have advance filters as query params.
+  // --)
+  // List API lists all the backup policies for a tenant.
+  rpc ListBackupPolicies(ListBackupPoliciesRequest)
+      returns(ListBackupPoliciesResponse) {
+    option(google.api.http) = {
+      get: "/core/v1/backupPolicies"
+      additional_bindings: {
+        post: "/core/v1/backupPolicies:search"
+        body: "*"
+      }
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "List API lists all the backup policies for a tenant"
+  };
+  }
+
+  // Delete API deletes a backup policy.
+  rpc DeleteBackupPolicy(DeleteBackupPolicyRequest)
+      returns(google.protobuf.Empty) {
+    option(google.api.http) = {
+      delete: "/core/v1/backupPolicies/{id}"
+    };
+  }
+}
+
+// Request to get a backup policy.
+message GetBackupPolicyRequest {
+  // ID of the schedule.
+  string id = 1;
+}
+
+// Request to create a backup policy.
+message CreateBackupPolicyRequest {
+  // The parent tenant id under which schedule will be created.
+  // (-- api-linter: core::0133::request-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for to support creation of
+  //     the resource in the tenant context. --)
+  string tenant_id = 1 ;
+
+  // Backup Policy configuration.
+  BackupPolicy backup_policy = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Request to update the meta of a backup policy.
+// (-- api-linter: core::0134::request-resource-required=disabled
+//     aip.dev/not-precedent: We need to do this because ScheduleMeta is being imported from the common meta. --)
+message UpdateBackupPolicyMetaRequest {
+  // Metadata of the backup policy to be updated.
+  // (-- api-linter: core::0134::request-required-fields=disabled
+  //     aip.dev/not-precedent: We really need this field to be required because
+  // meta data which needs to be updated has to be passed in the request. --)
+  portworx.common.v1.Meta meta = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Request to list the backup policies for a tenant.
+message ListBackupPoliciesRequest {
+  // Tenant ID for which the backup policies will be listed.
+  string tenant_id = 1;
+
+  // Pagination metadata for listing backup policies.
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // Provides the key in labels and associated values for which backup policy need to be listed.
+  public.portworx.common.v1.Selector label_selector = 3;
+
+  // Field selector is used to filter backup policies based on the fields in the backup policy's proto message.
+  public.portworx.common.v1.Selector field_selector = 4;
+
+  // Infra_resource_selector is used to filter backup policies based on the infra resources associated with the backup policy.
+  // Supported infra resource filters: PROJECT.
+  public.portworx.common.v1.ResourceSelector infra_resource_selector = 5;
+
+  // Sorting details using which requested list of backup policies to be sorted.
+  public.portworx.common.v1.Sort sort = 6;
+
+  // Response data flags for listing backup policies.
+  public.portworx.common.v1.RespData resp_data = 7;
+}
+
+// Response of list backup policies.
+message ListBackupPoliciesResponse {
+  // The list of backup policies scoped to a tenant.
+  repeated BackupPolicy backup_policies = 1;
+
+  // Pagination metadata for this response.
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
+
+// Request to delete a backup policy.
+message DeleteBackupPolicyRequest {
+  // ID of the backup policy.
+  string id = 1;
+}
+
+// Resource representing a backup policy.
+message BackupPolicy {
+  // Metadata of the backup policy.
+  portworx.common.v1.Meta meta = 1;
+
+  // Desired configuration of the backup policy.
+  Config config = 2;
+}
+
+// Desired configuration of the backup policy.
+message Config {
+  // Schedules defined for a policy.
+  repeated Schedule schedule = 1;
+}
+
+// A schedule for a backup policy.
+message Schedule {
+  // Schedule type.
+  oneof Duration {
+    // Interval Policy.
+    IntervalPolicy interval_policy = 1;
+
+    // Daily Policy.
+    DailyPolicy daily_policy = 2;
+
+    // Weekly Policy.
+    WeeklyPolicy weekly_policy = 3;
+
+    // Monthly Policy.
+    MonthlyPolicy monthly_policy = 4;
+
+    // A cron expression is a string consisting of six or seven subexpressions (fields) that describe individual details of the schedule.
+    string cron_expression = 5;
+  }
+
+  // Number of incremental snapshots to take before taking a full snapshot.
+  int64 incremental_count = 6;
+
+  // Number of objects to retain for the schedule type, default value is 10.
+  int64 retain = 7;
+}
+
+// Interval Policy.
+message IntervalPolicy {
+  // Interval in minutes at which an action should be triggered.
+  int64 minutes = 1;
+}
+
+// Daily Policy.
+message DailyPolicy {
+  // Time, when the policy should be triggered. Expected format is time. Eg 12:04PM or 12:04pm.
+  // (-- api-linter: core::0142::time-field-type=disabled
+  //     aip.dev/not-precedent: We need to do this to take input in string format. --)
+  string time = 1;
+}
+
+// Weekly Policy.
+message WeeklyPolicy {
+  // Day of the week when the policy should be triggered.
+  // For example, sunday or sun.
+  string day = 1;
+
+  // Time, when the policy should be triggered. Expected format is time. Eg 12:04PM or 12:04pm.
+  // (-- api-linter: core::0142::time-field-type=disabled
+  //     aip.dev/not-precedent: We need to do this to take input in string format. --)
+  string time = 2;
+}
+
+// Monthly Policy.
+message MonthlyPolicy {
+  // Date of the month when the policy should be triggered. If a given date doesn't exist in a month it'll rollover to the next date of the month.
+  // For example if 31 is specified, it'll trigger on either 1st or 2nd March depending on if it is a leap year.
+  // (-- api-linter: core::0142::time-field-type=disabled
+  //     aip.dev/not-precedent: We need to do this to take input in string format. --)
+  int64 date = 1;
+
+  // Time, when the policy should be triggered. Expected format is time. Eg 12:04PM or 12:04pm.
+  // (-- api-linter: core::0142::time-field-type=disabled
+  //     aip.dev/not-precedent: We need to do this to take input in string format. --)
+  string time = 2;
+}

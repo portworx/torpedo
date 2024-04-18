@@ -1,0 +1,587 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/platform/namespace/apiv1/namespace.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "NamespaceService"
+        }
+    ],
+    "paths": {
+        "/core/v1/namespaces": {
+            "get": {
+                "summary": "List API lists all the namespaces for a tenant",
+                "operationId": "NamespaceService_ListNamespaces",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListNamespacesResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "tenantId",
+                        "description": "tenant ID for which namespace need to be fetched.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "respData",
+                        "description": "Response data flags for listing cloud credentials.\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "RESP_DATA_UNSPECIFIED",
+                                "INDEX",
+                                "LITE",
+                                "FULL"
+                            ],
+                            "default": "RESP_DATA_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "sort.sortBy",
+                        "description": "Name of the attribute to sort results by.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "FIELD_UNSPECIFIED",
+                                "NAME",
+                                "CREATED_AT",
+                                "UPDATED_AT",
+                                "PHASE"
+                            ],
+                            "default": "FIELD_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "sort.sortOrder",
+                        "description": "Order of sorting to be applied on requested list.\nIf sort_by having some value and sort_order is not provided, by default ascending order will be used to sort the list.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "VALUE_UNSPECIFIED",
+                                "ASC",
+                                "DESC"
+                            ],
+                            "default": "VALUE_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageNumber",
+                        "description": "Page number is the page number to return based on the size.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageSize",
+                        "description": "Page size is the maximum number of records to include per page.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    }
+                ],
+                "tags": [
+                    "NamespaceService"
+                ]
+            }
+        },
+        "/core/v1/namespaces/{id}": {
+            "delete": {
+                "summary": "DeleteNamespace API will trigger deletion and cleanup on the control plane.",
+                "operationId": "NamespaceService_DeleteNamespace",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {}
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "id",
+                        "description": "ID of the namespace instance.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "NamespaceService"
+                ]
+            }
+        },
+        "/core/v1/namespaces:search": {
+            "post": {
+                "summary": "List API lists all the namespaces for a tenant",
+                "operationId": "NamespaceService_ListNamespaces2",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListNamespacesResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/v1ListNamespacesRequest"
+                            }
+                        }
+                    },
+                    "description": "ListNamespacesRequest request message for the ListNamespaces API.",
+                    "required": true
+                },
+                "tags": [
+                    "NamespaceService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "NamespacePhasePhase": {
+                "type": "string",
+                "enum": [
+                    "PHASE_UNSPECIFIED",
+                    "AVAILABLE",
+                    "RESERVED",
+                    "UNAVAILABLE",
+                    "TERMINATING",
+                    "TOMBSTONED",
+                    "DELETE_PENDING",
+                    "DELETE_IN_PROGRESS",
+                    "DELETE_FAILED"
+                ],
+                "default": "PHASE_UNSPECIFIED",
+                "description": "Phase is the status of the namespace based on the label type.\n\n - PHASE_UNSPECIFIED: Must be set in the proto file; ignore.\n - AVAILABLE: Available namespaces can be used to deploy applications, they have \"<platform-domain>/available: true\" label.\n - RESERVED: Reserved namespaces are used by platform agents and cannot be used to deploy applications, they have \"<platform-domain>/reserved: true\" label.\n - UNAVAILABLE: Unavailable namespaces are the ones deleted by user with active deployments or by removing available label.\n - TERMINATING: Termintaing state represents, namespace deletion is in progress on the target cluster.\n - TOMBSTONED: Tombstoned state represents namespace has been deleted from the cluster.\n - DELETE_PENDING: Deletion of namespace is yet to start.\n - DELETE_IN_PROGRESS: Deletion of the namespace is scheduled and in progress.\n - DELETE_FAILED: Deletion failed."
+            },
+            "ResourceSelectorResourceFilter": {
+                "type": "object",
+                "properties": {
+                    "resourceType": {
+                        "$ref": "#/components/schemas/v1InfraResourceType"
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/SelectorOperator"
+                    },
+                    "values": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Value of key,value pair against which filtering needs to be performs."
+                    }
+                },
+                "description": "ResourceFilter is filter for a given resource type."
+            },
+            "SelectorFilter": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "description": "Key of key,value pair against which filtering needs to be performs."
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/SelectorOperator"
+                    },
+                    "values": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Value of key,value pair against which filtering needs to be performs if operator is EXIST, value should be an empty array."
+                    }
+                },
+                "description": "Filter for a given key."
+            },
+            "SelectorOperator": {
+                "type": "string",
+                "enum": [
+                    "OPERATOR_UNSPECIFIED",
+                    "IN",
+                    "NOT_IN"
+                ],
+                "default": "OPERATOR_UNSPECIFIED",
+                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list."
+            },
+            "SortByField": {
+                "type": "string",
+                "enum": [
+                    "FIELD_UNSPECIFIED",
+                    "NAME",
+                    "CREATED_AT",
+                    "UPDATED_AT",
+                    "PHASE"
+                ],
+                "default": "FIELD_UNSPECIFIED",
+                "description": "Field names for sorting the list of resources.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource."
+            },
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "rpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "v1InfraResourceType": {
+                "type": "string",
+                "enum": [
+                    "TYPE_UNSPECIFIED",
+                    "ACCOUNT",
+                    "TENANT",
+                    "PROJECT",
+                    "TARGET_CLUSTER",
+                    "NAMESPACE",
+                    "CREDENTIAL",
+                    "BACKUP_LOCATION",
+                    "BACKUP_POLICY",
+                    "TEMPLATE"
+                ],
+                "default": "TYPE_UNSPECIFIED",
+                "description": "Type of the resource.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACCOUNT: Currently supported infra resources.\nInfra resource of type account.\n - TENANT: Infra resource of type tenant.\n - PROJECT: Infra resource of type projects.\n - TARGET_CLUSTER: Infra resource target cluster.\n - NAMESPACE: Infra resource of type namespace.\n - CREDENTIAL: Infra resource of type credential.\n - BACKUP_LOCATION: Infra resource of type backup location.\n - BACKUP_POLICY: Infra resource of type backup policy.\n - TEMPLATE: Infra resource of type template."
+            },
+            "v1ListNamespacesRequest": {
+                "type": "object",
+                "properties": {
+                    "tenantId": {
+                        "type": "string",
+                        "description": "tenant ID for which namespace need to be fetched."
+                    },
+                    "labelSelector": {
+                        "$ref": "#/components/schemas/v1Selector"
+                    },
+                    "fieldSelector": {
+                        "$ref": "#/components/schemas/v1Selector"
+                    },
+                    "infraResourceSelector": {
+                        "$ref": "#/components/schemas/v1ResourceSelector"
+                    },
+                    "respData": {
+                        "$ref": "#/components/schemas/v1RespData"
+                    },
+                    "sort": {
+                        "$ref": "#/components/schemas/v1Sort"
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationRequest"
+                    }
+                },
+                "description": "ListNamespacesRequest request message for the ListNamespaces API."
+            },
+            "v1ListNamespacesResponse": {
+                "type": "object",
+                "properties": {
+                    "namespaces": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1Namespace"
+                        },
+                        "description": "list of namespaces."
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
+                    }
+                },
+                "description": "ListNamespacesResponse response message for the ListNamespaces API."
+            },
+            "v1Meta": {
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the resource."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the resource."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                    },
+                    "createTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Creation time of the object.",
+                        "readOnly": true
+                    },
+                    "updateTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Update time of the object.",
+                        "readOnly": true
+                    },
+                    "labels": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Labels to apply to the object."
+                    },
+                    "annotations": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Annotations for the object."
+                    },
+                    "parentReference": {
+                        "$ref": "#/components/schemas/v1Reference"
+                    },
+                    "resourceNames": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                        "readOnly": true
+                    }
+                },
+                "description": "Meta holds general resource metadata."
+            },
+            "v1Namespace": {
+                "type": "object",
+                "properties": {
+                    "meta": {
+                        "$ref": "#/components/schemas/v1Meta"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/v1NamespaceStatus"
+                    }
+                },
+                "description": "A managed Kubernetes namespace."
+            },
+            "v1NamespaceStatus": {
+                "type": "object",
+                "properties": {
+                    "phase": {
+                        "$ref": "#/components/schemas/NamespacePhasePhase"
+                    }
+                },
+                "description": "NamespaceStatus represents the status of the namespace resource."
+            },
+            "v1PageBasedPaginationRequest": {
+                "type": "object",
+                "properties": {
+                    "pageNumber": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page number is the page number to return based on the size."
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page size is the maximum number of records to include per page."
+                    }
+                },
+                "description": "Request parameters for page-based pagination."
+            },
+            "v1PageBasedPaginationResponse": {
+                "type": "object",
+                "properties": {
+                    "totalRecords": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Total records without pagination available in the dataset."
+                    },
+                    "currentPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Current page number for this paginated response."
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page size used for pagination."
+                    },
+                    "totalPages": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Total pages based on the page_size provided in the request."
+                    },
+                    "nextPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Next page if available in the dataset, -1 if unavailable."
+                    },
+                    "prevPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Previous page if available in the dataset, -1 if unavailable."
+                    }
+                },
+                "description": "Metadata related to page based pagination for paginated API responses."
+            },
+            "v1Reference": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": "API group of the resource."
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Version of the API."
+                    },
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource."
+                    }
+                },
+                "description": "Reference identifies the resource type, version of the uid and the resource."
+            },
+            "v1ResourceSelector": {
+                "type": "object",
+                "properties": {
+                    "infraResourceFilters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ResourceSelectorResourceFilter"
+                        },
+                        "description": "Infra_resource_filters is the list of all filters that should be applied to fetch data related to infra resource.\nEach filter will have AND relationship."
+                    }
+                },
+                "description": "ResourceSelector is used to query resources using the associated infra resources."
+            },
+            "v1RespData": {
+                "type": "string",
+                "enum": [
+                    "RESP_DATA_UNSPECIFIED",
+                    "INDEX",
+                    "LITE",
+                    "FULL"
+                ],
+                "default": "RESP_DATA_UNSPECIFIED",
+                "description": "RespData provides flags which provides info about the fields that should be populated in the response.\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated."
+            },
+            "v1Selector": {
+                "type": "object",
+                "properties": {
+                    "filters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SelectorFilter"
+                        },
+                        "description": "FilterList is the list of all filters that should be applied."
+                    }
+                },
+                "description": "Selector is used to query resources using the associated labels or field names."
+            },
+            "v1Sort": {
+                "type": "object",
+                "properties": {
+                    "sortBy": {
+                        "$ref": "#/components/schemas/SortByField"
+                    },
+                    "sortOrder": {
+                        "$ref": "#/components/schemas/v1SortOrderValue"
+                    }
+                },
+                "description": "The details of the attribute for which the requested list of resource to be sorted."
+            },
+            "v1SortOrderValue": {
+                "type": "string",
+                "enum": [
+                    "VALUE_UNSPECIFIED",
+                    "ASC",
+                    "DESC"
+                ],
+                "default": "VALUE_UNSPECIFIED",
+                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
+            }
+        }
+    }
+}

@@ -1,0 +1,577 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/platform/tenant/apiv1/tenant.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "TenantService"
+        }
+    ],
+    "paths": {
+        "/core/v1/tenants": {
+            "get": {
+                "summary": "ListTenants API lists the tenants visible to the caller for the current account.",
+                "operationId": "TenantService_ListTenants",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListTenantsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "pagination.pageNumber",
+                        "description": "Page number is the page number to return based on the size.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageSize",
+                        "description": "Page size is the maximum number of records to include per page.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    }
+                ],
+                "tags": [
+                    "TenantService"
+                ]
+            },
+            "post": {
+                "summary": "CreateTenant API creates a new Tenant.",
+                "operationId": "TenantService_CreateTenant",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1Tenant"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/v1Tenant"
+                            }
+                        }
+                    },
+                    "description": "tenant to be created.",
+                    "required": true
+                },
+                "tags": [
+                    "TenantService"
+                ]
+            }
+        },
+        "/core/v1/tenants/{tenant.meta.uid}": {
+            "put": {
+                "summary": "UpdateTenant API updates tenant.",
+                "operationId": "TenantService_UpdateTenant",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1Tenant"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "tenant.meta.uid",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "meta": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "description": "Name of the resource."
+                                            },
+                                            "description": {
+                                                "type": "string",
+                                                "description": "Description of the resource."
+                                            },
+                                            "resourceVersion": {
+                                                "type": "string",
+                                                "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                                            },
+                                            "createTime": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "description": "Creation time of the object.",
+                                                "readOnly": true
+                                            },
+                                            "updateTime": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "description": "Update time of the object.",
+                                                "readOnly": true
+                                            },
+                                            "labels": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Labels to apply to the object."
+                                            },
+                                            "annotations": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Annotations for the object."
+                                            },
+                                            "parentReference": {
+                                                "$ref": "#/components/schemas/v1Reference"
+                                            },
+                                            "resourceNames": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                                                "readOnly": true
+                                            }
+                                        },
+                                        "description": "Metadata of the tenant.",
+                                        "title": "Metadata of the tenant."
+                                    },
+                                    "status": {
+                                        "$ref": "#/components/schemas/tenantv1Status"
+                                    }
+                                },
+                                "title": "tenant which  needs to be updated."
+                            }
+                        }
+                    },
+                    "description": "tenant which  needs to be updated.",
+                    "required": true
+                },
+                "tags": [
+                    "TenantService"
+                ]
+            }
+        },
+        "/core/v1/tenants/{tenantId}": {
+            "get": {
+                "summary": "GetTenant API returns the info about  for given tenant id.",
+                "operationId": "TenantService_GetTenant",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1Tenant"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "tenantId",
+                        "description": "ID of the tenant which needs to get info.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "TenantService"
+                ]
+            },
+            "delete": {
+                "summary": "Delete tenant removes a tenant record.",
+                "operationId": "TenantService_DeleteTenant",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {}
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "tenantId",
+                        "description": "ID of the tenant which needs to be deleted.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "TenantService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ResourceSelectorResourceFilter": {
+                "type": "object",
+                "properties": {
+                    "resourceType": {
+                        "$ref": "#/components/schemas/v1InfraResourceType"
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/SelectorOperator"
+                    },
+                    "values": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Value of key,value pair against which filtering needs to be performs."
+                    }
+                },
+                "description": "ResourceFilter is filter for a given resource type."
+            },
+            "SelectorOperator": {
+                "type": "string",
+                "enum": [
+                    "OPERATOR_UNSPECIFIED",
+                    "IN",
+                    "NOT_IN"
+                ],
+                "default": "OPERATOR_UNSPECIFIED",
+                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list."
+            },
+            "googlerpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "tenantv1Status": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "description": "Textual information for the current state of the tenant."
+                    },
+                    "phase": {
+                        "$ref": "#/components/schemas/v1PhaseType"
+                    }
+                },
+                "description": "Status represents the current state of the tenant."
+            },
+            "v1InfraResourceType": {
+                "type": "string",
+                "enum": [
+                    "TYPE_UNSPECIFIED",
+                    "ACCOUNT",
+                    "TENANT",
+                    "PROJECT",
+                    "TARGET_CLUSTER",
+                    "NAMESPACE",
+                    "CREDENTIAL",
+                    "BACKUP_LOCATION",
+                    "BACKUP_POLICY",
+                    "TEMPLATE"
+                ],
+                "default": "TYPE_UNSPECIFIED",
+                "description": "Type of the resource.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACCOUNT: Currently supported infra resources.\nInfra resource of type account.\n - TENANT: Infra resource of type tenant.\n - PROJECT: Infra resource of type projects.\n - TARGET_CLUSTER: Infra resource target cluster.\n - NAMESPACE: Infra resource of type namespace.\n - CREDENTIAL: Infra resource of type credential.\n - BACKUP_LOCATION: Infra resource of type backup location.\n - BACKUP_POLICY: Infra resource of type backup policy.\n - TEMPLATE: Infra resource of type template."
+            },
+            "v1ListTenantsResponse": {
+                "type": "object",
+                "properties": {
+                    "tenants": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1Tenant"
+                        },
+                        "description": "list of tenant response."
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
+                    }
+                },
+                "description": "ListTenantsResponse is the response message to the ListTenants API and contains\nthe list of tenants visible to the caller."
+            },
+            "v1Meta": {
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the resource."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the resource."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                    },
+                    "createTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Creation time of the object.",
+                        "readOnly": true
+                    },
+                    "updateTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Update time of the object.",
+                        "readOnly": true
+                    },
+                    "labels": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Labels to apply to the object."
+                    },
+                    "annotations": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Annotations for the object."
+                    },
+                    "parentReference": {
+                        "$ref": "#/components/schemas/v1Reference"
+                    },
+                    "resourceNames": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                        "readOnly": true
+                    }
+                },
+                "description": "Meta holds general resource metadata."
+            },
+            "v1PageBasedPaginationRequest": {
+                "type": "object",
+                "properties": {
+                    "pageNumber": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page number is the page number to return based on the size."
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page size is the maximum number of records to include per page."
+                    }
+                },
+                "description": "Request parameters for page-based pagination."
+            },
+            "v1PageBasedPaginationResponse": {
+                "type": "object",
+                "properties": {
+                    "totalRecords": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Total records without pagination available in the dataset."
+                    },
+                    "currentPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Current page number for this paginated response."
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page size used for pagination."
+                    },
+                    "totalPages": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Total pages based on the page_size provided in the request."
+                    },
+                    "nextPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Next page if available in the dataset, -1 if unavailable."
+                    },
+                    "prevPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Previous page if available in the dataset, -1 if unavailable."
+                    }
+                },
+                "description": "Metadata related to page based pagination for paginated API responses."
+            },
+            "v1PhaseType": {
+                "type": "string",
+                "enum": [
+                    "TYPE_UNSPECIFIED",
+                    "ACTIVE",
+                    "DELETE_PENDING",
+                    "DELETE_IN_PROGRESS",
+                    "DELETE_FAILED"
+                ],
+                "default": "TYPE_UNSPECIFIED",
+                "description": "Type of phase the tenant is in currently should be one of the below.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACTIVE: The tenant is in use and active.\n - DELETE_PENDING: Deletion of tenant has not started.\n - DELETE_IN_PROGRESS: Deletion of the tenant is scheduled and in progress.\n - DELETE_FAILED: Deletion is failed"
+            },
+            "v1Reference": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": "API group of the resource."
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Version of the API."
+                    },
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource."
+                    }
+                },
+                "description": "Reference identifies the resource type, version of the uid and the resource."
+            },
+            "v1ResourceSelector": {
+                "type": "object",
+                "properties": {
+                    "infraResourceFilters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ResourceSelectorResourceFilter"
+                        },
+                        "description": "Infra_resource_filters is the list of all filters that should be applied to fetch data related to infra resource.\nEach filter will have AND relationship."
+                    }
+                },
+                "description": "ResourceSelector is used to query resources using the associated infra resources."
+            },
+            "v1Tenant": {
+                "type": "object",
+                "properties": {
+                    "meta": {
+                        "$ref": "#/components/schemas/v1Meta"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/tenantv1Status"
+                    }
+                },
+                "description": "Tenant is an organizational subunit of an account that represents an org or a unit of a large company.\nA tenant comprises multiple projects."
+            }
+        }
+    }
+}

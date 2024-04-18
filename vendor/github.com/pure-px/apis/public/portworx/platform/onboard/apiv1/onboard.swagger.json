@@ -1,0 +1,400 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/platform/onboard/apiv1/onboard.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "OnboardService"
+        }
+    ],
+    "paths": {
+        "/core/v1/registration": {
+            "post": {
+                "summary": "creates a new account registration request.",
+                "operationId": "OnboardService_CreateAccountRegistration",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1AccountRegistration"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/v1AccountRegistration"
+                            }
+                        }
+                    },
+                    "description": "account to be created and onboarded.",
+                    "required": true
+                },
+                "tags": [
+                    "OnboardService"
+                ]
+            }
+        },
+        "/core/v1/registration/{accountRegistration.meta.uid}": {
+            "put": {
+                "summary": "For updating account subscription info.",
+                "operationId": "OnboardService_UpdateAccountRegistration",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1AccountRegistration"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "accountRegistration.meta.uid",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "meta": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "description": "Name of the resource."
+                                            },
+                                            "description": {
+                                                "type": "string",
+                                                "description": "Description of the resource."
+                                            },
+                                            "resourceVersion": {
+                                                "type": "string",
+                                                "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                                            },
+                                            "createTime": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "description": "Creation time of the object.",
+                                                "readOnly": true
+                                            },
+                                            "updateTime": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "description": "Update time of the object.",
+                                                "readOnly": true
+                                            },
+                                            "labels": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Labels to apply to the object."
+                                            },
+                                            "annotations": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Annotations for the object."
+                                            },
+                                            "parentReference": {
+                                                "$ref": "#/components/schemas/v1Reference"
+                                            },
+                                            "resourceNames": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                                                "readOnly": true
+                                            }
+                                        },
+                                        "description": "Metadata of the account.",
+                                        "title": "Metadata of the account."
+                                    },
+                                    "config": {
+                                        "$ref": "#/components/schemas/v1AccountConfig"
+                                    }
+                                },
+                                "title": "account for which subscription info needs to be updated."
+                            }
+                        }
+                    },
+                    "description": "account for which subscription info needs to be updated.",
+                    "required": true
+                },
+                "tags": [
+                    "OnboardService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "googlerpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "v1AccountConfig": {
+                "type": "object",
+                "properties": {
+                    "accountConfig": {
+                        "$ref": "#/components/schemas/v1Config"
+                    },
+                    "pdsAwsRegistrationToken": {
+                        "type": "string",
+                        "description": "AWS registration token."
+                    },
+                    "pdsZuoraSubscription": {
+                        "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
+                    },
+                    "pxeAwsRegistrationToken": {
+                        "type": "string",
+                        "description": "AWS registration token."
+                    },
+                    "pxeZuoraSubscription": {
+                        "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
+                    },
+                    "baasAwsRegistrationToken": {
+                        "type": "string",
+                        "description": "AWS registration token."
+                    },
+                    "baasZuoraSubscription": {
+                        "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
+                    }
+                },
+                "description": "Account Configuration Info used for Registration."
+            },
+            "v1AccountRegistration": {
+                "type": "object",
+                "properties": {
+                    "meta": {
+                        "$ref": "#/components/schemas/v1Meta"
+                    },
+                    "config": {
+                        "$ref": "#/components/schemas/v1AccountConfig"
+                    }
+                },
+                "description": "AccountRegistration has all details about the account and its subscriptions."
+            },
+            "v1AccountType": {
+                "type": "string",
+                "enum": [
+                    "ACCOUNT_TYPE_UNSPECIFIED",
+                    "FREEMIUM",
+                    "ENTERPRISE"
+                ],
+                "default": "ACCOUNT_TYPE_UNSPECIFIED",
+                "description": "Accepted account types.\n\n - ACCOUNT_TYPE_UNSPECIFIED: Unspecified, do not use.\n - FREEMIUM: Account is of freemium type for all three Portworx Service.\n - ENTERPRISE: Account has a active subscription for at least one of the Portworx Services."
+            },
+            "v1AwsSubscriptionInfo": {
+                "type": "object",
+                "properties": {
+                    "clientId": {
+                        "type": "string",
+                        "description": "Aws client id associated with the installed product."
+                    },
+                    "productId": {
+                        "type": "string",
+                        "description": "Aws product id of the installed product."
+                    },
+                    "accountId": {
+                        "type": "string",
+                        "description": "Aws account id associated with the installed product."
+                    }
+                },
+                "description": "AWS subscription info for one product."
+            },
+            "v1Config": {
+                "type": "object",
+                "properties": {
+                    "userEmail": {
+                        "type": "string",
+                        "description": "email of the first account user.",
+                        "readOnly": true
+                    },
+                    "dnsName": {
+                        "type": "string",
+                        "description": "Account DNS name."
+                    },
+                    "displayName": {
+                        "type": "string",
+                        "description": "Display name of Account."
+                    },
+                    "accountType": {
+                        "$ref": "#/components/schemas/v1AccountType"
+                    },
+                    "pdsZuoraSubscription": {
+                        "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
+                    },
+                    "pxeAwsSubscription": {
+                        "$ref": "#/components/schemas/v1AwsSubscriptionInfo"
+                    },
+                    "pxeZuoraSubscription": {
+                        "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
+                    },
+                    "baasAwsSubscription": {
+                        "$ref": "#/components/schemas/v1AwsSubscriptionInfo"
+                    },
+                    "baasZuoraSubscription": {
+                        "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
+                    }
+                },
+                "description": "Desired configuration of the account."
+            },
+            "v1Meta": {
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the resource."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the resource."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                    },
+                    "createTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Creation time of the object.",
+                        "readOnly": true
+                    },
+                    "updateTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Update time of the object.",
+                        "readOnly": true
+                    },
+                    "labels": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Labels to apply to the object."
+                    },
+                    "annotations": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Annotations for the object."
+                    },
+                    "parentReference": {
+                        "$ref": "#/components/schemas/v1Reference"
+                    },
+                    "resourceNames": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                        "readOnly": true
+                    }
+                },
+                "description": "Meta holds general resource metadata."
+            },
+            "v1Reference": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": "API group of the resource."
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Version of the API."
+                    },
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource."
+                    }
+                },
+                "description": "Reference identifies the resource type, version of the uid and the resource."
+            },
+            "v1ZuoraSubscriptionInfo": {
+                "type": "object",
+                "properties": {
+                    "subscriptionId": {
+                        "type": "string",
+                        "description": "id associated installed product."
+                    },
+                    "accountId": {
+                        "type": "string",
+                        "description": "id associated with the customer account."
+                    }
+                },
+                "description": "Zuora Subscription info for a particular installed product."
+            }
+        }
+    }
+}

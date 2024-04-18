@@ -3,11 +3,13 @@ package utilities
 import (
 	"context"
 	"fmt"
+	"github.com/jinzhu/copier"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/log"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	"math/rand"
+	"os"
 	"strconv"
 	"time"
 
@@ -306,4 +308,23 @@ func syncData(namespace string) {
 		}
 	}
 
+}
+
+// GetEnv gets environment variable and fall back to default value if not found
+func GetEnv(key, fallback string) string {
+	value := os.Getenv(key)
+	if len(value) == 0 {
+		log.Infof("Unable to find [%v] in the env variables, falling back to [%s]", fallback)
+		return fallback
+	}
+	log.Infof("ENV values %s", value)
+	return value
+}
+
+// CopyStruct copies one struct to another and raise error if failed
+func CopyStruct(fromValue interface{}, toValue interface{}) error {
+	// log.Infof("Copying from [%+v]", fromValue)
+	// log.Infof("Copying to [%+v]", toValue)
+	err := copier.CopyWithOption(toValue, fromValue, copier.Option{CaseSensitive: false})
+	return err
 }
