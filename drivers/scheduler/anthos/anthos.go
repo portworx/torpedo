@@ -228,10 +228,7 @@ func (anth *anthos) Init(schedOpts scheduler.InitOptions) error {
 	if err := anth.getUserClusterName(); err != nil {
 		return err
 	}
-	if _, err := anth.GetProviderSpec(); err != nil {
-		return err
-	}
-	log.Infof("Skip admin cluster upgrade is: [%t]", anth.adminClusterUpgrade)
+	log.Infof("Admin cluster upgrade is: [%t]", anth.adminClusterUpgrade)
 	return nil
 }
 
@@ -955,20 +952,20 @@ func getStoragePDBMinAvailableSet() (int, error) {
 	pxOperator := operator.Instance()
 	schedOps, err := schedops.Get(SchedName)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get driver for scheduler: %s. Err: %v", SchedName, err)
+		return -1, fmt.Errorf("failed to get driver for scheduler: %s. Err: %v", SchedName, err)
 	}
 	pxNameSpace, err := schedOps.GetPortworxNamespace()
 	if err != nil {
-		return 0, fmt.Errorf("failed to get portworx namespace. Err: %v", err)
+		return -1, fmt.Errorf("failed to get portworx namespace. Err: %v", err)
 	}
 	stcList, err := pxOperator.ListStorageClusters(pxNameSpace)
 	if err != nil {
-		return 0, fmt.Errorf("failed get StorageCluster list from namespace [%s], Err: %v", pxNameSpace, err)
+		return -1, fmt.Errorf("failed get StorageCluster list from namespace [%s], Err: %v", pxNameSpace, err)
 	}
 
 	stc, err := pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get StorageCluster [%s] from namespace [%s], Err: %v", stcList.Items[0].Name, stcList.Items[0].Namespace, err.Error())
+		return -1, fmt.Errorf("failed to get StorageCluster [%s] from namespace [%s], Err: %v", stcList.Items[0].Name, stcList.Items[0].Namespace, err.Error())
 	}
 	val, ok := stc.Annotations[storagePDBMinAvailable]
 	if !ok {
@@ -976,7 +973,7 @@ func getStoragePDBMinAvailableSet() (int, error) {
 	}
 	pdbVal, err := strconv.Atoi(val)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse pdb value. Err: %v", err)
+		return -1, fmt.Errorf("failed to parse pdb value. Err: %v", err)
 	}
 	return pdbVal, nil
 }
@@ -1011,10 +1008,10 @@ func getSequentialUpgradeTime(upgradeStartTime time.Time, sortedNodes []corev1.N
 	return printUpgradeTimeExceededErrorMessage(printNodeUpgradeTime(upgradeStartTime, sortedNodes))
 }
 
-// getParallelUpgradeTime calculate upgrade times for sequential upgrade
+// getParallelUpgradeTime calculate upgrade times for parallel upgrade
 func getParallelUpgradeTime(upgradeStartTime time.Time, sortedNodes []corev1.Node, maxNode int) error {
 	errorMessages := make([]string, 0)
-	var newUpgradeStartTime time.Time
+	timeQueue := make([]time.Time, maxNode)
 	nodePoolMap, err := getNodePoolMap(sortedNodes)
 	if err != nil {
 		return fmt.Errorf("fail to retrieve node pool map. Err: %v", err)
@@ -1022,22 +1019,20 @@ func getParallelUpgradeTime(upgradeStartTime time.Time, sortedNodes []corev1.Nod
 	log.Debugf("Retrieved node pool map: %v", nodePoolMap)
 	for pool := 0; pool < len(nodePoolMap); pool++ {
 		startTime := upgradeStartTime
-		errorMessages = append(errorMessages, printNodeUpgradeTime(startTime, nodePoolMap[pool])...)
-		// When number of pools is more than the number of nodes are upgraded simultaneously.
-		// All node pools upgrade start at same time.
-		// Finding the new upgrade start time here
-		if maxNode < len(nodePoolMap) {
-			if newUpgradeStartTime.IsZero() {
-				newUpgradeStartTime = nodePoolMap[pool][len(nodePoolMap[pool])-1].CreationTimestamp.Time
-			}
-			diff := newUpgradeStartTime.Sub(nodePoolMap[pool][len(nodePoolMap[pool])-1].CreationTimestamp.Time)
-			if diff < 0 {
-				newUpgradeStartTime = nodePoolMap[pool][len(nodePoolMap[pool])-1].CreationTimestamp.Time
-			}
-		}
+		// When number of pools is more than the number of nodes can be upgraded simultaneously.
+		// In that case upgrade will not start simultaneously in all node pools.
+		// Finding the new upgrade start time for node pools where upgrade will start later
 		if pool > maxNode {
-			upgradeStartTime = newUpgradeStartTime
+			if pool%maxNode == 0 {
+				sort.Slice(timeQueue, func(i, j int) bool {
+					return timeQueue[i].Before(timeQueue[j])
+				})
+			}
+			startTime = timeQueue[0]
+			timeQueue = timeQueue[1:]
 		}
+		timeQueue = append(timeQueue, nodePoolMap[pool][len(nodePoolMap[pool])-1].CreationTimestamp.Time)
+		errorMessages = append(errorMessages, printNodeUpgradeTime(startTime, nodePoolMap[pool])...)
 	}
 	return printUpgradeTimeExceededErrorMessage(errorMessages)
 }
