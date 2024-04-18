@@ -164,7 +164,7 @@ func ValidateProjectDeletion(projectId string) error {
 	validateProjectDeletion := func() (interface{}, bool, error) {
 		project, err := platformLibs.GetProject(projectId)
 		if err == nil {
-			return nil, true, fmt.Errorf("Project [%s] is yet not deleted. Phase - [%s]", projectId, project.Status.Phase)
+			return nil, true, fmt.Errorf("Project [%s] is yet not deleted. Phase - [%v]", projectId, project.Status.Phase)
 		} else {
 			log.Infof("Project [%s] is deleted successfully", projectId)
 			return nil, false, nil
