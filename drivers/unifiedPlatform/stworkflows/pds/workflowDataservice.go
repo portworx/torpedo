@@ -111,14 +111,14 @@ func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(depl
 	}
 
 	// Get the actual DeploymentName
-	_, deploymentName, err := dslibs.GetDeployment(deploymentId)
+	deployment, _, err := dslibs.GetDeployment(deploymentId)
 	if err != nil {
 		return err
 	}
 
 	// Update the actual deploymentName with deploymentId
 	wfDataService.DataServiceDeployment = make(map[string]string)
-	wfDataService.DataServiceDeployment[deploymentName] = deploymentId
+	wfDataService.DataServiceDeployment[*deployment.Get.Meta.Name] = deploymentId
 
 	// Validate if the dns endpoint is reachable
 	err = wfDataService.ValidateDNSEndpoint(deploymentId)
@@ -139,6 +139,16 @@ func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(depl
 	return nil
 }
 
+// GetDeploymentPodName gets the pod name for the deployment
+func (wfDataService *WorkflowDataService) GetDeploymentPodName(deploymentId string) (string, error) {
+	_, podName, err := dslibs.GetDeployment(deploymentId)
+	if err != nil {
+		return "", err
+	}
+
+	return podName, nil
+}
+
 func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deployment map[string]string, dataServiceName, resourceTemplateID, storageTemplateID, namespace string) (dslibs.ResourceSettingTemplate, dslibs.StorageOps, dslibs.DeploymentConfig, error) {
 	var (
 		resourceTemp dslibs.ResourceSettingTemplate
@@ -149,7 +159,12 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deployment ma
 	deploymentName, deploymentId := GetDeploymentNameAndId(deployment)
 	log.Debugf("deployment Name [%s] and Id [%s]", deploymentName, deploymentId)
 
-	dbConfig, err = dslibs.GetDeploymentConfigurations(namespace, dataServiceName, deploymentName)
+	podName, err := wfDataService.GetDeploymentPodName(deploymentId)
+	if err != nil {
+		return resourceTemp, storageOp, dbConfig, err
+	}
+
+	dbConfig, err = dslibs.GetDeploymentConfigurations(namespace, dataServiceName, podName)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
