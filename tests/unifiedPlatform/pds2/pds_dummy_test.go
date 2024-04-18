@@ -14,8 +14,10 @@ var dash *aetosutil.Dashboard
 
 var _ = Describe("{CleanUpDeployments}", func() {
 	It("Delete all deployments", func() {
-		err := pdslibs.DeleteAllDeployments(tests.ProjectId)
+		err := pdslibs.DeleteDeployment("dep:92cb728a-83ba-4e69-8afe-4aeb10190bcb")
 		log.FailOnError(err, "error while deleting deployment")
+		err = pdslibs.ValidateDeploymentIsDeleted("dep:92cb728a-83ba-4e69-8afe-4aeb10190bcb")
+		log.FailOnError(err, "error while validating delete deployment")
 	})
 })
 

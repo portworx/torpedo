@@ -28,6 +28,11 @@ func GetDeploymentConfigurations(namespace, dataServiceName, deploymentName stri
 	if err != nil {
 		return dbConfig, err
 	}
+	log.Debugf("namespace [%s]", namespace)
+	log.Debugf("CRGroup [%s]", CRGroup)
+	log.Debugf("Version [%s]", Version)
+	log.Debugf("dsName [%s]", strings.ToLower(dataServiceName)+"s")
+	log.Debugf("objects [%+v]", objects)
 
 	// Iterate over the CRD objects and print their names.
 	for _, object := range objects.Items {
@@ -110,7 +115,7 @@ func GetStorageTemplateConfigs(storageTemplateID string) (StorageOps, error) {
 }
 
 // ValidateDataServiceDeploymentHealth takes the deployment map(name and id), namespace and returns error
-func ValidateDataServiceDeploymentHealth(deploymentId, namespace string) error {
+func ValidateDataServiceDeploymentHealth(deploymentId string) error {
 	log.Infof("DeploymentId [%s]", deploymentId)
 	err = wait.Poll(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
 		res, err := v2Components.PDS.GetDeployment(deploymentId)
@@ -124,6 +129,25 @@ func ValidateDataServiceDeploymentHealth(deploymentId, namespace string) error {
 		}
 		log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Replicas, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
 		return true, nil
+	})
+	return err
+}
+
+// ValidateDeploymentIsDeleted checks if deployment is deleted
+func ValidateDeploymentIsDeleted(deploymentId string) error {
+	log.Infof("DeploymentId [%s]", deploymentId)
+	err = wait.Poll(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
+		res, err := v2Components.PDS.GetDeployment(deploymentId)
+		if err != nil && strings.Contains(err.Error(), "resource not found") {
+			log.Errorf("Error occured while getting deployment status %v", err)
+			return true, nil
+		}
+		log.Debugf("Health status -  %v", *res.Get.Status.Health)
+		if *res.Get.Config.DeploymentTopologies[0].Replicas != *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas || *res.Get.Status.Health != PDS_DEPLOYMENT_AVAILABLE {
+			return false, nil
+		}
+		log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Replicas, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
+		return false, nil
 	})
 	return err
 }

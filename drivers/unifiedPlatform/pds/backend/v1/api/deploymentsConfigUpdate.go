@@ -29,7 +29,7 @@ func (ds *PDS_API_V1) UpdateDeployment(updateDeploymentRequest *automationModels
 		return nil, fmt.Errorf("Error occured while copying updateDeploymentRequest %v\n", err)
 	}
 
-	dsModel, res, err := dsClient.DeploymentConfigUpdateServiceCreateDeploymentConfigUpdate(ctx, *updateDeploymentRequest.Update.V1Deployment.Meta.Uid).DeploymentConfigUpdateOfTheDeploymentUpdateRequest(UpdateDeploymentRequest).Execute()
+	dsModel, res, err := dsClient.DeploymentConfigUpdateServiceCreateDeploymentConfigUpdate(ctx, updateDeploymentRequest.Update.DeploymentID).DeploymentConfigUpdateOfTheDeploymentUpdateRequest(UpdateDeploymentRequest).Execute()
 	log.Debugf("updated dsModel [%v]", dsModel)
 	log.Debugf("response [%v]", res)
 	if err != nil || res.StatusCode != status.StatusOK {

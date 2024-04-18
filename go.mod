@@ -1,6 +1,6 @@
 module github.com/portworx/torpedo
 
-go 1.21.4
+go 1.21.6
 
 toolchain go1.21.7
 

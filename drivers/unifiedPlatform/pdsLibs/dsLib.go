@@ -8,6 +8,8 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 )
 
+const DEPLOYMENT_TOPOLOGY = "pds-qa-test-topology"
+
 // InitUnifiedApiComponents
 func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 	v2Components, err = unifiedPlatform.NewUnifiedPlatformComponents(controlPlaneURL, accountID)
@@ -19,39 +21,23 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 
 func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, imageId, appConfigId, resConfigId, stConfigId string) (*automationModels.PDSDeploymentResponse, error) {
 	log.Info("Update Data service will be performed")
-	//depInputs := automationModels.PDSDeploymentRequest{}
-
 	depInputs := &automationModels.PDSDeploymentRequest{
 		Update: automationModels.PDSDeploymentUpdate{
-			NamespaceID: namespaceId,
-			ProjectID:   projectId,
+			NamespaceID:  namespaceId,
+			ProjectID:    projectId,
+			DeploymentID: deploymentId,
 			V1Deployment: automationModels.V1DeploymentUpdate{
 				Meta: automationModels.Meta{
-					Uid:             &deploymentId,
-					Name:            &ds.DeploymentName,
-					Description:     nil,
-					ResourceVersion: nil,
-					CreateTime:      nil,
-					UpdateTime:      nil,
-					Labels:          nil,
-					Annotations:     nil,
+					Name: &ds.DeploymentName,
 				},
 				Config: automationModels.DeploymentUpdateConfig{
 					DeploymentMeta: automationModels.Meta{
-						Uid:             nil,
-						Name:            nil,
-						Description:     nil,
-						ResourceVersion: nil,
-						CreateTime:      nil,
-						UpdateTime:      nil,
-						Labels:          nil,
-						Annotations:     nil,
+						Description: StringPtr("pds-qa-tests"),
 					},
 					DeploymentConfig: automationModels.V1Config1{
-						TlsEnabled: nil,
 						DeploymentTopologies: []automationModels.DeploymentTopology{
 							{
-								Name:     StringPtr("pds-qa-test-topology"),
+								Name:     StringPtr(DEPLOYMENT_TOPOLOGY),
 								Replicas: intToPointerString(ds.ScaleReplicas),
 								ResourceSettings: &automationModels.PdsTemplates{
 									Id: &resConfigId,
@@ -77,8 +63,7 @@ func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, 
 }
 
 // DeleteDeployment Deletes the given deployment
-func DeleteDeployment(deployment map[string]string) error {
-	_, deploymentId := GetDeploymentNameAndId(deployment)
+func DeleteDeployment(deploymentId string) error {
 	return v2Components.PDS.DeleteDeployment(deploymentId)
 }
 
@@ -107,14 +92,12 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 				},
 				Config: automationModels.V1Config1{
 					References: automationModels.Reference{
-						TargetClusterId: targetClusterId,
-						ProjectId:       &projectId,
-						ImageId:         &imageId,
+						ImageId: &imageId,
 					},
 					TlsEnabled: nil,
 					DeploymentTopologies: []automationModels.DeploymentTopology{
 						{
-							Name:        StringPtr("pds-qa-test-topology"),
+							Name:        StringPtr(DEPLOYMENT_TOPOLOGY),
 							Replicas:    intToPointerString(ds.Replicas),
 							ServiceType: StringPtr(ds.ServiceType),
 							ResourceSettings: &automationModels.PdsTemplates{
