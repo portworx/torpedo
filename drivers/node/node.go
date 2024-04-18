@@ -521,3 +521,10 @@ func (d *notSupportedDriver) GetSupportedDriveTypes() ([]string, error) {
 		Operation: "GetSupportedDriveTypes()",
 	}
 }
+
+func (d *notSupportedDriver) MoveDisks(sourceNode Node, targetNode Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "MoveDisks()",
+	}
+}
