@@ -479,7 +479,7 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestart}", func() {
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
-	var testrailID = 296732
+	var testrailID = 297580
 	var runID int
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedServiceNodeDecomssion", "Legacy Shared to Sharedv4 Service Functional Test with Node Decommission", nil, testrailID)
@@ -531,8 +531,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 			for _, ctx := range contexts {
 				checkMapOfPods(podMap, ctx)
 			}
-			// Don't validate apps.
-			// ValidateApplications(contexts)
+			ValidateApplications(contexts)
 		})
 		// Don't Fail any of the below steps.
 		stepLog = fmt.Sprintf("Rejoin node %s", pxNode.Name)
@@ -633,7 +632,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator}", func() {
 		setMigrateLegacySharedToSharedv4Service(true)
 		time.Sleep(120 * time.Second) // sleep 2 minutes.
 
-		stepLog := "Decommission Node while Migration is in Progress"
+		stepLog := "Restart Node while Migration is in Progress"
 		Step(stepLog, func() {
 			err := Inst().V.RestartDriver(*nodeForPxRestart, nil)
 			log.FailOnError(err, fmt.Sprintf("error in Restart PX Driver of node %s ", nodeForPxRestart.Name))
@@ -660,7 +659,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator}", func() {
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() {
-	var testrailID = 0
+	var testrailID = 296731
 	var runID int
 	podMap := make(map[types.UID]bool)
 	volMap := make(map[string]bool)
@@ -715,7 +714,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() 
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServicePxRestartAll}", func() {
-	var testrailID = 296732
+	var testrailID = 297579
 	var runID int
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumePxRestartAll", "Legacy Shared to Sharedv4 Service Functional Test with restart px on all nodes", nil, testrailID)
@@ -778,7 +777,7 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestartAll}", func() {
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServicePxKill}", func() {
-	var testrailID = 296732
+	var testrailID = 297579
 	var runID int
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumePxkill", "Legacy Shared to Sharedv4 Service Functional Test with restart px kill on one nodes", nil, testrailID)
