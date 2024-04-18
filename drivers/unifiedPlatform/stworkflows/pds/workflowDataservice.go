@@ -25,13 +25,15 @@ type WorkflowDataService struct {
 }
 
 const (
-	ValidatePdsDeployment = "VALIDATE_PDS_DEPLOYMENT"
-	ValidatePdsWorkloads  = "VALIDATE_PDS_WORKLOADS"
-	PlatformNamespace     = "px-system"
+	ValidatePdsDeployment      = "VALIDATE_PDS_DEPLOYMENT"
+	ValidatePdsWorkloads       = "VALIDATE_PDS_WORKLOADS"
+	PlatformNamespace          = "px-system"
+	ValidateDeploymentDeletion = "VALIDATE_DELETE_DEPLOYMENT"
 )
 
 func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService, image, version string) (*automationModels.PDSDeploymentResponse, error) {
-	namespace := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
+	namespaceId := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
+	namespaceName := wfDataService.NamespaceName
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
 	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
@@ -45,7 +47,7 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	}
 
 	log.Debugf("DS Image id-[%s]", imageId)
-	deployment, err := dslibs.DeployDataService(ds, namespace, projectId, targetClusterId, imageId, appConfigId, resConfigId, stConfigId)
+	deployment, err := dslibs.DeployDataService(ds, namespaceId, projectId, targetClusterId, imageId, appConfigId, resConfigId, stConfigId)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +57,7 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 			log.Infof("Skipping DataService Deployment  Validation")
 		}
 	} else {
-		err = wfDataService.ValidatePdsDataServiceDeployments(deployment, ds, resConfigId, stConfigId, namespace, version, image)
+		err = wfDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, resConfigId, stConfigId, namespaceName, version, image)
 		if err != nil {
 			return nil, err
 		}
@@ -65,7 +67,8 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 }
 
 func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataService, deploymentId, image, version string) (*automationModels.PDSDeploymentResponse, error) {
-	namespace := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
+	namespaceId := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
+	namespaceName := wfDataService.NamespaceName
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
 	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
@@ -78,7 +81,7 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 		return nil, err
 	}
 
-	deployment, err := dslibs.UpdateDataService(ds, deploymentId, namespace, projectId, imageId, appConfigId, resConfigId, stConfigId)
+	deployment, err := dslibs.UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, resConfigId, stConfigId)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +93,7 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 			log.Infof("Skipping Validation")
 		}
 	} else {
-		err = wfDataService.ValidatePdsDataServiceDeployments(deployment, ds, resConfigId, stConfigId, namespace, version, image)
+		err = wfDataService.ValidatePdsDataServiceDeployments(*deployment.Update.Config.DeploymentMeta.Uid, ds, ds.ScaleReplicas, resConfigId, stConfigId, namespaceName, version, image)
 		if err != nil {
 			return nil, err
 		}
@@ -99,25 +102,26 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 }
 
 // ValidatePdsDataServiceDeployments validates the pds deployments resource, storage, deployment configurations and endpoints
-func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(deployment *automationModels.PDSDeploymentResponse, ds dslibs.PDSDataService, resConfigId, stConfigId, namespace, version, image string) error {
+func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(deploymentId string, ds dslibs.PDSDataService, replicas int, resConfigId, stConfigId, namespace, version, image string) error {
+
+	// Validate the sts object and health of the pds deployment
+	err := dslibs.ValidateDataServiceDeploymentHealth(deploymentId)
+	if err != nil {
+		return err
+	}
+
 	// Get the actual DeploymentName
-	_, deploymentName, err := dslibs.GetDeployment(*deployment.Create.Meta.Uid)
+	_, deploymentName, err := dslibs.GetDeployment(deploymentId)
 	if err != nil {
 		return err
 	}
 
 	// Update the actual deploymentName with deploymentId
 	wfDataService.DataServiceDeployment = make(map[string]string)
-	wfDataService.DataServiceDeployment[deploymentName] = *deployment.Create.Meta.Uid
-
-	// Validate the sts object and health of the pds deployment
-	err = dslibs.ValidateDataServiceDeploymentHealth(*deployment.Create.Meta.Uid, namespace)
-	if err != nil {
-		return err
-	}
+	wfDataService.DataServiceDeployment[deploymentName] = deploymentId
 
 	// Validate if the dns endpoint is reachable
-	err = wfDataService.ValidateDNSEndpoint(*deployment.Create.Meta.Uid)
+	err = wfDataService.ValidateDNSEndpoint(deploymentId)
 	if err != nil {
 		return err
 	}
@@ -130,7 +134,7 @@ func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(depl
 
 	// Validate deployment resources
 	dataServiceVersionBuild := version + "-" + image
-	wfDataService.ValidateDeploymentResources(resourceTemplateOps, storageOps, DeploymentConfigs, ds.Replicas, dataServiceVersionBuild)
+	wfDataService.ValidateDeploymentResources(resourceTemplateOps, storageOps, DeploymentConfigs, replicas, dataServiceVersionBuild)
 
 	return nil
 }
@@ -164,8 +168,22 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deployment ma
 
 }
 
-func (wfDataService *WorkflowDataService) DeleteDeployment() error {
-	return dslibs.DeleteDeployment(wfDataService.DataServiceDeployment)
+func (wfDataService *WorkflowDataService) DeleteDeployment(deploymentId string) error {
+	err := dslibs.DeleteDeployment(deploymentId)
+	if err != nil {
+		return err
+	}
+	if value, ok := wfDataService.SkipValidatation[ValidateDeploymentDeletion]; ok {
+		if value == true {
+			log.Infof("Skipping validation of dataservice deletion")
+		}
+	} else {
+		err = dslibs.ValidateDeploymentIsDeleted(deploymentId)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId string) error {

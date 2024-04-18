@@ -54,18 +54,19 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		}
 
 		defer func() {
-			Step("Delete DataServiceDeployment", func() {
-				err := workflowDataService.DeleteDeployment()
-				log.FailOnError(err, "Error while deleting dataservice")
-			})
-		}()
-
-		defer func() {
 			Step("Delete created Templates", func() {
 				err := workFlowTemplates.DeleteCreatedCustomPdsTemplates(tempList)
 				log.FailOnError(err, "Unable to delete Custom Templates for PDS")
 			})
 		}()
+
+		defer func() {
+			Step("Delete DataServiceDeployment", func() {
+				err := workflowDataService.DeleteDeployment(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while deleting dataservice")
+			})
+		}()
+
 		stepLog := "Running Workloads before taking backups"
 		Step(stepLog, func() {
 			err := workflowDataService.RunDataServiceWorkloads(NewPdsParams)

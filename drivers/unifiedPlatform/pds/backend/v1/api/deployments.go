@@ -26,7 +26,7 @@ func (ds *PDS_API_V1) GetDeployment(deploymentId string) (*automationModels.PDSD
 
 	dsModel, res, err := dsClient.DeploymentServiceGetDeployment(ctx, deploymentId).Execute()
 	if err != nil || res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
+		return nil, fmt.Errorf("Error when calling `DeploymentServiceGetDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}
 
 	err = utilities.CopyStruct(dsModel, &dsResponse.Get)
@@ -95,7 +95,6 @@ func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *automationModels
 	fmt.Println("Storage Template Id: ", *DeploymentRequest.Config.DeploymentTopologies[0].StorageOptions.Id)
 	fmt.Println("App Template Id: ", *DeploymentRequest.Config.DeploymentTopologies[0].ServiceConfigurations.Id)
 	fmt.Println("Resource Template Id: ", *DeploymentRequest.Config.DeploymentTopologies[0].ResourceSettings.Id)
-	fmt.Println("TargetClusterId: ", *DeploymentRequest.Config.References.TargetClusterId)
 
 	DeploymentRequestBody := deploymentV1.DeploymentServiceCreateDeploymentBody{
 		ProjectId:  &createDeploymentRequest.Create.ProjectID,

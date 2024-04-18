@@ -34,33 +34,23 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 
 		workflowRestore.Destination = WorkflowNamespace
 		workflowRestore.WorkflowProject = WorkflowProject
+		workflowDataservice.Dash = dash
 		restoreNamespace = "pds-restore-namespace-" + RandomString(5)
 	})
 
 	It("Deploy data services and perform backup and restore on the same cluster", func() {
-
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			Step("Deploy dataservice", func() {
-
 				workFlowTemplates.Platform = WorkflowPlatform
-
 				workflowDataservice.Namespace = WorkflowNamespace
 				workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
 
-				//TODO: Hardcoded values needs to be removed once templates are fixed
+				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+				log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
-				//serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
-				//log.FailOnError(err, "Unable to create Custom Templates for PDS")
-
-				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = "tmpl:d1ed6519-fe79-463f-8d8f-8e6aaedb2f79"
-				workflowDataservice.PDSTemplates.StorageTemplateId = "tmpl:a584ede7-811e-48bd-b000-ae799e3e084e"
-				workflowDataservice.PDSTemplates.ResourceTemplateId = "tmpl:04dab835-1fe2-4526-824f-d7a45694676c"
-
-				//workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
-				//workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
-				//workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
-
-				var err error
+				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+				workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+				workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 
 				deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while deploying ds")
@@ -153,6 +143,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 
 		workflowRestore.Destination = WorkflowNamespace
 		workflowRestore.WorkflowProject = WorkflowProject
+		workflowDataservice.Dash = dash
 		restoreNamespace = "pds-restore-namespace-" + RandomString(5)
 	})
 
@@ -166,20 +157,12 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 				workflowDataservice.Namespace = WorkflowNamespace
 				workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
 
-				//TODO: Hardcoded values needs to be removed once templates are fixed
+				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+				log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
-				//serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
-				//log.FailOnError(err, "Unable to create Custom Templates for PDS")
-
-				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = "tmpl:d1ed6519-fe79-463f-8d8f-8e6aaedb2f79"
-				workflowDataservice.PDSTemplates.StorageTemplateId = "tmpl:a584ede7-811e-48bd-b000-ae799e3e084e"
-				workflowDataservice.PDSTemplates.ResourceTemplateId = "tmpl:04dab835-1fe2-4526-824f-d7a45694676c"
-
-				//workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
-				//workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
-				//workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
-
-				var err error
+				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+				workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+				workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 
 				deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while deploying ds")
@@ -295,6 +278,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 
 		workflowRestore.Destination = WorkflowNamespace
 		workflowRestore.WorkflowProject = WorkflowProject
+		workflowDataservice.Dash = dash
 		restoreNamespace = "pds-restore-namespace-" + RandomString(5)
 		destinationProject.Platform = WorkflowPlatform
 	})
@@ -309,20 +293,12 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 				workflowDataservice.Namespace = WorkflowNamespace
 				workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
 
-				//TODO: Hardcoded values needs to be removed once templates are fixed
+				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+				log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
-				//serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
-				//log.FailOnError(err, "Unable to create Custom Templates for PDS")
-
-				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = "tmpl:d1ed6519-fe79-463f-8d8f-8e6aaedb2f79"
-				workflowDataservice.PDSTemplates.StorageTemplateId = "tmpl:a584ede7-811e-48bd-b000-ae799e3e084e"
-				workflowDataservice.PDSTemplates.ResourceTemplateId = "tmpl:04dab835-1fe2-4526-824f-d7a45694676c"
-
-				//workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
-				//workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
-				//workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
-
-				var err error
+				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+				workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+				workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 
 				deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while deploying ds")
@@ -472,7 +448,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 
 		defer func() {
 			Step("Delete DataServiceDeployment", func() {
-				err := workflowDataservice.DeleteDeployment()
+				err := workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error while deleting dataservice")
 			})
 		}()
@@ -603,7 +579,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 
 		defer func() {
 			Step("Delete DataServiceDeployment", func() {
-				err := workflowDataService.DeleteDeployment()
+				err := workflowDataService.DeleteDeployment(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error while deleting dataservice")
 			})
 		}()
@@ -896,7 +872,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 	})
 
 	It("Delete DataServiceDeployment", func() {
-		err := workflowDataservice.DeleteDeployment()
+		err := workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
 		log.FailOnError(err, "Error while deleting data Service")
 	})
 
@@ -1022,7 +998,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 	})
 
 	It("Delete DataServiceDeployment", func() {
-		err := workflowDataservice.DeleteDeployment()
+		err := workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
 		log.FailOnError(err, "Error while deleting data Service")
 	})
 

@@ -33,6 +33,7 @@ var _ = BeforeSuite(func() {
 		PdsLabels["clusterType"] = infraParams.ClusterType
 
 		log.InfoD("Get Account ID")
+		//TODO: Get the accountID
 		AccID = "acc:8b6e5023-2ec9-474f-acda-7ab662987409"
 
 		err = platformUtils.InitUnifiedApiComponents(os.Getenv(EnvControlPlaneUrl), "")
@@ -140,9 +141,9 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	//TODO: Steps to delete Backup location, Target and Bucket
-	err := WorkflowNamespace.Purge()
-	log.FailOnError(err, "Unable to cleanup all namespaces")
-	log.InfoD("All namespaces cleaned up successfully")
+	//err := WorkflowNamespace.Purge()
+	//log.FailOnError(err, "Unable to cleanup all namespaces")
+	//log.InfoD("All namespaces cleaned up successfully")
 
 	log.InfoD("Test Finished")
 })
