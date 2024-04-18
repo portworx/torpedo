@@ -6482,6 +6482,11 @@ func (k *K8s) ValidateAutopilotEvents(ctx *scheduler.Context) error {
 		eventMap[event.Message] = event.Count
 	}
 
+	eventTimeMap := make(map[string]time.Time)
+	for _, event := range k.GetEvents()["AutopilotRule"] {
+		eventTimeMap[event.Message] = event.LastSeen.Time
+	}
+
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 
@@ -6522,11 +6527,51 @@ func (k *K8s) ValidateAutopilotEvents(ctx *scheduler.Context) error {
 					if err != nil {
 						return err
 					}
+					err = k.calculateLatency(objectToValidateName, eventTimeMap, int32(resizeCount))
 				}
 			}
 		}
 	}
 	log.Infof("Finished validating events")
+	return nil
+}
+func (k *K8s) calculateLatency(objName string, events map[string]time.Time, count int32) error {
+	log.Debugf("calculate latency between each object state change")
+	if count == 0 {
+		// nothing to validate
+		return nil
+	}
+	expectedEvents := map[string]int32{
+		fmt.Sprintf("rule: %s transition from %s => %s", objName, apapi.RuleStateInit, apapi.RuleStateNormal):                                  1,
+		fmt.Sprintf("rule: %s transition from %s => %s", objName, apapi.RuleStateNormal, apapi.RuleStateTriggered):                             count,
+		fmt.Sprintf("rule: %s transition from %s => %s", objName, apapi.RuleStateTriggered, apapi.RuleStateActiveActionsPending):               count,
+		fmt.Sprintf("rule: %s transition from %s => %s", objName, apapi.RuleStateActiveActionsPending, apapi.RuleStateActiveActionsInProgress): count,
+		fmt.Sprintf("rule: %s transition from %s => %s", objName, apapi.RuleStateActiveActionsInProgress, apapi.RuleStateActiveActionsTaken):   count,
+		fmt.Sprintf("rule: %s transition from %s => %s", objName, apapi.RuleStateActiveActionsTaken, apapi.RuleStateNormal):                    count,
+	}
+	for message, v := range expectedEvents {
+		log.Debugf("expected event %s %d times", message, v)
+	}
+
+	var mevents []string
+	for message := range events {
+		mevents = append(mevents, message)
+	}
+
+	var times []time.Time
+	for _, v := range events {
+		times = append(times, v)
+	}
+	var latencies []time.Duration
+	for i := 0; i < len(times)-1; i++ {
+		latencies = append(latencies, times[i+1].Sub(times[i]))
+	}
+	for i, latency := range latencies {
+		if latency > time.Minute*10 {
+
+			return fmt.Errorf("latency between event %s and %s is %v ", mevents[i], mevents[i+1], latency)
+		}
+	}
 	return nil
 }
 
