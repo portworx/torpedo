@@ -504,56 +504,78 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 		return err
 	}
 
-	var disks []*types.VirtualDisk
+	// Detach disks from source VM and attach to destination VM
 	for _, device := range devices {
-		if disk, ok := device.(*types.VirtualDisk); ok {
-			// skip the first/root disk
-			if *disk.UnitNumber == 0 {
-				continue
-			}
-			disks = append(disks, disk)
-
-			config := &types.VirtualMachineConfigSpec{
-				DeviceChange: []types.BaseVirtualDeviceConfigSpec{
-					&types.VirtualDeviceConfigSpec{
-						Operation: types.VirtualDeviceConfigSpecOperationRemove,
-						Device:    disk,
-					},
-				},
-			}
-
-			event, err := sourceVM.Reconfigure(v.ctx, *config)
-			if err != nil {
-				return err
-			}
-
-			err = event.Wait(v.ctx)
-			if err != nil {
-				return err
+		switch device.(type) {
+		case *types.VirtualDisk:
+			disk := device.(*types.VirtualDisk)
+			if *disk.UnitNumber != 0 { // Exclude root disk
+				err = sourceVM.RemoveDevice(v.ctx, true, disk)
+				if err != nil {
+					fmt.Printf("Failed to remove disk from source VM: %s\n", err)
+					continue
+				}
+				// Attach disk to destination VM
+				err = targetVM.AddDevice(v.ctx, disk)
+				if err != nil {
+					fmt.Printf("Failed to attach disk to destination VM: %s\n", err)
+					continue
+				}
+				fmt.Printf("Disk %s detached from source VM and attached to destination VM.\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label)
 			}
 		}
 	}
-
-	for _, disk := range disks {
-		config := &types.VirtualMachineConfigSpec{
-			DeviceChange: []types.BaseVirtualDeviceConfigSpec{
-				&types.VirtualDeviceConfigSpec{
-					Operation: types.VirtualDeviceConfigSpecOperationAdd,
-					Device:    disk,
-				},
-			},
-		}
-
-		event, err := targetVM.Reconfigure(v.ctx, *config)
-		if err != nil {
-			return err
-		}
-
-		err = event.Wait(v.ctx)
-		if err != nil {
-			return err
-		}
-	}
+	//
+	//var disks []*types.VirtualDisk
+	//for _, device := range devices {
+	//	if disk, ok := device.(*types.VirtualDisk); ok {
+	//		// skip the first/root disk
+	//		if *disk.UnitNumber == 0 {
+	//			continue
+	//		}
+	//		disks = append(disks, disk)
+	//
+	//		config := &types.VirtualMachineConfigSpec{
+	//			DeviceChange: []types.BaseVirtualDeviceConfigSpec{
+	//				&types.VirtualDeviceConfigSpec{
+	//					Operation: types.VirtualDeviceConfigSpecOperationRemove,
+	//					Device:    disk,
+	//				},
+	//			},
+	//		}
+	//
+	//		event, err := sourceVM.Reconfigure(v.ctx, *config)
+	//		if err != nil {
+	//			return err
+	//		}
+	//
+	//		err = event.Wait(v.ctx)
+	//		if err != nil {
+	//			return err
+	//		}
+	//	}
+	//}
+	//
+	//for _, disk := range disks {
+	//	config := &types.VirtualMachineConfigSpec{
+	//		DeviceChange: []types.BaseVirtualDeviceConfigSpec{
+	//			&types.VirtualDeviceConfigSpec{
+	//				Operation: types.VirtualDeviceConfigSpecOperationAdd,
+	//				Device:    disk,
+	//			},
+	//		},
+	//	}
+	//
+	//	event, err := targetVM.Reconfigure(v.ctx, *config)
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	err = event.Wait(v.ctx)
+	//	if err != nil {
+	//		return err
+	//	}
+	//}
 
 	return nil
 }
