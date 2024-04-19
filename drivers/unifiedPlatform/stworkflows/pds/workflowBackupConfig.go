@@ -74,15 +74,17 @@ func (backupConfig WorkflowPDSBackupConfig) ListBackupConfig(tenantId string) (*
 }
 
 // Purge deletes all the backup config created during automation
-func (backupConfig WorkflowPDSBackupConfig) Purge() error {
+func (backupConfig WorkflowPDSBackupConfig) Purge(ignoreError bool) error {
 
 	log.Infof("Total number of backup configs found under [%s] are [%d]", backupConfig.WorkflowDataService.Namespace.TargetCluster.Project.Platform.TenantId, len(backupConfig.Backups))
 
 	for _, eachBackupConfig := range backupConfig.Backups {
 		log.Infof("Backup to be deleted - [%s]", *eachBackupConfig.Meta.Uid)
 		err := pdslibs.DeleteBackupConfig(*eachBackupConfig.Meta.Uid)
-		if err != nil && !strings.Contains(err.Error(), "404 Not Found") {
-			return err
+		if err != nil {
+			if ignoreError && !strings.Contains(err.Error(), "404 Not Found") {
+				return err
+			}
 		}
 		err = backupConfig.ValidateBackupConfigDeletion(*eachBackupConfig.Meta.Uid)
 		if err != nil {

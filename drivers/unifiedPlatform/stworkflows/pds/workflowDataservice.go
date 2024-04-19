@@ -139,16 +139,6 @@ func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(depl
 	return nil
 }
 
-// GetDeploymentPodName gets the pod name for the deployment
-func (wfDataService *WorkflowDataService) GetDeploymentPodName(deploymentId string) (string, error) {
-	_, podName, err := dslibs.GetDeployment(deploymentId)
-	if err != nil {
-		return "", err
-	}
-
-	return podName, nil
-}
-
 func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deployment map[string]string, dataServiceName, resourceTemplateID, storageTemplateID, namespace string) (dslibs.ResourceSettingTemplate, dslibs.StorageOps, dslibs.DeploymentConfig, error) {
 	var (
 		resourceTemp dslibs.ResourceSettingTemplate
@@ -159,7 +149,7 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deployment ma
 	deploymentName, deploymentId := GetDeploymentNameAndId(deployment)
 	log.Debugf("deployment Name [%s] and Id [%s]", deploymentName, deploymentId)
 
-	podName, err := wfDataService.GetDeploymentPodName(deploymentId)
+	_, podName, err := dslibs.GetDeployment(deploymentId)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
