@@ -625,12 +625,12 @@ func (v *vsphere) getDatastoreForDisk(ctx context.Context, vm *object.VirtualMac
 			break
 		}
 	}
-
+	fmt.Printf("Datastore reference: %T, Datastore.Value:%s\n", datastoreRef, datastoreRef.Value)
 	finder, err := v.getVMFinder()
 	datastore, err := finder.Datastore(ctx, datastoreRef.Value)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("Type of datastore: %T, Type of DataStore.Reference: %T\n", datastore, datastoreRef.Reference())
+	fmt.Printf("Type of datastore: %T\n", datastore)
 	return datastore, nil
 }
