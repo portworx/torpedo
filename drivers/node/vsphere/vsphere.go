@@ -544,6 +544,7 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 				//}
 				//fmt.Printf("Datastore for disk %s is %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label, datastore.Name())
 				//Attach disk to destination VM
+				fmt.Println("Printing disk details: ", disk.DiskObjectId, disk.ControllerKey, *disk.UnitNumber, datastore.Name())
 				err = targetVM.AttachDisk(v.ctx, disk.DiskObjectId, datastore, disk.ControllerKey, *disk.UnitNumber)
 				if err != nil {
 					fmt.Printf("Failed to attach disk to destination VM: %s\n", err)
