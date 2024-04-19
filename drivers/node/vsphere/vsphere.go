@@ -507,16 +507,19 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 	// Detach disks from source VM and attach to destination VM
 	for _, device := range devices {
 		switch device.(type) {
-		case *types.VirtualDisk:
+		case *types.VirtualDevice:
 			disk := device.(*types.VirtualDisk)
 			if *disk.UnitNumber != 0 { // Exclude root disk
-				err = sourceVM.RemoveDevice(v.ctx, true, disk)
+				err = sourceVM.DetachDisk(v.ctx, disk.DiskObjectId)
 				if err != nil {
 					fmt.Printf("Failed to remove disk from source VM: %s\n", err)
 					continue
 				}
-				// Attach disk to destination VM
-				err = targetVM.AddDevice(v.ctx, disk)
+
+				// Fetch the datastore of the disk
+				datastore, err := getDatastoreForDisk(v.ctx, sourceVM, disk)
+				//Attach disk to destination VM
+				err = targetVM.AttachDisk(v.ctx, disk.DiskObjectId, datastore, disk.ControllerKey, *disk.UnitNumber)
 				if err != nil {
 					fmt.Printf("Failed to attach disk to destination VM: %s\n", err)
 					continue
@@ -525,7 +528,30 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 			}
 		}
 	}
-	//
+
+	//for _, device := range devices {
+	//	switch device.(type) {
+	//	case *types.VirtualDisk:
+	//		disk := device.(*types.VirtualDisk)
+	//		if *disk.UnitNumber != 0 { // Exclude root disk
+	//			err = sourceVM.RemoveDevice(v.ctx, true, disk)
+	//			if err != nil {
+	//				fmt.Printf("Failed to remove disk from source VM: %s\n", err)
+	//				continue
+	//			}
+	//			time.Sleep(30 * time.Second)
+	//			// Attach disk to destination VM
+	//			err = targetVM.AddDevice(v.ctx, disk)
+	//			if err != nil {
+	//				fmt.Printf("Failed to attach disk to destination VM: %s\n", err)
+	//				continue
+	//			}
+	//			time.Sleep(30 * time.Second)
+	//			fmt.Printf("Disk %s detached from source VM and attached to destination VM.\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label)
+	//		}
+	//	}
+	//}
+
 	//var disks []*types.VirtualDisk
 	//for _, device := range devices {
 	//	if disk, ok := device.(*types.VirtualDisk); ok {
@@ -578,4 +604,25 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 	//}
 
 	return nil
+}
+
+func getDatastoreForDisk(ctx context.Context, vm *object.VirtualMachine, disk *types.VirtualDisk) (*object.Datastore, error) {
+	var datastoreRef types.ManagedObjectReference
+	devices, err := vm.Device(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, device := range devices {
+		if dev, ok := device.(*types.VirtualDisk); ok && dev.Key == disk.Key {
+			datastoreRef = *device.GetVirtualDevice().Backing.(*types.VirtualDiskFlatVer2BackingInfo).GetVirtualDeviceFileBackingInfo().Datastore
+			break
+		}
+	}
+
+	finder := find.NewFinder(vm.Client(), true)
+	datastore, err := finder.Datastore(ctx, datastoreRef.Value)
+	if err != nil {
+		return nil, err
+	}
+	return datastore, nil
 }
