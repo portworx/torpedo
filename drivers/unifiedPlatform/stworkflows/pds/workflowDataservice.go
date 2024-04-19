@@ -356,3 +356,14 @@ func (wfDataService *WorkflowDataService) DeletePDSPods() error {
 	}
 	return nil
 }
+
+func (wfDataService *WorkflowDataService) DeletePdsPods(podName []string, pdsNamespace string) error {
+	// GetPDSPods returns Name of the pds pod
+	for _, podname := range podName {
+		agentPdsPod := utils.FetchPDSPods(podname, pdsNamespace)
+		err := utils.DeleteK8sPods(agentPdsPod.Name, pdsNamespace, wfDataService.Namespace.TargetCluster.KubeConfig)
+		log.Errorf("failed While deleting [%v] pod", agentPdsPod.Name)
+		return err
+	}
+	return nil
+}

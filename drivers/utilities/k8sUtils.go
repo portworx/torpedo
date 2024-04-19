@@ -292,3 +292,18 @@ func ValidatePods(namespace string, podName string) error {
 	}
 	return nil
 }
+
+func FetchPDSPods(podName string, pdsNamespace string) corev1.Pod {
+	var pdsAgentpod corev1.Pod
+	log.InfoD("Get agent pod from %v namespace", pdsNamespace)
+	podList, err := GetPods(pdsNamespace)
+	log.FailOnError(err, "Error while getting pods")
+	for _, pod := range podList.Items {
+		if strings.Contains(pod.Name, podName) {
+			log.Infof("%v", pod.Name)
+			pdsAgentpod = pod
+			break
+		}
+	}
+	return pdsAgentpod
+}
