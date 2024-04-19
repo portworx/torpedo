@@ -623,9 +623,10 @@ func getDatastoreForDisk(ctx context.Context, vm *object.VirtualMachine, disk *t
 	}
 
 	finder := find.NewFinder(vm.Client(), true)
-	datastore, err := finder.Datastore(ctx, datastoreRef.Value)
+	datastore, err := finder.Datastore(ctx, datastoreRef.Reference().Value)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Printf("Type of datastore: %T, Type of DataStore.Reference: %T\n", datastore, datastoreRef.Reference())
 	return datastore, nil
 }
