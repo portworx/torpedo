@@ -22,7 +22,8 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		workflowRestore      pds.WorkflowPDSRestore
 		workflowBackup       pds.WorkflowPDSBackup
 		workFlowTemplates    pds.WorkflowPDSTemplates
-		deployment           *automationModels.PDSDeploymentResponse
+		// deployment           *automationModels.PDSDeploymentResponse
+		deploymentName string
 		//latestBackupUid      string
 		pdsBackupConfigName string
 		//restoreNamespace     string
@@ -43,16 +44,22 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 				workFlowTemplates.Platform = WorkflowPlatform
 				workflowDataservice.Namespace = WorkflowNamespace
 				workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
+				//
+				//serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+				//log.FailOnError(err, "Unable to create Custom Templates for PDS")
+				//
+				//workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+				//workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+				//workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 
-				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
-				log.FailOnError(err, "Unable to create Custom Templates for PDS")
+				//deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
 
-				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
-				workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
-				workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+				deploymentName = "pdsqa"
+				workflowDataservice.DataServiceDeployment[deploymentName] = "dep:7a436938-7087-42f3-a041-855471675604"
 
-				deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
-				log.FailOnError(err, "Error while deploying ds")
+				log.Infof("DS Name - [%s]", ds.Name)
+
+				// log.FailOnError(err, "Error while deploying ds")
 				log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
 
 				//stepLog := "Running Workloads on deployment"
@@ -67,7 +74,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 				workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
 				pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
 				workflowBackUpConfig.Backups = make(map[string]automationModels.V1BackupConfig)
-				bkpConfigResponse, err := workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
+				bkpConfigResponse, err := workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, deploymentName)
 				log.FailOnError(err, "Error occured while creating backupConfig")
 				log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", bkpConfigResponse.Create.Meta.Name, bkpConfigResponse.Create.Meta.Uid)
 				log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
@@ -76,7 +83,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 			Step("Get the latest backup detail for the deployment", func() {
 				workflowBackup.WorkflowDataService = workflowDataservice
 				log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
-				backupResponse, err := workflowBackup.GetLatestBackup(*deployment.Create.Meta.Name)
+				backupResponse, err := workflowBackup.GetLatestBackup(deploymentName)
 				log.FailOnError(err, "Error occured while creating backup")
 				// latestBackupUid = *backupResponse.Meta.Uid
 				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
@@ -85,9 +92,9 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 			})
 
 			Step("Purging the backups", func() {
-				err := workflowBackup.Purge(*deployment.Create.Meta.Name)
+				err := workflowBackup.Purge(deploymentName)
 				log.FailOnError(err, "Failed while deleting the backups")
-				log.InfoD("All backups deleted successsfully for [%s]", *deployment.Create.Meta.Name)
+				log.InfoD("All backups deleted successsfully for [%s]", deploymentName)
 			})
 
 			//Step("Create a new namespace for restore", func() {
