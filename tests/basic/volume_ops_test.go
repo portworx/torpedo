@@ -3278,6 +3278,8 @@ var _ = Describe("{VolumePreCheck}", func() {
 			log.InfoD("Test the ha-update sources option with a valid uuid of the node on which the repl of the volume is present")
 			validUuidcmd := fmt.Sprintf("v ha-update %s --repl 2 --sources %s", volName, selectedNodeId)
 			_, err = runPxctlCommand(validUuidcmd, node.GetStorageDriverNodes()[0], nil)
+			log.FailOnError(err, "Failed to update volume: %v", volName)
+			log.InfoD("Successfully updated volume: %v", volName)
 
 			log.InfoD("Delete the volume that is created for the test")
 			deleteVolumeCmd := fmt.Sprintf("volume delete %s", volName)
