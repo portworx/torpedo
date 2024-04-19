@@ -3237,7 +3237,7 @@ var _ = Describe("{VolumePreCheck}", func() {
 			id := uuid.New()
 			volName := fmt.Sprintf("volume_%s", id.String()[:8])
 			log.InfoD("Create a volume with a min size on node [%s]", selectedNode.Name)
-			basicVolumeCreate := fmt.Sprintf("volume create --nodes %s %s", selectedNode.Id, volName)
+			basicVolumeCreate := fmt.Sprintf("volume create -a 2 --nodes %s %s", selectedNode.Id, volName)
 			_, err := runPxctlCommand(basicVolumeCreate, *selectedNode, nil)
 			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s] on node %s", volName, selectedNode.Name)
 			log.InfoD("Base Volume creation with volume name %s successful", volName)
