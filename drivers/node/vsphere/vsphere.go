@@ -505,54 +505,54 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 	}
 
 	// Detach disks from source VM and attach to destination VM
-	//for _, device := range devices {
-	//	switch device.(type) {
-	//	case *types.VirtualDevice:
-	//		disk := device.(*types.VirtualDisk)
-	//		if *disk.UnitNumber != 0 { // Exclude root disk
-	//			fmt.Printf("Detaching disk %s from source VM and attaching to destination VM.\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label)
-	//			err = sourceVM.RemoveDevice(v.ctx, true, disk)
-	//			if err != nil {
-	//				fmt.Printf("Failed to remove disk from source VM: %s\n", err)
-	//				continue
-	//			}
-	//
-	//			// Fetch the datastore of the disk
-	//			datastore, err := getDatastoreForDisk(v.ctx, sourceVM, disk)
-	//			fmt.Printf("Datastore for disk %s is %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label, datastore.Name())
-	//			//Attach disk to destination VM
-	//			err = targetVM.AttachDisk(v.ctx, disk.DiskObjectId, datastore, disk.ControllerKey, *disk.UnitNumber)
-	//			if err != nil {
-	//				fmt.Printf("Failed to attach disk to destination VM: %s\n", err)
-	//				continue
-	//			}
-	//			fmt.Printf("Disk %s detached from source VM and attached to destination VM.\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label)
-	//		}
-	//	}
-	//}
-
 	for _, device := range devices {
 		switch device.(type) {
 		case *types.VirtualDisk:
 			disk := device.(*types.VirtualDisk)
 			if *disk.UnitNumber != 0 { // Exclude root disk
-				err = sourceVM.RemoveDevice(v.ctx, true, disk)
+				fmt.Printf("Detaching disk %s from source VM and attaching to destination VM.\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label)
+				err = sourceVM.DetachDisk(v.ctx, disk.DiskObjectId)
 				if err != nil {
 					fmt.Printf("Failed to remove disk from source VM: %s\n", err)
 					continue
 				}
-				time.Sleep(30 * time.Second)
-				// Attach disk to destination VM
-				err = targetVM.AddDevice(v.ctx, disk)
+
+				// Fetch the datastore of the disk
+				datastore, err := getDatastoreForDisk(v.ctx, sourceVM, disk)
+				fmt.Printf("Datastore for disk %s is %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label, datastore.Name())
+				//Attach disk to destination VM
+				err = targetVM.AttachDisk(v.ctx, disk.DiskObjectId, datastore, disk.ControllerKey, *disk.UnitNumber)
 				if err != nil {
 					fmt.Printf("Failed to attach disk to destination VM: %s\n", err)
 					continue
 				}
-				time.Sleep(30 * time.Second)
 				fmt.Printf("Disk %s detached from source VM and attached to destination VM.\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label)
 			}
 		}
 	}
+	//
+	//for _, device := range devices {
+	//	switch device.(type) {
+	//	case *types.VirtualDisk:
+	//		disk := device.(*types.VirtualDisk)
+	//		if *disk.UnitNumber != 0 { // Exclude root disk
+	//			err = sourceVM.RemoveDevice(v.ctx, true, disk)
+	//			if err != nil {
+	//				fmt.Printf("Failed to remove disk from source VM: %s\n", err)
+	//				continue
+	//			}
+	//			time.Sleep(30 * time.Second)
+	//			// Attach disk to destination VM
+	//			err = targetVM.AddDevice(v.ctx, disk)
+	//			if err != nil {
+	//				fmt.Printf("Failed to attach disk to destination VM: %s\n", err)
+	//				continue
+	//			}
+	//			time.Sleep(30 * time.Second)
+	//			fmt.Printf("Disk %s detached from source VM and attached to destination VM.\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label)
+	//		}
+	//	}
+	//}
 
 	//var disks []*types.VirtualDisk
 	//for _, device := range devices {
