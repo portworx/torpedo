@@ -518,7 +518,7 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 				}
 				time.Sleep(30 * time.Second)
 				// Fetch the datastore of the disk
-				datastore, err := getDatastoreForDisk(v.ctx, sourceVM, disk)
+				datastore, err := v.getDatastoreForDisk(v.ctx, sourceVM, disk)
 				if err != nil {
 					fmt.Printf("Failed to get datastore for disk %s: %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label, err)
 					continue
@@ -612,7 +612,7 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 	return nil
 }
 
-func getDatastoreForDisk(ctx context.Context, vm *object.VirtualMachine, disk *types.VirtualDisk) (*object.Datastore, error) {
+func (v *vsphere) getDatastoreForDisk(ctx context.Context, vm *object.VirtualMachine, disk *types.VirtualDisk) (*object.Datastore, error) {
 	fmt.Printf("Getting datastore for disk %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label)
 	var datastoreRef types.ManagedObjectReference
 	devices, err := vm.Device(ctx)
@@ -626,7 +626,7 @@ func getDatastoreForDisk(ctx context.Context, vm *object.VirtualMachine, disk *t
 		}
 	}
 
-	finder := find.NewFinder(vm.Client(), true)
+	finder, err := v.getVMFinder()
 	datastore, err := finder.Datastore(ctx, datastoreRef.Value)
 	if err != nil {
 		return nil, err
