@@ -518,36 +518,55 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 				}
 				time.Sleep(30 * time.Second)
 				// Fetch the datastore of the disk
+				fileName := disk.Backing.(*types.VirtualDiskFlatVer2BackingInfo).FileName
+				fmt.Printf("Filename: %s\n", fileName)
+				pattern := `\[(.*?)\]`
+				regex, err := regexp.Compile(pattern)
+				if err != nil {
+					fmt.Printf("Failed to compile regex: %s\n", err)
+					return err
+				}
+				match := regex.FindStringSubmatch(fileName)
+				if len(match) < 2 {
+					fmt.Printf("no match found")
+				}
+				fmt.Printf("Match: %s\n", match[1])
+				f, err := v.getVMFinder()
+				datastore, err := f.Datastore(v.ctx, match[1])
+				if err != nil {
+					fmt.Printf("Failed to get datastore: %s\n", err)
+					return err
+				}
 				//datastore, err := v.getDatastoreForDisk(v.ctx, sourceVM, disk)
 				//if err != nil {
 				//	fmt.Printf("Failed to get datastore for disk %s: %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label, err)
 				//	continue
 				//}
-				////fmt.Printf("Datastore for disk %s is %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label, datastore.Name())
-				////Attach disk to destination VM
-				//err = targetVM.AttachDisk(v.ctx, disk.DiskObjectId, datastore, disk.ControllerKey, *disk.UnitNumber)
-				//if err != nil {
-				//	fmt.Printf("Failed to attach disk to destination VM: %s\n", err)
-				//	continue
+				//fmt.Printf("Datastore for disk %s is %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label, datastore.Name())
+				//Attach disk to destination VM
+				err = targetVM.AttachDisk(v.ctx, disk.DiskObjectId, datastore, disk.ControllerKey, *disk.UnitNumber)
+				if err != nil {
+					fmt.Printf("Failed to attach disk to destination VM: %s\n", err)
+					continue
+				}
+				//config := &types.VirtualMachineConfigSpec{
+				//	DeviceChange: []types.BaseVirtualDeviceConfigSpec{
+				//		&types.VirtualDeviceConfigSpec{
+				//			Operation:     types.VirtualDeviceConfigSpecOperationEdit,
+				//			Device:        disk,
+				//			FileOperation: types.VirtualDeviceConfigSpecFileOperationReplace,
+				//		},
+				//	},
 				//}
-				config := &types.VirtualMachineConfigSpec{
-					DeviceChange: []types.BaseVirtualDeviceConfigSpec{
-						&types.VirtualDeviceConfigSpec{
-							Operation:     types.VirtualDeviceConfigSpecOperationAdd,
-							Device:        disk,
-							FileOperation: types.VirtualDeviceConfigSpecFileOperationReplace,
-						},
-					},
-				}
-
-				event, err := targetVM.Reconfigure(v.ctx, *config)
-				if err != nil {
-					return err
-				}
-				err = event.Wait(v.ctx)
-				if err != nil {
-					return err
-				}
+				//
+				//event, err := targetVM.Reconfigure(v.ctx, *config)
+				//if err != nil {
+				//	return err
+				//}
+				//err = event.Wait(v.ctx)
+				//if err != nil {
+				//	return err
+				//}
 				fmt.Printf("Disk %s detached from source VM and attached to destination VM.\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label)
 			}
 		}
