@@ -519,7 +519,7 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 				time.Sleep(30 * time.Second)
 				// Fetch the datastore of the disk
 				datastore, err := getDatastoreForDisk(v.ctx, sourceVM, disk)
-				fmt.Printf("Datastore for disk %s is %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label, datastore.Name())
+				//fmt.Printf("Datastore for disk %s is %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label, datastore.Name())
 				//Attach disk to destination VM
 				err = targetVM.AttachDisk(v.ctx, disk.DiskObjectId, datastore, disk.ControllerKey, *disk.UnitNumber)
 				if err != nil {
@@ -609,6 +609,7 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 }
 
 func getDatastoreForDisk(ctx context.Context, vm *object.VirtualMachine, disk *types.VirtualDisk) (*object.Datastore, error) {
+	fmt.Printf("Getting datastore for disk %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label)
 	var datastoreRef types.ManagedObjectReference
 	devices, err := vm.Device(ctx)
 	if err != nil {
