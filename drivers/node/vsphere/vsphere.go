@@ -518,17 +518,35 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 				}
 				time.Sleep(30 * time.Second)
 				// Fetch the datastore of the disk
-				datastore, err := v.getDatastoreForDisk(v.ctx, sourceVM, disk)
-				if err != nil {
-					fmt.Printf("Failed to get datastore for disk %s: %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label, err)
-					continue
+				//datastore, err := v.getDatastoreForDisk(v.ctx, sourceVM, disk)
+				//if err != nil {
+				//	fmt.Printf("Failed to get datastore for disk %s: %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label, err)
+				//	continue
+				//}
+				////fmt.Printf("Datastore for disk %s is %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label, datastore.Name())
+				////Attach disk to destination VM
+				//err = targetVM.AttachDisk(v.ctx, disk.DiskObjectId, datastore, disk.ControllerKey, *disk.UnitNumber)
+				//if err != nil {
+				//	fmt.Printf("Failed to attach disk to destination VM: %s\n", err)
+				//	continue
+				//}
+				config := &types.VirtualMachineConfigSpec{
+					DeviceChange: []types.BaseVirtualDeviceConfigSpec{
+						&types.VirtualDeviceConfigSpec{
+							Operation:     types.VirtualDeviceConfigSpecOperationAdd,
+							Device:        disk,
+							FileOperation: types.VirtualDeviceConfigSpecFileOperationReplace,
+						},
+					},
 				}
-				//fmt.Printf("Datastore for disk %s is %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label, datastore.Name())
-				//Attach disk to destination VM
-				err = targetVM.AttachDisk(v.ctx, disk.DiskObjectId, datastore, disk.ControllerKey, *disk.UnitNumber)
+
+				event, err := targetVM.Reconfigure(v.ctx, *config)
 				if err != nil {
-					fmt.Printf("Failed to attach disk to destination VM: %s\n", err)
-					continue
+					return err
+				}
+				err = event.Wait(v.ctx)
+				if err != nil {
+					return err
 				}
 				fmt.Printf("Disk %s detached from source VM and attached to destination VM.\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label)
 			}
