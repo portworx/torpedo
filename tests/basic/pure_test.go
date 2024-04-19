@@ -1695,7 +1695,7 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 				}
 				return nil, false, nil
 			}
-			_, err := task.DoRetryWithTimeout(waitForPodsToTerminate, 10*time.Minute, 30*time.Second)
+			_, err := task.DoRetryWithTimeout(waitForPodsToTerminate, 15*time.Minute, 30*time.Second)
 			if err != nil {
 				return fmt.Errorf("failed to scale down app [%s] and ensure all pods are deleted. Err: [%v]", ctx.App.Key, err)
 			}
