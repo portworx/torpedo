@@ -512,6 +512,8 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 		storageNodes, err := GetStorageNodes()
 		log.FailOnError(err, "Unable to get the storage nodes")
 		pxNode := storageNodes[rand.Intn(len(storageNodes))]
+		err := PrereqForNodeDecomm(pxNode, nil)
+		log.FailOnError(err, fmt.Sprintf("error in executing prereq for node decommission", pxNode.Name))
 		err = Inst().S.PrepareNodeToDecommission(pxNode, Inst().Provisioner)
 		log.FailOnError(err, fmt.Sprintf("error preparing node %s for decommision", pxNode.Name))
 		stepLog := "Decommission Node while Migration is in Progress"
