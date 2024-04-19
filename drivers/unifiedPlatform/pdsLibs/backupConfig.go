@@ -61,9 +61,11 @@ func UpdateBackupConfig(id string, labels map[string]string, annotations map[str
 // DeleteBackupConfig deletes backup config of the deployment
 func DeleteBackupConfig(id string) error {
 
-	deleteBackupConfigRequest := automationModels.PDSBackupConfigRequest{}
-
-	deleteBackupConfigRequest.Delete.Id = id
+	deleteBackupConfigRequest := automationModels.PDSBackupConfigRequest{
+		Delete: automationModels.DeletePDSBackupConfig{
+			Id: id,
+		},
+	}
 
 	err := v2Components.PDS.DeleteBackupConfig(&deleteBackupConfigRequest)
 	if err != nil {

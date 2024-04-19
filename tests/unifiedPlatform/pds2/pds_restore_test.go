@@ -95,6 +95,8 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 				err := workflowBackup.Purge(deploymentName)
 				log.FailOnError(err, "Failed while deleting the backups")
 				log.InfoD("All backups deleted successsfully for [%s]", deploymentName)
+				err = workflowBackUpConfig.Purge()
+				log.FailOnError(err, "Some error occurred while deleting backup configs")
 			})
 
 			//Step("Create a new namespace for restore", func() {

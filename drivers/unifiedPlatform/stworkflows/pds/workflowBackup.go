@@ -61,7 +61,7 @@ func (backup WorkflowPDSBackup) WaitForBackupToComplete(backupId string) error {
 
 // GetBackupIDByName deletes the given backup
 func (backup WorkflowPDSBackup) DeleteBackup(id string) error {
-	err := pdslibs.DeleteBackupConfig(id)
+	err := pdslibs.DeleteBackup(id)
 	return err
 }
 
@@ -82,9 +82,9 @@ func (backup WorkflowPDSBackup) ListAllBackups(deploymentName string) ([]automat
 func (backup WorkflowPDSBackup) ValidateBackupDeletion(id string) error {
 
 	validateBackupDeletion := func() (interface{}, bool, error) {
-		backup, err := pdslibs.GetBackup(id)
+		backupDetails, err := pdslibs.GetBackup(id)
 		if err == nil {
-			return nil, true, fmt.Errorf("Project [%s] is yet not deleted. Phase - [%v]", id, backup.Get.Status.Phase)
+			return nil, true, fmt.Errorf("Backup [%s] is yet not deleted. Phase - [%v]", id, *backupDetails.Get.Status.Phase)
 		} else {
 			log.Infof("Backup [%s] is deleted successfully", id)
 			return nil, false, nil
