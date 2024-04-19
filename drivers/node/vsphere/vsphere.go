@@ -510,7 +510,8 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 		case *types.VirtualDevice:
 			disk := device.(*types.VirtualDisk)
 			if *disk.UnitNumber != 0 { // Exclude root disk
-				err = sourceVM.DetachDisk(v.ctx, disk.DiskObjectId)
+				fmt.Printf("Detaching disk %s from source VM and attaching to destination VM.\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label)
+				err = sourceVM.RemoveDevice(v.ctx, true, disk)
 				if err != nil {
 					fmt.Printf("Failed to remove disk from source VM: %s\n", err)
 					continue
@@ -518,6 +519,7 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 
 				// Fetch the datastore of the disk
 				datastore, err := getDatastoreForDisk(v.ctx, sourceVM, disk)
+				fmt.Printf("Datastore for disk %s is %s\n", disk.GetVirtualDevice().DeviceInfo.GetDescription().Label, datastore.Name()
 				//Attach disk to destination VM
 				err = targetVM.AttachDisk(v.ctx, disk.DiskObjectId, datastore, disk.ControllerKey, *disk.UnitNumber)
 				if err != nil {
