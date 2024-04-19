@@ -7,8 +7,9 @@ metadata:
     app: containerized-data-importer
   annotations:
     cdi.kubevirt.io/storage.import.endpoint: http://kubevirt-disk-registry.pwx.dev.purestorage.com/more_images/fio-multi-disk.qcow2
+    pvc.source: "cloned"
 spec:
-  storageClassName: test-multi-disk-ea-build
+  storageClassName: sv4-repl2-multi-disk
   accessModes:
   - ReadWriteMany
   resources:

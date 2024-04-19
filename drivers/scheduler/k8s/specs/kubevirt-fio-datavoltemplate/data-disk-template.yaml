@@ -3,10 +3,12 @@ kind: PersistentVolumeClaim
 metadata:
   name: fio-disk-template
   namespace: openshift-virtualization-os-images
+  annotations:
+    pvc.source: "cloned"
 spec:
-  storageClassName: test-multi-disk-ea-build
+  storageClassName: sv4-repl2-multi-disk
   accessModes:
     - ReadWriteMany
   resources:
     requests:
-      storage: 100Gi
+      storage: 50Gi

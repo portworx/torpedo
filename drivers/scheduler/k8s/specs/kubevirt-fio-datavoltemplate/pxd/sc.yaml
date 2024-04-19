@@ -1,7 +1,7 @@
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: test-multi-disk-ea-build
+  name: sv4-repl2-multi-disk
 provisioner: pxd.portworx.com
 parameters:
   repl: "2"

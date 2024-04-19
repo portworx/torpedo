@@ -10,6 +10,7 @@ spec:
         kubevirt.io/domain: ubuntu-bionic
         kubevirt-key: kubevirt-val
         app: vm-multi-disk
+        pvc.source: "cloned"
     spec:
       domain:
         cpu:
