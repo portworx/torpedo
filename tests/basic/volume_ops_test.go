@@ -3237,10 +3237,15 @@ var _ = Describe("{VolumePreCheck}", func() {
 			id := uuid.New()
 			volName := fmt.Sprintf("volume_%s", id.String()[:8])
 			log.InfoD("Create a volume with a min size on node [%s]", selectedNode.Name)
-			basicVolumeCreate := fmt.Sprintf("volume create -a 2 --nodes %s %s", selectedNode.Id, volName)
+			basicVolumeCreate := fmt.Sprintf("volume create -a 2  %s", volName)
 			_, err := runPxctlCommand(basicVolumeCreate, *selectedNode, nil)
-			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s] on node %s", volName, selectedNode.Name)
+			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s] ", volName)
 			log.InfoD("Base Volume creation with volume name %s successful", volName)
+			//find on which node volume got created
+			volInspect, err := Inst().V.InspectVolume(volName)
+			log.FailOnError(err, "Failed to inspect volume")
+			log.InfoD("Volume created on node: %s", volInspect.ReplicaSets[0].Nodes[0])
+			selectedNodeId := volInspect.ReplicaSets[0].Nodes[0]
 
 			log.InfoD("Test the ha-update sources option with a uuid of other nodes on which node is not present")
 			wrongUuidcmd := fmt.Sprintf("v ha-update %s --repl 2 --sources %s", volName, nodesuuidWithoutReplica[rand.Intn(len(nodesuuidWithoutReplica))])
@@ -3271,7 +3276,7 @@ var _ = Describe("{VolumePreCheck}", func() {
 			}
 
 			log.InfoD("Test the ha-update sources option with a valid uuid of the node on which the repl of the volume is present")
-			validUuidcmd := fmt.Sprintf("v ha-update %s --repl 2 --sources %s", volName, selectedNode.Id)
+			validUuidcmd := fmt.Sprintf("v ha-update %s --repl 2 --sources %s", volName, selectedNodeId)
 			_, err = runPxctlCommand(validUuidcmd, node.GetStorageDriverNodes()[0], nil)
 
 			log.InfoD("Delete the volume that is created for the test")
