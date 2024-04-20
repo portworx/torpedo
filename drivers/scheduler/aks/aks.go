@@ -322,7 +322,7 @@ func (a *aks) SetASGClusterSize(totalClusterSize int64, timeout time.Duration) e
 	cmd := fmt.Sprintf("%s aks nodepool update --resource-group %s --cluster-name %s --nodepool-name %s  --update-cluster-autoscaler --min-count %d --max-count %d --no-wait", azCli, a.clusterName, a.clusterName, a.instanceGroup, totalClusterSize, totalClusterSize)
 	stdout, stderr, err := osutils.ExecShell(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to scale cluser [%s]  to [%s], Err: %v %v %v", a.clusterName, totalClusterSize, stderr, err, stdout)
+		return fmt.Errorf("failed to scale cluser [%s]  to [%d], Err: %v %v %v", a.clusterName, totalClusterSize, stderr, err, stdout)
 	}
 	err = a.waitForNodePoolToScale(totalClusterSize)
 
