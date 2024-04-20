@@ -558,3 +558,38 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 
 	return nil
 }
+
+// RemoveNonRootDisks removes all disks except the root disk from the VM
+func (v *vsphere) RemoveNonRootDisks(n node.Node) error {
+	// Reestablish connection to avoid session timeout.
+	err := v.connect()
+	if err != nil {
+		return err
+	}
+
+	vm, ok := vmMap[n.Name]
+	if !ok {
+		return fmt.Errorf("could not fetch VM for node: %s", n.Name)
+	}
+
+	devices, err := vm.Device(v.ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, device := range devices {
+		if disk, ok := device.(*types.VirtualDisk); ok {
+			// skip the first/root disk
+			if *disk.UnitNumber == 0 {
+				continue
+			}
+
+			err = vm.RemoveDevice(v.ctx, false, disk)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}

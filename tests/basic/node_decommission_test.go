@@ -397,6 +397,12 @@ var _ = Describe("{NodeDiskDetachAttach}", func() {
 		ValidateApplications(contexts)
 		// Fetch the node where PX is not started
 		nonPXNodes := node.GetPXDisabledNodes()
+		// Remove disks from all nodes in nonPXNodes
+		for _, n := range nonPXNodes {
+			// Fetch the disks attached to the node
+			err := Inst().N.RemoveNonRootDisks(n)
+			log.FailOnError(err, fmt.Sprintf("Failed to remove disks on node %s", n.Name))
+		}
 		randNonPxNode := nonPXNodes[randomNum.Intn(len(nonPXNodes))]
 
 		// Fetch a random node from the StorageNodes

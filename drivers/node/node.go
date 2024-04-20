@@ -204,6 +204,9 @@ type Driver interface {
 	// MoveDisks moves disks from one node to another
 	MoveDisks(sourceNode Node, targetNode Node) error
 
+	// RemoveNonRootDisks removes non-root disks from the node
+	RemoveNonRootDisks(node Node) error
+
 	// SystemctlUnitExist checks if a given service exists in a node
 	SystemctlUnitExist(n Node, service string, options SystemctlOpts) (bool, error)
 
