@@ -531,3 +531,10 @@ func (d *notSupportedDriver) MoveDisks(sourceNode Node, targetNode Node) error {
 		Operation: "MoveDisks()",
 	}
 }
+
+func (d *notSupportedDriver) RemoveNonRootDisks(node Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RemoveNonRootDisks()",
+	}
+}
