@@ -621,9 +621,9 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 		config := &types.VirtualMachineConfigSpec{
 			DeviceChange: []types.BaseVirtualDeviceConfigSpec{
 				&types.VirtualDeviceConfigSpec{
-					Operation:     types.VirtualDeviceConfigSpecOperationAdd,
-					Device:        disk,
-					FileOperation: types.VirtualDeviceConfigSpecFileOperationReplace,
+					Operation: types.VirtualDeviceConfigSpecOperationAdd,
+					Device:    disk,
+					//FileOperation: types.VirtualDeviceConfigSpecFileOperationReplace,
 				},
 			},
 		}
