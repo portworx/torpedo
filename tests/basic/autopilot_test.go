@@ -255,6 +255,12 @@ var _ = Describe(fmt.Sprintf("{%sToggleAutopilot}", testSuiteName), func() {
 				ValidateVolumes(ctx)
 			}
 		})
+		Step("validating latency between autopilot rule states", func() {
+			for _, apRule := range autopilotPVCRule {
+				aututils.CalculateTimeDifferenceBetweenAutopilotRuleStates(apRule.Name)
+
+			}
+		})
 
 		Step("destroy apps", func() {
 			opts := make(map[string]bool)
