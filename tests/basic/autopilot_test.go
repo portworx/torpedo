@@ -1066,6 +1066,13 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 			ValidateStoragePools(contexts)
 		})
 
+		Step("validating latency between autopilot rule states", func() {
+			for _, apRule := range pvcApRules {
+				aututils.CalculateTimeDifferenceBetweenAutopilotRuleStates(apRule.Name)
+
+			}
+		})
+
 		Step("destroy apps", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
@@ -1187,6 +1194,10 @@ var _ = Describe(fmt.Sprintf("{%sEvents}", testSuiteName), func() {
 				ValidateVolumes(ctx)
 				err := Inst().S.ValidateAutopilotEvents(ctx)
 				Expect(err).NotTo(HaveOccurred())
+				for _, apRule := range apRules {
+					aututils.CalculateTimeDifferenceBetweenAutopilotRuleStates(apRule.Name)
+				}
+
 			}
 		})
 

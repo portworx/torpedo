@@ -2,10 +2,12 @@ package aututils
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/autopilot"
+	"github.com/portworx/torpedo/pkg/log"
+	"sort"
 	"strings"
 	"time"
 
-	"github.com/portworx/sched-ops/k8s/autopilot"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 
@@ -381,6 +383,51 @@ func WaitForAutopilotEvent(apRule apapi.AutopilotRule, reason string, messages [
 	}
 	if _, err := task.DoRetryWithTimeout(t, eventCheckTimeout, eventCheckInterval); err != nil {
 		return err
+	}
+	return nil
+}
+func calculateLatencyForAutoPilotRule(apRule apapi.AutopilotRule) error {
+
+	ruleEvents, err := core.Instance().ListEvents(apRule.Namespace, meta_v1.ListOptions{
+		FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s --sort-by .lastTimestamp", apRule.Name),
+	})
+	if err != nil {
+		log.Errorf("Error in listing events for namespace %s", apRule.Namespace)
+	}
+	i := 0
+	for _, ruleEvent := range ruleEvents.Items {
+		latency := ruleEvent.LastTimestamp.Unix() - ruleEvents.Items[i+1].LastTimestamp.Unix()
+		if latency > 600 {
+			log.Errorf("The latency between the events [%s] and [%s] is more than 10 minutes", ruleEvent.Message, ruleEvents.Items[i+1].Message)
+		}
+		i++
+
+	}
+
+	return nil
+}
+
+func CalculateTimeDifferenceBetweenAutopilotRuleStates(apRuleName string) error {
+	// Retrieve the events related to the AutopilotRule
+	ruleEvents, err := core.Instance().ListEvents("", meta_v1.ListOptions{
+		FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", apRuleName),
+	})
+	if err != nil {
+		return err
+	}
+
+	// Sort the events based on their timestamps
+	sort.SliceStable(ruleEvents.Items, func(i, j int) bool {
+		return ruleEvents.Items[i].LastTimestamp.Before(&ruleEvents.Items[j].LastTimestamp)
+	})
+
+	for i := 0; i < len(ruleEvents.Items)-1; i++ {
+		timeDiff := ruleEvents.Items[i+1].LastTimestamp.Time.Sub(ruleEvents.Items[i].LastTimestamp.Time)
+		log.InfoD(fmt.Sprintf("Validating latency between [%s] and [%s]", ruleEvents.Items[i].Message, ruleEvents.Items[i+1].Message))
+		if timeDiff > 10*time.Minute {
+			return fmt.Errorf("The latency between the events [%s] and [%s] is more than 10 minutes", ruleEvents.Items[i].Message, ruleEvents.Items[i+1].Message)
+		}
+		log.InfoD(fmt.Sprintf("The latency between the events [%s] and [%s] is less than 10 minutes", ruleEvents.Items[i].Message, ruleEvents.Items[i+1].Message))
 	}
 	return nil
 }
