@@ -491,8 +491,8 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 		setMigrateLegacySharedToSharedv4Service(false)
 		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
-		if numberNameSpaces < numApps {
-			numberNameSpaces = numApps
+		if numberNameSpaces < 10 {
+			numberNameSpaces = 10
 		}
 		for i := 0; i < numberNameSpaces; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
@@ -509,7 +509,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
 		}
 		setMigrateLegacySharedToSharedv4Service(true)
-		time.Sleep(210 * time.Second) // sleep 3.5 minutes.
+		time.Sleep(60 * time.Second) // sleep 1 minute.
 
 		storageNodes, err := GetStorageNodes()
 		log.FailOnError(err, "Unable to get the storage nodes")
