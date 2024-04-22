@@ -5,7 +5,7 @@ import (
 	"github.com/portworx/torpedo/drivers/pure/flashblade"
 )
 
-// PureCreateClientAndConnect Create FA Client and Connect
+// PureCreateClientAndConnect Create FB Client and Connect
 func PureCreateFbClientAndConnect(fbMgmtEndpoint string, apiToken string) (*flashblade.Client, error) {
 	fbClient, err := flashblade.NewClient(fbMgmtEndpoint, "", "", apiToken,
 		"", false, false, "", nil)
@@ -15,7 +15,7 @@ func PureCreateFbClientAndConnect(fbMgmtEndpoint string, apiToken string) (*flas
 	return fbClient, nil
 }
 
-// GetFAMgmtEndPoints , Get Lists of all management Endpoints from FA Secrets
+// GetFAMgmtEndPoints , Get Lists of all management Endpoints from FB Secrets
 func GetFBMgmtEndPoints(secret PXPureSecret) []string {
 	mgmtEndpoints := []string{}
 	for _, fbDetails := range secret.Arrays {
@@ -47,7 +47,7 @@ func GetApiTokenForFbMgmtEndpoints(secret PXPureSecret, mgmtEndPoint string) str
 	return ""
 }
 
-// CreateVolumeOnFABackend Creates Volume on FA Backend
+// CreateVolumeOnFABackend Creates Volume on FB Backend
 func GetBladeDetails(faClient *flashblade.Client) ([]flashblade.Blades, error) {
 	blades, err := faClient.Blades.GetBlades(nil, nil)
 	if err != nil {
