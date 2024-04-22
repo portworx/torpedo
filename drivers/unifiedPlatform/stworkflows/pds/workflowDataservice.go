@@ -111,14 +111,14 @@ func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(depl
 	}
 
 	// Get the actual DeploymentName
-	_, deploymentName, err := dslibs.GetDeployment(deploymentId)
+	deployment, _, err := dslibs.GetDeployment(deploymentId)
 	if err != nil {
 		return err
 	}
 
 	// Update the actual deploymentName with deploymentId
 	wfDataService.DataServiceDeployment = make(map[string]string)
-	wfDataService.DataServiceDeployment[deploymentName] = deploymentId
+	wfDataService.DataServiceDeployment[*deployment.Get.Meta.Name] = deploymentId
 
 	// Validate if the dns endpoint is reachable
 	err = wfDataService.ValidateDNSEndpoint(deploymentId)
@@ -149,7 +149,12 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deployment ma
 	deploymentName, deploymentId := GetDeploymentNameAndId(deployment)
 	log.Debugf("deployment Name [%s] and Id [%s]", deploymentName, deploymentId)
 
-	dbConfig, err = dslibs.GetDeploymentConfigurations(namespace, dataServiceName, deploymentName)
+	_, podName, err := dslibs.GetDeployment(deploymentId)
+	if err != nil {
+		return resourceTemp, storageOp, dbConfig, err
+	}
+
+	dbConfig, err = dslibs.GetDeploymentConfigurations(namespace, dataServiceName, podName)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}

@@ -1,10 +1,13 @@
 package pds
 
 import (
+	"fmt"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
+	"strings"
 )
 
 type WorkflowPDSBackupConfig struct {
@@ -22,6 +25,7 @@ const (
 func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, deploymentName string) (*automationModels.PDSBackupConfigResponse, error) {
 
 	log.Infof("Backup name - [%s]", name)
+	log.Infof("Deployment Name - [%s]", deploymentName)
 	log.Infof("Delplyment UID - [%s]", backupConfig.WorkflowDataService.DataServiceDeployment[deploymentName])
 	log.Infof("Project Id - [%s]", backupConfig.WorkflowDataService.Namespace.TargetCluster.Project.ProjectId)
 	log.Infof("Backup Location Id - [%s]", backupConfig.WorkflowBackupLocation.BkpLocation.BkpLocationId)
@@ -67,4 +71,45 @@ func (backupConfig WorkflowPDSBackupConfig) ListBackupConfig(tenantId string) (*
 	}
 
 	return listBackups, err
+}
+
+// Purge deletes all the backup config created during automation
+func (backupConfig WorkflowPDSBackupConfig) Purge(ignoreError bool) error {
+
+	log.Infof("Total number of backup configs found under [%s] are [%d]", backupConfig.WorkflowDataService.Namespace.TargetCluster.Project.Platform.TenantId, len(backupConfig.Backups))
+
+	for _, eachBackupConfig := range backupConfig.Backups {
+		log.Infof("Backup to be deleted - [%s]", *eachBackupConfig.Meta.Uid)
+		err := pdslibs.DeleteBackupConfig(*eachBackupConfig.Meta.Uid)
+		if err != nil {
+			if ignoreError && !strings.Contains(err.Error(), "404 Not Found") {
+				return err
+			}
+		}
+		err = backupConfig.ValidateBackupConfigDeletion(*eachBackupConfig.Meta.Uid)
+		if err != nil {
+			return err
+		}
+		delete(backupConfig.Backups, *eachBackupConfig.Meta.Name)
+		log.Infof("Backup config deleted - [%s]", *eachBackupConfig.Meta.Name)
+
+	}
+
+	return nil
+}
+
+func (backupConfig WorkflowPDSBackupConfig) ValidateBackupConfigDeletion(backupConfgId string) error {
+	validateBackupDeletion := func() (interface{}, bool, error) {
+		backupConfigDetails, err := pdslibs.GetBackupConfig(backupConfgId)
+		if err == nil {
+			return nil, true, fmt.Errorf("Backup Config [%s] is yet not deleted. Phase - [%v]", backupConfgId, *backupConfigDetails.Get.Status.Phase)
+		} else {
+			log.Infof("Backup [%s] is deleted successfully", backupConfgId)
+			return nil, false, nil
+		}
+	}
+
+	_, err := task.DoRetryWithTimeout(validateBackupDeletion, backupDeleteTimeOut, defaultRetryInterval)
+
+	return err
 }

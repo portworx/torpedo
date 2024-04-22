@@ -116,7 +116,7 @@ func (backupConf *PDS_API_V1) DeleteBackupConfig(deleteBackupConfigRequest *auto
 	}
 	backupDeleteRequest := backupClient.BackupConfigServiceDeleteBackupConfig(ctx, deleteBackupConfigRequest.Delete.Id)
 
-	_, res, err := backupDeleteRequest.Execute()
+	_, res, err := backupClient.BackupConfigServiceDeleteBackupConfigExecute(backupDeleteRequest)
 	if err != nil || res.StatusCode != status.StatusOK {
 		return fmt.Errorf("Error when calling `BackupConfigServiceDeleteBackupConfig`: %v\n.Full HTTP response: %v", err, res)
 	}
@@ -154,7 +154,7 @@ func (backupConf *PDS_API_V1) ListBackupConfig(listBackupConfigRequest *automati
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `BackupConfigServiceGetBackupConfig`: %v\n.Full HTTP response: %v", err, res)
 	}
-	err = utilities.CopyStruct(backupModels, response)
+	err = utilities.CopyStruct(backupModels, &response.List)
 	if err != nil {
 		return nil, err
 	}
