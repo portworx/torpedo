@@ -33,11 +33,10 @@ func (backupConf *PDS_API_V1) CreateBackupConfig(createBackupConfigRequest *auto
 				References: &backupConfigV1.V1References{
 					BackupLocationId: *createBackupConfigRequest.Create.BackupConfig.Config.References.BackupLocationId,
 				},
-				JobHistoryLimit: createBackupConfigRequest.Create.BackupConfig.Config.JobHistoryLimit,
-				BackupType:      (*backupConfigV1.ConfigBackupType)(createBackupConfigRequest.Create.BackupConfig.Config.BackupType),
-				Suspend:         createBackupConfigRequest.Create.BackupConfig.Config.Suspend,
-				BackupLevel:     (*backupConfigV1.ConfigBackupLevel)(createBackupConfigRequest.Create.BackupConfig.Config.BackupLevel),
-				ReclaimPolicy:   (*backupConfigV1.ConfigReclaimPolicyType)(createBackupConfigRequest.Create.BackupConfig.Config.ReclaimPolicy),
+				BackupType:    (*backupConfigV1.ConfigBackupType)(createBackupConfigRequest.Create.BackupConfig.Config.BackupType),
+				Suspend:       createBackupConfigRequest.Create.BackupConfig.Config.Suspend,
+				BackupLevel:   (*backupConfigV1.ConfigBackupLevel)(createBackupConfigRequest.Create.BackupConfig.Config.BackupLevel),
+				ReclaimPolicy: (*backupConfigV1.ConfigReclaimPolicyType)(createBackupConfigRequest.Create.BackupConfig.Config.ReclaimPolicy),
 			},
 		},
 	})
