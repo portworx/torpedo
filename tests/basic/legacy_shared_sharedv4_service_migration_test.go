@@ -862,6 +862,8 @@ func writeHelper(pxNode node.Node, volumeName string) error {
 		defer func() {
 			unmountCmd := fmt.Sprintf("pxctl host unmount --path %s %s", mountPath, volumeName)
 			Inst().N.RunCommandWithNoRetry(pxNode, unmountCmd, cmdConnectionOpts)
+			unmountCmd = fmt.Sprintf("pxctl host detach %s", volumeName)
+			Inst().N.RunCommandWithNoRetry(pxNode, unmountCmd, cmdConnectionOpts)
 		 } ()
 		writeCmd := fmt.Sprintf("dd if=/dev/urandom of=%s/filename bs=1048576 count=4096", mountPath)
 		log.Infof("Running command %s on %s", writeCmd, pxNode.Name)
