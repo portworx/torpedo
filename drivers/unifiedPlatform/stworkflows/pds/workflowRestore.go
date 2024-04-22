@@ -52,9 +52,6 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 		}
 	}
 
-	if restore.Restores == nil {
-		restore.Restores = make(map[string]automationModels.PDSRestore)
-	}
 	restore.Restores[name] = createRestore.Create
 	log.Infof("Restore completed successfully - [%s]", *createRestore.Create.Meta.Name)
 

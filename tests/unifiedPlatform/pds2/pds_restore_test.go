@@ -106,25 +106,27 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 
 			Step("Create Restore from the latest backup Id", func() {
 				restoreName := "restore-" + RandomString(5)
+				workflowRestore.Restores = make(map[string]automationModels.PDSRestore)
 				workflowRestore.Destination = WorkflowNamespace
 				workflowRestore.WorkflowProject = WorkflowProject
 				_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("All restores - [%+v]", workflowRestore.Restores)
+				log.Infof("Restore Created Name - [%s], UID - [%s]", *workflowRestore.Restores[restoreName].Meta.Name, *workflowRestore.Restores[restoreName].Meta.Uid)
 			})
 		}
 
-		JustAfterEach(func() {
-			log.Infof("Cleaning up all resources")
-			err := workflowBackup.Purge(*deployment.Create.Meta.Name)
-			log.FailOnError(err, "Backup cleanup failed")
-			err = workflowBackUpConfig.Purge(true)
-			log.FailOnError(err, "Backup Configs cleanup failed")
-			err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Name)
-			log.FailOnError(err, "Data Service cleanup failed")
-			defer EndTorpedoTest()
-		})
+	})
 
+	JustAfterEach(func() {
+		log.Infof("Cleaning up all resources")
+		err := workflowBackup.Purge(*deployment.Create.Meta.Name)
+		log.FailOnError(err, "Backup cleanup failed")
+		err = workflowBackUpConfig.Purge(true)
+		log.FailOnError(err, "Backup Configs cleanup failed")
+		err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Name)
+		log.FailOnError(err, "Data Service cleanup failed")
+		defer EndTorpedoTest()
 	})
 })
 
