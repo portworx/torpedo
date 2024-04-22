@@ -110,8 +110,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 				workflowRestore.WorkflowProject = WorkflowProject
 				_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
 				log.FailOnError(err, "Restore Failed")
-
-				log.Infof("Restore created successfully with ID - [%s]", workflowRestore.Restores[restoreName].Meta.Uid)
+				log.Infof("All restores - [%+v]", workflowRestore.Restores)
 			})
 		}
 
