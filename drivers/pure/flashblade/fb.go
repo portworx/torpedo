@@ -26,7 +26,7 @@ type Client struct {
 	RestVersion string
 	UserAgent   string
 	AuthToken   string
-	ApiVersions [...]string
+	ApiVersions []string
 	Kwargs      map[string]string
 
 	client *http.Client
