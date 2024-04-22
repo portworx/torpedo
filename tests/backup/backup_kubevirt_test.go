@@ -2536,7 +2536,6 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 // This testcase verifies scheduled backup status when Kubevirt VMs are deleted and recreated from namespace in between schedules.
 var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[KubevirtScheduledVMDelete]...), func() {
 	var (
-		backupPreUpgrade               string
 		scheduledAppContexts           []*scheduler.Context
 		bkpNamespaces                  = make([]string, 0)
 		sourceClusterUid               string
@@ -2657,7 +2656,7 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				scheduleNames = append(scheduleNames, nonLabelScheduleName)
 				_, err = CreateVMScheduledBackupWithValidation(nonLabelScheduleName, vms, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
 					labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", false, periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup [%s] of namespace", backupPreUpgrade))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup [%s] of namespace", nonLabelScheduleName))
 				nonLabelSchNamespaceMap[namespace] = nonLabelScheduleName
 			}
 		})
@@ -2684,10 +2683,6 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				err := DeleteAllVMsInNamespace(namespace)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of kubevirt VMs from the namespace [%s]", namespace))
 			}
-			log.InfoD("Deleting remaining kubevirt VM related specs from the namespace")
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			DestroyApps(scheduledAppContexts, opts)
 		})
 
 		Step("Verify next namespace labelled and non labelled scheduled backup is success state after VM deletion", func() {
@@ -2745,7 +2740,6 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 					appName := Inst().AppList[index]
 					appCtx.ReadinessTimeout = AppReadinessTimeout
 					log.InfoD("Scheduled VM [%s] in source cluster in namespace [%s]", appName, namespace)
-					scheduledAppContexts = append(scheduledAppContexts, appCtx)
 				}
 			}
 		})
