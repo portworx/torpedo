@@ -1690,6 +1690,9 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName
 			Expect(err).NotTo(HaveOccurred())
 			log.InfoD("aroAvailable value %v", aroAvailable)
 			log.InfoD("=====Pool resize ARO verified ========")
+			log.InfoD("=====Calculate Latency ==============")
+			err := Inst().S.CalculateLatencyForAroStates(apRules[1])
+			Expect(err).NotTo(HaveOccurred())
 
 		})
 		Step("destroy apps", func() {
