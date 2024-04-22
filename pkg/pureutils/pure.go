@@ -317,5 +317,3 @@ func GetHostFromIqn(faClient *flasharray.Client, iqn string) (string, error) {
 	}
 	return "", fmt.Errorf("Failed to get host name from iqn [%v]", iqn)
 }
-
-// GetFAIqn

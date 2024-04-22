@@ -2381,8 +2381,8 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 	})
 
 	var (
-		hostName               = "torpedo-host"
-		volumeName             = "torpedo-vol"
+		hostName               = fmt.Sprintf("torpedo-host-%v", time.Now().UnixNano())
+		volumeName             = fmt.Sprintf("torpedo-vol-%v", time.Now().UnixNano())
 		faSecret               = Inst().FaSecret
 		FAclient               *flasharray.Client
 		MultipathBeforeRestart string
@@ -2410,15 +2410,23 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 			if len(flashArraysInSecret) == 0 {
 				log.FailOnError(fmt.Errorf("no FlashArrays details found"), fmt.Sprintf("error getting FlashArrays creds from %s [%s]", PureSecretName, pxPureSecret))
 			}
+			if len(faSecret) == 0 {
+				log.FailOnError(fmt.Errorf("no FlashArrays details found"), fmt.Sprintf("error getting FlashArrays creds from fa-secret flag"))
+			}
 
-			for _, value := range strings.Split(faSecret, ",") {
-				faMgmtEndPoint = strings.Split(value, ":")[0]
-				faAPIToken = strings.Split(value, ":")[1]
-				if len(faMgmtEndPoint) == 0 || len(faAPIToken) == 0 {
-					continue
+			if len(strings.Split(faSecret, ",")) == 0 {
+				faMgmtEndPoint = strings.Split(faSecret, ":")[0]
+				faAPIToken = strings.Split(faSecret, ":")[1]
+			} else {
+				for _, value := range strings.Split(faSecret, ",") {
+					faMgmtEndPoint = strings.Split(value, ":")[0]
+					faAPIToken = strings.Split(value, ":")[1]
+					if len(faMgmtEndPoint) == 0 || len(faAPIToken) == 0 {
+						continue
+					}
+					log.InfoD("famanagement endpoint: %v, faAPIToken: %v", faMgmtEndPoint, faAPIToken)
+					break
 				}
-				log.InfoD("famanagement endpoint: %v, faAPIToken: %v", faMgmtEndPoint, faAPIToken)
-				break
 			}
 			if len(faMgmtEndPoint) == 0 || len(faAPIToken) == 0 {
 				log.FailOnError(fmt.Errorf("no FlashArrays details found"), fmt.Sprintf("error getting FlashArrays creds from %s [%s]", PureSecretName, pxPureSecret))
@@ -2460,7 +2468,7 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 
 			} else {
 				// If iqn already exist in FA find the host which is using it
-				host, err := pureutils.GetIqnFromHosts(FAclient, iqn)
+				host, err := pureutils.GetHostFromIqn(FAclient, iqn)
 				log.FailOnError(err, "Failed to get host from FA")
 				log.InfoD("Host already exists on FA: %v", host)
 			}
@@ -2492,7 +2500,7 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 			for _, networkInterface := range networkInterfaces {
 				err = LoginIntoController(n, networkInterface, *FAclient)
 				log.FailOnError(err, "Failed to login into controller")
-				log.InfoD("Successfully logged into controller")
+				log.InfoD("Successfully logged into controller: %v", networkInterface.Address)
 			}
 
 			// run multipath after login
@@ -2536,7 +2544,7 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 			for _, networkInterface := range networkInterfaces {
 				err = LogoutFromController(n, networkInterface, *FAclient)
 				log.FailOnError(err, "Failed to login into controller")
-				log.InfoD("Successfully logged into controller")
+				log.InfoD("Successfully logged out of controller: %v", networkInterface.Address)
 			}
 
 			//disconnect volume from host

@@ -1203,6 +1203,14 @@ func (d *portworx) EnterPoolMaintenance(n node.Node) error {
 }
 
 func (d *portworx) ExitPoolMaintenance(n node.Node) error {
+
+	// no need to exit pool maintenance if node status is up
+	pxStatus, err := d.GetPxctlStatus(n)
+	if err == nil && pxStatus == api.Status_STATUS_OK.String(){
+		log.Infof("node is up, no need to exit pool maintenance mode")
+		return nil
+	}
+
 	cmd := fmt.Sprintf("pxctl sv pool maintenance -x -y")
 	out, err := d.nodeDriver.RunCommand(
 		n,
@@ -2409,7 +2417,7 @@ func (d *portworx) KillPXDaemon(nodes []node.Node, triggerOpts *driver_api.Trigg
 				return fmt.Errorf("unable to find PID for px daemon in output [%s]", out)
 			}
 
-			pxCrashCmd := fmt.Sprintf("sudo pkill -9 %s", processPid)
+			pxCrashCmd := fmt.Sprintf("sudo kill -9 %s", processPid)
 			_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
 				Timeout:         crashDriverTimeout,
 				TimeBeforeRetry: defaultRetryInterval,

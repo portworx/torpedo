@@ -3,7 +3,13 @@ package tests
 import (
 	context1 "context"
 	"fmt"
+	"net/url"
+	"strings"
+	"time"
+
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	oputil "github.com/libopenstorage/operator/pkg/util/test"
+
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -12,7 +18,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
-	"time"
 )
 
 var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
@@ -75,6 +80,12 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 			err = ValidateFileIntegrityInVM(appCtxs, namespace)
 			log.FailOnError(err, "File integrity validation failed")
 		})
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -106,7 +117,7 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, taskName)...)
 			}
 		})
-		defer DestroyApps(appCtxs, nil)
+
 		ValidateApplications(appCtxs)
 		stepLog = "Write some data in the VM and calculate it's md5sum"
 		Step(stepLog, func() {
@@ -133,6 +144,12 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 		Step(stepLog, func() {
 			err = ValidateFileIntegrityInVM(appCtxs, namespace)
 			log.FailOnError(err, "File integrity validation failed")
+		})
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
 		})
 	})
 	JustAfterEach(func() {
@@ -245,6 +262,11 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 			log.FailOnError(err, "File integrity validation failed")
 		})
 
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
 	})
 
 	JustAfterEach(func() {
@@ -377,6 +399,11 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 			log.FailOnError(err, "File integrity validation failed")
 		})
 
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
 	})
 
 	JustAfterEach(func() {
@@ -560,7 +587,6 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
 		})
-		//defer DestroyApps(appCtxs, nil)
 		ValidateApplications(appCtxs)
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
@@ -605,6 +631,12 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 		Step(stepLog, func() {
 			err = ValidateFileIntegrityInVM(appCtxs, namespace)
 			log.FailOnError(err, "File integrity validation failed")
+		})
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
 		})
 	})
 	JustAfterEach(func() {
@@ -825,5 +857,183 @@ var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
 			err := Inst().S.RemoveLabelOnNode(selectedStorageNode, k)
 			log.FailOnError(err, "failed to remove label [%s] on node: %s", k, selectedStorageNode.Name)
 		}
+	})
+})
+
+var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("UpgradeClusterAndValidateKubeVirt", "Upgrade OCP cluster and validate kubevirt apps", nil, 0)
+	})
+
+	var appCtxs []*scheduler.Context
+
+	itLog := "Upgrade OCP cluster and validate kubevirt apps"
+	It(itLog, func() {
+		stepLog := "schedule kubevirt VMs"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("test-%v", i)
+				appCtxs = append(appCtxs, ScheduleApplications(taskName)...)
+			}
+		})
+		stepLog = "validate kubevirt apps before upgrade"
+		Step(stepLog, func() {
+			ValidateApplications(appCtxs)
+			for _, appCtx := range appCtxs {
+				isVmBindMounted, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(isVmBindMounted, true, "Failed to verify bind mount?")
+			}
+		})
+
+		var versions []string
+		if len(Inst().SchedUpgradeHops) > 0 {
+			versions = strings.Split(Inst().SchedUpgradeHops, ",")
+		}
+		if len(versions) == 0 {
+			log.Fatalf("No versions to upgrade")
+			return
+		}
+		for _, version := range versions {
+			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), version), func() {
+				stopSignal := make(chan struct{})
+
+				var mError error
+				opver, err := oputil.GetPxOperatorVersion()
+				if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) {
+					go DoPDBValidation(stopSignal, &mError)
+					defer func() {
+						close(stopSignal)
+					}()
+				} else {
+					log.Warnf("PDB validation skipped. Current Px-Operator version: [%s], minimum required: [%s]. Error: [%v].", opver, PDBValidationMinOpVersion, err)
+				}
+
+				err = Inst().S.UpgradeScheduler(version)
+				dash.VerifyFatal(mError, nil, "validation of PDB of px-storage during cluster upgrade successful")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
+
+				PrintK8sCluterInfo()
+			})
+
+			Step("validate storage components", func() {
+				urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
+				u, err := url.Parse(urlToParse)
+				log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
+				err = Inst().V.ValidateDriver(u.String(), true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
+
+				// Printing cluster node info after the upgrade
+				PrintK8sCluterInfo()
+			})
+
+			Step("update node drive endpoints", func() {
+				// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
+				err = Inst().S.RefreshNodeRegistry()
+				log.FailOnError(err, "Refresh Node Registry failed")
+
+				// Refresh Driver Endpoints
+				err = Inst().V.RefreshDriverEndpoints()
+				log.FailOnError(err, "Refresh Driver Endpoints failed")
+
+				// Printing pxctl status after the upgrade
+				PrintPxctlStatus()
+			})
+
+			stepLog = "validate kubevirt apps after upgrade and destroy"
+			Step(stepLog, func() {
+				ValidateApplications(appCtxs)
+				for _, ctx := range appCtxs {
+					isVmBindMounted, err := IsVMBindMounted(ctx, false)
+					log.FailOnError(err, "Failed to verify bind mount")
+					dash.VerifyFatal(isVmBindMounted, true, "Failed to verify bind mount?")
+				}
+				DestroyApps(appCtxs, nil)
+			})
+		}
+	})
+})
+
+var _ = Describe("{RebootRootDiskAttachedNode}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootRootDiskAttachedNode", "Reboot the node where VMs root disk is attached", nil, 0)
+		DeployVMTemplatesAndValidate()
+	})
+	var appCtxs []*scheduler.Context
+
+	itLog := "Reboot node where Kubevirt VMs root disk is attached"
+	It(itLog, func() {
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-cirros-live-migration", "kubevirt-windows-vm",
+			"kubevirt-fio-pvc-clone", "kubevirt-fio-load-disk-repl-2", "kubevirt-fio-load-multi-disk"}
+		stepLog := "schedule a kubevirtVM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				appCtxs = append(appCtxs, ScheduleApplications("reboot")...)
+			}
+		})
+		defer DestroyApps(appCtxs, nil)
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount after initial deploy")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount after intial deploy")
+		}
+
+		stepLog = "Get node where VM's root disk is attached and reboot that node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for _, virtualMachineCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(virtualMachineCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount pre node reboot in namespace: %s", virtualMachineCtx.App.NameSpace)
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount pre node reboot")
+
+				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{virtualMachineCtx})
+				log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+				dash.VerifyFatal(len(vms) > 0, true, "Failed to to get VMs from scheduled contexts")
+
+				for _, vm := range vms {
+					nodeName, err := GetNodeOfVM(vm)
+					log.FailOnError(err, "Failed to get node name for VM: %s", vm.Name)
+					log.Infof("Pre-reboot VM [%s] in namespace [%s] is scheduled on node [%s]. Rebooting it.", vm.Name, vm.Namespace, nodeName)
+					nodeObj, err := node.GetNodeByName(nodeName)
+					log.FailOnError(err, "Failed to get node obj for node name: %s", nodeName)
+
+					err = Inst().N.RebootNodeAndWait(nodeObj)
+					log.FailOnError(err, "Failed to reboot  node: %s", nodeObj.Name)
+					log.Infof("Succesfully rebooted node: %s", nodeObj.Name)
+				}
+
+				ValidateApplications(appCtxs)
+
+				// Get updated VM list and validate bind mount again
+				// TODO: PTX-23439 Add validation that VM started on a different node than it's original node
+				vms, err = GetAllVMsFromScheduledContexts([]*scheduler.Context{virtualMachineCtx})
+				log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+				dash.VerifyFatal(len(vms) > 0, true, "Failed to to get VMs from scheduled contexts")
+
+				for _, vm := range vms {
+					nodeName, err := GetNodeOfVM(vm)
+					log.FailOnError(err, "Failed to get node name for VM: %s", vm.Name)
+					log.Infof("Post reboot VM [%s] in namespace [%s] is scheduled on node [%s]", vm.Name, vm.Namespace, nodeName)
+				}
+
+				bindMount, err = IsVMBindMounted(virtualMachineCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount post node reboot in namespace: %s", virtualMachineCtx.App.NameSpace)
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount pre node reboot")
+			}
+
+			ValidateApplications(appCtxs)
+
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
 	})
 })
