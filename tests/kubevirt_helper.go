@@ -152,7 +152,7 @@ func RunCmdInVirtLauncherPod(virtualMachineCtx *scheduler.Context, cmd []string)
 
 // GetNumberOfDisksInVMViaVirtLauncherPod gets the number of disks in the VM via the virt-launcher pod
 func GetNumberOfDisksInVMViaVirtLauncherPod(virtualMachineCtx *scheduler.Context) (int, error) {
-	cmd := []string{"lsblk | grep vmi-disks | grep pxd"}
+	cmd := []string{"/usr/bin/lsblk | grep vmi-disks | grep pxd"}
 
 	t := func() (interface{}, bool, error) {
 		output, err := RunCmdInVirtLauncherPod(virtualMachineCtx, cmd)
