@@ -152,7 +152,7 @@ func RunCmdInVirtLauncherPod(virtualMachineCtx *scheduler.Context, cmd []string)
 
 // GetNumberOfDisksInVMViaVirtLauncherPod gets the number of disks in the VM via the virt-launcher pod
 func GetNumberOfDisksInVMViaVirtLauncherPod(virtualMachineCtx *scheduler.Context) (int, error) {
-	cmd := []string{"/usr/bin/lsblk | grep vmi-disks | grep pxd"}
+	cmd := []string{"lsblk"}
 
 	t := func() (interface{}, bool, error) {
 		output, err := RunCmdInVirtLauncherPod(virtualMachineCtx, cmd)
@@ -161,7 +161,7 @@ func GetNumberOfDisksInVMViaVirtLauncherPod(virtualMachineCtx *scheduler.Context
 			return 0, false, err
 		}
 		// Splitting the output into lines
-		lines := strings.Split(output, `\n`)
+		lines := strings.Split(output, "\n")
 
 		// Count of lines containing "/run/kubevirt-private/vmi-disks/" and "pxd"
 		numberOfDisks := 0
@@ -644,7 +644,7 @@ func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks 
 			return fmt.Errorf("failed to get VMs from context: %w", err)
 		}
 		for _, v := range vms {
-			diskCountOutput, err := GetNumberOfDisksInVM(v)
+			diskCountOutput, err := GetNumberOfDisksInVMViaVirtLauncherPod(appCtx)
 			if err != nil {
 				return fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]: %w", v.Name, v.Namespace, err)
 			}
@@ -699,7 +699,7 @@ func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks 
 			}
 			log.InfoD("Sleep for 5mins for vm to come up")
 			time.Sleep(5 * time.Minute)
-			NewDiskCountOutput, err := GetNumberOfDisksInVM(v)
+			NewDiskCountOutput, err := GetNumberOfDisksInVMViaVirtLauncherPod(appCtx)
 			if err != nil {
 				return fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]", v.Name, v.Namespace)
 			}
