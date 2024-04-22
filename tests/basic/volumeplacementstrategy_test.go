@@ -3,7 +3,9 @@ package tests
 import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	"math/rand"
+	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo/v2"
@@ -463,7 +465,7 @@ var _ = Describe("{VPSValueDoesntExist}", func() {
 					Values:   []string{},
 				},
 			}
-			vpsSpec := vpsutil.VolumeAffinityByMatchExpression("value-empty-vps", matchExpression)
+			vpsSpec := vpsutil.VolumeAffinityByMatchExpression("val-empty-vps", matchExpression)
 			_, err := talisman.Instance().CreateVolumePlacementStrategy(&vpsSpec)
 			log.FailOnError(err, "Failed to Deploy VPS Spec")
 
@@ -497,10 +499,62 @@ var _ = Describe("{VPSValueDoesntExist}", func() {
 			log.InfoD(stepLog)
 			for _, ctx := range contexts {
 				// get all pvc from the context
-				_, err := core.Instance().GetPersistentVolumeClaims(ctx.App.NameSpace, nil)
+				pvcs, err := core.Instance().GetPersistentVolumeClaims(ctx.App.NameSpace, nil)
 				log.FailOnError(err, "Failed to get PVCs")
+
+				for _, pvc := range pvcs.Items {
+					log.InfoD("PVC %s status is %s", pvc.Name, pvc.Status.Phase)
+				}
+
+				// get all pods from the context
+				pods, err := core.Instance().GetPods(ctx.App.NameSpace, nil)
+				log.FailOnError(err, "Failed to get Pods")
+
+				for _, pod := range pods.Items {
+					log.InfoD("Pod %s status is %s", pod.Name, pod.Status.Phase)
+				}
 			}
 		})
+
+		stepLog = "Remove the label from the nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes := node.GetStorageDriverNodes()
+			for _, node := range storageNodes {
+				err := Inst().S.RemoveLabelOnNode(node, "vpsValEmpty")
+				log.FailOnError(err, "Failed to Remove Label from Node")
+			}
+		})
+
+		stepLog = "After removing the label, the pvcs should be scheduled on the nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			time.Sleep(1 * time.Minute)
+			t := func() (interface{}, bool, error) {
+				for _, ctx := range contexts {
+					pvcs, err := core.Instance().GetPersistentVolumeClaims(ctx.App.NameSpace, nil)
+					if err != nil {
+						return nil, true, err
+					}
+
+					for _, pvc := range pvcs.Items {
+						log.InfoD("PVC %s status is %s", pvc.Name, pvc.Status.Phase)
+						if pvc.Status.Phase != "Bound" {
+							return nil, false, nil
+						}
+					}
+				}
+				return nil, true, nil
+			}
+			_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+			log.FailOnError(err, "Failed to get PVCs")
+
+		})
+
+	})
+
+	JustAfterEach(func() {
+		EndTorpedoTest()
 
 	})
 
