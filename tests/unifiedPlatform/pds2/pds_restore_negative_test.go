@@ -129,12 +129,12 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
 		})
 
-		defer func() {
-			Step("Delete RestoredDeployment", func() {
-				err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
-				log.FailOnError(err, "Error while deleting restore")
-			})
-		}()
+		//defer func() {
+		//	Step("Delete RestoredDeployment", func() {
+		//		err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
+		//		log.FailOnError(err, "Error while deleting restore")
+		//	})
+		//}()
 
 		Step("Validate md5hash for the restored deployments", func() {
 			err := workflowDataService.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)
