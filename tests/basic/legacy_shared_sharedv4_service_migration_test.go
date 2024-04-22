@@ -1069,7 +1069,7 @@ var _ = Describe("{LegacySharedVolumeAppOutofQuorum}", func() {
 			// defer Restart
 			defer func() {
 				for i := 0; i  < len (nodesForPxStop); i++ {
-					Inst().V.StartDriver(nodesForPxStop[0])
+					Inst().V.StartDriver(nodesForPxStop[i])
 				}
 			}()
 		}
@@ -1077,7 +1077,31 @@ var _ = Describe("{LegacySharedVolumeAppOutofQuorum}", func() {
 		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
 		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
 
-		setMigrateLegacySharedToSharedv4Service(true)
+		//setMigrateLegacySharedToSharedv4Service(true)
+		// Since we have stopped drivers, let us pick a node that is still alive.
+		pxctlNodes, err := GetStorageNodes()
+		log.FailOnError(err, "Unable to get storage nodes")
+		var pxctlNode node.Node
+		foundPxctlNode := false
+		for i := 0; i < len(pxctlNodes); i++ {
+			n := pxctlNodes[i]
+			stoppedNode := false
+			for j := 0; j < len(nodesForPxStop); j++ {
+				if n.Id == nodesForPxStop[j].Id {
+					stoppedNode = true
+					break
+				}
+			}
+			if !stoppedNode {
+				pxctlNode = n
+				foundPxctlNode = true
+				break
+			}
+		}
+		dash.VerifyFatal(foundPxctlNode, true, fmt.Sprintf("Didn't find a node to issue pxctl"))
+		pxctlCmdFull := fmt.Sprintf("cluster options update --create-legacy-shared-as-sharedv4-service=true")
+		_, err = Inst().V.GetPxctlCmdOutput(pxctlNode, pxctlCmdFull)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Unable to set migration to true"))
 		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
 		countPostTimeout := getLegacySharedVolumeCount(contexts)
 		dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Expected legacy shared volume to be 0 but is %d", countPostTimeout))
