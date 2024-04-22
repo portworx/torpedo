@@ -124,8 +124,8 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		log.FailOnError(err, "Backup cleanup failed")
 		err = workflowBackUpConfig.Purge(true)
 		log.FailOnError(err, "Backup Configs cleanup failed")
-		err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Name)
-		log.FailOnError(err, "Data Service cleanup failed")
+		//err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Name)
+		//log.FailOnError(err, "Data Service cleanup failed")
 		defer EndTorpedoTest()
 	})
 })
@@ -144,7 +144,6 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 		pdsBackupConfigName  string
 		restoreNamespace     string
 	)
-
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestoreToDifferentClusterSameProject", "Deploy data services and perform backup and restore on a different cluster on the same project", nil, 0)
 		workflowDataservice.DataServiceDeployment = make(map[string]string)
@@ -152,7 +151,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 		workflowRestore.Destination = WorkflowNamespace
 		workflowRestore.WorkflowProject = WorkflowProject
 		workflowDataservice.Dash = dash
-		restoreNamespace = "pds-restore-namespace-" + RandomString(5)
+		restoreNamespace = "restore-" + RandomString(5)
 	})
 
 	It("Deploy data services and perform backup and restore on the different cluster", func() {
@@ -239,35 +238,36 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 			})
 
 			Step("Create Restore from the latest backup Id", func() {
-				restoreName := "testing_restore_" + RandomString(5)
+				restoreName := "restore-" + RandomString(5)
 				workflowRestore.Destination = destinationNamespace
+				workflowRestore.Restores = make(map[string]automationModels.PDSRestore)
 				workflowRestore.WorkflowProject = WorkflowProject
 				_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
 				log.FailOnError(err, "Restore Failed")
 
-				log.Infof("Restore created successfully with ID - [%s]", workflowRestore.Restores[restoreName].Meta.Uid)
+				log.Infof("Restore created successfully with ID - [%s]", *workflowRestore.Restores[restoreName].Meta.Uid)
 			})
 		}
 
-		JustAfterEach(func() {
-			defer func() {
-				err := SetSourceKubeConfig()
-				log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
-			}()
+	})
 
-			log.Infof("Cleaning up all resources")
-			err := workflowBackup.Purge(*deployment.Create.Meta.Name)
-			log.FailOnError(err, "Backup cleanup failed")
-			err = workflowBackUpConfig.Purge(true)
-			log.FailOnError(err, "Backup Configs cleanup failed")
-			err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Name)
-			log.FailOnError(err, "Data Service cleanup failed")
-			err = destinationNamespace.Purge()
-			log.FailOnError(err, "Destination namespace cleanup failed")
+	JustAfterEach(func() {
+		defer func() {
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+		}()
 
-			defer EndTorpedoTest()
+		log.Infof("Cleaning up all resources")
+		err := workflowBackup.Purge(*deployment.Create.Meta.Name)
+		log.FailOnError(err, "Backup cleanup failed")
+		err = workflowBackUpConfig.Purge(true)
+		//log.FailOnError(err, "Backup Configs cleanup failed")
+		//err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Name)
+		log.FailOnError(err, "Data Service cleanup failed")
+		err = destinationNamespace.Purge()
+		log.FailOnError(err, "Destination namespace cleanup failed")
 
-		})
+		defer EndTorpedoTest()
 
 	})
 })
@@ -295,7 +295,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 		workflowRestore.Destination = WorkflowNamespace
 		workflowRestore.WorkflowProject = WorkflowProject
 		workflowDataservice.Dash = dash
-		restoreNamespace = "pds-restore-namespace-" + RandomString(5)
+		restoreNamespace = "namespace-" + RandomString(5)
 		destinationProject.Platform = WorkflowPlatform
 	})
 
@@ -390,7 +390,8 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 			})
 
 			Step("Create Restore from the latest backup Id", func() {
-				restoreName := "testing_restore_" + RandomString(5)
+				restoreName := "restore-" + RandomString(5)
+				workflowRestore.Restores = make(map[string]automationModels.PDSRestore)
 				workflowRestore.Destination = destinationNamespace
 				workflowRestore.WorkflowProject = WorkflowProject
 				_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
@@ -399,29 +400,29 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 				log.Infof("Restore created successfully with ID - [%s]", workflowRestore.Restores[restoreName].Meta.Uid)
 			})
 		}
-
-		JustAfterEach(func() {
-			defer func() {
-				err := SetSourceKubeConfig()
-				log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
-			}()
-			log.Infof("Cleaning up all resources")
-			err := workflowBackup.Purge(*deployment.Create.Meta.Name)
-			log.FailOnError(err, "Backup cleanup failed")
-			err = workflowBackUpConfig.Purge(true)
-			log.FailOnError(err, "Backup Configs cleanup failed")
-			err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Name)
-			log.FailOnError(err, "Data Service cleanup failed")
-			err = SetDestinationKubeConfig()
-			log.FailOnError(err, "Unable to set kubeconfig to destination")
-			err = destinationNamespace.Purge()
-			log.FailOnError(err, "Destination namespace cleanup failed")
-			err = destinationProject.DeleteProject()
-			log.FailOnError(err, "Destination Project cleanup failed")
-			defer EndTorpedoTest()
-		})
-
 	})
+
+	JustAfterEach(func() {
+		defer func() {
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+		}()
+		log.Infof("Cleaning up all resources")
+		err := workflowBackup.Purge(*deployment.Create.Meta.Name)
+		log.FailOnError(err, "Backup cleanup failed")
+		err = workflowBackUpConfig.Purge(true)
+		log.FailOnError(err, "Backup Configs cleanup failed")
+		//err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Name)
+		//log.FailOnError(err, "Data Service cleanup failed")
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "Unable to set kubeconfig to destination")
+		err = destinationNamespace.Purge()
+		log.FailOnError(err, "Destination namespace cleanup failed")
+		err = destinationProject.DeleteProject()
+		log.FailOnError(err, "Destination Project cleanup failed")
+		defer EndTorpedoTest()
+	})
+
 })
 
 var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() {
