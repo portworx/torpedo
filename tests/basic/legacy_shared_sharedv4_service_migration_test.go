@@ -833,3 +833,95 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxKill}", func() {
 		DestroyApps(contexts, nil)
 	})
 })
+
+func writeHelper(pxNode node.Node, volumeName string) error {
+		mountPath := fmt.Sprintf("/var/lib/osd/mounts/%s", volumeName)
+		createDir := fmt.Sprintf("mkdir %s", mountPath)
+
+		cmdConnectionOpts := node.ConnectionOpts{
+			Timeout: 15 * time.Second,
+			TimeBeforeRetry: 5 * time.Second,
+			Sudo: true,
+		}
+		log.Infof("Running command %s on %s", createDir, pxNode.Name)
+		_, err := Inst().N.RunCommandWithNoRetry(pxNode, createDir, cmdConnectionOpts)
+		if err != nil {
+			return err
+		}
+
+		defer func() {
+			rmDir := fmt.Sprintf("rmdir %s", mountPath)
+			Inst().N.RunCommandWithNoRetry(pxNode, rmDir, cmdConnectionOpts)
+		 } ()
+		pxctlCmdfull := fmt.Sprintf("pxctl host mount --path %s %s", mountPath, volumeName)
+		log.Infof("Running command %s on %s", pxctlCmdfull, pxNode.Name)
+		_, err = Inst().N.RunCommandWithNoRetry(pxNode, pxctlCmdfull, cmdConnectionOpts)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			unmountCmd := fmt.Sprintf("pxctl host unmount --path %s %s", mountPath, volumeName)
+			Inst().N.RunCommandWithNoRetry(pxNode, unmountCmd, cmdConnectionOpts)
+		 } ()
+		writeCmd := fmt.Sprintf("dd if=/dev/urandom of=%s/filename bs=1048576 count=4096", mountPath)
+		log.Infof("Running command %s on %s", writeCmd, pxNode.Name)
+		_, err = Inst().N.RunCommandWithNoRetry(pxNode, writeCmd, cmdConnectionOpts)
+		if err != nil {
+			return err
+		}
+		return nil
+}
+
+// Migrate when volume state is ha-update.
+var _ = Describe("{LegacySharedVolumeAppMigrateHAupdating}", func() {
+	var testrailID = 297584
+	volumeName := "legacy-shared-volume-haupdate"
+	JustBeforeEach(func() {
+		StartTorpedoTest("LegacySharedVolumeAppMigrateHAupdating", "Legacy Shared to Sharedv4 Service Migration when volume is in HA update state", nil, testrailID)
+		setCreateLegacySharedAsSharedv4Service(false)
+		setMigrateLegacySharedToSharedv4Service(false)
+	})
+	stepLog := "Create Legacy shared volume, mount it ingest some data, update HA. Then start migration"
+	It(stepLog, func() {
+		pxctlCmdFull := fmt.Sprintf("v c -s 10 --shared=true %s", volumeName)
+		pxNodes, err := GetStorageNodes()
+		log.FailOnError(err, "Unable to get the storage nodes")
+		pxNode := GetRandomNode(pxNodes)
+		log.Infof("Creating legacy shared volume: %s", volumeName)
+		output, err := Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
+		log.FailOnError(err, fmt.Sprintf("error creating legacy shared volume %s", volumeName))
+		log.Infof(output)
+
+		vol, err := Inst().V.InspectVolume(volumeName)
+		log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume {%v}", volumeName))
+		dash.VerifyFatal(vol.Spec.Shared, true, "non-shared volume created unexpectedly")
+
+		err = writeHelper(pxNode, volumeName)
+		log.FailOnError(err, fmt.Sprintf("Failed writing data to volume {%v}", volumeName))
+
+		// Start Migration.
+		setMigrateLegacySharedToSharedv4Service(true)
+		time.Sleep(time.Minute) // sleep for a minute and ha-update.
+
+		pxctlCmdFull = fmt.Sprintf("v ha-update --repl 2 %s", volumeName)
+		_, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
+		log.FailOnError(err, fmt.Sprintf("error ha-updating legacy shared volume %s", volumeName))
+
+		migrated := false
+		for i := 0; i < 6; i++ {
+			vol, err := Inst().V.InspectVolume(volumeName)
+			log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume {%v}", volumeName))
+			if !vol.Spec.Shared && vol.Spec.Sharedv4 {
+				migrated = true
+				break
+			}
+			time.Sleep(1 * time.Minute)
+		}
+		dash.VerifyFatal(migrated, true, fmt.Sprintf("migration failed on volume [%v]", volumeName))
+		pxctlCmdFull = fmt.Sprintf("v d %s --force", volumeName)
+		Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
