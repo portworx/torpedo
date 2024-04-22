@@ -256,6 +256,7 @@ var _ = Describe(fmt.Sprintf("{%sToggleAutopilot}", testSuiteName), func() {
 			}
 		})
 		Step("validating latency between autopilot rule states", func() {
+			log.InfoD("Calculating time difference between autopilot rule states")
 			for _, apRule := range autopilotPVCRule {
 				aututils.CalculateTimeDifferenceBetweenAutopilotRuleStates(apRule.Name)
 
