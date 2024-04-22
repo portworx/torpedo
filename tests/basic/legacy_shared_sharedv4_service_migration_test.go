@@ -1071,6 +1071,7 @@ var _ = Describe("{LegacySharedVolumeAppOutofQuorum}", func() {
 				for i := 0; i < len(nodesForPxStop); i++ {
 					Inst().V.StartDriver(nodesForPxStop[i])
 				}
+				ValidateApplications(contexts)
 			}()
 		}
 
@@ -1100,7 +1101,7 @@ var _ = Describe("{LegacySharedVolumeAppOutofQuorum}", func() {
 			}
 		}
 		dash.VerifyFatal(foundPxctlNode, true, fmt.Sprintf("Didn't find a node to issue pxctl"))
-		pxctlCmdFull := fmt.Sprintf("cluster options update --create-legacy-shared-as-sharedv4-service=true")
+		pxctlCmdFull := fmt.Sprintf("cluster options update --migrate-legacy-shared-to-sharedv4-service=true")
 		_, err = Inst().V.GetPxctlCmdOutput(pxctlNode, pxctlCmdFull)
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Unable to set migration to true"))
 		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
@@ -1110,7 +1111,6 @@ var _ = Describe("{LegacySharedVolumeAppOutofQuorum}", func() {
 		for _, ctx := range contexts {
 			checkMapOfPods(podMap, ctx)
 		}
-		ValidateApplications(contexts)
 	})
 
 	JustAfterEach(func() {
