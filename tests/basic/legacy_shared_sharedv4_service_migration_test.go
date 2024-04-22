@@ -559,7 +559,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 			var rejoinedNode *api.StorageNode
 			t := func() (interface{}, bool, error) {
 				drvNodes, err := Inst().V.GetDriverNodes()
-				if err != nil {
+				if err == nil {
 					for _, n := range drvNodes {
 						if n.Hostname == pxNode.Hostname {
 							rejoinedNode = n
@@ -571,7 +571,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 			}
 
 			_, err = task.DoRetryWithTimeout(t, 15*time.Minute, defaultRetryInterval)
-			if err != nil {
+			if err == nil {
 				Inst().S.RefreshNodeRegistry()
 				Inst().V.RefreshDriverEndpoints()
 				decommissionedNode := node.Node{}
