@@ -35,7 +35,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		workflowRestore.Destination = WorkflowNamespace
 		workflowRestore.WorkflowProject = WorkflowProject
 		workflowDataservice.Dash = dash
-		restoreNamespace = "pds-restore-namespace-" + RandomString(5)
+		restoreNamespace = "restore-" + RandomString(5)
 	})
 
 	It("Deploy data services and perform backup and restore on the same cluster", func() {
@@ -70,7 +70,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 				workflowBackUpConfig.Backups = make(map[string]automationModels.V1BackupConfig)
 				bkpConfigResponse, err := workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
 				log.FailOnError(err, "Error occured while creating backupConfig")
-				log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", bkpConfigResponse.Create.Meta.Name, bkpConfigResponse.Create.Meta.Uid)
+				log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
 				log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
 			})
 
@@ -105,7 +105,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 			})
 
 			Step("Create Restore from the latest backup Id", func() {
-				restoreName := "testing_restore_" + RandomString(5)
+				restoreName := "restore-" + RandomString(5)
 				workflowRestore.Destination = WorkflowNamespace
 				workflowRestore.WorkflowProject = WorkflowProject
 				_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
