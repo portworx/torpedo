@@ -18,7 +18,7 @@ metadata:
   name: fio-fast-repl1-vps-log
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  placement_strategy: "fastpath-repl1-vps"
+  placement_strategy: "val-empty-vps"
   repl: "1"
   fastpath: "true"
   priority_io: "high"
