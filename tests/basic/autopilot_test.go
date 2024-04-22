@@ -109,6 +109,15 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
 			}
 		})
 
+		Step("Validte the Latency between each state in Aro Object ", func() {
+			log.InfoD("Validating the latency between each state in Aro Object")
+			for _, apRule := range autopilotruleBasicTestCases {
+				err := Inst().S.CalculateLatencyForAroStates(apRule)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+		})
+
 		Step("destroy apps", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true

@@ -6619,6 +6619,63 @@ func (k *K8s) ValidateAutopilotRuleObjects() error {
 	return nil
 }
 
+func (k *K8s) CalculateLatencyForAroStates(ruleName apapi.AutopilotRule) error {
+	namespace, err := k.GetAutopilotNamespace()
+	if err != nil {
+		return err
+	}
+
+	expectedAroStates := []apapi.RuleState{
+		apapi.RuleStateInit,
+		apapi.RuleStateTriggered,
+		apapi.RuleStateActiveActionsPending,
+		apapi.RuleStateActiveActionsInProgress,
+		apapi.RuleStateActiveActionsTaken,
+		apapi.RuleStateNormal,
+	}
+
+	listAutopilotRuleObjects, err := k8sAutopilot.ListAutopilotRuleObjects(namespace)
+	if err != nil {
+		return err
+	}
+	if len(listAutopilotRuleObjects.Items) == 0 {
+		log.Warnf("the list of autopilot rule objects is empty, please make sure that you have an appropriate autopilot rule")
+		return nil
+	}
+
+	for _, aro := range listAutopilotRuleObjects.Items {
+		log.InfoD("Rule Name %v", aro.GetObjectMeta().GetName())
+		if strings.Contains(aro.GetObjectMeta().GetName(), ruleName.Name) {
+			stateTimestampMap := make(map[apapi.RuleState]metav1.Time)
+			for _, aroStatusItem := range aro.Status.Items {
+				if aroStatusItem.State == "" {
+					continue
+				}
+				stateTimestampMap[aroStatusItem.State] = aroStatusItem.LastProcessTimestamp
+			}
+
+			var prevState apapi.RuleState
+			var prevTimestamp metav1.Time
+			for _, state := range expectedAroStates {
+				timestamp, exists := stateTimestampMap[state]
+				if !exists {
+					continue
+				}
+				if prevState != "" {
+					duration := timestamp.Time.Sub(prevTimestamp.Time)
+					if duration.Minutes() > 10 {
+						log.Warnf("More than 10 minutes between state %s and %s for autopilot rule object: %s", prevState, state, aro.Name)
+					}
+				}
+				prevState = state
+				prevTimestamp = timestamp
+			}
+		}
+
+	}
+	return nil
+}
+
 // VerifyPoolResizeARO() created and resize completed
 func (k *K8s) VerifyPoolResizeARO(ruleName apapi.AutopilotRule) (bool, error) {
 	var ruleTriggered bool
