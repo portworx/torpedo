@@ -551,7 +551,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 			Inst().N.RebootNode(pxNode, node.RebootNodeOpts{
 				Force: true,
 				ConnectionOpts: node.ConnectionOpts{
-						Timeout:         defaultCommandTimeout,
+					Timeout:         defaultCommandTimeout,
 					TimeBeforeRetry: defaultRetryInterval,
 				},
 			})
@@ -835,43 +835,43 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxKill}", func() {
 })
 
 func writeHelper(pxNode node.Node, volumeName string) error {
-		mountPath := fmt.Sprintf("/var/lib/osd/mounts/%s", volumeName)
-		createDir := fmt.Sprintf("mkdir %s", mountPath)
+	mountPath := fmt.Sprintf("/var/lib/osd/mounts/%s", volumeName)
+	createDir := fmt.Sprintf("mkdir %s", mountPath)
 
-		cmdConnectionOpts := node.ConnectionOpts{
-			Timeout: 15 * time.Second,
-			TimeBeforeRetry: 5 * time.Second,
-			Sudo: true,
-		}
-		log.Infof("Running command %s on %s", createDir, pxNode.Name)
-		_, err := Inst().N.RunCommandWithNoRetry(pxNode, createDir, cmdConnectionOpts)
-		if err != nil {
-			return err
-		}
+	cmdConnectionOpts := node.ConnectionOpts{
+		Timeout:         15 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	}
+	log.Infof("Running command %s on %s", createDir, pxNode.Name)
+	_, err := Inst().N.RunCommandWithNoRetry(pxNode, createDir, cmdConnectionOpts)
+	if err != nil {
+		return err
+	}
 
-		defer func() {
-			rmDir := fmt.Sprintf("rmdir %s", mountPath)
-			Inst().N.RunCommandWithNoRetry(pxNode, rmDir, cmdConnectionOpts)
-		 } ()
-		pxctlCmdfull := fmt.Sprintf("pxctl host mount --path %s %s", mountPath, volumeName)
-		log.Infof("Running command %s on %s", pxctlCmdfull, pxNode.Name)
-		_, err = Inst().N.RunCommandWithNoRetry(pxNode, pxctlCmdfull, cmdConnectionOpts)
-		if err != nil {
-			return err
-		}
-		defer func() {
-			unmountCmd := fmt.Sprintf("pxctl host unmount --path %s %s", mountPath, volumeName)
-			Inst().N.RunCommandWithNoRetry(pxNode, unmountCmd, cmdConnectionOpts)
-			unmountCmd = fmt.Sprintf("pxctl host detach %s", volumeName)
-			Inst().N.RunCommandWithNoRetry(pxNode, unmountCmd, cmdConnectionOpts)
-		 } ()
-		writeCmd := fmt.Sprintf("dd if=/dev/urandom of=%s/filename bs=1048576 count=4096", mountPath)
-		log.Infof("Running command %s on %s", writeCmd, pxNode.Name)
-		_, err = Inst().N.RunCommandWithNoRetry(pxNode, writeCmd, cmdConnectionOpts)
-		if err != nil {
-			return err
-		}
-		return nil
+	defer func() {
+		rmDir := fmt.Sprintf("rmdir %s", mountPath)
+		Inst().N.RunCommandWithNoRetry(pxNode, rmDir, cmdConnectionOpts)
+	}()
+	pxctlCmdfull := fmt.Sprintf("pxctl host mount --path %s %s", mountPath, volumeName)
+	log.Infof("Running command %s on %s", pxctlCmdfull, pxNode.Name)
+	_, err = Inst().N.RunCommandWithNoRetry(pxNode, pxctlCmdfull, cmdConnectionOpts)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		unmountCmd := fmt.Sprintf("pxctl host unmount --path %s %s", mountPath, volumeName)
+		Inst().N.RunCommandWithNoRetry(pxNode, unmountCmd, cmdConnectionOpts)
+		unmountCmd = fmt.Sprintf("pxctl host detach %s", volumeName)
+		Inst().N.RunCommandWithNoRetry(pxNode, unmountCmd, cmdConnectionOpts)
+	}()
+	writeCmd := fmt.Sprintf("dd if=/dev/urandom of=%s/filename bs=1048576 count=4096", mountPath)
+	log.Infof("Running command %s on %s", writeCmd, pxNode.Name)
+	_, err = Inst().N.RunCommandWithNoRetry(pxNode, writeCmd, cmdConnectionOpts)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Migrate when volume state is ha-update.
@@ -1068,14 +1068,15 @@ var _ = Describe("{LegacySharedVolumeAppOutofQuorum}", func() {
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Couldn't stop driver"))
 			// defer Restart
 			defer func() {
-				for i := 0; i  < len (nodesForPxStop); i++ {
+				for i := 0; i < len(nodesForPxStop); i++ {
 					Inst().V.StartDriver(nodesForPxStop[i])
 				}
 			}()
 		}
 
+		// It takes a while to detach the volumes.
 		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
-		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
+		timeForMigration := ((totalSharedVolumes + 30) / 30) * 30
 
 		//setMigrateLegacySharedToSharedv4Service(true)
 		// Since we have stopped drivers, let us pick a node that is still alive.
@@ -1111,6 +1112,7 @@ var _ = Describe("{LegacySharedVolumeAppOutofQuorum}", func() {
 		}
 		ValidateApplications(contexts)
 	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
