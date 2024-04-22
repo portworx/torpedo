@@ -644,7 +644,7 @@ func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks 
 			return fmt.Errorf("failed to get VMs from context: %w", err)
 		}
 		for _, v := range vms {
-			diskCountOutput, err := GetNumberOfDisksInVMViaVirtLauncherPod(appCtx)
+			diskCountOutput, err := GetNumberOfDisksInVM(v)
 			if err != nil {
 				return fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]: %w", v.Name, v.Namespace, err)
 			}
@@ -699,7 +699,7 @@ func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks 
 			}
 			log.InfoD("Sleep for 5mins for vm to come up")
 			time.Sleep(5 * time.Minute)
-			NewDiskCountOutput, err := GetNumberOfDisksInVMViaVirtLauncherPod(appCtx)
+			NewDiskCountOutput, err := GetNumberOfDisksInVM(v)
 			if err != nil {
 				return fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]", v.Name, v.Namespace)
 			}
