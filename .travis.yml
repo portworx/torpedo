@@ -1,5 +1,5 @@
 sudo: required
-dist: focal
+dist: jammy
 services:
   - docker
 language: go
