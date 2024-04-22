@@ -47,7 +47,7 @@ func GetApiTokenForFbMgmtEndpoints(secret PXPureSecret, mgmtEndPoint string) str
 	return ""
 }
 
-// CreateVolumeOnFABackend Creates Volume on FB Backend
+// GetBladeDetails Get Details of all the Blades present in FB
 func GetBladeDetails(faClient *flashblade.Client) ([]flashblade.Blades, error) {
 	blades, err := faClient.Blades.GetBlades(nil, nil)
 	if err != nil {
@@ -56,6 +56,7 @@ func GetBladeDetails(faClient *flashblade.Client) ([]flashblade.Blades, error) {
 	return blades, nil
 }
 
+// ListAllFileSystems Returns list of all filesystems present in FB Backend
 func ListAllFileSystems(faClient *flashblade.Client) ([]flashblade.FSResponse, error) {
 	fileSys, err := faClient.FileSystem.GetAllFileSystems(nil, nil)
 	if err != nil {
@@ -64,6 +65,7 @@ func ListAllFileSystems(faClient *flashblade.Client) ([]flashblade.FSResponse, e
 	return fileSys, nil
 }
 
+// ListSnapSchedulePolicies Returns list of all FB snapshots schedule policies present
 func ListSnapSchedulePolicies(faClient *flashblade.Client) ([]flashblade.PolicyResponse, error) {
 	policies, err := faClient.FileSystem.GetSnapshotSchedulingPolicies(nil, nil)
 	if err != nil {
@@ -72,6 +74,7 @@ func ListSnapSchedulePolicies(faClient *flashblade.Client) ([]flashblade.PolicyR
 	return policies, nil
 }
 
+// ListAllNetworkInterfaces Returns list of all Network interfaces from Specific FB
 func ListAllNetworkInterfaces(faClient *flashblade.Client) ([]flashblade.NetResponse, error) {
 	netInterface, err := faClient.NetworkInterface.ListNetworkInterfaces(nil, nil)
 	if err != nil {
@@ -80,6 +83,7 @@ func ListAllNetworkInterfaces(faClient *flashblade.Client) ([]flashblade.NetResp
 	return netInterface, nil
 }
 
+// ListAllSubnetInterfaces Returns list of all subnets from FB
 func ListAllSubnetInterfaces(faClient *flashblade.Client) ([]flashblade.SubNetResponse, error) {
 	netInterface, err := faClient.NetworkInterface.ListAllArraySubnets(nil, nil)
 	if err != nil {
