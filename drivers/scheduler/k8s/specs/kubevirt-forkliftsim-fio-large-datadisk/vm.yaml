@@ -5,7 +5,7 @@ metadata:
   annotations:
     "cdi.kubevirt.io/storage.contentType": "kubevirt"
     "forklift.konveyor.io/disk-source": "[VCD-DEV-LINUX2-PURE-002] satdaap00886/satdaap00886_1.vmdk"
-    "vmID": {{.vmID}}
+    "vmID": {{ .VmID }}
 spec:
   storageClassName: sv4-wffc-localattach-multi-disk 
   accessModes:
@@ -22,7 +22,7 @@ metadata:
   annotations:
     "cdi.kubevirt.io/storage.contentType": "kubevirt"
     "forklift.konveyor.io/disk-source": "[VCD-DEV-LINUX2-PURE-002] satdaap00886/satdaap00886_1.vmdk"
-    "vmID": {{.vmID}}
+    "vmID": {{ .VmID }}
 spec:
   storageClassName: sv4-wffc-localattach-multi-disk
   accessModes:
@@ -39,7 +39,7 @@ metadata:
   annotations:
     "cdi.kubevirt.io/storage.contentType": "kubevirt"
     "forklift.konveyor.io/disk-source": "[VCD-DEV-LINUX2-PURE-002] satdaap00886/satdaap00886_1.vmdk"
-    "vmID": {{.vmID}}
+    "vmID": {{ .VmID }}
 spec:
   storageClassName: sv4-wffc-localattach-multi-disk
   accessModes:
@@ -56,7 +56,7 @@ metadata:
   annotations:
     "cdi.kubevirt.io/storage.contentType": "kubevirt"
     "forklift.konveyor.io/disk-source": "[VCD-DEV-LINUX2-PURE-002] satdaap00886/satdaap00886_1.vmdk"
-    "vmID": {{.vmID}}
+    "vmID": {{ .VmID }}
 spec:
   storageClassName: sv4-wffc-localattach-multi-disk
   accessModes:
@@ -73,7 +73,7 @@ metadata:
   annotations:
     "cdi.kubevirt.io/storage.contentType": "kubevirt"
     "forklift.konveyor.io/disk-source": "[VCD-DEV-LINUX2-PURE-002] satdaap00886/satdaap00886_1.vmdk"
-    "vmID": {{.vmID}}
+    "vmID": {{ .VmID }}
 spec:
   storageClassName: sv4-wffc-localattach-multi-disk
   accessModes:
@@ -90,7 +90,7 @@ metadata:
   annotations:
     "cdi.kubevirt.io/storage.contentType": "kubevirt"
     "forklift.konveyor.io/disk-source": "[VCD-DEV-LINUX2-PURE-002] satdaap00886/satdaap00886_1.vmdk"
-    "vmID": {{.vmID}}
+    "vmID": {{ .VmID }}
 spec:
   storageClassName: sv4-wffc-localattach-multi-disk
   accessModes:
@@ -107,7 +107,7 @@ metadata:
   annotations:
     "cdi.kubevirt.io/storage.contentType": "kubevirt"
     "forklift.konveyor.io/disk-source": "[VCD-DEV-LINUX2-PURE-002] satdaap00886/satdaap00886_1.vmdk"
-    "vmID": {{.vmID}}
+    "vmID": {{ .VmID }}
 spec:
   storageClassName: sv4-wffc-localattach-multi-disk
   accessModes:
@@ -124,7 +124,7 @@ metadata:
   annotations:
     "cdi.kubevirt.io/storage.contentType": "kubevirt"
     "forklift.konveyor.io/disk-source": "[VCD-DEV-LINUX2-PURE-002] satdaap00886/satdaap00886_1.vmdk"
-    "vmID": {{.vmID}}
+    "vmID": {{ .VmID }}
 spec:
   storageClassName: sv4-wffc-localattach-multi-disk
   accessModes:
@@ -146,7 +146,7 @@ spec:
         kubevirt.io/domain: ubuntu-bionic
         kubevirt-key: kubevirt-val
         app: vm-multi-disk
-        "vmID": {{.vmID}}
+        "vmID": {{ .VmID }}
     spec:
       domain:
         cpu:
