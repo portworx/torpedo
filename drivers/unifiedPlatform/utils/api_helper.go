@@ -102,6 +102,7 @@ func GetBearerToken() (context.Context, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
+
 	return context.Background(), bearerToken.DATA.Token, nil
 }
 

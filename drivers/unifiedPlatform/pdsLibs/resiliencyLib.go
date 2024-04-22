@@ -4,22 +4,24 @@ import (
 	"errors"
 	"fmt"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
-	//pdswf "github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	k8utils "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	"sync"
 )
 
 const (
-	StopPXDuringStorageResize = "stop-px-during-storage-resize"
+	StopPXDuringStorageResize                         = "stop-px-during-storage-resize"
+	DeletePdsDeploymentPodAndValidateDeploymentHealth = "delete-pdsDeploymentPods-validate-deployment-health"
 )
 
-var FunctionMap map[string]error
+const (
+	PDS_DEPLOYMENT_AVAILABLE   = "AVAILABLE"
+	PDS_DEPLOYMENT_UNAVAILABLE = "UNAVAILABLE"
+)
 
 var (
 	wg                        sync.WaitGroup
 	ResiFlag                  = false
-	FailureType               TypeOfFailure
 	CapturedErrors            = make(chan error, 10)
 	ResiliencyCondition       = make(chan bool)
 	hasResiliencyConditionMet = false
@@ -44,9 +46,6 @@ func CloseResiliencyChannel() {
 
 // InduceFailure Function to wait for event to induce failure
 func InduceFailure(failure TypeOfFailure, ns string) {
-	FunctionMap = map[string]error{
-		StopPXDuringStorageResize: k8utils.StopPxOnReplicaVolumeNode(),
-	}
 	isResiliencyConditionset := <-ResiliencyCondition
 	if isResiliencyConditionset {
 		err := failure.Method()
@@ -72,9 +71,7 @@ func ExecuteInParallel(functions ...func()) {
 	}
 }
 
-func GenerateFailureTypeAndMethod(failuretype string) TypeOfFailure {
-	// Create a map to associate string keys with functions
-
+func GenerateFailureTypeAndMethod(failuretype string, FunctionMap map[string]error) TypeOfFailure {
 	var method error
 	// Call a function based on a string argument
 	if fn, ok := FunctionMap[failuretype]; ok {
@@ -92,24 +89,45 @@ func GenerateFailureTypeAndMethod(failuretype string) TypeOfFailure {
 }
 
 // DefineFailureType Wrapper to Define failure type from Test Case
-func DefineFailureType(failuretype TypeOfFailure) {
-	FailureType = failuretype
+func DefineFailureType(failureType string, funcMap map[string]error) TypeOfFailure {
+	return GenerateFailureTypeAndMethod(failureType, funcMap)
 }
 
-func InduceFailureAfterWaitingForCondition(ds PDSDataService, deploymentId, namespaceId, projectId, imageId, appConfigId, resConfigId, stConfigId, namespace string, failureType string, resiFlag bool) error {
+// InduceFailureAfterWaitingForCondition executes failure injection method and validation method in goroutines
+func InduceFailureAfterWaitingForCondition(ds PDSDataService, dsPodName, deploymentId, namespaceId, projectId, imageId, appConfigId, resConfigId, stConfigId, namespace, failureType string, resiFlag bool) error {
 	ResiFlag = resiFlag
-	failureTypeGen := GenerateFailureTypeAndMethod(failureType)
-	DefineFailureType(failureTypeGen)
-	switch failureTypeGen.Type {
+	switch failureType {
 	case StopPXDuringStorageResize:
+		FunctionMap := map[string]error{
+			StopPXDuringStorageResize: k8utils.StopPxOnReplicaVolumeNode(),
+		}
+		FailureTypeAndMethod := DefineFailureType(failureType, FunctionMap)
+
 		log.InfoD("Entering to resize of the Data service Volume, while PX on volume node is stopped")
 		func1 := func() {
 			UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, resConfigId, stConfigId)
 		}
 		func2 := func() {
-			InduceFailure(FailureType, namespace)
+			InduceFailure(FailureTypeAndMethod, namespace)
 		}
 		ExecuteInParallel(func1, func2)
+	case DeletePdsDeploymentPodAndValidateDeploymentHealth:
+		log.Debugf("dsPodName [%s]", dsPodName)
+		log.Debugf("namespace [%s]", namespace)
+		FunctionMap := map[string]error{
+			DeletePdsDeploymentPodAndValidateDeploymentHealth: k8utils.DeleteK8sPod(dsPodName, namespace, true),
+		}
+		FailureTypeAndMethod := DefineFailureType(failureType, FunctionMap)
+
+		func1 := func() {
+			ValidateDataServiceDeploymentHealth(deploymentId, PDS_DEPLOYMENT_UNAVAILABLE)
+		}
+		func2 := func() {
+			InduceFailure(FailureTypeAndMethod, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+		ResiFlag = false
+		ValidateDataServiceDeploymentHealth(deploymentId, PDS_DEPLOYMENT_AVAILABLE)
 	}
 
 	var aggregatedError error
@@ -121,7 +139,5 @@ func InduceFailureAfterWaitingForCondition(ds PDSDataService, deploymentId, name
 	if aggregatedError != nil {
 		return aggregatedError
 	}
-	//validate method needs to be called from the testcode
-	//err := ValidateDataServiceDeployment(deployment, namespace)
 	return err
 }
