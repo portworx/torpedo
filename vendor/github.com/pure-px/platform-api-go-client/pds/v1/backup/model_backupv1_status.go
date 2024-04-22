@@ -33,6 +33,7 @@ type Backupv1Status struct {
 	ErrorMessage *string `json:"errorMessage,omitempty"`
 	// FileSize of the CloudSnap image.
 	FileSize *string `json:"fileSize,omitempty"`
+	DeploymentMetaData *V1DeploymentMetaData `json:"deploymentMetaData,omitempty"`
 }
 
 // NewBackupv1Status instantiates a new Backupv1Status object
@@ -280,6 +281,38 @@ func (o *Backupv1Status) SetFileSize(v string) {
 	o.FileSize = &v
 }
 
+// GetDeploymentMetaData returns the DeploymentMetaData field value if set, zero value otherwise.
+func (o *Backupv1Status) GetDeploymentMetaData() V1DeploymentMetaData {
+	if o == nil || IsNil(o.DeploymentMetaData) {
+		var ret V1DeploymentMetaData
+		return ret
+	}
+	return *o.DeploymentMetaData
+}
+
+// GetDeploymentMetaDataOk returns a tuple with the DeploymentMetaData field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *Backupv1Status) GetDeploymentMetaDataOk() (*V1DeploymentMetaData, bool) {
+	if o == nil || IsNil(o.DeploymentMetaData) {
+		return nil, false
+	}
+	return o.DeploymentMetaData, true
+}
+
+// HasDeploymentMetaData returns a boolean if a field has been set.
+func (o *Backupv1Status) HasDeploymentMetaData() bool {
+	if o != nil && !IsNil(o.DeploymentMetaData) {
+		return true
+	}
+
+	return false
+}
+
+// SetDeploymentMetaData gets a reference to the given V1DeploymentMetaData and assigns it to the DeploymentMetaData field.
+func (o *Backupv1Status) SetDeploymentMetaData(v V1DeploymentMetaData) {
+	o.DeploymentMetaData = &v
+}
+
 func (o Backupv1Status) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -310,6 +343,9 @@ func (o Backupv1Status) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.FileSize) {
 		toSerialize["fileSize"] = o.FileSize
+	}
+	if !IsNil(o.DeploymentMetaData) {
+		toSerialize["deploymentMetaData"] = o.DeploymentMetaData
 	}
 	return toSerialize, nil
 }

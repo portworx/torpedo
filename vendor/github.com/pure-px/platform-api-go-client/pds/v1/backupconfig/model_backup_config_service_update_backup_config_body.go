@@ -19,8 +19,7 @@ var _ MappedNullable = &BackupConfigServiceUpdateBackupConfigBody{}
 
 // BackupConfigServiceUpdateBackupConfigBody Request to update a backup configuration.
 type BackupConfigServiceUpdateBackupConfigBody struct {
-	// Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1.
-	JobHistoryLimit *int32 `json:"jobHistoryLimit,omitempty"`
+	Suspend *V1BackupConfigSuspended `json:"suspend,omitempty"`
 	// Labels to apply to the Backup Config object.
 	Labels *map[string]string `json:"labels,omitempty"`
 	// Annotations for the Backup Config object.
@@ -33,6 +32,8 @@ type BackupConfigServiceUpdateBackupConfigBody struct {
 // will change when the set of required properties is changed
 func NewBackupConfigServiceUpdateBackupConfigBody() *BackupConfigServiceUpdateBackupConfigBody {
 	this := BackupConfigServiceUpdateBackupConfigBody{}
+	var suspend V1BackupConfigSuspended = V1BACKUPCONFIGSUSPENDED_BACKUP_CONFIG_SUSPENDED_UNSPECIFIED
+	this.Suspend = &suspend
 	return &this
 }
 
@@ -41,39 +42,41 @@ func NewBackupConfigServiceUpdateBackupConfigBody() *BackupConfigServiceUpdateBa
 // but it doesn't guarantee that properties required by API are set
 func NewBackupConfigServiceUpdateBackupConfigBodyWithDefaults() *BackupConfigServiceUpdateBackupConfigBody {
 	this := BackupConfigServiceUpdateBackupConfigBody{}
+	var suspend V1BackupConfigSuspended = V1BACKUPCONFIGSUSPENDED_BACKUP_CONFIG_SUSPENDED_UNSPECIFIED
+	this.Suspend = &suspend
 	return &this
 }
 
-// GetJobHistoryLimit returns the JobHistoryLimit field value if set, zero value otherwise.
-func (o *BackupConfigServiceUpdateBackupConfigBody) GetJobHistoryLimit() int32 {
-	if o == nil || IsNil(o.JobHistoryLimit) {
-		var ret int32
+// GetSuspend returns the Suspend field value if set, zero value otherwise.
+func (o *BackupConfigServiceUpdateBackupConfigBody) GetSuspend() V1BackupConfigSuspended {
+	if o == nil || IsNil(o.Suspend) {
+		var ret V1BackupConfigSuspended
 		return ret
 	}
-	return *o.JobHistoryLimit
+	return *o.Suspend
 }
 
-// GetJobHistoryLimitOk returns a tuple with the JobHistoryLimit field value if set, nil otherwise
+// GetSuspendOk returns a tuple with the Suspend field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *BackupConfigServiceUpdateBackupConfigBody) GetJobHistoryLimitOk() (*int32, bool) {
-	if o == nil || IsNil(o.JobHistoryLimit) {
+func (o *BackupConfigServiceUpdateBackupConfigBody) GetSuspendOk() (*V1BackupConfigSuspended, bool) {
+	if o == nil || IsNil(o.Suspend) {
 		return nil, false
 	}
-	return o.JobHistoryLimit, true
+	return o.Suspend, true
 }
 
-// HasJobHistoryLimit returns a boolean if a field has been set.
-func (o *BackupConfigServiceUpdateBackupConfigBody) HasJobHistoryLimit() bool {
-	if o != nil && !IsNil(o.JobHistoryLimit) {
+// HasSuspend returns a boolean if a field has been set.
+func (o *BackupConfigServiceUpdateBackupConfigBody) HasSuspend() bool {
+	if o != nil && !IsNil(o.Suspend) {
 		return true
 	}
 
 	return false
 }
 
-// SetJobHistoryLimit gets a reference to the given int32 and assigns it to the JobHistoryLimit field.
-func (o *BackupConfigServiceUpdateBackupConfigBody) SetJobHistoryLimit(v int32) {
-	o.JobHistoryLimit = &v
+// SetSuspend gets a reference to the given V1BackupConfigSuspended and assigns it to the Suspend field.
+func (o *BackupConfigServiceUpdateBackupConfigBody) SetSuspend(v V1BackupConfigSuspended) {
+	o.Suspend = &v
 }
 
 // GetLabels returns the Labels field value if set, zero value otherwise.
@@ -150,8 +153,8 @@ func (o BackupConfigServiceUpdateBackupConfigBody) MarshalJSON() ([]byte, error)
 
 func (o BackupConfigServiceUpdateBackupConfigBody) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.JobHistoryLimit) {
-		toSerialize["jobHistoryLimit"] = o.JobHistoryLimit
+	if !IsNil(o.Suspend) {
+		toSerialize["suspend"] = o.Suspend
 	}
 	if !IsNil(o.Labels) {
 		toSerialize["labels"] = o.Labels

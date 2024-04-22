@@ -20,10 +20,8 @@ var _ MappedNullable = &V1Config{}
 // V1Config Desired config of the backup configuration.
 type V1Config struct {
 	References *V1References `json:"references,omitempty"`
-	// Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1.
-	JobHistoryLimit *int32 `json:"jobHistoryLimit,omitempty"`
 	BackupPolicy *V1BackupPolicy `json:"backupPolicy,omitempty"`
-	// Suspend flag is used to suspend a scheduled backup from creating new backup jobs.
+	// Suspend flag is used to suspend a scheduled backup from creating new backups.
 	Suspend *bool `json:"suspend,omitempty"`
 	BackupType *ConfigBackupType `json:"backupType,omitempty"`
 	BackupLevel *ConfigBackupLevel `json:"backupLevel,omitempty"`
@@ -89,38 +87,6 @@ func (o *V1Config) HasReferences() bool {
 // SetReferences gets a reference to the given V1References and assigns it to the References field.
 func (o *V1Config) SetReferences(v V1References) {
 	o.References = &v
-}
-
-// GetJobHistoryLimit returns the JobHistoryLimit field value if set, zero value otherwise.
-func (o *V1Config) GetJobHistoryLimit() int32 {
-	if o == nil || IsNil(o.JobHistoryLimit) {
-		var ret int32
-		return ret
-	}
-	return *o.JobHistoryLimit
-}
-
-// GetJobHistoryLimitOk returns a tuple with the JobHistoryLimit field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *V1Config) GetJobHistoryLimitOk() (*int32, bool) {
-	if o == nil || IsNil(o.JobHistoryLimit) {
-		return nil, false
-	}
-	return o.JobHistoryLimit, true
-}
-
-// HasJobHistoryLimit returns a boolean if a field has been set.
-func (o *V1Config) HasJobHistoryLimit() bool {
-	if o != nil && !IsNil(o.JobHistoryLimit) {
-		return true
-	}
-
-	return false
-}
-
-// SetJobHistoryLimit gets a reference to the given int32 and assigns it to the JobHistoryLimit field.
-func (o *V1Config) SetJobHistoryLimit(v int32) {
-	o.JobHistoryLimit = &v
 }
 
 // GetBackupPolicy returns the BackupPolicy field value if set, zero value otherwise.
@@ -295,9 +261,6 @@ func (o V1Config) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	if !IsNil(o.References) {
 		toSerialize["references"] = o.References
-	}
-	if !IsNil(o.JobHistoryLimit) {
-		toSerialize["jobHistoryLimit"] = o.JobHistoryLimit
 	}
 	if !IsNil(o.BackupPolicy) {
 		toSerialize["backupPolicy"] = o.BackupPolicy

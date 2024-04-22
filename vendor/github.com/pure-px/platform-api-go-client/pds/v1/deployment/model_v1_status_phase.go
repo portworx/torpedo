@@ -15,7 +15,7 @@ import (
 	"fmt"
 )
 
-// V1StatusPhase Enum for Status of the Deployment.   - PHASE_UNSPECIFIED: Phase is unspecified.  - RESTORING: Restore of Deployment is in progress.  - FAILED: Deployment is Failed.  - DELETING: Deployment is being deleted.  - PREPARING: Deployment is Preparing.  - DEPLOYING: Deployment is Deploying.  - DEPLOYED: Deployment is Deployed.  - UPDATING: Deployment is Updating.  - TIMED_OUT: Deployment is Timeout.
+// V1StatusPhase Enum for Status of the Deployment.   - PHASE_UNSPECIFIED: Phase is unspecified.  - RESTORING: Restore of Deployment is in progress.  - FAILED: Deployment is Failed.  - DELETING: Deployment is being deleted.  - PREPARING: Deployment is Preparing.  - DEPLOYING: Deployment is Deploying.  - DEPLOYED: Deployment is Deployed.  - UPDATING: Deployment is Updating.  - TIMED_OUT: Deployment is Timeout.  - DELETED_FROM_CLUSTER: Deployment is deleted from cluster.
 type V1StatusPhase string
 
 // List of v1StatusPhase
@@ -29,6 +29,7 @@ const (
 	V1STATUSPHASE_DEPLOYED V1StatusPhase = "DEPLOYED"
 	V1STATUSPHASE_UPDATING V1StatusPhase = "UPDATING"
 	V1STATUSPHASE_TIMED_OUT V1StatusPhase = "TIMED_OUT"
+	V1STATUSPHASE_DELETED_FROM_CLUSTER V1StatusPhase = "DELETED_FROM_CLUSTER"
 )
 
 // All allowed values of V1StatusPhase enum
@@ -42,6 +43,7 @@ var AllowedV1StatusPhaseEnumValues = []V1StatusPhase{
 	"DEPLOYED",
 	"UPDATING",
 	"TIMED_OUT",
+	"DELETED_FROM_CLUSTER",
 }
 
 func (v *V1StatusPhase) UnmarshalJSON(src []byte) error {

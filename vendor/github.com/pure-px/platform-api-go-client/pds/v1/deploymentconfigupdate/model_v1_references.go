@@ -27,6 +27,7 @@ type V1References struct {
 	ProjectId *string `json:"projectId,omitempty"`
 	// UID of the restore id for the Deployment.
 	RestoreId *string `json:"restoreId,omitempty"`
+	DataServiceId *string `json:"dataServiceId,omitempty"`
 }
 
 // NewV1References instantiates a new V1References object
@@ -174,6 +175,38 @@ func (o *V1References) SetRestoreId(v string) {
 	o.RestoreId = &v
 }
 
+// GetDataServiceId returns the DataServiceId field value if set, zero value otherwise.
+func (o *V1References) GetDataServiceId() string {
+	if o == nil || IsNil(o.DataServiceId) {
+		var ret string
+		return ret
+	}
+	return *o.DataServiceId
+}
+
+// GetDataServiceIdOk returns a tuple with the DataServiceId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *V1References) GetDataServiceIdOk() (*string, bool) {
+	if o == nil || IsNil(o.DataServiceId) {
+		return nil, false
+	}
+	return o.DataServiceId, true
+}
+
+// HasDataServiceId returns a boolean if a field has been set.
+func (o *V1References) HasDataServiceId() bool {
+	if o != nil && !IsNil(o.DataServiceId) {
+		return true
+	}
+
+	return false
+}
+
+// SetDataServiceId gets a reference to the given string and assigns it to the DataServiceId field.
+func (o *V1References) SetDataServiceId(v string) {
+	o.DataServiceId = &v
+}
+
 func (o V1References) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -195,6 +228,9 @@ func (o V1References) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.RestoreId) {
 		toSerialize["restoreId"] = o.RestoreId
+	}
+	if !IsNil(o.DataServiceId) {
+		toSerialize["dataServiceId"] = o.DataServiceId
 	}
 	return toSerialize, nil
 }

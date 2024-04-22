@@ -147,6 +147,13 @@ type ApiBackupConfigServiceDeleteBackupConfigRequest struct {
 	ctx context.Context
 	ApiService *BackupConfigServiceAPIService
 	id string
+	force *bool
+}
+
+// Force flag to delete backup configuration from control plane only.
+func (r ApiBackupConfigServiceDeleteBackupConfigRequest) Force(force bool) ApiBackupConfigServiceDeleteBackupConfigRequest {
+	r.force = &force
+	return r
 }
 
 func (r ApiBackupConfigServiceDeleteBackupConfigRequest) Execute() (map[string]interface{}, *http.Response, error) {
@@ -190,6 +197,9 @@ func (a *BackupConfigServiceAPIService) BackupConfigServiceDeleteBackupConfigExe
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.force != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "force", r.force, "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 
@@ -364,7 +374,6 @@ func (a *BackupConfigServiceAPIService) BackupConfigServiceGetBackupConfigExecut
 type ApiBackupConfigServiceListBackupConfigsRequest struct {
 	ctx context.Context
 	ApiService *BackupConfigServiceAPIService
-	accountId *string
 	tenantId *string
 	projectId *string
 	targetClusterId *string
@@ -374,12 +383,7 @@ type ApiBackupConfigServiceListBackupConfigsRequest struct {
 	paginationPageSize *string
 	sortSortBy *string
 	sortSortOrder *string
-}
-
-// Account ID for which the backup configurations will be listed.
-func (r ApiBackupConfigServiceListBackupConfigsRequest) AccountId(accountId string) ApiBackupConfigServiceListBackupConfigsRequest {
-	r.accountId = &accountId
-	return r
+	suspended *string
 }
 
 // Tenant ID for which the backup configurations will be listed.
@@ -436,6 +440,12 @@ func (r ApiBackupConfigServiceListBackupConfigsRequest) SortSortOrder(sortSortOr
 	return r
 }
 
+// Filter backup configs based on suspended flag.   - BACKUP_CONFIG_SUSPENDED_UNSPECIFIED: List all backup configs.  - TRUE: List only suspended backup configs.  - FALSE: List only disabled backup configs.
+func (r ApiBackupConfigServiceListBackupConfigsRequest) Suspended(suspended string) ApiBackupConfigServiceListBackupConfigsRequest {
+	r.suspended = &suspended
+	return r
+}
+
 func (r ApiBackupConfigServiceListBackupConfigsRequest) Execute() (*V1ListBackupConfigsResponse, *http.Response, error) {
 	return r.ApiService.BackupConfigServiceListBackupConfigsExecute(r)
 }
@@ -474,9 +484,6 @@ func (a *BackupConfigServiceAPIService) BackupConfigServiceListBackupConfigsExec
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
-	if r.accountId != nil {
-		parameterAddToHeaderOrQuery(localVarQueryParams, "accountId", r.accountId, "")
-	}
 	if r.tenantId != nil {
 		parameterAddToHeaderOrQuery(localVarQueryParams, "tenantId", r.tenantId, "")
 	}
@@ -509,6 +516,12 @@ func (a *BackupConfigServiceAPIService) BackupConfigServiceListBackupConfigsExec
 	} else {
 		var defaultValue string = "VALUE_UNSPECIFIED"
 		r.sortSortOrder = &defaultValue
+	}
+	if r.suspended != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "suspended", r.suspended, "")
+	} else {
+		var defaultValue string = "BACKUP_CONFIG_SUSPENDED_UNSPECIFIED"
+		r.suspended = &defaultValue
 	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
