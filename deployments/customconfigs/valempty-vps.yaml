@@ -1,0 +1,9 @@
+apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: val-empty-vps
+spec:
+  replicaAntiAffinity:
+    -  matchExpressions:
+         - key: vpsValEmpty
+           operator: Exists
