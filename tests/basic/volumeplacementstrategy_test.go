@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/core"
 	"math/rand"
 
 	"github.com/libopenstorage/openstorage/api"
@@ -438,3 +439,69 @@ func getApiVols(vols []*volume.Volume) ([]*api.Volume, error) {
 	}
 	return apiVols, nil
 }
+
+var _ = Describe("{VPSValueDoesntExist}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VPSValueDoesntExist", "VPS test where vps rule where value is left empty", nil, 0)
+	})
+
+	itLog := "VPS test to check when vps value is left empty"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		var appList []string
+		var contexts []*scheduler.Context
+
+		stepLog := "Deploy vps with empty key"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			matchExpression := []*v1beta1.LabelSelectorRequirement{
+				{
+					Key:      "vpsValEmpty",
+					Operator: v1beta1.LabelSelectorOpExists,
+					Values:   []string{},
+				},
+			}
+			vpsSpec := vpsutil.VolumeAffinityByMatchExpression("value-empty-vps", matchExpression)
+			_, err := talisman.Instance().CreateVolumePlacementStrategy(&vpsSpec)
+			log.FailOnError(err, "Failed to Deploy VPS Spec")
+
+		})
+
+		stepLog = "Label all the nodes with the vps key which was created in the previous step"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes := node.GetStorageDriverNodes()
+			for _, node := range storageNodes {
+				err := Inst().S.AddLabelOnNode(node, "vpsValEmpty", "")
+				log.FailOnError(err, "Failed to Label Node")
+			}
+		})
+
+		stepLog = "Schedule applications with the label which was created in the previous step"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			appList = Inst().AppList
+			defer func() {
+				Inst().AppList = appList
+			}()
+			Inst().AppList = []string{"fio-vps-val-empty"}
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fio-vps-val-empty-%d", i))...)
+			}
+		})
+
+		stepLog = "PVC should not be scheduled on any node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				// get all pvc from the context
+				_, err := core.Instance().GetPersistentVolumeClaims(ctx.App.NameSpace, nil)
+				log.FailOnError(err, "Failed to get PVCs")
+			}
+		})
+
+	})
+
+})
