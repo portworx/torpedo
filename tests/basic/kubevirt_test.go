@@ -27,13 +27,13 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 	itLog := "Add a new disk to a kubevirtVM"
 	It(itLog, func() {
 		defer ListEvents("portworx")
-		namespace = fmt.Sprintf("kubevirt-1713799781")
+		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-fio-pvc-clone"}
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
