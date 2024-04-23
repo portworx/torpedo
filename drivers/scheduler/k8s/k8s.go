@@ -6580,13 +6580,12 @@ func (k *K8s) ValidateAutopilotRuleObjects() error {
 	return nil
 }
 
-func (k *K8s) CalculateLatencyForAroStates(ruleName apapi.AutopilotRule) error {
+func (k *K8s) CalculateLatencyForAroStates(ruleName apapi.AutopilotRule, aroNamespace string) error {
 	namespace, err := k.GetAutopilotNamespace()
 	if err != nil {
 		return err
 	}
 	log.InfoD("Autopilot is installed on namespace %v", namespace)
-	aroNamespace := ruleName.Namespace
 	log.InfoD("Autopilot rule object namespace %v", aroNamespace)
 	listAutopilotRuleObjects, err := k8sAutopilot.ListAutopilotRuleObjects(aroNamespace)
 	if err != nil {
