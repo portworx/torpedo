@@ -6604,6 +6604,8 @@ func (k *K8s) CalculateLatencyForAroStates(ruleName apapi.AutopilotRule, aroName
 			if len(aro.Status.Items) != 0 {
 				prevState = aro.Status.Items[0].State
 				prevTimestamp = aro.Status.Items[0].LastProcessTimestamp
+				log.InfoD("Initial state %v", prevState)
+				log.InfoD("Initial timestamp %v", prevTimestamp)
 			}
 			for _, aroStatusItem := range aro.Status.Items[1:] {
 				if aroStatusItem.State == "" {
@@ -6611,6 +6613,8 @@ func (k *K8s) CalculateLatencyForAroStates(ruleName apapi.AutopilotRule, aroName
 				}
 				if prevState != "" {
 					log.InfoD("calculating duration between state %v and %v", prevState, aroStatusItem.State)
+					log.InfoD("Previous timestamp %v", prevTimestamp)
+					log.InfoD("Current timestamp %v", aroStatusItem.LastProcessTimestamp)
 					duration := aroStatusItem.LastProcessTimestamp.Time.Sub(prevTimestamp.Time)
 					log.InfoD("Duration between state %v and %v is %v", prevState, aroStatusItem.State, duration.Minutes())
 					if duration.Minutes() > 10 {
