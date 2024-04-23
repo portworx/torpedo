@@ -7,10 +7,9 @@ metadata:
     app: containerized-data-importer
   annotations:
     cdi.kubevirt.io/storage.import.endpoint: http://kubevirt-disk-registry.pwx.dev.purestorage.com/more_images/debian-12-4.qcow2
-    cdi.kubevirt.io/storage.bind.immediate.requested: "true"
     pvc.source: "cloned"
 spec:
-  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
+  storageClassName: sc-sharedv4svc-nolock-immediate
   accessModes:
     - ReadWriteMany
   resources:
