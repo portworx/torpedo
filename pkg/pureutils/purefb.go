@@ -66,7 +66,7 @@ func ListAllFileSystems(faClient *flashblade.Client) ([]flashblade.FSResponse, e
 	return fileSys, nil
 }
 
-// GetAllPVCNames Returns list of all PVCs present in the FB Cluster 
+// GetAllPVCNames Returns list of all PVCs present in the FB Cluster
 func GetAllPVCNames(faClient *flashblade.Client) ([]string, error) {
 	allPVCs := []string{}
 	allFs, err := ListAllFileSystems(faClient)
@@ -112,7 +112,7 @@ func ListAllSubnetInterfaces(faClient *flashblade.Client) ([]flashblade.SubNetRe
 
 // listAllSpecificInterfaces returns list of all specific Interfaces from the available network interface
 // interface type can be management, data, replication support
-func listAllSpecificInterfaces(faClient *flashblade.Client, interfaceType string) ([]flashblade.NetResponse, error) {
+func ListAllSpecificInterfaces(faClient *flashblade.Client, interfaceType string) ([]flashblade.NetResponse, error) {
 	mgmtInterfaces := []flashblade.NetResponse{}
 	allInterfaces, err := ListAllNetworkInterfaces(faClient)
 	if err != nil {
