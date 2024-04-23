@@ -204,6 +204,7 @@ func populateDisruptiveTriggers() {
 		RebootManyNodes:                 true,
 		RestartKvdbVolDriver:            true,
 		NodeDecommission:                true,
+		DetachDrives:                    true,
 		CsiSnapShot:                     false,
 		CsiSnapRestore:                  false,
 		KVDBFailover:                    true,
@@ -539,6 +540,8 @@ func populateIntervals() {
 	triggerInterval[AutoFsTrim] = make(map[int]time.Duration)
 	triggerInterval[UpdateVolume] = make(map[int]time.Duration)
 	triggerInterval[UpdateIOProfile] = make(map[int]time.Duration)
+	triggerInterval[UpdateIOProfile] = make(map[int]time.Duration)
+	triggerInterval[DetachDrives] = make(map[int]time.Duration)
 	triggerInterval[RestartManyVolDriver] = make(map[int]time.Duration)
 	triggerInterval[RebootManyNodes] = make(map[int]time.Duration)
 	triggerInterval[NodeDecommission] = make(map[int]time.Duration)
@@ -592,7 +595,7 @@ func populateIntervals() {
 	triggerInterval[CreateAndRunMultipleFioOnVcluster] = make(map[int]time.Duration)
 	triggerInterval[VolumeDriverDownVCluster] = make(map[int]time.Duration)
 
-	baseInterval := 10 * time.Minute
+	baseInterval := 5 * time.Minute
 
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
 	triggerInterval[BackupScaleMongo][9] = 2 * baseInterval
@@ -911,7 +914,7 @@ func populateIntervals() {
 	triggerInterval[StorkAppBkpPoolResize][2] = 24 * baseInterval
 	triggerInterval[StorkAppBkpPoolResize][1] = 27 * baseInterval
 
-	baseInterval = 60 * time.Minute
+	baseInterval = 10 * time.Minute
 
 	triggerInterval[AppTasksDown][10] = 1 * baseInterval
 	triggerInterval[AppTasksDown][9] = 2 * baseInterval
@@ -1294,6 +1297,17 @@ func populateIntervals() {
 	triggerInterval[UpdateIOProfile][2] = 24 * baseInterval
 	triggerInterval[UpdateIOProfile][1] = 27 * baseInterval
 
+	triggerInterval[DetachDrives][10] = 1 * baseInterval
+	triggerInterval[DetachDrives][9] = 3 * baseInterval
+	triggerInterval[DetachDrives][8] = 6 * baseInterval
+	triggerInterval[DetachDrives][7] = 9 * baseInterval
+	triggerInterval[DetachDrives][6] = 12 * baseInterval
+	triggerInterval[DetachDrives][5] = 15 * baseInterval
+	triggerInterval[DetachDrives][4] = 18 * baseInterval
+	triggerInterval[DetachDrives][3] = 21 * baseInterval
+	triggerInterval[DetachDrives][2] = 24 * baseInterval
+	triggerInterval[DetachDrives][1] = 27 * baseInterval
+
 	triggerInterval[NodeDecommission][10] = 1 * baseInterval
 	triggerInterval[NodeDecommission][9] = 3 * baseInterval
 	triggerInterval[NodeDecommission][8] = 6 * baseInterval
@@ -1628,6 +1642,7 @@ func populateIntervals() {
 	triggerInterval[UpdateIOProfile][0] = 0
 	triggerInterval[AggrVolDepReplResizeOps][0] = 0
 	triggerInterval[UpdateIOProfile][0] = 0
+	triggerInterval[DetachDrives][0] = 0
 	triggerInterval[AddStorageNode][0] = 0
 	triggerInterval[AddStoragelessNode][0] = 0
 	triggerInterval[OCPStorageNodeRecycle][0] = 0

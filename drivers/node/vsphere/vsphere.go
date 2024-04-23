@@ -386,9 +386,6 @@ func (v *vsphere) DetachDisk(vmUuid string, path string) error {
 	log.InfoD("Virtual machine %v ", vmMo)
 	//Remove device and detach VM
 
-	//error := vmMo.DetachDisk(v.ctx, path)
-	//log.InfoD("Virtual machine %v , detach succful %v ", vmMo.Name(), error)
-
 	var deviceList object.VirtualDeviceList
 	var selectedDevice types.BaseVirtualDevice
 
@@ -433,15 +430,20 @@ func matchVirtualDiskAndVolPath(diskPath, volPath string) bool {
 func GetDiskPaths(driveset DriveSet) []string {
 	diskPaths := []string{}
 	for vmdkPath, configs := range driveset.Configs {
-		diskPath := vmdkPath
-		datastore := GetDatastore(configs)
-		openBracketIndex := strings.Index(diskPath, "[")
-		closeBracketIndex := strings.Index(diskPath, "]")
-		// Extract the substring inside the square brackets
-		substring := diskPath[openBracketIndex+1 : closeBracketIndex]
-		// Replace the substring inside the square brackets with datastore
-		diskPath = strings.Replace(diskPath, substring, datastore, 1)
-		diskPaths = append(diskPaths, diskPath)
+		//TODO need to change later
+		log.InfoD("PX type %s ", configs.PXType)
+		if configs.PXType == "data" {
+			diskPath := vmdkPath
+			datastore := GetDatastore(configs)
+			openBracketIndex := strings.Index(diskPath, "[")
+			closeBracketIndex := strings.Index(diskPath, "]")
+			// Extract the substring inside the square brackets
+			substring := diskPath[openBracketIndex+1 : closeBracketIndex]
+			// Replace the substring inside the square brackets with datastore
+			diskPath = strings.Replace(diskPath, substring, datastore, 1)
+			diskPaths = append(diskPaths, diskPath)
+			log.InfoD("diskPath %s is of type data ", diskPath)
+		}
 	}
 	return diskPaths
 }

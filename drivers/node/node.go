@@ -287,10 +287,10 @@ func (d *notSupportedDriver) RebootNode(node Node, options RebootNodeOpts) error
 	}
 }
 
-func (d *notSupportedDriver) DetachDisk(vmUuid string, path string) error {
+func (d *notSupportedDriver) DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "DetachDisk()",
+		Operation: "DetachDrivesFromVM()",
 	}
 }
 
