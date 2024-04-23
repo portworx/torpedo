@@ -83,6 +83,42 @@ func GetAllPVCNames(fbClient *flashblade.Client) ([]string, error) {
 	return allPVCs, nil
 }
 
+// CreateNewFileSystem Returns list of all filesystems present in FB Backend
+func CreateNewFileSystem(fbClient *flashblade.Client, fsName string, data interface{}) ([]flashblade.FsItem, error) {
+	queryParams := make(map[string]string)
+	queryParams["names"] = fsName
+	fileSys, err := fbClient.FileSystem.CreateNewFileSystem(queryParams, data)
+	if err != nil {
+		return nil, err
+	}
+	return fileSys, nil
+}
+
+// DeleteFileSystem Deletes Filesystem from cluster
+func DeleteFileSystem(fbClient *flashblade.Client, fsName string) error {
+	queryParams := make(map[string]string)
+	queryParams["names"] = fsName
+	err := fbClient.FileSystem.DeleteFilesystem(queryParams)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// IsFileSystemExists Returns True if Filesystem exists, else Returns False
+func IsFileSystemExists(fbClient *flashblade.Client, fsName string) (bool, error) {
+	allPvcNames, err := GetAllPVCNames(fbClient)
+	if err != nil {
+		return false, err
+	}
+	for _, eachPvc := range allPvcNames {
+		if fsName == eachPvc {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // ListSnapSchedulePolicies Returns list of all FB snapshots schedule policies present
 func ListSnapSchedulePolicies(fbClient *flashblade.Client) ([]flashblade.PolicyResponse, error) {
 	policies, err := fbClient.FileSystem.GetSnapshotSchedulingPolicies(nil, nil)
