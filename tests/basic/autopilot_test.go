@@ -112,10 +112,9 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
 		Step("Validte the Latency between each state in Aro Object ", func() {
 			log.InfoD("Validating the latency between each state in Aro Object")
 			for _, ctx := range contexts {
-				for _, apRule := range autopilotruleBasicTestCases {
-					err := Inst().S.CalculateLatencyForAroStates(apRule, ctx.App.NameSpace)
-					Expect(err).NotTo(HaveOccurred())
-				}
+
+				err := Inst().S.CalculateLatencyForAroStates(ctx.App.NameSpace)
+				Expect(err).NotTo(HaveOccurred())
 			}
 
 		})
@@ -189,6 +188,16 @@ var _ = Describe(fmt.Sprintf("{%sPVCVolDetached}", testSuiteName), func() {
 			for _, ctx := range contexts {
 				ValidateVolumes(ctx)
 			}
+		})
+		Step("Validte the Latency between each state in Aro Object ", func() {
+			log.InfoD("Validating the latency between each state in Aro Object")
+			for _, ctx := range contexts {
+
+				err := Inst().S.CalculateLatencyForAroStates(ctx.App.NameSpace)
+				Expect(err).NotTo(HaveOccurred())
+
+			}
+
 		})
 
 		Step("destroy apps", func() {

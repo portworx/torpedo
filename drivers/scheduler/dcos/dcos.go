@@ -101,7 +101,7 @@ func (d *dcos) ValidateAutopilotRuleObjects() error {
 	}
 }
 
-func (d *dcos) CalculateLatencyForAroStates(apRule apapi.AutopilotRule, aroNamespace string) error {
+func (d *dcos) CalculateLatencyForAroStates(aroNamespace string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CalculateLatencyForAroStates()",
