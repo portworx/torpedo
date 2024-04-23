@@ -745,7 +745,12 @@ func PrintCommandOutput(cmnd string) {
 }
 
 func PrintSvPoolStatus(node node.Node) {
-	runCmdGetOutput("pxctl sv pool show", node)
+	output, err := runCmdGetOutput("pxctl sv pool show", node)
+	if err != nil {
+		log.Warnf("error getting pool data on node [%s], cause: %v", node.Name, err)
+		return
+	}
+	log.Infof(output)
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -9127,6 +9132,20 @@ func KillKvdbMemberUsingPid(kvdbNode node.Node) error {
 		return err
 	}
 	return nil
+}
+
+// IsKVDBNode returns true if a node is kvdb node else it returns false
+func IsKVDBNode(n node.Node) (bool, error) {
+	KvdbNodes, err := GetAllKvdbNodes()
+	if err != nil {
+		return false, err
+	}
+	for _, each := range KvdbNodes {
+		if each.ID == n.Id {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // getReplicaNodes returns the list of nodes which has replicas

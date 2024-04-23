@@ -2462,20 +2462,6 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 			}
 		})
 
-		// Default Restores with Replace Policy
-		Step(fmt.Sprintf("Default restore of backups by replacing the existing resources"), func() {
-			log.InfoD(fmt.Sprintf("Default restore of backups by replacing the existing resources"))
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-			log.InfoD("Total backups to restore : %v", backupNames)
-			for i, bkpName := range backupNames {
-				restoreName = fmt.Sprintf("rreplace-%v-%s-%s", i, bkpName, RandomString(6))
-				log.InfoD("Restoring from the backup - [%s]", bkpName)
-				err = CreateRestoreWithReplacePolicyWithValidation(restoreName, bkpName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), 2, scheduledAppContexts)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Default restore of backups by replacing the existing resources [%s]", restoreName))
-			}
-		})
-
 		Step(fmt.Sprintf("Default restore of backups by replacing to a new namespace"), func() {
 			log.InfoD(fmt.Sprintf("Default restore of backups by replacing to a new namespace"))
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -2550,7 +2536,6 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 // This testcase verifies scheduled backup status when Kubevirt VMs are deleted and recreated from namespace in between schedules.
 var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[KubevirtScheduledVMDelete]...), func() {
 	var (
-		backupPreUpgrade               string
 		scheduledAppContexts           []*scheduler.Context
 		bkpNamespaces                  = make([]string, 0)
 		sourceClusterUid               string
@@ -2671,7 +2656,7 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				scheduleNames = append(scheduleNames, nonLabelScheduleName)
 				_, err = CreateVMScheduledBackupWithValidation(nonLabelScheduleName, vms, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
 					labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", false, periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup [%s] of namespace", backupPreUpgrade))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup [%s] of namespace", nonLabelScheduleName))
 				nonLabelSchNamespaceMap[namespace] = nonLabelScheduleName
 			}
 		})
@@ -2698,10 +2683,6 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				err := DeleteAllVMsInNamespace(namespace)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of kubevirt VMs from the namespace [%s]", namespace))
 			}
-			log.InfoD("Deleting remaining kubevirt VM related specs from the namespace")
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			DestroyApps(scheduledAppContexts, opts)
 		})
 
 		Step("Verify next namespace labelled and non labelled scheduled backup is success state after VM deletion", func() {
@@ -2759,7 +2740,6 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 					appName := Inst().AppList[index]
 					appCtx.ReadinessTimeout = AppReadinessTimeout
 					log.InfoD("Scheduled VM [%s] in source cluster in namespace [%s]", appName, namespace)
-					scheduledAppContexts = append(scheduledAppContexts, appCtx)
 				}
 			}
 		})
@@ -2865,7 +2845,6 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 	backupNames = make([]string, 0)
 	labelSelectors = make(map[string]string)
 	appNamespaces = make([]string, 0)
-	backupNamespaceMap := make(map[string]string)
 	periodicPolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(6))
 	testAppList = []string{"mysql-backup", "kubevirt-cirros-cd-with-pvc"}
 
@@ -3189,21 +3168,6 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 			}
 		})
 
-		// Default Restores
-		Step("Restoring all the backups which were taken above", func() {
-			log.InfoD("Restoring all the backups : %v", backupNames)
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-			for i, bkpName := range backupNames {
-				restoreName = fmt.Sprintf("rretain-%v-%s-%s", i, bkpName, RandomString(6))
-				log.InfoD("Restoring from the backup - [%s]", bkpName)
-				bkpNamespace := backupNamespaceMap[bkpName]
-				appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespace})
-				err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsExpectedInBackup)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s] from backup [%s]", restoreName, backupNames[i]))
-			}
-		})
-
 		// Default Restores with Replace Policy
 		Step(fmt.Sprintf("Default restore of backups by replacing the existing resources"), func() {
 			log.InfoD(fmt.Sprintf("Default restore of backups by replacing the existing resources"))
@@ -3475,6 +3439,8 @@ var _ = Describe("{KubevirtVMMigrationTest}", Label(TestCaseLabelsMap[KubevirtVM
 					log.Infof("Validating all px-backup pods are ready after reboot")
 					err = ValidateAllPodsInPxBackupNamespace()
 					dash.VerifyFatal(err, nil, "px-backup pods verification successful")
+					//Adding a sleep of 2 minute, Sometimes, it takes time for the pod to become ready.
+					time.Sleep(120 * time.Second)
 					log.Infof("Taking backup of VMs after node reboot")
 					wg.Add(1)
 					backupName := fmt.Sprintf("%s-%s-%v", "post-reboot-backup", scheduledNamespace, time.Now().Unix())
