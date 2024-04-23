@@ -909,17 +909,19 @@ var _ = Describe("{LegacySharedVolumeAppMigrateHAupdating}", func() {
 		_, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 		log.FailOnError(err, fmt.Sprintf("error ha-updating legacy shared volume %s", volumeName))
 
-		migrated := false
-		for i := 0; i < 6; i++ {
+		t := func() (interface{}, bool, error) {
 			vol, err := Inst().V.InspectVolume(volumeName)
-			log.FailOnError(err, fmt.Sprintf("Inspect volume failed on volume {%v}", volumeName))
-			if !vol.Spec.Shared && vol.Spec.Sharedv4 {
-				migrated = true
-				break
+			if err != nil {
+				log.Infof("Inspect of volume failed for voume {%v}", volumeName)
+				return "", false, err
 			}
-			time.Sleep(1 * time.Minute)
+
+			if !vol.Spec.Shared && vol.Spec.Sharedv4 {
+				return "", false, nil
+			}
+			return "", true, fmt.Errorf("Volume is still shared {%v}", volumeName)
 		}
-		dash.VerifyFatal(migrated, true, fmt.Sprintf("migration failed on volume [%v]", volumeName))
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("migration failed on volume [%v]", volumeName))
 		pxctlCmdFull = fmt.Sprintf("v d %s --force", volumeName)
 		Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
 	})
@@ -1069,7 +1071,9 @@ var _ = Describe("{LegacySharedVolumeAppOutofQuorum}", func() {
 			// defer Restart
 			defer func() {
 				for i := 0; i < len(nodesForPxStop); i++ {
+					// ignore errors.
 					Inst().V.StartDriver(nodesForPxStop[i])
+					Inst().V.WaitDriverUpOnNode(nodesForPxStop[i], 5*time.Minute)
 				}
 				ValidateApplications(contexts)
 			}()
