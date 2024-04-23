@@ -987,6 +987,7 @@ var _ = Describe("{LegacySharedVolumeAppDegraded}", func() {
 			// Stop Node.
 			err = Inst().V.StopDriver([]node.Node{nodeForPxStop}, false, nil)
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Couldn't stop driver"))
+			Inst().V.WaitDriverDownOnNode(nodeForPxStop)
 			// defer Restart
 			defer func() {
 				Inst().V.StartDriver(nodeForPxStop)
@@ -994,7 +995,7 @@ var _ = Describe("{LegacySharedVolumeAppDegraded}", func() {
 		}
 
 		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
-		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
+		timeForMigration := ((totalSharedVolumes + 30) / 30) * 20
 
 		setMigrateLegacySharedToSharedv4Service(true)
 		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
@@ -1069,6 +1070,9 @@ var _ = Describe("{LegacySharedVolumeAppOutofQuorum}", func() {
 			// Stop Node.
 			err = Inst().V.StopDriver(nodesForPxStop, false, nil)
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Couldn't stop driver"))
+			for i := 0; i < len(nodesForPxStop); i++ {
+				Inst().V.WaitDriverDownOnNode(nodesForPxStop[i])
+			}
 			// defer Restart
 			defer func() {
 				for i := 0; i < len(nodesForPxStop); i++ {
