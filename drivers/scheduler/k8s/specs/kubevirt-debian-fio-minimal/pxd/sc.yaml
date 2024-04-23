@@ -1,7 +1,7 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: sc-sharedv4svc-nolock-wait-first-consumer
+  name: sc-sharedv4svc-nolock-wait-first-consumer-1
 parameters:
   repl: "3"
   sharedv4: "true"

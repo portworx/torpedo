@@ -83,7 +83,7 @@ spec:
           resources:
             requests:
               storage: 10Gi
-          storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
+          storageClassName: sc-sharedv4svc-nolock-wait-first-consumer-1
           volumeMode: Filesystem
 ---
 apiVersion: v1
@@ -95,7 +95,7 @@ metadata:
   annotations:
     cdi.kubevirt.io/storage.usePopulator: "false"
 spec:
-  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
+  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer-1
   accessModes:
     - ReadWriteMany
   resources:
@@ -111,7 +111,7 @@ metadata:
   annotations:
     cdi.kubevirt.io/storage.usePopulator: "false"
 spec:
-  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
+  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer-1
   accessModes:
     - ReadWriteMany
   resources:
@@ -127,7 +127,7 @@ metadata:
   annotations:
     cdi.kubevirt.io/storage.usePopulator: "false"
 spec:
-  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
+  storageClassName: sc-sharedv4svc-nolock-wait-first-consumer-1
   accessModes:
     - ReadWriteMany
   resources:
