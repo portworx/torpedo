@@ -94,8 +94,8 @@ func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks in
 			if err != nil {
 				return false, err
 			}
-			log.InfoD("Sleep for 5mins for vm to come up")
-			time.Sleep(5 * time.Minute)
+			log.InfoD("Sleep for 30 seconds for vm to come up")
+			time.Sleep(30 * time.Second)
 
 			//After adding the pvcs check the number of disks in the VM
 			vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
