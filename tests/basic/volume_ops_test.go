@@ -3235,18 +3235,16 @@ var _ = Describe("{VolumePreCheck}", func() {
 			var repl_level int
 			storageNodes := node.GetStorageNodes()
 			if len(storageNodes) >= 4 && len(storageNodes) < 9 {
-				log.InfoD("Setting the aggr_level and repl_level to 2 as storage nodes in the cluster are %d", len(storageNodes))
 				aggr_level = 2
 				repl_level = 2
 			} else if len(storageNodes) >= 9 {
-				log.InfoD("Setting the aggr_level and repl_level to 2 as storage nodes in the cluster are %d", len(storageNodes))
 				aggr_level = 3
 				repl_level = 3
 			} else {
-				log.InfoD("Setting the aggr_level and repl_level to 1 as storage nodes in the cluster are %d", len(storageNodes))
 				aggr_level = 2
 				repl_level = 1
 			}
+			log.InfoD("Setting the aggr_level to %d and repl_level to %d as storage nodes in the cluster are %d", aggr_level, repl_level, len(storageNodes))
 
 			id := uuid.New()
 			volName := fmt.Sprintf("volume_%s", id.String()[:8])
