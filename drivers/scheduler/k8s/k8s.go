@@ -6610,7 +6610,9 @@ func (k *K8s) CalculateLatencyForAroStates(ruleName apapi.AutopilotRule, aroName
 					continue
 				}
 				if prevState != "" {
+					log.InfoD("calculating duration between state %v and %v", prevState, aroStatusItem.State)
 					duration := aroStatusItem.LastProcessTimestamp.Time.Sub(prevTimestamp.Time)
+					log.InfoD("Duration between state %v and %v is %v", prevState, aroStatusItem.State, duration.Minutes())
 					if duration.Minutes() > 10 {
 						log.Warnf("More than 10 minutes between state %s and %s for autopilot rule object: %s", prevState, aroStatusItem.State, aro.Name)
 					}
