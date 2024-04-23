@@ -232,7 +232,10 @@ func GetPXDisabledNodes() []Node {
 	var nodeList []Node
 	for _, n := range nodeRegistry {
 		if !n.IsStorageDriverInstalled {
-			nodeList = append(nodeList, n)
+			// Ignore the control plane nodes
+			if !IsMasterNode(n) {
+				nodeList = append(nodeList, n)
+			}
 		}
 	}
 	return nodeList
