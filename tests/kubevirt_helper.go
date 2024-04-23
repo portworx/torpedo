@@ -137,10 +137,23 @@ func RunCmdInVirtLauncherPod(virtualMachineCtx *scheduler.Context, cmd []string)
 		return "", err
 	}
 
+	// Check if the pod is in the 'Running' state before executing the command
+	_, err = task.DoRetryWithTimeout(func() (interface{}, bool, error) {
+		vmPod, err := GetVirtLauncherPodForVM(virtualMachineCtx, vols[0])
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get pod: %s", err)
+		}
+		if vmPod.Status.Phase != corev1.PodRunning {
+			return nil, true, fmt.Errorf("pod %s is not in running state, current state: %s", vmPod.Name, vmPod.Status.Phase)
+		}
+		return nil, false, nil
+	}, 10*time.Minute, 10*time.Second)
+
 	vmPod, err := GetVirtLauncherPodForVM(virtualMachineCtx, vols[0])
 	if err != nil {
 		return "", err
 	}
+
 	output, err := core.Instance().RunCommandInPod(cmd, vmPod.Name, "compute", vmPod.Namespace)
 	if err != nil {
 		return "", err
