@@ -3223,21 +3223,18 @@ var _ = Describe("{VolumePreCheck}", func() {
 		stepLog := "Create a volume and perform a precheck for sources options"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+
 			stNodes := node.GetStorageDriverNodes()
 			nodesuuidWithoutReplica := make([]string, 0)
 			nodesIP := make([]string, 0)
+
 			index := rand.Intn(len(stNodes))
 			selectedNode := &stNodes[index]
-			for _, stNode := range stNodes {
-				if stNode.Name != selectedNode.Name {
-					nodesuuidWithoutReplica = append(nodesuuidWithoutReplica, stNode.Id)
-					nodesIP = append(nodesIP, stNode.Addresses[0])
-				}
-			}
+
 			var aggr_level int
 			var repl_level int
 			storageNodes := node.GetStorageNodes()
-			if len(storageNodes) == 4 && len(storageNodes) < 9 {
+			if len(storageNodes) >= 4 && len(storageNodes) < 9 {
 				log.InfoD("Setting the aggr_level and repl_level to 2 as storage nodes in the cluster are %d", len(storageNodes))
 				aggr_level = 2
 				repl_level = 2
@@ -3247,9 +3244,10 @@ var _ = Describe("{VolumePreCheck}", func() {
 				repl_level = 3
 			} else {
 				log.InfoD("Setting the aggr_level and repl_level to 1 as storage nodes in the cluster are %d", len(storageNodes))
-				aggr_level = 1
+				aggr_level = 2
 				repl_level = 1
 			}
+
 			id := uuid.New()
 			volName := fmt.Sprintf("volume_%s", id.String()[:8])
 			log.InfoD("Create a volume with a min size on node [%s]", selectedNode.Name)
@@ -3261,7 +3259,21 @@ var _ = Describe("{VolumePreCheck}", func() {
 			volInspect, err := Inst().V.InspectVolume(volName)
 			log.FailOnError(err, "Failed to inspect volume")
 			log.InfoD("Volume created on node: %s", volInspect.ReplicaSets[0].Nodes[0])
+
 			selectedNodeId := volInspect.ReplicaSets[0].Nodes[0]
+			listofNodesVolumePlaced := volInspect.ReplicaSets[0].Nodes
+
+			log.InfoD("List of nodes on which volume is placed: %v", listofNodesVolumePlaced)
+			for _, stNode := range stNodes {
+				if !Contains(listofNodesVolumePlaced, stNode.VolDriverNodeID) {
+					nodesuuidWithoutReplica = append(nodesuuidWithoutReplica, stNode.Id)
+					nodesIP = append(nodesIP, stNode.Addresses[0])
+				}
+			}
+			if len(nodesuuidWithoutReplica) == 0 && len(listofNodesVolumePlaced) == len(storageNodes) {
+				log.InfoD("Volume Cannot be placed on other nodes as all the nodes are already used for the volume creation")
+				return
+			}
 
 			log.InfoD("Test the ha-update sources option with a uuid of other nodes on which node is not present")
 			wrongUuidcmd := fmt.Sprintf("v ha-update %s --repl %d --sources %s", volName, repl_level+1, nodesuuidWithoutReplica[rand.Intn(len(nodesuuidWithoutReplica))])
