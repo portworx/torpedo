@@ -8,12 +8,14 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
 	_ "github.com/rancher/norman/clientbase"
 	rancherClientBase "github.com/rancher/norman/clientbase"
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -438,6 +440,23 @@ func (r *Rancher) ChangeProjectForNamespace(projectName string, nsList []string)
 		}
 	}
 	return nil
+}
+
+// DeleteNode deletes the given node
+func (r *Rancher) DeleteNode(node node.Node) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteActionApproval()",
+	}
+}
+
+func (r *Rancher) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetASGClusterSize()",
+	}
 }
 
 func init() {

@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node/ibm"
+	"github.com/portworx/torpedo/drivers/scheduler/aks"
+	"github.com/portworx/torpedo/drivers/scheduler/eks"
+	"github.com/portworx/torpedo/drivers/scheduler/oke"
 	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
 	"time"
@@ -43,12 +46,15 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 
 		ValidateApplications(contexts)
 
-		intitialNodeCount, err := Inst().N.GetASGClusterSize()
+		initialNodeCount, err := Inst().S.GetASGClusterSize()
 		log.FailOnError(err, "Failed to Get ASG cluster size")
 
-		scaleupCount := intitialNodeCount + intitialNodeCount/2
+		scaleupCount := initialNodeCount + initialNodeCount/2
+
+		scaleupCount = (scaleupCount / 3) * 3
 		stepLog := fmt.Sprintf("scale up cluster from %d to %d nodes and validate",
-			intitialNodeCount, (scaleupCount/3)*3)
+			initialNodeCount, scaleupCount)
+
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			Scale(scaleupCount)
@@ -76,10 +82,10 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 		})
 
 		stepLog = fmt.Sprintf("scale down cluster back to original size of %d nodes",
-			intitialNodeCount)
+			initialNodeCount)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			Scale(intitialNodeCount)
+			Scale(initialNodeCount)
 
 			stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storeage nodes",
 				Inst().AutoStorageNodeRecoveryTimeout.String())
@@ -100,7 +106,7 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 			stepLog = fmt.Sprintf("validate number of storage nodes after scale down")
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-				ValidateClusterSize(intitialNodeCount)
+				ValidateClusterSize(initialNodeCount)
 			})
 		})
 
@@ -219,25 +225,25 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 })
 
 func Scale(count int64) {
+	perZoneCount := count
 	// In multi-zone ASG cluster, node count is per zone
-	zones, err := Inst().N.GetZones()
-	dash.VerifyFatal(err, nil, "Verify Get zones")
+	if Inst().S.String() != aks.SchedName && Inst().S.String() != eks.SchedName {
+		zones, err := Inst().S.GetZones()
+		dash.VerifyFatal(err, nil, "Verify Get zones")
 
-	perZoneCount := count / int64(len(zones))
-
-	// err = Inst().N.SetASGClusterSize(perZoneCount, scaleTimeout)
-	// Expect(err).NotTo(HaveOccurred())
+		perZoneCount = count / int64(len(zones))
+	}
 
 	t := func() (interface{}, bool, error) {
 
-		err = Inst().N.SetASGClusterSize(perZoneCount, scaleTimeout)
+		err = Inst().S.SetASGClusterSize(perZoneCount, scaleTimeout)
 		if err != nil {
 			return "", true, err
 		}
 		return "", false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(t, 60*time.Minute, 2*time.Minute)
+	_, err = task.DoRetryWithTimeout(t, 6*time.Minute, 2*time.Minute)
 	dash.VerifyFatal(err, nil, "Verify Set ASG Cluster size")
 
 }
@@ -249,28 +255,19 @@ func asgKillANodeAndValidate(storageDriverNodes []node.Node) {
 	stepLog := fmt.Sprintf("Deleting node [%v]", nodeToKill.Name)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		err := Inst().N.DeleteNode(nodeToKill, nodeDeleteTimeoutMins)
+		err := Inst().S.DeleteNode(nodeToKill)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Valdiate node %s deletion", nodeToKill.Name))
 	})
 
-	if Inst().N.String() == ibm.DriverName {
-
-		err := waitForIBMNodeToDelete(nodeToKill)
-		log.FailOnError(err, "failed to kill node [%s]", nodeToKill.Hostname)
-
-		log.InfoD("Initiating IBM worker pool rebalance")
-		err = Inst().N.RebalanceWorkerPool()
-		log.FailOnError(err, "Failed to rebalance worker pool")
-		log.Infof("Sleeping for 2 mins for new node to start deploying")
-		time.Sleep(2 * time.Minute)
-		err = waitForIBMNodeTODeploy()
-		log.FailOnError(err, "Failed to deploy new worker")
+	waitTime := 10
+	if Inst().S.String() == oke.SchedName {
+		waitTime = 15 // OKE takes more time to replace the node
 	}
 
-	stepLog = "Wait for 10 min. to node get replaced by autoscalling group"
+	stepLog = fmt.Sprintf("Wait for %d min. to node get replaced by autoscalling group", waitTime)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		time.Sleep(10 * time.Minute)
+		time.Sleep(time.Duration(waitTime) * time.Minute)
 	})
 
 	err := Inst().S.RefreshNodeRegistry()

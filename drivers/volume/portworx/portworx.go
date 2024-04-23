@@ -1203,6 +1203,14 @@ func (d *portworx) EnterPoolMaintenance(n node.Node) error {
 }
 
 func (d *portworx) ExitPoolMaintenance(n node.Node) error {
+
+	// no need to exit pool maintenance if node status is up
+	pxStatus, err := d.GetPxctlStatus(n)
+	if err == nil && pxStatus == api.Status_STATUS_OK.String(){
+		log.Infof("node is up, no need to exit pool maintenance mode")
+		return nil
+	}
+
 	cmd := fmt.Sprintf("pxctl sv pool maintenance -x -y")
 	out, err := d.nodeDriver.RunCommand(
 		n,
@@ -1494,10 +1502,12 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			if requestedSpec.AggregationLevel != vol.Spec.AggregationLevel {
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
 			}
+			/* Ignore shared setting.
 		case api.SpecShared:
 			if requestedSpec.Shared != vol.Spec.Shared {
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.Shared, vol.Spec.Shared)
 			}
+			*/
 		case api.SpecSticky:
 			if requestedSpec.Sticky != vol.Spec.Sticky {
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.Sticky, vol.Spec.Sticky)
@@ -1528,27 +1538,29 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			// Reference: https://docs.portworx.com/portworx-enterprise/concepts/io-profiles
 			if requestedSpec.IoProfile != vol.DerivedIoProfile {
 				switch requestedSpec.IoProfile {
-				case api.IoProfile_IO_PROFILE_AUTO:
-					// The profile auto-selects "db_remote" for volumes with a replication factor is
-					// greater than or equal to 2, and "none" otherwise, based on configuration details.
+				// The "db" and "sequential" IO profiles are deprecated in newer versions of
+				// Portworx, with legacy volumes labeled as such now internally treated as "auto"
+				// profile volumes.
+				case api.IoProfile_IO_PROFILE_AUTO, api.IoProfile_IO_PROFILE_DB, api.IoProfile_IO_PROFILE_SEQUENTIAL:
+					// The "auto" IO profile selects "db_remote" for volumes with a replication factor
+					// of 2 or greater, and selects "none" otherwise.
 					if vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_DB_REMOTE && vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_NONE {
 						log.Infof("requested Spec: %+v", requestedSpec)
 						log.Infof("actual Spec: %+v", vol)
 						return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
 					}
 				case api.IoProfile_IO_PROFILE_AUTO_JOURNAL:
-					// The auto_journal IO profile adjusts a volume to use "journal" or "none"
-					// settings based on analyzing 24-second write pattern intervals to optimize
-					// performance.
+					// The "auto_journal" IO profile dynamically switches between "none" and "journal" based on
+					// 24-second analyses of write patterns, optimizing application performance accordingly.
 					if vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_JOURNAL && vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_NONE {
 						log.Infof("requested Spec: %+v", requestedSpec)
 						log.Infof("actual Spec: %+v", vol)
 						return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
 					}
 				case api.IoProfile_IO_PROFILE_DB_REMOTE:
-					// The write-back flush coalescing algorithm consolidates syncs within 100ms into
-					// a single operation, necessitating at least two replications (HA factor) for
-					// reliability.
+					// The "db_remote" IO profile utilizes a write-back flush coalescing algorithm
+					// that consolidates syncs within 100ms into a single operation, necessitating at
+					// least two replications (HA factor) for reliability.
 					if vol.Spec.HaLevel >= 2 {
 						log.Infof("requested Spec: %+v", requestedSpec)
 						log.Infof("actual Spec: %+v", vol)
@@ -2405,7 +2417,7 @@ func (d *portworx) KillPXDaemon(nodes []node.Node, triggerOpts *driver_api.Trigg
 				return fmt.Errorf("unable to find PID for px daemon in output [%s]", out)
 			}
 
-			pxCrashCmd := fmt.Sprintf("sudo pkill -9 %s", processPid)
+			pxCrashCmd := fmt.Sprintf("sudo kill -9 %s", processPid)
 			_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
 				Timeout:         crashDriverTimeout,
 				TimeBeforeRetry: defaultRetryInterval,

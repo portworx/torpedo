@@ -2,6 +2,7 @@ package openshift
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/errors"
 	"io/ioutil"
 	"net/http"
 	"os/exec"
@@ -909,7 +910,7 @@ func (k *openshift) getMachinesCount() (int, error) {
 }
 
 // Method to recycling OCP node
-func (k *openshift) RecycleNode(n node.Node) error {
+func (k *openshift) DeleteNode(n node.Node) error {
 	// Check if node is valid before proceeding for delete a node
 	var worker []node.Node = node.GetWorkerNodes()
 	var delNode *api.StorageNode
@@ -1342,4 +1343,12 @@ func updatePrometheusAndAutopilot() error {
 	}
 	log.Infof("Successfully updated PX StorageCluster [%s] in [%s] namespace with required changes to work with OCP Prometheus...", stc.Name, stc.Namespace)
 	return nil
+}
+
+func (k *openshift) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetASGClusterSize()",
+	}
 }
