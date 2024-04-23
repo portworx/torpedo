@@ -3,6 +3,7 @@ package pureutils
 import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/pure/flashblade"
+	"strings"
 )
 
 // PureCreateClientAndConnect Create FB Client and Connect
@@ -65,6 +66,23 @@ func ListAllFileSystems(faClient *flashblade.Client) ([]flashblade.FSResponse, e
 	return fileSys, nil
 }
 
+// GetAllPVCNames Returns list of all PVCs present in the FB Cluster 
+func GetAllPVCNames(faClient *flashblade.Client) ([]string, error) {
+	allPVCs := []string{}
+	allFs, err := ListAllFileSystems(faClient)
+	if err != nil {
+		return nil, err
+	}
+	for _, eachPvc := range allFs {
+		for _, eachItem := range eachPvc.Items {
+			if strings.Contains("-pvc-", eachItem.Name) {
+				allPVCs = append(allPVCs, eachItem.Name)
+			}
+		}
+	}
+	return allPVCs, nil
+}
+
 // ListSnapSchedulePolicies Returns list of all FB snapshots schedule policies present
 func ListSnapSchedulePolicies(faClient *flashblade.Client) ([]flashblade.PolicyResponse, error) {
 	policies, err := faClient.FileSystem.GetSnapshotSchedulingPolicies(nil, nil)
@@ -90,4 +108,24 @@ func ListAllSubnetInterfaces(faClient *flashblade.Client) ([]flashblade.SubNetRe
 		return nil, err
 	}
 	return netInterface, nil
+}
+
+// listAllSpecificInterfaces returns list of all specific Interfaces from the available network interface
+// interface type can be management, data, replication support
+func listAllSpecificInterfaces(faClient *flashblade.Client, interfaceType string) ([]flashblade.NetResponse, error) {
+	mgmtInterfaces := []flashblade.NetResponse{}
+	allInterfaces, err := ListAllNetworkInterfaces(faClient)
+	if err != nil {
+		return nil, err
+	}
+	for _, eachInterfaces := range allInterfaces {
+		for _, eachItem := range eachInterfaces.Items {
+			for _, eachServices := range eachItem.Services {
+				if eachServices == interfaceType {
+					mgmtInterfaces = append(mgmtInterfaces, eachInterfaces)
+				}
+			}
+		}
+	}
+	return mgmtInterfaces, nil
 }
