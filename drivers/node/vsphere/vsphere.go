@@ -522,7 +522,7 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 					},
 				},
 			}
-
+			log.Debugf("Detaching disk %s from VM %s", disk.DeviceInfo.GetDescription().Label, sourceVM.Name())
 			event, err := sourceVM.Reconfigure(v.ctx, *config)
 			if err != nil {
 				return err
@@ -544,7 +544,7 @@ func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
 				},
 			},
 		}
-
+		log.Debugf("Attaching disk %s to VM %s", disk.DeviceInfo.GetDescription().Label, targetVM.Name())
 		event, err := targetVM.Reconfigure(v.ctx, *config)
 		if err != nil {
 			return err
@@ -583,7 +583,7 @@ func (v *vsphere) RemoveNonRootDisks(n node.Node) error {
 			if *disk.UnitNumber == 0 {
 				continue
 			}
-
+			log.Debugf("Deleting disk %s from VM %s", disk.DeviceInfo.GetDescription().Label, vm.Name())
 			err = vm.RemoveDevice(v.ctx, false, disk)
 			if err != nil {
 				return err
