@@ -26,11 +26,12 @@ type Client struct {
 	RestVersion string
 	UserAgent   string
 	AuthToken   string
-	ApiVersions []string
 	Kwargs      map[string]string
 
+	// Client object defined here
 	client *http.Client
 
+	// All services supported updated here
 	Blades           *BladesService
 	Alerts           *AlertService
 	FileSystem       *FileSystemService
