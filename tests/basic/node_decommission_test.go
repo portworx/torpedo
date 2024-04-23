@@ -416,6 +416,8 @@ var _ = Describe("{NodeDiskDetachAttach}", func() {
 			// ToDo - Ensure the above selected node has volumes/apps running on it
 			// Store the Node ID of randomStorageNode for future use
 			oldNodeIDtoMatch = randomStorageNode.Id
+			// Stop PX on the node
+			err = k8sCore.AddLabelOnNode(randomStorageNode.Name, schedops.PXServiceLabelKey, "stop")
 
 			err = Inst().N.MoveDisks(randomStorageNode, randNonPxNode)
 			log.FailOnError(err, fmt.Sprintf("Failed to move disks from node %s to node %s", randomStorageNode.Name, randNonPxNode.Name))
