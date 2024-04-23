@@ -428,6 +428,10 @@ var _ = Describe("{NodeDiskDetachAttach}", func() {
 			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=true on node %s", schedops.PXEnabledLabelKey, randNonPxNode.Name))
 			err = k8sCore.AddLabelOnNode(randNonPxNode.Name, schedops.PXServiceLabelKey, "start")
 			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=start on node %s", schedops.PXServiceLabelKey, randNonPxNode.Name))
+			err = Inst().V.WaitForPxPodsToBeUp(randNonPxNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to wait for PX pods to be up on node %s", randNonPxNode.Name))
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing node registry")
 			err = Inst().V.WaitDriverUpOnNode(randNonPxNode, Inst().DriverStartTimeout)
 			dash.VerifyFatal(err, nil, "Validate volume is driver up")
 			// Verify the node ID is same as earlier stored Node ID
