@@ -235,7 +235,7 @@ func (v *vsphere) connect() error {
 		if hostname == "" {
 			continue
 		}
-		log.Debugf("hostname for vm %v: %v", vm.Name(), hostname)
+		//log.Debugf("hostname for vm %v: %v", vm.Name(), hostname)
 
 		for _, n := range nodes {
 			if hostname == n.Name {
