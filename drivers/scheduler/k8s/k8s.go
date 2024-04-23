@@ -6598,7 +6598,8 @@ func (k *K8s) CalculateLatencyForAroStates(ruleName apapi.AutopilotRule, aroName
 
 	for _, aro := range listAutopilotRuleObjects.Items {
 		log.InfoD("Rule Name %v", aro.GetObjectMeta().GetName())
-		if strings.Contains(aro.GetObjectMeta().GetName(), ruleName.Name) {
+
+		if aro.Namespace == aroNamespace {
 			var prevState apapi.RuleState
 			var prevTimestamp metav1.Time
 			if len(aro.Status.Items) != 0 {
