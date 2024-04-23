@@ -2536,7 +2536,6 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 // This testcase verifies scheduled backup status when Kubevirt VMs are deleted and recreated from namespace in between schedules.
 var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[KubevirtScheduledVMDelete]...), func() {
 	var (
-		backupPreUpgrade               string
 		scheduledAppContexts           []*scheduler.Context
 		bkpNamespaces                  = make([]string, 0)
 		sourceClusterUid               string
@@ -2657,7 +2656,7 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 				scheduleNames = append(scheduleNames, nonLabelScheduleName)
 				_, err = CreateVMScheduledBackupWithValidation(nonLabelScheduleName, vms, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
 					labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", false, periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup [%s] of namespace", backupPreUpgrade))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup [%s] of namespace", nonLabelScheduleName))
 				nonLabelSchNamespaceMap[namespace] = nonLabelScheduleName
 			}
 		})
@@ -2741,7 +2740,6 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 					appName := Inst().AppList[index]
 					appCtx.ReadinessTimeout = AppReadinessTimeout
 					log.InfoD("Scheduled VM [%s] in source cluster in namespace [%s]", appName, namespace)
-					scheduledAppContexts = append(scheduledAppContexts, appCtx)
 				}
 			}
 		})
@@ -3441,6 +3439,8 @@ var _ = Describe("{KubevirtVMMigrationTest}", Label(TestCaseLabelsMap[KubevirtVM
 					log.Infof("Validating all px-backup pods are ready after reboot")
 					err = ValidateAllPodsInPxBackupNamespace()
 					dash.VerifyFatal(err, nil, "px-backup pods verification successful")
+					//Adding a sleep of 2 minute, Sometimes, it takes time for the pod to become ready.
+					time.Sleep(120 * time.Second)
 					log.Infof("Taking backup of VMs after node reboot")
 					wg.Add(1)
 					backupName := fmt.Sprintf("%s-%s-%v", "post-reboot-backup", scheduledNamespace, time.Now().Unix())
