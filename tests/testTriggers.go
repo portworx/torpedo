@@ -6033,7 +6033,7 @@ func TriggerUpdateCluster(contexts *[]*scheduler.Context, recordChan *chan *Even
 					time.Sleep(30 * time.Minute)
 				}
 
-				PrintK8sCluterInfo()
+				PrintK8sClusterInfo()
 			})
 
 			Step("validate storage components", func() {
@@ -6052,7 +6052,7 @@ func TriggerUpdateCluster(contexts *[]*scheduler.Context, recordChan *chan *Even
 				}
 
 				// Printing cluster node info after the upgrade
-				PrintK8sCluterInfo()
+				PrintK8sClusterInfo()
 			})
 
 			// TODO: This currently doesn't work for most distros and commenting out this change, see PTX-22409
