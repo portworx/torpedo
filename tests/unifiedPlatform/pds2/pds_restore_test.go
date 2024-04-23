@@ -26,6 +26,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		latestBackupUid      string
 		pdsBackupConfigName  string
 		restoreNamespace     string
+		restoreName          string
 	)
 
 	JustBeforeEach(func() {
@@ -36,6 +37,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		workflowRestore.WorkflowProject = WorkflowProject
 		workflowDataservice.Dash = dash
 		restoreNamespace = "restore-" + RandomString(5)
+		restoreName = "restore-" + RandomString(5)
 	})
 
 	It("Deploy data services and perform backup and restore on the same cluster", func() {
@@ -105,7 +107,6 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 			})
 
 			Step("Create Restore from the latest backup Id", func() {
-				restoreName := "restore-" + RandomString(5)
 				workflowRestore.Restores = make(map[string]automationModels.PDSRestore)
 				workflowRestore.Destination = WorkflowNamespace
 				workflowRestore.WorkflowProject = WorkflowProject
@@ -124,8 +125,10 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		log.FailOnError(err, "Backup cleanup failed")
 		err = workflowBackUpConfig.Purge(true)
 		log.FailOnError(err, "Backup Configs cleanup failed")
-		//err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Name)
-		//log.FailOnError(err, "Data Service cleanup failed")
+		err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
+		log.FailOnError(err, "Data Service cleanup failed")
+		err = workflowDataservice.DeleteDeployment(workflowRestore.Restores[restoreName].Config.DestinationReferences.DeploymentId)
+		log.FailOnError(err, "Restored Data Service cleanup failed")
 		defer EndTorpedoTest()
 	})
 })
@@ -143,6 +146,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 		latestBackupUid      string
 		pdsBackupConfigName  string
 		restoreNamespace     string
+		restoreName          string
 	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestoreToDifferentClusterSameProject", "Deploy data services and perform backup and restore on a different cluster on the same project", nil, 0)
@@ -152,6 +156,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 		workflowRestore.WorkflowProject = WorkflowProject
 		workflowDataservice.Dash = dash
 		restoreNamespace = "restore-" + RandomString(5)
+		restoreName = "restore-" + RandomString(5)
 	})
 
 	It("Deploy data services and perform backup and restore on the different cluster", func() {
@@ -219,10 +224,17 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 				log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
 			})
 
+			// TODO: This needs to be removed once DS-9443 is fixed
+			Step("Create a old namespace for restore - Workaround", func() {
+				_, err := destinationNamespace.CreateNamespaces(PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Unable to create namespace")
+				log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
+			})
+
 			Step("Associate target cluster and restore namespace to Project", func() {
 				err := WorkflowProject.Associate(
 					[]string{destinationCluster.ClusterUID},
-					[]string{destinationNamespace.Namespaces[restoreNamespace]},
+					[]string{destinationNamespace.Namespaces[restoreNamespace], destinationNamespace.Namespaces[PDS_DEFAULT_NAMESPACE]},
 					[]string{},
 					[]string{},
 					[]string{},
@@ -233,7 +245,6 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 			})
 
 			Step("Create Restore from the latest backup Id", func() {
-				restoreName := "restore-" + RandomString(5)
 				workflowRestore.Destination = destinationNamespace
 				workflowRestore.Restores = make(map[string]automationModels.PDSRestore)
 				workflowRestore.WorkflowProject = WorkflowProject
@@ -256,9 +267,11 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 		err := workflowBackup.Purge(*deployment.Create.Meta.Name)
 		log.FailOnError(err, "Backup cleanup failed")
 		err = workflowBackUpConfig.Purge(true)
-		//log.FailOnError(err, "Backup Configs cleanup failed")
-		//err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Name)
+		log.FailOnError(err, "Backup Configs cleanup failed")
+		err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
 		log.FailOnError(err, "Data Service cleanup failed")
+		err = workflowDataservice.DeleteDeployment(workflowRestore.Restores[restoreName].Config.DestinationReferences.DeploymentId)
+		log.FailOnError(err, "Restored Data Service cleanup failed")
 		err = destinationNamespace.Purge()
 		log.FailOnError(err, "Destination namespace cleanup failed")
 
@@ -281,6 +294,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 		latestBackupUid      string
 		pdsBackupConfigName  string
 		restoreNamespace     string
+		restoreName          string
 	)
 
 	JustBeforeEach(func() {
@@ -292,6 +306,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 		workflowDataservice.Dash = dash
 		restoreNamespace = "namespace-" + RandomString(5)
 		destinationProject.Platform = WorkflowPlatform
+		restoreName = "restore-" + RandomString(5)
 	})
 
 	It("Deploy data services and perform backup and restore on the different cluster", func() {
@@ -354,7 +369,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 			Step("Register Destination Target Cluster", func() {
 				err := SetDestinationKubeConfig()
 				if err != nil {
-					log.Infof("Failed to switched to destination cluster")
+					log.FailOnError(err, "Failed to switched to destination cluster")
 				}
 				destinationCluster.Project = destinationProject
 				log.Infof("Tenant ID [%s]", destinationCluster.Project.Platform.TenantId)
@@ -371,10 +386,17 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 				log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
 			})
 
+			// TODO: This needs to be removed once DS-9443 is fixed
+			Step("Create a old namespace for restore - Workaround", func() {
+				_, err := destinationNamespace.CreateNamespaces(PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Unable to create namespace")
+				log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
+			})
+
 			Step("Associate target cluster and restore namespace to Project", func() {
 				err := destinationProject.Associate(
 					[]string{destinationCluster.ClusterUID},
-					[]string{destinationNamespace.Namespaces[restoreNamespace]},
+					[]string{destinationNamespace.Namespaces[restoreNamespace], destinationNamespace.Namespaces[PDS_DEFAULT_NAMESPACE]},
 					[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
 					[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
 					[]string{},
@@ -385,7 +407,6 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 			})
 
 			Step("Create Restore from the latest backup Id", func() {
-				restoreName := "restore-" + RandomString(5)
 				workflowRestore.Restores = make(map[string]automationModels.PDSRestore)
 				workflowRestore.Destination = destinationNamespace
 				workflowRestore.WorkflowProject = WorkflowProject
@@ -407,12 +428,14 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 		log.FailOnError(err, "Backup cleanup failed")
 		err = workflowBackUpConfig.Purge(true)
 		log.FailOnError(err, "Backup Configs cleanup failed")
-		//err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Name)
-		//log.FailOnError(err, "Data Service cleanup failed")
+		err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
+		log.FailOnError(err, "Data Service cleanup failed")
+		err = workflowDataservice.DeleteDeployment(workflowRestore.Restores[restoreName].Config.DestinationReferences.DeploymentId)
+		log.FailOnError(err, "Restored Data Service cleanup failed")
 		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "Unable to set kubeconfig to destination")
-		err = destinationNamespace.Purge()
-		log.FailOnError(err, "Destination namespace cleanup failed")
+		//err = destinationNamespace.Purge()
+		//log.FailOnError(err, "Destination namespace cleanup failed")
 		err = destinationProject.DeleteProject()
 		log.FailOnError(err, "Destination Project cleanup failed")
 		defer EndTorpedoTest()
