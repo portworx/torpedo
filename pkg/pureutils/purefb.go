@@ -49,8 +49,8 @@ func GetApiTokenForFbMgmtEndpoints(secret PXPureSecret, mgmtEndPoint string) str
 }
 
 // GetBladeDetails Get Details of all the Blades present in FB
-func GetBladeDetails(faClient *flashblade.Client) ([]flashblade.Blades, error) {
-	blades, err := faClient.Blades.GetBlades(nil, nil)
+func GetBladeDetails(fbClient *flashblade.Client) ([]flashblade.Blades, error) {
+	blades, err := fbClient.Blades.GetBlades(nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -58,8 +58,8 @@ func GetBladeDetails(faClient *flashblade.Client) ([]flashblade.Blades, error) {
 }
 
 // ListAllFileSystems Returns list of all filesystems present in FB Backend
-func ListAllFileSystems(faClient *flashblade.Client) ([]flashblade.FSResponse, error) {
-	fileSys, err := faClient.FileSystem.GetAllFileSystems(nil, nil)
+func ListAllFileSystems(fbClient *flashblade.Client) ([]flashblade.FSResponse, error) {
+	fileSys, err := fbClient.FileSystem.GetAllFileSystems(nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -67,9 +67,9 @@ func ListAllFileSystems(faClient *flashblade.Client) ([]flashblade.FSResponse, e
 }
 
 // GetAllPVCNames Returns list of all PVCs present in the FB Cluster
-func GetAllPVCNames(faClient *flashblade.Client) ([]string, error) {
+func GetAllPVCNames(fbClient *flashblade.Client) ([]string, error) {
 	allPVCs := []string{}
-	allFs, err := ListAllFileSystems(faClient)
+	allFs, err := ListAllFileSystems(fbClient)
 	if err != nil {
 		return nil, err
 	}
@@ -84,8 +84,8 @@ func GetAllPVCNames(faClient *flashblade.Client) ([]string, error) {
 }
 
 // ListSnapSchedulePolicies Returns list of all FB snapshots schedule policies present
-func ListSnapSchedulePolicies(faClient *flashblade.Client) ([]flashblade.PolicyResponse, error) {
-	policies, err := faClient.FileSystem.GetSnapshotSchedulingPolicies(nil, nil)
+func ListSnapSchedulePolicies(fbClient *flashblade.Client) ([]flashblade.PolicyResponse, error) {
+	policies, err := fbClient.FileSystem.GetSnapshotSchedulingPolicies(nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -93,8 +93,8 @@ func ListSnapSchedulePolicies(faClient *flashblade.Client) ([]flashblade.PolicyR
 }
 
 // ListAllNetworkInterfaces Returns list of all Network interfaces from Specific FB
-func ListAllNetworkInterfaces(faClient *flashblade.Client) ([]flashblade.NetResponse, error) {
-	netInterface, err := faClient.NetworkInterface.ListNetworkInterfaces(nil, nil)
+func ListAllNetworkInterfaces(fbClient *flashblade.Client) ([]flashblade.NetResponse, error) {
+	netInterface, err := fbClient.NetworkInterface.ListNetworkInterfaces(nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -102,8 +102,8 @@ func ListAllNetworkInterfaces(faClient *flashblade.Client) ([]flashblade.NetResp
 }
 
 // ListAllSubnetInterfaces Returns list of all subnets from FB
-func ListAllSubnetInterfaces(faClient *flashblade.Client) ([]flashblade.SubNetResponse, error) {
-	netInterface, err := faClient.NetworkInterface.ListAllArraySubnets(nil, nil)
+func ListAllSubnetInterfaces(fbClient *flashblade.Client) ([]flashblade.SubNetResponse, error) {
+	netInterface, err := fbClient.NetworkInterface.ListAllArraySubnets(nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -112,9 +112,9 @@ func ListAllSubnetInterfaces(faClient *flashblade.Client) ([]flashblade.SubNetRe
 
 // listAllSpecificInterfaces returns list of all specific Interfaces from the available network interface
 // interface type can be management, data, replication support
-func ListAllSpecificInterfaces(faClient *flashblade.Client, interfaceType string) ([]flashblade.NetResponse, error) {
+func ListAllSpecificInterfaces(fbClient *flashblade.Client, interfaceType string) ([]flashblade.NetResponse, error) {
 	mgmtInterfaces := []flashblade.NetResponse{}
-	allInterfaces, err := ListAllNetworkInterfaces(faClient)
+	allInterfaces, err := ListAllNetworkInterfaces(fbClient)
 	if err != nil {
 		return nil, err
 	}
