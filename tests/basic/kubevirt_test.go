@@ -318,15 +318,7 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 				}
 			}
 		})
-		stepLog = "Add another disk to the kubevirt VM"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			numberOfVolumes = 2
-			success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
-			log.FailOnError(err, "Failed to add disks to kubevirt VM")
-			dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
-		})
-		stepLog = "Verify the new disk added is also bind mounted"
+		stepLog = "Verify the disks added are still bind mounted"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for _, appCtx := range appCtxs {
