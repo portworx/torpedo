@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"os"
@@ -135,6 +136,18 @@ var _ = BeforeSuite(func() {
 		)
 		log.FailOnError(err, "Unable to associate Cluster to Project")
 		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+	})
+
+	Step("Dumping kubeconfigs file", func() {
+		kubeconfigs := os.Getenv("KUBECONFIGS")
+		if kubeconfigs != "" {
+			kubeconfigList := strings.Split(kubeconfigs, ",")
+			if len(kubeconfigList) < 2 {
+				log.FailOnError(fmt.Errorf("At least minimum two kubeconfigs required but has"),
+					"Failed to get k8s config path.At least minimum two kubeconfigs required")
+			}
+			DumpKubeconfigs(kubeconfigList)
+		}
 	})
 
 })
