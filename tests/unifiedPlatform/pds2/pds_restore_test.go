@@ -272,8 +272,8 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 		log.FailOnError(err, "Data Service cleanup failed")
 		err = workflowDataservice.DeleteDeployment(workflowRestore.Restores[restoreName].Config.DestinationReferences.DeploymentId)
 		log.FailOnError(err, "Restored Data Service cleanup failed")
-		err = destinationNamespace.Purge()
-		log.FailOnError(err, "Destination namespace cleanup failed")
+		//err = destinationNamespace.Purge()
+		//log.FailOnError(err, "Destination namespace cleanup failed")
 
 		defer EndTorpedoTest()
 
