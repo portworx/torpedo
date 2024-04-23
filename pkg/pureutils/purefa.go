@@ -158,6 +158,12 @@ func DeleteVolumeOnFABackend(faClient *flasharray.Client, volName string) (*flas
 	if err != nil {
 		return nil, err
 	}
+
+	// Delete from Recycle Bin
+	_, err = faClient.Volumes.EradicateVolume(volName)
+	if err != nil {
+		return nil, err
+	}
 	return volume, nil
 }
 
@@ -281,4 +287,20 @@ func DisableNetworkInterface(faClient *flasharray.Client, iface string) (bool, e
 		return true, nil
 	}
 	return false, fmt.Errorf("Failed to disable network interface [%v]", iface)
+}
+
+// GetHostFromIqn returns host name from iqn
+func GetHostFromIqn(faClient *flasharray.Client, iqn string) (string, error) {
+	hosts, err := ListAllHosts(faClient)
+	if err != nil {
+		return "", err
+	}
+	for _, eachHost := range hosts {
+		for _, eachIqn := range eachHost.Iqn {
+			if eachIqn == iqn {
+				return eachHost.Name, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("Failed to get host name from iqn [%v]", iqn)
 }

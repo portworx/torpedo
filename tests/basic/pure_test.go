@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
-
 	"math/rand"
 	"sort"
 	"strconv"
@@ -2637,19 +2636,4 @@ func logOutOfAllControllers(n node.Node, networkInterfaces []flasharray.NetworkI
 		}
 	}
 	return nil
-}
-
-func GetIQNOfNode(n node.Node) (string, error) {
-	cmd := "cat /etc/iscsi/initiatorname.iscsi"
-	output, err := runCmd(cmd, n)
-	if err != nil {
-		return "", err
-	}
-
-	for _, line := range strings.Split(output, "\n") {
-		if strings.Contains(line, "InitiatorName") {
-			return strings.Split(line, "=")[1], nil
-		}
-	}
-	return "", fmt.Errorf("iqn not found")
 }
