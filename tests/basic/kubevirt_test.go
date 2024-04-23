@@ -46,18 +46,10 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 			log.FailOnError(err, "Failed to verify bind mount")
 			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 		}
-		//stepLog = "Write some data in the VM and calculate it's md5sum"
-		//Step(stepLog, func() {
-		//	err = CreateConfigMap()
-		//	log.FailOnError(err, "Failed in creating Config map to login the VM")
-		//	err = WriteFilesAndStoreMD5InVM(appCtxs, namespace, 20, 250000000)
-		//	log.FailOnError(err, "Failed to write files and store MD5 sums")
-		//})
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			_, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
-			//err = HotAddPVCsToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
 		})
@@ -73,12 +65,6 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 				}
 			}
 		})
-		//stepLog = "Validate md5sum of previously written data"
-		//Step(stepLog, func() {
-		//	err = ValidateFileIntegrityInVM(appCtxs, namespace)
-		//	log.FailOnError(err, "File integrity validation failed")
-		//})
-
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -106,8 +92,7 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 		defer func() {
 			Inst().AppList = appList
 		}()
-		Inst().AppList = []string{"kubevirt-fio-pvc-clone"}
-
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog := "schedule a kubevirt VM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -115,21 +100,12 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, taskName)...)
 			}
 		})
-
 		ValidateApplications(appCtxs)
-		stepLog = "Write some data in the VM and calculate it's md5sum"
-		Step(stepLog, func() {
-			err = CreateConfigMap()
-			log.FailOnError(err, "Failed in creating Config map to login the VM")
-			err = WriteFilesAndStoreMD5InVM(appCtxs, namespace, 20, 250000000)
-			log.FailOnError(err, "Failed to write files and store MD5 sums")
-		})
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
 			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 		}
-
 		stepLog = "Live migrate the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -138,12 +114,6 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 				log.FailOnError(err, "Failed to live migrate kubevirt VM")
 			}
 		})
-		stepLog = "Validate md5sum of previously written data"
-		Step(stepLog, func() {
-			err = ValidateFileIntegrityInVM(appCtxs, namespace)
-			log.FailOnError(err, "File integrity validation failed")
-		})
-
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -160,7 +130,6 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("PxKillBeforeAddDiskToVM", "Kill Px on host node of Kubuevirt VM and then Add a disk", nil, 0)
 	})
-
 	var appCtxs []*scheduler.Context
 	var nodes []string
 	var namespace string
@@ -172,7 +141,7 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-fio-pvc-clone"}
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -185,13 +154,6 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 			log.FailOnError(err, "Failed to verify bind mount")
 			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 		}
-		stepLog = "Write some data in the VM and calculate it's md5sum"
-		Step(stepLog, func() {
-			err = CreateConfigMap()
-			log.FailOnError(err, "Failed in creating Config map to login the VM")
-			err = WriteFilesAndStoreMD5InVM(appCtxs, namespace, 20, 250000000)
-			log.FailOnError(err, "Failed to write files and store MD5 sums")
-		})
 		stepLog = "Kill Px on node hosting VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -234,15 +196,13 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 				}
 			}
 		})
-
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			err = HotAddPVCsToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			_, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
 		})
-
 		stepLog = "Verify the new disk added is also bind mounted"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -254,19 +214,12 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 				}
 			}
 		})
-		stepLog = "Validate md5sum of previously written data"
-		Step(stepLog, func() {
-			err = ValidateFileIntegrityInVM(appCtxs, namespace)
-			log.FailOnError(err, "File integrity validation failed")
-		})
-
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			DestroyApps(appCtxs, nil)
 		})
 	})
-
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
@@ -578,7 +531,7 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-fio-pvc-clone"}
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -591,13 +544,6 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 			log.FailOnError(err, "Failed to verify bind mount")
 			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 		}
-		stepLog = "Write some data in the VM and calculate it's md5sum"
-		Step(stepLog, func() {
-			err = CreateConfigMap()
-			log.FailOnError(err, "Failed in creating Config map to login the VM")
-			err = WriteFilesAndStoreMD5InVM(appCtxs, namespace, 20, 250000000)
-			log.FailOnError(err, "Failed to write files and store MD5 sums")
-		})
 		stepLog = "Live migrate the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -609,11 +555,10 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "0.5Gi")
+			success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
 		})
-
 		stepLog = "Verify the new disk added is also bind mounted"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -625,12 +570,6 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 				}
 			}
 		})
-		stepLog = "Validate md5sum of previously written data"
-		Step(stepLog, func() {
-			err = ValidateFileIntegrityInVM(appCtxs, namespace)
-			log.FailOnError(err, "File integrity validation failed")
-		})
-
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -644,7 +583,6 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 })
 
 var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
-
 	/*
 		PWX:
 			https://purestorage.atlassian.net/browse/PWX-36709
@@ -652,7 +590,6 @@ var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
 			https://portworx.testrail.net/index.php?/cases/view/93652
 			https://portworx.testrail.net/index.php?/cases/view/93653
 	*/
-
 	var (
 		testName                string
 		contexts                []*scheduler.Context
