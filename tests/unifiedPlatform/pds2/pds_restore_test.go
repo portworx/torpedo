@@ -175,11 +175,6 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 				log.FailOnError(err, "Error while deploying ds")
 				log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
 
-				//stepLog := "Running Workloads on deployment"
-				//Step(stepLog, func() {
-				//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-				//	log.FailOnError(err, "Error while running workloads on ds")
-				//})
 			})
 
 			Step("Create Adhoc backup config of the existing deployment", func() {
@@ -207,7 +202,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 			Step("Register Destination Target Cluster", func() {
 				err := SetDestinationKubeConfig()
 				if err != nil {
-					log.Infof("Failed to switched to destination cluster")
+					log.FailOnError(err, "Failed to switched to destination cluster")
 				}
 				destinationCluster.Project = WorkflowProject
 				log.Infof("Tenant ID [%s]", destinationCluster.Project.Platform.TenantId)
@@ -254,7 +249,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 	JustAfterEach(func() {
 		defer func() {
 			err := SetSourceKubeConfig()
-			log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+			log.FailOnError(err, "Unable to switch context to source cluster. Error - [%s]", err.Error())
 		}()
 
 		log.Infof("Cleaning up all resources")
