@@ -75,20 +75,6 @@ func NewClient(mgmtIp string, apiToken string, userName string, password string,
 	requestKwargs := setDefaultRequestKwargs(kwargs, verifyHTTPS, sslCert)
 	c.Kwargs = requestKwargs
 
-	/*
-			version, err := getRestVersion(restVersion, c.MgmtIp)
-			if err != nil {
-				return nil, err
-			}
-			fmt.Printf("Rest Version selected [%v]", version)
-		//c.RestVersion = version
-
-		// Get API Token
-		err = c.getAPIToken()
-		if err != nil {
-			return nil, err
-		}*/
-
 	authToken, err := c.getAuthToken()
 	if err != nil {
 		return nil, err
