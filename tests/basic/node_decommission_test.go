@@ -418,6 +418,7 @@ var _ = Describe("{NodeDiskDetachAttach}", func() {
 			oldNodeIDtoMatch = randomStorageNode.Id
 			// Stop PX on the node
 			err = k8sCore.AddLabelOnNode(randomStorageNode.Name, schedops.PXServiceLabelKey, "stop")
+			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=stop on node %s", schedops.PXServiceLabelKey, randomStorageNode.Name))
 
 			err = Inst().N.MoveDisks(randomStorageNode, randNonPxNode)
 			log.FailOnError(err, fmt.Sprintf("Failed to move disks from node %s to node %s", randomStorageNode.Name, randNonPxNode.Name))
