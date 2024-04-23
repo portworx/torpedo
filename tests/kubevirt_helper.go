@@ -47,7 +47,7 @@ func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks in
 		}
 		for _, v := range vms {
 			t := func() (interface{}, bool, error) {
-				diskCountOutput, err := GetNumberOfDisksInVM(v)
+				diskCountOutput, err := GetNumberOfDisksInVMViaVirtLauncherPod(appCtx)
 				if err != nil {
 					return nil, false, fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]", v.Name, v.Namespace)
 				}
@@ -104,7 +104,7 @@ func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks in
 			}
 			for _, v := range vms {
 				t = func() (interface{}, bool, error) {
-					diskCountOutput, err := GetNumberOfDisksInVM(v)
+					diskCountOutput, err := GetNumberOfDisksInVMViaVirtLauncherPod(appCtx)
 					if err != nil {
 						return nil, false, fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]", v.Name, v.Namespace)
 					}

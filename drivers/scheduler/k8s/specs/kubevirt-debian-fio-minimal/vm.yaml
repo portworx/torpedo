@@ -82,7 +82,7 @@ spec:
             - ReadWriteMany
           resources:
             requests:
-              storage: 100Gi
+              storage: 10Gi
           storageClassName: sc-sharedv4svc-nolock-wait-first-consumer
           volumeMode: Filesystem
 ---
