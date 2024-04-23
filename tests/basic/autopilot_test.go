@@ -1352,6 +1352,10 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName), func() {
 				err = Inst().S.ValidateAutopilotRuleObjects()
 				Expect(err).NotTo(HaveOccurred())
 
+				log.InfoD("Calculating latency for ARO states")
+				err = Inst().S.CalculateLatencyForAroStates(apRule)
+				Expect(err).NotTo(HaveOccurred())
+
 			}
 		})
 
