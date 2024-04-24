@@ -15,6 +15,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/sirupsen/logrus"
 
 	kubevirtdy "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 	corev1 "k8s.io/api/core/v1"
@@ -761,4 +762,16 @@ func DeployVMTemplatesAndValidate() error {
 	}
 	_, err = task.DoRetryWithTimeout(waitForCompletedAnnotations, importerPodCompletionTimeout, importerPodRetryInterval)
 	return err
+}
+
+func ValidateVMNodeChanged(vmName, nodeName string, vmNodeMap map[string]string) error {
+	logrus.Infof("Old VM node: %s. New VM node  %s", vmNodeMap[vmName], nodeName)
+	if oldNode, ok := vmNodeMap[vmName]; ok {
+		if oldNode == nodeName {
+			return fmt.Errorf("VM %s is still scheduled on node: %s should have moved from node: %s", vmName, oldNode, nodeName)
+		}
+		// update the map so that future validations have updated data
+		vmNodeMap[vmName] = nodeName
+	}
+	return nil
 }
