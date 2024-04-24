@@ -146,6 +146,8 @@ const (
 	AutopilotLabelNameKey = "name"
 	AutopilotLabelValue   = "autopilot"
 	PortworxNotDeployed   = "portworx not deployed"
+	// MetadataLabel is added to node if node has to be made kvdb node or never become kvdb node according to key value
+	MetaDataLabel = "px/metadata-node"
 )
 
 const (
@@ -7174,6 +7176,14 @@ func (k *K8s) GetASGClusterSize() (int64, error) {
 	return 0, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetASGClusterSize()",
+	}
+}
+
+func (k *K8s) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetASGClusterSize()",
 	}
 }
 
