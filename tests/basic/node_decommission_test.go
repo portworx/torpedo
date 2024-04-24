@@ -423,6 +423,10 @@ var _ = Describe("{NodeDiskDetachAttach}", func() {
 			err = Inst().N.MoveDisks(randomStorageNode, randNonPxNode)
 			log.FailOnError(err, fmt.Sprintf("Failed to move disks from node %s to node %s", randomStorageNode.Name, randNonPxNode.Name))
 
+			// Add PXEnabled false label to srcVM
+			err = k8sCore.AddLabelOnNode(randomStorageNode.Name, schedops.PXEnabledLabelKey, "false")
+			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=stop on node %s", schedops.PXServiceLabelKey, randomStorageNode.Name))
+
 			// Start PX on the node
 			err = k8sCore.AddLabelOnNode(randNonPxNode.Name, schedops.PXEnabledLabelKey, "true")
 			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=true on node %s", schedops.PXEnabledLabelKey, randNonPxNode.Name))
