@@ -5516,7 +5516,6 @@ func (k *K8s) createVirtualMachineObjects(
 			if !vm.Status.Ready {
 				return nil, fmt.Errorf("VM is not in the expected 'Running' state")
 			}
-
 			return vm, nil
 		}
 	}

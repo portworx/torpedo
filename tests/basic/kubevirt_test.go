@@ -41,7 +41,7 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 			template := ScheduleApplications("template")
 			ValidateApplications(template)
 		})
-		
+
 		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog = "schedule a kubevirtVM"
 		Step(stepLog, func() {
