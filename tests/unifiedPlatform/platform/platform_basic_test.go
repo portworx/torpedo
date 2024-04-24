@@ -55,6 +55,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+	EndTorpedoTest()
 	log.InfoD("Test Finished")
 })
 

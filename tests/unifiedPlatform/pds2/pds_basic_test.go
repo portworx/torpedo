@@ -21,10 +21,13 @@ import (
 var _ = BeforeSuite(func() {
 	PDS_DEFAULT_NAMESPACE = "pds-namespace-" + RandomString(5)
 	steplog := "Get prerequisite params to run platform tests"
+
 	log.InfoD(steplog)
 	Step(steplog, func() {
 		InitInstance()
 		dash = Inst().Dash
+		dash.TestSet.Product = "pds"
+		dash.TestSetBegin(dash.TestSet)
 		// Read pds params from the configmap
 		var err error
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
@@ -35,7 +38,7 @@ var _ = BeforeSuite(func() {
 
 		log.InfoD("Get Account ID")
 		//TODO: Get the accountID
-		AccID = "acc:e0886df7-aa22-4090-a6ea-9f08a0097f99"
+		AccID = "acc:8b6e5023-2ec9-474f-acda-7ab662987409"
 
 		err = platformUtils.InitUnifiedApiComponents(os.Getenv(EnvControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
@@ -153,6 +156,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+	EndTorpedoTest()
 	//TODO: Steps to delete Backup location, Target and Bucket
 	// TODO: Add namespace cleanup once deployment cleanup cleans up the services too
 	//err := WorkflowNamespace.Purge()
