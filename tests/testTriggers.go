@@ -3354,6 +3354,11 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 					policyName := "intervalpolicy"
 					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 					if err != nil {
+						err = CreatePXCloudCredential()
+						if err != nil {
+							UpdateOutcome(event, err)
+							return
+						}
 						retain := 10
 						interval := getCloudSnapInterval(CloudSnapShot)
 						log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
@@ -3500,6 +3505,11 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 	defer func() {
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
+	}()
+
+	defer func() {
+		err := DeleteCloudSnapBucket(*contexts)
+		UpdateOutcome(event, fmt.Errorf("failed to delete cloud snap bucket,Cause: %v", err))
 	}()
 
 	setMetrics(*event)

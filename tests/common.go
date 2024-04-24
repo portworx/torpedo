@@ -11365,7 +11365,10 @@ func PrintK8sClusterInfo() {
 }
 
 func CreatePXCloudCredential() error {
-
+	/*
+		Creating a cloud credential for cloudsnap wit the given params
+		Deleting the existing cred if exists so that we can use same creds to delete the s3 bucket once test is completed.
+	*/
 	id, secret, endpoint, s3Region, disableSSl, err := getCreateCredParams()
 
 	if err != nil {
@@ -11390,7 +11393,7 @@ func CreatePXCloudCredential() error {
 		log.Warnf("Deleting existing cred and creating new cred with given params")
 		credUUID := strings.Split(output, ":")[1]
 		credUUID = strings.ReplaceAll(strings.TrimSpace(credUUID), "\"", "")
-		credDeleteCmd := fmt.Sprintf("pxctl cred delete %s", credUUID)
+		credDeleteCmd := fmt.Sprintf("cred delete %s", credUUID)
 		output, err = Inst().V.GetPxctlCmdOutputConnectionOpts(n, credDeleteCmd, node.ConnectionOpts{
 			IgnoreError:     false,
 			TimeBeforeRetry: defaultRetryInterval,
@@ -11458,7 +11461,6 @@ func DeleteCloudSnapBucket(contexts []*scheduler.Context) error {
 				}
 				log.Infof("Got Bucket Name [%s]", bucketName)
 			}
-
 			vols, err := Inst().S.GetVolumes(ctx)
 			if err != nil {
 				return err
@@ -11474,49 +11476,51 @@ func DeleteCloudSnapBucket(contexts []*scheduler.Context) error {
 				}
 			}
 		}
-
 	}
 
-	id, secret, endpoint, s3Region, _, err := getCreateCredParams()
-
-	if err != nil {
-		return err
-	}
-
-	var sess *session.Session
-	if strings.Contains(endpoint, "minio") {
-
-		sess, err = session.NewSessionWithOptions(session.Options{
-			Config: aws.Config{
-				Endpoint:         aws.String(endpoint),
-				Region:           aws.String(s3Region),
-				Credentials:      credentials.NewStaticCredentials(id, secret, ""),
-				S3ForcePathStyle: aws.Bool(true),
-			},
-		})
+	if bucketName != "" {
+		id, secret, endpoint, s3Region, _, err := getCreateCredParams()
 		if err != nil {
-			return fmt.Errorf("failed to initialize new session: %v", err)
+			return err
+		}
+		var sess *session.Session
+		if strings.Contains(endpoint, "minio") {
+
+			sess, err = session.NewSessionWithOptions(session.Options{
+				Config: aws.Config{
+					Endpoint:         aws.String(endpoint),
+					Region:           aws.String(s3Region),
+					Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+					S3ForcePathStyle: aws.Bool(true),
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to initialize new session: %v", err)
+			}
+		}
+
+		if strings.Contains(endpoint, "amazonaws") {
+			sess, err = session.NewSessionWithOptions(session.Options{
+				Config: aws.Config{
+					Region:      aws.String(s3Region),
+					Credentials: credentials.NewStaticCredentials(id, secret, ""),
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to initialize new session: %v", err)
+			}
+		}
+
+		if sess == nil {
+			return fmt.Errorf("failed to initialize new session using endpoint [%s], Cause: %v", endpoint, err)
+		}
+
+		client := s3.New(sess)
+		err = deleteAndValidateBucketDeletion(client, bucketName)
+		if err != nil {
+			return err
 		}
 	}
-
-	if strings.Contains(endpoint, "amazonaws") {
-		sess, err = session.NewSessionWithOptions(session.Options{
-			Config: aws.Config{
-				Region:      aws.String(s3Region),
-				Credentials: credentials.NewStaticCredentials(id, secret, ""),
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("failed to initialize new session: %v", err)
-		}
-	}
-
-	if sess == nil {
-		return fmt.Errorf("failed to initialize new session using endpoint [%s], Cause: %v", endpoint, err)
-	}
-
-	client := s3.New(sess)
-	err = deleteAndValidateBucketDeletion(client, bucketName)
 
 	return nil
 }
@@ -11643,8 +11647,6 @@ func getCreateCredParams() (id, secret, endpoint, s3Region string, disableSSLBoo
 			err = fmt.Errorf("S3_DISABLE_SSL=%s is not a valid boolean value,err: %v", disableSSL, err)
 			return
 		}
-	} else {
-		err = fmt.Errorf("S3_DISABLE_SSL Environment variable is not provided")
 	}
 
 	return
