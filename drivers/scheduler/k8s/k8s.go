@@ -6556,22 +6556,14 @@ func (k *K8s) ValidateAutopilotRuleObjects() error {
 	}
 	return nil
 }
-func (k *K8s) CalculateLatencyForAroStates(ruleName apapi.AutopilotRule) error {
+func (k *K8s) CalculateLatencyForAroStates(aroNamespace string) error {
 	namespace, err := k.GetAutopilotNamespace()
 	if err != nil {
 		return err
 	}
-
-	expectedAroStates := []apapi.RuleState{
-		apapi.RuleStateInit,
-		apapi.RuleStateTriggered,
-		apapi.RuleStateActiveActionsPending,
-		apapi.RuleStateActiveActionsInProgress,
-		apapi.RuleStateActiveActionsTaken,
-		apapi.RuleStateNormal,
-	}
-
-	listAutopilotRuleObjects, err := k8sAutopilot.ListAutopilotRuleObjects(namespace)
+	log.InfoD("Autopilot is installed on namespace %v", namespace)
+	log.InfoD("Autopilot rule object namespace %v", aroNamespace)
+	listAutopilotRuleObjects, err := k8sAutopilot.ListAutopilotRuleObjects(aroNamespace)
 	if err != nil {
 		return err
 	}
@@ -6582,34 +6574,36 @@ func (k *K8s) CalculateLatencyForAroStates(ruleName apapi.AutopilotRule) error {
 
 	for _, aro := range listAutopilotRuleObjects.Items {
 		log.InfoD("Rule Name %v", aro.GetObjectMeta().GetName())
-		if strings.Contains(aro.GetObjectMeta().GetName(), ruleName.Name) {
-			stateTimestampMap := make(map[apapi.RuleState]metav1.Time)
-			for _, aroStatusItem := range aro.Status.Items {
-				if aroStatusItem.State == "" {
-					continue
-				}
-				stateTimestampMap[aroStatusItem.State] = aroStatusItem.LastProcessTimestamp
-			}
 
-			var prevState apapi.RuleState
-			var prevTimestamp metav1.Time
-			for _, state := range expectedAroStates {
-				timestamp, exists := stateTimestampMap[state]
-				if !exists {
-					continue
-				}
-				if prevState != "" {
-					duration := timestamp.Time.Sub(prevTimestamp.Time)
-					if duration.Minutes() > 10 {
-						log.Warnf("More than 10 minutes between state %s and %s for autopilot rule object: %s", prevState, state, aro.Name)
+		var prevState apapi.RuleState
+		var prevTimestamp metav1.Time
+		if len(aro.Status.Items) != 0 {
+			prevState = aro.Status.Items[0].State
+			prevTimestamp = aro.Status.Items[0].LastProcessTimestamp
+
+		}
+		for _, aroStatusItem := range aro.Status.Items[1:] {
+			if aroStatusItem.State == "" {
+				continue
+			}
+			if prevState != "" {
+				log.InfoD("calculating time taken for transition from state %v to %v", prevState, aroStatusItem.State)
+
+				duration := aroStatusItem.LastProcessTimestamp.Time.Sub(prevTimestamp.Time)
+				log.InfoD("Transition time taken from state %v to %v is %v minutes", prevState, aroStatusItem.State, duration.Minutes())
+				if duration.Minutes() > 10 {
+					if prevState != apapi.RuleStateNormal && aroStatusItem.State != apapi.RuleStateTriggered {
+						log.Warnf("More than 10 minutes between state %s and %s for autopilot rule object: %s", prevState, aroStatusItem.State, aro.Name)
 					}
 				}
-				prevState = state
-				prevTimestamp = timestamp
+
 			}
+			prevState = aroStatusItem.State
+			prevTimestamp = aroStatusItem.LastProcessTimestamp
 		}
 
 	}
+
 	return nil
 }
 

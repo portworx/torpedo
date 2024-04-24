@@ -350,7 +350,7 @@ type Driver interface {
 	ValidateAutopilotRuleObjects() error
 
 	// CalculateLatencyForAroStates calculates the time difference between each state change
-	CalculateLatencyForAroStates(apRule apapi.AutopilotRule) error
+	CalculateLatencyForAroStates(aroNamespace string) error
 
 	//WaitForRebalanceAROToComplete waits for rebalance to start
 	WaitForRebalanceAROToComplete() error

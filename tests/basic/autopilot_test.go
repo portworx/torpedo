@@ -108,6 +108,15 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
 				ValidateVolumes(ctx)
 			}
 		})
+		Step("Validte the Latency between each state in Aro Object ", func() {
+			log.InfoD("Validating the latency between each state in Aro Object")
+			for _, ctx := range contexts {
+
+				err := Inst().S.CalculateLatencyForAroStates(ctx.App.NameSpace)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+		})
 
 		Step("destroy apps", func() {
 			opts := make(map[string]bool)
@@ -1690,9 +1699,6 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName
 			Expect(err).NotTo(HaveOccurred())
 			log.InfoD("aroAvailable value %v", aroAvailable)
 			log.InfoD("=====Pool resize ARO verified ========")
-			log.InfoD("=====Calculate Latency ==============")
-			err := Inst().S.CalculateLatencyForAroStates(apRules[1])
-			Expect(err).NotTo(HaveOccurred())
 
 		})
 		Step("destroy apps", func() {
