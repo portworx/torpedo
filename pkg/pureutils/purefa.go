@@ -290,17 +290,17 @@ func DisableNetworkInterface(faClient *flasharray.Client, iface string) (bool, e
 }
 
 // GetHostFromIqn returns host name from iqn
-func GetHostFromIqn(faClient *flasharray.Client, iqn string) (string, error) {
+func GetHostFromIqn(faClient *flasharray.Client, iqn string) (*flasharray.Host, error) {
 	hosts, err := ListAllHosts(faClient)
 	if err != nil {
-		return "", err
+		return &flasharray.Host{}, err
 	}
 	for _, eachHost := range hosts {
 		for _, eachIqn := range eachHost.Iqn {
 			if eachIqn == iqn {
-				return eachHost.Name, nil
+				return &eachHost, nil
 			}
 		}
 	}
-	return "", fmt.Errorf("Failed to get host name from iqn [%v]", iqn)
+	return &flasharray.Host{}, fmt.Errorf("Failed to get host name from iqn [%v]", iqn)
 }
