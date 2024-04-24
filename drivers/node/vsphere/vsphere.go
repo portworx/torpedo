@@ -11,9 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
-	"github.com/vmware/govmomi/vim25/mo"
-
 	pxutil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	coreops "github.com/portworx/sched-ops/k8s/core"
@@ -24,6 +21,7 @@ import (
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
 )
 
@@ -334,23 +332,21 @@ func (v *vsphere) connect() error {
 	return nil
 }
 
+// DetachDisk vdisks from node.
 func (v *vsphere) DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string) error {
-	log.InfoD("STC name %v ", stc)
 	configData, err := GetCloudDriveConfigmapData(stc)
-	log.InfoD("Below is the cloud drive config data")
-	log.InfoD("Config Data %v", configData)
 	//Find out the instance VMUUID and then dettach.
 	for _, nodeConfigData := range configData {
 		if nodeName == nodeConfigData.SchedulerNodeName {
 			allDiskPaths := GetDiskPaths(nodeConfigData)
 			instanceId := nodeConfigData.InstanceID
 			for i := 0; i < len(allDiskPaths); i++ {
-				logrus.Infof("diskpath for %v is %v and instance id is %v", nodeConfigData.NodeID, allDiskPaths[i], instanceId)
-				log.InfoD("For LogD diskpath for %v is %v and instance id is %v", nodeConfigData.NodeID, allDiskPaths[i], instanceId)
-				//TODO need to detach devices of datapath
-				v.DetachDisk(instanceId, allDiskPaths[i])
+				log.Infof("Diskpath for %v is %v and instance id is %v", nodeConfigData.NodeID, allDiskPaths[i], instanceId)
+				err = v.DetachDisk(instanceId, allDiskPaths[i])
 				if err != nil {
-					log.InfoD("Detach drives from the node faield %v", err)
+					//log.InfoD("Detach drives from the node failed %v", err)
+					err = fmt.Errorf("%w; %s", err, nodeName)
+					return err
 				}
 			}
 		} else {
@@ -378,43 +374,40 @@ func (v *vsphere) DetachDisk(vmUuid string, path string) error {
 		if vm.UUID(v.ctx) == vmUuid {
 			//Found
 			vmMo = vm
-			log.InfoD("VM Name found inside the method %v", vm)
+			log.Infof("VM found %v", vm)
 			break
 		}
 	}
 	//Error if not found
-	log.InfoD("Virtual machine %v ", vmMo)
+	if vmMo == nil {
+		return fmt.Errorf("Virtual machine not found")
+	}
+	log.Infof("Virtual machine %v ", vmMo)
 	//Remove device and detach VM
-
 	var deviceList object.VirtualDeviceList
 	var selectedDevice types.BaseVirtualDevice
-
 	deviceList, err = vmMo.Device(v.ctx)
 	if err != nil {
-		log.Errorf("Failed to get the devices for VM: %q. err: %+v", vmMo, err)
-
+		return fmt.Errorf("Failed to get the devices for VM: %q. err: %+v", vmMo, err)
 	}
-	log.InfoD("All devices %v", deviceList)
-
+	log.Infof("All devices %v", deviceList)
 	// filter vm devices to retrieve device for the given vmdk file identified by disk path
 	for _, device := range deviceList {
-		//log.InfoD("Device Description %s ", device.GetVirtualDevice().DeviceInfo.GetDescription())
-		//log.InfoD("Device TypeName %v", deviceList.TypeName(device))
-
 		if deviceList.TypeName(device) == "VirtualDisk" {
 			virtualDevice := device.GetVirtualDevice()
 			if backing, ok := virtualDevice.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
 				if matchVirtualDiskAndVolPath(backing.FileName, path) {
-					log.InfoD("Found VirtualDisk backing with filename %q for diskPath %q", backing.FileName, path)
+					log.Infof("Found VirtualDisk backing with filename %q for diskPath %q", backing.FileName, path)
 					selectedDevice = device
 				}
 			}
 		}
 	}
-	log.InfoD("Selected device %v", selectedDevice)
-	err = vmMo.RemoveDevice(v.ctx, true, selectedDevice)
-	log.InfoD("ERROR %v", err)
-	return nil
+	if selectedDevice != nil {
+		log.Infof("Selected device %v", selectedDevice)
+		return vmMo.RemoveDevice(v.ctx, true, selectedDevice)
+	}
+	return fmt.Errorf("No device selected for VM: %q", vmMo)
 }
 
 //Match the paths between fileNamePath and absolute vmdk path
@@ -426,7 +419,6 @@ func matchVirtualDiskAndVolPath(diskPath, volPath string) bool {
 
 //Get virtual disk path.
 //TODO need to filter only of type: DrivePaths
-
 func GetDiskPaths(driveset DriveSet) []string {
 	diskPaths := []string{}
 	for vmdkPath, configs := range driveset.Configs {
@@ -442,7 +434,7 @@ func GetDiskPaths(driveset DriveSet) []string {
 			// Replace the substring inside the square brackets with datastore
 			diskPath = strings.Replace(diskPath, substring, datastore, 1)
 			diskPaths = append(diskPaths, diskPath)
-			log.InfoD("diskPath %s is of type data ", diskPath)
+			log.Infof("diskPath %s is of type data ", diskPath)
 		}
 	}
 	return diskPaths
@@ -458,6 +450,7 @@ func GetDatastore(configs DriveConfig) string {
 	return ""
 }
 
+//GetCloudDriveConfigmapData Get clouddrive configMap data.
 func GetCloudDriveConfigmapData(cluster *corev1.StorageCluster) (map[string]DriveSet, error) {
 	cloudDriveConfigmapName := pxutil.GetCloudDriveConfigMapName(cluster)
 	var PortworxNamespace = "kube-system"

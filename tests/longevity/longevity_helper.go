@@ -565,7 +565,6 @@ func populateIntervals() {
 	triggerInterval[AutoFsTrim] = make(map[int]time.Duration)
 	triggerInterval[UpdateVolume] = make(map[int]time.Duration)
 	triggerInterval[UpdateIOProfile] = make(map[int]time.Duration)
-	triggerInterval[UpdateIOProfile] = make(map[int]time.Duration)
 	triggerInterval[DetachDrives] = make(map[int]time.Duration)
 	triggerInterval[RestartManyVolDriver] = make(map[int]time.Duration)
 	triggerInterval[RebootManyNodes] = make(map[int]time.Duration)
@@ -622,7 +621,7 @@ func populateIntervals() {
 	triggerInterval[SetDiscardMounts] = make(map[int]time.Duration)
 	triggerInterval[ResetDiscardMounts] = make(map[int]time.Duration)
 
-	baseInterval := 5 * time.Minute
+	baseInterval := 10 * time.Minute
 
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
 	triggerInterval[BackupScaleMongo][9] = 2 * baseInterval
@@ -941,7 +940,7 @@ func populateIntervals() {
 	triggerInterval[StorkAppBkpPoolResize][2] = 24 * baseInterval
 	triggerInterval[StorkAppBkpPoolResize][1] = 27 * baseInterval
 
-	baseInterval = 10 * time.Minute
+	baseInterval = 60 * time.Minute
 
 	triggerInterval[AppTasksDown][10] = 1 * baseInterval
 	triggerInterval[AppTasksDown][9] = 2 * baseInterval

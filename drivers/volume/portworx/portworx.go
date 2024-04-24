@@ -1206,7 +1206,7 @@ func (d *portworx) ExitPoolMaintenance(n node.Node) error {
 
 	// no need to exit pool maintenance if node status is up
 	pxStatus, err := d.GetPxctlStatus(n)
-	if err == nil && pxStatus == api.Status_STATUS_OK.String(){
+	if err == nil && pxStatus == api.Status_STATUS_OK.String() {
 		log.Infof("node is up, no need to exit pool maintenance mode")
 		return nil
 	}
@@ -1503,10 +1503,10 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
 			}
 			/* Ignore shared setting.
-		case api.SpecShared:
-			if requestedSpec.Shared != vol.Spec.Shared {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.Shared, vol.Spec.Shared)
-			}
+			case api.SpecShared:
+				if requestedSpec.Shared != vol.Spec.Shared {
+					return errFailedToInspectVolume(volumeName, k, requestedSpec.Shared, vol.Spec.Shared)
+				}
 			*/
 		case api.SpecSticky:
 			if requestedSpec.Sticky != vol.Spec.Sticky {
@@ -2698,7 +2698,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 					n.Name, n.VolDriverNodeID, api.Status_STATUS_OK, pxNode.Status),
 			}
 		default:
-			log.InfoD("Status PX available %s", pxNode.Status.String())
+			log.Infof("Status PX available %s", pxNode.Status.String())
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
 				Cause: fmt.Sprintf("PX cluster is usable but node [%s/%s] status is not ok. Expected: %v Actual: %v",

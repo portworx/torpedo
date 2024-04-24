@@ -207,9 +207,10 @@ type Driver interface {
 
 	// AddMachine adds the new machine instance to existing map
 	AddMachine(machineName string) error
+
 	// DetachDisk vdisk from node.
 	DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string) error
-	//DetachDisk(vmUuid string, path string) error
+
 	// PowerOnVMByName power on the VM using the vm name
 	PowerOnVMByName(vmName string) error
 
