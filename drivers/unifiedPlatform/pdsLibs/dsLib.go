@@ -35,6 +35,9 @@ func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, 
 						Description: StringPtr("pds-qa-tests"),
 					},
 					DeploymentConfig: automationModels.V1Config1{
+						References: automationModels.Reference{
+							ImageId: &imageId,
+						},
 						DeploymentTopologies: []automationModels.DeploymentTopology{
 							{
 								Name:     StringPtr(DEPLOYMENT_TOPOLOGY),
