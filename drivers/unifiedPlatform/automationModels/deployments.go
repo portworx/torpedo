@@ -62,6 +62,7 @@ type Deploymentv1Status struct {
 	Initialized *string `copier:"must,nopanic"`
 	// Status of the deployment topology.
 	DeploymentTopologyStatus []V1DeploymentTopologyStatus `copier:"must,nopanic"`
+	CustomResourceName       *string                      `copier:"must,nopanic"`
 }
 
 // V1DeploymentTopologyStatus Status of the deployment topology. It is consumed in Deployment.
@@ -69,9 +70,9 @@ type V1DeploymentTopologyStatus struct {
 	Health *V1DeploymentTopologyStatusHealth `copier:"must,nopanic"`
 	Phase  *V1DeploymentTopologyStatusPhase  `copier:"must,nopanic"`
 	// Number of replicas reported by Target Cluster that are up and running.
-	ReadyReplicas  *string           `copier:"must,nopanic"`
-	ConnectionInfo *V1ConnectionInfo `copier:"must,nopanic"`
-	CustomResourceName       *string 
+	ReadyReplicas      *string           `copier:"must,nopanic"`
+	ConnectionInfo     *V1ConnectionInfo `copier:"must,nopanic"`
+	CustomResourceName *string
 }
 
 // V1ConnectionInfo Connection Information for the Deployment Topology.

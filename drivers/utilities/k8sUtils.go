@@ -39,11 +39,11 @@ func Inst() *Torpedo {
 	return instance
 }
 
-func IncreasePVCby1Gig(namespace string, deployment map[string]string, sizeInGb uint64) (*volume.Volume, error) {
+func IncreasePVCby1Gig(namespace string, deploymentName string, sizeInGb uint64) (*volume.Volume, error) {
 	log.Info("Resizing of the PVC begins")
 	var vol *volume.Volume
-	pvcList, _ := GetPvsAndPVCsfromDeployment(namespace, deployment)
-	initialCapacity, err := GetVolumeCapacityInGB(namespace, deployment)
+	pvcList, _ := GetPvsAndPVCsfromDeployment(namespace, deploymentName)
+	initialCapacity, err := GetVolumeCapacityInGB(namespace, deploymentName)
 	log.Debugf("Initial volume storage size is : %v", initialCapacity)
 	if err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func IncreasePVCby1Gig(namespace string, deployment map[string]string, sizeInGb 
 	}
 	// wait for the resize to take effect
 	time.Sleep(30 * time.Second)
-	newcapacity, err := GetVolumeCapacityInGB(namespace, deployment)
+	newcapacity, err := GetVolumeCapacityInGB(namespace, deploymentName)
 	log.Infof("Resized volume storage size is : %v", newcapacity)
 	if err != nil {
 		return nil, err
@@ -78,11 +78,11 @@ func IncreasePVCby1Gig(namespace string, deployment map[string]string, sizeInGb 
 	}
 }
 
-func GetPvsAndPVCsfromDeployment(namespace string, deployment map[string]string) (*corev1.PersistentVolumeClaimList, []*volume.Volume) {
+func GetPvsAndPVCsfromDeployment(namespace string, deploymentName string) (*corev1.PersistentVolumeClaimList, []*volume.Volume) {
 	log.Infof("Get PVC List based on namespace and deployment")
 	var vols []*volume.Volume
 	labelSelector := make(map[string]string)
-	labelSelector["name"] = "deployment.GetClusterResourceName()"
+	labelSelector["name"] = deploymentName
 	pvcList, _ := k8sCores.GetPersistentVolumeClaims(namespace, labelSelector)
 	for _, pvc := range pvcList.Items {
 		vols = append(vols, &volume.Volume{
@@ -92,9 +92,9 @@ func GetPvsAndPVCsfromDeployment(namespace string, deployment map[string]string)
 	return pvcList, vols
 }
 
-func GetVolumeCapacityInGB(namespace string, deployment map[string]string) (uint64, error) {
+func GetVolumeCapacityInGB(namespace string, deploymentName string) (uint64, error) {
 	var pvcCapacity uint64
-	_, vols := GetPvsAndPVCsfromDeployment(namespace, deployment)
+	_, vols := GetPvsAndPVCsfromDeployment(namespace, deploymentName)
 	for _, vol := range vols {
 		appVol, err := Inst().V.InspectVolume(vol.ID)
 		if err != nil {

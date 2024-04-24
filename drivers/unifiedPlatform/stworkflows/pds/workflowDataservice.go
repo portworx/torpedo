@@ -306,7 +306,7 @@ func (wfDataService *WorkflowDataService) ValidateDeploymentResources(resourceTe
 	wfDataService.Dash.VerifyFatal(dataServiceVersionBuild, config.Spec.Version, "Validating ds version")
 }
 
-func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string, deployment map[string]string, sizeInGb uint64) error {
+func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string, deployment string, sizeInGb uint64) error {
 	_, err := utils.IncreasePVCby1Gig(namespace, deployment, sizeInGb)
 	return err
 }
