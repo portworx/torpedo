@@ -438,6 +438,8 @@ var _ = Describe("{NodeDiskDetachAttach}", func() {
 			log.FailOnError(err, "error refreshing node registry")
 			err = Inst().V.RefreshDriverEndpoints()
 			log.FailOnError(err, "error refreshing storage drive endpoints")
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing node registry")
 			err = Inst().V.WaitDriverUpOnNode(randNonPxNode, Inst().DriverStartTimeout)
 			dash.VerifyFatal(err, nil, "Validate volume is driver up")
 			// Verify the node ID is same as earlier stored Node ID
