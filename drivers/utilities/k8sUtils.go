@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -104,6 +105,40 @@ func GetVolumeCapacityInGB(namespace string, deploymentName string) (uint64, err
 		pvcCapacity = appVol.Spec.Size / units.GiB
 	}
 	return pvcCapacity, nil
+}
+
+func GetVolumeUsage(namespace string, deploymentName string) (float64, error) {
+	var pvcUsage float64
+	_, vols := GetPvsAndPVCsfromDeployment(namespace, deploymentName)
+	for _, vol := range vols {
+		appVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return 0, err
+		}
+		pvcUsage = float64(appVol.GetUsage())
+	}
+	log.InfoD("Amount of PVC consumed is- [%v]", pvcUsage)
+	return pvcUsage, nil
+}
+
+// Check the DS related PV usage and resize in case of 90% full
+func CheckStorageFullCondition(namespace string, deploymentName string, thresholdPercentage float64) error {
+	log.Infof("Check PVC Usage")
+	f := func() (interface{}, bool, error) {
+		initialCapacity, _ := GetVolumeCapacityInGB(namespace, deploymentName)
+		floatCapacity := float64(initialCapacity)
+		consumedCapacity, err := GetVolumeUsage(namespace, deploymentName)
+		log.FailOnError(err, "unable to calculate vol usage")
+		threshold := thresholdPercentage * (floatCapacity / 100)
+		log.InfoD("threshold value calculated is- [%v]", threshold)
+		if consumedCapacity >= threshold {
+			log.Infof("The PVC capacity was %v , the consumed PVC in floating point value is- %v", initialCapacity, consumedCapacity)
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("threshold not achieved for the PVC, ")
+	}
+	_, err := task.DoRetryWithTimeout(f, 35*time.Minute, 20*time.Second)
+	return err
 }
 
 func GetDbMasterNode(namespace string, dsName string, deployment string, kubeconfigPath string) (string, bool) {

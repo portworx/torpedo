@@ -381,6 +381,14 @@ func (wfDataService *WorkflowDataService) GetPodAgeForDeployment(deploymentName 
 	return age, nil
 }
 
+func (wfDataService *WorkflowDataService) CheckPVCStorageFullCondition(namespace string, deploymentName string, thresholdPercentage float64) error {
+	err := utils.CheckStorageFullCondition(namespace, deploymentName, thresholdPercentage)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (wfDataService *WorkflowDataService) ValidateDepConfigPostStorageIncrease(dsName string, deploymentName string, stIncrease *dslibs.ValidateStorageIncrease) error {
 	// Get data service deployment resources
 	resourceTemp, storageTemp, dbConfig, err := wfDataService.GetDsDeploymentResources(wfDataService.DataServiceDeployment, dsName, stIncrease.ResConfigIdUpdated, stIncrease.StorageConfigIdUpdated, wfDataService.NamespaceName)
