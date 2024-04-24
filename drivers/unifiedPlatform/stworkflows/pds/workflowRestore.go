@@ -8,10 +8,11 @@ import (
 )
 
 type WorkflowPDSRestore struct {
-	WorkflowProject  platform.WorkflowProject
-	Destination      platform.WorkflowNamespace
-	SkipValidatation map[string]bool
-	Restores         map[string]automationModels.PDSRestore
+	WorkflowProject     platform.WorkflowProject
+	Destination         platform.WorkflowNamespace
+	SkipValidatation    map[string]bool
+	Restores            map[string]automationModels.PDSRestore
+	RestoredDeployments map[string]WorkflowDataService
 }
 
 const (
@@ -51,11 +52,8 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 		}
 	}
 
-	if restore.Restores == nil {
-		restore.Restores = make(map[string]automationModels.PDSRestore)
-	}
 	restore.Restores[name] = createRestore.Create
-	log.Infof("Updated the restores")
+	log.Infof("Restore completed successfully - [%s]", *createRestore.Create.Meta.Name)
 
 	return createRestore, nil
 }
