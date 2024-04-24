@@ -23,7 +23,7 @@ import (
 )
 
 // This testcase verifies alternating backups between locked and unlocked bucket
-var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
+var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", Label(TestCaseLabelsMap[BackupAlternatingBetweenLockedAndUnlockedBuckets]...), func() {
 	var (
 		appList        = Inst().AppList
 		credName       string
@@ -217,7 +217,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 })
 
 // This testcase verifies resize after same original volume is restored from a backup stored in a locked bucket
-var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
+var _ = Describe("{LockedBucketResizeOnRestoredVolume}", Label(TestCaseLabelsMap[LockedBucketResizeOnRestoredVolume]...), func() {
 	var (
 		appList              = Inst().AppList
 		backupName           string
@@ -466,7 +466,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 })
 
 // This testcase verifies schedule backups are successful while volume resize is in progress for locked bucket
-var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
+var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", Label(TestCaseLabelsMap[LockedBucketResizeVolumeOnScheduleBackup]...), func() {
 	var (
 		beforeSize                 int
 		credName                   string
@@ -676,10 +676,16 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 					log.InfoD("Create schedule backup after initializing volume resize")
 					ctx, err := backup.GetAdminCtxFromSecret()
 					log.FailOnError(err, "Unable to px-central-admin ctx")
-					preRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleNameList[i])
-					log.FailOnError(err, "Unable to fetch pre rule Uid")
-					postRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleNameList[i])
-					log.FailOnError(err, "Unable to fetch post rule Uid")
+					preRuleUid := ""
+					if preRuleNameList[i] != "" {
+						preRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleNameList[i])
+						log.FailOnError(err, "Unable to fetch pre rule Uid")
+					}
+					postRuleUid := ""
+					if postRuleNameList[i] != "" {
+						postRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleNameList[i])
+						log.FailOnError(err, "Unable to fetch post rule Uid")
+					}
 					scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 					_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), BackupOrgID, preRuleNameList[i], preRuleUid, postRuleNameList[i], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
@@ -722,7 +728,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 })
 
 // DeleteLockedBucketUserObjectsFromAdmin delete backups, backup schedules, restore and cluster objects created with locked bucket from the admin
-var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
+var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", Label(TestCaseLabelsMap[DeleteLockedBucketUserObjectsFromAdmin]...), func() {
 	var (
 		scheduledAppContexts                           = make([]*scheduler.Context, 0)
 		appNamespaces                                  = make([]string, 0)
@@ -1090,7 +1096,7 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 })
 
 // BackupToLockedBucketWithSharedObjects creates backup with shared backup objects
-var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
+var _ = Describe("{BackupToLockedBucketWithSharedObjects}", Label(TestCaseLabelsMap[BackupToLockedBucketWithSharedObjects]...), func() {
 	var (
 		preRuleName           string
 		postRuleName          string

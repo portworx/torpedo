@@ -1,7 +1,7 @@
 package tests
 
 import (
-	"bufio"
+    "bufio"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
@@ -23,9 +23,14 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 	context1 "context"
 
+	rest "k8s.io/client-go/rest"
+	"github.com/Masterminds/semver/v3"
+	"github.com/hashicorp/go-version"
+	pxapi "github.com/libopenstorage/operator/api/px"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"cloud.google.com/go/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/aws/aws-sdk-go/aws"
@@ -50,31 +55,10 @@ import (
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/operator"
+	policyops "github.com/portworx/sched-ops/k8s/policy"
 	k8sStorage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers"
-	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
-	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/monitor"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"github.com/portworx/torpedo/drivers/pds"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
-	appUtils "github.com/portworx/torpedo/drivers/utilities"
-	"github.com/portworx/torpedo/drivers/volume"
-	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/asyncdr"
-	"github.com/portworx/torpedo/pkg/jirautils"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/portworx/torpedo/pkg/pureutils"
-	"github.com/portworx/torpedo/pkg/s3utils"
-	"github.com/portworx/torpedo/pkg/stats"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
-	"github.com/portworx/torpedo/pkg/units"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/sirupsen/logrus"
 	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
@@ -103,6 +87,32 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"k8s.io/client-go/tools/clientcmd"
+	"github.com/portworx/sched-ops/k8s/stork"
+
+	"github.com/portworx/torpedo/drivers"
+	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
+	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
+	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/monitor"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/pds"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	appUtils "github.com/portworx/torpedo/drivers/utilities"
+	"github.com/portworx/torpedo/drivers/volume"
+	torpedovolume "github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/asyncdr"
+	"github.com/portworx/torpedo/pkg/jirautils"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/pureutils"
+	"github.com/portworx/torpedo/pkg/s3utils"
+	"github.com/portworx/torpedo/pkg/stats"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
+	"github.com/portworx/torpedo/pkg/units"
 
 	// import ssh driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/node/ssh"
@@ -142,6 +152,8 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
 
+	_ "github.com/portworx/torpedo/drivers/scheduler/oke"
+
 	// import rke scheduler drivers to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/rke"
 
@@ -172,9 +184,13 @@ import (
 	// import ibm driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ibm"
 
+	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/iks"
+
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
 )
+
 
 const (
 	// SkipClusterScopedObjects describes option for skipping deletion of cluster wide objects
@@ -197,6 +213,11 @@ var (
 var (
 	NamespaceAppWithDataMap    = make(map[string][]appDriver.ApplicationDriver)
 	IsReplacePolicySetToDelete = false // To check if the policy in the test is set to delete - Skip data continuity validation in this case
+)
+
+var (
+	// PDBValidationMinOpVersion specifies the minimum PX Operator version required to enable PDB validation in the UpgradeCluster
+	PDBValidationMinOpVersion, _ = version.NewVersion("24.1.0-")
 )
 
 type OwnershipAccessType int32
@@ -356,6 +377,7 @@ const (
 	defaultTorpedoJob                     = "torpedo-job"
 	defaultTorpedoJobType                 = "functional"
 	labelNameKey                          = "name"
+	serviceURL                            = "https://us-east.iaas.cloud.ibm.com/v1"
 )
 
 const (
@@ -384,6 +406,124 @@ const (
 
 const (
 	pxctlCDListCmd = "pxctl cd list"
+)
+
+const (
+	IBMHelmRepoName   = "ibm-helm-portworx"
+	IBMHelmRepoURL    = "https://raw.githubusercontent.com/portworx/ibm-helm/master/repo/stable"
+	IBMHelmValuesFile = "/tmp/values.yaml"
+)
+
+const (
+	ValidateStorageClusterTimeout = 40 * time.Minute
+)
+
+// LabLabel used to name the licensing features
+type LabLabel string
+
+const (
+	IBMTestLicenseSKU   = "PX-Enterprise IBM Cloud (test)"
+	IBMTestLicenseDRSKU = "PX-Enterprise IBM Cloud DR (test)"
+	IBMProdLicenseSKU   = "PX-Enterprise IBM Cloud"
+	IBMProdLicenseDRSKU = "PX-Enterprise IBM Cloud DR"
+)
+
+const (
+	// LabNodes - Number of nodes maximum
+	LabNodes LabLabel = "Nodes"
+	// LabVolumeSize - Volume capacity [TB] maximum
+	LabVolumeSize LabLabel = "VolumeSize"
+	// LabVolumes - Number of volumes per cluster maximum
+	LabVolumes LabLabel = "Volumes"
+	// LabSnapshots - Number of snapshots per volume maximum
+	LabSnapshots LabLabel = "Snapshots"
+	// LabHaLevel - Volume replica count
+	LabHaLevel LabLabel = "HaLevel"
+	// LabSharedVol - Shared volumes
+	LabSharedVol LabLabel = "SharedVolume"
+	// LabEncryptedVol - BYOK data encryption
+	LabEncryptedVol LabLabel = "EncryptedVolume"
+	// LabScaledVol - Volume sets
+	LabScaledVol LabLabel = "ScaledVolume"
+	// LabAggregatedVol - Storage aggregation
+	LabAggregatedVol LabLabel = "AggregatedVolume"
+	// LabResizeVolume - Resize volumes on demand
+	LabResizeVolume LabLabel = "ResizeVolume"
+	// LabCloudSnap - Snapshot to object store [CloudSnap]
+	LabCloudSnap LabLabel = "SnapshotToObjectStore"
+	// LabCloudSnapDaily - Number of CloudSnaps daily per volume maximum
+	LabCloudSnapDaily LabLabel = "SnapshotToObjectStoreDaily"
+	// LabCloudMigration -Cluster-level migration [Kube-motion/Data Migration]
+	LabCloudMigration LabLabel = "CloudMigration"
+	// LabDisasterRecovery - Disaster Recovery [PX-DR]
+	LabDisasterRecovery LabLabel = "DisasterRecovery"
+	// LabAUTCapacityMgmt - Autopilot Capacity Management
+	LabAUTCapacityMgmt LabLabel = "AUTCapacityManagement"
+	// LabPlatformBare - Bare-metal hosts
+	LabPlatformBare LabLabel = "EnablePlatformBare"
+	// LabPlatformVM - Virtual machine hosts
+	LabPlatformVM LabLabel = "EnablePlatformVM"
+	// LabNodeCapacity - Node disk capacity [TB] maximum
+	LabNodeCapacity LabLabel = "NodeCapacity"
+	// LabNodeCapacityExtend - Node disk capacity extension
+	LabNodeCapacityExtend LabLabel = "NodeCapacityExtension"
+	// LabLocalAttaches - Number of attached volumes per node maximum
+	LabLocalAttaches LabLabel = "LocalVolumeAttaches"
+	// LabOIDCSecurity - OIDC Security
+	LabOIDCSecurity LabLabel = "OIDCSecurity"
+	// LabGlobalSecretsOnly - Limit BYOK encryption to cluster-wide secrets
+	LabGlobalSecretsOnly LabLabel = "GlobalSecretsOnly"
+	// LabFastPath - FastPath extension [PX-FAST]
+	LabFastPath LabLabel = "FastPath"
+	// UnlimitedNumber represents the unlimited number of licensed resource.
+	// note - the max # Flex counts handle, is actually 999999999999999990
+	UnlimitedNumber = int64(0x7FFFFFFF) // C.FLX_FEATURE_UNCOUNTED_VALUE = 0x7FFFFFFF  (=2147483647)
+	Unlimited       = int64(0x7FFFFFFFFFFFFFFF)
+
+	// -- Testing maximums below
+
+	// MaxNumNodes is a maximum nodes in a cluster
+	MaxNumNodes = int64(1000)
+	// MaxNumVolumes is a maximum number of volumes in a cluster
+	MaxNumVolumes = int64(100000)
+	// MaxVolumeSize is a maximum volume size for single volume [in TB]
+	MaxVolumeSize = int64(40)
+	// MaxNodeCapacity defines the maximum node's disk capacity [in TB]
+	MaxNodeCapacity = int64(256)
+	// MaxLocalAttachCount is a maximum number of local volume attaches
+	MaxLocalAttachCount = int64(256)
+	// MaxHaLevel is a maximum replication factor
+	MaxHaLevel = int64(3)
+	// MaxNumSnapshots is a maximum number of snapshots
+	MaxNumSnapshots = int64(64)
+)
+
+var (
+	IBMLicense = map[LabLabel]interface{}{
+		LabNodes:              &pxapi.LicensedFeature_Count{Count: 1000},
+		LabVolumeSize:         &pxapi.LicensedFeature_CapacityTb{CapacityTb: 40},
+		LabVolumes:            &pxapi.LicensedFeature_Count{Count: 16384},
+		LabHaLevel:            &pxapi.LicensedFeature_Count{Count: MaxHaLevel},
+		LabSnapshots:          &pxapi.LicensedFeature_Count{Count: 64},
+		LabAggregatedVol:      &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabSharedVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabEncryptedVol:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabGlobalSecretsOnly:  &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabScaledVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabResizeVolume:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnap:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnapDaily:     &pxapi.LicensedFeature_Count{Count: Unlimited},
+		LabCloudMigration:     &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabDisasterRecovery:   &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabPlatformBare:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabPlatformVM:         &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabNodeCapacity:       &pxapi.LicensedFeature_CapacityTb{CapacityTb: 256},
+		LabNodeCapacityExtend: &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabLocalAttaches:      &pxapi.LicensedFeature_Count{Count: 256},
+		LabOIDCSecurity:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabAUTCapacityMgmt:    &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabFastPath:           &pxapi.LicensedFeature_Enabled{Enabled: false},
+	}
 )
 
 var pxRuntimeOpts string
@@ -444,6 +584,7 @@ var (
 	includeVolumesFlag    = true
 	startApplicationsFlag = true
 	tempDir               = "/tmp"
+	bidirectionalClusterPairDir = "bidirectional-cluster-pair"
 	migrationList         []*storkapi.Migration
 )
 
@@ -590,6 +731,10 @@ func PrintPxctlStatus() {
 	PrintCommandOutput("pxctl status")
 }
 
+func PrintInspectVolume(volID string) {
+	PrintCommandOutput(fmt.Sprintf("pxctl volume inspect %s", volID))
+}
+
 func PrintCommandOutput(cmnd string) {
 	output, err := Inst().N.RunCommand(node.GetStorageNodes()[0], cmnd, node.ConnectionOpts{
 		IgnoreError:     false,
@@ -602,6 +747,15 @@ func PrintCommandOutput(cmnd string) {
 	}
 	log.Infof(output)
 
+}
+
+func PrintSvPoolStatus(node node.Node) {
+	output, err := runCmdGetOutput("pxctl sv pool show", node)
+	if err != nil {
+		log.Warnf("error getting pool data on node [%s], cause: %v", node.Name, err)
+		return
+	}
+	log.Infof(output)
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -669,6 +823,39 @@ func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
 	})
 }
 
+func IsPoolAddDiskSupported() bool {
+	DMthin, err := IsDMthin()
+	log.FailOnError(err, "Error occured while checking if DMthin is enabled")
+	if DMthin {
+		dmthinSupportedPxVersion, px_err := semver.NewVersion("3.1.0")
+		if px_err != nil {
+			log.FailOnError(px_err, "Error occured :%s")
+		}
+		driverVersion, version_err := Inst().V.GetDriverVersion()
+		if version_err != nil {
+			log.FailOnError(version_err, "Error occured while fetching current version")
+		}
+		var new_trimmedVersion string
+		parts := strings.Split(driverVersion, "-")
+		trimmedVersion := strings.Split(parts[0], ".")
+		if len(trimmedVersion) > 3 {
+			new_trimmedVersion = strings.Join(trimmedVersion[:3], ".")
+		} else {
+			new_trimmedVersion = parts[0]
+		}
+		currentPxVersionOnCluster, semver_err := semver.NewVersion(new_trimmedVersion)
+		if semver_err != nil {
+			log.FailOnError(semver_err, "Error occured while comparing the current and expected version")
+		}
+		log.InfoD(fmt.Sprintf("The current version on the cluster is :%s", currentPxVersionOnCluster))
+		if currentPxVersionOnCluster.GreaterThan(dmthinSupportedPxVersion) {
+			log.Errorf("drive add to existing pool not supported for px-storev2 or px-cache pools as the current version is:%s", currentPxVersionOnCluster)
+			return false
+		}
+	}
+	return true
+}
+
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	defer func() {
@@ -689,6 +876,10 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 		}
 
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
+			// In case of tektoncd skip the volume validation as the pods are created through jobs and not deployments or sts
+			if strings.Contains(ctx.App.Key, "tektoncd") {
+				ctx.SkipVolumeValidation = true
+			}
 			if !ctx.SkipVolumeValidation {
 				log.InfoD(fmt.Sprintf("Validating %s app's volumes", ctx.App.Key))
 				ValidateVolumes(ctx, errChan...)
@@ -761,6 +952,52 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			})
 		}
 	})
+}
+
+func ValidatePDB(pdbValue int, allowedDisruptions int, initialNumNodes int, isClusterParallelyUpgraded *bool, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+
+	currentPdbValue, _ := GetPDBValue()
+	if currentPdbValue == -1 {
+		err := fmt.Errorf("failed to get PDB value")
+		processError(err, errChan...)
+	}
+	Step("Validate PDB minAvailable for px storage", func() {
+		if currentPdbValue != pdbValue {
+			err := fmt.Errorf("PDB minAvailable value has changed. Expected: %d, Actual: %d", pdbValue, currentPdbValue)
+			processError(err, errChan...)
+		}
+	})
+	Step("Validate number of disruptions ", func() {
+		nodes, err := Inst().V.GetDriverNodes()
+		if err != nil {
+			processError(err, errChan...)
+		}
+		currentNumNodes := len(nodes)
+		if allowedDisruptions < initialNumNodes-currentNumNodes {
+			err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
+			processError(err, errChan...)
+		}
+		if initialNumNodes-currentNumNodes > 1 {
+			*isClusterParallelyUpgraded = true
+		}
+	})
+}
+
+func GetPDBValue() (int, int) {
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		return -1, -1
+	}
+	pdb, err := policyops.Instance().GetPodDisruptionBudget("px-storage", stc.Namespace)
+	if err != nil {
+		return -1, -1
+	}
+	return pdb.Spec.MinAvailable.IntValue(), int(pdb.Status.DisruptionsAllowed)
 }
 
 func ValidatePureCloudDriveTopologies() error {
@@ -1317,7 +1554,8 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 			err = osutils.Kubectl(cmdArgs)
 			processError(err, errChan...)
 			fmt.Println("sleeping to let volume usage get reflected")
-			// wait until the backends size is reflected before making the REST call, Max time for FBDA Update is 15 min
+	  
+      // wait until the backends size is reflected before making the REST call, Max time for FBDA Update is 15 min
 			time.Sleep(time.Minute * 16)
 
 			byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
@@ -1890,6 +2128,33 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	return contexts
 }
 
+// ScheduleApplicationsWithScheduleOptions schedules *the* applications taking scheduleOptions as input and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
+func ScheduleApplicationsWithScheduleOptions(testname string, appSpec string, provisioner string, errChan ...*chan error) []*scheduler.Context {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	var contexts []*scheduler.Context
+	var taskName string
+	var err error
+	options := scheduler.ScheduleOptions{
+		AppKeys:            []string{appSpec},
+		StorageProvisioner: provisioner,
+	}
+	taskName = fmt.Sprintf("%s", testname)
+	contexts, err = Inst().S.Schedule(taskName, options)
+	// Need to check err != nil before calling processError
+	if err != nil {
+		processError(err, errChan...)
+	}
+	if len(contexts) == 0 {
+		processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
+	}
+
+	return contexts
+}
+
 // ScheduleApplicationsOnNamespace ScheduleApplications schedules *the* applications and returns
 // the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
 func ScheduleApplicationsOnNamespace(namespace string, testname string, errChan ...*chan error) []*scheduler.Context {
@@ -2110,7 +2375,7 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 
 		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -2177,6 +2442,7 @@ func DestroyApps(contexts []*scheduler.Context, opts map[string]bool) {
 // DestroyApps destroy applications with data validation
 func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, controlChannel chan string, errGroup *errgroup.Group) error {
 
+	defer ginkgo.GinkgoRecover()
 	var allErrors string
 
 	log.InfoD("Validating apps data continuity")
@@ -2498,41 +2764,44 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 // ValidateClusterSize validates number of storage nodes in given cluster
 // using total cluster size `count` and max_storage_nodes_per_zone
 func ValidateClusterSize(count int64) {
-	zones, err := Inst().N.GetZones()
+	zones, err := Inst().S.GetZones()
 	log.FailOnError(err, "Zones empty")
 	log.InfoD("ASG is running in [%+v] zones\n", zones)
-	perZoneCount := count / int64(len(zones))
+
+	volDriverSpec, err := Inst().V.GetDriver()
+	log.FailOnError(err, "error getting storage cluster volDriverSpec")
+	perZoneCount := *volDriverSpec.Spec.CloudStorage.MaxStorageNodesPerZone
 
 	// Validate total node count
-	currentNodeCount, err := Inst().N.GetASGClusterSize()
+	currentNodeCount, err := Inst().S.GetASGClusterSize()
 	log.FailOnError(err, "Failed to Get ASG Cluster Size")
 
-	dash.VerifyFatal(currentNodeCount, perZoneCount*int64(len(zones)), "ASG cluster size is as expected?")
+	dash.VerifyFatal(currentNodeCount, count, "ASG cluster size is as expected?")
 
 	// Validate storage node count
-	var expectedStorageNodesPerZone int
-	if Inst().MaxStorageNodesPerAZ <= int(perZoneCount) {
-		expectedStorageNodesPerZone = Inst().MaxStorageNodesPerAZ
-	} else {
-		expectedStorageNodesPerZone = int(perZoneCount)
+	totalStorageNodesAllowed := int(perZoneCount) * len(zones)
+	expectedStoragesNodes := totalStorageNodesAllowed
+
+	if totalStorageNodesAllowed > int(count) {
+		expectedStoragesNodes = int(count)
 	}
 	storageNodes := node.GetStorageNodes()
-	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones), "Storage nodes matches the expected number?")
+	dash.VerifyFatal(len(storageNodes), expectedStoragesNodes, "Storage nodes matches the expected number?")
 }
 
 // GetStorageNodes get storage nodes in the cluster
 func GetStorageNodes() ([]node.Node, error) {
 
-	storageNodes := []node.Node{}
+	var storageNodes []node.Node
 	nodes := node.GetStorageDriverNodes()
 
-	for _, node := range nodes {
-		devices, err := Inst().V.GetStorageDevices(node)
+	for _, n := range nodes {
+		devices, err := Inst().V.GetStorageDevices(n)
 		if err != nil {
 			return nil, err
 		}
 		if len(devices) > 0 {
-			storageNodes = append(storageNodes, node)
+			storageNodes = append(storageNodes, n)
 		}
 	}
 	return storageNodes, nil
@@ -3296,7 +3565,7 @@ func SetClusterContext(clusterConfigPath string) error {
 		return nil
 	}
 	log.InfoD("Switching context to [%s]", clusterConfigPathForLog)
-	provider := getClusterProvider()
+	provider := GetClusterProvider()
 	if clusterConfigPath != "" {
 		switch provider {
 		case drivers.ProviderGke:
@@ -3383,6 +3652,14 @@ func SetDestinationKubeConfig() error {
 		return err
 	}
 	return SetClusterContext(destClusterConfigPath)
+}
+
+func SetCustomKubeConfig(clusterConfigIndex int) error {
+	customClusterConfigPath, err := GetCustomClusterConfigPath(clusterConfigIndex)
+	if err != nil {
+		return err
+	}
+	return SetClusterContext(customClusterConfigPath)
 }
 
 // ScheduleValidateClusterPair Schedule a clusterpair by creating a yaml file and validate it
@@ -3514,6 +3791,154 @@ func CreateClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig 
 	}
 
 	return addStorageOptions(pairInfo, clusterPairFileName)
+}
+
+func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string, mode string, sourceCluster int, destCluster int) (err error) {
+	//var token string
+	// Setting kubeconfig to source because we will create bidirectional cluster pair based on source as reference
+	err = SetCustomKubeConfig(sourceCluster)
+	if err != nil {
+		return err
+	}
+
+	// Create namespace for the cluster pair on source cluster
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cpNamespace,
+			Labels: map[string]string{
+				"creator": "stork-test",
+			},
+		},
+	})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return fmt.Errorf("Failed to create namespace %s on source cluster", cpNamespace)
+	}
+
+	srcKubeConfigPath, err := GetCustomClusterConfigPath(sourceCluster)
+	if err != nil {
+	    return fmt.Errorf("Failed to get config path for source cluster")
+        }
+
+	defer func() {
+		var config *rest.Config
+		config, err = clientcmd.BuildConfigFromFlags("", srcKubeConfigPath)
+		if err != nil {
+			return
+		}
+		core.Instance().SetConfig(config)
+		apps.Instance().SetConfig(config)
+		stork.Instance().SetConfig(config)
+	}()
+
+	err = SetCustomKubeConfig(destCluster)
+	if err != nil {
+		return err
+	}
+
+	// Create namespace for the cluster pair on destination cluster
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cpNamespace,
+			Labels: map[string]string{
+				"creator": "stork-test",
+			},
+		},
+	})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return fmt.Errorf("Failed to create namespace %s on destination cluster", cpNamespace)
+	}
+
+	destKubeConfigPath, err := GetCustomClusterConfigPath(destCluster)
+	if err != nil {
+            return fmt.Errorf("Failed to get config path for destination cluster")
+        }
+
+	err = SetCustomKubeConfig(sourceCluster)
+	if err != nil {
+		return err
+	}
+
+	// Create source --> destination and destination --> cluster pairs using storkctl
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
+	cmdArgs := []string{"create", "clusterpair", "-n", cpNamespace, cpName,
+	    "--kubeconfig", srcKubeConfigPath,
+		"--src-kube-file", srcKubeConfigPath,
+		"--dest-kube-file", destKubeConfigPath,
+	}
+
+	if mode == "sync-dr" {
+		cmdArgs = []string{"create", "clusterpair", "-n", cpNamespace, cpName,
+		    "--kubeconfig", srcKubeConfigPath,
+			"--src-kube-file", srcKubeConfigPath,
+			"--dest-kube-file", destKubeConfigPath,
+			"--mode", "sync-dr",
+	    }
+	}
+
+	if projectMappings != "" {
+		cmdArgs = append(cmdArgs, "--project-mappings")
+		cmdArgs = append(cmdArgs, projectMappings)
+	}
+
+	// Get external object store details and append to the command accordingily
+	if objectStoreType != "" {
+		// Get external object store details and append to the command accordingily
+		objectStoreArgs, err := getObjectStoreArgs(objectStoreType, secretName)
+		if err != nil {
+			return fmt.Errorf("failed to get  %s secret in configmap secret-config in default namespace", objectStoreType)
+		}
+		cmdArgs = append(cmdArgs, objectStoreArgs...)
+	}
+
+	cmd.SetArgs(cmdArgs)
+	log.InfoD("Following is the bidirectional command: %v", cmdArgs)
+	if err := cmd.Execute(); err != nil {
+		return fmt.Errorf("Creation of bidirectional cluster pair using storkctl failed: %v", err)
+	}
+
+	return nil
+}
+
+func getObjectStoreArgs(objectStoreType storkv1.BackupLocationType, secretName string) ([]string, error) {
+	var objectStoreArgs []string
+	secretData, err := core.Instance().GetSecret(secretName, "default")
+	if err != nil {
+		return objectStoreArgs, fmt.Errorf("error getting secret %s in default namespace: %v", secretName, err)
+	}
+	if objectStoreType == storkv1.BackupLocationS3 {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "s3",
+				"--s3-access-key", string(secretData.Data["accessKeyID"]),
+				"--s3-secret-key", string(secretData.Data["secretAccessKey"]),
+				"--s3-region", string(secretData.Data["region"]),
+				"--s3-endpoint", string(secretData.Data["endpoint"]),
+			}...)
+		if val, ok := secretData.Data["disableSSL"]; ok && string(val) == "true" {
+			objectStoreArgs = append(objectStoreArgs, "--disable-ssl")
+		}
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	} else if objectStoreType == storkv1.BackupLocationAzure {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "azure", "--azure-account-name", string(secretData.Data["storageAccountName"]),
+				"--azure-account-key", string(secretData.Data["storageAccountKey"])}...)
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	} else if objectStoreType == storkv1.BackupLocationGoogle {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "google", "--google-project-id", string(secretData.Data["projectID"]), "--google-key-file-path", string(secretData.Data["accountKey"])}...)
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	}
+
+	return objectStoreArgs, nil
 }
 
 func addStorageOptions(pairInfo map[string]string, clusterPairFileName string) error {
@@ -5316,6 +5741,22 @@ func GetDestinationClusterConfigPath() (string, error) {
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]), nil
 }
 
+func GetCustomClusterConfigPath(clusterConfigIndex int) (string, error) {
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	if kubeconfigs == "" {
+		return "", fmt.Errorf("empty KUBECONFIGS environment variable")
+	}
+
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	if len(kubeconfigList) < 2 {
+		return "", fmt.Errorf(`Failed to get source config path.
+				At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
+	}
+
+	log.Infof("config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[clusterConfigIndex]))
+	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[clusterConfigIndex]), nil
+}
+
 // GetAzureCredsFromEnv get creds for azure
 func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey string) {
 	accountName = os.Getenv("AZURE_ACCOUNT_NAME")
@@ -5580,28 +6021,26 @@ func DeleteBucket(provider string, bucketName string) {
 	})
 }
 
-// HaIncreaseRebootTargetNode repl increase and reboot target node
-func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) {
+// HaIncreaseErrorInjectionTargetNode repl increase and reboot target node
+func HaIncreaseErrorInjectionTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) error {
 
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
 		Inst().V.String(), ctx.App.Key, v)
 	var replicaSets []*opsapi.ReplicaSet
+	var err error
 	Step(stepLog,
 		func() {
 			log.InfoD(stepLog)
-			currRep, err := Inst().V.GetReplicationFactor(v)
+			var currRep int64
+			currRep, err = Inst().V.GetReplicationFactor(v)
 
 			if err != nil {
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
-				log.Error(err)
-				UpdateOutcome(event, err)
 				return
 			}
 			//if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
-				log.Warn(err)
-				UpdateOutcome(event, err)
 				return
 			}
 
@@ -5625,28 +6064,30 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 					if !nExist {
 						newReplID = nID
 						newReplNode = node
-						poolsUsedSize, err := Inst().V.GetPoolsUsedSize(&newReplNode)
+						var poolsUsedSize map[string]string
+						var pools map[string]*opsapi.StoragePool
+						poolsUsedSize, err = Inst().V.GetPoolsUsedSize(&newReplNode)
 						if err != nil {
-							UpdateOutcome(event, err)
 							return
 						}
 
-						pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+						pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
 						if err != nil {
-							UpdateOutcome(event, err)
+
 							return
 						}
 						for p, u := range poolsUsedSize {
 							listPool := pools[p]
-							usedSize, err := strconv.ParseUint(u, 10, 64)
+							var usedSize uint64
+							var vol *opsapi.Volume
+							usedSize, err = strconv.ParseUint(u, 10, 64)
 							if err != nil {
-								UpdateOutcome(event, err)
+
 								return
 							}
 							freeSize := listPool.TotalSize - usedSize
-							vol, err := Inst().V.InspectVolume(v.ID)
+							vol, err = Inst().V.InspectVolume(v.ID)
 							if err != nil {
-								UpdateOutcome(event, err)
 								return
 							}
 							if freeSize >= vol.Usage {
@@ -5656,9 +6097,10 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 					}
 				}
 				if newReplID != "" {
-					nodeContexts, err := GetContextsOnNode(&[]*scheduler.Context{ctx}, &newReplNode)
+					var nodeContexts []*scheduler.Context
+					nodeContexts, err = GetContextsOnNode(&[]*scheduler.Context{ctx}, &newReplNode)
 					if err != nil {
-						UpdateOutcome(event, err)
+						return
 					}
 
 					stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
@@ -5672,15 +6114,18 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 
 							}
 							log.InfoD("Increasing repl with target node  [%v]", newReplID)
-							dashStats := make(map[string]string)
-							dashStats["volume-name"] = v.Name
-							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
-							dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
-							updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
+							if event != nil {
+								dashStats := make(map[string]string)
+								dashStats["volume-name"] = v.Name
+								dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+								dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
+								updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
+							}
+
 							err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, nil, false)
 							if err != nil {
-								log.Errorf("There is an error increasing repl [%v]", err.Error())
-								UpdateOutcome(event, err)
+								err = fmt.Errorf("There is an error increasing repl [%v]", err.Error())
+								return
 							}
 						})
 
@@ -5702,24 +6147,26 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
 								time.Sleep(10 * time.Second)
 								if errInj == PX_RESTART {
-									updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
-									testError := Inst().V.StopDriver([]node.Node{newReplNode}, false, nil)
-									if testError != nil {
-										log.Error(testError)
-										UpdateOutcome(event, err)
+
+									if event != nil {
+										updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
+									}
+									err = Inst().V.StopDriver([]node.Node{newReplNode}, false, nil)
+									if err != nil {
 										return
 									}
 									log.Infof("waiting for 15 mins before starting volume driver")
 									time.Sleep(15 * time.Minute)
-									testError = Inst().V.StartDriver(newReplNode)
-									if testError != nil {
-										log.Error(testError)
-										UpdateOutcome(event, err)
+									err = Inst().V.StartDriver(newReplNode)
+									if err != nil {
 										return
 									}
 									log.InfoD("PX restarted successfully on node %v", newReplNode)
 								} else if errInj == REBOOT {
-									updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
+									if event != nil {
+										updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
+									}
+
 									err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
 										Force: true,
 										ConnectionOpts: node.ConnectionOpts{
@@ -5728,73 +6175,83 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 										},
 									})
 									if err != nil {
-										log.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
-										UpdateOutcome(event, err)
+										err = fmt.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
+
 									}
 								} else if errInj == CRASH {
-									updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
+									if event != nil {
+										updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
+									}
+
 									errorChan := make(chan error, errorChannelSize)
 									CrashVolDriverAndWait([]node.Node{newReplNode}, &errorChan)
-									for err := range errorChan {
-										UpdateOutcome(event, err)
+									var errorMsgs []string
+									for chanError := range errorChan {
+										errorMsgs = append(errorMsgs, chanError.Error())
 									}
+									if len(errorMsgs) > 0 {
+										err = fmt.Errorf("%s", strings.Join(errorMsgs, ","))
+									}
+
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
 									err = fmt.Errorf("error in ha-increse after %s target node . Error: %v", action, err)
-									log.Error(err)
-									UpdateOutcome(event, err)
-								} else {
-									dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
+									return
 								}
+								dash.VerifySafely(err, nil, fmt.Sprintf("repl successfully increased to %d", currRep+1))
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
-									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
-									UpdateOutcome(event, err)
-									dashStats = make(map[string]string)
-									dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
-									dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
-									dashStats["fastpath"] = "true"
-									dashStats["volume-name"] = v.Name
-									updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
+									if event != nil {
+										dashStats = make(map[string]string)
+										dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+										dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+										dashStats["fastpath"] = "true"
+										dashStats["volume-name"] = v.Name
+										updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
+									}
+									err = ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+									dash.VerifySafely(err, nil, "fastpath volume successfully validated")
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
+									if err != nil {
+										return
+									}
 								}
 							})
 
 						err = ValidateDataIntegrity(&nodeContexts)
-						UpdateOutcome(event, err)
-
+						if err != nil {
+							return
+						}
 					}
 				} else {
-					UpdateOutcome(event, fmt.Errorf("no node identified to repl increase for vol: %s", v.Name))
+					err = fmt.Errorf("no node identified to repl increase for vol: %s", v.Name)
 				}
 			} else {
-				log.Error(err)
-				UpdateOutcome(event, err)
-
+				return
 			}
 		})
+	return err
 }
 
-// HaIncreaseRebootSourceNode repl increase and reboot source node
-func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) {
+// HaIncreaseErrorInjectSourceNode repl increase and reboot source node
+func HaIncreaseErrorInjectSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) error {
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
 		Inst().V.String(), ctx.App.Key, v)
+	var err error
+	var currRep int64
 	Step(stepLog,
 		func() {
 			log.InfoD(stepLog)
-			currRep, err := Inst().V.GetReplicationFactor(v)
+			currRep, err = Inst().V.GetReplicationFactor(v)
 			if err != nil {
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
-				log.Error(err)
-				UpdateOutcome(event, err)
 				return
+
 			}
 
 			//if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
-				log.Warn(err)
-				UpdateOutcome(event, err)
 				return
 			}
 
@@ -5811,55 +6268,60 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 				Step(stepLog,
 					func() {
 						log.InfoD(stepLog)
-						replicaSets, err := Inst().V.GetReplicaSets(v)
+						var replicaSets []*opsapi.ReplicaSet
+						replicaSets, err = Inst().V.GetReplicaSets(v)
 						if err == nil {
-
 							replicaNodes := replicaSets[0].Nodes
 							if strings.Contains(ctx.App.Key, fastpathAppName) {
-								newFastPathNode, err := AddFastPathLabel(ctx)
+								var newFastPathNode *node.Node
+								newFastPathNode, err = AddFastPathLabel(ctx)
 								if err == nil {
 									defer Inst().S.RemoveLabelOnNode(*newFastPathNode, k8s.NodeType)
 								}
-								UpdateOutcome(event, err)
 							}
-							dashStats := make(map[string]string)
-							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
-							dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
-							dashStats["volume-name"] = v.Name
-							updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
+
+							if event != nil {
+								dashStats := make(map[string]string)
+								dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+								dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
+								dashStats["volume-name"] = v.Name
+								updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
+							}
+
 							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, false)
 							if err != nil {
-								log.Errorf("There is an error increasing repl [%v]", err.Error())
-								UpdateOutcome(event, err)
+								return
 							} else {
 								log.Infof("Waiting for 60 seconds for re-sync to initialize before source nodes reboot")
 								time.Sleep(60 * time.Second)
 								//rebooting source nodes one by one
 								for _, nID := range replicaNodes {
 									replNodeToReboot := storageNodeMap[nID]
-									dashStats = make(map[string]string)
+									dashStats := make(map[string]string)
 									dashStats["node"] = replNodeToReboot.Name
 									log.Infof("selected repl node: %s", replNodeToReboot.Name)
 									if errInj == PX_RESTART {
-										updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
-										testError := Inst().V.StopDriver([]node.Node{replNodeToReboot}, false, nil)
-										if testError != nil {
-											log.Error(testError)
-											UpdateOutcome(event, err)
+										if event != nil {
+											updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
+										}
+
+										err = Inst().V.StopDriver([]node.Node{replNodeToReboot}, false, nil)
+										if err != nil {
 											return
 										}
 										log.Infof("waiting for 15 mins before starting volume driver")
 										time.Sleep(15 * time.Minute)
-										testError = Inst().V.StartDriver(replNodeToReboot)
-										if testError != nil {
-											log.Error(testError)
-											UpdateOutcome(event, err)
+										err = Inst().V.StartDriver(replNodeToReboot)
+										if err != nil {
 											return
 										}
 										log.InfoD("PX restarted successfully on node %s", replNodeToReboot.Name)
 
 									} else if errInj == REBOOT {
-										updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
+										if event != nil {
+											updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
+										}
+
 										err = Inst().N.RebootNode(replNodeToReboot, node.RebootNodeOpts{
 											Force: true,
 											ConnectionOpts: node.ConnectionOpts{
@@ -5868,65 +6330,73 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 											},
 										})
 										if err != nil {
-											log.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
-											UpdateOutcome(event, err)
+											err = fmt.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
 										}
 									} else if errInj == CRASH {
-										updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
+										if event != nil {
+											updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
+										}
+
 										errorChan := make(chan error, errorChannelSize)
 										CrashVolDriverAndWait([]node.Node{replNodeToReboot}, &errorChan)
-										for err := range errorChan {
-											UpdateOutcome(event, err)
+										var errorMsgs []string
+										for chanError := range errorChan {
+											errorMsgs = append(errorMsgs, chanError.Error())
+										}
+										if len(errorMsgs) > 0 {
+											err = fmt.Errorf("%s", strings.Join(errorMsgs, ","))
 										}
 									}
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
 									err = fmt.Errorf("error in ha-increse after  source node reboot. Error: %v", err)
-									log.Error(err)
-									UpdateOutcome(event, err)
-								} else {
-									dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
+									return
 								}
+								dash.VerifySafely(err, nil, fmt.Sprintf("repl successfully increased to %d", currRep+1))
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
-									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
-									UpdateOutcome(event, err)
-									dashStats = make(map[string]string)
-									dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
-									dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
-									dashStats["fastpath"] = "true"
-									dashStats["volume-name"] = v.Name
-									updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
+									if event != nil {
+										dashStats := make(map[string]string)
+										dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+										dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+										dashStats["fastpath"] = "true"
+										dashStats["volume-name"] = v.Name
+										updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
+									}
+									err = ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+
+									dash.VerifySafely(err, nil, "fastpath volume successfully validated")
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
+									if err != nil {
+										return
+									}
 								}
 
 								for _, nID := range replicaNodes {
+									var nodeContexts []*scheduler.Context
 									replNodeToReboot := storageNodeMap[nID]
-									nodeContexts, err := GetContextsOnNode(&[]*scheduler.Context{ctx}, &replNodeToReboot)
+									nodeContexts, err = GetContextsOnNode(&[]*scheduler.Context{ctx}, &replNodeToReboot)
 									if err != nil {
-										UpdateOutcome(event, err)
-										break
+										return
 									}
 									err = ValidateDataIntegrity(&nodeContexts)
-									UpdateOutcome(event, err)
+									if err != nil {
+										return
+									}
 								}
-
 							}
 
 						} else {
 							err = fmt.Errorf("error getting relicasets for volume %s, Error: %v", v.Name, err)
-							log.Error(err)
-							UpdateOutcome(event, err)
 						}
 
 					})
 			} else {
 				err = fmt.Errorf("error getting current replication factor for volume %s, Error: %v", v.Name, err)
-				log.Error(err)
-				UpdateOutcome(event, err)
 			}
 
 		})
+	return err
 }
 
 func AddFastPathLabel(ctx *scheduler.Context) (*node.Node, error) {
@@ -7121,8 +7591,21 @@ func WaitForExpansionToStart(poolID string) error {
 	return err
 }
 
-// RebootNodeAndWait reboots node and waits for to be up
-func RebootNodeAndWait(n node.Node) error {
+// RebootNodeAndWaitForPxUp reboots node and waits for  volume driver to be up
+func RebootNodeAndWaitForPxUp(n node.Node) error {
+
+	err := RebootNodeAndWaitForPxDown(n)
+	err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+// RebootNodeAndWaitForPxDown reboots node and waits for volume driver to be down
+func RebootNodeAndWaitForPxDown(n node.Node) error {
 
 	if &n == nil {
 		return fmt.Errorf("no Node is provided to reboot")
@@ -7151,10 +7634,6 @@ func RebootNodeAndWait(n node.Node) error {
 		return err
 	}
 	err = Inst().S.IsNodeReady(n)
-	if err != nil {
-		return err
-	}
-	err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 	if err != nil {
 		return err
 	}
@@ -7561,6 +8040,10 @@ func StartPxBackupTorpedoTest(testName string, testDescription string, tags map[
 
 // EndPxBackupTorpedoTest ends the logging for Px Backup torpedo test and updates results in testrail
 func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
+	defer func() {
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	}()
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
 	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
@@ -7588,12 +8071,12 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
 	}
 
-	defer func() {
-		err := SetSourceKubeConfig()
-		log.FailOnError(err, "failed to switch context to source cluster")
-	}()
+	err = SetSourceKubeConfig()
+	log.FailOnError(err, "failed to switch context to source cluster")
+
 	masterNodes := node.GetMasterNodes()
-	if len(masterNodes) > 0 {
+	// TODO: enable the log collection for charmed k8s once we get the way to ssh into worker node from juju
+	if len(masterNodes) > 0 && GetClusterProvider() != "charmed" {
 		log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
 		testCaseName := currentSpecReport.FullText()
 		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(currentSpecReport.FullText())
@@ -7651,25 +8134,37 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 		}
 		if err != nil {
 			return createdVolIDs, fmt.Errorf("failed to creared volume %s, due to error : %v ", volName, err)
+
 		}
 		volPath = fmt.Sprintf("%v", out)
 		createdVolIDs[volId] = volPath
 		log.Infof("Volume %s attached to path %s", volId, volPath)
 		count--
+		log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s  after creating the volume", volName, volId)
+		PrintInspectVolume(volId)
 	}
 	return createdVolIDs, nil
 }
 
 // GetPoolsInUse lists all persistent volumes and returns the pool IDs
 func GetPoolsInUse() ([]string, error) {
+	var poolUuids []string
 	pvlist, err := k8sCore.GetPersistentVolumes()
 	if err != nil || pvlist == nil || len(pvlist.Items) == 0 {
 		return nil, fmt.Errorf("no persistent volume found. Error: %v", err)
 	}
-	volumeInUse := pvlist.Items[0]
-	volumeID := volumeInUse.GetName()
 
-	return GetPoolIDsFromVolName(volumeID)
+	for _, pv := range pvlist.Items {
+		volumeID := pv.GetName()
+		poolUuids, err = GetPoolIDsFromVolName(volumeID)
+		//Needed this logic as a workaround for PWX-35637
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			continue
+		}
+		break
+	}
+
+	return poolUuids, err
 }
 
 // GetPoolIDWithIOs returns the pools with IOs happening
@@ -7961,16 +8456,24 @@ func ExitNodesFromMaintenanceMode() error {
 }
 
 // GetPoolsDetailsOnNode returns all pools present in the Nodes
-func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
+func GetPoolsDetailsOnNode(n *node.Node) ([]*opsapi.StoragePool, error) {
 	var poolDetails []*opsapi.StoragePool
 
-	// Refreshing Node Registry to make sure all changes done to the nodes are refreshed
-	err := Inst().S.RefreshNodeRegistry()
+	// Refreshing Node Driver to make sure all changes done to the nodes are refreshed
+	err := Inst().V.RefreshDriverEndpoints()
 	if err != nil {
 		return nil, err
 	}
+	//updating the node info after refresh
+	stDriverNodes := node.GetStorageDriverNodes()
+	for _, stDriverNode := range stDriverNodes {
+		if stDriverNode.VolDriverNodeID == n.VolDriverNodeID {
+			n = &stDriverNode
+			break
+		}
+	}
 
-	if node.IsStorageNode(n) == false {
+	if node.IsStorageNode(*n) == false {
 		return nil, fmt.Errorf("Node [%s] is not Storage Node", n.Id)
 	}
 
@@ -8038,7 +8541,7 @@ func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
 func MakeStoragetoStoragelessNode(n node.Node) error {
 	storageLessNodeBeforePoolDelete := node.GetStorageLessNodes()
 	// Get total list of pools present on the node
-	poolList, err := GetPoolsDetailsOnNode(n)
+	poolList, err := GetPoolsDetailsOnNode(&n)
 	if err != nil {
 		return err
 	}
@@ -8192,7 +8695,7 @@ func WaitForPoolOffline(n node.Node) error {
 func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {
 	nodesPresent := node.GetStorageNodes()
 	for _, each := range nodesPresent {
-		poolsPresent, err := GetPoolsDetailsOnNode(each)
+		poolsPresent, err := GetPoolsDetailsOnNode(&each)
 		if err != nil {
 			return -1, err
 		}
@@ -8501,7 +9004,7 @@ func AsgKillNode(nodeToKill node.Node) error {
 			})
 
 		} else {
-			err = Inst().N.DeleteNode(nodeToKill, 5*time.Minute)
+			err = Inst().S.DeleteNode(nodeToKill)
 		}
 
 	})
@@ -8809,6 +9312,20 @@ func KillKvdbMemberUsingPid(kvdbNode node.Node) error {
 	return nil
 }
 
+// IsKVDBNode returns true if a node is kvdb node else it returns false
+func IsKVDBNode(n node.Node) (bool, error) {
+	KvdbNodes, err := GetAllKvdbNodes()
+	if err != nil {
+		return false, err
+	}
+	for _, each := range KvdbNodes {
+		if each.ID == n.Id {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // getReplicaNodes returns the list of nodes which has replicas
 func getReplicaNodes(vol *volume.Volume) ([]string, error) {
 	getReplicaSets, err := Inst().V.GetReplicaSets(vol)
@@ -9068,21 +9585,11 @@ func GetPoolUuidsWithStorageFull() ([]string, error) {
 
 // GetVolumeConsumedSize returns size of the volume
 func GetVolumeConsumedSize(vol volume.Volume) (uint64, error) {
-	// Get Random Storage Node
-	cmd := fmt.Sprintf("pxctl v i %v -j | jq '.[].usage'", vol.ID)
-	output, err := runCmdGetOutput(cmd, node.GetStorageNodes()[0])
+	apiVol, err := Inst().V.InspectVolume(vol.ID)
 	if err != nil {
 		return 0, err
 	}
-	output = strings.ReplaceAll(output, "\"", "")
-	output = strings.TrimSpace(output)
-
-	num, err := strconv.ParseUint(output, 10, 64)
-	if err != nil {
-		return 0, err
-	}
-
-	return num, nil
+	return apiVol.Usage, nil
 }
 
 // GetAllVolumesWithIO Returns list of volumes with IO
@@ -9276,7 +9783,11 @@ func AddCloudDrive(stNode node.Node, poolID int32) error {
 	if err != nil {
 		return fmt.Errorf("pool re-balance failed, err: %v", err)
 	}
-	err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
+	n1, err := node.GetNodeByName(stNode.Name)
+	if err != nil {
+		return fmt.Errorf("error getting node by name %s, err: %v", stNode.Name, err)
+	}
+	err = Inst().V.WaitDriverUpOnNode(n1, addDriveUpTimeOut)
 	if err != nil {
 		return fmt.Errorf("volume driver is down on node %s, err: %v", stNode.Name, err)
 	}
@@ -9299,7 +9810,8 @@ func AddCloudDrive(stNode node.Node, poolID int32) error {
 	}
 	log.Info(fmt.Sprintf("updated pool size: %d GiB", newTotalPoolSize))
 	dash.VerifyFatal(isPoolSizeUpdated, true, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
-	return nil
+	err = Inst().V.RefreshDriverEndpoints()
+	return err
 }
 
 func IsJournalEnabled() (bool, error) {
@@ -9958,7 +10470,7 @@ func ValidateCRMigration(pods *v1.PodList, appData *asyncdr.AppData) error {
 	log.InfoD("Create cluster pair between source and destination clusters")
 	ScheduleValidateClusterPair(emptyCtx, false, true, defaultClusterPairDir, false)
 	migName := migrationKey + time.Now().Format("15h03m05s")
-	mig, err := asyncdr.CreateMigration(migName, appData.Ns, asyncdr.DefaultClusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+	mig, err := asyncdr.CreateMigration(migName, appData.Ns, asyncdr.DefaultClusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 	if err != nil {
 		return err
 	}
@@ -10169,7 +10681,7 @@ func GetAllPoolsOnNode(nodeUuid string) ([]string, error) {
 }
 
 // Set default provider as aws
-func getClusterProvider() string {
+func GetClusterProvider() string {
 	clusterProvider = os.Getenv("CLUSTER_PROVIDER")
 	return clusterProvider
 }
@@ -10730,4 +11242,528 @@ func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
 	k8sStorage := k8sStorage.Instance()
 	_, err := k8sStorage.CreateStorageClass(&scObj)
 	return err
+}
+
+func GetClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
+	stNodes := node.GetStorageNodes()
+
+	nodeSchedulableStatus := make(map[string]string)
+	stNodeNames := make(map[string]bool)
+
+	for _, stNode := range stNodes {
+		stNodeNames[stNode.Name] = true
+	}
+
+	//Handling case where we have storageless node as kvdb node with dedicated kvdb device attached.
+	kvdbNodes, _ := GetAllKvdbNodes()
+	for _, kvdbNode := range kvdbNodes {
+		sNode, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+		if err == nil {
+			stNodeNames[sNode.Name] = true
+		} else {
+			log.Errorf("got error while getting with id [%s]", kvdbNode.ID)
+		}
+	}
+
+	log.Infof("stnodes are %#v", stNodeNames)
+	itr := 1
+	for {
+		log.Infof("K8s node validation. iteration: #%d", itr)
+		select {
+		case <-stopSignal:
+			log.Infof("Exiting node validations routine")
+			return
+		default:
+			nodeList, err := core.Instance().GetNodes()
+			if err != nil {
+				log.Errorf("Got error : %s", err.Error())
+				*mError = err
+				return
+			}
+
+			nodeNotReadyeCount := 0
+			for _, k8sNode := range nodeList.Items {
+				for _, status := range k8sNode.Status.Conditions {
+					if status.Type == v1.NodeReady {
+						nodeSchedulableStatus[k8sNode.Name] = string(status.Status)
+						if status.Status != v1.ConditionTrue && stNodeNames[k8sNode.Name] {
+							nodeNotReadyeCount += 1
+						}
+						break
+					}
+				}
+
+			}
+			if nodeNotReadyeCount > 1 {
+				err = fmt.Errorf("multiple  nodes are Unschedulable at same time,"+
+					"node status:%#v", nodeSchedulableStatus)
+				log.Errorf("Got error : %s", err.Error())
+				log.Infof("Node Details: %#v", nodeList.Items)
+				output, err := Inst().N.RunCommand(stNodes[0], "pxctl status", node.ConnectionOpts{
+					IgnoreError:     false,
+					TimeBeforeRetry: defaultRetryInterval,
+					Timeout:         defaultTimeout,
+					Sudo:            true,
+				})
+				if err != nil {
+					log.Errorf("failed to get pxctl status, Err: %v", err)
+				}
+				log.Infof(output)
+				*mError = err
+				return
+			}
+		}
+		itr++
+		time.Sleep(30 * time.Second)
+	}
+}
+
+// PrintK8sClusterInfo prints info about K8s cluster nodes
+func PrintK8sCluterInfo() {
+	log.Info("Get cluster info..")
+	t := func() (interface{}, bool, error) {
+		nodeList, err := core.Instance().GetNodes()
+		if err != nil {
+			return "", true, fmt.Errorf("failed to get nodes, Err %v", err)
+		}
+		if len(nodeList.Items) > 0 {
+			for _, node := range nodeList.Items {
+				nodeType := "Worker"
+				if core.Instance().IsNodeMaster(node) {
+					nodeType = "Master"
+				}
+				log.Infof(
+					"Node Name: %s, Node Type: %s, Kernel Version: %s, Kubernetes Version: %s, OS: %s, Container Runtime: %s",
+					node.Name, nodeType,
+					node.Status.NodeInfo.KernelVersion, node.Status.NodeInfo.KubeletVersion, node.Status.NodeInfo.OSImage,
+					node.Status.NodeInfo.ContainerRuntimeVersion)
+			}
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("no nodes were found in the cluster")
+	}
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
+		log.Warnf("failed to get k8s cluster info, Err: %v", err)
+	}
+}
+
+// ExportSourceKubeConfig changes the KUBECONFIG environment variable to the source cluster config path
+func ExportSourceKubeConfig() error {
+	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	err = os.Unsetenv("KUBECONFIG")
+	if err != nil {
+		return err
+	}
+	return os.Setenv("KUBECONFIG", sourceClusterConfigPath)
+}
+
+// ExportDestinationKubeConfig changes the KUBECONFIG environment variable to the destination cluster config path
+func ExportDestinationKubeConfig() error {
+	DestinationClusterConfigPath, err := GetDestinationClusterConfigPath()
+	if err != nil {
+		return err
+	}
+
+	err = os.Unsetenv("KUBECONFIG")
+	if err != nil {
+		return err
+	}
+	return os.Setenv("KUBECONFIG", DestinationClusterConfigPath)
+}
+
+// SwitchBothKubeConfigANDContext switches both KUBECONFIG and context to the given cluster
+func SwitchBothKubeConfigANDContext(cluster string) error {
+	if cluster == "source" {
+		err := ExportSourceKubeConfig()
+		if err != nil {
+			return err
+		}
+		err = SetSourceKubeConfig()
+		if err != nil {
+			return err
+		}
+	} else if cluster == "destination" {
+		err := ExportDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DoPDBValidation continuously validates the Pod Disruption Budget against
+// cluster upgrades, appending errors to mError, until a stop signal is received.
+func DoPDBValidation(stopSignal <-chan struct{}, mError *error) {
+	pdbValue, allowedDisruptions := GetPDBValue()
+	isClusterParallelyUpgraded := false
+	nodes, err := Inst().V.GetDriverNodes()
+	if err != nil {
+		*mError = multierr.Append(*mError, err)
+		return
+	}
+	totalNodes := len(nodes)
+	itr := 1
+	for {
+		log.Infof("PDB validation iteration: #%d", itr)
+		select {
+		case <-stopSignal:
+			if allowedDisruptions > 1 && !isClusterParallelyUpgraded {
+				err := fmt.Errorf("cluster is not parallely upgraded")
+				*mError = multierr.Append(*mError, err)
+				log.Warnf("Cluster not parallely upgraded as expected")
+			}
+			log.Infof("Exiting PDB validation routine")
+			return
+		default:
+			errorChan := make(chan error, 50)
+			ValidatePDB(pdbValue, allowedDisruptions, totalNodes, &isClusterParallelyUpgraded, &errorChan)
+			for err := range errorChan {
+				*mError = multierr.Append(*mError, err)
+			}
+			if *mError != nil {
+				return
+			}
+			itr++
+			time.Sleep(10 * time.Second)
+		}
+	}
+}
+
+// GetVolumesOnNode returns the volume IDs which have repl on a give node
+func GetVolumesOnNode(nodeId string) ([]string, error) {
+	var volumes []string
+
+	pvs, err := k8sCore.GetPersistentVolumes()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, vol := range pvs.Items {
+		volDetails, err := Inst().V.InspectVolume(vol.GetName())
+		if err != nil {
+			return volumes, err
+		}
+		replSets := volDetails.GetReplicaSets()
+		var replNodes []string
+		for _, replSet := range replSets {
+			replNodes = append(replNodes, replSet.GetNodes()...)
+		}
+		if Contains(replNodes, nodeId) {
+			volumes = append(volumes, vol.GetName())
+		}
+	}
+
+	return volumes, nil
+}
+
+// IsKubevirtInstalled returns true if Kubevirt is installed else returns false
+func IsKubevirtInstalled() bool {
+	k8sApiExtensions := apiextensions.Instance()
+	crdList, err := k8sApiExtensions.ListCRDs()
+	if err != nil {
+		return false
+	}
+	for _, crd := range crdList.Items {
+		if crd.Name == "kubevirts.kubevirt.io" {
+			k8sKubevirt := kubevirt.Instance()
+			version, err := k8sKubevirt.GetVersion()
+			if err == nil && version != "" {
+				log.InfoD("Version %s", version)
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// IsCloudsnapBackupActiveOnVolume returns true is cloudsnap backup is active on the volume
+func IsCloudsnapBackupActiveOnVolume(volName string) (bool, error) {
+	params := make(map[string]string)
+	csBksps, err := Inst().V.GetCloudsnaps(volName, params)
+	if err != nil {
+		return false, err
+	}
+
+	for _, csBksp := range csBksps {
+		if csBksp.GetSrcVolumeName() == volName && csBksp.GetStatus() == opsapi.SdkCloudBackupStatusType_SdkCloudBackupStatusTypeActive {
+
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// GetVolumeSnapShotScheduleOfVol returns VolumeSnapshotSchedule for the given volume
+func GetVolumeSnapShotScheduleOfVol(volName string) (*storkapi.VolumeSnapshotSchedule, error) {
+
+	params := make(map[string]string)
+	csBksps, err := Inst().V.GetCloudsnaps(volName, params)
+	if err != nil {
+		return nil, err
+	}
+	volDetails, err := Inst().V.InspectVolume(volName)
+	if err != nil {
+		return nil, err
+	}
+
+	pvcName, ok := volDetails.Spec.VolumeLabels["pvc"]
+	if ok {
+
+		for _, csBksp := range csBksps {
+			if csBksp.GetSrcVolumeName() == volName {
+				ns := csBksp.GetNamespace()
+				snapshotSchedules, err := storkops.Instance().ListSnapshotSchedules(ns)
+				if err != nil {
+					return nil, err
+				}
+
+				for _, snapshotSched := range snapshotSchedules.Items {
+					if strings.Contains(snapshotSched.GetName(), pvcName) {
+						return &snapshotSched, nil
+					}
+				}
+			}
+
+		}
+
+	}
+
+	return nil, fmt.Errorf("snapshot schedule for volume [%s] not found", volName)
+}
+
+// MoveReplica moves the replica of a volume from one node to another
+func MoveReplica(volName, fromNode, toNode string) error {
+	appVol, err := Inst().V.InspectVolume(volName)
+	log.Infof("Updating replicas for volume [%s/%s]", appVol.Id, volName)
+	if err != nil {
+		return err
+	}
+	replNodes := appVol.GetReplicaSets()[0].GetNodes()
+	tpVol := &volume.Volume{ID: volName, Name: volName}
+	if len(replNodes) == 1 {
+
+		err = Inst().V.SetReplicationFactor(tpVol, 2, []string{toNode}, nil, true)
+		if err != nil {
+			return err
+		}
+		err = Inst().V.SetReplicationFactor(tpVol, 1, []string{fromNode}, nil, true)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = Inst().V.SetReplicationFactor(tpVol, int64(len(replNodes)-1), []string{fromNode}, nil, true)
+		if err != nil {
+			return err
+		}
+		err = Inst().V.SetReplicationFactor(tpVol, int64(len(replNodes)), []string{toNode}, nil, true)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func GetNodeIdToMoveReplica(volName string) (string, error) {
+
+	appVol, err := Inst().V.InspectVolume(volName)
+	if err != nil {
+		return "", err
+	}
+	replNodes := appVol.GetReplicaSets()[0].GetNodes()
+	stNodes := node.GetStorageNodes()
+	log.Infof("replNodes %v", replNodes)
+
+	ShuffleSlice(stNodes)
+
+	for _, stNode := range stNodes {
+		log.Infof("checking for node [%s]", stNode.VolDriverNodeID)
+		if !Contains(replNodes, stNode.VolDriverNodeID) {
+			return stNode.VolDriverNodeID, nil
+		}
+	}
+
+	return "", err
+}
+
+// ShuffleSlice shuffles the elements of a slice in place.
+func ShuffleSlice[T any](slice []T) {
+	source := rand.NewSource(time.Now().UnixNano())
+	rng := rand.New(source) // Initialize the random number generator
+
+	for i := range slice {
+		j := rng.Intn(i + 1)                    // Generate a random index from 0 to i.
+		slice[i], slice[j] = slice[j], slice[i] // Swap the elements at indices i and j.
+	}
+}
+
+func PrereqForNodeDecomm(nodeToDecommission node.Node, suspendedScheds []*storkapi.VolumeSnapshotSchedule) error {
+	nodeVols, err := GetVolumesOnNode(nodeToDecommission.VolDriverNodeID)
+	if err != nil {
+		return fmt.Errorf("error getting volumes node [%s],Err: %v ", nodeToDecommission.Name, err)
+	}
+
+	credCmd := "cred list -j | grep uuid"
+
+	output, err := Inst().V.GetPxctlCmdOutput(nodeToDecommission, credCmd)
+	if err == nil && len(output) > 0 {
+		log.InfoD("Cloudsnap is enabled. Checking if backup is active on volumes")
+		for _, vol := range nodeVols {
+			isBackupActive, err := IsCloudsnapBackupActiveOnVolume(vol)
+			if err != nil {
+				return fmt.Errorf("error checking backup status  for volume  [%s],Err: %v ", vol, err)
+			}
+			log.Infof("Backup status for vol [%s]: %v", vol, isBackupActive)
+
+			if isBackupActive {
+				scheduleOfVol, err := GetVolumeSnapShotScheduleOfVol(vol)
+				if err != nil {
+					return fmt.Errorf("error getting volumes snapshot schedule for volume [%s],Err: %v ", vol, err)
+				}
+
+				if !*scheduleOfVol.Spec.Suspend {
+					log.Infof("Snapshot schedule is not suspended. Suspending it")
+					makeSuspend := true
+					scheduleOfVol.Spec.Suspend = &makeSuspend
+					_, err := storkops.Instance().UpdateSnapshotSchedule(scheduleOfVol)
+					if err != nil {
+						return fmt.Errorf("error suspending volumes snapshot schedule for volume  [%s],Err: %v ", vol, err)
+					}
+					suspendedScheds = append(suspendedScheds, scheduleOfVol)
+				}
+			}
+
+		}
+	}
+
+	for _, vol := range nodeVols {
+		newReplicaNode, err := GetNodeIdToMoveReplica(vol)
+		log.Infof("newReplicaNode %s", newReplicaNode)
+		if err != nil {
+			return fmt.Errorf("error getting replica node for volume [%s],Err: %v ", vol, err)
+		}
+
+		err = MoveReplica(vol, nodeToDecommission.VolDriverNodeID, newReplicaNode)
+		if err != nil {
+			return fmt.Errorf("error moving replica from node [%s] to volume [%s],Err: %v ", nodeToDecommission.VolDriverNodeID, newReplicaNode, err)
+		}
+	}
+	return nil
+}
+
+// ValidatePXStatus validates if PX is running on all nodes
+func ValidatePXStatus() error {
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := Inst().V.WaitDriverUpOnNode(n, 30*time.Second); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// GetNodeFromIPAddress returns node details from the provided IP Address
+func GetNodeFromIPAddress(ipaddress string) (*node.Node, error) {
+	for _, eachNode := range node.GetNodes() {
+		log.Infof(fmt.Sprintf("Comparing [%v] with [%v]", eachNode.GetMgmtIp(), ipaddress))
+		if eachNode.GetMgmtIp() == ipaddress {
+			log.Infof("Matched IP Address [%v]", eachNode.MgmtIp)
+			return &eachNode, nil
+		}
+	}
+	return nil, fmt.Errorf("Unable to fetch Node details from ipaddress [%v]", ipaddress)
+}
+
+// IsVolumeTypePureBlock Returns true if the volume type if pureBlock
+func IsVolumeTypePureBlock(ctx *scheduler.Context, volName string) (bool, error) {
+	vols, err := Inst().S.GetVolumeParameters(ctx)
+	if err != nil {
+		return false, err
+	}
+	for vol, params := range vols {
+		log.Infof(fmt.Sprintf("Checking for Volume [%v]", vol))
+		if vol == volName && params["backend"] == k8s.PureBlock {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// SetUnSetDiscardMountRTOptions Set discard mount run time options on the Node
+func SetUnSetDiscardMountRTOptions(n *node.Node, unset bool) error {
+	rtOptions := 1
+	if !unset {
+		rtOptions = 0
+	}
+	optionsMap := make(map[string]string)
+	optionsMap["discard_mount_force"] = fmt.Sprintf("%v", rtOptions)
+	err := Inst().V.SetClusterRunTimeOpts(*n, optionsMap)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ValidatePxLicenseSummary validates the license summary by comparing SKU and feature quantities
+func ValidatePxLicenseSummary() error {
+	summary, err := Inst().V.GetLicenseSummary()
+	if err != nil {
+		return fmt.Errorf("failed to get license summary. Err: [%v]", err)
+	}
+	log.Infof("License summary: %v", summary)
+	switch {
+	case IsIksCluster():
+		log.Infof("Get SKU and compare with IBM cloud license activated using catalog")
+		// Get SKU and compare with IBM cloud license
+		isValidLicense := summary.SKU == IBMTestLicenseSKU || summary.SKU == IBMTestLicenseDRSKU || summary.SKU == IBMProdLicenseSKU || summary.SKU == IBMProdLicenseDRSKU
+		if !isValidLicense {
+			return fmt.Errorf("license type is not valid: %v", summary.SKU)
+		}
+		log.InfoD("Compare with PX IBM cloud licensed features")
+		isTestOrProdSKU := summary.SKU == IBMTestLicenseSKU || summary.SKU == IBMProdLicenseSKU
+		for _, feature := range summary.Features {
+			if limit, ok := IBMLicense[LabLabel(feature.Name)]; ok {
+				// Special handling for DisasterRecovery feature and certain SKUs
+				if !isTestOrProdSKU && LabLabel(feature.Name) == LabDisasterRecovery {
+					limit = &pxapi.LicensedFeature_Enabled{Enabled: true}
+				}
+				if !reflect.DeepEqual(feature.Quantity, limit) {
+					return fmt.Errorf("verifying quantity for [%v]: actual [%v], expected [%v]", feature.Name, feature.Quantity, limit)
+				}
+			}
+		}
+		log.Infof("Validated IBM cloud license successfully")
+	case IsAksCluster():
+		return fmt.Errorf("license validation is not supported on AKS cluster")
+	case IsEksCluster():
+		return fmt.Errorf("license validation is not supported on EKS cluster")
+	case IsOkeCluster():
+		return fmt.Errorf("license validation is not supported on OKE cluster")
+	case IsPksCluster():
+		return fmt.Errorf("license validation is not supported on PKS cluster")
+	default:
+		return fmt.Errorf("license validation is not supported on Unknown cluster")
+	}
+	return nil
+}
+
+// SplitStorageDriverUpgradeURL splits the given storage driver upgrade URL into endpoint and version
+// For the upgradeURL https://install.portworx.com/3.1.1, this returns Endpoint: https://install.portworx.com and Version: 3.1.1
+func SplitStorageDriverUpgradeURL(upgradeURL string) (string, string, error) {
+	parsedURL, err := url.Parse(upgradeURL)
+	if err != nil {
+		return "", "", err
+	}
+	pathSegments := strings.Split(strings.TrimSuffix(parsedURL.Path, "/"), "/")
+	endpoint := *parsedURL
+	endpoint.Path = strings.Join(pathSegments[:len(pathSegments)-1], "/")
+	pxVersion := pathSegments[len(pathSegments)-1]
+	return endpoint.String(), pxVersion, nil
 }

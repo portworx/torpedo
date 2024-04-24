@@ -2,15 +2,17 @@ package utils
 
 import (
 	"fmt"
-	"math/rand"
-	"net/http"
-	"regexp"
-
 	"github.com/gin-gonic/gin"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
+	kubevirtv1 "kubevirt.io/api/core/v1"
+	"math/rand"
+	"net/http"
+	"regexp"
 )
 
 var (
@@ -177,38 +179,56 @@ func CollectSupport(c *gin.Context) {
 // ScheduleAppsAndValidate : This API schedules multiple applications on the cluster and validates them
 // context is created as a global context to be accessed later in further tests
 func ScheduleAppsAndValidate(c *gin.Context) {
+
+	var requestBody struct {
+		NamespaceSuffix string   `json:"nsSuffix"`
+		AppList         []string `json:"appList"`
+	}
 	var errors []error
+	errStrings := make([]string, 0)
 	errChan := make(chan error, 100)
 	if !checkTorpedoInit(c) {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+			"error": fmt.Errorf("error during InitInstance"),
 		})
 		return
 	}
-	appToRun := c.Param("appName")
-	tests.Inst().AppList = []string{appToRun}
-	context = tests.ScheduleApplications(c.Param("namespace"))
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	tests.Inst().AppList = requestBody.AppList
+	options := tests.CreateScheduleOptions("")
+	context, err := tests.Inst().S.Schedule(requestBody.NamespaceSuffix, options)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	for _, ctx := range context {
 		tests.ValidateContext(ctx, &errChan)
 	}
-	for err := range errChan {
+	for err = range errChan {
 		errors = append(errors, err)
 	}
-	errStrings := make([]string, 0)
-	for _, err := range errors {
+	for _, err = range errors {
 		if err != nil {
 			errStrings = append(errStrings, err.Error())
 		}
 	}
 	if len(errStrings) > 0 {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": errStrings,
-		})
-	} else {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Apps Created and Validated successfully",
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": errStrings})
+		return
 	}
+	namespacesList := make([]string, 0)
+	for _, ctx := range context {
+		namespace := tests.GetAppNamespace(ctx, requestBody.NamespaceSuffix)
+		namespacesList = append(namespacesList, namespace)
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message":   "App is created and validated successfully",
+		"namespace": namespacesList,
+	})
 }
 
 // GetPxVersion This function returns the current Px Version in the Target Cluster
@@ -325,4 +345,245 @@ func GetPxctlStatusOutput(c *gin.Context) {
 			"output": status,
 		})
 	}
+}
+
+// GetVMsInNamespaces gets the list of Virtual Machines in the given namespaces
+func GetVMsInNamespaces(c *gin.Context) {
+	var requestBody struct {
+		Namespaces []string `json:"namespaces"`
+	}
+	var vms []kubevirtv1.VirtualMachine
+	type VM struct {
+		Name      string `json:"name"`
+		Namespace string `json:"namespace"`
+		Status    string `json:"status"`
+	}
+	var vmResponse []VM
+
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("error in InitInstance()"),
+		})
+		return
+	}
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(requestBody.Namespaces) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespaces cannot be empty"})
+		return
+	}
+
+	for _, ns := range requestBody.Namespaces {
+		vmList, err := tests.GetAllVMsInNamespace(ns)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		vms = append(vms, vmList...)
+	}
+
+	for _, v := range vms {
+		vmResponse = append(vmResponse, VM{
+			Name:      v.Name,
+			Namespace: v.Namespace,
+			Status:    string(v.Status.PrintableStatus),
+		})
+	}
+
+	// Return the list of VMs
+	c.JSON(http.StatusOK, vmResponse)
+}
+
+// GetVMsWithNamespaceLabels gets the list of Virtual Machines in the namespaces with the given labels
+func GetVMsWithNamespaceLabels(c *gin.Context) {
+	var requestBody struct {
+		NamespaceLabels map[string]string `json:"namespaceLabels"`
+	}
+	var vms []kubevirtv1.VirtualMachine
+	type VM struct {
+		Name      string `json:"name"`
+		Namespace string `json:"namespace"`
+		Status    string `json:"status"`
+	}
+	var vmResponse []VM
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("error in InitInstance()"),
+		})
+		return
+	}
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(requestBody.NamespaceLabels) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace labels cannot be empty"})
+		return
+	}
+	vms, err := tests.GetAllVMsInNamespacesWithLabel(requestBody.NamespaceLabels)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	for _, v := range vms {
+		vmResponse = append(vmResponse, VM{
+			Name:      v.Name,
+			Namespace: v.Namespace,
+			Status:    string(v.Status.PrintableStatus),
+		})
+	}
+
+	// Return the list of VMs
+	c.JSON(http.StatusOK, vmResponse)
+
+}
+
+// AddNSLabel adds the label to the namespaces with the given label
+func AddNSLabel(c *gin.Context) {
+	log.Infof("Adding label to NS ")
+	type LabelUpdateResponse struct {
+		Success map[string]string `json:"success"`
+		Failed  map[string]string `json:"failed"`
+	}
+
+	var NamespaceLabelRequest struct {
+		Namespaces []string          `json:"namespaces" binding:"required"`
+		Label      map[string]string `json:"ns_label" binding:"required"`
+	}
+	success := make(map[string]string)
+	failed := make(map[string]string)
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("error in InitInstance()"),
+		})
+		return
+	}
+	if err := c.BindJSON(&NamespaceLabelRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(NamespaceLabelRequest.Label) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace labels cannot be empty"})
+		return
+	}
+	log.Infof("NamespaceLabelRequest", NamespaceLabelRequest)
+	for _, namespace := range NamespaceLabelRequest.Namespaces {
+		err := tests.Inst().S.AddNamespaceLabel(namespace, NamespaceLabelRequest.Label)
+		if err != nil {
+			failed[namespace] = err.Error()
+		} else {
+			success[namespace] = "Label added successfully"
+		}
+	}
+
+	response := LabelUpdateResponse{
+		Success: success,
+		Failed:  failed,
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": response,
+	})
+
+}
+
+// UpgradeStork upgrades the stork to given version
+func UpgradeStork(c *gin.Context) {
+	var requestBody struct {
+		Version string `json:"version"`
+	}
+	if err := c.BindJSON(&requestBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	log.Infof("%s", requestBody.Version)
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("error in InitInstance()"),
+		})
+		return
+	}
+	err := tests.UpgradeStorkVersion(requestBody.Version)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status": "Stork upgraded successfully",
+	})
+}
+
+// DeletePod deletes the pods with given label
+func DeletePod(c *gin.Context) {
+	log.Infof("Deleting pods with given label")
+	var deletePodRequest struct {
+		Namespace   string            `json:"namespace"`
+		Label       map[string]string `json:"label"`
+		PodList     []string          `json:"podList"`
+		IgnoreLabel bool              `json:"ignoreLabel"`
+	}
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error in init": fmt.Errorf("error in InitInstance()"),
+		})
+		return
+	}
+
+	if err := c.BindJSON(&deletePodRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error for request": err.Error()})
+		return
+	}
+
+	if len(deletePodRequest.Namespace) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace cannot be empty", "ns": deletePodRequest.Namespace})
+		return
+	}
+	if len(deletePodRequest.Label) == 0 && len(deletePodRequest.PodList) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "both pod label and pod list cannot be empty", "label": deletePodRequest.Label})
+		return
+	}
+	if len(deletePodRequest.Label) != 0 {
+		err := tests.DeletePodWithWithoutLabelInNamespace(deletePodRequest.Namespace, deletePodRequest.Label, deletePodRequest.IgnoreLabel)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	} else {
+		for _, pod := range deletePodRequest.PodList {
+			err := core.Instance().DeletePod(pod, deletePodRequest.Namespace, false)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error in deleting pod": err.Error(), "pod name": pod})
+				return
+			}
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Pods list %v with label %s in namespace %s deleted successfully", deletePodRequest.PodList, deletePodRequest.Label, deletePodRequest.Namespace)})
+}
+
+// GetPxBackupNamespace returns the namespace in which px-backup is deployed
+func GetPxBackupNamespace(c *gin.Context) {
+	log.Infof("Getting px-backup namespace")
+	var namespace string
+	type PxBackupNamespacePodResponse struct {
+		Namespace string `json:"namespace"`
+	}
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("error in InitInstance()"),
+		})
+		return
+	}
+	ns, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	namespace = ns
+	response := PxBackupNamespacePodResponse{
+		Namespace: namespace,
+	}
+	// Return the namespace in which px-backup is deployed
+	c.JSON(http.StatusOK, response)
 }

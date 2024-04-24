@@ -154,7 +154,7 @@ if [ -n "${CONFIG_MAP}" ]; then
 fi
 
 if [ -z "${TORPEDO_IMG}" ]; then
-    TORPEDO_IMG="portworx/torpedo:latest"
+    TORPEDO_IMG="portworx/torpedo:master"
     echo "Using default torpedo image: ${TORPEDO_IMG}"
 fi
 
@@ -271,14 +271,14 @@ if [ -z "${AUTOPILOT_UPGRADE_VERSION}" ]; then
     AUTOPILOT_UPGRADE_VERSION=""
 fi
 
-kubectl delete secret torpedo
-kubectl delete pod torpedo
-state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
+kubectl -n default delete secret torpedo
+kubectl -n default delete pod torpedo
+state=`kubectl -n default get pod torpedo | grep -v NAME | awk '{print $3}'`
 timeout=0
 while [ "$state" == "Terminating" -a $timeout -le 600 ]; do
   echo "Terminating torpedo..."
   sleep 1
-  state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
+  state=`kubectl -n default get pod torpedo | grep -v NAME | awk '{print $3}'`
   timeout=$[$timeout+1]
 done
 
@@ -291,7 +291,7 @@ TORPEDO_CUSTOM_PARAM_VOLUME=""
 TORPEDO_CUSTOM_PARAM_MOUNT=""
 CUSTOM_APP_CONFIG_PATH=""
 if [ -n "${CUSTOM_APP_CONFIG}" ]; then
-    kubectl create configmap custom-app-config --from-file=custom_app_config.yml=${CUSTOM_APP_CONFIG}
+    kubectl -n default create configmap custom-app-config --from-file=custom_app_config.yml=${CUSTOM_APP_CONFIG}
     CUSTOM_APP_CONFIG_PATH="/mnt/torpedo/custom_app_config.yml"
     TORPEDO_CUSTOM_PARAM_VOLUME="{ \"name\": \"custom-app-config-volume\", \"configMap\": { \"name\": \"custom-app-config\", \"items\": [{\"key\": \"custom_app_config.yml\", \"path\": \"custom_app_config.yml\"}] } }"
     TORPEDO_CUSTOM_PARAM_MOUNT="{ \"name\": \"custom-app-config-volume\", \"mountPath\": \"${CUSTOM_APP_CONFIG_PATH}\", \"subPath\": \"custom_app_config.yml\" }"
@@ -300,7 +300,7 @@ fi
 TORPEDO_SSH_KEY_VOLUME=""
 TORPEDO_SSH_KEY_MOUNT=""
 if [ -n "${TORPEDO_SSH_KEY}" ]; then
-    kubectl create secret generic key4torpedo --from-file=${TORPEDO_SSH_KEY}
+    kubectl -n default create secret generic key4torpedo --from-file=${TORPEDO_SSH_KEY}
     TORPEDO_SSH_KEY_VOLUME="{ \"name\": \"ssh-key-volume\", \"secret\": { \"secretName\": \"key4torpedo\", \"defaultMode\": 256 }}"
     TORPEDO_SSH_KEY_MOUNT="{ \"name\": \"ssh-key-volume\", \"mountPath\": \"/home/torpedo/\" }"
 fi
@@ -371,7 +371,7 @@ if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
     TORPEDO_IMG="${INTERNAL_DOCKER_REGISTRY}/${TORPEDO_IMG}"
 fi
 
-kubectl create configmap cloud-config --from-file=/config/cloud-json
+kubectl -n default create configmap cloud-config --from-file=/config/cloud-json
 
 # List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
 FROM_FILE=""
@@ -386,7 +386,7 @@ if [ -n "${KUBECONFIGS}" ]; then
        CLUSTER_CONFIGS="${CLUSTER_CONFIGS},`basename ${i}`"
      fi
   done
-  kubectl create configmap kubeconfigs ${FROM_FILE}
+  kubectl -n default create configmap kubeconfigs ${FROM_FILE}
 fi
 
 K8S_VENDOR_KEY=""
@@ -404,23 +404,6 @@ fi
 
 echo '' > torpedo.yaml
 
-if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
-  echo "Adding Docker registry secret ..."
-  auth=$(echo "$IMAGE_PULL_USERNAME:$IMAGE_PULL_PASSWORD" | base64)
-  secret=$(echo "{\"auths\":{\"$IMAGE_PULL_SERVER\":{\"username\":\"$IMAGE_PULL_USERNAME\",\"password\":\"$IMAGE_PULL_PASSWORD\",\"auth\":"$auth"}}}" | base64 -w 0)
-  cat >> torpedo.yaml <<EOF
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: torpedo
-type: docker-registry
-data:
-  .dockerconfigjson: $secret
-
-EOF
-  sed -i '/spec:/a\  imagePullSecrets:\n    - name: torpedo' torpedo.yaml
-fi
 
 cat >> torpedo.yaml <<EOF
 ---
@@ -719,8 +702,16 @@ spec:
       value: "${TARGET_CLUSTER_NAME}"
     - name: PX_ORACLE_user_ocid
       value: "${PX_ORACLE_user_ocid}"
+    - name: PX_ORACLE_compartment_id
+      value: "${PX_ORACLE_compartment_id}"
+    - name: PX_ORACLE_cluster_name
+      value: "${PX_ORACLE_cluster_name}"
     - name: PX_ORACLE_fingerprint
       value: "${PX_ORACLE_fingerprint}"
+    - name: PX_ORACLE_cluster_region
+      value: "${PX_ORACLE_cluster_region}"
+    - name: PX_ORACLE_tenancy
+      value: "${PX_ORACLE_tenancy}"
     - name: PX_ORACLE_private_key_path
       value: "${ORACLE_API_KEY}"
     - name: INSTANCE_GROUP
@@ -781,6 +772,14 @@ spec:
       value: "${EKS_CLUSTER_REGION}"
     - name: EKS_PX_NODEGROUP_NAME
       value: "${EKS_PX_NODEGROUP_NAME}"
+    - name: IKS_CLUSTER_NAME
+      value: "${IKS_CLUSTER_NAME}"
+    - name: IKS_PX_WORKERPOOL_NAME
+      value: "${IKS_PX_WORKERPOOL_NAME}"
+    - name: IKS_CLUSTER_REGION
+      value: "${IKS_CLUSTER_REGION}"
+    - name: LONGEVITY_UPGRADE_EXECUTION_THRESHOLD
+      value: "${LONGEVITY_UPGRADE_EXECUTION_THRESHOLD}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
@@ -788,16 +787,35 @@ spec:
 
 EOF
 
+# If these are passed, we will create a docker config secret to use to pull images
+if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
+  echo "Adding Docker registry secret ..."
+  auth=$(echo -n "$IMAGE_PULL_USERNAME:$IMAGE_PULL_PASSWORD" | base64)
+  secret=$(echo -n "{\"auths\":{\"$IMAGE_PULL_SERVER\":{\"auth\":\"$auth\"}}}" | base64 -w 0)
+  cat >> torpedo.yaml <<EOF
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: torpedo
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: $secret
+
+EOF
+  sed -i '/spec:/a\  imagePullSecrets:\n    - name: torpedo' torpedo.yaml
+fi
+
 cat torpedo.yaml
 
 echo "Deploying torpedo pod..."
-kubectl apply -f torpedo.yaml
+kubectl -n default apply -f torpedo.yaml
 
 echo "Waiting for torpedo to start running"
 
 function describe_pod_then_exit {
   echo "Pod description:"
-  kubectl describe pod torpedo
+  kubectl -n default describe pod torpedo
   exit 1
 }
 
@@ -805,13 +823,13 @@ function terminate_pod_then_exit {
     echo "Terminating Ginkgo test in Torpedo pod..."
     # Fetch the PID of the Ginkgo test process
     local test_pid
-    test_pid=$(kubectl exec torpedo -- pgrep -f 'torpedo/bin')
+    test_pid=$(kubectl -n default exec torpedo -- pgrep -f 'torpedo/bin')
     if [ "$test_pid" ]; then
         # Using SIGKILL instead of SIGTERM to immediately stop the process.
         # SIGTERM would allow Ginkgo to run AfterSuite and generate reports,
         # but the intention here is to stop the process immediately.
         echo "Sending SIGKILL to terminate Ginkgo test process with PID: $test_pid"
-        kubectl exec torpedo -- kill -SIGKILL "$test_pid"
+        kubectl -n default exec torpedo -- kill -SIGKILL "$test_pid"
     fi
     exit 1
 }
@@ -824,7 +842,7 @@ trap terminate_pod_then_exit SIGTERM
     first_iteration=true
     for i in $(seq 1 900); do
         echo "Iteration: $i"
-        state=$(kubectl get pod torpedo | grep -v NAME | awk '{print $3}')
+        state=$(kubectl -n default get pod torpedo | grep -v NAME | awk '{print $3}')
 
         if [ "$state" == "Error" ]; then
             echo "Error: Torpedo finished with $state state"
@@ -833,11 +851,11 @@ trap terminate_pod_then_exit SIGTERM
             # For the first iteration, display all logs. Later, only from 1 minute ago
             if [ "$first_iteration" = true ]; then
                 echo "Logs from first iteration"
-                kubectl logs -f torpedo
+                kubectl -n default logs -f torpedo
                 first_iteration=false
             else
                 echo "Logs from iteration: $i"
-                kubectl logs -f --since=1m torpedo
+                kubectl -n default logs -f --since=1m torpedo
             fi
         elif [ "$state" == "Completed" ]; then
             echo "Success: Torpedo finished with $state state"

@@ -21,7 +21,7 @@ import (
 )
 
 // This testcase verifies backup and restore of applications by excluding files and directories from mountPath.
-var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
+var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[ExcludeDirectoryFileBackup]...), func() {
 	var (
 		backupName                    string
 		scheduledAppContexts          []*scheduler.Context
@@ -141,8 +141,8 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 							sc := podScMountPathMap[pod.Name][mountPath]
 							DirectoryConfig := PodDirectoryConfig{
 								BasePath:          mountPath,
-								Depth:             10,
-								Levels:            3,
+								Depth:             100,
+								Levels:            1,
 								FilesPerDirectory: 100,
 							}
 							log.Infof(fmt.Sprintf("creating nested directories and files within mountPath [%s] with depth [%d] , level [%d] and FilesPerDirectory [%d]", DirectoryConfig.BasePath, DirectoryConfig.Depth, DirectoryConfig.Levels, DirectoryConfig.FilesPerDirectory))
@@ -226,11 +226,11 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 						for _, mountPath := range mountPaths {
 							excludeFileDirList := make([]string, 0)
 							log.Infof(fmt.Sprintf("Fetch some random directories from created list %v", dirListMountMap[mountPath]))
-							randomDirs, err := GetRandomSubset(dirListMountMap[mountPath], 500)
+							randomDirs, err := GetRandomSubset(dirListMountMap[mountPath], 50)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random directories from the list"))
 							log.Infof(fmt.Sprintf("the list of directories randomly selected from mountPath- %v : %v", mountPath, randomDirs))
 							log.Infof(fmt.Sprintf("Fetch some random files from created list %v", fileListMountMap[mountPath]))
-							randomFiles, err := GetRandomSubset(fileListMountMap[mountPath], 500)
+							randomFiles, err := GetRandomSubset(fileListMountMap[mountPath], 100)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random files from the list"))
 							log.Infof(fmt.Sprintf("the list of files randomly selected from mountPath- %v : %v", mountPath, randomFiles))
 							excludeFileDirList = append(excludeFileDirList, randomDirs...)
@@ -749,7 +749,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 })
 
 // This testcase verifies backup and restore with mentioned valid directories or files from backed-up apps and restores them when invalid,non-existent storageclass and files are there in KDMP exclude list
-var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
+var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[ExcludeInvalidDirectoryFileBackup]...), func() {
 	var (
 		backupName                    string
 		scheduledAppContexts          []*scheduler.Context
@@ -867,8 +867,8 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
 						for _, mountPath := range mountPaths {
 							DirectoryConfig := PodDirectoryConfig{
 								BasePath:          mountPath,
-								Depth:             10,
-								Levels:            3,
+								Depth:             100,
+								Levels:            1,
 								FilesPerDirectory: 100,
 							}
 							log.Infof(fmt.Sprintf("creating nested directories and files within mountPath [%s] with depth [%d] , level [%d] and FilesPerDirectory [%d]", DirectoryConfig.BasePath, DirectoryConfig.Depth, DirectoryConfig.Levels, DirectoryConfig.FilesPerDirectory))
@@ -898,11 +898,11 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
 						for _, mountPath := range mountPaths {
 							excludeFileDirList := make([]string, 0)
 							log.Infof(fmt.Sprintf("Fetch some random directories from created list %v", dirListMountMap[mountPath]))
-							randomDirs, err := GetRandomSubset(dirListMountMap[mountPath], 500)
+							randomDirs, err := GetRandomSubset(dirListMountMap[mountPath], 50)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random directories from the list"))
 							log.Infof(fmt.Sprintf("the list of directories randomly selected from mountPath- %v : %v", mountPath, randomDirs))
 							log.Infof(fmt.Sprintf("Fetch some random files from created list %v", fileListMountMap[mountPath]))
-							randomFiles, err := GetRandomSubset(fileListMountMap[mountPath], 500)
+							randomFiles, err := GetRandomSubset(fileListMountMap[mountPath], 100)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random files from the list"))
 							log.Infof(fmt.Sprintf("the list of files randomly selected from mountPath- %v : %v", mountPath, randomFiles))
 							excludeFileDirList = append(excludeFileDirList, randomDirs...)
