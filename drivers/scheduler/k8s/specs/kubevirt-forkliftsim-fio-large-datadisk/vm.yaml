@@ -13,7 +13,6 @@ spec:
   resources:
     requests:
       storage: 2048Gi
-
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -30,7 +29,6 @@ spec:
   resources:
     requests:
       storage: 120Gi
-
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -47,7 +45,6 @@ spec:
   resources:
     requests:
       storage: 20Gi
-
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -64,7 +61,6 @@ spec:
   resources:
     requests:
       storage: 20Gi
-
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -81,7 +77,6 @@ spec:
   resources:
     requests:
       storage: 20Gi
-
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -98,7 +93,6 @@ spec:
   resources:
     requests:
       storage: 20Gi
-
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -115,7 +109,6 @@ spec:
   resources:
     requests:
       storage: 20Gi
-
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -132,7 +125,6 @@ spec:
   resources:
     requests:
       storage: 20Gi
-
 ---
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
