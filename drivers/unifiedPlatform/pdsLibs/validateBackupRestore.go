@@ -65,6 +65,7 @@ func ValidateRestoreDeployment(restoreId, namespace string) error {
 		return fmt.Errorf("error while fetching source deployment object")
 	}
 	destinationDeployment, err := v2Components.PDS.GetDeployment(restore.Get.Config.DestinationReferences.DeploymentId)
+
 	if err != nil {
 		return fmt.Errorf("error while fetching destination deployment object")
 	}
@@ -83,12 +84,14 @@ func ValidateRestore(sourceDeployment, destinationDeployment *automationModels.P
 	//TODO : This validation needs to be revisited once we have the working pds templates api
 
 	// Validate the Resource configuration
-	sourceDep := sourceDeployment.Create.Config.DeploymentTopologies[0]
-	destDep := destinationDeployment.Create.Config.DeploymentTopologies[0]
+	log.Infof("Source Deployment Topology - [%+v]", sourceDeployment.Get.Config.DeploymentTopologies)
+	log.Infof("Destination Deployment Topology - [%+v]", destinationDeployment.Get.Config.DeploymentTopologies)
+	sourceDep := sourceDeployment.Get.Config.DeploymentTopologies[0]
+	destDep := destinationDeployment.Get.Config.DeploymentTopologies[0]
 
 	sourceResourceSettings := sourceDep.ResourceSettings
 	destResourceSettings := destDep.ResourceSettings
-	log.Debugf("source resource settings - [%v]", sourceResourceSettings.Id)
+	log.Debugf("source resource settings - [%v]", *sourceResourceSettings.Id)
 	if !reflect.DeepEqual(sourceResourceSettings, destResourceSettings) {
 		return fmt.Errorf("restored resource configuration are not same as backed up resource config")
 	}

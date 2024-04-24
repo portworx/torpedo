@@ -46,7 +46,7 @@ func ListTargetClusters(tenantId string) (*automationModels.V1ListTargetClusters
 
 	tcList, err := v2Components.Platform.ListTargetClusters(&wfRequest)
 	if err != nil {
-		return &tcList.ListTargetClusters, err
+		return nil, err
 	}
 
 	totalRecords := *tcList.ListTargetClusters.Pagination.TotalRecords

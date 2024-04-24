@@ -27,6 +27,13 @@ type ApiBackupServiceDeleteBackupRequest struct {
 	ctx context.Context
 	ApiService *BackupServiceAPIService
 	id string
+	force *bool
+}
+
+// Force flag to delete backup from control plane only.
+func (r ApiBackupServiceDeleteBackupRequest) Force(force bool) ApiBackupServiceDeleteBackupRequest {
+	r.force = &force
+	return r
 }
 
 func (r ApiBackupServiceDeleteBackupRequest) Execute() (map[string]interface{}, *http.Response, error) {
@@ -70,6 +77,9 @@ func (a *BackupServiceAPIService) BackupServiceDeleteBackupExecute(r ApiBackupSe
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.force != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "force", r.force, "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 
@@ -245,8 +255,6 @@ type ApiBackupServiceListBackupsRequest struct {
 	ctx context.Context
 	ApiService *BackupServiceAPIService
 	deploymentId *string
-	targetClusterId *string
-	namespaceId *string
 	backupConfigId *string
 	paginationPageNumber *string
 	paginationPageSize *string
@@ -257,18 +265,6 @@ type ApiBackupServiceListBackupsRequest struct {
 // Deployment ID for which the backups will be listed.
 func (r ApiBackupServiceListBackupsRequest) DeploymentId(deploymentId string) ApiBackupServiceListBackupsRequest {
 	r.deploymentId = &deploymentId
-	return r
-}
-
-// Cluster ID for which the backups will be listed.
-func (r ApiBackupServiceListBackupsRequest) TargetClusterId(targetClusterId string) ApiBackupServiceListBackupsRequest {
-	r.targetClusterId = &targetClusterId
-	return r
-}
-
-// Namespace ID for which the backups will be listed.
-func (r ApiBackupServiceListBackupsRequest) NamespaceId(namespaceId string) ApiBackupServiceListBackupsRequest {
-	r.namespaceId = &namespaceId
 	return r
 }
 
@@ -342,12 +338,6 @@ func (a *BackupServiceAPIService) BackupServiceListBackupsExecute(r ApiBackupSer
 
 	if r.deploymentId != nil {
 		parameterAddToHeaderOrQuery(localVarQueryParams, "deploymentId", r.deploymentId, "")
-	}
-	if r.targetClusterId != nil {
-		parameterAddToHeaderOrQuery(localVarQueryParams, "targetClusterId", r.targetClusterId, "")
-	}
-	if r.namespaceId != nil {
-		parameterAddToHeaderOrQuery(localVarQueryParams, "namespaceId", r.namespaceId, "")
 	}
 	if r.backupConfigId != nil {
 		parameterAddToHeaderOrQuery(localVarQueryParams, "backupConfigId", r.backupConfigId, "")

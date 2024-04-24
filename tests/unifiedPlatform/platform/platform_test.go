@@ -26,7 +26,7 @@ var _ = Describe("{PlatformBasicTest}", func() {
 	)
 	JustBeforeEach(func() {
 
-		StartTorpedoTest("PlatformBasicTest", "Basic CRUD operations on platform", nil, 0)
+		StartPDSTorpedoTest("PlatformBasicTest", "Basic CRUD operations on platform", nil, 0)
 		namespace = fmt.Sprintf("pds-namespace-%s", utilities.RandomString(5))
 		workflowPlatform.Accounts = map[string]map[string]string{
 			NewPdsParams.Users.AdminUsername: {
@@ -150,7 +150,7 @@ var _ = Describe("{PlatformBasicTest}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPDSTorpedoTest()
 	})
 })
 
@@ -168,7 +168,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 	)
 	JustBeforeEach(func() {
 
-		StartTorpedoTest("PlatformRBACTest", "Basic RBAC operations on platform", nil, 0)
+		StartPDSTorpedoTest("PlatformRBACTest", "Basic RBAC operations on platform", nil, 0)
 		workflowPlatform.TenantInit()
 		projectAdmin = "project-Admin-" + RandomString(5)
 		tenantAdmin = "tenant-Admin-" + RandomString(5)
@@ -406,6 +406,6 @@ var _ = Describe("{PlatformRBACTest}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPDSTorpedoTest()
 	})
 })

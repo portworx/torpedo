@@ -49,7 +49,6 @@ type RestoreInterface interface {
 	CreateRestore(*PDSRestoreRequest) (*PDSRestoreResponse, error)
 	ReCreateRestore(*PDSRestoreRequest) (*PDSRestoreResponse, error)
 	GetRestore(*PDSRestoreRequest) (*PDSRestoreResponse, error)
-	DeleteRestore(*PDSRestoreRequest) error
 	ListRestore(*PDSRestoreRequest) (*PDSRestoreResponse, error)
 }
 

@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"os"
@@ -20,10 +21,13 @@ import (
 var _ = BeforeSuite(func() {
 	PDS_DEFAULT_NAMESPACE = "pds-namespace-" + RandomString(5)
 	steplog := "Get prerequisite params to run platform tests"
+
 	log.InfoD(steplog)
 	Step(steplog, func() {
 		InitInstance()
 		dash = Inst().Dash
+		dash.TestSet.Product = "pds"
+		dash.TestSetBegin(dash.TestSet)
 		// Read pds params from the configmap
 		var err error
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
@@ -137,10 +141,24 @@ var _ = BeforeSuite(func() {
 		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
 	})
 
+	Step("Dumping kubeconfigs file", func() {
+		kubeconfigs := os.Getenv("KUBECONFIGS")
+		if kubeconfigs != "" {
+			kubeconfigList := strings.Split(kubeconfigs, ",")
+			if len(kubeconfigList) < 2 {
+				log.FailOnError(fmt.Errorf("At least minimum two kubeconfigs required but has"),
+					"Failed to get k8s config path.At least minimum two kubeconfigs required")
+			}
+			DumpKubeconfigs(kubeconfigList)
+		}
+	})
+
 })
 
 var _ = AfterSuite(func() {
+	EndTorpedoTest()
 	//TODO: Steps to delete Backup location, Target and Bucket
+	// TODO: Add namespace cleanup once deployment cleanup cleans up the services too
 	//err := WorkflowNamespace.Purge()
 	//log.FailOnError(err, "Unable to cleanup all namespaces")
 	//log.InfoD("All namespaces cleaned up successfully")

@@ -15,7 +15,7 @@ import (
 	"fmt"
 )
 
-// V1StatusHealth Enum for Health of the Deployment.   - HEALTH_UNSPECIFIED: Health is unspecified.  - AVAILABLE: Deployment is Available.  - PARTIALLY_AVAILABLE: Deployment is PartiallyAvailable.  - UNAVAILABLE: Deployment is Unavailable.
+// V1StatusHealth Enum for Health of the Deployment.   - HEALTH_UNSPECIFIED: Health is unspecified.  - AVAILABLE: Deployment is Available.  - PARTIALLY_AVAILABLE: Deployment is PartiallyAvailable.  - UNAVAILABLE: Deployment is Unavailable.  - NOT_APPLICABLE: Deployment is deleted from cluster.
 type V1StatusHealth string
 
 // List of v1StatusHealth
@@ -24,6 +24,7 @@ const (
 	V1STATUSHEALTH_AVAILABLE V1StatusHealth = "AVAILABLE"
 	V1STATUSHEALTH_PARTIALLY_AVAILABLE V1StatusHealth = "PARTIALLY_AVAILABLE"
 	V1STATUSHEALTH_UNAVAILABLE V1StatusHealth = "UNAVAILABLE"
+	V1STATUSHEALTH_NOT_APPLICABLE V1StatusHealth = "NOT_APPLICABLE"
 )
 
 // All allowed values of V1StatusHealth enum
@@ -32,6 +33,7 @@ var AllowedV1StatusHealthEnumValues = []V1StatusHealth{
 	"AVAILABLE",
 	"PARTIALLY_AVAILABLE",
 	"UNAVAILABLE",
+	"NOT_APPLICABLE",
 }
 
 func (v *V1StatusHealth) UnmarshalJSON(src []byte) error {
