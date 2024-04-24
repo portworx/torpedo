@@ -1416,7 +1416,7 @@ github.com/pure-px/apis/public/portworx/platform/template/apiv1
 github.com/pure-px/apis/public/portworx/platform/tenant/apiv1
 github.com/pure-px/apis/public/portworx/platform/tenant/application/apiv1
 github.com/pure-px/apis/public/portworx/platform/whoami/apiv1
-# github.com/pure-px/platform-api-go-client v0.0.0-20240405095715-34babdd92c3c
+# github.com/pure-px/platform-api-go-client v0.0.0-20240422094205-23129136cfd2
 ## explicit; go 1.21.4
 github.com/pure-px/platform-api-go-client/pds/v1/backup
 github.com/pure-px/platform-api-go-client/pds/v1/backupconfig

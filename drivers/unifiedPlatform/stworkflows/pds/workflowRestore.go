@@ -70,12 +70,12 @@ func (restore WorkflowPDSRestore) GetRestore(id string) (*automationModels.PDSRe
 	return getRestore, nil
 }
 
-func (restore WorkflowPDSRestore) DeleteRestore(id string) error {
-	err := pdslibs.DeleteRestore(id)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
+//func (restore WorkflowPDSRestore) DeleteRestore(id string) error {
+//	err := pdslibs.DeleteRestore(id)
+//
+//	if err != nil {
+//		return err
+//	}
+//
+//	return nil
+//}

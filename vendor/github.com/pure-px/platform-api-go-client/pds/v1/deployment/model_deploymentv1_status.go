@@ -27,6 +27,8 @@ type Deploymentv1Status struct {
 	Initialized *string `json:"initialized,omitempty"`
 	// Status of the deployment topology.
 	DeploymentTopologyStatus []V1DeploymentTopologyStatus `json:"deploymentTopologyStatus,omitempty"`
+	// Custom Resource Name is the kubernetes resource name for the deployment that is built from ID.
+	CustomResourceName *string `json:"customResourceName,omitempty"`
 }
 
 // NewDeploymentv1Status instantiates a new Deploymentv1Status object
@@ -214,6 +216,38 @@ func (o *Deploymentv1Status) SetDeploymentTopologyStatus(v []V1DeploymentTopolog
 	o.DeploymentTopologyStatus = v
 }
 
+// GetCustomResourceName returns the CustomResourceName field value if set, zero value otherwise.
+func (o *Deploymentv1Status) GetCustomResourceName() string {
+	if o == nil || IsNil(o.CustomResourceName) {
+		var ret string
+		return ret
+	}
+	return *o.CustomResourceName
+}
+
+// GetCustomResourceNameOk returns a tuple with the CustomResourceName field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *Deploymentv1Status) GetCustomResourceNameOk() (*string, bool) {
+	if o == nil || IsNil(o.CustomResourceName) {
+		return nil, false
+	}
+	return o.CustomResourceName, true
+}
+
+// HasCustomResourceName returns a boolean if a field has been set.
+func (o *Deploymentv1Status) HasCustomResourceName() bool {
+	if o != nil && !IsNil(o.CustomResourceName) {
+		return true
+	}
+
+	return false
+}
+
+// SetCustomResourceName gets a reference to the given string and assigns it to the CustomResourceName field.
+func (o *Deploymentv1Status) SetCustomResourceName(v string) {
+	o.CustomResourceName = &v
+}
+
 func (o Deploymentv1Status) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -238,6 +272,9 @@ func (o Deploymentv1Status) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.DeploymentTopologyStatus) {
 		toSerialize["deploymentTopologyStatus"] = o.DeploymentTopologyStatus
+	}
+	if !IsNil(o.CustomResourceName) {
+		toSerialize["customResourceName"] = o.CustomResourceName
 	}
 	return toSerialize, nil
 }

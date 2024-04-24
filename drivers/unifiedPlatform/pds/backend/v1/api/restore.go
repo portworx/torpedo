@@ -115,22 +115,22 @@ func (restore *PDS_API_V1) GetRestore(getRestoreRequest *automationModels.PDSRes
 	return &response, nil
 }
 
-// DeleteRestore will delete restore for a given deployment
-func (restore *PDS_API_V1) DeleteRestore(deleteRestoreRequest *automationModels.PDSRestoreRequest) error {
-	ctx, restoreClient, err := restore.getRestoreClient()
-	if err != nil {
-		return fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
-	}
-
-	deleteRequest := restoreClient.RestoreServiceDeleteRestore(ctx, deleteRestoreRequest.Delete.Id)
-
-	_, res, err := deleteRequest.Execute()
-	if err != nil || res.StatusCode != status.StatusOK {
-		return fmt.Errorf("Error when calling `RestoreServiceGetRestore`: %v\n.Full HTTP response: %v", err, res)
-	}
-
-	return nil
-}
+//// DeleteRestore will delete restore for a given deployment
+//func (restore *PDS_API_V1) DeleteRestore(deleteRestoreRequest *automationModels.PDSRestoreRequest) error {
+//	ctx, restoreClient, err := restore.getRestoreClient()
+//	if err != nil {
+//		return fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
+//	}
+//
+//	deleteRequest := restoreClient.(ctx, deleteRestoreRequest.Delete.Id)
+//
+//	_, res, err := deleteRequest.Execute()
+//	if err != nil || res.StatusCode != status.StatusOK {
+//		return fmt.Errorf("Error when calling `RestoreServiceGetRestore`: %v\n.Full HTTP response: %v", err, res)
+//	}
+//
+//	return nil
+//}
 
 // ListRestore will list restores for a given deployment
 func (restore *PDS_API_V1) ListRestore(listRestoresRequest *automationModels.PDSRestoreRequest) (*automationModels.PDSRestoreResponse, error) {
@@ -144,7 +144,6 @@ func (restore *PDS_API_V1) ListRestore(listRestoresRequest *automationModels.PDS
 	}
 
 	restoreRequest := restoreClient.RestoreServiceListRestores(ctx)
-	restoreRequest = restoreRequest.AccountId(listRestoresRequest.List.AccountId)
 	restoreRequest = restoreRequest.DeploymentId(listRestoresRequest.List.DeploymentId)
 	restoreRequest = restoreRequest.BackupId(listRestoresRequest.List.BackupId)
 	restoreRequest = restoreRequest.ProjectId(listRestoresRequest.List.ProjectId)

@@ -53,21 +53,21 @@ func ReCreateRestore(id string, targetClusterId string, name string, namespaceId
 	return restoreResponse, err
 }
 
-// DeleteRestore deletes restore of the deployment
-func DeleteRestore(id string) error {
-
-	deleteRestoreRequest := automationModels.PDSRestoreRequest{
-		Delete: automationModels.PDSDeleteRestore{},
-	}
-
-	deleteRestoreRequest.Delete.Id = id
-
-	err := v2Components.PDS.DeleteRestore(&deleteRestoreRequest)
-	if err != nil {
-		return err
-	}
-	return err
-}
+//// DeleteRestore deletes restore of the deployment
+//func DeleteRestore(id string) error {
+//
+//	deleteRestoreRequest := automationModels.PDSRestoreRequest{
+//		Delete: automationModels.PDSDeleteRestore{},
+//	}
+//
+//	deleteRestoreRequest.Delete.Id = id
+//
+//	err := v2Components.PDS.DeleteRestore(&deleteRestoreRequest)
+//	if err != nil {
+//		return err
+//	}
+//	return err
+//}
 
 // GetBackupConfig fetches backup config for the deployment
 func GetRestore(id string) (*automationModels.PDSRestoreResponse, error) {
