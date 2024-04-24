@@ -8,7 +8,7 @@ metadata:
     "cdi.kubevirt.io/storage.import.endpoint": "http://kubevirt-disk-registry.pwx.dev.purestorage.com/more_images/fio-multi-disk.qcow2"
     "cdi.kubevirt.io/storage.contentType": "kubevirt"
     forklift.konveyor.io/disk-source: "[VCD-DEV-LINUX2-PURE-002] satdaap00886/satdaap00886_1.vmdk"
-    "vmID": {{.vmID}}
+    "vmID": {{ .VmID }}
     cdi.kubevirt.io/storage.bind.immediate.requested: "true"
     pvc.source: "cloned"
 spec:
