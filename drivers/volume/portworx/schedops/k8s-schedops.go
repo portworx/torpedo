@@ -2,6 +2,7 @@ package schedops
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -797,10 +798,81 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 	return isPxPodPresent
 }
 
+func StructToString(s interface{}) string {
+	if s == nil {
+		return "nil"
+	}
+	v := reflect.ValueOf(s)
+	if stringer, ok := s.(fmt.Stringer); ok {
+		return stringer.String()
+	}
+	if v.Kind() != reflect.Struct {
+		return fmt.Sprintf("%v", s)
+	}
+	t := v.Type()
+	var fields []string
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if field.IsExported() {
+			fieldVal := v.Field(i)
+			var fieldString string
+			fieldName := field.Name
+			if fieldName == "" {
+				fieldName = "UnnamedField"
+			}
+			if stringer, ok := fieldVal.Interface().(fmt.Stringer); ok {
+				fieldString = fmt.Sprintf("%s: %s", fieldName, stringer.String())
+			} else {
+				switch fieldVal.Kind() {
+				case reflect.Ptr:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", fieldName)
+					} else if fieldVal.Type().Elem().Kind() == reflect.Struct {
+						fieldString = fmt.Sprintf("%s: %s", fieldName, StructToString(fieldVal.Elem().Interface()))
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", fieldName, fieldVal.Elem())
+					}
+				case reflect.Slice:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", fieldName)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", fieldName, fieldVal.Interface())
+					}
+				case reflect.Map:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", fieldName)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", fieldName, fieldVal.Interface())
+					}
+				case reflect.Struct:
+					fieldString = fmt.Sprintf("%s: %s", fieldName, StructToString(fieldVal.Interface()))
+				case reflect.String:
+					if fieldVal.Len() == 0 {
+						fieldString = fmt.Sprintf("%s: \"\"", fieldName)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", fieldName, fieldVal.Interface())
+					}
+				default:
+					fieldString = fmt.Sprintf("%s: %v", fieldName, fieldVal.Interface())
+				}
+			}
+			fields = append(fields, fieldString)
+		}
+	}
+	if t.Name() == "" {
+		return fmt.Sprintf("%s: {%s}", "UnnamedStruct", strings.Join(fields, ", "))
+	}
+	return fmt.Sprintf("%s: {%s}", t.Name(), strings.Join(fields, ", "))
+}
+
 // IsPXEnabled returns true  if px is enabled on given node
 func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
+	log.Infof("[IsPXEnabled] Node Details: [%v]", n)
+	log.Infof("[IsPXEnabled StructToString] Node Details: [%v]", StructToString(n))
 	t := func() (interface{}, bool, error) {
 		node, err := k8sCore.GetNodeByName(n.Name)
+		log.Infof("[IsPXEnabled] Node [%v] Details: [%v]", n.Name, node)
+		log.Infof("[IsPXEnabled StructToString] Node [%v] Details: [%v]", n.Name, StructToString(node))
 		if err != nil {
 			log.Errorf("Failed to get node %v", err)
 			return nil, true, err
@@ -817,6 +889,12 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	kubeNode := node.(*corev1.Node)
 	// if node has px/enabled label set to false or node-type public or
 	// has any taints then px is disabled on node
+
+	log.Infof("[IsPXEnabled kubeNode] Node Labels [%v]", kubeNode.Labels)
+	log.Infof("[IsPXEnabled kubeNode StructToString] Node Labels [%v]", StructToString(kubeNode.Labels))
+	log.Infof("[IsPXEnabled kubeNode] Node Taints [%v]", kubeNode.Spec.Taints)
+	log.Infof("[IsPXEnabled kubeNode StructToString] Node Taints [%v]", StructToString(kubeNode.Spec.Taints))
+
 	if kubeNode.Labels[PXEnabledLabelKey] == "false" || kubeNode.Labels[dcosNodeType] == "public" {
 		log.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
 		return false, nil
