@@ -199,7 +199,7 @@ func ScheduleAppsAndValidate(c *gin.Context) {
 	}
 
 	tests.Inst().AppList = requestBody.AppList
-	options := tests.CreateScheduleOptions(requestBody.NamespaceSuffix)
+	options := tests.CreateScheduleOptions("")
 	context, err := tests.Inst().S.Schedule(requestBody.NamespaceSuffix, options)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
