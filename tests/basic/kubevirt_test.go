@@ -20,6 +20,71 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
+var _ = Describe("{TestDhruv}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("TestDhruv", "Add a new disk to a kubevirtVM", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	itLog := "Add a new disk to a kubevirtVM"
+	It(itLog, func() {
+		defer ListEvents("portworx")
+		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		numberOfVolumes := 1
+		Inst().AppList = []string{"kubevirt-debian-template"}
+		stepLog := "Setting up Boot PVC Template"
+		Step(stepLog, func() {
+			template := ScheduleApplications("TemplateCreation")
+			ValidateApplications(template)
+		})
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+		stepLog = "schedule a kubevirtVM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+		stepLog = "Add one disk to the kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			log.FailOnError(err, "Failed to add disks to kubevirt VM")
+			dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
+		})
+
+		stepLog = "Verify the new disk added is also bind mounted"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				isVmBindMounted, err := IsVMBindMounted(appCtx, true)
+				log.FailOnError(err, "Failed to verify disks in kubevirt VM")
+				if !isVmBindMounted {
+					log.Errorf("The newly added disk to vm %s is not bind mounted", appCtx.App.Key)
+				}
+			}
+		})
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
 var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddNewDiskToKubevirtVM", "Add a new disk to a kubevirtVM", nil, 0)
@@ -137,6 +202,7 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 	var namespace string
 	itLog := "Kill Px then Add disk to Kubevirt VM"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -239,6 +305,7 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 
 	itLog := "Add disk to Kubevirt VM, Kill Px and then add another disk"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -349,6 +416,7 @@ var _ = Describe("{KubevirtVMVolHaIncrease}", func() {
 	var namespace string
 	itLog := "Increase the volume HA of a kubevirt VM"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -420,6 +488,7 @@ var _ = Describe("{KubevirtVMVolHaDecrease}", func() {
 	var namespace string
 	itLog := "Decrease the volume HA of a kubevirt VM"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		log.InfoD(stepLog)
 		appList := Inst().AppList
@@ -495,6 +564,7 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 	var namespace string
 	itLog := "Live Migrate a VM and then add a new disk to a kubevirtVM"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -560,6 +630,7 @@ var _ = Describe("{AddDiskAndLiveMigrate}", func() {
 	var namespace string
 	itLog := "Add a new disk to a kubevirtVM and then Live Migrate"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -646,6 +717,7 @@ var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
 	})
 
 	It("has to fill up the volume completely, resize the volumes and storage pool(s), validate and teardown apps", func() {
+		defer ListEvents("portworx")
 		log.InfoD("filling up the volume completely, resizing the volumes and storage pool(s), validating and tearing down apps")
 
 		Step("Create autopilot rules for PVC and pool expand", func() {
@@ -839,6 +911,7 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 
 	itLog := "Upgrade OCP cluster and validate kubevirt apps"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		stepLog := "schedule kubevirt VMs"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -933,6 +1006,7 @@ var _ = Describe("{RebootRootDiskAttachedNode}", func() {
 
 	itLog := "Reboot node where Kubevirt VMs root disk is attached"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
