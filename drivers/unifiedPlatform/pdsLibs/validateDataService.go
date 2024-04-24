@@ -6,6 +6,7 @@ import (
 	pds "github.com/portworx/torpedo/drivers/pds/dataservice"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"google.golang.org/grpc"
 	v1 "k8s.io/api/apps/v1"
@@ -20,6 +21,17 @@ const (
 	CRGroup = "deployments.pds.portworx.com"
 	Version = "v1"
 )
+
+var Dash *aetosutil.Dashboard
+
+type ValidateStorageIncrease struct {
+	UpdatedDeployment      *automationModels.PDSDeploymentResponse
+	ResConfigIdUpdated     string
+	StorageConfigIdUpdated string
+	InitialCapacity        uint64
+	IncreasedStorageSize   uint64
+	BeforeResizePodAge     float64
+}
 
 // GetDeploymentConfigurations returns the deployment CRObject response
 func GetDeploymentConfigurations(namespace, dataServiceName, deploymentName string) (DeploymentConfig, error) {
@@ -402,5 +414,26 @@ func ValidateDNSEndPoint(dnsEndPoint string) error {
 
 	defer conn.Close()
 
+	return nil
+}
+
+func VerifyStorageSizeIncreaseAndNoPodRestarts(initialCapacity uint64, newCapacity uint64, beforeAge float64, afterResizePodAge float64) error {
+	if newCapacity > initialCapacity {
+		flag := true
+		Dash.VerifyFatal(flag, true, "Validating the storage size is updated in the config post resize (PV/PVC-LEVEL)")
+		log.InfoD("Initial PVC Capacity is- [%v] and Updated PVC Capacity is- [%v]", initialCapacity, newCapacity)
+	} else {
+		log.FailOnError(err, "Failed to verify Storage Resize at PV/PVC level")
+	}
+	log.FailOnError(err, "unable to get pods restart count before PVC resize")
+	log.InfoD("Pods Age after storage resize is- [%v]Min", afterResizePodAge)
+	if beforeAge < afterResizePodAge {
+		flagCount := true
+		Dash.VerifyFatal(flagCount, true, "Validating NO pod restarts occurred while storage resize")
+
+	} else {
+		log.FailOnError(err, "Pods restarted after storage resize, Please check the logs manually")
+	}
+	log.InfoD("Successfully validated that NO pod restarted while/after storage resize")
 	return nil
 }

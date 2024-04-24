@@ -657,7 +657,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 	It("Increase PVC Size by 1 GB of DataService from K8s", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			log.InfoD("Dataservice on which the PVC needs to be resized is- [%v]", ds.Name)
-			err = workflowDataService.IncreasePvcSizeBy1gb(workflowDataService.NamespaceName, workflowDataService.DataServiceDeployment, 1)
+			err = workflowDataService.IncreasePvcSizeBy1gb(workflowDataService.NamespaceName, *deployment.Create.Status.CustomResourceName, 1)
 			log.FailOnError(err, "Failing while Increasing the PVC name...")
 
 		}

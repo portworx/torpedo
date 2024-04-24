@@ -62,6 +62,7 @@ type Deploymentv1Status struct {
 	Initialized *string `copier:"must,nopanic"`
 	// Status of the deployment topology.
 	DeploymentTopologyStatus []V1DeploymentTopologyStatus `copier:"must,nopanic"`
+	CustomResourceName       *string                      `copier:"must,nopanic"`
 }
 
 // V1DeploymentTopologyStatus Status of the deployment topology. It is consumed in Deployment.
