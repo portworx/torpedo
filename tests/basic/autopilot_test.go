@@ -1093,11 +1093,14 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 			ValidateStoragePools(contexts)
 		})
 
-		Step("validating latency between autopilot rule states", func() {
-			for _, apRule := range pvcApRules {
-				aututils.CalculateTimeDifferenceBetweenAutopilotRuleStates(apRule.Name)
+		Step("Validte the Latency between each state in Aro Object ", func() {
+			log.InfoD("Validating the latency between each state in Aro Object")
+			for _, ctx := range contexts {
 
+				err := Inst().S.CalculateLatencyForAroStates(ctx.App.NameSpace)
+				Expect(err).NotTo(HaveOccurred())
 			}
+
 		})
 
 		Step("destroy apps", func() {
@@ -1213,6 +1216,8 @@ var _ = Describe(fmt.Sprintf("{%sEvents}", testSuiteName), func() {
 			for _, ctx := range contexts {
 				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
 				Expect(err).NotTo(HaveOccurred())
+				validateAroerr := Inst().S.CalculateLatencyForAroStates(ctx.App.NameSpace)
+				Expect(validateAroerr).NotTo(HaveOccurred())
 			}
 		})
 
@@ -1221,11 +1226,17 @@ var _ = Describe(fmt.Sprintf("{%sEvents}", testSuiteName), func() {
 				ValidateVolumes(ctx)
 				err := Inst().S.ValidateAutopilotEvents(ctx)
 				Expect(err).NotTo(HaveOccurred())
-				for _, apRule := range apRules {
-					aututils.CalculateTimeDifferenceBetweenAutopilotRuleStates(apRule.Name)
-				}
 
 			}
+		})
+		Step("Validte the Latency between each state in Aro Object ", func() {
+			log.InfoD("Validating the latency between each state in Aro Object")
+			for _, ctx := range contexts {
+
+				err := Inst().S.CalculateLatencyForAroStates(ctx.App.NameSpace)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
 		})
 
 		Step("destroy apps", func() {
@@ -1295,6 +1306,16 @@ var _ = Describe(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName), func() {
 
 		Step("validating and verifying size of storage pools", func() {
 			ValidateStoragePools(contexts)
+		})
+
+		Step("Validte the Latency between each state in Aro Object ", func() {
+			log.InfoD("Validating the latency between each state in Aro Object")
+			for _, ctx := range contexts {
+
+				err := Inst().S.CalculateLatencyForAroStates(ctx.App.NameSpace)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
 		})
 
 		Step("destroy apps", func() {
