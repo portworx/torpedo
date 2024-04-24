@@ -1199,6 +1199,16 @@ var _ = Describe(fmt.Sprintf("{%sEvents}", testSuiteName), func() {
 			}
 		})
 
+		Step("Validte the Latency between each state in Aro Object ", func() {
+			log.InfoD("Validating the latency between each state in Aro Object")
+			for _, ctx := range contexts {
+
+				err := Inst().S.CalculateLatencyForAroStates(ctx.App.NameSpace)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+		})
+
 		Step("destroy apps", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
