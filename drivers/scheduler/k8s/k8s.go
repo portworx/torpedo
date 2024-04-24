@@ -5508,35 +5508,15 @@ func (k *K8s) createVirtualMachineObjects(
 			}
 			log.Infof("Sleeping for 30 seconds to let data volume settle")
 			time.Sleep(30 * time.Second)
-			//vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace)
-			//if err != nil {
-			//	return nil, fmt.Errorf("failed to retrieve VM after creating/waiting for DataVolumes: %v", err)
-			//}
-			//// Check if the VM is in 'Running' phase.
-			//if !vm.Status.Ready {
-			//	return nil, fmt.Errorf("VM is not in the expected 'Running' state")
-			//}
 			vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, fmt.Errorf("failed to retrieve VM after creating/waiting for DataVolumes: %v", err)
 			}
+			// Check if the VM is in 'Running' phase.
+			if !vm.Status.Ready {
+				return nil, fmt.Errorf("VM is not in the expected 'Running' state")
+			}
 
-			t := func() (interface{}, bool, error) {
-				vm, err := k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace)
-				if err != nil {
-					return nil, true, fmt.Errorf("failed to retrieve VM: %v", err)
-				}
-				if !vm.Status.Ready {
-					return nil, true, fmt.Errorf("VM is not in the expected 'Running' state, current state: %s", vm.Status.PrintableStatus)
-				}
-				return vm, false, nil
-			}
-			retryTimeout := 5 * time.Minute
-			retryInterval := 30 * time.Second
-			_, retryErr := task.DoRetryWithTimeout(t, retryTimeout, retryInterval)
-			if retryErr != nil {
-				return nil, retryErr
-			}
 			return vm, nil
 		}
 	}
