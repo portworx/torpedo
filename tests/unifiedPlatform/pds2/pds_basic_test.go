@@ -21,10 +21,13 @@ import (
 var _ = BeforeSuite(func() {
 	PDS_DEFAULT_NAMESPACE = "pds-namespace-" + RandomString(5)
 	steplog := "Get prerequisite params to run platform tests"
+
 	log.InfoD(steplog)
 	Step(steplog, func() {
 		InitInstance()
 		dash = Inst().Dash
+		dash.TestSet.Product = "pds"
+		dash.TestSetBegin(dash.TestSet)
 		// Read pds params from the configmap
 		var err error
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
@@ -153,6 +156,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+	EndTorpedoTest()
 	//TODO: Steps to delete Backup location, Target and Bucket
 	// TODO: Add namespace cleanup once deployment cleanup cleans up the services too
 	//err := WorkflowNamespace.Purge()

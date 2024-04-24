@@ -150,7 +150,7 @@ var _ = Describe("{PlatformBasicTest}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPDSTorpedoTest()
 	})
 })
 
@@ -406,6 +406,6 @@ var _ = Describe("{PlatformRBACTest}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPDSTorpedoTest()
 	})
 })

@@ -7913,6 +7913,28 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	}
 }
 
+// EndPDSTorpedoTest ends the logging for PDS torpedo test and updates results in testrail
+func EndPDSTorpedoTest() {
+
+	// Creating empty contexts as no contexts are created during PDS test
+	contexts := make([]*scheduler.Context, 0)
+
+	defer func() {
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	}()
+	CloseLogger(TestLogger)
+	dash.TestCaseEnd()
+	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
+		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
+	}
+
+	currentSpecReport := ginkgo.CurrentSpecReport()
+	if currentSpecReport.Failed() {
+		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
+	}
+}
+
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
 	createdVolIDs := make(map[string]string)
 	defer wg.Done()

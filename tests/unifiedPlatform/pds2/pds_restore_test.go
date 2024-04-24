@@ -152,7 +152,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		log.FailOnError(err, "Data Service cleanup failed")
 		err = workflowDataservice.DeleteDeployment(workflowRestore.Restores[restoreName].Config.DestinationReferences.DeploymentId)
 		log.FailOnError(err, "Restored Data Service cleanup failed")
-		defer EndTorpedoTest()
+		defer EndPDSTorpedoTest()
 	})
 })
 
@@ -321,7 +321,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 		//err = destinationNamespace.Purge()
 		//log.FailOnError(err, "Destination namespace cleanup failed")
 
-		defer EndTorpedoTest()
+		defer EndPDSTorpedoTest()
 
 	})
 })
@@ -507,7 +507,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 		//log.FailOnError(err, "Destination namespace cleanup failed")
 		err = destinationProject.DeleteProject()
 		log.FailOnError(err, "Destination Project cleanup failed")
-		defer EndTorpedoTest()
+		defer EndPDSTorpedoTest()
 	})
 
 })
