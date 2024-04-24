@@ -38,7 +38,7 @@ var _ = Describe("{TestDhruv}", func() {
 		Inst().AppList = []string{"kubevirt-debian-template"}
 		stepLog := "Setting up Boot PVC Template"
 		Step(stepLog, func() {
-			template := ScheduleApplications("TemplateCreation")
+			template := ScheduleApplications("template")
 			ValidateApplications(template)
 		})
 		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
