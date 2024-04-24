@@ -431,15 +431,15 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 		workflowDataservice  pds.WorkflowDataService
 		workFlowTemplates    pds.WorkflowPDSTemplates
 		workflowBackUpConfig pds.WorkflowPDSBackupConfig
-		workflowRestore      pds.WorkflowPDSRestore
-		deployment           *automationModels.PDSDeploymentResponse
-		updatedDeployment    *automationModels.PDSDeploymentResponse
-		restoreDeployment    *automationModels.PDSRestoreResponse
-		bkpConfigResponse    *automationModels.PDSBackupConfigResponse
-		pdsBackupConfigName  string
-		oldDeploymentId      string
-		newDeploymentId      string
-		err                  error
+		//workflowRestore      pds.WorkflowPDSRestore
+		deployment        *automationModels.PDSDeploymentResponse
+		updatedDeployment *automationModels.PDSDeploymentResponse
+		//restoreDeployment    *automationModels.PDSRestoreResponse
+		bkpConfigResponse   *automationModels.PDSBackupConfigResponse
+		pdsBackupConfigName string
+		oldDeploymentId     string
+		newDeploymentId     string
+		err                 error
 	)
 
 	It("Deploy and Validate DataService", func() {
@@ -518,12 +518,12 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 
 	It("Restore the old deployment and upgrade the restored deployment", func() {
 
-		defer func() {
-			Step("Delete RestoredDeployment", func() {
-				err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
-				log.FailOnError(err, "Error while deleting restore")
-			})
-		}()
+		//defer func() {
+		//	Step("Delete RestoredDeployment", func() {
+		//		err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
+		//		log.FailOnError(err, "Error while deleting restore")
+		//	})
+		//}()
 
 		Step("Update restored DataService Version and Image", func() {
 			for _, ds := range NewPdsParams.DataServiceToTest {
@@ -552,9 +552,9 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 	var (
 		workflowDataService  pds.WorkflowDataService
 		workflowBackUpConfig pds.WorkflowPDSBackupConfig
-		workflowRestore      pds.WorkflowPDSRestore
-		deployment           *automationModels.PDSDeploymentResponse
-		restoreDeployment    *automationModels.PDSRestoreResponse
+		//workflowRestore      pds.WorkflowPDSRestore
+		deployment        *automationModels.PDSDeploymentResponse
+		restoreDeployment *automationModels.PDSRestoreResponse
 
 		workFlowTemplates pds.WorkflowPDSTemplates
 		tempList          []string
@@ -640,12 +640,12 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 		//	log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
 		//})
 
-		defer func() {
-			Step("Delete RestoredDeployment", func() {
-				err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
-				log.FailOnError(err, "Error while deleting restore")
-			})
-		}()
+		//defer func() {
+		//	Step("Delete RestoredDeployment", func() {
+		//		err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
+		//		log.FailOnError(err, "Error while deleting restore")
+		//	})
+		//}()
 
 		Step("Validate md5hash for the restored deployments", func() {
 			err := workflowDataService.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)
@@ -705,12 +705,12 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 		//	log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
 		//})
 
-		defer func() {
-			Step("Delete RestoredDeployment", func() {
-				err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
-				log.FailOnError(err, "Error while deleting restore")
-			})
-		}()
+		//defer func() {
+		//	Step("Delete RestoredDeployment", func() {
+		//		err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
+		//		log.FailOnError(err, "Error while deleting restore")
+		//	})
+		//}()
 
 		Step("Validate md5hash for the restored deployments", func() {
 			err := workflowDataService.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)
@@ -807,12 +807,12 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
 		})
 
-		defer func() {
-			Step("Delete RestoredDeployment", func() {
-				err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
-				log.FailOnError(err, "Error while deleting restore")
-			})
-		}()
+		//defer func() {
+		//	Step("Delete RestoredDeployment", func() {
+		//		err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
+		//		log.FailOnError(err, "Error while deleting restore")
+		//	})
+		//}()
 
 		Step("Validate md5hash for the restored deployments", func() {
 			err := workflowDataservice.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)
@@ -867,12 +867,12 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
 		})
 
-		defer func() {
-			Step("Delete RestoredDeployment", func() {
-				err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
-				log.FailOnError(err, "Error while deleting restore")
-			})
-		}()
+		//defer func() {
+		//	Step("Delete RestoredDeployment", func() {
+		//		err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
+		//		log.FailOnError(err, "Error while deleting restore")
+		//	})
+		//}()
 
 		Step("Validate md5hash for the restored deployments", func() {
 			err := workflowDataservice.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)
@@ -993,12 +993,12 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 			})
 		}()
 
-		defer func() {
-			Step("Delete RestoredDeployment", func() {
-				err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
-				log.FailOnError(err, "Error while deleting restore")
-			})
-		}()
+		//defer func() {
+		//	Step("Delete RestoredDeployment", func() {
+		//		err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
+		//		log.FailOnError(err, "Error while deleting restore")
+		//	})
+		//}()
 
 		Step("Validate md5hash for the restored deployments", func() {
 			err := workflowDataservice.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)

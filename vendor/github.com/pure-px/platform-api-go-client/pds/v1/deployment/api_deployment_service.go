@@ -147,6 +147,13 @@ type ApiDeploymentServiceDeleteDeploymentRequest struct {
 	ctx context.Context
 	ApiService *DeploymentServiceAPIService
 	id string
+	force *bool
+}
+
+// Force flag to delete backup configuration from control plane only.
+func (r ApiDeploymentServiceDeleteDeploymentRequest) Force(force bool) ApiDeploymentServiceDeleteDeploymentRequest {
+	r.force = &force
+	return r
 }
 
 func (r ApiDeploymentServiceDeleteDeploymentRequest) Execute() (map[string]interface{}, *http.Response, error) {
@@ -190,6 +197,9 @@ func (a *DeploymentServiceAPIService) DeploymentServiceDeleteDeploymentExecute(r
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.force != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "force", r.force, "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 
@@ -473,7 +483,6 @@ func (a *DeploymentServiceAPIService) DeploymentServiceGetDeploymentCredentialsE
 type ApiDeploymentServiceListDeploymentsRequest struct {
 	ctx context.Context
 	ApiService *DeploymentServiceAPIService
-	accountId *string
 	tenantId *string
 	clusterId *string
 	namespaceId *string
@@ -482,12 +491,6 @@ type ApiDeploymentServiceListDeploymentsRequest struct {
 	paginationPageSize *string
 	sortSortBy *string
 	sortSortOrder *string
-}
-
-// UID of the account.
-func (r ApiDeploymentServiceListDeploymentsRequest) AccountId(accountId string) ApiDeploymentServiceListDeploymentsRequest {
-	r.accountId = &accountId
-	return r
 }
 
 // UID of the tenant.
@@ -576,9 +579,6 @@ func (a *DeploymentServiceAPIService) DeploymentServiceListDeploymentsExecute(r 
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
-	if r.accountId != nil {
-		parameterAddToHeaderOrQuery(localVarQueryParams, "accountId", r.accountId, "")
-	}
 	if r.tenantId != nil {
 		parameterAddToHeaderOrQuery(localVarQueryParams, "tenantId", r.tenantId, "")
 	}
@@ -626,127 +626,6 @@ func (a *DeploymentServiceAPIService) DeploymentServiceListDeploymentsExecute(r 
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
-	if err != nil {
-		return localVarReturnValue, nil, err
-	}
-
-	localVarHTTPResponse, err := a.client.callAPI(req)
-	if err != nil || localVarHTTPResponse == nil {
-		return localVarReturnValue, localVarHTTPResponse, err
-	}
-
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
-	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
-	if err != nil {
-		return localVarReturnValue, localVarHTTPResponse, err
-	}
-
-	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
-			body:  localVarBody,
-			error: localVarHTTPResponse.Status,
-		}
-			var v GooglerpcStatus
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
-		return localVarReturnValue, localVarHTTPResponse, newErr
-	}
-
-	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-	if err != nil {
-		newErr := &GenericOpenAPIError{
-			body:  localVarBody,
-			error: err.Error(),
-		}
-		return localVarReturnValue, localVarHTTPResponse, newErr
-	}
-
-	return localVarReturnValue, localVarHTTPResponse, nil
-}
-
-type ApiDeploymentServiceUpdateDeploymentRequest struct {
-	ctx context.Context
-	ApiService *DeploymentServiceAPIService
-	deploymentMetaUid string
-	deploymentResource *DeploymentResource
-}
-
-// Deployment resource.
-func (r ApiDeploymentServiceUpdateDeploymentRequest) DeploymentResource(deploymentResource DeploymentResource) ApiDeploymentServiceUpdateDeploymentRequest {
-	r.deploymentResource = &deploymentResource
-	return r
-}
-
-func (r ApiDeploymentServiceUpdateDeploymentRequest) Execute() (*V1Deployment, *http.Response, error) {
-	return r.ApiService.DeploymentServiceUpdateDeploymentExecute(r)
-}
-
-/*
-DeploymentServiceUpdateDeployment UpdateDeployment API updates the Deployment resource.
-
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @param deploymentMetaUid UID of the resource of the format <resource prefix>-<uuid>.
- @return ApiDeploymentServiceUpdateDeploymentRequest
-*/
-func (a *DeploymentServiceAPIService) DeploymentServiceUpdateDeployment(ctx context.Context, deploymentMetaUid string) ApiDeploymentServiceUpdateDeploymentRequest {
-	return ApiDeploymentServiceUpdateDeploymentRequest{
-		ApiService: a,
-		ctx: ctx,
-		deploymentMetaUid: deploymentMetaUid,
-	}
-}
-
-// Execute executes the request
-//  @return V1Deployment
-func (a *DeploymentServiceAPIService) DeploymentServiceUpdateDeploymentExecute(r ApiDeploymentServiceUpdateDeploymentRequest) (*V1Deployment, *http.Response, error) {
-	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *V1Deployment
-	)
-
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DeploymentServiceAPIService.DeploymentServiceUpdateDeployment")
-	if err != nil {
-		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
-	}
-
-	localVarPath := localBasePath + "/pds/v1/deployments/{deployment.meta.uid}"
-	localVarPath = strings.Replace(localVarPath, "{"+"deployment.meta.uid"+"}", url.PathEscape(parameterValueToString(r.deploymentMetaUid, "deploymentMetaUid")), -1)
-
-	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
-	if r.deploymentResource == nil {
-		return localVarReturnValue, nil, reportError("deploymentResource is required and must be specified")
-	}
-
-	// to determine the Content-Type header
-	localVarHTTPContentTypes := []string{"application/json"}
-
-	// set Content-Type header
-	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
-	if localVarHTTPContentType != "" {
-		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
-	}
-
-	// to determine the Accept header
-	localVarHTTPHeaderAccepts := []string{"application/json"}
-
-	// set Accept header
-	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
-	if localVarHTTPHeaderAccept != "" {
-		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
-	}
-	// body params
-	localVarPostBody = r.deploymentResource
 	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
 	if err != nil {
 		return localVarReturnValue, nil, err

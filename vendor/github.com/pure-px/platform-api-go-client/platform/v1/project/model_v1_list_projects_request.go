@@ -21,7 +21,7 @@ var _ MappedNullable = &V1ListProjectsRequest{}
 type V1ListProjectsRequest struct {
 	// Tenant id for which projects to be listed.
 	TenantId *string `json:"tenantId,omitempty"`
-	ResourceSelector *V1ResourceSelector `json:"resourceSelector,omitempty"`
+	InfraResourceSelector *V1ResourceSelector `json:"infraResourceSelector,omitempty"`
 	LabelSelector *V1Selector `json:"labelSelector,omitempty"`
 	FieldSelector *V1Selector `json:"fieldSelector,omitempty"`
 	RespData *V1RespData `json:"respData,omitempty"`
@@ -82,36 +82,36 @@ func (o *V1ListProjectsRequest) SetTenantId(v string) {
 	o.TenantId = &v
 }
 
-// GetResourceSelector returns the ResourceSelector field value if set, zero value otherwise.
-func (o *V1ListProjectsRequest) GetResourceSelector() V1ResourceSelector {
-	if o == nil || IsNil(o.ResourceSelector) {
+// GetInfraResourceSelector returns the InfraResourceSelector field value if set, zero value otherwise.
+func (o *V1ListProjectsRequest) GetInfraResourceSelector() V1ResourceSelector {
+	if o == nil || IsNil(o.InfraResourceSelector) {
 		var ret V1ResourceSelector
 		return ret
 	}
-	return *o.ResourceSelector
+	return *o.InfraResourceSelector
 }
 
-// GetResourceSelectorOk returns a tuple with the ResourceSelector field value if set, nil otherwise
+// GetInfraResourceSelectorOk returns a tuple with the InfraResourceSelector field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *V1ListProjectsRequest) GetResourceSelectorOk() (*V1ResourceSelector, bool) {
-	if o == nil || IsNil(o.ResourceSelector) {
+func (o *V1ListProjectsRequest) GetInfraResourceSelectorOk() (*V1ResourceSelector, bool) {
+	if o == nil || IsNil(o.InfraResourceSelector) {
 		return nil, false
 	}
-	return o.ResourceSelector, true
+	return o.InfraResourceSelector, true
 }
 
-// HasResourceSelector returns a boolean if a field has been set.
-func (o *V1ListProjectsRequest) HasResourceSelector() bool {
-	if o != nil && !IsNil(o.ResourceSelector) {
+// HasInfraResourceSelector returns a boolean if a field has been set.
+func (o *V1ListProjectsRequest) HasInfraResourceSelector() bool {
+	if o != nil && !IsNil(o.InfraResourceSelector) {
 		return true
 	}
 
 	return false
 }
 
-// SetResourceSelector gets a reference to the given V1ResourceSelector and assigns it to the ResourceSelector field.
-func (o *V1ListProjectsRequest) SetResourceSelector(v V1ResourceSelector) {
-	o.ResourceSelector = &v
+// SetInfraResourceSelector gets a reference to the given V1ResourceSelector and assigns it to the InfraResourceSelector field.
+func (o *V1ListProjectsRequest) SetInfraResourceSelector(v V1ResourceSelector) {
+	o.InfraResourceSelector = &v
 }
 
 // GetLabelSelector returns the LabelSelector field value if set, zero value otherwise.
@@ -287,8 +287,8 @@ func (o V1ListProjectsRequest) ToMap() (map[string]interface{}, error) {
 	if !IsNil(o.TenantId) {
 		toSerialize["tenantId"] = o.TenantId
 	}
-	if !IsNil(o.ResourceSelector) {
-		toSerialize["resourceSelector"] = o.ResourceSelector
+	if !IsNil(o.InfraResourceSelector) {
+		toSerialize["infraResourceSelector"] = o.InfraResourceSelector
 	}
 	if !IsNil(o.LabelSelector) {
 		toSerialize["labelSelector"] = o.LabelSelector
