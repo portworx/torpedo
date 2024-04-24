@@ -2,8 +2,14 @@ package tests
 
 import (
 	"fmt"
+
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
+<<<<<<< HEAD
+=======
+	"github.com/sirupsen/logrus"
+
+>>>>>>> [PWX-37026] Adding FBDAMultiTenancyBasicTest
 	"math/rand"
 	"sort"
 	"strconv"
@@ -2808,5 +2814,73 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+	})
+})
+
+/*
+This test deploys app with FBDA volume having storageClass with pure_nfs_endpoint parameter.
+It validates that FBDA volume gets consumed over IP mentioned in `pure_nfs_endpoint` parameter of storageClass.
+*/
+var _ = Describe("{FBDAMultiTenancyBasicTest}", func() {
+	var contexts []*scheduler.Context
+	var testName string
+	var customConfigAppName string
+
+	testName = "fbda-multitenancy"
+	JustBeforeEach(func() {
+		StartTorpedoTest("FBDAMultiTenancyBasicTest", "Validate FBDA vols get consumed over IP mentioned in `pure_nfs_endpoint` parameter of storageClass", nil, 0)
+		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
+
+		logrus.Infof("Using CustomAppConfig: %+v", Inst().CustomAppConfig)
+		contexts = ScheduleApplications(testName)
+		ValidateApplicationsPureSDK(contexts)
+		// Skip the test if we don't find any of our apps
+		for appName := range Inst().CustomAppConfig {
+			found := false
+			for _, ctx := range contexts {
+				if ctx.App.Key == appName {
+					found = true
+					customConfigAppName = appName
+					break
+				}
+			}
+			if !found {
+				logrus.Warnf("App %v not found in %d contexts, skipping test", appName, len(contexts))
+				Skip(fmt.Sprintf("app %v not found", appName))
+			}
+		}
+	})
+
+	When("pure_nfs_endpoint parameter specified in storageClass", func() {
+		It("should create a FBDA volume over pure_nfs_endpoint mentioned in storageClass", func() {
+			ctx := findContext(contexts, customConfigAppName)
+
+			vols, err := Inst().S.GetVolumes(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(vols)).To(Not(BeZero()))
+
+			expectedPureNfsEndpoint := Inst().CustomAppConfig[customConfigAppName].StorageClassPureNfsEndpoint
+
+			for _, vol := range vols {
+				apiVol, err := Inst().V.InspectVolume(vol.ID)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Validate the volume is created over the NFS endpoint mentioned in storageClass
+				Expect(apiVol.Spec.ProxySpec.PureFileSpec.NfsEndpoint).To(Equal(expectedPureNfsEndpoint), "FBDA volume is not using NFS endpoint mentioned in storageClass.")
+			}
+		})
+
+		JustAfterEach(func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+			Step("delete credential used for cloudsnap", deleteCloudsnapCredential)
+
+			defer EndTorpedoTest()
+			AfterEachTest(contexts)
+		})
 	})
 })
