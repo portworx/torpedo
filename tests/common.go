@@ -7855,6 +7855,14 @@ func StartPxBackupTorpedoTest(testName string, testDescription string, tags map[
 	StartTorpedoTest(testName, testDescription, tags, testRepoID)
 }
 
+// StartPxBackupTorpedoTest starts the logging for Px Backup torpedo test
+func StartPDSTorpedoTest(testName string, testDescription string, tags map[string]string, testRepoID int) {
+	instanceIDString := strconv.Itoa(testRepoID)
+	timestamp := time.Now().Format("01-02-15h04m05s")
+	Inst().InstanceID = fmt.Sprintf("%s-%s", instanceIDString, timestamp)
+	StartTorpedoTest(testName, testDescription, tags, testRepoID)
+}
+
 // EndPxBackupTorpedoTest ends the logging for Px Backup torpedo test and updates results in testrail
 func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	defer func() {
