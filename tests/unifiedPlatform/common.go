@@ -2,13 +2,22 @@ package tests
 
 import (
 	"encoding/json"
+	"fmt"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	. "github.com/portworx/torpedo/tests"
 	"io/ioutil"
 	"path/filepath"
+	"strconv"
+	"time"
 )
+
+var dash *aetosutil.Dashboard
 
 const (
 	EnvControlPlaneUrl     = "CONTROL_PLANE_URL"
@@ -81,4 +90,34 @@ func ReadNewParams(filename string) (*parameters.NewPDSParams, error) {
 		}
 	}
 	return &jsonPara, nil
+}
+
+// EndPDSTorpedoTest ends the logging for PDS torpedo test and updates results in testrail
+func EndPDSTorpedoTest() {
+
+	// Creating empty contexts as no contexts are created during PDS test
+	contexts := make([]*scheduler.Context, 0)
+
+	defer func() {
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	}()
+	CloseLogger(TestLogger)
+	Inst().Dash.TestCaseEnd()
+	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
+		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
+	}
+
+	currentSpecReport := ginkgo.CurrentSpecReport()
+	if currentSpecReport.Failed() {
+		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
+	}
+}
+
+// StartPDSTorpedoTest starts the logging for PDS torpedo test
+func StartPDSTorpedoTest(testName string, testDescription string, tags map[string]string, testRepoID int) {
+	instanceIDString := strconv.Itoa(testRepoID)
+	timestamp := time.Now().Format("01-02-15h04m05s")
+	Inst().InstanceID = fmt.Sprintf("%s-%s", instanceIDString, timestamp)
+	StartTorpedoTest(testName, testDescription, tags, testRepoID)
 }

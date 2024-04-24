@@ -7855,14 +7855,6 @@ func StartPxBackupTorpedoTest(testName string, testDescription string, tags map[
 	StartTorpedoTest(testName, testDescription, tags, testRepoID)
 }
 
-// StartPxBackupTorpedoTest starts the logging for Px Backup torpedo test
-func StartPDSTorpedoTest(testName string, testDescription string, tags map[string]string, testRepoID int) {
-	instanceIDString := strconv.Itoa(testRepoID)
-	timestamp := time.Now().Format("01-02-15h04m05s")
-	Inst().InstanceID = fmt.Sprintf("%s-%s", instanceIDString, timestamp)
-	StartTorpedoTest(testName, testDescription, tags, testRepoID)
-}
-
 // EndPxBackupTorpedoTest ends the logging for Px Backup torpedo test and updates results in testrail
 func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	defer func() {
@@ -7918,28 +7910,6 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		collectStorkLogs(testCaseName)
 		collectPxBackupLogs(testCaseName)
 		compressSubDirectories(pxbLogDirPath)
-	}
-}
-
-// EndPDSTorpedoTest ends the logging for PDS torpedo test and updates results in testrail
-func EndPDSTorpedoTest() {
-
-	// Creating empty contexts as no contexts are created during PDS test
-	contexts := make([]*scheduler.Context, 0)
-
-	defer func() {
-		err := SetSourceKubeConfig()
-		log.FailOnError(err, "failed to switch context to source cluster")
-	}()
-	CloseLogger(TestLogger)
-	dash.TestCaseEnd()
-	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
-		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
-	}
-
-	currentSpecReport := ginkgo.CurrentSpecReport()
-	if currentSpecReport.Failed() {
-		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 	}
 }
 
