@@ -2,17 +2,9 @@ package tests
 
 import (
 	"fmt"
-	"os"
-	"strconv"
-	"strings"
-	"testing"
-	"time"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	_ "github.com/portworx/px-backup-api/pkg/kubeauth/gcp"
-	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -21,6 +13,10 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/s3utils"
 	. "github.com/portworx/torpedo/tests"
+	"os"
+	"strconv"
+	"strings"
+	"testing"
 )
 
 func getBucketNameSuffix() string {
@@ -238,7 +234,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	StartTorpedoTest("Environment cleanup", "Removing Px-Backup entities created during the test execution", nil, 0)
+	/*StartTorpedoTest("Environment cleanup", "Removing Px-Backup entities created during the test execution", nil, 0)
 	defer dash.TestSetEnd()
 	defer EndTorpedoTest()
 
@@ -417,7 +413,7 @@ var _ = AfterSuite(func() {
 				log.Infof("Group %s was not deleted", group.Name)
 			}
 		}
-	}
+	}*/
 })
 
 func TestMain(m *testing.M) {
