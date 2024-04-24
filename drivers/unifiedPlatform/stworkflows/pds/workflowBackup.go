@@ -32,7 +32,11 @@ func (backup WorkflowPDSBackup) GetLatestBackup(deploymentName string) (automati
 		return latestBackup, err
 	}
 
-	latestBackup = allBackups.List.Backups[0]
+	if len(allBackups.List.Backups) > 0 {
+		latestBackup = allBackups.List.Backups[0]
+	} else {
+		return latestBackup, fmt.Errorf("No backups found for backup config")
+	}
 
 	return latestBackup, nil
 }

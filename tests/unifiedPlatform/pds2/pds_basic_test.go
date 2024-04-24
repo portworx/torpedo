@@ -35,7 +35,7 @@ var _ = BeforeSuite(func() {
 
 		log.InfoD("Get Account ID")
 		//TODO: Get the accountID
-		AccID = "acc:e0886df7-aa22-4090-a6ea-9f08a0097f99"
+		AccID = "acc:8b6e5023-2ec9-474f-acda-7ab662987409"
 
 		err = platformUtils.InitUnifiedApiComponents(os.Getenv(EnvControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
