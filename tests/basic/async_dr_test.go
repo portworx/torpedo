@@ -39,14 +39,16 @@ const (
 	metromigrationKey = "metro-dr-"
 )
 
+var (
+	kubeConfigWritten bool
+)
+
+
 // This test performs basic test of starting an application, creating cluster pair,
 // and migrating application to the destination clsuter
 var _ = Describe("{MigrateDeployment}", func() {
-	var testrailID = 50803
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35258
-	var runID int
-
-	var kubeConfigWritten bool
+	testrailID = 50803
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/50803
 	BeforeEach(func() {
 		if !kubeConfigWritten {
 			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
@@ -154,10 +156,8 @@ var _ = Describe("{MigrateDeployment}", func() {
 })
 
 var _ = Describe("{MigrateDeploymentMetroAsync}", func() {
-	var testrailID = 297595
+	testrailID = 297595
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/297595
-	var runID int
-	var kubeConfigWritten bool
 	BeforeEach(func() {
 		if !kubeConfigWritten {
 			// Write kubeconfig files after reading from the config maps created by torpedo deploy script

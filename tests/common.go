@@ -24,32 +24,8 @@ import (
 	"sync"
 	"time"
 	context1 "context"
-	// import ssh driver to invoke it's init
-	// import backup driver to invoke it's init
-	// import aws driver to invoke it's init
-	// import vsphere driver to invoke it's init
-	// import ibm driver to invoke it's init
-	// import oracle driver to invoke it's init
-	// import ssh driver to invoke it's init
-	// import scheduler drivers to invoke it's init
-	// import ocp scheduler driver to invoke it's init
-	// import aks scheduler driver to invoke it's init
-	// import scheduler drivers to invoke it's init
-	// import gke scheduler driver to invoke it's init
-	// import rke scheduler drivers to invoke it's init
-	// import portworx driver to invoke it's init
-	// import gce driver to invoke it's init
-	// import aws driver to invoke it's init
-	// import azure driver to invoke it's init
-	// import generic csi driver to invoke it's init
-	// import driver to invoke it's init
-	// import driver to invoke it's init
-	// import scheduler drivers to invoke it's init
-	// import pso driver to invoke it's init
-	// import ibm driver to invoke it's init
-	// import scheduler drivers to invoke it's init
-	// import ocp driver to invoke it's init
 
+	rest "k8s.io/client-go/rest"
 	"github.com/Masterminds/semver/v3"
 	"github.com/hashicorp/go-version"
 	pxapi "github.com/libopenstorage/operator/api/px"
@@ -137,36 +113,81 @@ import (
 	"github.com/portworx/torpedo/pkg/stats"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/portworx/torpedo/pkg/units"
+
+	// import ssh driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/node/ssh"
+
+	// import backup driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/backup/portworx"
+	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aws"
+	// import vsphere driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/vsphere"
+	// import ibm driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/node/ibm"
 	_ "github.com/portworx/torpedo/drivers/node/ibm"
+
+	// import oracle driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/oracle"
+
+	// import ssh driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
+
+	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+
+	// import ocp scheduler driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
+
+	// import aks scheduler driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/aks"
+
+	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/eks"
+
+	// import gke scheduler driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
+
 	_ "github.com/portworx/torpedo/drivers/scheduler/oke"
+
+	// import rke scheduler drivers to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/rke"
+
+	// import portworx driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
+	// import gce driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/gce"
+	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/aws"
+	// import azure driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/azure"
+
+	// import generic csi driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
+
+	// import driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/monitor/prometheus"
+
+	// import driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/pds/dataservice"
+
+	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/anthos"
+
+	// import pso driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/pso"
+
+	// import ibm driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ibm"
+
+	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/iks"
+
+	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
 )
 
@@ -3771,10 +3792,10 @@ func CreateClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig 
 	return addStorageOptions(pairInfo, clusterPairFileName)
 }
 
-func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string, mode string, sourceCluster int, destCluster int) error {
+func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string, mode string, sourceCluster int, destCluster int) (err error) {
 	//var token string
 	// Setting kubeconfig to source because we will create bidirectional cluster pair based on source as reference
-	err := SetCustomKubeConfig(sourceCluster)
+	err = SetCustomKubeConfig(sourceCluster)
 	if err != nil {
 		return err
 	}
@@ -3793,16 +3814,19 @@ func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	}
 
 	srcKubeConfigPath, err := GetCustomClusterConfigPath(sourceCluster)
+	if err != nil {
+	    return fmt.Errorf("Failed to get config path for source cluster")
+        }
 
-	defer func() error {
-		config, err := clientcmd.BuildConfigFromFlags("", srcKubeConfigPath)
+	defer func() {
+		var config *rest.Config
+		config, err = clientcmd.BuildConfigFromFlags("", srcKubeConfigPath)
 		if err != nil {
-			return err
+			return
 		}
 		core.Instance().SetConfig(config)
 		apps.Instance().SetConfig(config)
 		stork.Instance().SetConfig(config)
-		return nil
 	}()
 
 	err = SetCustomKubeConfig(destCluster)
@@ -3824,6 +3848,9 @@ func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	}
 
 	destKubeConfigPath, err := GetCustomClusterConfigPath(destCluster)
+	if err != nil {
+            return fmt.Errorf("Failed to get config path for destination cluster")
+        }
 
 	err = SetCustomKubeConfig(sourceCluster)
 	if err != nil {
