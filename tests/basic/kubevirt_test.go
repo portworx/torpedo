@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
@@ -41,43 +42,55 @@ var _ = Describe("{TestDhruv}", func() {
 			template := ScheduleApplications("template")
 			ValidateApplications(template)
 		})
-		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
-		stepLog = "schedule a kubevirtVM"
-		Step(stepLog, func() {
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
-			}
-		})
-		ValidateApplications(appCtxs)
-		for _, appCtx := range appCtxs {
-			bindMount, err := IsVMBindMounted(appCtx, false)
-			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
-		}
-		stepLog = "Add one disk to the kubevirt VM"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			_, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
-			log.FailOnError(err, "Failed to add disks to kubevirt VM")
-			dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
-		})
+		// Start parallel execution
+		var wg sync.WaitGroup
+		for i := 0; i < 3; i++ {
+			wg.Add(1)
+			go func(namespace string) {
+				defer wg.Done()
+				localAppCtxs := []*scheduler.Context{}
+				Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+				stepLog = "schedule a kubevirtVM"
+				Step(stepLog, func() {
+					localAppCtxs = append(localAppCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+				})
+				ValidateApplications(localAppCtxs)
 
-		stepLog = "Verify the new disk added is also bind mounted"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			for _, appCtx := range appCtxs {
-				isVmBindMounted, err := IsVMBindMounted(appCtx, true)
-				log.FailOnError(err, "Failed to verify disks in kubevirt VM")
-				if !isVmBindMounted {
-					log.Errorf("The newly added disk to vm %s is not bind mounted", appCtx.App.Key)
+				for _, appCtx := range localAppCtxs {
+					bindMount, err := IsVMBindMounted(appCtx, false)
+					log.FailOnError(err, "Failed to verify bind mount")
+					dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 				}
-			}
-		})
-		stepLog = "Destroy Applications"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			DestroyApps(appCtxs, nil)
-		})
+
+				stepLog = "Add one disk to the kubevirt VM"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					_, err := AddDisksToKubevirtVM(localAppCtxs, numberOfVolumes, "10Gi")
+					log.FailOnError(err, "Failed to add disks to kubevirt VM")
+					dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
+				})
+
+				stepLog = "Verify the new disk added is also bind mounted"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					for _, appCtx := range localAppCtxs {
+						isVmBindMounted, err := IsVMBindMounted(appCtx, true)
+						log.FailOnError(err, "Failed to verify disks in kubevirt VM")
+						if !isVmBindMounted {
+							log.Errorf("The newly added disk to vm %s is not bind mounted", appCtx.App.Key)
+						}
+					}
+				})
+
+				stepLog = "Destroy Applications"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					DestroyApps(localAppCtxs, nil)
+				})
+			}(fmt.Sprintf("%s-%d", namespace, i)) // Pass a unique namespace for each goroutine
+		}
+		// Wait for all goroutines to finish
+		wg.Wait()
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
