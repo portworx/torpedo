@@ -178,6 +178,15 @@ func DeleteK8sPods(pod string, namespace string, kubeConfigPath string) error {
 	return nil
 }
 
+func DeleteK8sPod(podName, namespace string, force bool) error {
+	log.Debug("DeleteK8sMethod is called ")
+	err := k8sCores.DeletePod(podName, namespace, force)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetPods returns the list of pods in namespace
 func GetPods(namespace string) (*corev1.PodList, error) {
 	podList, err := k8sCores.GetPods(namespace, nil)

@@ -29,6 +29,7 @@ const (
 	ValidatePdsWorkloads       = "VALIDATE_PDS_WORKLOADS"
 	PlatformNamespace          = "px-system"
 	ValidateDeploymentDeletion = "VALIDATE_DELETE_DEPLOYMENT"
+	PDS_DEPLOYMENT_AVAILABLE   = "AVAILABLE"
 )
 
 func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService, image, version string) (*automationModels.PDSDeploymentResponse, error) {
@@ -105,7 +106,7 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(deploymentId string, ds dslibs.PDSDataService, replicas int, resConfigId, stConfigId, namespace, version, image string) error {
 
 	// Validate the sts object and health of the pds deployment
-	err := dslibs.ValidateDataServiceDeploymentHealth(deploymentId)
+	err := dslibs.ValidateDataServiceDeploymentHealth(deploymentId, PDS_DEPLOYMENT_AVAILABLE)
 	if err != nil {
 		return err
 	}

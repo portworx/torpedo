@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	pds "github.com/portworx/torpedo/drivers/pds/dataservice"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/pkg/log"
 	"google.golang.org/grpc"
@@ -16,9 +17,8 @@ import (
 )
 
 const (
-	PDS_DEPLOYMENT_AVAILABLE = "AVAILABLE"
-	CRGroup                  = "deployments.pds.portworx.com"
-	Version                  = "v1"
+	CRGroup = "deployments.pds.portworx.com"
+	Version = "v1"
 )
 
 // GetDeploymentConfigurations returns the deployment CRObject response
@@ -115,22 +115,33 @@ func GetStorageTemplateConfigs(storageTemplateID string) (StorageOps, error) {
 }
 
 // ValidateDataServiceDeploymentHealth takes the deployment map(name and id), namespace and returns error
-func ValidateDataServiceDeploymentHealth(deploymentId string) error {
+func ValidateDataServiceDeploymentHealth(deploymentId string, expectedHealth automationModels.V1StatusHealth) error {
 	log.Infof("DeploymentId [%s]", deploymentId)
-	err = wait.Poll(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
+	conditionError := wait.Poll(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
 		res, err := v2Components.PDS.GetDeployment(deploymentId)
 		if err != nil {
 			log.Errorf("Error occured while getting deployment status %v", err)
 			return false, nil
 		}
 		log.Debugf("Health status -  %v", *res.Get.Status.Health)
-		if *res.Get.Config.DeploymentTopologies[0].Replicas != *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas || *res.Get.Status.Health != PDS_DEPLOYMENT_AVAILABLE {
-			return false, nil
+		if *res.Get.Status.Health == expectedHealth {
+			log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Replicas, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
+			if ResiFlag {
+				ResiliencyCondition <- true
+				log.InfoD("Resiliency Condition Met")
+			}
+			return true, nil
 		}
-		log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Replicas, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
-		return true, nil
+		log.Infof("Condition still not met. Will retry to see if it has met now.....")
+		return false, nil
 	})
-	return err
+	if conditionError != nil {
+		if ResiliencyFlag {
+			ResiliencyCondition <- false
+			CapturedErrors <- conditionError
+		}
+	}
+	return conditionError
 }
 
 // ValidateDeploymentIsDeleted checks if deployment is deleted
