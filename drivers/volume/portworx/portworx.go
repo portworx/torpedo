@@ -738,10 +738,12 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 		for _, pxNode := range pxNodes {
 			//log.Debugf("Checking PX node %+v for address %s", pxNode, address) // NOTE: Do we really need to print the whole node?
 			log.Debugf("Checking PX node [%s] for address [%s]", pxNode.Hostname, address)
+			log.Debugf("PX Node ID for node [%s] is [%s]", pxNode.Hostname, pxNode.Id)
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.SchedulerNodeName {
 				if len(pxNode.Id) > 0 {
 					n.StorageNode = pxNode
 					n.VolDriverNodeID = pxNode.Id
+					log.Debugf("Node ID for node [%s] is [%s]", n.Name, n.VolDriverNodeID)
 					n.IsStorageDriverInstalled = isPX
 					// TODO: PTX-2445 Replace isMetadataNode API call with SDK call
 					isMetadataNode, err := d.isMetadataNode(*n, address)
