@@ -22,6 +22,7 @@ type WorkflowDataService struct {
 	SourceDeploymentMd5Hash       map[string]string
 	RestoredDeploymentMd5Hash     map[string]string
 	Dash                          *aetosutil.Dashboard
+	ValidateStorageIncrease       dslibs.ValidateStorageIncrease
 }
 
 const (
@@ -307,8 +308,9 @@ func (wfDataService *WorkflowDataService) ValidateDeploymentResources(resourceTe
 	wfDataService.Dash.VerifyFatal(dataServiceVersionBuild, config.Spec.Version, "Validating ds version")
 }
 
-func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string, deployment string, sizeInGb uint64) error {
-	_, err := utils.IncreasePVCby1Gig(namespace, deployment, sizeInGb)
+
+func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string, deploymentName string, sizeInGb uint64) error {
+	_, err := utils.IncreasePVCby1Gig(namespace, deploymentName, sizeInGb)
 	return err
 }
 
@@ -361,4 +363,51 @@ func (wfDataService *WorkflowDataService) DeletePDSPods() error {
 		return fmt.Errorf("Error while validating pods: %v", err)
 	}
 	return nil
+}
+
+// GetVolumeCapacityInGBForDeployment Get volume capacity
+func (wfDataService *WorkflowDataService) GetVolumeCapacityInGBForDeployment(namespace string, deploymentName string) (uint64, error) {
+	capacity, err := utils.GetVolumeCapacityInGB(namespace, deploymentName)
+	if err != nil {
+		return 0, err
+	}
+	return capacity, nil
+}
+
+func (wfDataService *WorkflowDataService) GetPodAgeForDeployment(deploymentName string, namespace string) (float64, error) {
+	age, err := utils.GetPodAge(deploymentName, namespace)
+	if err != nil {
+		return 0, err
+	}
+	return age, nil
+}
+
+func (wfDataService *WorkflowDataService) CheckPVCStorageFullCondition(namespace string, deploymentName string, thresholdPercentage float64) error {
+	err := utils.CheckStorageFullCondition(namespace, deploymentName, thresholdPercentage)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (wfDataService *WorkflowDataService) ValidateDepConfigPostStorageIncrease(dsName string, deploymentName string, stIncrease *dslibs.ValidateStorageIncrease) error {
+	// Get data service deployment resources
+	resourceTemp, storageTemp, dbConfig, err := wfDataService.GetDsDeploymentResources(wfDataService.DataServiceDeployment, dsName, stIncrease.ResConfigIdUpdated, stIncrease.StorageConfigIdUpdated, wfDataService.NamespaceName)
+	if err != nil {
+		return err
+	}
+	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Requests.CPU, dbConfig.Spec.Topologies[0].Resources.Requests.CPU, "Validating CPU Request")
+	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Requests.Memory, dbConfig.Spec.Topologies[0].Resources.Requests.Memory, "Validating Memory Request")
+
+	log.InfoD("Original resConfigModel.StorageRequest val is- [%v] and Updated resConfigModel.StorageRequest val is- [%v]", resourceTemp.Resources.Requests.Storage, dbConfig.Spec.Topologies[0].Resources.Requests.Storage)
+	wfDataService.Dash.VerifyFatal(dbConfig.Spec.Topologies[0].Resources.Requests.Storage, resourceTemp.Resources.Requests.Storage, "Validating the storage size is updated in the config post resize (STS-LEVEL)")
+
+	stringRelFactor := storageTemp.Replicas
+	wfDataService.Dash.VerifyFatal(dbConfig.Spec.Topologies[0].StorageOptions.Replicas, stringRelFactor, "Validating the Replication Factor count post storage resize (RepelFactor-LEVEL)")
+	podAgeAfterResize, err := utils.GetPodAge(deploymentName, wfDataService.NamespaceName)
+	err = dslibs.VerifyStorageSizeIncreaseAndNoPodRestarts(stIncrease.InitialCapacity, stIncrease.IncreasedStorageSize, stIncrease.BeforeResizePodAge, podAgeAfterResize)
+	if err != nil {
+		return err
+	}
+	return err
 }

@@ -281,6 +281,84 @@ var _ = Describe("{IncreasePVCby1gb}", func() {
 	})
 })
 
+var _ = Describe("{GetPVCFullCondition}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("GetPVCFullCondition", "Deploy a dataservice and fill-up the PVC, Once full, resize the PVC", nil, 0)
+	})
+	var (
+		workflowDataservice pds.WorkflowDataService
+		workFlowTemplates   pds.WorkflowPDSTemplates
+		deployment          *automationModels.PDSDeploymentResponse
+		deployments         = make(map[dslibs.PDSDataService]*automationModels.PDSDeploymentResponse)
+		templates           []string
+	)
+	It("Deploy and Validate DataService", func() {
+		Step("Create a PDS Namespace", func() {
+			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
+			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			workFlowTemplates.Platform = WorkflowPlatform
+			WorkflowNamespace.Namespaces = make(map[string]string)
+			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
+			log.FailOnError(err, "Unable to create namespace")
+			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
+			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
+		})
+
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.NamespaceName = Namespace
+
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+			templates = append(templates, serviceConfigId, stConfigId, resConfigId)
+
+			log.InfoD("Original Storage Template ID- [resTempId- %v]", stConfigId)
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+			log.FailOnError(err, "Error while deploying ds")
+			deployments[ds] = deployment
+
+			defer func() {
+				Step("Delete PDS CustomTemplates", func() {
+					log.InfoD("Cleaning Up templates...")
+					err := workFlowTemplates.DeleteCreatedCustomPdsTemplates(templates)
+					log.FailOnError(err, "Error while deleting dataservice")
+				})
+			}()
+
+			defer func() {
+				for _, deployment := range deployments {
+					Step("Delete DataServiceDeployment", func() {
+						log.InfoD("Cleaning Up dataservice...")
+						err := workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
+						log.FailOnError(err, "Error while deleting dataservice")
+					})
+				}
+			}()
+
+			log.InfoD("Running Workloads to fill up the PVC")
+			err = workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			log.FailOnError(err, "Error while running workloads on ds")
+
+			log.InfoD("Compute the PVC usage")
+			err = workflowDataservice.CheckPVCStorageFullCondition(workflowDataservice.NamespaceName, *deployment.Create.Status.CustomResourceName, 85)
+			log.FailOnError(err, "Error while checking for pvc full condition")
+
+			log.InfoD("Once pvc has reached threshold, increase the ovc by 1gb")
+			err = workflowDataservice.IncreasePvcSizeBy1gb(workflowDataservice.NamespaceName, *deployment.Create.Status.CustomResourceName, 1)
+			log.FailOnError(err, "Failing while Increasing the PVC name...")
+
+			log.InfoD("Validate deployment after PVC increase")
+			err = workflowDataservice.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, resConfigId, stConfigId, workflowDataservice.NamespaceName, ds.Version, ds.Image)
+		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataServices are not affected", nil, 0)
