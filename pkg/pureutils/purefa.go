@@ -57,19 +57,6 @@ func GetFAClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flasharray
 	return clientMap, nil
 }
 
-// GetFBClientMapFromPXPureSecret takes a PXPureSecret and returns a map of mgmt endpoints to FB clients
-func GetFBClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flasharray.Client, error) {
-	clientMap := make(map[string]*flasharray.Client)
-	for _, fb := range secret.Blades {
-		fbClient, err := PureCreateClientAndConnect(fb.MgmtEndPoint, fb.APIToken)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create FB client for [%s]. Err: [%v]", fb.MgmtEndPoint, err)
-		}
-		clientMap[fb.MgmtEndPoint] = fbClient
-	}
-	return clientMap, nil
-}
-
 // GetFAMgmtEndPoints , Get Lists of all management Endpoints from FA Secrets
 func GetFAMgmtEndPoints(secret PXPureSecret) []string {
 	mgmtEndpoints := []string{}
@@ -179,6 +166,22 @@ func GetIqnFromHosts(faClient *flasharray.Client, hostName string) ([]string, er
 		}
 	}
 	return nil, fmt.Errorf("Unable to fetch iqn details for the host specified [%v]", hostName)
+}
+
+// IsIQNExistsOnFA returns True if IQN is already associated to some Node
+func IsIQNExistsOnFA(faClient *flasharray.Client, iqnName string) (bool, error) {
+	hosts, err := ListAllHosts(faClient)
+	if err != nil {
+		return false, err
+	}
+	for _, eachHosts := range hosts {
+		for _, eachIqn := range eachHosts.Iqn {
+			if eachIqn == iqnName {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 // ListAllNetworkInterfacesOnFA returns all the list of Network Interfaces present
