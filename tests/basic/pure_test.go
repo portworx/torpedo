@@ -5,11 +5,8 @@ import (
 
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
-<<<<<<< HEAD
-=======
 	"github.com/sirupsen/logrus"
 
->>>>>>> [PWX-37026] Adding FBDAMultiTenancyBasicTest
 	"math/rand"
 	"sort"
 	"strconv"
