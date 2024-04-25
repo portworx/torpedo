@@ -91,13 +91,20 @@ func getLegacySharedVolumeCount(contexts []*scheduler.Context) int {
 	count := 0
 	for _, ctx := range contexts {
 		vols, err := Inst().S.GetVolumes(ctx)
-		log.FailOnError(err, "error geting volumes used by app")
-		for _, v := range vols {
-			vol, err := Inst().V.InspectVolume(v.ID)
-			log.FailOnError(err, "Failed to inspect volume %v", v.ID)
-			if vol.Spec.Shared {
-				count++
+		if err == nil {
+			for _, v := range vols {
+				vol, err := Inst().V.InspectVolume(v.ID)
+				log.FailOnError(err, "Failed to inspect volume %v", v.ID)
+				if vol.Spec.Shared {
+					count++
+				}
 			}
+		} else {
+			// Failed to get the volume for the context.
+			// It can happen if the pods are restarting or in flux.
+			// For now add a count of one. Will revist this in next iteration.
+			log.Infof("Failed to Get Volumes err=[%v]", err)
+			count++
 		}
 	}
 	return count
