@@ -434,12 +434,16 @@ var _ = Describe("{NodeDiskDetachAttach}", func() {
 			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=start on node %s", schedops.PXServiceLabelKey, randNonPxNode.Name))
 			err = Inst().V.WaitForPxPodsToBeUp(randNonPxNode)
 			log.FailOnError(err, fmt.Sprintf("Failed to wait for PX pods to be up on node %s", randNonPxNode.Name))
+			// Refresh the driver endpoints
 			err = Inst().S.RefreshNodeRegistry()
 			log.FailOnError(err, "error refreshing node registry")
 			err = Inst().V.RefreshDriverEndpoints()
 			log.FailOnError(err, "error refreshing storage drive endpoints")
-			err = Inst().S.RefreshNodeRegistry()
-			log.FailOnError(err, "error refreshing node registry")
+			// Wait for the driver to be up on the node
+			randNonPxNode, err = node.GetNodeByName(randNonPxNode.Name)
+			if err != nil {
+				log.FailOnError(err, fmt.Sprintf("Failed to get node %s", randNonPxNode.Name))
+			}
 			err = Inst().V.WaitDriverUpOnNode(randNonPxNode, Inst().DriverStartTimeout)
 			dash.VerifyFatal(err, nil, "Validate volume is driver up")
 			// Verify the node ID is same as earlier stored Node ID
