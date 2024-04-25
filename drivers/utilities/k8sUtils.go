@@ -2,6 +2,10 @@ package utilities
 
 import (
 	"fmt"
+	"math/rand"
+	"strings"
+	"time"
+
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
@@ -14,14 +18,15 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"math/rand"
-	"strings"
-	"time"
 )
 
 const (
 	timeInterval = 10 * time.Second
 	timeOut      = 30 * time.Minute
+)
+
+var (
+	k8sCore = core.Instance()
 )
 
 var (
@@ -367,4 +372,79 @@ func GetPodAge(deploymentName string, namespace string) (float64, error) {
 	}
 	podAgeInt := podAge.Minutes()
 	return podAgeInt, nil
+}
+
+// Check if a deployment specific PV and associated PVC is still present. If yes then delete both of them
+func DeletePvandPVCs(resourceName string, delPod bool) error {
+	log.Debugf("Starting to delete the PV and PVCs for resource %v\n", resourceName)
+	var claimName string
+	pv_list, err := k8sCore.GetPersistentVolumes()
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return fmt.Errorf("persistant volumes Not Found due to : %v", err)
+		}
+		return err
+	}
+	for _, vol := range pv_list.Items {
+		if vol.Spec.ClaimRef != nil {
+			claimName = vol.Spec.ClaimRef.Name
+		} else {
+			log.Infof("No PVC bounded to the PV - %v", vol.Name)
+			continue
+		}
+		flag := strings.Contains(claimName, resourceName)
+		if flag {
+			err := CheckAndDeleteIndependentPV(vol.Name, delPod)
+			if err != nil {
+				return fmt.Errorf("unable to delete the associated PV and PVCS due to : %v .Please check manually", err)
+			}
+			log.Debugf("The PV : %v and its associated PVC : %v is deleted !", vol.Name, claimName)
+		}
+	}
+	return nil
+}
+
+// Check if PV and associated PVC is still present. If yes then delete both of them
+func CheckAndDeleteIndependentPV(name string, delPod bool) error {
+	pv_check, err := k8sCore.GetPersistentVolume(name)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil
+		}
+		return err
+	}
+	log.InfoD("Stranded PV Found by the name - %s. Going ahead to delete this PV and associated entities", name)
+	if pv_check.Status.Phase == corev1.VolumeBound {
+		if pv_check.Spec.ClaimRef != nil && pv_check.Spec.ClaimRef.Kind == "PersistentVolumeClaim" {
+			namespace := pv_check.Spec.ClaimRef.Namespace
+			pvc_name := pv_check.Spec.ClaimRef.Name
+			// Delete all Pods in this namespace
+			var newPods []corev1.Pod
+			podList, err := GetPods(namespace)
+			if err != nil {
+				return err
+			}
+			for _, pod := range podList.Items {
+				newPods = append(newPods, pod)
+			}
+			if delPod {
+				err = DeletePods(newPods)
+				if err != nil {
+					return err
+				}
+			}
+
+			// Delete PVC from figured out namespace
+			err = k8sCore.DeletePersistentVolumeClaim(pvc_name, namespace)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	// Delete PV as it is still available from previous run
+	err = k8sCore.DeletePersistentVolume(name)
+	if err != nil {
+		return err
+	}
+	return nil
 }

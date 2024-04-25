@@ -2,6 +2,8 @@ package pds
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
@@ -308,7 +310,6 @@ func (wfDataService *WorkflowDataService) ValidateDeploymentResources(resourceTe
 	wfDataService.Dash.VerifyFatal(dataServiceVersionBuild, config.Spec.Version, "Validating ds version")
 }
 
-
 func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string, deploymentName string, sizeInGb uint64) error {
 	_, err := utils.IncreasePVCby1Gig(namespace, deploymentName, sizeInGb)
 	return err
@@ -410,4 +411,49 @@ func (wfDataService *WorkflowDataService) ValidateDepConfigPostStorageIncrease(d
 		return err
 	}
 	return err
+}
+
+// Purge will delete all dataservice and associated PVCs from the cluster
+func (wfDataService *WorkflowDataService) Purge() error {
+
+	var errors []string
+
+	errors = make([]string, 0)
+
+	for dsName, dsId := range wfDataService.DataServiceDeployment {
+		log.Infof("Deleting [%s] with id [%d]", dsName, dsId)
+
+		deploymentDetails, _, err := dslibs.GetDeployment(dsId)
+		if err != nil {
+			log.Warnf("Unable to fetch details for [%s]. Error - [%s]", dsName, err.Error())
+			errors = append(errors, err.Error())
+			continue
+		}
+
+		err = wfDataService.DeleteDeployment(*deploymentDetails.Get.Meta.Uid)
+		if err != nil {
+			log.Warnf("Unable to delete [%s]. Error - [%s]", dsName, err.Error())
+			errors = append(errors, err.Error())
+			continue
+		} else {
+			log.Infof("[%s] deleted successfully", dsName)
+		}
+
+		err = utils.DeletePvandPVCs(*deploymentDetails.Get.Status.CustomResourceName, false)
+
+		if err != nil {
+			log.Warnf("Unable to delete PVs for [%s]. Error - [%s]", dsName, err.Error())
+			errors = append(errors, err.Error())
+			continue
+		} else {
+			log.Infof("All PVs associated with [%s] deleted successfully", dsName)
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("Below errors occurred during deployment cleanup.\n\n [%s]", strings.Join(errors, "\n"))
+	}
+
+	return nil
 }
