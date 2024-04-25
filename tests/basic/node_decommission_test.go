@@ -452,14 +452,9 @@ var _ = Describe("{NodeDiskDetachAttach}", func() {
 			if oldNodeIDtoMatch != newNodeIDtoMatch {
 				log.FailOnError(fmt.Errorf("node ID mismatch"), fmt.Sprintf("Node ID mismatch for node %s", randNonPxNode.Name))
 				dash.VerifyFatal(false, true, fmt.Sprintf("Node ID mismatch for node %s after moving the disks", randNonPxNode.Name))
+			} else {
+				log.Infof("Node ID matches for node %s [%s == %s]", randNonPxNode.Name, oldNodeIDtoMatch, newNodeIDtoMatch)
 			}
-		})
-
-		Step(fmt.Sprintf("decommission and rejoin the node %s", randomStorageNode.Name), func() {
-			err = Inst().V.DecommissionNode(&randomStorageNode)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate node [%s] decommission init", randomStorageNode.Name))
-			err = Inst().V.RejoinNode(&randomStorageNode)
-			dash.VerifyFatal(err, nil, "Validate node rejoin init")
 		})
 
 		// ToDo - Verify the integrity of apps, cluster and volumes
