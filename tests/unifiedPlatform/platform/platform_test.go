@@ -293,8 +293,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 				[]string{},
 				[]string{},
 			)
-			log.FailOnError(err, "Unable to Associate target cluster - Project Admin")
-			log.InfoD("Associated target cluster - Project Admin")
+			dash.VerifyFatal(strings.Contains(err.Error(), "403 Forbidden"), true, "Associate to project with Project Admin - 403 Forbidden")
 		})
 
 		Step("Dissociate target cluster from Project Admin", func() {
@@ -310,8 +309,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 				[]string{},
 				[]string{},
 			)
-			log.FailOnError(err, "Unable to Dissociate target cluster - Project Admin")
-			log.InfoD("Dissociated target cluster - Project Admin")
+			dash.VerifyFatal(strings.Contains(err.Error(), "403 Forbidden"), true, "Dissociate from project with Project Admin - 403 Forbidden")
 		})
 
 		Step("Associate target cluster to Project - Tenant Admin", func() {
