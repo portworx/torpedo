@@ -1734,7 +1734,7 @@ func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*cha
 			attachedNode, err := Inst().V.GetNodeForVolume(vol, defaultCmdTimeout*3, defaultCmdRetryInterval)
 			log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
 
-			// Ignore the check if the volume type if purefile ,https://purestorage.atlassian.net/issues/PWX-37040
+			// Ignore mount path check if the volume type is purefile, https://purestorage.atlassian.net/issues/PWX-37040
 			isPureFile, err := Inst().V.IsPureFileVolume(vol)
 			log.FailOnError(err, "Failed to get details about PureVolume", ctx.App.Key)
 			if !isPureFile {
