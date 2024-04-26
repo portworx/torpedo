@@ -1555,8 +1555,9 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 			err = osutils.Kubectl(cmdArgs)
 			processError(err, errChan...)
 			fmt.Println("sleeping to let volume usage get reflected")
-			// wait until the backends size is reflected before making the REST call
-			time.Sleep(time.Minute * 5)
+
+			// wait until the backends size is reflected before making the REST call, Max time for FBDA Update is 15 min
+			time.Sleep(time.Minute * 16)
 
 			byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
 			fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
@@ -1734,8 +1735,14 @@ func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*cha
 		if strings.Contains(strings.Join(sc.MountOptions, ""), "nosuid") {
 			attachedNode, err := Inst().V.GetNodeForVolume(vol, defaultCmdTimeout*3, defaultCmdRetryInterval)
 			log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
-			err = Inst().V.ValidatePureFaFbMountOptions(vol.ID, requiredMountOptions, attachedNode)
-			dash.VerifySafely(err, nil, "Testing mount options are properly applied on pure volumes")
+
+			// Ignore mount path check if the volume type is purefile, https://purestorage.atlassian.net/issues/PWX-37040
+			isPureFile, err := Inst().V.IsPureFileVolume(vol)
+			log.FailOnError(err, "Failed to get details about PureVolume", ctx.App.Key)
+			if !isPureFile {
+				err = Inst().V.ValidatePureFaFbMountOptions(vol.ID, requiredMountOptions, attachedNode)
+				dash.VerifySafely(err, nil, "Testing mount options are properly applied on pure volumes")
+			}
 		} else {
 			log.Infof("There is no nosuid mount option in this volume %s", vol)
 		}

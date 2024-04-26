@@ -2387,6 +2387,7 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 		faMgmtEndPoint         string
 		faAPIToken             string
 		host                   *flasharray.Host
+		IQNExists              bool
 	)
 
 	itLog := "Attach a volume from a different FA, restart portworx and check multipath consistency"
@@ -2443,7 +2444,7 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 			log.FailOnError(err, "Failed to create client and connect to FA")
 
 			// Check if the IQN of the node is present in the FA if present take the existing host else create one
-			IQNExists, err := pureutils.IsIQNExistsOnFA(FAclient, iqn)
+			IQNExists, err = pureutils.IsIQNExistsOnFA(FAclient, iqn)
 			log.FailOnError(err, "Failed to check if iqn exists on FA")
 
 			if !IQNExists {
@@ -2479,12 +2480,6 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 		stepLog = "Run iscsiadm commands to login to the controllers"
 		Step(stepLog, func() {
 
-			//run multipath before login
-			cmd := "multipath -ll"
-			output, err := runCmd(cmd, n)
-			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
-			log.InfoD("Output of multipath -ll command: %v", output)
-
 			//Run iscsiadm commands to login to the controllers
 			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
 
@@ -2495,10 +2490,10 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 			}
 
 			// run multipath after login
-			cmd = "multipath -ll"
+			cmd := "multipath -ll"
 			MultipathBeforeRestart, err = runCmd(cmd, n)
 			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
-			log.InfoD("Output of multipath -ll command: %v", output)
+			log.InfoD("Output of multipath -ll command before restart: %v", MultipathBeforeRestart)
 
 		})
 
@@ -2516,10 +2511,12 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 			dash.VerifyFatal(err == nil, true,
 				fmt.Sprintf("PX is up after restarting on node [%s]", n.Name))
 
+			time.Sleep(10 * time.Second)
 			//run multipath after restart
 			cmd := "multipath -ll"
 			multipathAfterRestart, err := runCmd(cmd, n)
 			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
+			log.InfoD("Output of multipath -ll command after restart: %v", multipathAfterRestart)
 
 			//check if the multipath entries are same before and after restart
 			dash.VerifyFatal(MultipathBeforeRestart == multipathAfterRestart, true, "Multipath entries are same before and after restart")
@@ -2549,9 +2546,11 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 			log.InfoD("Volume deleted on FA: %v", volumeName)
 
 			//Delete the host from FAbackend
-			_, err = pureutils.DeleteHostOnFA(FAclient, hostName)
-			log.FailOnError(err, "Failed to delete host on FA")
-			log.InfoD("Host deleted on FA: %v", hostName)
+			if !IQNExists {
+				_, err = pureutils.DeleteHostOnFA(FAclient, hostName)
+				log.FailOnError(err, "Failed to delete host on FA")
+				log.InfoD("Host deleted on FA: %v", hostName)
+			}
 		})
 
 	})
@@ -2797,6 +2796,11 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 			_, err = pureutils.DeleteVolumeOnFABackend(FAclient, volumeName)
 			log.FailOnError(err, "Failed to delete volume on FA")
 			log.InfoD("Volume deleted on FA: %v", volumeName)
+
+			//Refresh the iscsi session
+			err = RefreshIscsiSession(n)
+			log.FailOnError(err, "Failed to refresh iscsi session")
+			log.InfoD("Successfully refreshed iscsi session")
 
 		})
 
