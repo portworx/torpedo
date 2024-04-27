@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	corev1 "k8s.io/api/core/v1"
 	"math"
 	"math/rand"
 	"reflect"
@@ -20,19 +21,19 @@ import (
 
 	"github.com/portworx/torpedo/pkg/log"
 
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
@@ -12072,6 +12073,118 @@ var _ = Describe("{PoolDeleteMultiplePools}", func() {
 			log.FailOnError(err, "Failed to reboot node and wait till it is up")
 			log.Info("Verify reboot succeed")
 		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})
+
+var _ = Describe("{VolResizeAllVolumes}", func() {
+
+	/*
+		PTX-23576
+		Trigger vol resize on all volumes at once
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolResizeAllVolumes", "Trigger vol resize on all volumes at once", nil, 0)
+	})
+
+	itLog := "VolResizeAllVolumes"
+	It(itLog, func() {
+		var contexts []*scheduler.Context
+		var k8sCore = core.Instance()
+
+		type VolumeDetails struct {
+			Size uint64
+			vol  *volume.Volume
+			pvc  *corev1.PersistentVolumeClaim
+			ctx  *scheduler.Context
+		}
+		volSizeMap := []*VolumeDetails{}
+		stepLog = "Schedule Applications on the cluster and get details of Volumes"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volresizeallvol-%d", i))...)
+			}
+			ValidateApplications(contexts)
+			defer appsValidateAndDestroy(contexts)
+
+			for _, eachCtx := range contexts {
+				vols, err := Inst().S.GetVolumes(eachCtx)
+				log.FailOnError(err, "Failed to get list of Volumes in the cluster")
+				for _, eachVol := range vols {
+					// Inspect volume to get Volume details
+					vInspect, err := Inst().V.InspectVolume(eachVol.Name)
+					log.FailOnError(err, "Failed to get Volumes size for Volume [%v]", eachVol)
+
+					volDetails := VolumeDetails{}
+
+					// Get Size of the Volume
+					volDetails.Size = vInspect.Spec.Size
+					log.Infof("Volume [%v] is with Size [%v]", eachVol.Name, eachVol.Size)
+
+					// Get details on the Volume
+					volDetails.vol = eachVol
+
+					// Get PVC object from the Volume
+					pvc, err := GetPVCObjFromVolName(eachVol)
+					log.FailOnError(err, "Failed to get PVC Details from Volume [%v]", eachVol.Name)
+
+					// Update volSizeMap to perform Parallel Resize of all the Volumes present in the cluster
+					volDetails.pvc = pvc
+					volSizeMap = append(volSizeMap, &volDetails)
+				}
+			}
+		})
+
+		for _, eachVol := range volSizeMap {
+			// Pod details after blocking IP
+			podsAfterblk, err := k8sCore.GetPodsUsingPVC(eachVol.vol.Name, eachVol.vol.Namespace)
+			log.FailOnError(err, "unable to find the node from the pod")
+			for _, eachPodAfter := range podsAfterblk {
+				if eachPodAfter.Status.Phase != "Running" {
+					log.FailOnError(fmt.Errorf("Pod [%v] Consuming Volume [%v] is not in Running State ",
+						eachPodAfter.Name, eachVol.vol.Name), "Pod not in Running State")
+				}
+			}
+		}
+
+		// Volume resize routine resizes specific Volume
+		// Run inspect continuously in the background
+		log.InfoD("start Volume resize on each Volume present in the cluster")
+		doResizeFunction := func(newVolumeIDs *VolumeDetails) {
+			volNewSize := newVolumeIDs.Size + 1048000
+			log.Infof("Resizing Volume [%v] from size [%v] to [%v]", newVolumeIDs.vol.Name, newVolumeIDs.Size, volNewSize)
+			vol, err := Inst().S.ResizePVC(newVolumeIDs.ctx, newVolumeIDs.pvc, volNewSize)
+			log.FailOnError(err, "Failed to resize PVC [%v]", vol.Name)
+			dash.VerifyFatal(vol.Size > newVolumeIDs.Size, true, "Resize of Volume didnot happen!")
+		}
+
+		for _, eachVol := range volSizeMap {
+			Step(fmt.Sprintf("Do Resize on Volume [%v]", eachVol.vol.Name), func() {
+				go doResizeFunction(eachVol)
+			})
+		}
+
+		// wait for some time before checking all the applications are Up and Running
+		time.Sleep(120 * time.Second)
+
+		for _, eachVol := range volSizeMap {
+			// Pod details after blocking IP
+			podsAfterblk, err := k8sCore.GetPodsUsingPVC(eachVol.vol.Name, eachVol.vol.Namespace)
+			log.FailOnError(err, "unable to find the node from the pod")
+			for _, eachPodAfter := range podsAfterblk {
+				if eachPodAfter.Status.Phase != "Running" {
+					log.FailOnError(fmt.Errorf("Pod [%v] Consuming Volume [%v] is not in Running State ",
+						eachPodAfter.Name, eachVol.vol.Name), "Pod not in Running State")
+				}
+			}
+		}
+
 	})
 
 	JustAfterEach(func() {

@@ -1739,7 +1739,13 @@ func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*cha
 		if strings.Contains(strings.Join(sc.MountOptions, ""), "nosuid") {
 			// Ignore mount path check if the volume type is purefile, https://purestorage.atlassian.net/issues/PWX-37040
 			isPureFile, err := Inst().V.IsPureFileVolume(vol)
-			log.FailOnError(err, "Failed to get details about PureVolume", ctx.App.Key)
+			log.FailOnError(err, "Failed to get details about PureFile")
+			log.Infof("Given Volume is [%v] and PureFile [%v]", vol.Name, isPureFile)
+
+			isPureVol, err := Inst().V.IsPureVolume(vol)
+			log.FailOnError(err, fmt.Sprintf("Failed to get details about PureVolume [%v] and Value is [%v]", vol.Name, isPureVol))
+			log.Infof("Given Volume is [%v] and PureVolume [%v]", vol.Name, isPureVol)
+
 			if !isPureFile {
 				attachedNode, err := Inst().V.GetNodeForVolume(vol, defaultCmdTimeout*3, defaultCmdRetryInterval)
 				log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
@@ -12128,4 +12134,13 @@ func RefreshIscsiSession(n node.Node) error {
 		return err
 	}
 	return nil
+}
+
+// GetPVCObjFromVolName Returns pvc object from Volume
+func GetPVCObjFromVolName(vol *volume.Volume) (*v1.PersistentVolumeClaim, error) {
+	pvcObj, err := k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	return pvcObj, nil
 }
