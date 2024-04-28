@@ -12104,15 +12104,35 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 			ctx *scheduler.Context
 		}
 		volSizeMap := []*VolumeDetails{}
+
+		stepLog = "Enable Trashcan on the cluster"
+		Step(stepLog,
+			func() {
+				log.InfoD(stepLog)
+				currNode := node.GetStorageDriverNodes()[0]
+				err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+					"--volume-expiration-minutes": "600",
+				})
+				log.FailOnError(err, "error while enabling trashcan")
+				log.InfoD("Trashcan is successfully enabled")
+			})
+
 		stepLog = "Schedule Applications on the cluster and get details of Volumes"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volresizeallvol-%d", i))...)
 			}
 		})
+		appsDeleted := false
+		deleteApps := func() {
+			if !appsDeleted {
+				appsValidateAndDestroy(contexts)
+			}
+		}
 
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
+		defer deleteApps()
+
 		stepLog = "Verify parallel resize of all the volumes "
 		Step(stepLog, func() {
 			for _, eachCtx := range contexts {
@@ -12142,16 +12162,17 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 			for _, eachPodAfter := range podsAfterblk {
 				log.Infof(fmt.Sprintf("Current state of the Pod [%v] is [%v]", eachPodAfter.Name, eachPodAfter.Status.Phase))
 				if eachPodAfter.Status.Phase != "Running" {
-					log.Infof(fmt.Sprintf("After State of the Pod [%v] is [%v]", eachPodAfter.Name, eachPodAfter.Status.Phase))
+					log.Infof(fmt.Sprintf("State of the Pod before Resize volume [%v] is [%v]", eachPodAfter.Name, eachPodAfter.Status.Phase))
 					log.FailOnError(fmt.Errorf("Pod [%v] Consuming Volume [%v] is not in Running State ",
 						eachPodAfter.Name, eachVol.vol.Name), "Pod not in Running State")
 				}
 			}
 		}
+
 		// Volume resize routine resizes specific Volume
-		// Run inspect continuously in the background
 		log.InfoD("start Volume resize on each Volume present in the cluster")
-		doResizeFunction := func(newVolumeIDs *VolumeDetails) {
+		ResizePvcInParallel := func(newVolumeIDs *VolumeDetails) {
+			defer GinkgoRecover()
 			volCurSize := newVolumeIDs.vol.Size / units.GiB
 			volNewSize := volCurSize + uint64(10)
 			log.Infof("Resizing Volume [%v] from size [%v] to [%v]", newVolumeIDs.vol.Name, newVolumeIDs.vol.Size, volNewSize*units.GiB)
@@ -12167,9 +12188,27 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 			log.Infof(fmt.Sprintf("Volume [%v] resized from [%v] to [%v]", newVolumeIDs.vol.Name, newVolumeIDs.vol.Size, volReSize.Spec.Size))
 		}
 
+		// Resize Volumes in parallel
+		ResizeVolumes := func(volId string) {
+			defer GinkgoRecover()
+			sizeBeforeResize, err := Inst().V.InspectVolume(volId)
+			log.FailOnError(err, "inspect returned error ?")
+			toResize := sizeBeforeResize.Spec.Size + (10 * units.GiB)
+
+			// Resize Volume and verify if volume resized
+			log.FailOnError(Inst().V.ResizeVolume(volId, toResize), "Failed to resize volume")
+
+			//Size after resize
+			sizeAfterResize, err := Inst().V.InspectVolume(volId)
+			log.FailOnError(err, "inspect returned error ?")
+
+			dash.VerifyFatal(sizeBeforeResize.Spec.Size < sizeAfterResize.Spec.Size, true, "Volume resize did not happen")
+
+		}
+
 		for _, eachVol := range volSizeMap {
 			Step(fmt.Sprintf("Do Resize on Volume [%v]", eachVol.vol.Name), func() {
-				go doResizeFunction(eachVol)
+				go ResizePvcInParallel(eachVol)
 			})
 		}
 
@@ -12188,6 +12227,83 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 				}
 			}
 		}
+
+		// Destroy all apps
+		DestroyApps(contexts, nil)
+		appsDeleted = true
+
+		// Restore all the Volumes from trashcan
+		var trashcanVols []string
+		stepLog = "validate volumes in trashcan"
+		Step(stepLog, func() {
+			// wait for few seconds for pvc to get deleted and volume to get detached
+			time.Sleep(10 * time.Second)
+			node := node.GetStorageDriverNodes()[0]
+			log.InfoD(stepLog)
+			trashcanVols, err = Inst().V.GetTrashCanVolumeIds(node)
+			log.FailOnError(err, "error While getting trashcan volumes")
+			log.Infof("trashcan len: %v", trashcanVols)
+			dash.VerifyFatal(len(trashcanVols) > 0, true, "validate volumes exist in trashcan")
+
+			for _, volsInTrash := range trashcanVols {
+				if volsInTrash != "" {
+					volReSize, err := Inst().V.InspectVolume(volsInTrash)
+					log.FailOnError(err, "inspect returned error for volume [%v]?", volsInTrash)
+					if !volReSize.InTrashcan {
+						log.FailOnError(fmt.Errorf("Volume [%v] is still not in trashcan", volsInTrash), "is volume in trashcan after delete ?")
+					}
+				}
+			}
+		})
+
+		log.Infof("list of volumes in trashcan [%v]", trashcanVols)
+
+		// Get List of volumes present in the cluster before Restoring volumes
+		allVols, err := Inst().V.ListAllVolumes()
+		log.FailOnError(err, "failed to get list of volumes")
+		log.Infof("List of all Volumes present in the cluster [%v]", allVols)
+
+		stepLog = "validate restore volumes from trashcan"
+		restoredVol := []string{}
+		newUUID, err := uuid.NewRandom()
+		log.FailOnError(err, "failed to get random UUID")
+
+		Step(stepLog, func() {
+			// Restore Volumes from trashcan
+			for _, eachVol := range trashcanVols {
+				if eachVol != "" {
+					err = trashcanRestore(eachVol, fmt.Sprintf("restore_%v_%v", newUUID, eachVol))
+					log.FailOnError(err, fmt.Sprintf("Failed restoring volume [%v] from trashcan", eachVol))
+					restoredVol = append(restoredVol, fmt.Sprintf("restore_%v_%v", newUUID, eachVol))
+				}
+			}
+		})
+
+		// Get List of volumes present in the cluster before Restoring volumes
+		allVolsAfterRestore, err := Inst().V.ListAllVolumes()
+		log.FailOnError(err, "failed to get list of volumes")
+		log.Infof("List of all Volumes present in the cluster after restore [%v]", allVolsAfterRestore)
+
+		for _, eachVolume := range restoredVol {
+			volReSize, err := Inst().V.InspectVolume(eachVolume)
+			log.FailOnError(err, "inspect returned error for volume [%v]?", volReSize.Id)
+			if strings.Contains(eachVolume, fmt.Sprintf("restore_%v", newUUID)) {
+				log.Infof("Resizing Volume [%v]", eachVolume)
+				// Resize Volume in parallel
+				go ResizeVolumes(eachVolume)
+			}
+		}
+
+		time.Sleep(60 * time.Second)
+		// Sleep for some time and try deleting Volumes which were restore from trashcan
+		for _, eachVolume := range restoredVol {
+			if strings.Contains(eachVolume, fmt.Sprintf("restore_%v", newUUID)) {
+				log.Infof("Deleting the volume [%v]", eachVolume)
+				// Delete Volumes which are restored / Resized
+				log.FailOnError(Inst().V.DeleteVolume(eachVolume), "failed to delete volumes")
+			}
+		}
+
 	})
 
 	JustAfterEach(func() {
