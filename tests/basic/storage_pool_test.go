@@ -12110,21 +12110,19 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volresizeallvol-%d", i))...)
 			}
-			ValidateApplications(contexts)
-			defer appsValidateAndDestroy(contexts)
-
+		})
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+		stepLog = "Verify parallel resize of all the volumes "
+		Step(stepLog, func() {
 			for _, eachCtx := range contexts {
 				vols, err := Inst().S.GetVolumes(eachCtx)
 				log.FailOnError(err, "Failed to get list of Volumes in the cluster")
 				for _, eachVol := range vols {
-					// Inspect volume to get Volume details
-					vInspect, err := Inst().V.InspectVolume(eachVol.Name)
-					log.FailOnError(err, "Failed to get Volumes size for Volume [%v]", eachVol)
-
 					volDetails := VolumeDetails{}
 
 					// Get Size of the Volume
-					volDetails.Size = vInspect.Spec.Size
+					volDetails.Size = eachVol.Size
 					log.Infof("Volume [%v] is with Size [%v]", eachVol.Name, eachVol.Size)
 
 					// Get details on the Volume
@@ -12146,22 +12144,31 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 			podsAfterblk, err := k8sCore.GetPodsUsingPVC(eachVol.vol.Name, eachVol.vol.Namespace)
 			log.FailOnError(err, "unable to find the node from the pod")
 			for _, eachPodAfter := range podsAfterblk {
+				log.Infof(fmt.Sprintf("Current state of the Pod [%v] is [%v]", eachPodAfter.Name, eachPodAfter.Status.Phase))
 				if eachPodAfter.Status.Phase != "Running" {
+					log.Infof(fmt.Sprintf("After State of the Pod [%v] is [%v]", eachPodAfter.Name, eachPodAfter.Status.Phase))
 					log.FailOnError(fmt.Errorf("Pod [%v] Consuming Volume [%v] is not in Running State ",
 						eachPodAfter.Name, eachVol.vol.Name), "Pod not in Running State")
 				}
 			}
 		}
-
 		// Volume resize routine resizes specific Volume
 		// Run inspect continuously in the background
 		log.InfoD("start Volume resize on each Volume present in the cluster")
 		doResizeFunction := func(newVolumeIDs *VolumeDetails) {
-			volNewSize := newVolumeIDs.Size + 1048000
-			log.Infof("Resizing Volume [%v] from size [%v] to [%v]", newVolumeIDs.vol.Name, newVolumeIDs.Size, volNewSize)
+			volCurSize := newVolumeIDs.Size / units.GiB
+			volNewSize := volCurSize + uint64(10)
+			log.Infof("Resizing Volume [%v] from size [%v] to [%v]", newVolumeIDs.vol.Name, newVolumeIDs.Size, volNewSize*units.GiB)
 			vol, err := Inst().S.ResizePVC(newVolumeIDs.ctx, newVolumeIDs.pvc, volNewSize)
 			log.FailOnError(err, "Failed to resize PVC [%v]", vol.Name)
-			dash.VerifyFatal(vol.Size > newVolumeIDs.Size, true, "Resize of Volume didnot happen!")
+
+			time.Sleep(60 * time.Second)
+			volReSize, err := Inst().V.InspectVolume(vol.ID)
+			log.FailOnError(err, "inspect returned error ?")
+
+			log.Infof("Verify volume size after resizing the volume [%v]", vol.Name)
+			dash.VerifyFatal(volReSize.Spec.Size > newVolumeIDs.Size, true, "Resize of Volume didnot happen!")
+			log.Infof(fmt.Sprintf("Volume [%v] resized from [%v] to [%v]", newVolumeIDs.vol.Name, newVolumeIDs.Size, volReSize.Spec.Size))
 		}
 
 		for _, eachVol := range volSizeMap {
@@ -12178,6 +12185,7 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 			podsAfterblk, err := k8sCore.GetPodsUsingPVC(eachVol.vol.Name, eachVol.vol.Namespace)
 			log.FailOnError(err, "unable to find the node from the pod")
 			for _, eachPodAfter := range podsAfterblk {
+				log.Infof(fmt.Sprintf("State of the pod after resize [%v] is [%v]", eachPodAfter.Name, eachPodAfter.Status.Phase))
 				if eachPodAfter.Status.Phase != "Running" {
 					log.FailOnError(fmt.Errorf("Pod [%v] Consuming Volume [%v] is not in Running State ",
 						eachPodAfter.Name, eachVol.vol.Name), "Pod not in Running State")
