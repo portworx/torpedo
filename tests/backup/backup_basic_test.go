@@ -272,70 +272,6 @@ var _ = AfterSuite(func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
 		}
 
-		// Deleting clusters and the corresponding cloud cred
-		var clusterCredName string
-		var clusterCredUID string
-		kubeconfigs := os.Getenv("KUBECONFIGS")
-		kubeconfigList := strings.Split(kubeconfigs, ",")
-		for _, kubeconfig := range kubeconfigList {
-			clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
-			isPresent, err := IsClusterPresent(clusterName, ctx, BackupOrgID)
-			if err != nil {
-				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cluster [%s] is present", clusterName))
-			}
-			if isPresent {
-				clusterReq := &api.ClusterInspectRequest{OrgId: BackupOrgID, Name: clusterName}
-				clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
-				if err != nil {
-					if strings.Contains(err.Error(), "object not found") {
-						log.InfoD("Cluster %s is not present", clusterName)
-					} else {
-						Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Inspecting cluster [%s]", clusterName))
-					}
-				} else {
-					clusterObj := clusterResp.GetCluster()
-					clusterProvider := GetClusterProviders()
-					for _, provider := range clusterProvider {
-						switch provider {
-						case drivers.ProviderRke:
-							if clusterObj.PlatformCredentialRef != nil {
-								clusterCredName = clusterObj.PlatformCredentialRef.Name
-								clusterCredUID = clusterObj.PlatformCredentialRef.Uid
-							} else {
-								log.Warnf("the platform credential ref of the cluster [%s] is nil", clusterName)
-							}
-						default:
-							if clusterObj.CloudCredentialRef != nil {
-								clusterCredName = clusterObj.CloudCredentialRef.Name
-								clusterCredUID = clusterObj.CloudCredentialRef.Uid
-							} else {
-								log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterName)
-							}
-						}
-
-						err = DeleteCluster(clusterName, BackupOrgID, ctx, false)
-						Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
-						clusterDeleteStatus := func() (interface{}, bool, error) {
-							status, err := IsClusterPresent(clusterName, ctx, BackupOrgID)
-							if err != nil {
-								return "", true, fmt.Errorf("cluster %s still present with error %v", clusterName, err)
-							}
-							if status {
-								return "", true, fmt.Errorf("cluster %s is not deleted yet", clusterName)
-							}
-							return "", false, nil
-						}
-						_, err = task.DoRetryWithTimeout(clusterDeleteStatus, ClusterDeleteTimeout, ClusterDeleteRetryTime)
-						Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
-						if clusterCredName != "" {
-							err = DeleteCloudCredential(clusterCredName, BackupOrgID, clusterCredUID)
-							Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
-						}
-					}
-				}
-			}
-		}
-
 		// Cleanup all backup locations
 		allBackupLocations, err := GetAllBackupLocations(ctx)
 		dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
@@ -417,6 +353,85 @@ var _ = AfterSuite(func() {
 				log.Infof("Group %s was not deleted", group.Name)
 			}
 		}
+
+		var clusterCredName string
+		var clusterCredUID string
+		kubeconfigs := os.Getenv("KUBECONFIGS")
+		kubeconfigList := strings.Split(kubeconfigs, ",")
+
+		// Validating custom resource object cleanup
+		for _, kubeconfig := range kubeconfigList {
+			clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+			isPresent, err := IsClusterPresent(clusterName, ctx, BackupOrgID)
+			if err != nil {
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cluster [%s] is present", clusterName))
+			}
+			if isPresent {
+				err = ValidateAllBackupCreatedResourceCleanup(clusterName, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("CR/Backup resources found after cleanup"))
+			}
+		}
+
+		// Deleting clusters and the corresponding cloud cred
+		for _, kubeconfig := range kubeconfigList {
+			clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+			isPresent, err := IsClusterPresent(clusterName, ctx, BackupOrgID)
+			if err != nil {
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cluster [%s] is present", clusterName))
+			}
+			if isPresent {
+				clusterReq := &api.ClusterInspectRequest{OrgId: BackupOrgID, Name: clusterName}
+				clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
+				if err != nil {
+					if strings.Contains(err.Error(), "object not found") {
+						log.InfoD("Cluster %s is not present", clusterName)
+					} else {
+						Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Inspecting cluster [%s]", clusterName))
+					}
+				} else {
+					clusterObj := clusterResp.GetCluster()
+					clusterProvider := GetClusterProviders()
+					for _, provider := range clusterProvider {
+						switch provider {
+						case drivers.ProviderRke:
+							if clusterObj.PlatformCredentialRef != nil {
+								clusterCredName = clusterObj.PlatformCredentialRef.Name
+								clusterCredUID = clusterObj.PlatformCredentialRef.Uid
+							} else {
+								log.Warnf("the platform credential ref of the cluster [%s] is nil", clusterName)
+							}
+						default:
+							if clusterObj.CloudCredentialRef != nil {
+								clusterCredName = clusterObj.CloudCredentialRef.Name
+								clusterCredUID = clusterObj.CloudCredentialRef.Uid
+							} else {
+								log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterName)
+							}
+						}
+
+						err = DeleteCluster(clusterName, BackupOrgID, ctx, false)
+						Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
+						clusterDeleteStatus := func() (interface{}, bool, error) {
+							status, err := IsClusterPresent(clusterName, ctx, BackupOrgID)
+							if err != nil {
+								return "", true, fmt.Errorf("cluster %s still present with error %v", clusterName, err)
+							}
+							if status {
+								return "", true, fmt.Errorf("cluster %s is not deleted yet", clusterName)
+							}
+							return "", false, nil
+						}
+						_, err = task.DoRetryWithTimeout(clusterDeleteStatus, ClusterDeleteTimeout, ClusterDeleteRetryTime)
+						Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
+						if clusterCredName != "" {
+							err = DeleteCloudCredential(clusterCredName, BackupOrgID, clusterCredUID)
+							Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
+						}
+					}
+				}
+			}
+		}
+
 	}
 })
 

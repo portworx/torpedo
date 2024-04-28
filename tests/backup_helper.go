@@ -4,6 +4,9 @@ import (
 	context1 "context"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -275,6 +278,84 @@ const (
 	Sequential ExecutionMode = iota
 	Parallel
 )
+
+// Type for customResourceObjects created by backup
+type customResourceObjectDetails struct {
+	Group         string
+	Version       string
+	Resource      string
+	SkipResources []string // If this list is populated that particular CR will not be considered for cleanup
+}
+
+// List of all the CRs to be considered for cleanup
+var crListMap = map[string]customResourceObjectDetails{
+	"applicationbackups": {
+		Group:         "stork.libopenstorage.org",
+		Version:       "v1alpha1",
+		Resource:      "applicationbackups",
+		SkipResources: []string{},
+	},
+	"applicationbackupschedules": {
+		Group:         "stork.libopenstorage.org",
+		Version:       "v1alpha1",
+		Resource:      "applicationbackupschedules",
+		SkipResources: []string{},
+	},
+	"backuplocations": {
+		Group:         "stork.libopenstorage.org",
+		Version:       "v1alpha1",
+		Resource:      "backuplocations",
+		SkipResources: []string{},
+	},
+	"schedulepolicies": {
+		Group:    "stork.libopenstorage.org",
+		Version:  "v1alpha1",
+		Resource: "schedulepolicies",
+		SkipResources: []string{
+			"default-daily-policy",
+			"default-interval-policy",
+			"default-migration-policy",
+			"default-monthly-policy",
+			"default-weekly-policy",
+		},
+	},
+	"applicationrestores": {
+		Group:         "stork.libopenstorage.org",
+		Version:       "v1alpha1",
+		Resource:      "applicationrestores",
+		SkipResources: []string{},
+	},
+	"rules": {
+		Group:         "stork.libopenstorage.org",
+		Version:       "v1alpha1",
+		Resource:      "rules",
+		SkipResources: []string{},
+	},
+	"dataexports": {
+		Group:         "kdmp.portworx.com",
+		Version:       "v1alpha1",
+		Resource:      "dataexports",
+		SkipResources: []string{},
+	},
+	"resourcebackups": {
+		Group:         "kdmp.portworx.com",
+		Version:       "v1alpha1",
+		Resource:      "resourcebackups",
+		SkipResources: []string{},
+	},
+	"resourceexports": {
+		Group:         "kdmp.portworx.com",
+		Version:       "v1alpha1",
+		Resource:      "resourceexports",
+		SkipResources: []string{},
+	},
+	"volumebackups": {
+		Group:         "kdmp.portworx.com",
+		Version:       "v1alpha1",
+		Resource:      "volumebackups",
+		SkipResources: []string{},
+	},
+}
 
 var (
 	// AppRuleMaster is a map of struct for all the value for rules
@@ -2139,6 +2220,22 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 			}
 			_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, CloudAccountDeleteTimeout, CloudAccountDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
+		}
+	}
+
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+
+	// Validating custom resource object cleanup
+	for _, kubeconfig := range kubeconfigList {
+		clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+		isPresent, err := IsClusterPresent(clusterName, ctx, BackupOrgID)
+		if err != nil {
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cluster [%s] is present", clusterName))
+		}
+		if isPresent {
+			err = ValidateAllBackupCreatedResourceCleanup(clusterName, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("CR/Backup resources found after cleanup"))
 		}
 	}
 
@@ -8355,6 +8452,82 @@ func ValidateCustomResourceRestores(ctx context1.Context, orgID string, resource
 	return nil
 }
 
+// ValidateAllBackupCreatedResourceCleanup verfies all the backup related objects cleanup in after suite
+func ValidateAllBackupCreatedResourceCleanup(clusterName string, context context1.Context) error {
+
+	clusterUID, err := Inst().Backup.GetClusterUID(context, BackupOrgID, clusterName)
+	if err != nil {
+		return fmt.Errorf("unable to find cluster UID. Error: [%s]", err.Error())
+	}
+	log.Infof("Cluster UID - [%s], Cluster Name - [%s]", clusterUID, clusterName)
+	clusterReq := &api.ClusterInspectRequest{OrgId: BackupOrgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
+	clusterResp, err := Inst().Backup.InspectCluster(context, clusterReq)
+	if err != nil {
+		return fmt.Errorf("cluster Inspect request failed. Error: [%s]", err.Error())
+	}
+	clusterObj := clusterResp.GetCluster()
+
+	validateResourceCleanup := func() (interface{}, bool, error) {
+		allCRObjects := GetAllBackupCRObjects(clusterObj)
+		if len(allCRObjects) > 0 {
+			return "", true, fmt.Errorf("Found CRs - [%v]", allCRObjects)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(validateResourceCleanup, 10*time.Minute, 10*time.Second)
+
+	return err
+}
+
+// GetCRObject queries and returns any CRD defined
+func getCRObject(clusterObj *api.ClusterObject, namespace string, customResourceObjectDetails customResourceObjectDetails) (*unstructured.UnstructuredList, error) {
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	config, err := portworx.GetKubernetesRestConfig(clusterObj)
+	if err != nil {
+		return nil, err
+	}
+
+	dynamicClient := dynamic.NewForConfigOrDie(config)
+
+	// Get the GVR of the CRD.
+	gvr := metav1.GroupVersionResource{
+		Group:    customResourceObjectDetails.Group,
+		Version:  customResourceObjectDetails.Version,
+		Resource: customResourceObjectDetails.Resource,
+	}
+	objects, err := dynamicClient.Resource(schema.GroupVersionResource(gvr)).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return objects, nil
+}
+
+// GetAllBackupCRObjects returns names of all backup CR object found in the cluster
+func GetAllBackupCRObjects(clusterObj *api.ClusterObject) []string {
+
+	var allBackupCrs = make([]string, 0)
+	for crName, definition := range crListMap {
+		allCurrentCrs, err := getCRObject(clusterObj, "", definition)
+		if err != nil {
+			log.Infof("Some error occurred while checking for [%s], Error - [%s]", crName, err.Error())
+		} else {
+			if len(allCurrentCrs.Items) > 0 {
+				log.Infof("Found [%s] object in the cluster", crName)
+				for _, item := range allCurrentCrs.Items {
+					// Skip the CR if present in SkipResources
+					if !slices.Contains(definition.SkipResources, item.GetName()) {
+						allBackupCrs = append(allBackupCrs, item.GetName())
+					}
+				}
+			}
+		}
+	}
+
+	return allBackupCrs
+}
+
 // ScaleApplicationToDesiredReplicas scales Application to desired replicas for migrated application namespace.
 func ScaleApplicationToDesiredReplicas(namespace string) error {
 	var options metav1.ListOptions
@@ -8407,7 +8580,6 @@ func ScaleApplicationToDesiredReplicas(namespace string) error {
 		}
 
 	}
-
 	return nil
 }
 
