@@ -12099,10 +12099,9 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 		var k8sCore = core.Instance()
 
 		type VolumeDetails struct {
-			Size uint64
-			vol  *volume.Volume
-			pvc  *corev1.PersistentVolumeClaim
-			ctx  *scheduler.Context
+			vol *volume.Volume
+			pvc *corev1.PersistentVolumeClaim
+			ctx *scheduler.Context
 		}
 		volSizeMap := []*VolumeDetails{}
 		stepLog = "Schedule Applications on the cluster and get details of Volumes"
@@ -12111,6 +12110,7 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volresizeallvol-%d", i))...)
 			}
 		})
+
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 		stepLog = "Verify parallel resize of all the volumes "
@@ -12120,10 +12120,6 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 				log.FailOnError(err, "Failed to get list of Volumes in the cluster")
 				for _, eachVol := range vols {
 					volDetails := VolumeDetails{}
-
-					// Get Size of the Volume
-					volDetails.Size = eachVol.Size
-					log.Infof("Volume [%v] is with Size [%v]", eachVol.Name, eachVol.Size)
 
 					// Get details on the Volume
 					volDetails.vol = eachVol
@@ -12156,9 +12152,9 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 		// Run inspect continuously in the background
 		log.InfoD("start Volume resize on each Volume present in the cluster")
 		doResizeFunction := func(newVolumeIDs *VolumeDetails) {
-			volCurSize := newVolumeIDs.Size / units.GiB
+			volCurSize := newVolumeIDs.vol.Size / units.GiB
 			volNewSize := volCurSize + uint64(10)
-			log.Infof("Resizing Volume [%v] from size [%v] to [%v]", newVolumeIDs.vol.Name, newVolumeIDs.Size, volNewSize*units.GiB)
+			log.Infof("Resizing Volume [%v] from size [%v] to [%v]", newVolumeIDs.vol.Name, newVolumeIDs.vol.Size, volNewSize*units.GiB)
 			vol, err := Inst().S.ResizePVC(newVolumeIDs.ctx, newVolumeIDs.pvc, volNewSize)
 			log.FailOnError(err, "Failed to resize PVC [%v]", vol.Name)
 
@@ -12167,8 +12163,8 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 			log.FailOnError(err, "inspect returned error ?")
 
 			log.Infof("Verify volume size after resizing the volume [%v]", vol.Name)
-			dash.VerifyFatal(volReSize.Spec.Size > newVolumeIDs.Size, true, "Resize of Volume didnot happen!")
-			log.Infof(fmt.Sprintf("Volume [%v] resized from [%v] to [%v]", newVolumeIDs.vol.Name, newVolumeIDs.Size, volReSize.Spec.Size))
+			dash.VerifyFatal(volReSize.Spec.Size > newVolumeIDs.vol.Size, true, "Resize of Volume didnot happen!")
+			log.Infof(fmt.Sprintf("Volume [%v] resized from [%v] to [%v]", newVolumeIDs.vol.Name, newVolumeIDs.vol.Size, volReSize.Spec.Size))
 		}
 
 		for _, eachVol := range volSizeMap {
@@ -12178,7 +12174,7 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 		}
 
 		// wait for some time before checking all the applications are Up and Running
-		time.Sleep(120 * time.Second)
+		time.Sleep(60 * time.Second)
 
 		for _, eachVol := range volSizeMap {
 			// Pod details after blocking IP
@@ -12192,7 +12188,6 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 				}
 			}
 		}
-
 	})
 
 	JustAfterEach(func() {
