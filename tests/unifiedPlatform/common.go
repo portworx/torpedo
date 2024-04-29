@@ -55,6 +55,7 @@ var (
 	WorkflowTargetClusterDestination platform.WorkflowTargetCluster
 	WorkflowProject                  platform.WorkflowProject
 	WorkflowNamespace                platform.WorkflowNamespace
+	WorkflowNamespaceDestination     platform.WorkflowNamespace
 	WorkflowCc                       platform.WorkflowCloudCredentials
 	WorkflowbkpLoc                   platform.WorkflowBackupLocation
 	NewPdsParams                     *parameters.NewPDSParams
@@ -160,6 +161,9 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 
 	Step("Creating all PDS related structs", func() {
 
+		WorkflowNamespaceDestination.TargetCluster = WorkflowTargetClusterDestination
+		WorkflowNamespaceDestination.Namespaces = make(map[string]string)
+
 		log.Infof("Creating data service struct")
 		WorkflowDataService.NamespaceName = PDS_DEFAULT_NAMESPACE
 		WorkflowDataService.Namespace = &WorkflowNamespace
@@ -195,19 +199,25 @@ func PurgePDS() {
 	if WorkflowPDSRestore.Source.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
 		err := SetDestinationKubeConfig()
 		log.FailOnError(err, "Failed to switched to destination cluster")
+	} else {
+		log.Infof("Source and target cluster are same. Switch is not required")
 	}
 
 	log.InfoD("Purging all restore objects")
 	err := WorkflowPDSRestore.Purge()
 	log.FailOnError(err, "some error occurred while purging restore objects")
 
-	log.InfoD("Purging all restore destination namespaces")
-	err = WorkflowPDSRestore.Destination.Purge()
-	log.FailOnError(err, "some error occurred while purging restore destination namespaces")
+	if WorkflowPDSRestore.Source.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
+		log.InfoD("Purging all restore destination namespaces")
+		err = WorkflowPDSRestore.Destination.Purge()
+		log.FailOnError(err, "some error occurred while purging restore destination namespaces")
+	}
 
 	if WorkflowPDSRestore.Source.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "failed to switch context to source cluster")
+	} else {
+		log.Infof("Source and target cluster are same. Switch is not required")
 	}
 
 	log.InfoD("Purging all dataservice objects")
@@ -226,7 +236,17 @@ func PurgePDS() {
 	err = WorkflowPDSRestore.Source.Purge()
 	log.FailOnError(err, "some error occurred while purging restore source namespaces")
 
-	log.InfoD("Purging all namespace objects")
+	log.InfoD("Purging all source namespace objects")
 	err = WorkflowNamespace.Purge()
 	log.FailOnError(err, "some error occurred while purging namespace objects")
+}
+
+// CheckforClusterSwitch checks if restore needs to be created on source or dest
+func CheckforClusterSwitch() {
+	if WorkflowPDSRestore.Source.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
+		err := SetDestinationKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	} else {
+		log.Infof("Source and target cluster are same. Switch is not required")
+	}
 }

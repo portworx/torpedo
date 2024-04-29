@@ -55,6 +55,18 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "error while initialising api components in ds utils")
 	})
 
+	Step("Dumping kubeconfigs file", func() {
+		kubeconfigs := os.Getenv("KUBECONFIGS")
+		if kubeconfigs != "" {
+			kubeconfigList := strings.Split(kubeconfigs, ",")
+			if len(kubeconfigList) < 2 {
+				log.FailOnError(fmt.Errorf("At least minimum two kubeconfigs required but has"),
+					"Failed to get k8s config path.At least minimum two kubeconfigs required")
+			}
+			DumpKubeconfigs(kubeconfigList)
+		}
+	})
+
 	Step("Get Default Tenant", func() {
 		log.Infof("Initialising values for tenant")
 		WorkflowPlatform.AdminAccountId = AccID
@@ -140,7 +152,7 @@ var _ = BeforeSuite(func() {
 
 	Step("Associate platform resources to Project", func() {
 		err := WorkflowProject.Associate(
-			[]string{WorkflowTargetCluster.ClusterUID},
+			[]string{WorkflowTargetCluster.ClusterUID, WorkflowTargetClusterDestination.ClusterUID},
 			[]string{},
 			[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
 			[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
@@ -149,18 +161,6 @@ var _ = BeforeSuite(func() {
 		)
 		log.FailOnError(err, "Unable to associate platform resources to Project")
 		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
-	})
-
-	Step("Dumping kubeconfigs file", func() {
-		kubeconfigs := os.Getenv("KUBECONFIGS")
-		if kubeconfigs != "" {
-			kubeconfigList := strings.Split(kubeconfigs, ",")
-			if len(kubeconfigList) < 2 {
-				log.FailOnError(fmt.Errorf("At least minimum two kubeconfigs required but has"),
-					"Failed to get k8s config path.At least minimum two kubeconfigs required")
-			}
-			DumpKubeconfigs(kubeconfigList)
-		}
 	})
 
 })

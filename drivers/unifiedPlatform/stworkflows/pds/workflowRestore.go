@@ -60,8 +60,9 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 	}
 
 	restore.Restores[name] = createRestore.Create
+
 	restore.RestoredDeployments.Namespace = restore.Destination
-	restore.RestoredDeployments.NamespaceName = namespace
+	restore.RestoredDeployments.DataServiceDeployment[name] = createRestore.Create.Config.DestinationReferences.DeploymentId
 
 	log.Infof("Restore completed successfully - [%s]", *createRestore.Create.Meta.Name)
 
@@ -82,7 +83,6 @@ func (restore WorkflowPDSRestore) GetRestore(id string) (*automationModels.PDSRe
 // Purge Deletes all created restores
 func (restore WorkflowPDSRestore) Purge() error {
 
-	log.InfoD("Purging all restored deployments")
 	err := restore.RestoredDeployments.Purge()
 	if err != nil {
 		return err
