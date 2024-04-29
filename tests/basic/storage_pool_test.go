@@ -12,7 +12,6 @@ import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/node/vsphere"
-	corev1 "k8s.io/api/core/v1"
 
 	"github.com/google/uuid"
 	"github.com/portworx/torpedo/drivers/node"
@@ -29,6 +28,7 @@ import (
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strconv"
 	"strings"
