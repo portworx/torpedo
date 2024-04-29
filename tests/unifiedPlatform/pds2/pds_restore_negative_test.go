@@ -119,7 +119,7 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		}()
 
 		Step("Perform Restore and validate", func() {
-			workflowRestore.WorkflowProject = WorkflowProject
+			workflowRestore.Source = WorkflowNamespace
 			backupUid := *bkpConfigResponse.Create.Meta.Uid
 			deploymentName := *deployment.Create.Meta.Name
 			cloudSnapId := ""
@@ -168,7 +168,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 		workflowDataservice.DataServiceDeployment = make(map[string]string)
 
 		workflowRestore.Destination = WorkflowNamespace
-		workflowRestore.WorkflowProject = WorkflowProject
+		workflowRestore.Source = WorkflowNamespace
 		workflowDataservice.Dash = dash
 		restoreNamespace = "pds-restore-namespace-" + RandomString(5)
 	})
@@ -254,7 +254,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 			Step("Create Restore from the latest backup Id", func() {
 				restoreName := "testing_restore_" + RandomString(5)
 				workflowRestore.Destination = WorkflowNamespace
-				workflowRestore.WorkflowProject = WorkflowProject
+				workflowRestore.Source = WorkflowNamespace
 				_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
 				log.FailOnError(err, "Restore Failed")
 
