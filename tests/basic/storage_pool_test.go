@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	corev1 "k8s.io/api/core/v1"
 	"math"
 	"math/rand"
 	"reflect"
@@ -13,6 +12,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/node/vsphere"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/google/uuid"
 	"github.com/portworx/torpedo/drivers/node"
