@@ -12145,7 +12145,7 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 					volDetails.vol = eachVol
 
 					// Get PVC object from the Volume
-					pvc, err := GetPVCObjFromVolName(eachVol)
+					pvc, err := GetPVCObjFromVol(eachVol)
 					log.FailOnError(err, "Failed to get PVC Details from Volume [%v]", eachVol.Name)
 
 					// Update volSizeMap to perform Parallel Resize of all the Volumes present in the cluster
