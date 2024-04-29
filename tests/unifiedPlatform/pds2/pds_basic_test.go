@@ -19,7 +19,6 @@ import (
 )
 
 var _ = BeforeSuite(func() {
-	PDS_DEFAULT_NAMESPACE = "pds-namespace-" + RandomString(5)
 	steplog := "Get prerequisite params to run platform tests"
 
 	log.InfoD(steplog)
@@ -65,12 +64,14 @@ var _ = BeforeSuite(func() {
 
 	Step("Get Default Project", func() {
 		var err error
+		DEFAULT_PROJECT_NAME := "pds-project-" + RandomString(5)
 		WorkflowProject.Platform = WorkflowPlatform
-		ProjectId, err = WorkflowProject.GetDefaultProject(DefaultProject)
-		log.FailOnError(err, "Unable to get default project")
-		log.Infof("Default project ID - [%s]", ProjectId)
-		WorkflowProject.ProjectId = ProjectId
-		WorkflowProject.ProjectName = DefaultProject
+		WorkflowProject.ProjectName = DEFAULT_PROJECT_NAME
+		_, err = WorkflowProject.CreateProject()
+		log.FailOnError(err, "unable to create project")
+		ProjectId, err = WorkflowProject.GetDefaultProject(DEFAULT_PROJECT_NAME)
+		log.FailOnError(err, "Unable to get current project")
+		log.Infof("Current project ID - [%s]", ProjectId)
 	})
 
 	Step("Register Target Cluster", func() {
@@ -79,14 +80,6 @@ var _ = BeforeSuite(func() {
 		WorkflowTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane(false)
 		log.FailOnError(err, "Unable to register target cluster")
 		log.Infof("Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
-	})
-
-	Step("Create a namespace for PDS", func() {
-		WorkflowNamespace.TargetCluster = WorkflowTargetCluster
-		WorkflowNamespace.Namespaces = make(map[string]string)
-		_, err := WorkflowNamespace.CreateNamespaces(PDS_DEFAULT_NAMESPACE)
-		log.FailOnError(err, "Unable to create namespace")
-		log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
 	})
 
 	Step("Create Buckets", func() {
@@ -128,16 +121,16 @@ var _ = BeforeSuite(func() {
 		log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
 	})
 
-	Step("Associate namespace and cluster to Project", func() {
+	Step("Associate platform resources to Project", func() {
 		err := WorkflowProject.Associate(
 			[]string{WorkflowTargetCluster.ClusterUID},
-			[]string{WorkflowNamespace.Namespaces[PDS_DEFAULT_NAMESPACE]},
+			[]string{},
 			[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
 			[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
 			[]string{},
 			[]string{},
 		)
-		log.FailOnError(err, "Unable to associate Cluster to Project")
+		log.FailOnError(err, "Unable to associate platform resources to Project")
 		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
 	})
 
@@ -156,12 +149,16 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+
+	Step("Purging all platform related objects", func() {
+
+		log.InfoD("Deleting projects")
+		err := WorkflowProject.DeleteProject()
+		log.FailOnError(err, "unable to delete projects")
+	})
+
 	EndTorpedoTest()
-	//TODO: Steps to delete Backup location, Target and Bucket
-	// TODO: Add namespace cleanup once deployment cleanup cleans up the services too
-	//err := WorkflowNamespace.Purge()
-	//log.FailOnError(err, "Unable to cleanup all namespaces")
-	//log.InfoD("All namespaces cleaned up successfully")
+
 	log.InfoD("Test Finished")
 })
 

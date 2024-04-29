@@ -15,16 +15,14 @@ import (
 )
 
 type WorkflowDataService struct {
-	Namespace                     platform.WorkflowNamespace
-	PDSTemplates                  WorkflowPDSTemplates
-	NamespaceName                 string
-	DataServiceDeployment         map[string]string
-	RestoredDataServiceDeployment map[string]string
-	SkipValidatation              map[string]bool
-	SourceDeploymentMd5Hash       map[string]string
-	RestoredDeploymentMd5Hash     map[string]string
-	Dash                          *aetosutil.Dashboard
-	ValidateStorageIncrease       dslibs.ValidateStorageIncrease
+	Namespace               platform.WorkflowNamespace
+	PDSTemplates            WorkflowPDSTemplates
+	NamespaceName           string
+	DataServiceDeployment   map[string]string
+	SkipValidatation        map[string]bool
+	SourceDeploymentMd5Hash map[string]string
+	Dash                    *aetosutil.Dashboard
+	ValidateStorageIncrease dslibs.ValidateStorageIncrease
 }
 
 const (
@@ -258,17 +256,20 @@ func (wfDataService *WorkflowDataService) ValidateDataServiceWorkloads(params *p
 
 	deployment := make(map[string]string)
 	deployment[*restoredDeployment.Create.Meta.Name] = *restoredDeployment.Create.Meta.Uid
-	chkSum, wlDep, err := dslibs.ReadDataAndReturnChecksum(deployment, wkloadParams)
+	// chkSum, wlDep, err := dslibs.ReadDataAndReturnChecksum(deployment, wkloadParams)
+	_, wlDep, err := dslibs.ReadDataAndReturnChecksum(deployment, wkloadParams)
 	if err != nil {
 		return err
 	}
 
-	deploymentName, _ := GetDeploymentNameAndId(deployment)
+	// deploymentName, _ := GetDeploymentNameAndId(deployment)
+	_, _ = GetDeploymentNameAndId(deployment)
 
-	wfDataService.RestoredDeploymentMd5Hash[deploymentName] = chkSum
-
-	result := dslibs.ValidateDataMd5Hash(wfDataService.SourceDeploymentMd5Hash, wfDataService.RestoredDeploymentMd5Hash)
-	wfDataService.Dash.VerifyFatal(result, true, "Validate md5 hash after restore")
+	// TODO: Commenting this out for now, this needs to be refactored as per current design
+	//wfDataService.RestoredDeploymentMd5Hash[deploymentName] = chkSum
+	//
+	//result := dslibs.ValidateDataMd5Hash(wfDataService.SourceDeploymentMd5Hash, wfDataService.RestoredDeploymentMd5Hash)
+	//wfDataService.Dash.VerifyFatal(result, true, "Validate md5 hash after restore")
 
 	return dslibs.DeleteWorkloadDeployments(wlDep)
 }

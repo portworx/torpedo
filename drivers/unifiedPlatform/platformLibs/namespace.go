@@ -18,7 +18,7 @@ func CreatePDSNamespace(namespace string) error {
 	k8sCore := core.Instance()
 	_, err := k8sCore.GetNamespace(namespace)
 	if err != nil {
-		log.Warnf("Namespace not found %v", err)
+		log.Infof("Namespace not found %v", err)
 		if strings.Contains(err.Error(), "not found") {
 			nsName := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
