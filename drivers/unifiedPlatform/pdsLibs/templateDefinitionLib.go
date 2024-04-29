@@ -33,6 +33,33 @@ const (
 	SERVICE_OPTIONS   = "service_settings"
 )
 
+func NewCreateServiceConfigTemplate(tenantId string, dsName string, templateValue map[string]interface{}) (*automationModels.PlatformTemplatesResponse, error) {
+	log.InfoD("DsName fetched is- [%v]", dsName)
+	revisionUid, err := GetRevisionUidForApplication(dsName)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch revisionUid for the dataservice - [%v] under test", dsName)
+	}
+	templateName := "pdsAutoSVCTemp" + utilities.RandomString(5)
+
+	log.InfoD("Tenant is- [%v]", tenantId)
+	createReq := automationModels.PlatformTemplatesRequest{Create: automationModels.CreatePlatformTemplates{
+		TenantId: tenantId,
+		Template: &automationModels.V1Template{
+			Meta: &automationModels.V1Meta{Name: &templateName},
+			Config: &automationModels.V1Config{
+				RevisionUid:    &revisionUid,
+				TemplateValues: templateValue,
+			},
+		},
+	}}
+	log.InfoD("Create ServiceConfiguration Request formed is- {%v}", createReq)
+	templateResponse, err := v2Components.Platform.CreateTemplates(&createReq)
+	if err != nil {
+		return templateResponse, err
+	}
+	return templateResponse, nil
+}
+
 func CreateServiceConfigTemplate(tenantId string, dsName string, serviceConfig ServiceConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
 	log.InfoD("DsName fetched is- [%v]", dsName)
 	revisionUid, err := GetRevisionUidForApplication(dsName)

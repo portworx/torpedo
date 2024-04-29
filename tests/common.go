@@ -1,7 +1,8 @@
 package tests
 
 import (
-    "bufio"
+	"bufio"
+	context1 "context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
@@ -23,40 +24,40 @@ import (
 	"strings"
 	"sync"
 	"time"
-	context1 "context"
 
-	rest "k8s.io/client-go/rest"
-	"github.com/Masterminds/semver/v3"
-	"github.com/hashicorp/go-version"
-	pxapi "github.com/libopenstorage/operator/api/px"
-	"github.com/portworx/sched-ops/k8s/apiextensions"
-	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"cloud.google.com/go/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
+	"github.com/Masterminds/semver/v3"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/hashicorp/go-version"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/sched"
+	pxapi "github.com/libopenstorage/operator/api/px"
 	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/k8s/operator"
 	policyops "github.com/portworx/sched-ops/k8s/policy"
 	k8sStorage "github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/sched-ops/k8s/stork"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -86,10 +87,9 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kubevirtv1 "kubevirt.io/api/core/v1"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	rest "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"github.com/portworx/sched-ops/k8s/stork"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/portworx/torpedo/drivers"
 	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
@@ -190,7 +190,6 @@ import (
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
 )
-
 
 const (
 	// SkipClusterScopedObjects describes option for skipping deletion of cluster wide objects
@@ -359,7 +358,7 @@ const (
 	defaultMonitorDriver                  = "prometheus"
 	defaultStorageDriver                  = "pxd"
 	defaultPdsDriver                      = "pds"
-	defaultLogLocation                    = "/testresults/"
+	defaultLogLocation                    = "/tmp/"
 	defaultBundleLocation                 = "/var/cores"
 	defaultLogLevel                       = "debug"
 	defaultAppScaleFactor                 = 1
@@ -580,12 +579,12 @@ var (
 )
 
 var (
-	includeResourcesFlag  = true
-	includeVolumesFlag    = true
-	startApplicationsFlag = true
-	tempDir               = "/tmp"
+	includeResourcesFlag        = true
+	includeVolumesFlag          = true
+	startApplicationsFlag       = true
+	tempDir                     = "/tmp"
 	bidirectionalClusterPairDir = "bidirectional-cluster-pair"
-	migrationList         []*storkapi.Migration
+	migrationList               []*storkapi.Migration
 )
 
 var (
@@ -1554,8 +1553,8 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 			err = osutils.Kubectl(cmdArgs)
 			processError(err, errChan...)
 			fmt.Println("sleeping to let volume usage get reflected")
-	  
-      // wait until the backends size is reflected before making the REST call, Max time for FBDA Update is 15 min
+
+			// wait until the backends size is reflected before making the REST call, Max time for FBDA Update is 15 min
 			time.Sleep(time.Minute * 16)
 
 			byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
@@ -3816,8 +3815,8 @@ func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 
 	srcKubeConfigPath, err := GetCustomClusterConfigPath(sourceCluster)
 	if err != nil {
-	    return fmt.Errorf("Failed to get config path for source cluster")
-        }
+		return fmt.Errorf("Failed to get config path for source cluster")
+	}
 
 	defer func() {
 		var config *rest.Config
@@ -3850,8 +3849,8 @@ func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 
 	destKubeConfigPath, err := GetCustomClusterConfigPath(destCluster)
 	if err != nil {
-            return fmt.Errorf("Failed to get config path for destination cluster")
-        }
+		return fmt.Errorf("Failed to get config path for destination cluster")
+	}
 
 	err = SetCustomKubeConfig(sourceCluster)
 	if err != nil {
@@ -3862,18 +3861,18 @@ func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	factory := storkctl.NewFactory()
 	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
 	cmdArgs := []string{"create", "clusterpair", "-n", cpNamespace, cpName,
-	    "--kubeconfig", srcKubeConfigPath,
+		"--kubeconfig", srcKubeConfigPath,
 		"--src-kube-file", srcKubeConfigPath,
 		"--dest-kube-file", destKubeConfigPath,
 	}
 
 	if mode == "sync-dr" {
 		cmdArgs = []string{"create", "clusterpair", "-n", cpNamespace, cpName,
-		    "--kubeconfig", srcKubeConfigPath,
+			"--kubeconfig", srcKubeConfigPath,
 			"--src-kube-file", srcKubeConfigPath,
 			"--dest-kube-file", destKubeConfigPath,
 			"--mode", "sync-dr",
-	    }
+		}
 	}
 
 	if projectMappings != "" {

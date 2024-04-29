@@ -17,6 +17,23 @@ type WorkflowPDSTemplates struct {
 	ServiceConfigTemplateId string
 }
 
+func (cusTemp *WorkflowPDSTemplates) CreateAppTemplate(params *parameters.NewPDSParams) map[string]string {
+	appTempIdAndDsName := make(map[string]string)
+	for _, conf := range params.DataserviceConfigurationsToTest {
+		log.Infof(conf.Name)
+		for key, value := range conf.Configurations {
+			log.Infof("key: %s", key)
+			log.Infof("value: %s", value)
+		}
+		appConfig, _ := pdslibs.NewCreateServiceConfigTemplate(cusTemp.Platform.TenantId, conf.Name, conf.Configurations)
+		log.InfoD("appConfig ID-  %v", *appConfig.Create.Meta.Uid)
+		appConfigId := appConfig.Create.Meta.Uid
+		cusTemp.ServiceConfigTemplateId = *appConfigId
+		appTempIdAndDsName[conf.Name] = *appConfigId
+	}
+	return appTempIdAndDsName
+}
+
 func (cusTemp *WorkflowPDSTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *parameters.NewPDSParams, dsName string) (string, string, string, error) {
 
 	//Todo: Mechanism to populate dynamic/Unknown key-value pairs for App config

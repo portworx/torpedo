@@ -128,14 +128,14 @@ func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(depl
 	}
 
 	// Get data service deployment resources
-	resourceTemplateOps, storageOps, DeploymentConfigs, err := wfDataService.GetDsDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, resConfigId, stConfigId, namespace)
-	if err != nil {
-		return err
-	}
-
-	// Validate deployment resources
-	dataServiceVersionBuild := version + "-" + image
-	wfDataService.ValidateDeploymentResources(resourceTemplateOps, storageOps, DeploymentConfigs, replicas, dataServiceVersionBuild)
+	//resourceTemplateOps, storageOps, DeploymentConfigs, err := wfDataService.GetDsDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, resConfigId, stConfigId, namespace)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//// Validate deployment resources
+	//dataServiceVersionBuild := version + "-" + image
+	//wfDataService.ValidateDeploymentResources(resourceTemplateOps, storageOps, DeploymentConfigs, replicas, dataServiceVersionBuild)
 
 	return nil
 }

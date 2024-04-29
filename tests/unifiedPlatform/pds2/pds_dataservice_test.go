@@ -95,6 +95,51 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	})
 })
 
+var _ = Describe("{AppTemplateCreation}", func() {
+	var (
+		workflowDataservice pds.WorkflowDataService
+		workFlowTemplates   pds.WorkflowPDSTemplates
+		deployment          *automationModels.PDSDeploymentResponse
+		deployments         = make(map[dslibs.PDSDataService]*automationModels.PDSDeploymentResponse)
+		templates           []string
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("AppTemplateCreation", "Upgrade Data Service Image", nil, 0)
+		workFlowTemplates.Platform = WorkflowPlatform
+		workflowDataservice.Namespace = WorkflowNamespace
+		workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
+		workflowDataservice.Dash = dash
+	})
+	It("Deploy and Validate Dataservice", func() {
+		dsNameAndAppTempId := workFlowTemplates.CreateAppTemplate(NewPdsParams)
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+
+			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
+			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
+			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+			templates = []string{serviceConfigId, stConfigId, resConfigId}
+
+			//workflowDataservice.SkipValidatation = make(map[string]bool)
+			//workflowDataservice.SkipValidatation["VALIDATE_PDS_DEPLOYMENT"] = true
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
+			log.FailOnError(err, "Error while deploying ds")
+			log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+			deployments[ds] = deployment
+		}
+		defer func() {
+			Step("Delete PDS CustomTemplates", func() {
+				log.InfoD("Cleaning Up templates...")
+				err := workFlowTemplates.DeleteCreatedCustomPdsTemplates(templates)
+				log.FailOnError(err, "Error while deleting dataservice")
+			})
+		}()
+	})
+
+})
+
 var _ = Describe("{UpgradeDataServiceImage}", func() {
 	var (
 		workflowDataservice pds.WorkflowDataService

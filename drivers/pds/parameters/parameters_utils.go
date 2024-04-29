@@ -107,6 +107,11 @@ type NewPDSParams struct {
 		ServiceType           string `json:"ServiceType"`
 	} `json:"DataServiceToTest"`
 
+	DataserviceConfigurationsToTest []struct {
+		Name           string                 `json:"Name"`
+		Configurations map[string]interface{} `json:"Configurations"`
+	}
+
 	ForceImageID bool
 
 	SSIE struct {
