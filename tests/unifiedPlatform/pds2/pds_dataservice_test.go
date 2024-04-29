@@ -31,7 +31,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	It("Deploy,Validate and ScaleUp DataService", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workFlowTemplates.Platform = WorkflowPlatform
-			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.Namespace = &WorkflowNamespace
 			workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
 			workflowDataservice.Dash = dash
 
@@ -107,7 +107,7 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("UpgradeDataServiceImage", "Upgrade Data Service Image", nil, 0)
 		workFlowTemplates.Platform = WorkflowPlatform
-		workflowDataservice.Namespace = WorkflowNamespace
+		workflowDataservice.Namespace = &WorkflowNamespace
 		workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
 		workflowDataservice.Dash = dash
 	})
@@ -198,7 +198,7 @@ var _ = Describe("{ScaleUpCpuMemLimitsOfDS}", func() {
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.Namespace = &WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
 
 			//serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
@@ -250,7 +250,7 @@ var _ = Describe("{IncreasePVCby1gb}", func() {
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.Namespace = &WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
 
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
@@ -305,7 +305,7 @@ var _ = Describe("{GetPVCFullCondition}", func() {
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.Namespace = &WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
 
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
@@ -373,7 +373,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workFlowTemplates.Platform = WorkflowPlatform
-			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.Namespace = &WorkflowNamespace
 			workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
 			workflowDataservice.Dash = dash
 

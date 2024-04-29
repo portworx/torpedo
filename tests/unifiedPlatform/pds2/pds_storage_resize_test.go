@@ -40,7 +40,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			for _, repl := range NewPdsParams.StorageConfigurationsSSIE.ReplFactor {
-				workflowDataservice.Namespace = WorkflowNamespace
+				workflowDataservice.Namespace = &WorkflowNamespace
 				workflowDataservice.NamespaceName = Namespace
 				NewPdsParams.StorageConfiguration.Repl = repl
 				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)

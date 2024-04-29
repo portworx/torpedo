@@ -10,8 +10,8 @@ import (
 
 type WorkflowPDSRestore struct {
 	SourceNamespace     string
-	Source              platform.WorkflowNamespace
-	Destination         platform.WorkflowNamespace
+	Source              *platform.WorkflowNamespace
+	Destination         *platform.WorkflowNamespace
 	SkipValidatation    map[string]bool
 	Restores            map[string]automationModels.PDSRestore
 	RestoredDeployments WorkflowDataService

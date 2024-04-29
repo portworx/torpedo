@@ -12,7 +12,7 @@ import (
 
 type WorkflowPDSBackupConfig struct {
 	Backups                map[string]automationModels.V1BackupConfig
-	WorkflowDataService    WorkflowDataService
+	WorkflowDataService    *WorkflowDataService
 	SkipValidatation       map[string]bool
 	WorkflowBackupLocation platform.WorkflowBackupLocation
 }

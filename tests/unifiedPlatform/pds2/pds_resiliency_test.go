@@ -35,7 +35,7 @@ var _ = Describe("{ValidatePdsHealthIncaseofFailures}", func() {
 	It("Deploy and Validate DataService", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workFlowTemplates.Platform = WorkflowPlatform
-			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.Namespace = &WorkflowNamespace
 			workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
 			workflowDataservice.Dash = dash
 
@@ -124,7 +124,7 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.Namespace = &WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
 
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)

@@ -12,7 +12,7 @@ import (
 )
 
 type WorkflowPDSBackup struct {
-	WorkflowDataService WorkflowDataService
+	WorkflowDataService *WorkflowDataService
 }
 
 const (

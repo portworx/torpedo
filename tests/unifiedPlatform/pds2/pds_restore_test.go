@@ -636,7 +636,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.Namespace = &WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
 
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
@@ -664,7 +664,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 	})
 
 	It("Perform adhoc backup of old deployments", func() {
-		workflowBackUpConfig.WorkflowDataService = workflowDataservice
+		workflowBackUpConfig.WorkflowDataService = &workflowDataservice
 		workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
 		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
 
@@ -755,7 +755,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			workflowDataService.Namespace = WorkflowNamespace
+			workflowDataService.Namespace = &WorkflowNamespace
 			workflowDataService.NamespaceName = Namespace
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
@@ -788,7 +788,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 	})
 	It("Perform adhoc backup, restore before PVC Resize and validate them", func() {
 		var bkpConfigResponse *automationModels.PDSBackupConfigResponse
-		workflowBackUpConfig.WorkflowDataService = workflowDataService
+		workflowBackUpConfig.WorkflowDataService = &workflowDataService
 		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
 
 		Step("Take Backup and validate", func() {
@@ -853,7 +853,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 	})
 	It("Perform adhoc backup, restore after PVC Resize and validate them", func() {
 		var bkpConfigResponse *automationModels.PDSBackupConfigResponse
-		workflowBackUpConfig.WorkflowDataService = workflowDataService
+		workflowBackUpConfig.WorkflowDataService = &workflowDataService
 		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
 
 		Step("Take Backup and validate", func() {
@@ -934,7 +934,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.Namespace = &WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
 
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
@@ -955,7 +955,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 	})
 
 	It("Perform adhoc backup, restore and validate them before upgrade", func() {
-		workflowBackUpConfig.WorkflowDataService = workflowDataservice
+		workflowBackUpConfig.WorkflowDataService = &workflowDataservice
 		workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
 		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
 
@@ -981,7 +981,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 
 		Step("Perform Restore on destination cluster and validate", func() {
 			restoreName := "pds-restore-before-update-" + RandomString(5)
-			workflowRestore.Destination = WorkflowNamespace
+			workflowRestore.Destination = &WorkflowNamespace
 			restoreDeployment, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, Namespace)
 			log.FailOnError(err, "Error while taking restore")
 			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
@@ -1015,7 +1015,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 	})
 
 	It("Perform adhoc backup, restore and validate them after upgrade", func() {
-		workflowBackUpConfig.WorkflowDataService = workflowDataservice
+		workflowBackUpConfig.WorkflowDataService = &workflowDataservice
 		workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
 		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
 
@@ -1041,7 +1041,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 
 		Step("Perform Restore on destination cluster and validate", func() {
 			restoreName := "pds-restore-before-update-" + RandomString(5)
-			workflowRestore.Destination = WorkflowNamespace
+			workflowRestore.Destination = &WorkflowNamespace
 			restoreDeployment, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, Namespace)
 			log.FailOnError(err, "Error while taking restore")
 			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
@@ -1102,7 +1102,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.Namespace = &WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
 
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
@@ -1123,7 +1123,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 	})
 
 	It("Perform adhoc backup, restore and validate - Multiple Backup and Restores", func() {
-		workflowBackUpConfig.WorkflowDataService = workflowDataservice
+		workflowBackUpConfig.WorkflowDataService = &workflowDataservice
 		workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
 		numberOfIterations = 10
 
@@ -1156,7 +1156,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 				latestBackupUid = *eachBackup.Meta.Uid
 				log.Infof("Current backup ID [%s], Name [%s]", *eachBackup.Meta.Uid, *eachBackup.Meta.Name)
 				restoreName := "pds-restore-before-update-" + RandomString(5)
-				workflowRestore.Destination = WorkflowNamespace
+				workflowRestore.Destination = &WorkflowNamespace
 				restoreDeployment, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, Namespace)
 				log.FailOnError(err, "Error while taking restore")
 				log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
