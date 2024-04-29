@@ -8,6 +8,10 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/portworx/torpedo/drivers/node/ssh"
@@ -30,10 +34,6 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
