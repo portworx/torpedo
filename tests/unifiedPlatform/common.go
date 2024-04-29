@@ -172,6 +172,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 
 		log.Infof("Creating Backup struct")
 		WorkflowPDSBackup.WorkflowDataService = &WorkflowDataService
+		WorkflowPDSBackup.AllBackups = make([]string, 0)
 
 		log.Infof("Creating restore object for same cluster and same project")
 		WorkflowPDSRestore.Source = &WorkflowNamespace
@@ -193,6 +194,10 @@ func PurgePDS() {
 	log.FailOnError(err, "some error occurred while purging data service objects")
 
 	log.InfoD("Purging all backup objects")
+	err = WorkflowPDSBackup.Purge()
+	log.FailOnError(err, "some error occurred while purging backup config objects")
+
+	log.InfoD("Purging all backup config objects")
 	err = WorkflowPDSBackupConfig.Purge(true)
 	log.FailOnError(err, "some error occurred while purging backup config objects")
 

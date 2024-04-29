@@ -63,6 +63,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 			})
 
 			Step("Create Restore from the latest backup Id", func() {
+				WorkflowPDSRestore.SourceNamespace = WorkflowDataService.NamespaceName
 				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
@@ -1163,22 +1164,6 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 			}
 
 		})
-
-		defer func() {
-			Step("Delete Backups", func() {
-				for _, eachBackup := range pdsBackupConfigNames {
-					err := workflowBackUpConfig.DeleteBackupConfig(eachBackup)
-					log.FailOnError(err, "Error while deleting BackupConfig [%s]", eachBackup)
-				}
-			})
-		}()
-
-		//defer func() {
-		//	Step("Delete RestoredDeployment", func() {
-		//		err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
-		//		log.FailOnError(err, "Error while deleting restore")
-		//	})
-		//}()
 
 		Step("Validate md5hash for the restored deployments", func() {
 			err := workflowDataservice.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)

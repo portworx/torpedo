@@ -13,6 +13,7 @@ import (
 
 type WorkflowPDSBackup struct {
 	WorkflowDataService *WorkflowDataService
+	AllBackups          []string
 }
 
 const (
@@ -59,6 +60,9 @@ func (backup WorkflowPDSBackup) WaitForBackupToComplete(backupId string) error {
 
 	_, err := task.DoRetryWithTimeout(waitforBackupToComplete, backupTimeOut, defaultRetryInterval)
 
+	if err == nil {
+		backup.AllBackups = append(backup.AllBackups, backupId)
+	}
 	return err
 
 }
@@ -101,21 +105,14 @@ func (backup WorkflowPDSBackup) ValidateBackupDeletion(id string) error {
 }
 
 // Purge deletes all backups for a given deployment
-func (backup WorkflowPDSBackup) Purge(deploymentName string) error {
+func (backup WorkflowPDSBackup) Purge() error {
 
-	allBackups, err := backup.ListAllBackups(deploymentName)
-	if err != nil {
-		return err
-	}
-
-	log.Infof("Total number of backups found for [%s] are [%d]", deploymentName, len(allBackups))
-
-	for _, eachBackup := range allBackups {
-		err := backup.DeleteBackup(*eachBackup.Meta.Uid)
+	for _, eachBackup := range backup.AllBackups {
+		err := backup.DeleteBackup(eachBackup)
 		if err != nil {
 			return err
 		}
-		err = backup.ValidateBackupDeletion(*eachBackup.Meta.Uid)
+		err = backup.ValidateBackupDeletion(eachBackup)
 		if err != nil {
 			return fmt.Errorf("Backup deleted but validation failed. Error - [%s]", err.Error())
 		}
