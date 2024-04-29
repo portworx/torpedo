@@ -107,7 +107,10 @@ func (backup WorkflowPDSBackup) ValidateBackupDeletion(id string) error {
 // Purge deletes all backups for a given deployment
 func (backup WorkflowPDSBackup) Purge() error {
 
+	log.Infof("Total number of backups found - [%d]", len(backup.AllBackups))
+
 	for _, eachBackup := range backup.AllBackups {
+		log.InfoD("Deleting [%s]", eachBackup)
 		err := backup.DeleteBackup(eachBackup)
 		if err != nil {
 			return err
