@@ -2446,8 +2446,17 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 				Cause: err.Error(),
 			}
 		}
+		isPureFile, err := d.IsPureFileVolume(vol)
+		if err != nil {
+			return nil, false, err
+		}
+		if isPureFile {
+			return nil, false, nil
+		}
+
 		pxVol := volumeInspectResponse.Volume
 		for _, n := range node.GetStorageDriverNodes() {
+
 			ok, err := d.IsVolumeAttachedOnNode(pxVol, n)
 			if err != nil {
 				return nil, false, err
@@ -2461,7 +2470,6 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 		if pxVol.Source.Parent != "" {
 			return nil, false, nil
 		}
-
 		return nil, true, fmt.Errorf("volume [%s] is not attached on any node", volumeName)
 	}
 
