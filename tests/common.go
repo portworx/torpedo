@@ -12139,9 +12139,14 @@ func RefreshIscsiSession(n node.Node) error {
 
 // GetPVCObjFromVol Returns pvc object from Volume
 func GetPVCObjFromVol(vol *volume.Volume) (*v1.PersistentVolumeClaim, error) {
-	pvcObj, err := k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
-	if err != nil {
-		return nil, err
-	}
-	return pvcObj, nil
+	return k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
+}
+
+// Enables and Sets trashcan on the cluster
+func EnableTrashcanOnCluster(size string) error {
+	currNode := node.GetStorageDriverNodes()[0]
+	log.Infof("setting value of trashcan (volume-expiration-minutes) to [%v] ", size)
+	err := Inst().V.SetClusterOptsWithConfirmation(currNode,
+		map[string]string{"--volume-expiration-minutes": fmt.Sprintf("%v", size)})
+	return err
 }

@@ -12109,12 +12109,8 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 		Step(stepLog,
 			func() {
 				log.InfoD(stepLog)
-				currNode := node.GetStorageDriverNodes()[0]
-				err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
-					"--volume-expiration-minutes": "600",
-				})
-				log.FailOnError(err, "error while enabling trashcan")
-				log.InfoD("Trashcan is successfully enabled")
+				err := EnableTrashcanOnCluster("90")
+				log.FailOnError(err, "failed to enable trashcan on the cluster")
 			})
 
 		stepLog = "Schedule Applications on the cluster and get details of Volumes"
@@ -12174,18 +12170,28 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 		ResizePvcInParallel := func(newVolumeIDs *VolumeDetails) {
 			defer GinkgoRecover()
 			volCurSize := newVolumeIDs.vol.Size / units.GiB
-			volNewSize := volCurSize + uint64(10)
-			log.Infof("Resizing Volume [%v] from size [%v] to [%v]", newVolumeIDs.vol.Name, newVolumeIDs.vol.Size, volNewSize*units.GiB)
-			vol, err := Inst().S.ResizePVC(newVolumeIDs.ctx, newVolumeIDs.pvc, volNewSize)
+			volNewSize := volCurSize + 10
+			log.Infof("Resizing Volume [%v] from size [%v]/[%v] to [%v]/[%v]",
+				newVolumeIDs.vol.Name, newVolumeIDs.vol.Size, newVolumeIDs.vol.Size/units.GB,
+				volNewSize*units.GB, volNewSize)
+
+			log.Infof("Resizing PVC [%v] to [%v]", newVolumeIDs.pvc.Name, volNewSize)
+			vol, err := Inst().S.ResizePVC(newVolumeIDs.ctx, newVolumeIDs.pvc, 10)
 			log.FailOnError(err, "Failed to resize PVC [%v]", vol.Name)
 
-			time.Sleep(60 * time.Second)
+			time.Sleep(30 * time.Second)
 			volReSize, err := Inst().V.InspectVolume(vol.ID)
 			log.FailOnError(err, "inspect returned error ?")
 
 			log.Infof("Verify volume size after resizing the volume [%v]", vol.Name)
-			dash.VerifyFatal(volReSize.Spec.Size > newVolumeIDs.vol.Size, true, "Resize of Volume didnot happen!")
-			log.Infof(fmt.Sprintf("Volume [%v] resized from [%v] to [%v]", newVolumeIDs.vol.Name, newVolumeIDs.vol.Size, volReSize.Spec.Size))
+			dash.VerifyFatal(volReSize.Spec.Size > newVolumeIDs.vol.Size, true,
+				fmt.Sprintf("Resize of Volume didnot happen? current size is [%v]", volReSize.Spec.Size/units.GiB))
+
+			log.Infof(fmt.Sprintf("Volume [%v] resized from [%v] to [%v]",
+				newVolumeIDs.vol.Name, newVolumeIDs.vol.Size, volReSize.Spec.Size))
+			dash.VerifyFatal((volReSize.Spec.Size/units.GiB) == volNewSize, true,
+				fmt.Sprintf("Resize of Volume didnot happen? current size is [%v]!", volReSize.Spec.Size/units.GiB))
+
 		}
 
 		// Resize Volumes in parallel
@@ -12194,6 +12200,8 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 			sizeBeforeResize, err := Inst().V.InspectVolume(volId)
 			log.FailOnError(err, "inspect returned error ?")
 			toResize := sizeBeforeResize.Spec.Size + (10 * units.GiB)
+			log.Infof("Resizing Volume [%v] from [%v] to [%v]",
+				volId, sizeBeforeResize.Spec.Size, toResize/units.GiB)
 
 			// Resize Volume and verify if volume resized
 			log.FailOnError(Inst().V.ResizeVolume(volId, toResize), "Failed to resize volume")
@@ -12202,7 +12210,14 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 			sizeAfterResize, err := Inst().V.InspectVolume(volId)
 			log.FailOnError(err, "inspect returned error ?")
 
-			dash.VerifyFatal(sizeBeforeResize.Spec.Size < sizeAfterResize.Spec.Size, true, "Volume resize did not happen")
+			dash.VerifyFatal(sizeBeforeResize.Spec.Size < sizeAfterResize.Spec.Size, true,
+				"Volume resize did not happen")
+
+			log.Infof("Volume [%v] resized from [%v] to [%v] and expected is [%v]",
+				volId, sizeBeforeResize.Spec.Size, toResize, sizeAfterResize.Spec.Size)
+
+			dash.VerifyFatal((toResize/units.GiB) == (sizeAfterResize.Spec.Size/units.GiB), true,
+				fmt.Sprintf("Resize of Volume didnot happen? current size is [%v]!", sizeAfterResize.Spec.Size))
 
 		}
 
@@ -12218,9 +12233,10 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 		for _, eachVol := range volSizeMap {
 			// Pod details after blocking IP
 			podsAfterblk, err := k8sCore.GetPodsUsingPVC(eachVol.vol.Name, eachVol.vol.Namespace)
-			log.FailOnError(err, "unable to find the node from the pod")
+			log.FailOnError(err, fmt.Sprintf("failed to get details of Pods assigned to volume [%v]", eachVol.vol.Name))
 			for _, eachPodAfter := range podsAfterblk {
-				log.Infof(fmt.Sprintf("State of the pod after resize [%v] is [%v]", eachPodAfter.Name, eachPodAfter.Status.Phase))
+				log.Infof(fmt.Sprintf("State of the pod after resize [%v] is [%v]",
+					eachPodAfter.Name, eachPodAfter.Status.Phase))
 				if eachPodAfter.Status.Phase != "Running" {
 					log.FailOnError(fmt.Errorf("Pod [%v] Consuming Volume [%v] is not in Running State ",
 						eachPodAfter.Name, eachVol.vol.Name), "Pod not in Running State")
@@ -12237,7 +12253,7 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 		stepLog = "validate volumes in trashcan"
 		Step(stepLog, func() {
 			// wait for few seconds for pvc to get deleted and volume to get detached
-			time.Sleep(10 * time.Second)
+			time.Sleep(60 * time.Second)
 			node := node.GetStorageDriverNodes()[0]
 			log.InfoD(stepLog)
 			trashcanVols, err = Inst().V.GetTrashCanVolumeIds(node)
@@ -12250,7 +12266,8 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 					volReSize, err := Inst().V.InspectVolume(volsInTrash)
 					log.FailOnError(err, "inspect returned error for volume [%v]?", volsInTrash)
 					if !volReSize.InTrashcan {
-						log.FailOnError(fmt.Errorf("Volume [%v] is still not in trashcan", volsInTrash), "is volume in trashcan after delete ?")
+						log.FailOnError(fmt.Errorf("Volume [%v] is still not in trashcan", volsInTrash),
+							"is volume in trashcan after delete ?")
 					}
 				}
 			}
@@ -12303,6 +12320,13 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 				log.FailOnError(Inst().V.DeleteVolume(eachVolume), "failed to delete volumes")
 			}
 		}
+		stepLog = "Disable trashcan on the cluster"
+		Step(stepLog,
+			func() {
+				log.InfoD(stepLog)
+				err := EnableTrashcanOnCluster("0")
+				log.FailOnError(err, "failed to disable trashcan on the cluster")
+			})
 
 	})
 
