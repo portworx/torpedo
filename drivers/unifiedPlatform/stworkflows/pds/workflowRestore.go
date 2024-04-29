@@ -93,6 +93,7 @@ func (restore WorkflowPDSRestore) Purge() error {
 
 func (restore WorkflowPDSRestore) CreateAndAssociateRestoreNamespace(namespace string) error {
 
+	// TODO: Remove this once https://purestorage.atlassian.net/browse/DS-9443 is resolved
 	log.InfoD("Creating restore namespace on source")
 	_, err := restore.Source.CreateNamespaces(restore.SourceNamespace)
 	if err != nil {
@@ -105,7 +106,7 @@ func (restore WorkflowPDSRestore) CreateAndAssociateRestoreNamespace(namespace s
 		return fmt.Errorf("unable to create restore namespace - [%s]", err.Error())
 	}
 
-	log.InfoD("Assocting restore namespace to destination project")
+	log.InfoD("Associating restore namespace to destination project")
 
 	err = restore.Destination.TargetCluster.Project.Associate(
 		[]string{},

@@ -43,11 +43,6 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 				log.FailOnError(err, "Error while deploying ds")
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 
-				//stepLog := "Running Workloads on deployment"
-				//Step(stepLog, func() {
-				//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-				//	log.FailOnError(err, "Error while running workloads on ds")
-				//})
 			})
 
 			Step("Create Adhoc backup config of the existing deployment", func() {

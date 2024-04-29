@@ -163,7 +163,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowDataService.NamespaceName = PDS_DEFAULT_NAMESPACE
 		WorkflowDataService.Namespace = WorkflowNamespace
 		WorkflowDataService.DataServiceDeployment = make(map[string]string)
-		WorkflowDataService.Dash = dash
+		WorkflowDataService.Dash = Inst().Dash
 
 		log.Infof("Creating backup config struct")
 		WorkflowPDSBackupConfig.WorkflowBackupLocation = WorkflowbkpLoc
