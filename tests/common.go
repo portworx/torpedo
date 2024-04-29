@@ -12137,8 +12137,8 @@ func RefreshIscsiSession(n node.Node) error {
 	return nil
 }
 
-// GetPVCObjFromVolName Returns pvc object from Volume
-func GetPVCObjFromVolName(vol *volume.Volume) (*v1.PersistentVolumeClaim, error) {
+// GetPVCObjFromVol Returns pvc object from Volume
+func GetPVCObjFromVol(vol *volume.Volume) (*v1.PersistentVolumeClaim, error) {
 	pvcObj, err := k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
 	if err != nil {
 		return nil, err
