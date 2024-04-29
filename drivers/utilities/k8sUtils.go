@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -12,6 +13,7 @@ import (
 	"github.com/portworx/torpedo/pkg/units"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math/rand"
 	"strings"
 	"time"
@@ -103,6 +105,40 @@ func GetVolumeCapacityInGB(namespace string, deploymentName string) (uint64, err
 		pvcCapacity = appVol.Spec.Size / units.GiB
 	}
 	return pvcCapacity, nil
+}
+
+func GetVolumeUsage(namespace string, deploymentName string) (float64, error) {
+	var pvcUsage float64
+	_, vols := GetPvsAndPVCsfromDeployment(namespace, deploymentName)
+	for _, vol := range vols {
+		appVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return 0, err
+		}
+		pvcUsage = float64(appVol.GetUsage())
+	}
+	log.InfoD("Amount of PVC consumed is- [%v]", pvcUsage)
+	return pvcUsage, nil
+}
+
+// Check the DS related PV usage and resize in case of 90% full
+func CheckStorageFullCondition(namespace string, deploymentName string, thresholdPercentage float64) error {
+	log.Infof("Check PVC Usage")
+	f := func() (interface{}, bool, error) {
+		initialCapacity, _ := GetVolumeCapacityInGB(namespace, deploymentName)
+		floatCapacity := float64(initialCapacity)
+		consumedCapacity, err := GetVolumeUsage(namespace, deploymentName)
+		log.FailOnError(err, "unable to calculate vol usage")
+		threshold := thresholdPercentage * (floatCapacity / 100)
+		log.InfoD("threshold value calculated is- [%v]", threshold)
+		if consumedCapacity >= threshold {
+			log.Infof("The PVC capacity was %v , the consumed PVC in floating point value is- %v", initialCapacity, consumedCapacity)
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("threshold not achieved for the PVC, ")
+	}
+	_, err := task.DoRetryWithTimeout(f, 35*time.Minute, 20*time.Second)
+	return err
 }
 
 func GetDbMasterNode(namespace string, dsName string, deployment string, kubeconfigPath string) (string, bool) {
@@ -300,4 +336,35 @@ func ValidatePods(namespace string, podName string) error {
 		}
 	}
 	return nil
+}
+
+// GetDeploymentPods returns the pods list for a given deployment and given namespace
+func GetDeploymentPods(deploymentName string, namespace string) ([]corev1.Pod, error) {
+
+	depPods := make([]corev1.Pod, 0)
+	pods, err := GetPods(namespace)
+	if err != nil {
+		log.FailOnError(err, "failed to get deployment pods")
+	}
+	for _, pod := range pods.Items {
+		log.Infof("%v", pod.Name)
+		if strings.Contains(pod.Name, deploymentName) {
+			depPods = append(depPods, pod)
+		}
+	}
+	return depPods, nil
+}
+
+// GetPodAge gets the pod age of pods of a given deployment and namespace
+func GetPodAge(deploymentName string, namespace string) (float64, error) {
+	var podAge time.Duration
+	pods, err := GetDeploymentPods(deploymentName, namespace)
+	log.FailOnError(err, "Unable to fetch deployment pods")
+	for _, pod := range pods {
+		currentTime := metav1.Now()
+		podCreationTime := pod.GetCreationTimestamp().Time
+		podAge = currentTime.Time.Sub(podCreationTime)
+	}
+	podAgeInt := podAge.Minutes()
+	return podAgeInt, nil
 }

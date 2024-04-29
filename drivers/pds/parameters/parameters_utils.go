@@ -175,7 +175,7 @@ type NewPDSParams struct {
 	} `json:"ResiliencyTest"`
 	StorageConfigurationsSSIE struct {
 		FSType         []string
-		ReplFactor     []int32
+		ReplFactor     []string
 		NewStorageSize string
 		CpuLimit       string
 		CpuRequest     string

@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
@@ -11,6 +12,7 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -50,6 +52,18 @@ var _ = BeforeSuite(func() {
 		//Initialising UnifiedApiComponents in ds utils
 		err = dsUtils.InitUnifiedApiComponents(infraParams.ControlPlaneURL, AccID)
 		log.FailOnError(err, "error while initialising api components in ds utils")
+	})
+
+	Step("Dumping kubeconfigs file", func() {
+		kubeconfigs := os.Getenv("KUBECONFIGS")
+		if kubeconfigs != "" {
+			kubeconfigList := strings.Split(kubeconfigs, ",")
+			if len(kubeconfigList) < 2 {
+				log.FailOnError(fmt.Errorf("At least minimum two kubeconfigs required but has"),
+					"Failed to get k8s config path.At least minimum two kubeconfigs required")
+			}
+			DumpKubeconfigs(kubeconfigList)
+		}
 	})
 
 })
