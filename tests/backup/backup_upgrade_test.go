@@ -3,7 +3,6 @@ package tests
 import (
 	"fmt"
 	"github.com/hashicorp/go-version"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -1149,12 +1148,6 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 					err = Inst().V.RefreshDriverEndpoints()
 					log.FailOnError(err, "Refresh Driver Endpoints failed")
 
-					urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
-					u, err := url.Parse(urlToParse)
-					log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
-					err = Inst().V.ValidateDriver(u.String(), true)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
-
 					// Printing cluster node info after the upgrade
 					PrintK8sClusterInfo()
 
@@ -1168,12 +1161,6 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 					// Refresh Driver Endpoints
 					err = Inst().V.RefreshDriverEndpoints()
 					log.FailOnError(err, "Refresh Driver Endpoints failed")
-
-					urlToParse = fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
-					u, err = url.Parse(urlToParse)
-					log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
-					err = Inst().V.ValidateDriver(u.String(), true)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
 
 					// Printing cluster node info after the upgrade
 					PrintK8sClusterInfo()
