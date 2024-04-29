@@ -74,12 +74,29 @@ var _ = BeforeSuite(func() {
 		log.Infof("Current project ID - [%s]", ProjectId)
 	})
 
-	Step("Register Target Cluster", func() {
+	Step("Register Source target Cluster", func() {
 		WorkflowTargetCluster.Project = WorkflowProject
 		log.Infof("Tenant ID [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
 		WorkflowTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane(false)
 		log.FailOnError(err, "Unable to register target cluster")
 		log.Infof("Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
+	})
+
+	Step("Register Destination target Cluster", func() {
+
+		defer func() {
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "failed to switch context to source cluster")
+		}()
+
+		err := SetDestinationKubeConfig()
+		log.FailOnError(err, "Failed to switched to destination cluster")
+
+		WorkflowTargetClusterDestination.Project = WorkflowProject
+		log.Infof("Tenant ID [%s]", WorkflowTargetClusterDestination.Project.Platform.TenantId)
+		WorkflowTargetCluster, err := WorkflowTargetClusterDestination.RegisterToControlPlane(false)
+		log.FailOnError(err, "Unable to register target cluster")
+		log.Infof("Destination Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
 	})
 
 	Step("Create Buckets", func() {

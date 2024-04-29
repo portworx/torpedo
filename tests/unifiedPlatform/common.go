@@ -50,15 +50,16 @@ var (
 )
 
 var (
-	WorkflowPlatform      platform.WorkflowPlatform
-	WorkflowTargetCluster platform.WorkflowTargetCluster
-	WorkflowProject       platform.WorkflowProject
-	WorkflowNamespace     platform.WorkflowNamespace
-	WorkflowCc            platform.WorkflowCloudCredentials
-	WorkflowbkpLoc        platform.WorkflowBackupLocation
-	NewPdsParams          *parameters.NewPDSParams
-	PdsLabels             = make(map[string]string)
-	PDS_DEFAULT_NAMESPACE string
+	WorkflowPlatform                 platform.WorkflowPlatform
+	WorkflowTargetCluster            platform.WorkflowTargetCluster
+	WorkflowTargetClusterDestination platform.WorkflowTargetCluster
+	WorkflowProject                  platform.WorkflowProject
+	WorkflowNamespace                platform.WorkflowNamespace
+	WorkflowCc                       platform.WorkflowCloudCredentials
+	WorkflowbkpLoc                   platform.WorkflowBackupLocation
+	NewPdsParams                     *parameters.NewPDSParams
+	PdsLabels                        = make(map[string]string)
+	PDS_DEFAULT_NAMESPACE            string
 )
 
 // ReadParams reads the params from given or default json
@@ -172,10 +173,11 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 
 		log.Infof("Creating Backup struct")
 		WorkflowPDSBackup.WorkflowDataService = &WorkflowDataService
-		WorkflowPDSBackup.AllBackups = make([]string, 0)
+		WorkflowPDSBackup.AllBackups = make(map[string]string)
 
 		log.Infof("Creating restore object for same cluster and same project")
 		WorkflowPDSRestore.Source = &WorkflowNamespace
+		WorkflowPDSRestore.Restores = make(map[string]automationModels.PDSRestore)
 		WorkflowPDSRestore.Destination = &WorkflowNamespace
 		WorkflowPDSRestore.RestoredDeployments = pds.WorkflowDataService{}
 		WorkflowPDSRestore.RestoredDeployments.DataServiceDeployment = make(map[string]string)
@@ -189,8 +191,27 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 
 // PurgePDS purges all default PDS related resources created during testcase run
 func PurgePDS() {
+
+	if WorkflowPDSRestore.Source.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
+		err := SetDestinationKubeConfig()
+		log.FailOnError(err, "Failed to switched to destination cluster")
+	}
+
+	log.InfoD("Purging all restore objects")
+	err := WorkflowPDSRestore.Purge()
+	log.FailOnError(err, "some error occurred while purging restore objects")
+
+	log.InfoD("Purging all restore destination namespaces")
+	err = WorkflowPDSRestore.Destination.Purge()
+	log.FailOnError(err, "some error occurred while purging restore destination namespaces")
+
+	if WorkflowPDSRestore.Source.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
+		err = SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	}
+
 	log.InfoD("Purging all dataservice objects")
-	err := WorkflowDataService.Purge()
+	err = WorkflowDataService.Purge()
 	log.FailOnError(err, "some error occurred while purging data service objects")
 
 	log.InfoD("Purging all backup objects")
@@ -201,17 +222,9 @@ func PurgePDS() {
 	err = WorkflowPDSBackupConfig.Purge(true)
 	log.FailOnError(err, "some error occurred while purging backup config objects")
 
-	log.InfoD("Purging all restore objects")
-	err = WorkflowPDSRestore.Purge()
-	log.FailOnError(err, "some error occurred while purging restore objects")
-
 	log.InfoD("Purging all restore source namespaces")
 	err = WorkflowPDSRestore.Source.Purge()
 	log.FailOnError(err, "some error occurred while purging restore source namespaces")
-
-	log.InfoD("Purging all restore destination namespaces")
-	err = WorkflowPDSRestore.Destination.Purge()
-	log.FailOnError(err, "some error occurred while purging restore destination namespaces")
 
 	log.InfoD("Purging all namespace objects")
 	err = WorkflowNamespace.Purge()

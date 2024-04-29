@@ -13,7 +13,7 @@ import (
 
 type WorkflowPDSBackup struct {
 	WorkflowDataService *WorkflowDataService
-	AllBackups          []string
+	AllBackups          map[string]string
 }
 
 const (
@@ -54,15 +54,13 @@ func (backup WorkflowPDSBackup) WaitForBackupToComplete(backupId string) error {
 		} else {
 			log.Infof("Backup completed successfully - [%s]", *backupModel.Get.Meta.Name)
 			log.Infof("Backup Status - [%s]", *backupModel.Get.Status.CloudSnapId)
+			backup.AllBackups[*backupModel.Get.Meta.Name] = backupId
 			return nil, false, nil
 		}
 	}
 
 	_, err := task.DoRetryWithTimeout(waitforBackupToComplete, backupTimeOut, defaultRetryInterval)
 
-	if err == nil {
-		backup.AllBackups = append(backup.AllBackups, backupId)
-	}
 	return err
 
 }

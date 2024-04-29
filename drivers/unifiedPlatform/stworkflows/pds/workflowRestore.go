@@ -95,7 +95,7 @@ func (restore WorkflowPDSRestore) CreateAndAssociateRestoreNamespace(namespace s
 
 	// TODO: Remove this once https://purestorage.atlassian.net/browse/DS-9443 is resolved
 	log.InfoD("Creating restore namespace on source")
-	_, err := restore.Source.CreateNamespaces(restore.SourceNamespace)
+	_, err := restore.Destination.CreateNamespaces(restore.SourceNamespace)
 	if err != nil {
 		return fmt.Errorf("unable to create source namespace - [%s]", err.Error())
 	}
@@ -110,7 +110,7 @@ func (restore WorkflowPDSRestore) CreateAndAssociateRestoreNamespace(namespace s
 
 	err = restore.Destination.TargetCluster.Project.Associate(
 		[]string{},
-		[]string{restore.Destination.Namespaces[namespace]},
+		[]string{restore.Destination.Namespaces[namespace], restore.Destination.Namespaces[restore.SourceNamespace]},
 		[]string{},
 		[]string{},
 		[]string{},
