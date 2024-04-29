@@ -110,7 +110,7 @@ type NewPDSParams struct {
 	DataserviceConfigurationsToTest []struct {
 		Name           string                 `json:"Name"`
 		Configurations map[string]interface{} `json:"Configurations"`
-	}
+	} `json:"DataserviceConfigurationsToTest"`
 
 	ForceImageID bool
 

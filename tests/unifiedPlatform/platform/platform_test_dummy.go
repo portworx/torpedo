@@ -313,13 +313,14 @@ var _ = Describe("{TestPlatformTemplates}", func() {
 		Step("create custom templates for PDS", func() {
 			workFlowTemplates.Platform = WorkflowPlatform
 			for _, ds := range NewPdsParams.DataServiceToTest {
-				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 				log.FailOnError(err, "Unable to create Custom Templates for PDS")
 				log.InfoD("Created serviceConfig Template ID- [serviceConfigId- %v]", serviceConfigId)
 				log.InfoD("Created stConfig Template ID- [stConfigId- %v]", stConfigId)
 				log.InfoD("Created resConfig Template ID- [resConfigId- %v]", resConfigId)
-				tempList = append(tempList, serviceConfigId, stConfigId, resConfigId)
+				tempList = append(tempList, serviceConfigId[ds.Name], stConfigId, resConfigId)
 			}
+
 		})
 		Step("Cleanup Created Templates after dissociating linked resources", func() {
 			err := workFlowTemplates.DeleteCreatedCustomPdsTemplates(tempList)

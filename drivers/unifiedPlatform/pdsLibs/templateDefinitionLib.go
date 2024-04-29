@@ -91,10 +91,10 @@ func CreateServiceConfigTemplate(tenantId string, dsName string, serviceConfig S
 	return templateResponse, nil
 }
 
-func CreateStorageConfigTemplate(tenantId string, dsName string, templateConfigs StorageConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
+func CreateStorageConfigTemplate(tenantId string, templateConfigs StorageConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
 	revisionUid, err := GetRevisionUidForStorageOptions()
 	if err != nil {
-		return nil, fmt.Errorf("unable to fetch revisionUid for the dataservice - [%v] under test", dsName)
+		return nil, fmt.Errorf("unable to fetch revisionUid for the dataservice under test")
 	}
 	templateName := "pdsAutoSVCTemp" + utilities.RandomString(5)
 	templateValue := structToMap(templateConfigs, STORAGE_OPTIONS)
@@ -117,10 +117,10 @@ func CreateStorageConfigTemplate(tenantId string, dsName string, templateConfigs
 	return templateResponse, nil
 }
 
-func CreateResourceConfigTemplate(tenantId string, dsName string, templateConfigs ResourceConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
+func CreateResourceConfigTemplate(tenantId string, templateConfigs ResourceConfiguration) (*automationModels.PlatformTemplatesResponse, error) {
 	revisionUid, err := GetRevisionUidForResourceConfig()
 	if err != nil {
-		return nil, fmt.Errorf("unable to fetch revisionUid for the dataservice - [%v] under test", dsName)
+		return nil, fmt.Errorf("unable to fetch revisionUid for the dataservice - under test")
 	}
 	templateName := "pdsAutoResTemp" + utilities.RandomString(5)
 	templateValue := structToMap(templateConfigs, RESOURCE_SETTINGS)
