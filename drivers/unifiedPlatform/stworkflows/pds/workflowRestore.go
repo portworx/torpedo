@@ -26,9 +26,14 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 	log.Infof("Name of restore - [%s]", name)
 	log.Infof("Backup UUID - [%s]", backupUid)
 	log.Infof("Destination Cluster Id - [%s]", restore.Destination.TargetCluster.ClusterUID)
-	log.Infof("Destination Namespace Id - [%s]", restore.Destination.Namespaces[namespace])
 	log.Infof("Source project Id - [%s]", restore.Source.TargetCluster.Project.ProjectId)
 	log.Infof("Destination project Id - [%s]", restore.Destination.TargetCluster.Project.ProjectId)
+	err := restore.CreateAndAssociateRestoreNamespace(namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("Destination Namespace Id - [%s]", restore.Destination.Namespaces[namespace])
 
 	createRestore, err := pdslibs.CreateRestore(
 		name,
@@ -38,11 +43,6 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 		restore.Destination.TargetCluster.Project.ProjectId,
 	)
 
-	if err != nil {
-		return nil, err
-	}
-
-	err = restore.CreateAndAssociateRestoreNamespace(namespace)
 	if err != nil {
 		return nil, err
 	}
