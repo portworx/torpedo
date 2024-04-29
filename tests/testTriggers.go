@@ -3354,6 +3354,11 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 					policyName := "intervalpolicy"
 					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 					if err != nil {
+						err = CreatePXCloudCredential()
+						if err != nil {
+							UpdateOutcome(event, err)
+							return
+						}
 						retain := 10
 						interval := getCloudSnapInterval(CloudSnapShot)
 						log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
@@ -3500,6 +3505,11 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 	defer func() {
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
+	}()
+
+	defer func() {
+		err := DeleteCloudSnapBucket(*contexts)
+		UpdateOutcome(event, fmt.Errorf("failed to delete cloud snap bucket,Cause: %v", err))
 	}()
 
 	setMetrics(*event)
@@ -3654,7 +3664,6 @@ func checkLunsAfterVolumeDeletion(event *EventRecord, vols []*volume.Volume) {
 
 	pureClientMap := make(map[string]map[string]*flasharray.Client)
 	pureClientMap["FADA"], err = pureutils.GetFAClientMapFromPXPureSecret(pxPureSecret)
-	pureClientMap["FBDA"], err = pureutils.GetFBClientMapFromPXPureSecret(pxPureSecret)
 
 	timeout := 10 * time.Minute
 	t := func() (interface{}, bool, error) {
@@ -5521,13 +5530,13 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 			statType = stats.ResizeDiskEventName
 		}
 		isDmthin, _ := IsDMthin()
+		pNode, err = GetNodeFromPoolUUID(pool.Uuid)
+		if err != nil {
+			log.Error(err.Error())
+			UpdateOutcome(event, err)
+			return
+		}
 		if isDmthin && resizeOperationType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
-			pNode, err = GetNodeFromPoolUUID(pool.Uuid)
-			if err != nil {
-				log.Error(err.Error())
-				UpdateOutcome(event, err)
-				return
-			}
 			err = EnterPoolMaintenance(*pNode)
 			if err != nil {
 				log.InfoD(fmt.Sprintf("Printing The storage pool status after failure of entering maintenance on Node:%s ", pNode.Name))
@@ -5572,7 +5581,6 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 					} else {
 						err = RebootNodeAndWaitForPxUp(*storageNode)
 					}
-					err = RebootNodeAndWaitForPxUp(*storageNode)
 					if err != nil {
 						log.Error(err.Error())
 						UpdateOutcome(event, err)
@@ -5590,7 +5598,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 
 		}
 
-		if pNode != nil {
+		if pNode != nil && isDmthin && resizeOperationType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
 			err := ExitPoolMaintenance(*pNode)
 			if err != nil {
 				log.Error(err.Error())
@@ -6035,7 +6043,7 @@ func TriggerUpdateCluster(contexts *[]*scheduler.Context, recordChan *chan *Even
 					time.Sleep(30 * time.Minute)
 				}
 
-				PrintK8sCluterInfo()
+				PrintK8sClusterInfo()
 			})
 
 			Step("validate storage components", func() {
@@ -6054,7 +6062,7 @@ func TriggerUpdateCluster(contexts *[]*scheduler.Context, recordChan *chan *Even
 				}
 
 				// Printing cluster node info after the upgrade
-				PrintK8sCluterInfo()
+				PrintK8sClusterInfo()
 			})
 
 			// TODO: This currently doesn't work for most distros and commenting out this change, see PTX-22409

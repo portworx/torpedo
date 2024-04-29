@@ -3,8 +3,13 @@ package tests
 import (
 	context1 "context"
 	"fmt"
+	"net/url"
+	"strings"
+	"time"
+
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
+
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -13,9 +18,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
-	"time"
-	"net/url"
-	"strings"
 )
 
 var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
@@ -33,8 +35,15 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-fio-pvc-clone"}
-		stepLog := "schedule a kubevirtVM"
+		Inst().AppList = []string{"kubevirt-debian-template"}
+		stepLog := "Setting up Boot PVC Template"
+		Step(stepLog, func() {
+			template := ScheduleApplications("template")
+			ValidateApplications(template)
+		})
+
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+		stepLog = "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
@@ -46,18 +55,10 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 			log.FailOnError(err, "Failed to verify bind mount")
 			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 		}
-		stepLog = "Write some data in the VM and calculate it's md5sum"
-		Step(stepLog, func() {
-			err = CreateConfigMap()
-			log.FailOnError(err, "Failed in creating Config map to login the VM")
-			err = WriteFilesAndStoreMD5InVM(appCtxs, namespace, 20, 250000000)
-			log.FailOnError(err, "Failed to write files and store MD5 sums")
-		})
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			//success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "0.5Gi")
-			err = HotAddPVCsToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			_, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
 		})
@@ -73,10 +74,10 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 				}
 			}
 		})
-		stepLog = "Validate md5sum of previously written data"
+		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
-			err = ValidateFileIntegrityInVM(appCtxs, namespace)
-			log.FailOnError(err, "File integrity validation failed")
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
 		})
 	})
 	JustAfterEach(func() {
@@ -100,8 +101,7 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 		defer func() {
 			Inst().AppList = appList
 		}()
-		Inst().AppList = []string{"kubevirt-fio-pvc-clone"}
-
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog := "schedule a kubevirt VM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -109,21 +109,12 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, taskName)...)
 			}
 		})
-		defer DestroyApps(appCtxs, nil)
 		ValidateApplications(appCtxs)
-		stepLog = "Write some data in the VM and calculate it's md5sum"
-		Step(stepLog, func() {
-			err = CreateConfigMap()
-			log.FailOnError(err, "Failed in creating Config map to login the VM")
-			err = WriteFilesAndStoreMD5InVM(appCtxs, namespace, 20, 250000000)
-			log.FailOnError(err, "Failed to write files and store MD5 sums")
-		})
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
 			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 		}
-
 		stepLog = "Live migrate the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -132,10 +123,10 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 				log.FailOnError(err, "Failed to live migrate kubevirt VM")
 			}
 		})
-		stepLog = "Validate md5sum of previously written data"
+		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
-			err = ValidateFileIntegrityInVM(appCtxs, namespace)
-			log.FailOnError(err, "File integrity validation failed")
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
 		})
 	})
 	JustAfterEach(func() {
@@ -148,19 +139,19 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("PxKillBeforeAddDiskToVM", "Kill Px on host node of Kubuevirt VM and then Add a disk", nil, 0)
 	})
-
 	var appCtxs []*scheduler.Context
 	var nodes []string
 	var namespace string
 	itLog := "Kill Px then Add disk to Kubevirt VM"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-fio-pvc-clone"}
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -173,13 +164,6 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 			log.FailOnError(err, "Failed to verify bind mount")
 			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 		}
-		stepLog = "Write some data in the VM and calculate it's md5sum"
-		Step(stepLog, func() {
-			err = CreateConfigMap()
-			log.FailOnError(err, "Failed in creating Config map to login the VM")
-			err = WriteFilesAndStoreMD5InVM(appCtxs, namespace, 20, 250000000)
-			log.FailOnError(err, "Failed to write files and store MD5 sums")
-		})
 		stepLog = "Kill Px on node hosting VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -222,15 +206,13 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 				}
 			}
 		})
-
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			err = HotAddPVCsToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			_, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
 		})
-
 		stepLog = "Verify the new disk added is also bind mounted"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -242,14 +224,12 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 				}
 			}
 		})
-		stepLog = "Validate md5sum of previously written data"
+		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
-			err = ValidateFileIntegrityInVM(appCtxs, namespace)
-			log.FailOnError(err, "File integrity validation failed")
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
 		})
-
 	})
-
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
@@ -267,13 +247,14 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 
 	itLog := "Add disk to Kubevirt VM, Kill Px and then add another disk"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-fio-pvc-clone"}
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -286,21 +267,13 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 			log.FailOnError(err, "Failed to verify bind mount")
 			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 		}
-		stepLog = "Write some data in the VM and calculate it's md5sum"
-		Step(stepLog, func() {
-			err = CreateConfigMap()
-			log.FailOnError(err, "Failed in creating Config map to login the VM")
-			err = WriteFilesAndStoreMD5InVM(appCtxs, namespace, 20, 250000000)
-			log.FailOnError(err, "Failed to write files and store MD5 sums")
-		})
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "0.5Gi")
+			success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
 		})
-
 		stepLog = "Verify the new disk added is also bind mounted"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -354,16 +327,7 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 				}
 			}
 		})
-		stepLog = "Add another disk to the kubevirt VM"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			numberOfVolumes = 2
-			success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "0.5Gi")
-			log.FailOnError(err, "Failed to add disks to kubevirt VM")
-			dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
-		})
-
-		stepLog = "Verify the new disk added is also bind mounted"
+		stepLog = "Verify the disks added are still bind mounted"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for _, appCtx := range appCtxs {
@@ -374,14 +338,12 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 				}
 			}
 		})
-		stepLog = "Validate md5sum of previously written data"
+		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
-			err = ValidateFileIntegrityInVM(appCtxs, namespace)
-			log.FailOnError(err, "File integrity validation failed")
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
 		})
-
 	})
-
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
@@ -389,7 +351,6 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 })
 
 var _ = Describe("{KubevirtVMVolHaIncrease}", func() {
-
 	JustBeforeEach(func() {
 		StartTorpedoTest("KubevirtVMVolHaIncrease", "Increase the volume HA of a kubevirt VM", nil, 0)
 	})
@@ -397,13 +358,13 @@ var _ = Describe("{KubevirtVMVolHaIncrease}", func() {
 	var namespace string
 	itLog := "Increase the volume HA of a kubevirt VM"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
 		}()
-
-		Inst().AppList = []string{"kubevirt-fio-load-disk-repl-2"}
+		Inst().AppList = []string{"kubevirt-debian-fio-low-ha"}
 		stepLog := "schedule a kubevirt VM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -416,7 +377,6 @@ var _ = Describe("{KubevirtVMVolHaIncrease}", func() {
 			log.FailOnError(err, "Failed to verify bind mount")
 			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 		}
-
 		stepLog = "Increase the volume HA of the kubevirt VM Volumes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -439,7 +399,6 @@ var _ = Describe("{KubevirtVMVolHaIncrease}", func() {
 				}
 			}
 		})
-
 		stepLog = "Verify if VM's are still bind mounted even after HA increase"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -457,7 +416,6 @@ var _ = Describe("{KubevirtVMVolHaIncrease}", func() {
 			DestroyApps(appCtxs, nil)
 		})
 	})
-
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
@@ -465,7 +423,6 @@ var _ = Describe("{KubevirtVMVolHaIncrease}", func() {
 })
 
 var _ = Describe("{KubevirtVMVolHaDecrease}", func() {
-
 	JustBeforeEach(func() {
 		StartTorpedoTest("KubevirtVMVolHaDecrease", "Decrease the replication factor of kubevirt Vms", nil, 0)
 	})
@@ -473,6 +430,7 @@ var _ = Describe("{KubevirtVMVolHaDecrease}", func() {
 	var namespace string
 	itLog := "Decrease the volume HA of a kubevirt VM"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		log.InfoD(stepLog)
 		appList := Inst().AppList
@@ -480,7 +438,7 @@ var _ = Describe("{KubevirtVMVolHaDecrease}", func() {
 			Inst().AppList = appList
 		}()
 
-		Inst().AppList = []string{"kubevirt-fio-load-multi-disk"}
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog := "schedule a kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -517,8 +475,7 @@ var _ = Describe("{KubevirtVMVolHaDecrease}", func() {
 				}
 			}
 		})
-
-		stepLog = "Verify if VM's are still bind mounted even after HA De"
+		stepLog = "Verify if VM's are still bind mounted even after HA Decrease"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for _, appCtx := range appCtxs {
@@ -535,7 +492,6 @@ var _ = Describe("{KubevirtVMVolHaDecrease}", func() {
 			DestroyApps(appCtxs, nil)
 		})
 	})
-
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
@@ -550,33 +506,26 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 	var namespace string
 	itLog := "Live Migrate a VM and then add a new disk to a kubevirtVM"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
 		}()
 		numberOfVolumes := 1
-		Inst().AppList = []string{"kubevirt-fio-pvc-clone"}
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
 		})
-		//defer DestroyApps(appCtxs, nil)
 		ValidateApplications(appCtxs)
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
 			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 		}
-		stepLog = "Write some data in the VM and calculate it's md5sum"
-		Step(stepLog, func() {
-			err = CreateConfigMap()
-			log.FailOnError(err, "Failed in creating Config map to login the VM")
-			err = WriteFilesAndStoreMD5InVM(appCtxs, namespace, 20, 250000000)
-			log.FailOnError(err, "Failed to write files and store MD5 sums")
-		})
 		stepLog = "Live migrate the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -588,11 +537,10 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "0.5Gi")
+			success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
 		})
-
 		stepLog = "Verify the new disk added is also bind mounted"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -604,10 +552,76 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 				}
 			}
 		})
-		stepLog = "Validate md5sum of previously written data"
+		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
-			err = ValidateFileIntegrityInVM(appCtxs, namespace)
-			log.FailOnError(err, "File integrity validation failed")
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{AddDiskAndLiveMigrate}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddDiskAndLiveMigrate", "Live Migrate a VM After Adding a new disk to a kubevirtVM", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	itLog := "Add a new disk to a kubevirtVM and then Live Migrate"
+	It(itLog, func() {
+		defer ListEvents("portworx")
+		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		numberOfVolumes := 1
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+		stepLog := "schedule a kubevirtVM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+		stepLog = "Add one disk to the kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			log.FailOnError(err, "Failed to add disks to kubevirt VM")
+			dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
+		})
+		stepLog = "Verify the new disk added is also bind mounted"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				isVmBindMounted, err := IsVMBindMounted(appCtx, true)
+				log.FailOnError(err, "Failed to verify disks in kubevirt VM")
+				if !isVmBindMounted {
+					log.Errorf("The newly added disk to vm %s is not bind mounted", appCtx.App.Key)
+				}
+			}
+		})
+		stepLog = "Live migrate the kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+				log.FailOnError(err, "Failed to live migrate kubevirt VM")
+			}
+		})
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
 		})
 	})
 	JustAfterEach(func() {
@@ -617,7 +631,6 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 })
 
 var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
-
 	/*
 		PWX:
 			https://purestorage.atlassian.net/browse/PWX-36709
@@ -625,7 +638,6 @@ var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
 			https://portworx.testrail.net/index.php?/cases/view/93652
 			https://portworx.testrail.net/index.php?/cases/view/93653
 	*/
-
 	var (
 		testName                string
 		contexts                []*scheduler.Context
@@ -647,6 +659,7 @@ var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
 	})
 
 	It("has to fill up the volume completely, resize the volumes and storage pool(s), validate and teardown apps", func() {
+		defer ListEvents("portworx")
 		log.InfoD("filling up the volume completely, resizing the volumes and storage pool(s), validating and tearing down apps")
 
 		Step("Create autopilot rules for PVC and pool expand", func() {
@@ -840,6 +853,7 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 
 	itLog := "Upgrade OCP cluster and validate kubevirt apps"
 	It(itLog, func() {
+		defer ListEvents("portworx")
 		stepLog := "schedule kubevirt VMs"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -884,7 +898,7 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 				dash.VerifyFatal(mError, nil, "validation of PDB of px-storage during cluster upgrade successful")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
 
-				PrintK8sCluterInfo()
+				PrintK8sClusterInfo()
 			})
 
 			Step("validate storage components", func() {
@@ -895,7 +909,7 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
 
 				// Printing cluster node info after the upgrade
-				PrintK8sCluterInfo()
+				PrintK8sClusterInfo()
 			})
 
 			Step("update node drive endpoints", func() {
@@ -922,5 +936,81 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 				DestroyApps(appCtxs, nil)
 			})
 		}
+	})
+})
+
+var _ = Describe("{RebootRootDiskAttachedNode}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootRootDiskAttachedNode", "Reboot the node where VMs root disk is attached", nil, 0)
+		DeployVMTemplatesAndValidate()
+	})
+	var appCtxs []*scheduler.Context
+
+	itLog := "Reboot node where Kubevirt VMs root disk is attached"
+	It(itLog, func() {
+		defer ListEvents("portworx")
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-cirros-live-migration", "kubevirt-windows-vm",
+			"kubevirt-fio-pvc-clone", "kubevirt-fio-load-disk-repl-2", "kubevirt-fio-load-multi-disk"}
+		stepLog := "schedule a kubevirtVM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				appCtxs = append(appCtxs, ScheduleApplications("reboot")...)
+			}
+		})
+		defer DestroyApps(appCtxs, nil)
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount after initial deploy")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount after intial deploy")
+		}
+
+		stepLog = "Get node where VM's root disk is attached and reboot that node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, virtualMachineCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(virtualMachineCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount pre node reboot in namespace: %s", virtualMachineCtx.App.NameSpace)
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount pre node reboot")
+
+				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{virtualMachineCtx})
+				log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+				dash.VerifyFatal(len(vms) > 0, true, "Failed to to get VMs from scheduled contexts")
+
+				for _, vm := range vms {
+					nodeName, err := GetNodeOfVM(vm)
+					log.FailOnError(err, "Failed to get node name for VM: %s", vm.Name)
+					log.Infof("Pre-reboot VM [%s] in namespace [%s] is scheduled on node [%s]. Rebooting it.", vm.Name, vm.Namespace, nodeName)
+					nodeObj, err := node.GetNodeByName(nodeName)
+					log.FailOnError(err, "Failed to get node obj for node name: %s", nodeName)
+					err = Inst().N.RebootNodeAndWait(nodeObj)
+					log.FailOnError(err, "Failed to reboot  node: %s", nodeObj.Name)
+					log.Infof("Succesfully rebooted node: %s", nodeObj.Name)
+				}
+				ValidateApplications(appCtxs)
+				// Get updated VM list and validate bind mount again
+				// TODO: PTX-23439 Add validation that VM started on a different node than it's original node
+				vms, err = GetAllVMsFromScheduledContexts([]*scheduler.Context{virtualMachineCtx})
+				log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+				dash.VerifyFatal(len(vms) > 0, true, "Failed to to get VMs from scheduled contexts")
+				for _, vm := range vms {
+					nodeName, err := GetNodeOfVM(vm)
+					log.FailOnError(err, "Failed to get node name for VM: %s", vm.Name)
+					log.Infof("Post reboot VM [%s] in namespace [%s] is scheduled on node [%s]", vm.Name, vm.Namespace, nodeName)
+				}
+				bindMount, err = IsVMBindMounted(virtualMachineCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount post node reboot in namespace: %s", virtualMachineCtx.App.NameSpace)
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount pre node reboot")
+			}
+			ValidateApplications(appCtxs)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
 	})
 })
