@@ -2,8 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"math/rand"
 	"path"
 	"strings"
@@ -12,6 +10,7 @@ import (
 
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/pkg/log"
@@ -19,6 +18,7 @@ import (
 	"github.com/portworx/torpedo/pkg/pureutils"
 
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
