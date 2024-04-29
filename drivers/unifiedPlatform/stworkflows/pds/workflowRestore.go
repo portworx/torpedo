@@ -42,6 +42,11 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 		return nil, err
 	}
 
+	err = restore.CreateAndAssociateRestoreNamespace(namespace)
+	if err != nil {
+		return nil, err
+	}
+
 	if value, ok := restore.SkipValidatation[ValidatePdsRestore]; ok {
 		if value == true {
 			log.Infof("Skipping Restore Validation")
@@ -83,6 +88,7 @@ func (restore WorkflowPDSRestore) Purge() error {
 		return err
 	}
 
+	return nil
 }
 
 func (restore WorkflowPDSRestore) CreateAndAssociateRestoreNamespace(namespace string) error {
