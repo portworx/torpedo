@@ -396,10 +396,11 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart}", func() {
 		for _, ctx := range contexts {
 			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
 		}
-		setMigrateLegacySharedToSharedv4Service(true)
-		time.Sleep(210 * time.Second) // sleep 3.5 minutes.
 		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
 		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
+
+		setMigrateLegacySharedToSharedv4Service(true)
+		time.Sleep(210 * time.Second) // sleep 3.5 minutes.
 
 		stepLog := "Pause Migration and let all Apps come up and restart Migration"
 		Step(stepLog, func() {
@@ -453,6 +454,9 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestart}", func() {
 		for _, ctx := range contexts {
 			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
 		}
+		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
+		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
+
 		setMigrateLegacySharedToSharedv4Service(true)
 		time.Sleep(210 * time.Second) // sleep 3.5 minutes.
 
@@ -467,8 +471,6 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestart}", func() {
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", pxNode.Name))
 		})
 
-		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
-		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
 		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
 		countPostTimeout := getLegacySharedVolumeCount(contexts)
 		dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Post migration count is [%d] instead of 0", countPostTimeout))
@@ -523,6 +525,8 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 		log.FailOnError(err, fmt.Sprintf("error in executing prereq for node %s decommission", pxNode.Name))
 
 		// Transition after preparing for decommission.
+		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
+		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
 		setMigrateLegacySharedToSharedv4Service(true)
 		time.Sleep(90 * time.Second) // sleep 1.5 minute.
 
@@ -537,8 +541,6 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 
 		stepLog = "Validate migration process after node Decommission"
 		Step(stepLog, func() {
-			totalSharedVolumes := getLegacySharedVolumeCount(contexts)
-			timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
 			waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
 			countPostTimeout := getLegacySharedVolumeCount(contexts)
 			dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Post migration count is [%d] instead of 0", countPostTimeout))
@@ -634,6 +636,9 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator}", func() {
 				break
 			}
 		}
+		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
+		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
+
 		setMigrateLegacySharedToSharedv4Service(true)
 		time.Sleep(120 * time.Second) // sleep 2 minutes.
 
@@ -645,8 +650,6 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator}", func() {
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeForPxRestart.Name))
 		})
 
-		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
-		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
 		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
 		countPostTimeout := getLegacySharedVolumeCount(contexts)
 		dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Post migration count is [%d] instead of 0", countPostTimeout))
@@ -692,13 +695,13 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() 
 			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
 		}
 		createSnapshotsAndClones(volMap, "snapshot-1", "clone-1")
+		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
+		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
 		setMigrateLegacySharedToSharedv4Service(true)
 		time.Sleep(120 * time.Second) // sleep 2 minutes.
 
 		createSnapshotsAndClones(volMap, "snapshot-2", "clone-2")
 
-		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
-		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
 		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
 		countPostTimeout := getLegacySharedVolumeCount(contexts)
 		dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Post migration count is [%d] instead of 0", countPostTimeout))
@@ -808,6 +811,8 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxKill}", func() {
 		for _, ctx := range contexts {
 			returnMapOfPodsUsingApiSharedVolumes(podMap, volMap, ctx)
 		}
+		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
+		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
 		setMigrateLegacySharedToSharedv4Service(true)
 		time.Sleep(180 * time.Second) // sleep 3 minutes.
 
@@ -822,8 +827,6 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxKill}", func() {
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", pxNode.Name))
 		})
 
-		totalSharedVolumes := getLegacySharedVolumeCount(contexts)
-		timeForMigration := ((totalSharedVolumes + 30) / 30) * 10
 		waitAllSharedVolumesToGetMigrated(contexts, timeForMigration)
 		countPostTimeout := getLegacySharedVolumeCount(contexts)
 		dash.VerifyFatal(countPostTimeout == 0, true, fmt.Sprintf("Post migration count is [%d] instead of 0", countPostTimeout))
