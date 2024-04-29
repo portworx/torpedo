@@ -859,7 +859,7 @@ func TriggerDetachDrives(contexts *[]*scheduler.Context, recordChan *chan *Event
 					return nil, false, nil
 				}
 				_, err = task.DoRetryWithTimeout(getSTC, 3 * time.Minute, 1 * time.Minute)
-				dash.VerifyFatal(err==nil, true, "Find storage cluster ?")
+				UpdateOutcome(event, err)
 				var nodeId string
 				storageNodes:= node.GetStorageNodes()
 				nodeId = storageNodes[0].VolDriverNodeID
@@ -935,7 +935,6 @@ func TriggerDetachDrives(contexts *[]*scheduler.Context, recordChan *chan *Event
 				}
 				err = ValidateDataIntegrity(contexts)
 				UpdateOutcome(event, err)
-				dash.VerifyFatal(err==nil, true, "Data integrity check ?")
 				updateMetrics(*event)
 			})
 	})
