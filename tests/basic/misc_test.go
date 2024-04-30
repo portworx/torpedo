@@ -1201,6 +1201,7 @@ var _ = Describe("{NodeDiskDetachAttach}", func() {
 		var oldNodeIDtoMatch string
 		var newNodeIDtoMatch string
 		Step(fmt.Sprintf("detach disks attached from a random storage node %s and attach to non px node %s", randomStorageNode.Name, randNonPxNode.Name), func() {
+			log.Infof("Detaching disks from node %s and attaching to node %s", randomStorageNode.Name, randNonPxNode.Name)
 			// ToDo - Ensure the above selected node has volumes/apps running on it
 			// Store the Node ID of randomStorageNode for future use
 			oldNodeIDtoMatch = randomStorageNode.Id
@@ -1229,20 +1230,14 @@ var _ = Describe("{NodeDiskDetachAttach}", func() {
 			log.FailOnError(err, "error refreshing storage drive endpoints")
 			// Wait for the driver to be up on the node
 			randNonPxNode, err = node.GetNodeByName(randNonPxNode.Name)
-			if err != nil {
-				log.FailOnError(err, fmt.Sprintf("Failed to get node %s", randNonPxNode.Name))
-			}
+			log.FailOnError(err, fmt.Sprintf("Failed to get node %s", randNonPxNode.Name))
 			err = Inst().V.WaitDriverUpOnNode(randNonPxNode, Inst().DriverStartTimeout)
 			dash.VerifyFatal(err, nil, "Validate volume is driver up")
 			// Verify the node ID is same as earlier stored Node ID
 			newNodeIDtoMatch = randNonPxNode.Id
 
-			if oldNodeIDtoMatch != newNodeIDtoMatch {
-				log.FailOnError(fmt.Errorf("node ID mismatch"), fmt.Sprintf("Node ID mismatch for node %s", randNonPxNode.Name))
-				dash.VerifyFatal(false, true, fmt.Sprintf("Node ID mismatch for node %s after moving the disks", randNonPxNode.Name))
-			} else {
-				log.Infof("Node ID matches for node %s [%s == %s]", randNonPxNode.Name, oldNodeIDtoMatch, newNodeIDtoMatch)
-			}
+			dash.VerifyFatal(oldNodeIDtoMatch, newNodeIDtoMatch, fmt.Sprintf("Node ID mismatch for node %s after moving the disks", randNonPxNode.Name))
+			log.Infof("Node ID matches for node %s [%s == %s]", randNonPxNode.Name, oldNodeIDtoMatch, newNodeIDtoMatch)
 		})
 
 		// ToDo - Verify the integrity of apps, cluster and volumes
