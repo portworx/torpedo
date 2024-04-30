@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"strings"
 	"sync"
 
@@ -33,7 +32,6 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 
 			Step("Deploy dataservice", func() {
-				WorkflowPDSTemplate.Platform = WorkflowPlatform
 
 				_, _, _, err := WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
 				log.FailOnError(err, "Unable to create Custom Templates for PDS")
@@ -86,13 +84,11 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 
 var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 	var (
-		deployment           *automationModels.PDSDeploymentResponse
-		destinationCluster   platform.WorkflowTargetCluster
-		destinationNamespace platform.WorkflowNamespace
-		latestBackupUid      string
-		pdsBackupConfigName  string
-		restoreNamespace     string
-		restoreName          string
+		deployment          *automationModels.PDSDeploymentResponse
+		latestBackupUid     string
+		pdsBackupConfigName string
+		restoreNamespace    string
+		restoreName         string
 	)
 	JustBeforeEach(func() {
 		StartPDSTorpedoTest("PerformRestoreToDifferentClusterSameProject", "Deploy data services and perform backup and restore on a different cluster on the same project", nil, 0)
@@ -134,38 +130,9 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 				log.FailOnError(err, "Error occured while waiting for backup to complete")
 			})
 
-			Step("Register Destination Target Cluster", func() {
-				err := SetDestinationKubeConfig()
-				log.FailOnError(err, "Failed to switched to destination cluster")
-
-				destinationCluster.Project = WorkflowProject
-				log.Infof("Tenant ID [%s]", destinationCluster.Project.Platform.TenantId)
-				_, err = destinationCluster.RegisterToControlPlane(false)
-				log.FailOnError(err, "Unable to register target cluster")
-				log.Infof("Destination Target cluster registered with uid - [%s]", destinationCluster.ClusterUID)
-			})
-
-			Step("Associate target cluster to Project", func() {
-				err := WorkflowProject.Associate(
-					[]string{destinationCluster.ClusterUID},
-					[]string{},
-					[]string{},
-					[]string{},
-					[]string{},
-					[]string{},
-				)
-				log.FailOnError(err, "Unable to associate Cluster to Project")
-				log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
-			})
-
 			Step("Create Restore from the latest backup Id", func() {
-
-				defer func() {
-					err := SetSourceKubeConfig()
-					log.FailOnError(err, "failed to switch context to source cluster")
-				}()
-
-				WorkflowPDSRestore.Destination = &destinationNamespace
+				WorkflowPDSRestore.Destination = &WorkflowNamespaceDestination
+				CheckforClusterSwitch()
 				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
 				log.FailOnError(err, "Restore Failed")
 

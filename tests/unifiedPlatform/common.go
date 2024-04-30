@@ -185,6 +185,9 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowPDSRestore.Destination = &WorkflowNamespace
 		WorkflowPDSRestore.RestoredDeployments = pds.WorkflowDataService{}
 		WorkflowPDSRestore.RestoredDeployments.DataServiceDeployment = make(map[string]string)
+
+		log.Infof("Creating PDS template object")
+		WorkflowPDSTemplate.Platform = WorkflowPlatform
 	})
 
 	instanceIDString := strconv.Itoa(testRepoID)
