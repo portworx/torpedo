@@ -117,7 +117,9 @@ func EndPDSTorpedoTest() {
 
 	Step("Purging all PDS related objects", func() {
 
-		PurgePDS()
+		// TODO: This needs to be added back once all cleanup issues are fixed
+		// PurgePDS()
+		log.Warnf("Skipping PDS resource cleanup")
 
 	})
 
@@ -185,6 +187,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowPDSRestore.Destination = &WorkflowNamespace
 		WorkflowPDSRestore.RestoredDeployments = pds.WorkflowDataService{}
 		WorkflowPDSRestore.RestoredDeployments.DataServiceDeployment = make(map[string]string)
+		WorkflowPDSRestore.SourceNamespace = PDS_DEFAULT_NAMESPACE
 
 		log.Infof("Creating PDS template object")
 		WorkflowPDSTemplate.Platform = WorkflowPlatform

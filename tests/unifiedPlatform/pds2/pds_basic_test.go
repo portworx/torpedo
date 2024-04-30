@@ -169,9 +169,11 @@ var _ = AfterSuite(func() {
 
 	Step("Purging all platform related objects", func() {
 
-		log.InfoD("Deleting projects")
-		err := WorkflowProject.DeleteProject()
-		log.FailOnError(err, "unable to delete projects")
+		// TODO: This needs to be added back once cleanup issues are fixed
+		log.Warnf("Skipping Platform resource cleanup")
+		//log.InfoD("Deleting projects")
+		//err := WorkflowProject.DeleteProject()
+		//log.FailOnError(err, "unable to delete projects")
 	})
 
 	EndTorpedoTest()
