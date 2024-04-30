@@ -35,6 +35,7 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 
 	log.Infof("Destination Namespace Id - [%s]", restore.Destination.Namespaces[namespace])
 
+	log.InfoD("Creating restore - [%s]", name)
 	createRestore, err := pdslibs.CreateRestore(
 		name,
 		backupUid, restore.Destination.TargetCluster.ClusterUID,
@@ -94,13 +95,13 @@ func (restore WorkflowPDSRestore) Purge() error {
 func (restore WorkflowPDSRestore) CreateAndAssociateRestoreNamespace(namespace string) error {
 
 	// TODO: Remove this once https://purestorage.atlassian.net/browse/DS-9443 is resolved
-	log.InfoD("Creating restore namespace on source")
+	log.InfoD("Creating restore namespace on source - [%s]", restore.SourceNamespace)
 	_, err := restore.Destination.CreateNamespaces(restore.SourceNamespace)
 	if err != nil {
 		return fmt.Errorf("unable to create source namespace - [%s]", err.Error())
 	}
 
-	log.InfoD("Creating restore namespace")
+	log.InfoD("Creating restore namespace - [%s]", namespace)
 	_, err = restore.Destination.CreateNamespaces(namespace)
 	if err != nil {
 		return fmt.Errorf("unable to create restore namespace - [%s]", err.Error())

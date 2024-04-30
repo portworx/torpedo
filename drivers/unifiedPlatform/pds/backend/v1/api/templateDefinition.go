@@ -104,7 +104,7 @@ func (tempDef *PDS_API_V1) GetTemplateRevisions() (*TemplateDefinitionResponse, 
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `TemplateDefinitionServiceGetRevision`: %v\n.Full HTTP response: %v", err, res)
 	}
-	log.InfoD("Successfully fetched the template Roles")
+	log.Infof("Successfully fetched the template Roles")
 	log.Infof("Value of template - [%v]", templateModel)
 	err = utilities.CopyStruct(templateModel, templateResponse.GetRevision)
 	log.Infof("Value of template after copy - [%v]", templateResponse)

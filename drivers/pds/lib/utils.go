@@ -1789,7 +1789,7 @@ func CheckAndDeleteIndependentPV(name string, delPod bool) error {
 		}
 		return err
 	}
-	log.InfoD("Stranded PV Found by the name - %s. Going ahead to delete this PV and associated entities", name)
+	log.Infof("Stranded PV Found by the name - %s. Going ahead to delete this PV and associated entities", name)
 	if pv_check.Status.Phase == corev1.VolumeBound {
 		if pv_check.Spec.ClaimRef != nil && pv_check.Spec.ClaimRef.Kind == "PersistentVolumeClaim" {
 			namespace := pv_check.Spec.ClaimRef.Namespace
