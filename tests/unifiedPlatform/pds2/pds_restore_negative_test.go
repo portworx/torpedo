@@ -3,7 +3,7 @@ package tests
 import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
+	pds2 "github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -17,13 +17,13 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		StartTorpedoTest("PerformRestoreValidatingHA", "Deploy data services, Perform restore while validating HA on the same cluster", nil, 0)
 	})
 	var (
-		workflowDataService  pds.WorkflowDataService
-		workflowBackUpConfig pds.WorkflowPDSBackupConfig
-		workflowRestore      pds.WorkflowPDSRestore
+		workflowDataService  pds2.WorkflowDataService
+		workflowBackUpConfig pds2.WorkflowPDSBackupConfig
+		workflowRestore      pds2.WorkflowPDSRestore
 		deployment           *automationModels.PDSDeploymentResponse
 		restoreDeployment    *automationModels.PDSRestoreResponse
 
-		workFlowTemplates pds.WorkflowPDSTemplates
+		workFlowTemplates pds2.WorkflowPDSTemplates
 		tempList          []string
 
 		pdsBackupConfigName string
@@ -151,11 +151,11 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 
 var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 	var (
-		workflowDataservice  pds.WorkflowDataService
-		workflowBackUpConfig pds.WorkflowPDSBackupConfig
-		workflowRestore      pds.WorkflowPDSRestore
-		workflowBackup       pds.WorkflowPDSBackup
-		workFlowTemplates    pds.WorkflowPDSTemplates
+		workflowDataservice  pds2.WorkflowDataService
+		workflowBackUpConfig pds2.WorkflowPDSBackupConfig
+		workflowRestore      pds2.WorkflowPDSRestore
+		workflowBackup       pds2.WorkflowPDSBackup
+		workFlowTemplates    pds2.WorkflowPDSTemplates
 		deployment           *automationModels.PDSDeploymentResponse
 		podsToBeDeleted      []string
 		latestBackupUid      string

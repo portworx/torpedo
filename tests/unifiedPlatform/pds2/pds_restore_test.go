@@ -2,14 +2,14 @@ package tests
 
 import (
 	"fmt"
+	pds2 "github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
+	platform2 "github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"strconv"
 	"strings"
 	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -18,11 +18,11 @@ import (
 
 var _ = Describe("{PerformRestoreToSameCluster}", func() {
 	var (
-		workflowDataservice  pds.WorkflowDataService
-		workflowBackUpConfig pds.WorkflowPDSBackupConfig
-		workflowRestore      pds.WorkflowPDSRestore
-		workflowBackup       pds.WorkflowPDSBackup
-		workFlowTemplates    pds.WorkflowPDSTemplates
+		workflowDataservice  pds2.WorkflowDataService
+		workflowBackUpConfig pds2.WorkflowPDSBackupConfig
+		workflowRestore      pds2.WorkflowPDSRestore
+		workflowBackup       pds2.WorkflowPDSBackup
+		workFlowTemplates    pds2.WorkflowPDSTemplates
 		deployment           *automationModels.PDSDeploymentResponse
 		latestBackupUid      string
 		pdsBackupConfigName  string
@@ -158,14 +158,14 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 
 var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 	var (
-		workflowDataservice  pds.WorkflowDataService
-		workflowBackUpConfig pds.WorkflowPDSBackupConfig
-		workflowRestore      pds.WorkflowPDSRestore
-		workflowBackup       pds.WorkflowPDSBackup
-		workFlowTemplates    pds.WorkflowPDSTemplates
+		workflowDataservice  pds2.WorkflowDataService
+		workflowBackUpConfig pds2.WorkflowPDSBackupConfig
+		workflowRestore      pds2.WorkflowPDSRestore
+		workflowBackup       pds2.WorkflowPDSBackup
+		workFlowTemplates    pds2.WorkflowPDSTemplates
 		deployment           *automationModels.PDSDeploymentResponse
-		destinationCluster   platform.WorkflowTargetCluster
-		destinationNamespace platform.WorkflowNamespace
+		destinationCluster   platform2.WorkflowTargetCluster
+		destinationNamespace platform2.WorkflowNamespace
 		latestBackupUid      string
 		pdsBackupConfigName  string
 		restoreNamespace     string
@@ -329,15 +329,15 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 
 var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 	var (
-		workflowDataservice  pds.WorkflowDataService
-		workflowBackUpConfig pds.WorkflowPDSBackupConfig
-		workflowRestore      pds.WorkflowPDSRestore
-		workflowBackup       pds.WorkflowPDSBackup
-		workFlowTemplates    pds.WorkflowPDSTemplates
+		workflowDataservice  pds2.WorkflowDataService
+		workflowBackUpConfig pds2.WorkflowPDSBackupConfig
+		workflowRestore      pds2.WorkflowPDSRestore
+		workflowBackup       pds2.WorkflowPDSBackup
+		workFlowTemplates    pds2.WorkflowPDSTemplates
 		deployment           *automationModels.PDSDeploymentResponse
-		destinationProject   platform.WorkflowProject
-		destinationCluster   platform.WorkflowTargetCluster
-		destinationNamespace platform.WorkflowNamespace
+		destinationProject   platform2.WorkflowProject
+		destinationCluster   platform2.WorkflowTargetCluster
+		destinationNamespace platform2.WorkflowNamespace
 		latestBackupUid      string
 		pdsBackupConfigName  string
 		restoreNamespace     string
@@ -516,11 +516,11 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 
 var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 	var (
-		workflowDataservice  pds.WorkflowDataService
-		workflowBackUpConfig pds.WorkflowPDSBackupConfig
-		workflowRestore      pds.WorkflowPDSRestore
-		workflowBackup       pds.WorkflowPDSBackup
-		workFlowTemplates    pds.WorkflowPDSTemplates
+		workflowDataservice  pds2.WorkflowDataService
+		workflowBackUpConfig pds2.WorkflowPDSBackupConfig
+		workflowRestore      pds2.WorkflowPDSRestore
+		workflowBackup       pds2.WorkflowPDSBackup
+		workFlowTemplates    pds2.WorkflowPDSTemplates
 		deployments          []*automationModels.PDSDeploymentResponse
 		latestBackupUid      string
 		pdsBackupConfigName  string
@@ -687,9 +687,9 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 		StartTorpedoTest("UpgradeDataServiceImageAndVersionWithBackUpRestore", "Upgrade Data Service Version and Image", nil, 0)
 	})
 	var (
-		workflowDataservice  pds.WorkflowDataService
-		workFlowTemplates    pds.WorkflowPDSTemplates
-		workflowBackUpConfig pds.WorkflowPDSBackupConfig
+		workflowDataservice  pds2.WorkflowDataService
+		workFlowTemplates    pds2.WorkflowPDSTemplates
+		workflowBackUpConfig pds2.WorkflowPDSBackupConfig
 		//workflowRestore      pds.WorkflowPDSRestore
 		deployment        *automationModels.PDSDeploymentResponse
 		updatedDeployment *automationModels.PDSDeploymentResponse
@@ -809,13 +809,13 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 		StartTorpedoTest("PerformRestoreAfterPVCResize", "Deploy data services, increase PVC Size and perform backup and restore on the same cluster", nil, 0)
 	})
 	var (
-		workflowDataService  pds.WorkflowDataService
-		workflowBackUpConfig pds.WorkflowPDSBackupConfig
+		workflowDataService  pds2.WorkflowDataService
+		workflowBackUpConfig pds2.WorkflowPDSBackupConfig
 		//workflowRestore      pds.WorkflowPDSRestore
 		deployment        *automationModels.PDSDeploymentResponse
 		restoreDeployment *automationModels.PDSRestoreResponse
 
-		workFlowTemplates pds.WorkflowPDSTemplates
+		workFlowTemplates pds2.WorkflowPDSTemplates
 		tempList          []string
 
 		pdsBackupConfigName string
@@ -988,12 +988,12 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 		StartTorpedoTest("PerformRestoreAfterDataServiceUpdate", "Perform restore after ds update", nil, 0)
 	})
 	var (
-		workflowDataservice  pds.WorkflowDataService
-		workFlowTemplates    pds.WorkflowPDSTemplates
-		workflowBackUpConfig pds.WorkflowPDSBackupConfig
-		workflowBackup       pds.WorkflowPDSBackup
+		workflowDataservice  pds2.WorkflowDataService
+		workFlowTemplates    pds2.WorkflowPDSTemplates
+		workflowBackUpConfig pds2.WorkflowPDSBackupConfig
+		workflowBackup       pds2.WorkflowPDSBackup
 		deployment           *automationModels.PDSDeploymentResponse
-		workflowRestore      pds.WorkflowPDSRestore
+		workflowRestore      pds2.WorkflowPDSRestore
 		restoreDeployment    *automationModels.PDSRestoreResponse
 		pdsBackupConfigName  string
 		latestBackupUid      string
@@ -1155,12 +1155,12 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 		StartTorpedoTest("PerformSimultaneousBackupRestoreForMultipleDeployments", "Perform multiple backup and restore simultaneously for different deployments.", nil, 0)
 	})
 	var (
-		workflowDataservice  pds.WorkflowDataService
-		workFlowTemplates    pds.WorkflowPDSTemplates
-		workflowBackUpConfig pds.WorkflowPDSBackupConfig
-		workflowBackup       pds.WorkflowPDSBackup
+		workflowDataservice  pds2.WorkflowDataService
+		workFlowTemplates    pds2.WorkflowPDSTemplates
+		workflowBackUpConfig pds2.WorkflowPDSBackupConfig
+		workflowBackup       pds2.WorkflowPDSBackup
 		deployment           *automationModels.PDSDeploymentResponse
-		workflowRestore      pds.WorkflowPDSRestore
+		workflowRestore      pds2.WorkflowPDSRestore
 		restoreDeployment    *automationModels.PDSRestoreResponse
 		pdsBackupConfigNames []string
 		latestBackupUid      string

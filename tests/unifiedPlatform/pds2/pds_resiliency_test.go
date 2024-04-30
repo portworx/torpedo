@@ -2,11 +2,11 @@ package tests
 
 import (
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	pds2 "github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -20,9 +20,9 @@ const (
 
 var _ = Describe("{ValidatePdsHealthIncaseofFailures}", func() {
 	var (
-		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.WorkflowPDSTemplates
-		workflowResiliency  pds.WorkflowPDSResiliency
+		workflowDataservice pds2.WorkflowDataService
+		workFlowTemplates   pds2.WorkflowPDSTemplates
+		workflowResiliency  pds2.WorkflowPDSResiliency
 		deployment          *automationModels.PDSDeploymentResponse
 		deployments         = make(map[dslibs.PDSDataService]*automationModels.PDSDeploymentResponse)
 		templates           []string
@@ -105,9 +105,9 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 		StartTorpedoTest("StopPXDuringStorageResize", "Deploy data services, Run workloads, and Stop PX on the node while Storage resize is happening", nil, 0)
 	})
 	var (
-		workflowResiliency  pds.WorkflowPDSResiliency
-		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.WorkflowPDSTemplates
+		workflowResiliency  pds2.WorkflowPDSResiliency
+		workflowDataservice pds2.WorkflowDataService
+		workFlowTemplates   pds2.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 	)
 	workflowResiliency.WfDataService = &workflowDataservice
@@ -144,7 +144,7 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 		})
 
 		//Update Ds With New Values of Resource Templates
-		resourceConfigUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Meta.Name, 1)
+		resourceConfigUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Meta.Name)
 		log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
 		log.InfoD("Updated Storage Template ID- [updated- %v]", resourceConfigUpdated)

@@ -2,12 +2,12 @@ package pds
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"time"
 
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
 )
 

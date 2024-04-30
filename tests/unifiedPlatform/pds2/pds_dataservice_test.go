@@ -2,11 +2,11 @@ package tests
 
 import (
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	pds2 "github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -15,8 +15,8 @@ import (
 
 var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	var (
-		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.WorkflowPDSTemplates
+		workflowDataservice pds2.WorkflowDataService
+		workFlowTemplates   pds2.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 		deployments         = make(map[dslibs.PDSDataService]*automationModels.PDSDeploymentResponse)
 		updateDeployment    *automationModels.PDSDeploymentResponse
@@ -97,8 +97,8 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 
 var _ = Describe("{UpgradeDataServiceImage}", func() {
 	var (
-		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.WorkflowPDSTemplates
+		workflowDataservice pds2.WorkflowDataService
+		workFlowTemplates   pds2.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 		deployments         = make(map[dslibs.PDSDataService]*automationModels.PDSDeploymentResponse)
 		templates           []string
@@ -180,8 +180,8 @@ var _ = Describe("{ScaleUpCpuMemLimitsOfDS}", func() {
 		StartTorpedoTest("ScaleUpCpuMemLimitsOfDS", "Deploy a dataservice and scale up its CPU/MEM limits by editing the respective template", nil, 0)
 	})
 	var (
-		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.WorkflowPDSTemplates
+		workflowDataservice pds2.WorkflowDataService
+		workFlowTemplates   pds2.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 		err                 error
 	)
@@ -213,7 +213,7 @@ var _ = Describe("{ScaleUpCpuMemLimitsOfDS}", func() {
 		}
 
 		//Update Ds With New Values of Resource Templates
-		resConfigIdUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Meta.Name, 1)
+		resConfigIdUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Meta.Name)
 		log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
 		log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdated)
@@ -233,8 +233,8 @@ var _ = Describe("{IncreasePVCby1gb}", func() {
 		StartTorpedoTest("IncreasePVCby1gb", "Deploy a dataservice and increase it Storage Size by 1gb  by applying new Storage template", nil, 0)
 	})
 	var (
-		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.WorkflowPDSTemplates
+		workflowDataservice pds2.WorkflowDataService
+		workFlowTemplates   pds2.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 	)
 	It("Deploy and Validate DataService", func() {
@@ -266,7 +266,7 @@ var _ = Describe("{IncreasePVCby1gb}", func() {
 
 		//Update Ds With New Values of Resource Templates
 		//Update Ds With New Values of Resource Templates
-		resConfigIdUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Meta.Name, 1)
+		resConfigIdUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Meta.Name)
 		log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
 		log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdated)
@@ -286,8 +286,8 @@ var _ = Describe("{GetPVCFullCondition}", func() {
 		StartTorpedoTest("GetPVCFullCondition", "Deploy a dataservice and fill-up the PVC, Once full, resize the PVC", nil, 0)
 	})
 	var (
-		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.WorkflowPDSTemplates
+		workflowDataservice pds2.WorkflowDataService
+		workFlowTemplates   pds2.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 		deployments         = make(map[dslibs.PDSDataService]*automationModels.PDSDeploymentResponse)
 		templates           []string
@@ -364,8 +364,8 @@ var _ = Describe("{DeletePDSPods}", func() {
 		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataServices are not affected", nil, 0)
 	})
 	var (
-		workflowDataservice pds.WorkflowDataService
-		workFlowTemplates   pds.WorkflowPDSTemplates
+		workflowDataservice pds2.WorkflowDataService
+		workFlowTemplates   pds2.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
 		deployments         = make(map[dslibs.PDSDataService]*automationModels.PDSDeploymentResponse)
 	)

@@ -3,13 +3,13 @@ package pds
 import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
+	platform2 "github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
 type WorkflowPDSRestore struct {
-	WorkflowProject     platform.WorkflowProject
-	Destination         platform.WorkflowNamespace
+	WorkflowProject     platform2.WorkflowProject
+	Destination         platform2.WorkflowNamespace
 	SkipValidatation    map[string]bool
 	Restores            map[string]automationModels.PDSRestore
 	RestoredDeployments map[string]WorkflowDataService

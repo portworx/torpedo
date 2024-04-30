@@ -7,7 +7,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
+	platform2 "github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -40,12 +40,12 @@ var (
 )
 
 var (
-	WorkflowPlatform      platform.WorkflowPlatform
-	WorkflowTargetCluster platform.WorkflowTargetCluster
-	WorkflowProject       platform.WorkflowProject
-	WorkflowNamespace     platform.WorkflowNamespace
-	WorkflowCc            platform.WorkflowCloudCredentials
-	WorkflowbkpLoc        platform.WorkflowBackupLocation
+	WorkflowPlatform      platform2.WorkflowPlatform
+	WorkflowTargetCluster platform2.WorkflowTargetCluster
+	WorkflowProject       platform2.WorkflowProject
+	WorkflowNamespace     platform2.WorkflowNamespace
+	WorkflowCc            platform2.WorkflowCloudCredentials
+	WorkflowbkpLoc        platform2.WorkflowBackupLocation
 	NewPdsParams          *parameters.NewPDSParams
 	PdsLabels             = make(map[string]string)
 	PDS_DEFAULT_NAMESPACE string

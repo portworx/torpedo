@@ -3,7 +3,7 @@ package tests
 import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
+	pds2 "github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -16,8 +16,8 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 		StartTorpedoTest("ScaleUpDsPostStorageSizeIncreaseVariousRepl", "Scale up the DS and Perform PVC Resize, validate the updated vol in the storage config.", nil, 0)
 	})
 	var (
-		workflowDataservice    pds.WorkflowDataService
-		workFlowTemplates      pds.WorkflowPDSTemplates
+		workflowDataservice    pds2.WorkflowDataService
+		workFlowTemplates      pds2.WorkflowPDSTemplates
 		deployment             *automationModels.PDSDeploymentResponse
 		updateDeployment       *automationModels.PDSDeploymentResponse
 		updateDeploymentScaled *automationModels.PDSDeploymentResponse
@@ -42,6 +42,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 			for _, repl := range NewPdsParams.StorageConfigurationsSSIE.ReplFactor {
 				workflowDataservice.Namespace = WorkflowNamespace
 				workflowDataservice.NamespaceName = Namespace
+				workflowDataservice.Dash = dash
 				NewPdsParams.StorageConfiguration.Repl = repl
 				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
 				log.FailOnError(err, "Unable to create Custom Templates for PDS")
@@ -55,7 +56,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 
-				initialCapacity, _ = workflowDataservice.GetVolumeCapacityInGBForDeployment(workflowDataservice.NamespaceName, *deployment.Create.Status.CustomResourceName)
+				initialCapacity, _ = GetVolumeCapacityInGB(workflowDataservice.NamespaceName, *deployment.Create.Status.CustomResourceName)
 				log.FailOnError(err, "Error while fetching pvc size for the ds")
 				log.InfoD("Initial volume storage size is : %v", initialCapacity)
 
@@ -64,10 +65,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				log.InfoD("Pods Age before storage resize is- [%v]Min", beforeResizePodAge)
 
 				defer func() {
-					Step("Delete DataServiceDeployment and Templates", func() {
-						err := workFlowTemplates.DeleteCreatedCustomPdsTemplates(templates)
-						log.FailOnError(err, "Unable to delete Custom Templates for PDS")
-
+					Step("Delete DataServiceDeployment", func() {
 						log.InfoD("Cleaning Up dataservice...")
 						err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
 						log.FailOnError(err, "Error while deleting dataservice")
@@ -77,7 +75,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				// Run Workloads
 
 				log.InfoD("Increase the storage size by 1 gb through template")
-				resConfigIdUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Status.CustomResourceName, 1)
+				resConfigIdUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Status.CustomResourceName)
 
 				log.FailOnError(err, "Unable to create Custom Templates for PDS")
 				templates = append(templates, resConfigIdUpdated)
@@ -90,7 +88,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				log.Debugf("Updated Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 
 				//Verify storage size before and after storage resize - Verify at STS, PV,PVC level
-				increasedPvcSize, err = workflowDataservice.GetVolumeCapacityInGBForDeployment(workflowDataservice.NamespaceName, *deployment.Create.Status.CustomResourceName)
+				increasedPvcSize, err = GetVolumeCapacityInGB(workflowDataservice.NamespaceName, *deployment.Create.Status.CustomResourceName)
 				log.InfoD("Increased Storage Size is- %v", increasedPvcSize)
 
 				log.InfoD("Verify storage size before and after storage resize - Verify at STS, PV,PVC level")
@@ -106,7 +104,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				beforeResizePodAge2, err := workflowDataservice.GetPodAgeForDeployment(*deployment.Create.Status.CustomResourceName, workflowDataservice.NamespaceName)
 
 				log.InfoD("Increase the storage size again after Scale-UP")
-				resConfigIdUpdatedScaled, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Status.CustomResourceName, 1)
+				resConfigIdUpdatedScaled, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Status.CustomResourceName)
 				log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
 				log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdatedScaled)
@@ -117,7 +115,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				log.FailOnError(err, "Error while updating ds")
 				log.Debugf("Updated Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 
-				increasedPvcSizeScaleUp, err := workflowDataservice.GetVolumeCapacityInGBForDeployment(workflowDataservice.NamespaceName, *deployment.Create.Status.CustomResourceName)
+				increasedPvcSizeScaleUp, err := GetVolumeCapacityInGB(workflowDataservice.NamespaceName, *deployment.Create.Status.CustomResourceName)
 				log.InfoD("Increased Storage Size is- %v", increasedPvcSizeScaleUp)
 
 				//Verify storage size before and after storage resize - Verify at STS, PV,PVC level

@@ -3,7 +3,7 @@ package tests
 import (
 	. "github.com/onsi/ginkgo/v2"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
+	pds2 "github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -27,7 +27,7 @@ var _ = Describe("{ValidateDnsEndPoint}", func() {
 	})
 
 	var (
-		workflowDataservice pds.WorkflowDataService
+		workflowDataservice pds2.WorkflowDataService
 		err                 error
 	)
 
@@ -47,9 +47,9 @@ var _ = Describe("{ValidateDnsEndPoint}", func() {
 var _ = Describe("{DummyBackupTest}", func() {
 
 	var (
-		workflowDataservice pds.WorkflowDataService
-		workflowBackup      pds.WorkflowPDSBackup
-		workflowRestore     pds.WorkflowPDSRestore
+		workflowDataservice pds2.WorkflowDataService
+		workflowBackup      pds2.WorkflowPDSBackup
+		workflowRestore     pds2.WorkflowPDSRestore
 		deploymentName      string
 		latestBackupUid     string
 	)
