@@ -64,6 +64,7 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 
 	restore.RestoredDeployments.Namespace = restore.Destination
 	restore.RestoredDeployments.DataServiceDeployment[name] = createRestore.Create.Config.DestinationReferences.DeploymentId
+	restore.RestoredDeployments.NamespaceMap[name] = namespace
 
 	log.Infof("Restore completed successfully - [%s]", *createRestore.Create.Meta.Name)
 

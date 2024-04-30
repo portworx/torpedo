@@ -15,14 +15,16 @@ import (
 )
 
 type WorkflowDataService struct {
-	Namespace               *platform.WorkflowNamespace
-	PDSTemplates            WorkflowPDSTemplates
+	Namespace    *platform.WorkflowNamespace
+	PDSTemplates WorkflowPDSTemplates
+	// TODO: NamespaceName should be taken as a parameter in the method
 	NamespaceName           string
 	DataServiceDeployment   map[string]string
 	SkipValidatation        map[string]bool
 	SourceDeploymentMd5Hash map[string]string
 	Dash                    *aetosutil.Dashboard
 	ValidateStorageIncrease dslibs.ValidateStorageIncrease
+	NamespaceMap            map[string]string
 }
 
 const (
@@ -53,6 +55,9 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	if err != nil {
 		return nil, err
 	}
+
+	wfDataService.DataServiceDeployment[*deployment.Create.Meta.Name] = *deployment.Create.Meta.Uid
+	wfDataService.NamespaceMap[*deployment.Create.Meta.Name] = namespaceName
 
 	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
 		if value == true {
@@ -88,7 +93,6 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 		return nil, err
 	}
 	log.Debugf("Updated Deployment [%v]", deployment)
-	wfDataService.DataServiceDeployment = make(map[string]string)
 	wfDataService.DataServiceDeployment[*deployment.Update.Config.DeploymentMeta.Name] = *deployment.Update.Config.DeploymentMeta.Uid
 	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
 		if value == true {
@@ -111,16 +115,6 @@ func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(depl
 	if err != nil {
 		return err
 	}
-
-	// Get the actual DeploymentName
-	deployment, _, err := dslibs.GetDeployment(deploymentId)
-	if err != nil {
-		return err
-	}
-
-	// Update the actual deploymentName with deploymentId
-	wfDataService.DataServiceDeployment = make(map[string]string)
-	wfDataService.DataServiceDeployment[*deployment.Get.Meta.Name] = deploymentId
 
 	// Validate if the dns endpoint is reachable
 	err = wfDataService.ValidateDNSEndpoint(deploymentId)
@@ -448,6 +442,12 @@ func (wfDataService *WorkflowDataService) Purge() error {
 			continue
 		} else {
 			log.Infof("All PVs associated with [%s] deleted successfully", dsName)
+		}
+
+		err = utils.RemoveFinalizersFromAllResources(wfDataService.NamespaceMap[dsName])
+		if err != nil {
+			log.Warnf("Unable to remove finalizers. Error - [%s]", err.Error())
+			errors = append(errors, err.Error())
 		}
 
 	}

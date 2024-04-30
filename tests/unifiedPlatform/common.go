@@ -118,8 +118,8 @@ func EndPDSTorpedoTest() {
 	Step("Purging all PDS related objects", func() {
 
 		// TODO: This needs to be added back once all cleanup issues are fixed
-		// PurgePDS()
-		log.Warnf("Skipping PDS resource cleanup")
+		PurgePDS()
+		// log.Warnf("Skipping PDS resource cleanup")
 
 	})
 
@@ -171,6 +171,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowDataService.Namespace = &WorkflowNamespace
 		WorkflowDataService.DataServiceDeployment = make(map[string]string)
 		WorkflowDataService.Dash = Inst().Dash
+		WorkflowDataService.NamespaceMap = make(map[string]string)
 
 		log.Infof("Creating backup config struct")
 		WorkflowPDSBackupConfig.WorkflowBackupLocation = WorkflowbkpLoc
@@ -187,6 +188,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowPDSRestore.Destination = &WorkflowNamespace
 		WorkflowPDSRestore.RestoredDeployments = pds.WorkflowDataService{}
 		WorkflowPDSRestore.RestoredDeployments.DataServiceDeployment = make(map[string]string)
+		WorkflowPDSRestore.RestoredDeployments.NamespaceMap = make(map[string]string)
 		WorkflowPDSRestore.SourceNamespace = PDS_DEFAULT_NAMESPACE
 
 		log.Infof("Creating PDS template object")
@@ -230,21 +232,21 @@ func PurgePDS() {
 	err = WorkflowDataService.Purge()
 	log.FailOnError(err, "some error occurred while purging data service objects")
 
-	log.InfoD("Purging all backup objects")
-	err = WorkflowPDSBackup.Purge()
-	// TODO: Uncomment once https://purestorage.atlassian.net/browse/DS-9546 is fixed
-	// log.FailOnError(err, "some error occurred while purging backup config objects")
-	if err != nil {
-		log.Infof("Error while deleting backup objects - Error - [%s]", err.Error())
-	}
-
-	log.InfoD("Purging all backup config objects")
-	err = WorkflowPDSBackupConfig.Purge(true)
-	// TODO: Uncomment once https://purestorage.atlassian.net/browse/DS-9554 is fixed
-	// log.FailOnError(err, "some error occurred while purging backup config objects")
-	if err != nil {
-		log.Infof("Error while deleting backup config objects - Error - [%s]", err.Error())
-	}
+	//log.InfoD("Purging all backup objects")
+	//err = WorkflowPDSBackup.Purge()
+	//// TODO: Uncomment once https://purestorage.atlassian.net/browse/DS-9546 is fixed
+	//// log.FailOnError(err, "some error occurred while purging backup config objects")
+	//if err != nil {
+	//	log.Infof("Error while deleting backup objects - Error - [%s]", err.Error())
+	//}
+	//
+	//log.InfoD("Purging all backup config objects")
+	//err = WorkflowPDSBackupConfig.Purge(true)
+	//// TODO: Uncomment once https://purestorage.atlassian.net/browse/DS-9554 is fixed
+	//// log.FailOnError(err, "some error occurred while purging backup config objects")
+	//if err != nil {
+	//	log.Infof("Error while deleting backup config objects - Error - [%s]", err.Error())
+	//}
 
 	log.InfoD("Purging all restore source namespaces")
 	err = WorkflowPDSRestore.Source.Purge()

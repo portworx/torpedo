@@ -448,3 +448,63 @@ func CheckAndDeleteIndependentPV(name string, delPod bool) error {
 	}
 	return nil
 }
+
+// RemoveFinalizersFromAllResources removes finalizers from all PDS resource for cleanup
+func RemoveFinalizersFromAllResources(namespace string) error {
+
+	ns, err := k8sCore.GetNamespace(namespace)
+	if err != nil {
+		return fmt.Errorf("unable to get namespace. Error - [%s]", err.Error())
+	}
+
+	allEndpoints, err := k8sCore.ListEndpoints(namespace, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to list endpoints. Error - [%s]", err.Error())
+	}
+	log.Infof("Total number of endpoints found - [%s]", len(allEndpoints.Items))
+
+	allServices, err := k8sCore.ListServices(namespace, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to list services. Error - [%s]", err.Error())
+	}
+	log.Infof("Total number of services found - [%s]", len(allServices.Items))
+
+	var allErrors []string
+
+	log.Infof("Removing finalizers from endpoints")
+	for _, endpoint := range allEndpoints.Items {
+
+		log.Infof("Setting finalizer for [%s]", endpoint.Name)
+		endpoint.SetFinalizers([]string{})
+
+		_, err := k8sCore.UpdateEndpoints(&endpoint)
+		if err != nil {
+			allErrors = append(allErrors, err.Error())
+		}
+	}
+
+	log.Infof("Removing finalizers from services")
+	for _, service := range allServices.Items {
+
+		log.Infof("Setting finalizer for [%s]", service.Name)
+		service.SetFinalizers([]string{})
+
+		_, err := k8sCore.UpdateService(&service)
+		if err != nil {
+			allErrors = append(allErrors, err.Error())
+		}
+	}
+
+	log.Infof("Removing finalizers from namespace")
+	ns.SetFinalizers([]string{})
+	_, err = k8sCore.UpdateNamespace(ns)
+	if err != nil {
+		allErrors = append(allErrors, err.Error())
+	}
+
+	if len(allErrors) > 0 {
+		return fmt.Errorf("error while removing finalizers. Error - [%s]", strings.Join(allErrors, "\n"))
+	}
+
+	return nil
+}
