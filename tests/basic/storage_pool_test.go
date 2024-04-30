@@ -12336,3 +12336,113 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 	})
 
 })
+
+var _ = Describe("{VolHAIncreaseAllVolumes}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolHAIncreaseAllVolumes", "Trigger vol HA Increase on all volumes at once", nil, 0)
+	})
+
+	itLog := "VolHAIncreaseAllVolumes"
+	It(itLog, func() {
+		var contexts []*scheduler.Context
+
+		stepLog = "Schedule Applications on the cluster and get details of Volumes"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volresizeallvol-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		type volMap struct {
+			ReplSet int64
+			volObj  *volume.Volume
+		}
+		volHAMap := []*volMap{}
+		volDet := volMap{}
+
+		revertReplica := func() {
+			for _, eachvol := range volHAMap {
+				getReplicaSets, err := Inst().V.GetReplicaSets(eachvol.volObj)
+				log.FailOnError(err, "Failed to get replication factor on the volume")
+				if len(getReplicaSets[0].Nodes) != int(eachvol.ReplSet) {
+					err := Inst().V.SetReplicationFactor(eachvol.volObj, eachvol.ReplSet, nil, nil, true)
+					log.FailOnError(err, "failed to set replicaiton value of Volume [%v]", eachvol.volObj.Name)
+				}
+			}
+		}
+
+		setReplOnVolumes := func(vol *volume.Volume, curReplSet int64, wait bool) {
+			defer GinkgoRecover()
+			var setRepl int64
+			if curReplSet == 1 || curReplSet == 3 {
+				setRepl = 2
+			} else {
+				setRepl = 3
+			}
+			opts := volume.Options{
+				ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
+			}
+			err = Inst().V.SetReplicationFactor(vol, setRepl, nil, nil, wait, opts)
+			log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", setRepl, vol.Name))
+
+		}
+		defer revertReplica()
+
+		// Wait for some time so that IO's will generate some data on all the volumes created so that
+		// HA Update will take some time to finish
+		time.Sleep(10 * time.Minute)
+
+		for _, eachCtx := range contexts {
+			vols, err := Inst().S.GetVolumes(eachCtx)
+			log.FailOnError(err, "Failed to get list of Volumes in the cluster")
+
+			for _, eachVol := range vols {
+				curReplSet, err := Inst().V.GetReplicationFactor(eachVol)
+				log.FailOnError(err, "failed to get replication factor of the volume")
+				volDet.volObj = eachVol
+				volDet.ReplSet = curReplSet
+				log.Infof("Volume [%v] is with HA [%v]", volDet.volObj.Name, volDet.ReplSet)
+				volHAMap = append(volHAMap, &volDet)
+			}
+		}
+
+		// Wait for all the Volumes in Clean State
+		for _, eachVol := range volHAMap {
+			log.FailOnError(WaitForVolumeClean(eachVol.volObj), "is Volume in clean state ?")
+		}
+
+		// Set Repl Factor on all the volumes at ones
+		for _, eachVol := range volHAMap {
+			go setReplOnVolumes(eachVol.volObj, eachVol.ReplSet, false)
+		}
+
+		// Wait for 2 min before validating the volume
+		time.Sleep(2 * time.Minute)
+
+		// Wait for all the Volumes in Clean State after starting Resync of the volume
+		for _, eachVol := range volHAMap {
+			log.FailOnError(WaitForVolumeClean(eachVol.volObj), "is Volume in clean state ?")
+		}
+
+		// Verify Repl Resync Completed after all volumes are in Clean state
+		for _, eachVol := range volHAMap {
+			curReplSet, err := Inst().V.GetReplicationFactor(eachVol.volObj)
+			log.FailOnError(err, "failed to get replication factor of the volume")
+
+			if eachVol.ReplSet == 3 || eachVol.ReplSet == 1 {
+				dash.VerifyFatal(curReplSet == 2, true, fmt.Sprintf("Verify if HA Value is 2 for Volume [%v]", eachVol.volObj.Name))
+			} else {
+				dash.VerifyFatal(curReplSet == 3, true, fmt.Sprintf("Verify if HA Value is 3 for Volume [%v]", eachVol.volObj.Name))
+			}
+		}
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})
