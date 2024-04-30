@@ -12,6 +12,7 @@ import (
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	corev1 "k8s.io/api/core/v1"
+	"time"
 )
 
 type WorkflowDataService struct {
@@ -353,6 +354,7 @@ func (wfDataService *WorkflowDataService) DeletePDSPods() error {
 	if err != nil {
 		return fmt.Errorf("Error while deleting pods: %\v ", err)
 	}
+	time.Sleep(30 * time.Second)
 	log.InfoD("Validating PDS System Pods")
 	err = utils.ValidatePods(PlatformNamespace, "")
 	if err != nil {

@@ -86,12 +86,15 @@ var _ = BeforeSuite(func() {
 		log.Infof("Current project ID - [%s]", ProjectId)
 	})
 
-	Step("Register Source target Cluster", func() {
+	Step("Register Target Cluster and Install PDS app", func() {
 		WorkflowTargetCluster.Project = WorkflowProject
 		log.Infof("Tenant ID [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
 		WorkflowTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane(false)
 		log.FailOnError(err, "Unable to register target cluster")
 		log.Infof("Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
+
+		err = WorkflowTargetCluster.InstallPDSAppOnTC(WorkflowTargetCluster.ClusterUID)
+		log.FailOnError(err, "Unable to Install pds on target cluster")
 	})
 
 	Step("Register Destination target Cluster", func() {
@@ -106,9 +109,11 @@ var _ = BeforeSuite(func() {
 
 		WorkflowTargetClusterDestination.Project = WorkflowProject
 		log.Infof("Tenant ID [%s]", WorkflowTargetClusterDestination.Project.Platform.TenantId)
-		WorkflowTargetCluster, err := WorkflowTargetClusterDestination.RegisterToControlPlane(false)
+		WorkflowTargetClusterDestination, err := WorkflowTargetClusterDestination.RegisterToControlPlane(false)
 		log.FailOnError(err, "Unable to register target cluster")
 		log.Infof("Destination Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
+		err = WorkflowTargetClusterDestination.InstallPDSAppOnTC(WorkflowTargetCluster.ClusterUID)
+		log.FailOnError(err, "Unable to Install pds on destination target cluster")
 	})
 
 	Step("Create Buckets", func() {
@@ -177,7 +182,11 @@ var _ = AfterSuite(func() {
 	})
 
 	EndTorpedoTest()
-
+	//TODO: Steps to delete Backup location, Target and Bucket
+	// TODO: Add namespace cleanup once deployment cleanup cleans up the services too
+	//err := WorkflowNamespace.Purge()
+	//log.FailOnError(err, "Unable to cleanup all namespaces")
+	//log.InfoD("All namespaces cleaned up successfully")
 	log.InfoD("Test Finished")
 })
 

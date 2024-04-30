@@ -1,7 +1,6 @@
 package tests
 
 import (
-	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -24,79 +23,73 @@ var _ = Describe("{ValidatePdsHealthIncaseofFailures}", func() {
 		workFlowTemplates   pds.WorkflowPDSTemplates
 		workflowResiliency  pds.WorkflowPDSResiliency
 		deployment          *automationModels.PDSDeploymentResponse
-		deployments         = make(map[dslibs.PDSDataService]*automationModels.PDSDeploymentResponse)
 		templates           []string
+		dsNameAndAppTempId  map[string]string
+		stConfigId          string
+		resConfigId         string
+		err                 error
 	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeployDataServicesOnDemandAndScaleUp", "Deploy data services and perform scale up", nil, 0)
+		workFlowTemplates.Platform = WorkflowPlatform
+		workflowDataservice.Namespace = &WorkflowNamespace
+		workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
+		workflowDataservice.Dash = dash
 	})
 
 	It("Deploy and Validate DataService", func() {
-		for _, ds := range NewPdsParams.DataServiceToTest {
-			workFlowTemplates.Platform = WorkflowPlatform
-			workflowDataservice.Namespace = &WorkflowNamespace
-			workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
-			workflowDataservice.Dash = dash
-
-			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+		Step("Create Service Configuration, Resource and Storage Templates", func() {
+			//dsNameAndAppTempId = workFlowTemplates.CreateAppTemplate(NewPdsParams)
+			dsNameAndAppTempId, stConfigId, resConfigId, err = workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-
-			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
 			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
-			templates = []string{serviceConfigId, stConfigId, resConfigId}
-
-			//workflowDataservice.SkipValidatation = make(map[string]bool)
-			//workflowDataservice.SkipValidatation["VALIDATE_PDS_DEPLOYMENT"] = true
-			deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
-			log.FailOnError(err, "Error while deploying ds")
-			log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
-			deployments[ds] = deployment
-		}
-
-		defer func() {
-			Step("Delete PDS CustomTemplates", func() {
-				log.InfoD("Cleaning Up templates...")
-				err := workFlowTemplates.DeleteCreatedCustomPdsTemplates(templates)
-				log.FailOnError(err, "Error while deleting dataservice")
-			})
-		}()
-
-		defer func() {
-			for _, deployment := range deployments {
-				Step("Delete DataServiceDeployment", func() {
-					log.InfoD("Cleaning Up dataservice...")
-					err := workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
-					log.FailOnError(err, "Error while deleting dataservice")
-				})
-			}
-		}()
-
-		//stepLog := "Running Workloads before taking backups"
-		//Step(stepLog, func() {
-		//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-		//	log.FailOnError(err, "Error while running workloads on ds")
-		//})
-
-		Step("Delete PdsDeploymentPods and check the deployment health", func() {
-			workflowResiliency.WfDataService = &workflowDataservice
-			workflowResiliency.ResiliencyFlag = true
-			for ds, deployment := range deployments {
-				workflowResiliency.InduceFailureAndExecuteResiliencyScenario(ds, deployment, DeletePdsDeploymentPodAndValidateDeploymentHealth)
-			}
 		})
 
-		//stepLog = "Running Workloads after ScaleUp of DataService"
-		//Step(stepLog, func() {
-		//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-		//	log.FailOnError(err, "Error while running workloads on ds")
-		//})
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
+				templates = append(templates, dsNameAndAppTempId[ds.Name], stConfigId, resConfigId)
 
+				log.Debugf("Deploying DataService [%s]", ds.Name)
+				deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+			})
+
+			//stepLog := "Running Workloads before taking backups"
+			//Step(stepLog, func() {
+			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			//	log.FailOnError(err, "Error while running workloads on ds")
+			//})
+
+			Step("Delete PdsDeploymentPods and check the deployment health", func() {
+				workflowResiliency.WfDataService = &workflowDataservice
+				workflowResiliency.ResiliencyFlag = true
+				workflowResiliency.InduceFailureAndExecuteResiliencyScenario(ds, deployment, DeletePdsDeploymentPodAndValidateDeploymentHealth)
+			})
+
+			//stepLog = "Running Workloads after ScaleUp of DataService"
+			//Step(stepLog, func() {
+			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			//	log.FailOnError(err, "Error while running workloads on ds")
+			//})
+			Step("Delete DataServiceDeployment", func() {
+				log.InfoD("Cleaning Up dataservice...")
+				err := workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while deleting dataservice")
+			})
+		}
 	})
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		Step("Delete PDS CustomTemplates", func() {
+			log.InfoD("Cleaning Up templates...")
+			err := workFlowTemplates.DeleteCreatedCustomPdsTemplates(templates)
+			log.FailOnError(err, "Error while deleting dataservice")
+		})
 	})
 })
 
@@ -127,9 +120,9 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 			workflowDataservice.Namespace = &WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
 
-			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId[ds.Name]
 			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 

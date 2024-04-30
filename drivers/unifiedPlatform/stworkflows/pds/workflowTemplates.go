@@ -15,16 +15,27 @@ type WorkflowPDSTemplates struct {
 	ResourceTemplateId      string
 	StorageTemplateId       string
 	ServiceConfigTemplateId string
+	AppTempIdAndDsName      map[string]string
 }
 
-func (cusTemp *WorkflowPDSTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *parameters.NewPDSParams, dsName string) (string, string, string, error) {
-
-	//Todo: Mechanism to populate dynamic/Unknown key-value pairs for App config
-
-	//Initializing the parameters required for template generation
-	appConfigParams := pdslibs.ServiceConfiguration{
-		MAX_CONNECTIONS: templates.ServiceConfiguration.MAX_CONNECTIONS,
+func (cusTemp *WorkflowPDSTemplates) CreateAppTemplate(params *parameters.NewPDSParams) map[string]string {
+	appTempIdAndDsName := make(map[string]string)
+	for _, conf := range params.DataserviceConfigurationsToTest {
+		log.Infof(conf.Name)
+		for key, value := range conf.Configurations {
+			log.Infof("key: %s", key)
+			log.Infof("value: %s", value)
+		}
+		appConfig, _ := pdslibs.NewCreateServiceConfigTemplate(cusTemp.Platform.TenantId, conf.Name, conf.Configurations)
+		log.InfoD("appConfig ID-  %v", *appConfig.Create.Meta.Uid)
+		appConfigId := appConfig.Create.Meta.Uid
+		cusTemp.ServiceConfigTemplateId = *appConfigId
+		appTempIdAndDsName[conf.Name] = *appConfigId
 	}
+	return appTempIdAndDsName
+}
+
+func (cusTemp *WorkflowPDSTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *parameters.NewPDSParams) (map[string]string, string, string, error) {
 	stConfigParams := pdslibs.StorageConfiguration{
 		FS:          templates.StorageConfiguration.FS,
 		Repl:        templates.StorageConfiguration.Repl,
@@ -39,21 +50,20 @@ func (cusTemp *WorkflowPDSTemplates) CreatePdsCustomTemplatesAndFetchIds(templat
 		Memory_Request:  templates.ResourceConfiguration.Memory_Request,
 		Storage_Request: templates.ResourceConfiguration.Storage_Request,
 	}
-	appConfig, _ := pdslibs.CreateServiceConfigTemplate(cusTemp.Platform.TenantId, dsName, appConfigParams)
-	log.InfoD("appConfig ID-  %v", *appConfig.Create.Meta.Uid)
-	appConfigId := appConfig.Create.Meta.Uid
-	cusTemp.ServiceConfigTemplateId = *appConfigId
 
-	stConfig, _ := pdslibs.CreateStorageConfigTemplate(cusTemp.Platform.TenantId, dsName, stConfigParams)
+	appTemplateNameAndId := cusTemp.CreateAppTemplate(templates)
+	cusTemp.AppTempIdAndDsName = appTemplateNameAndId
+
+	stConfig, _ := pdslibs.CreateStorageConfigTemplate(cusTemp.Platform.TenantId, stConfigParams)
 	log.InfoD("stConfig ID-  %v", *stConfig.Create.Meta.Uid)
 	stConfigId := stConfig.Create.Meta.Uid
 	cusTemp.StorageTemplateId = *stConfigId
 
-	resConfig, _ := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, dsName, resConfigParams)
+	resConfig, _ := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, resConfigParams)
 	log.InfoD("resConfig ID-  %v", *resConfig.Create.Meta.Uid)
 	resourceConfigId := resConfig.Create.Meta.Uid
 	cusTemp.ResourceTemplateId = *resourceConfigId
-	return *appConfigId, *stConfigId, *resourceConfigId, nil
+	return appTemplateNameAndId, *stConfigId, *resourceConfigId, nil
 }
 
 func (cusTemp *WorkflowPDSTemplates) DeleteCreatedCustomPdsTemplates(tempList []string) error {
@@ -88,7 +98,7 @@ func (cusTemp *WorkflowPDSTemplates) CreateResourceTemplateWithCustomValue(templ
 	//create new templates with new storage Req-
 	newStorageReq, _ := strconv.Atoi(templates.ResourceConfiguration.Storage_Request)
 	templates.ResourceConfiguration.Storage_Request = fmt.Sprint(string(rune(newStorageReq+1))) + "G"
-	resConfig, _ := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, dsName, resConfigParams)
+	resConfig, _ := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, resConfigParams)
 	log.InfoD("resConfig ID-  %v", *resConfig.Create.Meta.Uid)
 	resourceConfigId := resConfig.Create.Meta.Uid
 	cusTemp.ResourceTemplateId = *resourceConfigId

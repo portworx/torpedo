@@ -313,7 +313,6 @@ func DeletePods(podList []corev1.Pod) error {
 
 // ValidatePods returns err if pods are not up
 func ValidatePods(namespace string, podName string) error {
-
 	var newPods []corev1.Pod
 	newPodList, err := GetPods(namespace)
 	if err != nil {

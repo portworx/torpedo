@@ -44,12 +44,12 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataService.Namespace = &WorkflowNamespace
 			workflowDataService.NamespaceName = Namespace
-			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-			workflowDataService.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+			workflowDataService.PDSTemplates.ServiceConfigTemplateId = serviceConfigId[ds.Name]
 			workflowDataService.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataService.PDSTemplates.ResourceTemplateId = resConfigId
-			tempList = append(tempList, serviceConfigId, stConfigId, resConfigId)
+			tempList = append(tempList, serviceConfigId[ds.Name], stConfigId, resConfigId)
 			deployment, err = workflowDataService.DeployDataService(ds, ds.Image, ds.Version)
 			log.FailOnError(err, "Error while deploying ds")
 		}
@@ -180,10 +180,10 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 				workflowDataservice.Namespace = &WorkflowNamespace
 				workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
 
-				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, ds.Name)
+				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 				log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
-				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId[ds.Name]
 				workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 				workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 
