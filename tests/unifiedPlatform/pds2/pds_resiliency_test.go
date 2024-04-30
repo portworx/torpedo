@@ -45,13 +45,12 @@ var _ = Describe("{ValidatePdsHealthIncaseofFailures}", func() {
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
 			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
-			templates = []string{stConfigId, resConfigId}
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			Step("Deploy DataService", func() {
 				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
-				templates = []string{dsNameAndAppTempId[ds.Name]}
+				templates = append(templates, dsNameAndAppTempId[ds.Name], stConfigId, resConfigId)
 
 				log.Debugf("Deploying DataService [%s]", ds.Name)
 				deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
