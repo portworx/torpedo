@@ -73,12 +73,15 @@ var _ = BeforeSuite(func() {
 		WorkflowProject.ProjectName = DefaultProject
 	})
 
-	Step("Register Target Cluster", func() {
+	Step("Register Target Cluster and Install PDS app", func() {
 		WorkflowTargetCluster.Project = WorkflowProject
 		log.Infof("Tenant ID [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
 		WorkflowTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane(false)
 		log.FailOnError(err, "Unable to register target cluster")
 		log.Infof("Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
+
+		err = WorkflowTargetCluster.InstallPDSAppOnTC(WorkflowTargetCluster.ClusterUID)
+		log.FailOnError(err, "Unable to Install pds on target cluster")
 	})
 
 	Step("Create a namespace for PDS", func() {
