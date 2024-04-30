@@ -4275,7 +4275,9 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 				switch inspectedVol.Spec.ProxySpec.ProxyProtocol {
 				case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
 					labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFA
-					labels[FADAVolumeSerialLabel] = inspectedVol.Spec.ProxySpec.PureBlockSpec.SerialNum
+					if inspectedVol.Spec != nil && inspectedVol.Spec.ProxySpec != nil && inspectedVol.Spec.ProxySpec.PureBlockSpec != nil {
+						labels[FADAVolumeSerialLabel] = inspectedVol.Spec.ProxySpec.PureBlockSpec.SerialNum
+					}
 				case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
 					labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFB
 				default:

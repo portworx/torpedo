@@ -164,6 +164,9 @@ type Driver interface {
 	// ValidatePureLocalVolumePaths checks that the given volumes all have the proper local paths present, *and that no other unexpected ones are present*
 	ValidatePureLocalVolumePaths() error
 
+	// ValidatePureFBDAMountSource checks that, on all the given nodes, all the provided FBDA volumes are mounted using the expected IP
+	ValidatePureFBDAMountSource(nodes []node.Node, vols []*Volume, expectedIP string) error
+
 	// ValidateVolumeInPxctlList validates that the given volume appears in the output of `pxctl v l`
 	ValidateVolumeInPxctlList(name string) error
 
@@ -377,6 +380,9 @@ type Driver interface {
 
 	//UpdateStickyFlag update sticky flag using pxctl command
 	UpdateStickyFlag(volumeName, stickyOption string) error
+
+	// UpdateFBDANFSEndpoint updates the NFS endpoint for a given FBDA volume
+	UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) error
 
 	//ValidatePureFaFbMountOptions validates mount options by executing mount command
 	ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error
