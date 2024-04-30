@@ -113,6 +113,17 @@ func EndPDSTorpedoTest() {
 	defer func() {
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "failed to switch context to source cluster")
+
+		CloseLogger(TestLogger)
+		Inst().Dash.TestCaseEnd()
+		if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
+			AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
+		}
+
+		currentSpecReport := ginkgo.CurrentSpecReport()
+		if currentSpecReport.Failed() {
+			log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
+		}
 	}()
 
 	Step("Purging all PDS related objects", func() {
@@ -123,16 +134,6 @@ func EndPDSTorpedoTest() {
 
 	})
 
-	CloseLogger(TestLogger)
-	Inst().Dash.TestCaseEnd()
-	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
-		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
-	}
-
-	currentSpecReport := ginkgo.CurrentSpecReport()
-	if currentSpecReport.Failed() {
-		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
-	}
 }
 
 // StartPDSTorpedoTest starts the logging for PDS torpedo test
@@ -193,6 +194,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 
 		log.Infof("Creating PDS template object")
 		WorkflowPDSTemplate.Platform = WorkflowPlatform
+
 	})
 
 	instanceIDString := strconv.Itoa(testRepoID)
@@ -255,6 +257,10 @@ func PurgePDS() {
 	log.InfoD("Purging all source namespace objects")
 	err = WorkflowNamespace.Purge()
 	log.FailOnError(err, "some error occurred while purging namespace objects")
+
+	log.InfoD("Purging all templates")
+	err = WorkflowPDSTemplate.Purge()
+	log.FailOnError(err, "some error occurred while purging data service templates")
 }
 
 // CheckforClusterSwitch checks if restore needs to be created on source or dest
