@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/google/uuid"
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -30,7 +29,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
 const (
@@ -66,6 +64,8 @@ type portworx struct {
 	versionManager          api.VersionClient
 	activityTimeLineManager api.ActivityTimeLineClient
 	metricsManager          api.MetricsClient
+	receiverManager         api.ReceiverClient
+	recipientManager        api.RecipientClient
 
 	schedulerDriver scheduler.Driver
 	nodeDriver      node.Driver
@@ -79,7 +79,7 @@ func (p *portworx) String() string {
 	return DriverName
 }
 
-func getKubernetesRestConfig(clusterObj *api.ClusterObject) (*rest.Config, error) {
+func GetKubernetesRestConfig(clusterObj *api.ClusterObject) (*rest.Config, error) {
 	if clusterObj.GetKubeconfig() == "" {
 		return nil, fmt.Errorf("empty cluster kubeconfig")
 	}
@@ -97,7 +97,7 @@ func getKubernetesRestConfig(clusterObj *api.ClusterObject) (*rest.Config, error
 
 // GetKubernetesInstance - Get handler to k8s cluster.
 func GetKubernetesInstance(cluster *api.ClusterObject) (core.Ops, stork.Ops, error) {
-	client, err := getKubernetesRestConfig(cluster)
+	client, err := GetKubernetesRestConfig(cluster)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -191,6 +191,8 @@ func (p *portworx) testAndSetEndpoint(endpoint string) error {
 	p.activityTimeLineManager = api.NewActivityTimeLineClient(conn)
 	p.metricsManager = api.NewMetricsClient(conn)
 	p.roleManager = api.NewRoleClient(conn)
+	p.receiverManager = api.NewReceiverClient(conn)
+	p.recipientManager = api.NewRecipientClient(conn)
 
 	log.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
 
@@ -2028,6 +2030,26 @@ func (p *portworx) GetBackupName(ctx context.Context, backupUid string, orgID st
 	return "", fmt.Errorf("backup with uid '%s' not found for org '%s'", backupUid, orgID)
 }
 
+// func GetBackupStatusWithReason return backup status and reason for a given backup name.
+func (p *portworx) GetBackupStatusWithReason(backupName string, ctx context.Context, orgID string) (api.BackupInfo_StatusInfo_Status, string, error) {
+	backupUid, err := p.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return 0, "", err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	resp, err := p.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return 0, "", err
+	}
+	status := resp.GetBackup().GetStatus().Status
+	reason := resp.GetBackup().GetStatus().Reason
+	return status, reason, nil
+}
+
 func (p *portworx) GetAllScheduleBackupNames(ctx context.Context, scheduleName string, orgID string) ([]string, error) {
 	var scheduleBackupNames []string
 	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
@@ -2092,6 +2114,19 @@ var (
 			"pod_selector_list": {"app=postgres"},
 			"container":         {"", ""},
 		},
+		},
+		"mysql-backup": {"pre": {"pre_action_list": {"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH TABLES WITH READ LOCK;system ${WAIT_CMD};'"},
+			"background":        {"true"},
+			"runInSinglePod":    {"false"},
+			"pod_selector_list": {"app=mysql"},
+			"container":         {"", ""},
+		},
+			"post": {"post_action_list": {"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH LOGS; UNLOCK TABLES;'"},
+				"background":        {"false"},
+				"pod_selector_list": {"app=mysql"},
+				"runInSinglePod":    {"false"},
+				"container":         {"", ""},
+			},
 		},
 	}
 )
@@ -2185,102 +2220,6 @@ func (p *portworx) CreateRuleForBackup(appName string, orgID string, prePostFlag
 	}
 
 	_, err = p.CreateRule(ctx, RuleCreateReq)
-	if err != nil {
-		err = fmt.Errorf("Failed to create backup rules: [%v]", err)
-		return false, ruleName, err
-	}
-	log.Infof("Validate rules for backup")
-	RuleEnumerateReq := &api.RuleEnumerateRequest{
-		OrgId: orgID,
-	}
-	ruleList, err := p.EnumerateRule(ctx, RuleEnumerateReq)
-	for i := 0; i < len(ruleList.Rules); i++ {
-		if ruleList.Rules[i].Metadata.Name == ruleName {
-			uid = ruleList.Rules[i].Metadata.Uid
-			break
-		}
-	}
-	RuleInspectReq := &api.RuleInspectRequest{
-		OrgId: orgID,
-		Name:  ruleName,
-		Uid:   uid,
-	}
-	_, err = p.InspectRule(ctx, RuleInspectReq)
-	if err != nil {
-		err = fmt.Errorf("Failed to validate the created rule with Error: [%v]", err)
-		return false, ruleName, err
-	}
-	return true, ruleName, nil
-}
-
-// CreateRuleForKubevirtBackup created a backup rule for kubevirt
-func (p *portworx) CreateRuleForKubevirtBackup(ctx context.Context, virtualMachineList []kubevirtv1.VirtualMachine, orgID string,
-	prePostFlag string, template string) (bool, string, error) {
-	var podSelector []map[string]string
-	var actionValue []string
-	var container []string
-	var runInSinglePod []bool
-	var background []bool
-	var rulesInfo api.RulesInfo
-	var uid string
-	for _, vm := range virtualMachineList {
-		log.Infof("Creating rule for [%s] in [%s]", vm.Name, vm.Namespace)
-		ps := strings.Split(KubevirtRuleSpec[template]["podSelector"], "=")
-		psMap := make(map[string]string)
-		psMap[ps[0]] = strings.Replace(ps[1], "<vm-name>", vm.Name, 1)
-		podSelector = append(podSelector, psMap)
-		container = append(container, KubevirtRuleSpec[template]["container"])
-		podVal, _ := strconv.ParseBool(KubevirtRuleSpec[template]["runInSinglePod"])
-		runInSinglePod = append(runInSinglePod, podVal)
-		backgroundVal, _ := strconv.ParseBool(KubevirtRuleSpec[template]["background"])
-		background = append(background, backgroundVal)
-
-		if prePostFlag == "pre" {
-			actionValue = append(
-				actionValue,
-				strings.Replace(
-					strings.Replace(KubevirtRuleSpec[template]["pre"], "<vm-name>", vm.Name, 1),
-					"<namespace>",
-					vm.Namespace,
-					1))
-		} else {
-			actionValue = append(
-				actionValue,
-				strings.Replace(
-					strings.Replace(KubevirtRuleSpec[template]["post"], "<vm-name>", vm.Name, 1),
-					"<namespace>",
-					vm.Namespace,
-					1))
-		}
-	}
-
-	totalRules := len(actionValue)
-	if totalRules == 0 {
-		log.Info("Rules not required for the apps")
-		return true, "", nil
-	}
-	timestamp := strconv.Itoa(int(time.Now().Unix()))
-	uuid := uuid.New()
-	ruleName := fmt.Sprintf("%s-%s-rule-%s-%s", "kubevirt", prePostFlag, timestamp, uuid.String()[:5])
-	rulesInfoRuleItem := make([]api.RulesInfo_RuleItem, totalRules)
-	for i := 0; i < totalRules; i++ {
-		ruleAction := api.RulesInfo_Action{Background: background[i], RunInSinglePod: runInSinglePod[i],
-			Value: actionValue[i]}
-		var actions = []*api.RulesInfo_Action{&ruleAction}
-		rulesInfoRuleItem[i].PodSelector = podSelector[i]
-		rulesInfoRuleItem[i].Actions = actions
-		rulesInfoRuleItem[i].Container = container[i]
-		rulesInfo.Rules = append(rulesInfo.Rules, &rulesInfoRuleItem[i])
-	}
-	RuleCreateReq := &api.RuleCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  ruleName,
-			OrgId: orgID,
-		},
-		RulesInfo: &rulesInfo,
-	}
-
-	_, err := p.CreateRule(ctx, RuleCreateReq)
 	if err != nil {
 		err = fmt.Errorf("Failed to create backup rules: [%v]", err)
 		return false, ruleName, err
@@ -2420,7 +2359,7 @@ func (p *portworx) GetRuleUid(orgID string, ctx context.Context, ruleName string
 			return ruleUid, nil
 		}
 	}
-	return "", nil
+	return "", fmt.Errorf("unable to find uid for rule [%s]", ruleName)
 }
 
 func (p *portworx) DeleteRuleForBackup(orgID string, ruleName string) error {
@@ -2629,6 +2568,61 @@ func (p *portworx) UpdateRole(ctx context.Context, req *api.RoleUpdateRequest) (
 
 func (p *portworx) InspectRole(ctx context.Context, req *api.RoleInspectRequest) (*api.RoleInspectResponse, error) {
 	return p.roleManager.Inspect(ctx, req)
+}
+
+// CreateReceiver creates receiver object
+func (p *portworx) CreateReceiver(ctx context.Context, req *api.ReceiverCreateRequest) (*api.ReceiverCreateResponse, error) {
+	return p.receiverManager.Create(ctx, req)
+}
+
+// DeleteReceiver deletes receiver object
+func (p *portworx) DeleteReceiver(ctx context.Context, req *api.ReceiverDeleteRequest) (*api.ReceiverDeleteResponse, error) {
+	return p.receiverManager.Delete(ctx, req)
+}
+
+// EnumerateReceiver enumerates receiver object
+func (p *portworx) EnumerateReceiver(ctx context.Context, req *api.ReceiverEnumerateRequest) (*api.ReceiverEnumerateResponse, error) {
+	return p.receiverManager.Enumerate(ctx, req)
+}
+
+// UpdateReceiver updates receiver object
+func (p *portworx) UpdateReceiver(ctx context.Context, req *api.ReceiverUpdateRequest) (*api.ReceiverUpdateResponse, error) {
+	return p.receiverManager.Update(ctx, req)
+}
+
+// InspectReceiver inspects receiver object
+func (p *portworx) InspectReceiver(ctx context.Context, req *api.ReceiverInspectRequest) (*api.ReceiverInspectResponse, error) {
+	return p.receiverManager.Inspect(ctx, req)
+}
+
+// ValidateReceiver validates receiver object
+func (p *portworx) ValidateReceiver(ctx context.Context, req *api.ReceiverValidateSMTPRequest) (*api.ReceiverValidateSMTPResponse, error) {
+	return p.receiverManager.ValidateSMTP(ctx, req)
+}
+
+// CreateRecipient creates recipient object
+func (p *portworx) CreateRecipient(ctx context.Context, req *api.RecipientCreateRequest) (*api.RecipientCreateResponse, error) {
+	return p.recipientManager.Create(ctx, req)
+}
+
+// DeleteRecipient deletes recipient object
+func (p *portworx) DeleteRecipient(ctx context.Context, req *api.RecipientDeleteRequest) (*api.RecipientDeleteResponse, error) {
+	return p.recipientManager.Delete(ctx, req)
+}
+
+// EnumerateRecipient enumerates recipient object
+func (p *portworx) EnumerateRecipient(ctx context.Context, req *api.RecipientEnumerateRequest) (*api.RecipientEnumerateResponse, error) {
+	return p.recipientManager.Enumerate(ctx, req)
+}
+
+// UpdateRecipient updates recipient object
+func (p *portworx) UpdateRecipient(ctx context.Context, req *api.RecipientUpdateRequest) (*api.RecipientUpdateResponse, error) {
+	return p.recipientManager.Update(ctx, req)
+}
+
+// InspectRecipient inspects recipient object
+func (p *portworx) InspectRecipient(ctx context.Context, req *api.RecipientInspectRequest) (*api.RecipientInspectResponse, error) {
+	return p.recipientManager.Inspect(ctx, req)
 }
 
 func init() {

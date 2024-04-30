@@ -2,25 +2,21 @@ package tests
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 
+	pxapi "github.com/libopenstorage/operator/api/px"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
-	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"golang.org/x/net/context"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	. "github.com/portworx/torpedo/tests"
 )
-
-// Label used to name the licensing features
-type Label string
 
 const (
 	defaultReadynessTimeout = 2 * time.Minute
@@ -29,83 +25,11 @@ const (
 	pureSecretDataField = "pure.json"
 	expiredLicString    = "License is expired"
 
-	// LabNodes - Number of nodes maximum
-	LabNodes Label = "Nodes"
-	// LabVolumeSize - Volume capacity [TB] maximum
-	LabVolumeSize Label = "VolumeSize"
-	// LabVolumes - Number of volumes per cluster maximum
-	LabVolumes Label = "Volumes"
-	// LabSnapshots - Number of snapshots per volume maximum
-	LabSnapshots Label = "Snapshots"
-	// LabHaLevel - Volume replica count
-	LabHaLevel Label = "HaLevel"
-	// LabSharedVol - Shared volumes
-	LabSharedVol Label = "SharedVolume"
-	// LabEncryptedVol - BYOK data encryption
-	LabEncryptedVol Label = "EncryptedVolume"
-	// LabScaledVol - Volume sets
-	LabScaledVol Label = "ScaledVolume"
-	// LabAggregatedVol - Storage aggregation
-	LabAggregatedVol Label = "AggregatedVolume"
-	// LabResizeVolume - Resize volumes on demand
-	LabResizeVolume Label = "ResizeVolume"
-	// LabCloudSnap - Snapshot to object store [CloudSnap]
-	LabCloudSnap Label = "SnapshotToObjectStore"
-	// LabCloudSnapDaily - Number of CloudSnaps daily per volume maximum
-	LabCloudSnapDaily Label = "SnapshotToObjectStoreDaily"
-	// LabCloudMigration -Cluster-level migration [Kube-motion/Data Migration]
-	LabCloudMigration Label = "CloudMigration"
-	// LabDisasterRecovery - Disaster Recovery [PX-DR]
-	LabDisasterRecovery Label = "DisasterRecovery"
-	// LabAUTCapacityMgmt - Autopilot Capacity Management
-	LabAUTCapacityMgmt Label = "AUTCapacityManagement"
-	// LabPlatformBare - Bare-metal hosts
-	LabPlatformBare Label = "EnablePlatformBare"
-	// LabPlatformVM - Virtual machine hosts
-	LabPlatformVM Label = "EnablePlatformVM"
-	// LabNodeCapacity - Node disk capacity [TB] maximum
-	LabNodeCapacity Label = "NodeCapacity"
-	// LabNodeCapacityExtend - Node disk capacity extension
-	LabNodeCapacityExtend Label = "NodeCapacityExtension"
-	// LabLocalAttaches - Number of attached volumes per node maximum
-	LabLocalAttaches Label = "LocalVolumeAttaches"
-	// LabOIDCSecurity - OIDC Security
-	LabOIDCSecurity Label = "OIDCSecurity"
-	// LabGlobalSecretsOnly - Limit BYOK encryption to cluster-wide secrets
-	LabGlobalSecretsOnly Label = "GlobalSecretsOnly"
-	// LabFastPath - FastPath extension [PX-FAST]
-	LabFastPath Label = "FastPath"
-
-	essentialsFaFbSKU   = "Portworx CSI for FA/FB"
-	ibmTestLicenseSKU   = "PX-Enterprise IBM Cloud (test)"
-	ibmTestLicenseDRSKU = "PX-Enterprise IBM Cloud DR (test)"
-	ibmProdLicenseSKU   = "PX-Enterprise IBM Cloud"
-	ibmProdLicenseDRSKU = "PX-Enterprise IBM Cloud DR"
-	// UnlimitedNumber represents the unlimited number of licensed resource.
-	// note - the max # Flex counts handle, is actually 999999999999999990
-	UnlimitedNumber = int64(0x7FFFFFFF) // C.FLX_FEATURE_UNCOUNTED_VALUE = 0x7FFFFFFF  (=2147483647)
-	Unlimited       = int64(0x7FFFFFFFFFFFFFFF)
-
-	// -- Testing maximums below
-
-	// MaxNumNodes is a maximum nodes in a cluster
-	MaxNumNodes = int64(1000)
-	// MaxNumVolumes is a maximum number of volumes in a cluster
-	MaxNumVolumes = int64(100000)
-	// MaxVolumeSize is a maximum volume size for single volume [in TB]
-	MaxVolumeSize = int64(40)
-	// MaxNodeCapacity defines the maximum node's disk capacity [in TB]
-	MaxNodeCapacity = int64(256)
-	// MaxLocalAttachCount is a maximum number of local volume attaches
-	MaxLocalAttachCount = int64(256)
-	// MaxHaLevel is a maximum replication factor
-	MaxHaLevel = int64(3)
-	// MaxNumSnapshots is a maximum number of snapshots
-	MaxNumSnapshots = int64(64)
+	essentialsFaFbSKU = "Portworx CSI for FA/FB"
 )
 
 var (
-	faLicense = map[Label]interface{}{
+	faLicense = map[LabLabel]interface{}{
 		LabNodes:              &pxapi.LicensedFeature_Count{Count: 1000},
 		LabVolumeSize:         &pxapi.LicensedFeature_CapacityTb{CapacityTb: 40},
 		LabVolumes:            &pxapi.LicensedFeature_Count{Count: 200},
@@ -128,34 +52,6 @@ var (
 		LabLocalAttaches:      &pxapi.LicensedFeature_Count{Count: 128},
 		LabOIDCSecurity:       &pxapi.LicensedFeature_Enabled{Enabled: false},
 		LabAUTCapacityMgmt:    &pxapi.LicensedFeature_Enabled{Enabled: false},
-	}
-)
-
-var (
-	ibmLicense = map[Label]interface{}{
-		LabNodes:              &pxapi.LicensedFeature_Count{Count: 1000},
-		LabVolumeSize:         &pxapi.LicensedFeature_CapacityTb{CapacityTb: 40},
-		LabVolumes:            &pxapi.LicensedFeature_Count{Count: 16384},
-		LabHaLevel:            &pxapi.LicensedFeature_Count{Count: MaxHaLevel},
-		LabSnapshots:          &pxapi.LicensedFeature_Count{Count: 64},
-		LabAggregatedVol:      &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabSharedVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabEncryptedVol:       &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabGlobalSecretsOnly:  &pxapi.LicensedFeature_Enabled{Enabled: false},
-		LabScaledVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabResizeVolume:       &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabCloudSnap:          &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabCloudSnapDaily:     &pxapi.LicensedFeature_Count{Count: Unlimited},
-		LabCloudMigration:     &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabDisasterRecovery:   &pxapi.LicensedFeature_Enabled{Enabled: false},
-		LabPlatformBare:       &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabPlatformVM:         &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabNodeCapacity:       &pxapi.LicensedFeature_CapacityTb{CapacityTb: 256},
-		LabNodeCapacityExtend: &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabLocalAttaches:      &pxapi.LicensedFeature_Count{Count: 256},
-		LabOIDCSecurity:       &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabAUTCapacityMgmt:    &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabFastPath:           &pxapi.LicensedFeature_Enabled{Enabled: false},
 	}
 )
 
@@ -190,9 +86,9 @@ var _ = Describe("{BasicEssentialsFaFbTest}", func() {
 			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
-					if _, ok := faLicense[Label(feature.Name)]; ok {
-						Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
-							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					if _, ok := faLicense[LabLabel(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(faLicense[LabLabel(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[LabLabel(feature.Name)]))
 					}
 				}
 			})
@@ -393,9 +289,9 @@ var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
 			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
-					if _, ok := faLicense[Label(feature.Name)]; ok {
-						Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
-							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					if _, ok := faLicense[LabLabel(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(faLicense[LabLabel(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[LabLabel(feature.Name)]))
 					}
 				}
 			})
@@ -461,9 +357,9 @@ var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
 			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
-					if _, ok := faLicense[Label(feature.Name)]; ok {
-						Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
-							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					if _, ok := faLicense[LabLabel(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(faLicense[LabLabel(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[LabLabel(feature.Name)]))
 					}
 				}
 			})
@@ -517,9 +413,9 @@ var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
 			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
-					if _, ok := faLicense[Label(feature.Name)]; ok {
-						Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
-							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					if _, ok := faLicense[LabLabel(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(faLicense[LabLabel(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[LabLabel(feature.Name)]))
 					}
 				}
 			})
@@ -602,9 +498,9 @@ var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
 			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
-					if _, ok := faLicense[Label(feature.Name)]; ok {
-						Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
-							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					if _, ok := faLicense[LabLabel(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(faLicense[LabLabel(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[LabLabel(feature.Name)]))
 					}
 				}
 			})
@@ -732,9 +628,9 @@ var _ = Describe("{DisableCallHomeTest}", func() {
 				Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 					for _, feature := range summary.Features {
 						// if the feature limit exists in the hardcoded license limits we test it.
-						if _, ok := faLicense[Label(feature.Name)]; ok {
-							Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
-								fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, faLicense[Label(feature.Name)]))
+						if _, ok := faLicense[LabLabel(feature.Name)]; ok {
+							Expect(feature.Quantity).To(Equal(faLicense[LabLabel(feature.Name)]),
+								fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, faLicense[LabLabel(feature.Name)]))
 						}
 					}
 				})
@@ -751,45 +647,20 @@ var _ = Describe("{DisableCallHomeTest}", func() {
 	})
 })
 
-// Validate on IBM cloud Marketplace Test License or production License
+// LicenseValidation validates license summary against expected SKU and features
 var _ = Describe("{LicenseValidation}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("LicenseValidation", "Validate PX License Activated using catalog", nil, 0)
+		StartTorpedoTest("LicenseValidation", "Validates license summary against expected SKU and features", nil, 0)
 	})
 
-	stepLog := "Get SKU and compare with IBM cloud license activated using catalog"
-	It(stepLog, func() {
-		log.InfoD(stepLog)
-		summary, err := Inst().V.GetLicenseSummary()
-		log.FailOnError(err, "Failed to get license SKU")
-		log.InfoD("%v", summary)
-
-		// Get SKU and compare with IBM cloud license
-		stepLog = "Verify PX-IBM cloud license type and its features"
-		Step(stepLog, func() {
-			log.InfoD("validate IBM cloud license type")
-			isValidLicense := summary.SKU == ibmTestLicenseSKU || summary.SKU == ibmTestLicenseDRSKU || summary.SKU == ibmProdLicenseSKU || summary.SKU == ibmProdLicenseDRSKU
-			dash.VerifyFatal(isValidLicense, true, fmt.Sprintf("License type is valid?: %v", summary.SKU))
-
-			Step("Compare PX-IBM License features vs activated license", func() {
-				log.InfoD("Compare with PX IBM cloud licensed features")
-				isTestOrProdSKU := summary.SKU == ibmTestLicenseSKU || summary.SKU == ibmProdLicenseSKU
-				for _, feature := range summary.Features {
-					if limit, ok := ibmLicense[Label(feature.Name)]; ok {
-						// Special handling for DisasterRecovery feature and certain SKUs
-						if !isTestOrProdSKU && Label(feature.Name) == LabDisasterRecovery {
-							limit = &pxapi.LicensedFeature_Enabled{Enabled: true}
-						}
-						dash.VerifyFatal(reflect.DeepEqual(feature.Quantity, limit), true, fmt.Sprintf("Verifying quantity for %v: actual %v, expected %v", feature.Name, feature.Quantity, limit))
-					}
-				}
-			})
-		})
+	It("Validate license summary against expected SKU and features", func() {
+		log.Infof("Validating license summary against expected SKU and features")
+		err = ValidatePxLicenseSummary()
+		log.FailOnError(err, "failed to validate license summary against expected SKU and features")
 	})
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-
 	})
 })
 

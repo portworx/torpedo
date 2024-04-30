@@ -2,12 +2,14 @@ package tests
 
 import (
 	"fmt"
+	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -57,7 +59,6 @@ var _ = Describe("{DecommissionNode}", func() {
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
 		}
-
 		ValidateApplications(contexts)
 
 		var storageDriverNodes []node.Node
@@ -85,11 +86,33 @@ var _ = Describe("{DecommissionNode}", func() {
 		// decommission nodes one at a time according to chaosLevel
 		for nodeIndex := range nodeIndexMap {
 			nodeToDecommission := storageDriverNodes[nodeIndex]
-			nodeToDecommission, err := node.GetNodeByName(nodeToDecommission.Name) //This is required when multiple nodes are decommissioned sequentially
+
+			//checking node status before decommission
+			status, err := Inst().V.GetNodeStatus(nodeToDecommission)
+			log.FailOnError(err, "error checking node [%s] status", nodeToDecommission.Name)
+			if *status != api.Status_STATUS_OK {
+				continue
+			}
+
+			nodeToDecommission, err = node.GetNodeByName(nodeToDecommission.Name) //This is required when multiple nodes are decommissioned sequentially
 			log.FailOnError(err, fmt.Sprintf("node [%s] not found with name", nodeToDecommission.Name))
 			stepLog = fmt.Sprintf("decommission node %s", nodeToDecommission.Name)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
+				var suspendedScheds []*v1alpha1.VolumeSnapshotSchedule
+				defer func() {
+					if len(suspendedScheds) > 0 {
+						for _, sched := range suspendedScheds {
+							makeSuspend := false
+							sched.Spec.Suspend = &makeSuspend
+							_, err := storkops.Instance().UpdateSnapshotSchedule(sched)
+							log.FailOnError(err, "error resuming volumes snapshot schedule for volume [%s] ", sched.Name)
+						}
+					}
+				}()
+				err = PrereqForNodeDecomm(nodeToDecommission, suspendedScheds)
+				log.FailOnError(err, "error performing prerequisites for node decommission")
+
 				err := Inst().S.PrepareNodeToDecommission(nodeToDecommission, Inst().Provisioner)
 				dash.VerifyFatal(err, nil, "Validate node decommission preparation")
 				err = Inst().V.DecommissionNode(&nodeToDecommission)
@@ -220,6 +243,19 @@ var _ = Describe("{KvdbDecommissionNode}", func() {
 			stepLog = fmt.Sprintf("decommission node %s", nodeToDecommission.Name)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
+				var suspendedScheds []*v1alpha1.VolumeSnapshotSchedule
+				defer func() {
+					if len(suspendedScheds) > 0 {
+						for _, sched := range suspendedScheds {
+							makeSuspend := false
+							sched.Spec.Suspend = &makeSuspend
+							_, err := storkops.Instance().UpdateSnapshotSchedule(sched)
+							log.FailOnError(err, "error resuming volumes snapshot schedule for volume [%s]", sched.Name)
+						}
+					}
+				}()
+				err = PrereqForNodeDecomm(nodeToDecommission, suspendedScheds)
+				log.FailOnError(err, "error performing prerequisites for node decommission")
 				err := Inst().S.PrepareNodeToDecommission(nodeToDecommission, Inst().Provisioner)
 				dash.VerifyFatal(err, nil, "Validate node decommission preparation")
 				err = Inst().V.DecommissionNode(&nodeToDecommission)

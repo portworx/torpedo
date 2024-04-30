@@ -8,7 +8,7 @@ import (
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -59,7 +59,7 @@ var _ = Describe("{CreateAndRunFioOnVcluster}", func() {
 		log.Infof("Successfully created PVC with name: %v", pvcName)
 		jobName := "fio-job"
 		// Create FIO Deployment on VCluster using the above PVC
-		err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
+		err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName, 12*time.Minute)
 		log.FailOnError(err, "Error in creating FIO Application")
 		log.Infof("Successfully ran FIO on Vcluster")
 	})
@@ -137,7 +137,7 @@ var _ = Describe("{CreateAndRunMultipleFioOnVcluster}", func() {
 					log.FailOnError(err, fmt.Sprintf("Error creating PVC %v with Storageclass name %v", pvcName, scName))
 					log.Infof("Successfully created PVC with name: %v", pvcName)
 					// Create FIO Deployment on VCluster using the above PVC
-					err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
+					err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName, 10*time.Minute)
 					log.FailOnError(err, "Error in creating FIO Application for PVC "+pvcName)
 				}(i + j)
 			}
@@ -268,12 +268,12 @@ var _ = Describe("{CreateAndRunFioOnVclusterRWX}", func() {
 
 		go func() {
 			defer wg.Done()
-			err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName1)
+			err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName1, 12*time.Minute)
 			log.FailOnError(err, "Error in creating first FIO Application")
 		}()
 		go func() {
 			defer wg.Done()
-			err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName2)
+			err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName2, 12*time.Minute)
 			log.FailOnError(err, "Error in creating second FIO Application")
 		}()
 		wg.Wait()
@@ -374,7 +374,7 @@ var _ = Describe("{CreateAndRunMultipleFioOnManyVclusters}", func() {
 							log.FailOnError(err, fmt.Sprintf("Error creating PVC %v with Storageclass name %v", pvcName, scName))
 							log.Infof("Successfully created PVC with name: %v", pvcName)
 							// Create FIO Deployment on VCluster using the above PVC
-							err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
+							err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName, 10*time.Minute)
 							log.FailOnError(err, "Error in creating FIO Application for PVC "+pvcName)
 						}(i + j)
 					}
@@ -750,7 +750,7 @@ var _ = Describe("{CreateEncryptedVolVCluster}", func() {
 		log.Infof("Successfully created PVC with name: %v", pvcName)
 		jobName := "fio-job"
 		// Create FIO Deployment on VCluster using the above PVC
-		err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
+		err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName, 10*time.Minute)
 		log.FailOnError(err, "Error in creating FIO Application")
 		log.Infof("Successfully ran FIO on Vcluster")
 	})
@@ -888,7 +888,7 @@ var _ = Describe("{VolumeSnapshotAndRestoreVcluster}", func() {
 		log.Infof("Successfully created PVC with name: %v", pvcName)
 		jobName := "fio-job"
 		// Create FIO Deployment on VCluster using the above PVC
-		err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
+		err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName, 10*time.Minute)
 		log.FailOnError(err, "Error in creating FIO Application")
 		log.Infof("Successfully ran FIO on Vcluster")
 		log.Infof("Waiting for 60 seconds as that is frequency to take one snapshot")
@@ -920,7 +920,7 @@ var _ = Describe("{VolumeSnapshotAndRestoreVcluster}", func() {
 		fioOptions.RW = "read"
 		fioOptions.VerifyOnly = true
 		jobName = "fio-restored-job"
-		err = vc.CreateFIODeployment(restoredPvcName, appNS, fioOptions, jobName)
+		err = vc.CreateFIODeployment(restoredPvcName, appNS, fioOptions, jobName, 10*time.Minute)
 		log.FailOnError(err, "Error in creating FIO Application")
 		log.Infof("Successfully ran FIO on Vcluster")
 	})
@@ -980,7 +980,7 @@ var _ = Describe("{AutopilotPvcResizeTestVCluster}", func() {
 
 		go func() {
 			defer wg.Done()
-			err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
+			err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName, 10*time.Minute)
 			log.FailOnError(err, "Error in creating first FIO Application")
 		}()
 		go func() {
@@ -1072,7 +1072,7 @@ var _ = Describe("{AutopilotMultiplePvcResizeTestVCluster}", func() {
 
 		go func() {
 			defer wg.Done()
-			err = vc.CreateFIOMultiPvcDeployment(pvcNames, appNS, fioOptions, jobName)
+			err = vc.CreateFIOMultiPvcDeployment(pvcNames, appNS, fioOptions, jobName, 10*time.Minute)
 			log.FailOnError(err, "Error in creating first FIO Application")
 		}()
 		go func() {
@@ -1211,7 +1211,7 @@ var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
 							go func() {
 								defer wginternal.Done()
 								// Create FIO Deployment on VCluster using the above PVC
-								err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
+								err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName, 10*time.Minute)
 								log.FailOnError(err, "Error in creating FIO Application for PVC "+pvcName)
 							}()
 							go func() {
@@ -1261,6 +1261,21 @@ var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
 		for _, apRule := range apRules {
 			Inst().S.DeleteAutopilotRule(apRule.ObjectMeta.Name)
 			log.Errorf("Failed to delete Rule %v", apRule.ObjectMeta.Name)
+		}
+	})
+})
+
+var _ = Describe("{DeployMultipleKubevirtApps}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeployMultipleKubevirtApps", "Create, Connect and run Multiple Kubevirt VMs", nil, 0)
+	})
+	It("Create Multiple FIO apps on VCluster and run it for 10 minutes", func() {
+		Inst().AppList = []string{"kubevirt-cloudsnap", "kubevirt-localsnap", "kubevirt-multi-disk", "kubevirt-ssie-vm", "kubevirt-ssie-io", "kubevirt-vm-pvc"}
+
+		for i := 1; i <= 20; i++ {
+			taskName := fmt.Sprintf("ssie-load-%d", i)
+			appNamespace := fmt.Sprintf("%v-%v", "multi-kubevirt-app", time.Now().Unix())
+			_ = ScheduleApplicationsOnNamespace(appNamespace, taskName)
 		}
 	})
 })

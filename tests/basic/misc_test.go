@@ -2,23 +2,32 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/volume"
 	"math/rand"
+	"path"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/drivers/volume/portworx"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
+
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/pureutils"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+var k8sCore = core.Instance()
 
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{SetupTeardown}", func() {
@@ -53,6 +62,74 @@ var _ = Describe("{SetupTeardown}", func() {
 	})
 })
 
+func pureWriteRoutine(ctx *scheduler.Context, podName string, dataDir string, shouldStop *bool, errOutChan chan error) {
+	for {
+		if *shouldStop {
+			return
+		}
+		// Proceed to the write
+
+		// Get the current time in unix timestamp
+		filename := fmt.Sprintf("purewritetest-%s-%d", podName, time.Now().Unix())
+		log.Debugf("Writing to pod '%s' in namespace '%s' in data dir '%s'. This will be filename %s", podName, ctx.App.NameSpace, dataDir, filename)
+		cmdArgs := []string{"exec", "-it", podName, "-n", ctx.App.NameSpace, "--", "touch", path.Join(dataDir, filename)}
+		err = osutils.Kubectl(cmdArgs)
+		if err != nil {
+			log.Errorf("Error writing to pod '%s' in namespace '%s' in data dir '%s': %v", podName, ctx.App.NameSpace, dataDir, err)
+			errOutChan <- fmt.Errorf("Error writing to pod '%s' in namespace '%s' in data dir '%s': %v", podName, ctx.App.NameSpace, dataDir, err)
+			return
+		}
+
+		// Sleep for 10 seconds
+		time.Sleep(10 * time.Second)
+	}
+}
+
+func StartPureBackgroundWriteRoutines() func() {
+	pureStopWriteRoutine := false
+	pureErrOutChan := make(chan error, 1) // We only need one failure to fail the entire test: no reason to store more than we need
+
+	Step("start write routine on all Pure volumes to ensure data continuity", func() {
+		for _, ctx := range contexts {
+			var vols []*volume.Volume
+			Step(fmt.Sprintf("get %s app's volumes", ctx.App.Key), func() {
+				vols, err = Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+			})
+
+			podNames := map[string]bool{}
+			for _, vol := range vols {
+				pods, err := Inst().S.GetPodsForPVC(vol.Name, vol.Namespace)
+				log.FailOnError(err, "Failed to get pods for PVC %s in app %s", vol.Name, ctx.App.Key)
+				for _, pod := range pods {
+					podNames[pod.Name] = true
+				}
+			}
+
+			dataDir, _ := pureutils.GetAppDataDir(ctx.App.NameSpace)
+			for podName := range podNames {
+				// Start a routine that will repeatedly write to this pod's data directory until we send something to the stop channel
+				// If any errors occur, they will be sent to the err channel, and checked at the end of the test
+				log.Infof("Starting background write routine for pod '%s' in namespace '%s' in data dir '%s'", podName, ctx.App.NameSpace, dataDir)
+				go pureWriteRoutine(ctx, podName, dataDir, &pureStopWriteRoutine, pureErrOutChan)
+			}
+		}
+	})
+	return func() {
+		// Finish up the write routines from earlier
+		// First, check for any errors
+		var err error
+		select {
+		case err = <-pureErrOutChan:
+			log.FailOnError(err, "Error writing to Pure volume")
+		default:
+			log.Infof("No errors found in error channel for Pure volume write validation")
+		}
+		// Then, close all the routines out so they stop writing
+		pureStopWriteRoutine = true
+	}
+}
+
 // Volume Driver Plugin is down, unavailable - and the client container should not be impacted.
 var _ = Describe("{VolumeDriverDown}", func() {
 	var testrailID = 35259
@@ -74,6 +151,11 @@ var _ = Describe("{VolumeDriverDown}", func() {
 		}
 
 		ValidateApplications(contexts)
+
+		var pureCleanupFunction func()
+		if Inst().V.String() == portworx.PureDriverName {
+			pureCleanupFunction = StartPureBackgroundWriteRoutines()
+		}
 
 		Step("get nodes bounce volume driver", func() {
 			for _, appNode := range node.GetStorageDriverNodes() {
@@ -105,6 +187,12 @@ var _ = Describe("{VolumeDriverDown}", func() {
 					}
 				})
 			}
+
+			if pureCleanupFunction != nil {
+				pureCleanupFunction() // Checks for any errors during the background writes and fails the test if any occurred
+				return
+			}
+
 			err := ValidateDataIntegrity(&contexts)
 			log.FailOnError(err, "error validating data integrity")
 		})
@@ -218,6 +306,11 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 
 		ValidateApplications(contexts)
 
+		var pureCleanupFunction func()
+		if Inst().V.String() == portworx.PureDriverName {
+			pureCleanupFunction = StartPureBackgroundWriteRoutines()
+		}
+
 		stepLog = "crash volume driver in all nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -231,6 +324,11 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 					})
 			}
 		})
+
+		if pureCleanupFunction != nil {
+			pureCleanupFunction() // Checks for any errors during the background writes and fails the test if any occurred
+			return
+		}
 
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
@@ -306,7 +404,9 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 					dash.VerifySafely(err, nil, fmt.Sprintf("Verify App %s deletion", ctx.App.Key))
 				})
 
-				DeleteVolumesAndWait(ctx, nil)
+				err = DeleteVolumesAndWait(ctx, nil)
+				dash.VerifySafely(err, nil, fmt.Sprintf("%s's volume deleted successfully?", ctx.App.Key))
+
 			}
 		})
 	})
@@ -1059,5 +1159,99 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Add a test to detach all the disks from a node and then reattach them to a different node
+var _ = Describe("{NodeDiskDetachAttach}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("NodeDiskDetachAttach", "Validate disk detach and attach", nil, 0)
+	})
+	var contexts []*scheduler.Context
+
+	testName := "nodediskdetachattach"
+	stepLog := "has to detach all disks from a node and reattach them to a different node"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
+		}
+
+		randomNum := rand.New(rand.NewSource(time.Now().Unix()))
+
+		ValidateApplications(contexts)
+		// Fetch the node where PX is not started
+		nonPXNodes := node.GetPXDisabledNodes()
+		// Remove disks from all nodes in nonPXNodes
+		for _, n := range nonPXNodes {
+			// Fetch the disks attached to the node
+			err := Inst().N.RemoveNonRootDisks(n)
+			log.FailOnError(err, fmt.Sprintf("Failed to remove disks on node %s", n.Name))
+		}
+		randNonPxNode := nonPXNodes[randomNum.Intn(len(nonPXNodes))]
+
+		// Fetch a random node from the StorageNodes
+		storageNodes := node.GetStorageNodes()
+		randomStorageNode := storageNodes[randomNum.Intn(len(storageNodes))]
+
+		// Fetch random storage node and detach the disks attached to that node
+		var oldNodeIDtoMatch string
+		var newNodeIDtoMatch string
+		Step(fmt.Sprintf("detach disks attached from a random storage node %s and attach to non px node %s", randomStorageNode.Name, randNonPxNode.Name), func() {
+			log.Infof("Detaching disks from node %s and attaching to node %s", randomStorageNode.Name, randNonPxNode.Name)
+			// ToDo - Ensure the above selected node has volumes/apps running on it
+			// Store the Node ID of randomStorageNode for future use
+			oldNodeIDtoMatch = randomStorageNode.Id
+			// Stop PX on the node
+			err = k8sCore.AddLabelOnNode(randomStorageNode.Name, schedops.PXServiceLabelKey, "stop")
+			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=stop on node %s", schedops.PXServiceLabelKey, randomStorageNode.Name))
+
+			err = Inst().N.MoveDisks(randomStorageNode, randNonPxNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to move disks from node %s to node %s", randomStorageNode.Name, randNonPxNode.Name))
+
+			// Add PXEnabled false label to srcVM
+			err = k8sCore.AddLabelOnNode(randomStorageNode.Name, schedops.PXEnabledLabelKey, "false")
+			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=stop on node %s", schedops.PXServiceLabelKey, randomStorageNode.Name))
+
+			// Start PX on the node
+			err = k8sCore.AddLabelOnNode(randNonPxNode.Name, schedops.PXEnabledLabelKey, "true")
+			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=true on node %s", schedops.PXEnabledLabelKey, randNonPxNode.Name))
+			err = k8sCore.AddLabelOnNode(randNonPxNode.Name, schedops.PXServiceLabelKey, "start")
+			log.FailOnError(err, fmt.Sprintf("Failed to add label %s=start on node %s", schedops.PXServiceLabelKey, randNonPxNode.Name))
+			err = Inst().V.WaitForPxPodsToBeUp(randNonPxNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to wait for PX pods to be up on node %s", randNonPxNode.Name))
+			// Refresh the driver endpoints
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing node registry")
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing storage drive endpoints")
+			// Wait for the driver to be up on the node
+			randNonPxNode, err = node.GetNodeByName(randNonPxNode.Name)
+			log.FailOnError(err, fmt.Sprintf("Failed to get node %s", randNonPxNode.Name))
+			err = Inst().V.WaitDriverUpOnNode(randNonPxNode, Inst().DriverStartTimeout)
+			dash.VerifyFatal(err, nil, "Validate volume is driver up")
+			// Verify the node ID is same as earlier stored Node ID
+			newNodeIDtoMatch = randNonPxNode.Id
+
+			dash.VerifyFatal(oldNodeIDtoMatch, newNodeIDtoMatch, fmt.Sprintf("Node ID mismatch for node %s after moving the disks", randNonPxNode.Name))
+			log.Infof("Node ID matches for node %s [%s == %s]", randNonPxNode.Name, oldNodeIDtoMatch, newNodeIDtoMatch)
+		})
+
+		// ToDo - Verify the integrity of apps, cluster and volumes
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })

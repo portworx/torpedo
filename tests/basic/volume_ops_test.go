@@ -1,32 +1,34 @@
 package tests
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/restutil"
+	"math"
+	"math/rand"
+	"net/http"
+	"reflect"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/google/uuid"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/openstorage/api"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
-	v1 "k8s.io/api/core/v1"
-	storageApi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"math"
-	"math/rand"
-	"reflect"
-	"strings"
-	"sync"
-	"time"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -45,6 +47,20 @@ const (
 	fioPVScheduleName       = "tc-cs-volsnapsched"
 	fioOutputPVScheduleName = "tc-cs-volsnapsched-2"
 )
+
+type volumeDataMap struct {
+	UsedSize         float64 `json:"UsedSize"`
+	PoolID           int     `json:"PoolID"`
+	ClusterID        string  `json:"ClusterID"`
+	TotalRestoreSize float64 `json:"TotalRestoreSize"`
+}
+
+type CloudBackupSizeAPI struct {
+	Size                  string `json:"size"`
+	TotalDownloadBytes    string `json:"total_download_bytes"`
+	CompressedObjectBytes string `json:"compressed_object_bytes"`
+	Capacity              string `json:"capacity_required_for_restore"`
+}
 
 // Volume replication change
 var _ = Describe("{VolumeUpdate}", func() {
@@ -300,6 +316,21 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist ?")
 				})
 				for _, v := range appVolumes {
+					if _, ok := v.Labels[k8s.PureDAVolumeLabel]; ok {
+						// This is a Pure Direct Access volume, which will not support repl updates.
+						// Ensure the command fails.
+						Step(fmt.Sprintf("ensure repl update fails on Pure Direct Access on app %s's volume: %v", ctx.App.Key, v), func() {
+							appNodes, err := Inst().S.GetNodesForApp(ctx)
+							log.FailOnError(err, "Failed to get nodes for app %s", ctx.App.Key)
+							dash.VerifyFatal(len(appNodes) > 0, true, "App nodes exist ?")
+
+							err = Inst().V.SetReplicationFactor(v, 3, []string{appNodes[0].VolDriverNodeID}, nil, true)
+							dash.VerifyFatal(err != nil, true, "Repl update failed (as expected) for Pure DA volumes?")
+							dash.VerifyFatal(strings.Contains(err.Error(), "not supported for Pure"), true, "Repl update error for Pure DA volumes contains proper string?")
+						})
+						continue
+					}
+
 					MaxRF := Inst().V.GetMaxReplicationFactor()
 					MinRF := Inst().V.GetMinReplicationFactor()
 					currReplicaSet := []string{}
@@ -960,7 +991,10 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		retain := 8
-		interval := 3
+		interval := 4
+
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
 
 		n := node.GetStorageDriverNodes()[0]
 		uuidCmd := "pxctl cred list -j | grep uuid"
@@ -1006,7 +1040,11 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 			ValidateApplications(contexts)
 
 		})
-		volSnapMap := make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
+
+		defer func() {
+			err := storkops.Instance().DeleteSchedulePolicy(policyName)
+			log.FailOnError(err, fmt.Sprintf("error deleting a SchedulePolicy [%s]", policyName))
+		}()
 
 		stepLog = "Verify that cloud snap status"
 		Step(stepLog, func() {
@@ -1031,7 +1069,6 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 				scaleFactor := time.Duration(Inst().GlobalScaleFactor * len(appVolumes))
 				err = Inst().S.ValidateVolumes(ctx, scaleFactor*4*time.Minute, defaultRetryInterval, nil)
 				log.FailOnError(err, "error validating volumes for [%s]", ctx.App.Key)
-				snapMap := make(map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
 				for _, v := range appVolumes {
 
 					isPureVol, err := Inst().V.IsPureVolume(v)
@@ -1044,71 +1081,71 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 					snapshotScheduleName := v.Name + "-interval-schedule"
 					log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
 
-					var volumeSnapshotStatus *storkv1.ScheduledVolumeSnapshotStatus
-					checkSnapshotSchedules := func() (interface{}, bool, error) {
-						resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
-						if err != nil {
-							return "", false, fmt.Errorf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
-						}
-						if len(resp.Status.Items) == 0 {
-							return "", false, fmt.Errorf("no snapshot schedules found for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
-						}
+					resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+					log.FailOnError(err, fmt.Sprintf("error getting snapshot schedule for [%s], volume:[%s] in namespace [%s]", snapshotScheduleName, v.Name, v.Namespace))
+					dash.VerifyFatal(len(resp.Status.Items) > 0, true, fmt.Sprintf("verify snapshots exists for [%s]", snapshotScheduleName))
+					for _, snapshotStatuses := range resp.Status.Items {
+						if len(snapshotStatuses) > 0 {
+							status := snapshotStatuses[len(snapshotStatuses)-1]
+							if status == nil {
+								log.FailOnError(fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status"), fmt.Sprintf("error getting latest snapshot status for [%s]", snapshotScheduleName))
+							}
+							status, err = WaitForSnapShotToReady(snapshotScheduleName, status.Name, appNamespace)
+							log.Infof("Snapshot [%s] has status [%v]", status.Name, status.Status)
+							if status.Status == snapv1.VolumeSnapshotConditionError {
+								resp, _ := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+								log.Infof("SnapshotSchedule resp: %v", resp)
+								snapData, _ := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
+								log.Infof("snapData : %v", snapData)
+								log.FailOnError(fmt.Errorf("snapshot: %s failed. status: [%v]", status.Name, status.Status), fmt.Sprintf("cloud snapshot for [%s] failed", snapshotScheduleName))
+							}
+							if status.Status == snapv1.VolumeSnapshotConditionPending {
+								log.FailOnError(fmt.Errorf("snapshot: %s not completed. status: [%v]", status.Name, status.Status), fmt.Sprintf("cloud snapshot for [%s] stuck in pending state", snapshotScheduleName))
+							}
+							if status.Status == snapv1.VolumeSnapshotConditionReady {
+								snapData, err := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
+								log.FailOnError(err, fmt.Sprintf("error getting snapshot data for [%s/%s]", appNamespace, status.Name))
 
-						for _, snapshotStatuses := range resp.Status.Items {
-							if len(snapshotStatuses) > 0 {
-								volumeSnapshotStatus = snapshotStatuses[len(snapshotStatuses)-1]
-								if volumeSnapshotStatus == nil {
-									return "", true, fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status")
+								snapType := snapData.Spec.PortworxSnapshot.SnapshotType
+								log.Infof("Snapshot Type: %v", snapType)
+								if snapType != "cloud" {
+									err = &scheduler.ErrFailedToGetVolumeParameters{
+										App:   ctx.App,
+										Cause: fmt.Sprintf("Snapshot Type: [%s] does not match", snapType),
+									}
+									log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, status.Name))
 								}
-								if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionReady {
-									return nil, false, nil
-								}
-								if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionError {
-									return nil, false, fmt.Errorf("volume snapshot: %s failed. status: %v", volumeSnapshotStatus.Name, volumeSnapshotStatus.Status)
-								}
-								if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionPending {
-									return nil, true, fmt.Errorf("volume Sanpshot %s is still pending", volumeSnapshotStatus.Name)
+								condition := snapData.Status.Conditions[0]
+								dash.VerifyFatal(condition.Type == snapv1.VolumeSnapshotDataConditionReady, true, fmt.Sprintf("validate volume snapshot condition data for [%s] expteced: [%v], actual [%v]", status.Name, snapv1.VolumeSnapshotDataConditionReady, condition.Type))
+
+								snapID := snapData.Spec.PortworxSnapshot.SnapshotID
+								log.Infof("Snapshot ID: %v", snapID)
+								if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
+									len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
+									err = &scheduler.ErrFailedToGetVolumeParameters{
+										App:   ctx.App,
+										Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
+									}
+									log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, status.Name))
 								}
 							}
 						}
-						return nil, true, fmt.Errorf("volume Sanpshots for %s is not found", v.Name)
 					}
-					_, err = task.DoRetryWithTimeout(checkSnapshotSchedules, time.Duration(5*15)*defaultCommandTimeout, defaultReadynessTimeout)
-					log.FailOnError(err, "error validating volume snapshot for %s", v.Name)
-
-					snapMap[v] = volumeSnapshotStatus
-
-					snapData, err := Inst().S.GetSnapShotData(ctx, volumeSnapshotStatus.Name, appNamespace)
-					log.FailOnError(err, fmt.Sprintf("error getting snapshot data for [%s/%s]", appNamespace, volumeSnapshotStatus.Name))
-
-					snapType := snapData.Spec.PortworxSnapshot.SnapshotType
-					log.Infof("Snapshot Type: %v", snapType)
-					if snapType != "cloud" {
-						err = &scheduler.ErrFailedToGetVolumeParameters{
-							App:   ctx.App,
-							Cause: fmt.Sprintf("Snapshot Type: %s does not match", snapType),
-						}
-						log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, volumeSnapshotStatus.Name))
-					}
-					condition := snapData.Status.Conditions[0]
-					dash.VerifyFatal(condition.Type == snapv1.VolumeSnapshotDataConditionReady, true, fmt.Sprintf("validate volume snapshot condition data for %s expteced: %v, actual %v", volumeSnapshotStatus.Name, snapv1.VolumeSnapshotDataConditionReady, condition.Type))
-
-					snapID := snapData.Spec.PortworxSnapshot.SnapshotID
-					log.Infof("Snapshot ID: %v", snapID)
-					if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
-						len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
-						err = &scheduler.ErrFailedToGetVolumeParameters{
-							App:   ctx.App,
-							Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
-						}
-						log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, volumeSnapshotStatus.Name))
-					}
-
 				}
-				volSnapMap[appNamespace] = snapMap
 			}
-			log.Infof("waiting for 10 mins to create multiple cloud snaps")
-			time.Sleep(10 * time.Minute)
+		})
+
+		stepLog = "Validating cloud snapshot backup size values"
+		Step(stepLog, func() {
+			for _, ctx := range contexts {
+				// Validate the cloud snapshot backup size values [PTX-17342]
+				log.Infof("Validating cloud snapshot backup size values for app [%s]", ctx.App.Key)
+				vols, err := Inst().S.GetVolumeParameters(ctx)
+				log.FailOnError(err, fmt.Sprintf("error getting volume params for [%s]", ctx.App.Key))
+				for vol, params := range vols {
+					dash.VerifyFatal(validateCloudSnapValues(credUUID, vol, params), true, fmt.Sprintf("validate cloud snap values for volume [%s]", vol))
+				}
+			}
 		})
 
 		stepLog = "Update volume io_profiles on all volumes"
@@ -1142,22 +1179,64 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 
 		stepLog = "Verify cloud snap restore"
 		Step(stepLog, func() {
-			for ns, volSnap := range volSnapMap {
-				for vol, snap := range volSnap {
-					restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
-						Name:      vol.Name,
-						Namespace: vol.Namespace,
-					}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: snap.Name, SourceNamespace: ns, GroupSnapshot: false}}
-					restore, err := storkops.Instance().CreateVolumeSnapshotRestore(restoreSpec)
-					log.FailOnError(err, fmt.Sprintf("error creating volume snapshot restore for %s", snap.Name))
-					err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, time.Duration(5*15)*defaultCommandTimeout, defaultReadynessTimeout)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destination: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
+			for _, ctx := range contexts {
+
+				if strings.Contains(ctx.App.Key, "cloudsnap") {
+
+					appNamespace := ctx.App.Key + "-" + ctx.UID
+					snapSchedList, err := storkops.Instance().ListSnapshotSchedules(appNamespace)
+					log.FailOnError(err, "error getting snapshot list")
+
+					vols, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "error getting volumes")
+
+					for _, vol := range vols {
+						var snapshotScheduleName string
+						for _, snap := range snapSchedList.Items {
+							snapshotScheduleName = snap.Name
+							if strings.Contains(snapshotScheduleName, vol.Name) {
+								break
+							}
+						}
+						resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+						log.FailOnError(err, "error getting snapshot schedule for [%s] in namespace [%s]", snapshotScheduleName, appNamespace)
+						var volumeSnapshotStatus *storkv1.ScheduledVolumeSnapshotStatus
+					outer:
+						for _, snapshotStatuses := range resp.Status.Items {
+							for _, vsStatus := range snapshotStatuses {
+								if vsStatus.Status == snapv1.VolumeSnapshotConditionReady {
+									volumeSnapshotStatus = vsStatus
+									break outer
+								}
+							}
+						}
+						if volumeSnapshotStatus != nil {
+							restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
+								Name:      vol.Name,
+								Namespace: vol.Namespace,
+							}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: volumeSnapshotStatus.Name, SourceNamespace: appNamespace, GroupSnapshot: false}}
+							restore, err := storkops.Instance().CreateVolumeSnapshotRestore(restoreSpec)
+							log.FailOnError(err, "error CreateVolumeSnapshotRestore")
+							err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
+							dash.VerifySafely(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destnation: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
+							if err == nil {
+								err = storkops.Instance().DeleteVolumeSnapshotRestore(restore.Name, restore.Namespace)
+								log.FailOnError(err, "error deleting volume snapshot restore object")
+							}
+						} else {
+							log.FailOnError(fmt.Errorf("no snapshot with Ready status found for vol[%s] in namespace[%s]", vol.Name, vol.Namespace), "error getting volume snapshot")
+						}
+
+					}
+
 				}
 			}
 
 		})
+
 		stepLog = "Validating and Destroying apps"
 		Step(stepLog, func() {
+
 			for _, ctx := range contexts {
 				ctx.ReadinessTimeout = 15 * time.Minute
 				ctx.SkipVolumeValidation = false
@@ -1170,6 +1249,8 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		err = DeleteCloudSnapBucket(contexts)
+		log.FailOnError(err, "error deleting cloud snap bucket")
 		AfterEachTest(contexts)
 	})
 })
@@ -1504,9 +1585,10 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 	var pxNode node.Node
 	var contexts []*scheduler.Context
 	var volumrlidttr []*api.Volume
-	var applist = Inst().AppList
+
 	stepLog := "Create fastpath Volume reboot node and check if fastpath is active"
 	It(stepLog, func() {
+		applist := Inst().AppList
 		log.InfoD(stepLog)
 		revertAppList := func() {
 			Inst().AppList = applist
@@ -1660,6 +1742,9 @@ var _ = Describe("{TrashcanRecoveryWithCloudsnap}", func() {
 	stepLog := "Validate the successful restore from Trashcan of volume in resync"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
 		stepLog = "Enable Trashcan"
 		Step(stepLog,
 			func() {
@@ -1696,6 +1781,12 @@ var _ = Describe("{TrashcanRecoveryWithCloudsnap}", func() {
 				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
 			}
 		})
+
+		defer func() {
+			err := storkops.Instance().DeleteSchedulePolicy(policyName)
+			log.FailOnError(err, fmt.Sprintf("error deleting a SchedulePolicy [%s]", policyName))
+
+		}()
 		fioPVC := "fio-pvc"
 		fioPVName := "fio-pv"
 		fioOutputPVC := "fio-output-pvc"
@@ -1936,6 +2027,8 @@ var _ = Describe("{TrashcanRecoveryWithCloudsnap}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		err = DeleteCloudSnapBucket(contexts)
+		log.FailOnError(err, "error deleting cloud snap bucket")
 		AfterEachTest(contexts)
 	})
 })
@@ -2083,6 +2176,54 @@ func validateCloudSnaps(appNamespace string) (map[string]string, error) {
 	return snapsMap, nil
 }
 
+func validateCloudSnapValues(credUUID string, volName string, params map[string]string) bool {
+	log.InfoD("Validating snapshot values")
+	cSnaps, err := Inst().V.GetCloudsnaps(volName, params)
+	if err != nil || len(cSnaps) == 0 {
+		log.FailOnError(err, "error getting cloudsnaps or no cloudsnaps found!")
+		return false
+	}
+	for _, cSnap := range cSnaps {
+		volData := cSnap.Metadata["volume"]
+		log.Infof("Volume Data from SDK: %v", volData)
+		var volumeData volumeDataMap
+		err := json.Unmarshal([]byte(volData), &volumeData)
+		if err != nil {
+			log.FailOnError(err, "Error while unmarshalling volume data")
+			return false
+		}
+		totalRestoreSize := strconv.FormatFloat(volumeData.TotalRestoreSize, 'f', -1, 64)
+		compressedSizeBytes := cSnap.Metadata["compressedSizeBytes"]
+		capacityRequiredForRestore := strconv.FormatFloat(volumeData.UsedSize, 'f', -1, 64)
+		log.Infof("TotalRestoreSize: %v, CompressedObjectBytes: %v, CapacityRequiredForRestore: %v",
+			totalRestoreSize, compressedSizeBytes, capacityRequiredForRestore)
+
+		// API GET values from v1/cloudbackups/size
+		url := fmt.Sprintf("http://%s:9021/v1/cloudbackups/size?credential_id=%s&backup_id=%s",
+			node.GetStorageDriverNodes()[0].MgmtIp, credUUID, cSnap.Id)
+		resp, respStatusCode, err := restutil.GET(url, nil, nil)
+		if err != nil || respStatusCode != http.StatusOK || len(resp) == 0 {
+			log.FailOnError(err, "Error in fetching cloud backup size, Cause: %v; Status code: %v "+
+				"\n Or the data is empty", err, respStatusCode)
+			return false
+		}
+		log.InfoD("Parsing output from cloud backup size API")
+		var cloudBackupSize CloudBackupSizeAPI
+		err = json.Unmarshal(resp, &cloudBackupSize)
+		log.Infof("CloudBackupSize: %v", cloudBackupSize)
+
+		if err != nil || cloudBackupSize.Size != totalRestoreSize ||
+			cloudBackupSize.TotalDownloadBytes != totalRestoreSize ||
+			cloudBackupSize.CompressedObjectBytes != compressedSizeBytes ||
+			cloudBackupSize.Capacity != capacityRequiredForRestore {
+			log.FailOnError(err, "Cloudsnap size mismatch: %v", cSnap.Id)
+			return false
+		}
+	}
+
+	return true
+}
+
 func trashcanRestore(volId, volName string) error {
 	log.InfoD("Restoring vol [%v] from trashcan", volId)
 	pxctlCmdFull := fmt.Sprintf("v r %s --trashcan %s", volName, volId)
@@ -2128,17 +2269,8 @@ var _ = Describe("{CloudSnapWithPXEvents}", func() {
 		stepLog = "validate cloud cred and create schedule policy"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			n := node.GetStorageDriverNodes()[0]
-			uuidCmd := "pxctl cred list -j | grep uuid"
-			output, err := runCmd(uuidCmd, n)
-			log.FailOnError(err, "error getting uuid for cloudsnap credential")
-			if output == "" {
-				log.FailOnError(fmt.Errorf("cloud cred is not created"), "Check for cloud cred exists?")
-			}
-
-			credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
-			credUUID = strings.ReplaceAll(credUUID, "\"", "")
-			log.Infof("Got Cred UUID: %s", credUUID)
+			err := CreatePXCloudCredential()
+			log.FailOnError(err, "failed to create cloud credential")
 			contexts = make([]*scheduler.Context, 0)
 			policyName := "intervalpolicy"
 
@@ -2166,6 +2298,11 @@ var _ = Describe("{CloudSnapWithPXEvents}", func() {
 					log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
 				}
 			})
+
+			defer func() {
+				err := storkops.Instance().DeleteSchedulePolicy(policyName)
+				log.FailOnError(err, fmt.Sprintf("error deleting a SchedulePolicy [%s]", policyName))
+			}()
 
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cspxevents-%d", i))...)
@@ -2479,6 +2616,8 @@ var _ = Describe("{CloudSnapWithPXEvents}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		err = DeleteCloudSnapBucket(contexts)
+		log.FailOnError(err, "failed to delete cloud snap bucket")
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
@@ -2507,23 +2646,13 @@ var _ = Describe("{PoolFullCloudsnap}", func() {
 	It(stepLog, func() {
 
 		stepLog = "Create cloudsnap schedule and validate cloud cred"
-
+		policyName := "intervalpolicy"
 		Step(stepLog, func() {
 
 			log.InfoD(stepLog)
-			n := node.GetStorageDriverNodes()[0]
-			uuidCmd := "pxctl cred list -j | grep uuid"
-			output, err := runCmd(uuidCmd, n)
-			log.FailOnError(err, "error getting uuid for cloudsnap credential")
-			if output == "" {
-				log.FailOnError(fmt.Errorf("cloud cred is not created"), "Check for cloud cred exists?")
-			}
-
-			credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
-			credUUID = strings.ReplaceAll(credUUID, "\"", "")
-			log.Infof("Got Cred UUID: %s", credUUID)
+			err := CreatePXCloudCredential()
+			log.FailOnError(err, "failed to create cloud credential")
 			contexts = make([]*scheduler.Context, 0)
-			policyName := "intervalpolicy"
 
 			stepLog = fmt.Sprintf("create schedule policy %s", policyName)
 			Step(stepLog, func() {
@@ -2551,6 +2680,11 @@ var _ = Describe("{PoolFullCloudsnap}", func() {
 			})
 
 		})
+
+		defer func() {
+			err := storkops.Instance().DeleteSchedulePolicy(policyName)
+			log.FailOnError(err, fmt.Sprintf("error deleting a SchedulePolicy [%s]", policyName))
+		}()
 
 		log.InfoD(stepLog)
 		existingAppList := Inst().AppList
@@ -2731,6 +2865,8 @@ var _ = Describe("{PoolFullCloudsnap}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		err = DeleteCloudSnapBucket(contexts)
+		log.FailOnError(err, "failed to delete cloud snap bucket")
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
@@ -2780,7 +2916,7 @@ var _ = Describe("{NFSProxyVolumeValidation}", func() {
 			contexts = make([]*scheduler.Context, 0)
 
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("purevolumestest-%d", i))...)
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nfsproxytest-%d", i))...)
 			}
 
 			for _, ctx := range contexts {
@@ -2843,87 +2979,652 @@ var _ = Describe("{NFSProxyVolumeValidation}", func() {
 	})
 })
 
-func SetupProxyServer(n node.Node) error {
+var _ = Describe("{SharedVolFuseTest}", func() {
+	/*
+					https://portworx.atlassian.net/browse/PWX-35639
+				   https://portworx.atlassian.net/browse/PTX-21805
 
-	createDirCommand := "mkdir -p /exports/testnfsexportdir"
-	output, err := Inst().N.RunCommandWithNoRetry(n, createDirCommand, node.ConnectionOpts{
-		Sudo: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
 
-	addVersionCmd := "echo -e \"MOUNTD_NFS_V4=\"yes\"\nRPCNFSDARGS=\"-N 2 -N 4\"\" >> /etc/sysconfig/nfs"
-	output, err = Inst().N.RunCommandWithNoRetry(n, addVersionCmd, node.ConnectionOpts{
-		Sudo: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
 
-	updateExportsCmd := "echo \"/exports/testnfsexportdir *(rw,sync,no_root_squash)\" > /etc/exports"
-	output, err = Inst().N.RunCommandWithNoRetry(n, updateExportsCmd, node.ConnectionOpts{
-		Sudo: true,
+			  		1.Get the list of storage nodes where sv4 service and sv4 volumes are attached
+					2.Stop/Start PX on each storage node filtered in step 1
+					3.Validate PX on the node
+			   		4.Repeat this in a loop for 10 iterations
+		            5. Validate the applications
+	*/
+	var testrailID = 12133434
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35259
+	var runID int
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("SharedVolFuseTest", "Validate PX operations after sharedv4 and sharedv4 svc volumes  failover multiple times", nil, 0)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
-	exportCmd := "exportfs -a"
-	output, err = Inst().N.RunCommandWithNoRetry(n, exportCmd, node.ConnectionOpts{
-		Sudo: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
 
-	enableNfsServerCmd := "systemctl enable nfs-server"
-	output, err = Inst().N.RunCommandWithNoRetry(n, enableNfsServerCmd, node.ConnectionOpts{
-		Sudo: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
+	It("schedule sharedv4 and sharedv4_svc volumes and perform failover of the coordinator node", func() {
 
-	startNfsServerCmd := "systemctl restart nfs-server"
-	output, err = Inst().N.RunCommandWithNoRetry(n, startNfsServerCmd, node.ConnectionOpts{
-		Sudo: true,
+		appList := make([]string, 0)
+		stepLog = "create sharedv4 and sharedv4_svc apps "
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for _, appName := range Inst().AppList {
+
+				if strings.Contains(appName, "shared") || strings.Contains(appName, "svc") {
+					appList = append(appList, appName)
+				}
+			}
+
+			if len(appList) == 0 {
+				log.FailOnError(fmt.Errorf("sharedv4 or sharedv4 svc apps are mandatory for the test"), "no sharedv4 or sharedv4 svc apps found to deploy")
+			}
+
+			contexts = make([]*scheduler.Context, 0)
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pxfusetest-%d", i))...)
+			}
+
+			for _, ctx := range contexts {
+				log.InfoD("Validating application [%s]", ctx.App.Key)
+				ValidateContext(ctx)
+			}
+		})
+
+		stNodes := node.GetStorageNodes()
+
+		nodesToRestart := make(map[string]bool)
+		sharedVols := make([]*volume.Volume, 0)
+
+		for _, stNode := range stNodes {
+			nodesToRestart[stNode.Name] = false
+		}
+
+		stepLog = "restart PX on storage nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			numIter := 10
+
+			//Getting the volumes of sharedv4 and sharedv4 svc apps
+			for _, ctx := range contexts {
+				if Contains(appList, ctx.App.Key) {
+					appVols, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, fmt.Sprintf("error getting volumes for app [%s]", ctx.App.Key))
+					sharedVols = append(sharedVols, appVols...)
+				}
+			}
+
+			for i := 1; i <= numIter; i++ {
+
+				log.Infof("Running Iteration: #%d", i)
+
+				//Getting the coordinator nodes of sharedv4 and sharedv4 svc volumes
+				for _, appVol := range sharedVols {
+					attachedNode, err := Inst().V.GetNodeForVolume(appVol, 1*time.Minute, 5*time.Second)
+					log.FailOnError(err, fmt.Sprintf("error getting attached node for volume [%s]", appVol.Name))
+					nodesToRestart[attachedNode.Name] = true
+				}
+
+				for _, stNode := range stNodes {
+					//Restarting Px only if sharedv4 or sharedv4 svc volume is attached to the provided node
+					if nodesToRestart[stNode.Name] {
+						StopVolDriverAndWait([]node.Node{stNode})
+						log.Infof("waiting for 1 min before starting PX for volumes corordinator to failover")
+						time.Sleep(1 * time.Second)
+						StartVolDriverAndWait([]node.Node{stNode})
+						status, err := IsPxRunningOnNode(&stNode)
+						log.FailOnError(err, "error checking px status on node [%s]", stNode.Name)
+						dash.VerifyFatal(status, true, fmt.Sprintf("verfiy px is running on node [%s]", stNode.Name))
+					}
+				}
+
+				//Setting it false to obtain refreshed nodes once volumes failover
+				for _, stNode := range stNodes {
+					nodesToRestart[stNode.Name] = false
+				}
+
+			}
+
+			Step("validate apps after all failovers", func() {
+				for _, ctx := range contexts {
+					log.InfoD("Validating application [%s]", ctx.App.Key)
+					ValidateContext(ctx)
+				}
+			})
+			PerformSystemCheck()
+
+		})
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+
 	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{FioClonedVolumeFaultInjection}", func() {
+	/*
+		https://portworx.atlassian.net/browse/PTX-15687
+			1. Create 1 Volume,  Run fio
+			2. Create the Clone of Volume in step 1 , Run Fio on the cloned volume
+			3. Perform HA increase/Decrease
+			4. Perform Volume resize
+			4. Inject faults ( like portworx restart)
+			6. Repeat step 1-5 for 10 iterations
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("FioClonedVolumeFaultInjectoin", "Create fio clone volume and inject faults,HA increase and volume resize", nil, 0)
+	})
+
+	itLog := "FioClonedVolumeFaultInjectoin"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		var secretId = "secret"
+		var secretValue = "password"
+		selectedNode := node.GetStorageDriverNodes()[0]
+
+		numberOfTotalVolumes := 10
+		numberofVolumeCreationInParallel := 5
+
+		numberofIterations := numberOfTotalVolumes / numberofVolumeCreationInParallel
+		var Wg sync.WaitGroup
+
+		for j := 0; j < numberofIterations; j++ {
+			var once sync.Once
+			stepLog := "Create a secret using pxctl secrets kvdb"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				cmd := fmt.Sprintf("pxctl secrets kvdb login | pxctl secrets kvdb put-secret --secret_id %v --secret_value %v", secretId, secretValue)
+
+				out, err := Inst().N.RunCommandWithNoRetry(selectedNode, cmd, node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+				log.FailOnError(err, "Unable to execute the pxctl show command")
+				log.InfoD("Succesfully created secrets for secure volume: %v", out)
+			})
+
+			for i := 0; i < numberofVolumeCreationInParallel; i++ {
+				// Create a px secure volume using pxctl.
+				volName := fmt.Sprintf("fio-clone-fault-injection-%d", i)
+				var cloneVol string
+				Wg.Add(1)
+				go func(i int) {
+					defer Wg.Done()
+					defer GinkgoRecover()
+
+					stepLog = "Create 1 Volume,  Run fio"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+
+						pxctlCreateVolumeCmd := fmt.Sprintf("volume create --secure --size 10 %v --secret_key %v", volName, secretId)
+						output, err := runPxctlCommand(pxctlCreateVolumeCmd, selectedNode, nil)
+						log.FailOnError(err, "Failed to create volume using pxctl")
+						log.InfoD("Successfully created volume: %v", output)
+
+						//attach volume to host
+						attachCmd := fmt.Sprintf("pxctl host attach %s --secret_key %v", volName, secretId)
+						cmdConnectionOpts := node.ConnectionOpts{
+							Timeout:         15 * time.Second,
+							TimeBeforeRetry: 5 * time.Second,
+							Sudo:            true,
+						}
+
+						_, err = Inst().N.RunCommandWithNoRetry(selectedNode, attachCmd, cmdConnectionOpts)
+						log.FailOnError(err, "Failed to attach volume to host")
+
+						err = writeFioDataToVolume(volName, selectedNode, 5)
+						log.FailOnError(err, "Failed to write data to volume")
+
+					})
+
+					stepLog = "Create a clone of volume and run fio on the cloned volume"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						cloneVol, err = Inst().V.CloneVolume(volName)
+						log.FailOnError(err, "Failed to clone volume")
+						log.InfoD("successfully create clone of volume :%v -> %v", volName, cloneVol)
+
+						//attach volume to host
+						attachCmd := fmt.Sprintf("pxctl host attach %s --secret_key %v", cloneVol, secretId)
+						cmdConnectionOpts := node.ConnectionOpts{
+							Timeout:         15 * time.Second,
+							TimeBeforeRetry: 5 * time.Second,
+							Sudo:            true,
+						}
+
+						_, err = Inst().N.RunCommandWithNoRetry(selectedNode, attachCmd, cmdConnectionOpts)
+						log.FailOnError(err, "Failed to attach volume to host")
+
+						err = writeFioDataToVolume(cloneVol, selectedNode, 2)
+						log.FailOnError(err, "Failed to write data to volume")
+					})
+
+					stepLog = "Perform HA Increase/Decrease"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+
+						// Increase replication factor to 2
+						pxctlHAUpdateCmd := fmt.Sprintf("v ha-update --repl 2 %v", volName)
+						_, err = runPxctlCommand(pxctlHAUpdateCmd, selectedNode, nil)
+						log.FailOnError(err, "Failed to increase replication factor to 2")
+						log.InfoD("Successfully increase replication factor to 2")
+
+						time.Sleep(2 * time.Minute)
+
+						// Decrease replication factor to 1
+						pxctlHAUpdateCmd = fmt.Sprintf("v ha-update --repl 1 %v", volName)
+						_, err = runPxctlCommand(pxctlHAUpdateCmd, selectedNode, nil)
+						log.FailOnError(err, "Failed to increase replication factor to 1")
+						log.InfoD("Successfully increase replication factor to 1")
+
+						time.Sleep(30 * time.Second)
+					})
+
+					stepLog = "Perform volume resize"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+
+						pxctlVolResizeCmd := fmt.Sprintf("v update %v --size %v", volName, 20)
+						_, err = runPxctlCommand(pxctlVolResizeCmd, selectedNode, nil)
+						log.FailOnError(err, "Failed to resize volume: %v", volName)
+						log.InfoD("Succesfully resized volume: %v", volName)
+
+						volInspect, err := Inst().V.InspectVolume(volName)
+						log.FailOnError(err, "Failed to inspect volume")
+						log.InfoD("Volume size: %v", volInspect.Spec.Size)
+
+						time.Sleep(30 * time.Second)
+
+					})
+					stepLog = "Delete the volume and clone of the volume"
+					Step(stepLog, func() {
+						//unmount volume
+						pxctlUnmountCmd := fmt.Sprintf("host unmount --path /var/lib/osd/mounts/%s %s", volName, volName)
+						_, err = runPxctlCommand(pxctlUnmountCmd, selectedNode, nil)
+						log.FailOnError(err, "Failed to unmount volume: %v", volName)
+						log.InfoD("Succesfully unmounted volume: %v", volName)
+
+						err = Inst().V.DeleteVolume(volName)
+						log.FailOnError(err, "Failed to delete volume:%v", volName)
+
+						pxctlUnmountCmd = fmt.Sprintf("host unmount --path /var/lib/osd/mounts/%s %s", cloneVol, cloneVol)
+						_, err = runPxctlCommand(pxctlUnmountCmd, selectedNode, nil)
+						log.FailOnError(err, "Failed to unmount volume: %v", volName)
+						log.InfoD("Succesfully unmounted volume: %v", volName)
+
+						//Delete the clone volume
+						err = Inst().V.DeleteVolume(cloneVol)
+						log.FailOnError(err, "Failed to delete volume:%v", cloneVol)
+					})
+				}(i)
+			}
+			Wg.Wait()
+
+			once.Do(func() {
+				stepLog = "Restart portworx where the volume is attached"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
+					StopVolDriverAndWait([]node.Node{selectedNode})
+					log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), selectedNode.Name)
+					StartVolDriverAndWait([]node.Node{selectedNode})
+					time.Sleep(30 * time.Second)
+				})
+			})
+		}
+	})
+})
+var _ = Describe("{VolumePreCheck}", func() {
+	/*
+			https://portworx.atlassian.net/browse/PTX-20557
+			1. Deploy a basic volume on the cluster
+			2. Now we need to test the ha-update of the volume with different cases
+			scenarios :
+		    1. Test the ha-update sources option with an uuid of other nodes on which node is not present
+		    2. Test the ha-update sources option with an ip of nodes
+			3. Test the ha-update sources option with an invalid uuid of the node on which the repl of the volume is present
+		    4. Test the ha-update sources option with a valid uuid of the node on which the repl of the volume is present
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("volumeprecheck", "Precheck for volume operations", nil, 0)
+	})
+
+	It("volumeprecheck", func() {
+		log.InfoD("volumeprecheck")
+		stepLog := "Create a volume and perform a precheck for sources options"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			stNodes := node.GetStorageDriverNodes()
+			nodesuuidWithoutReplica := make([]string, 0)
+			nodesIP := make([]string, 0)
+
+			index := rand.Intn(len(stNodes))
+			selectedNode := &stNodes[index]
+
+			var aggr_level int
+			var repl_level int
+			storageNodes := node.GetStorageNodes()
+			if len(storageNodes) >= 4 && len(storageNodes) < 9 {
+				aggr_level = 2
+				repl_level = 2
+			} else if len(storageNodes) >= 9 {
+				aggr_level = 3
+				repl_level = 3
+			} else {
+				aggr_level = 2
+				repl_level = 1
+			}
+			log.InfoD("Setting the aggr_level to %d and repl_level to %d as storage nodes in the cluster are %d", aggr_level, repl_level, len(storageNodes))
+
+			id := uuid.New()
+			volName := fmt.Sprintf("volume_%s", id.String()[:8])
+			log.InfoD("Create a volume with a min size on node [%s]", selectedNode.Name)
+			basicVolumeCreate := fmt.Sprintf("volume create -a %d --repl %d  %s", aggr_level, repl_level, volName)
+			_, err := runPxctlCommand(basicVolumeCreate, *selectedNode, nil)
+			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s] ", volName)
+			log.InfoD("Base Volume creation with volume name %s successful", volName)
+			//find on which node volume got created
+			volInspect, err := Inst().V.InspectVolume(volName)
+			log.FailOnError(err, "Failed to inspect volume")
+			log.InfoD("Volume created on node: %s", volInspect.ReplicaSets[0].Nodes[0])
+
+			selectedNodeId := volInspect.ReplicaSets[0].Nodes[0]
+			listofNodesVolumePlaced := volInspect.ReplicaSets[0].Nodes
+
+			log.InfoD("List of nodes on which volume is placed: %v", listofNodesVolumePlaced)
+			for _, stNode := range stNodes {
+				if !Contains(listofNodesVolumePlaced, stNode.VolDriverNodeID) {
+					nodesuuidWithoutReplica = append(nodesuuidWithoutReplica, stNode.Id)
+					nodesIP = append(nodesIP, stNode.Addresses[0])
+				}
+			}
+			if len(nodesuuidWithoutReplica) == 0 && len(listofNodesVolumePlaced) == len(storageNodes) {
+				log.InfoD("Volume Cannot be placed on other nodes as all the nodes are already used for the volume creation")
+				return
+			}
+
+			log.InfoD("Test the ha-update sources option with a uuid of other nodes on which node is not present")
+			wrongUuidcmd := fmt.Sprintf("v ha-update %s --repl %d --sources %s", volName, repl_level+1, nodesuuidWithoutReplica[rand.Intn(len(nodesuuidWithoutReplica))])
+			_, err = runPxctlCommand(wrongUuidcmd, node.GetStorageDriverNodes()[0], nil)
+			if err != nil {
+				isExpectedError := strings.Contains(err.Error(), "does not belong to volume's replication set")
+				dash.VerifyFatal(isExpectedError, true, fmt.Sprintf("Expected error: %v", err))
+
+			}
+
+			log.InfoD("Test the ha-update sources option with a ip of nodes ")
+			wrongIPcmd := fmt.Sprintf("v ha-update %s --repl %d --sources %s", volName, repl_level+1, nodesIP[rand.Intn(len(nodesIP))])
+			_, err = runPxctlCommand(wrongIPcmd, node.GetStorageDriverNodes()[0], nil)
+			if err != nil {
+				isExpectedError := strings.Contains(err.Error(), "could not find any node with id")
+				dash.VerifyFatal(isExpectedError, true, fmt.Sprintf("Expected error: %v", err))
+
+			}
+
+			log.InfoD("Test the ha-update sources option with an invalid uuid of the node on which the repl of the volume is present")
+			randomUUID := uuid.New()
+			invalidUuidcmd := fmt.Sprintf("v ha-update %s --repl %d --sources %s", volName, repl_level+1, randomUUID)
+			_, err = runPxctlCommand(invalidUuidcmd, node.GetStorageDriverNodes()[0], nil)
+			if err != nil {
+				isExpectedError := strings.Contains(err.Error(), "Failed to update volume: could not find any node with id")
+				dash.VerifyFatal(isExpectedError, true, fmt.Sprintf("Expected error: %v", err))
+
+			}
+
+			log.InfoD("Test the ha-update sources option with a valid uuid of the node on which the repl of the volume is present")
+			validUuidcmd := fmt.Sprintf("v ha-update %s --repl %d --sources %s", volName, repl_level+1, selectedNodeId)
+			_, err = runPxctlCommand(validUuidcmd, node.GetStorageDriverNodes()[0], nil)
+			log.FailOnError(err, "Failed to update volume: %v", volName)
+			log.InfoD("Successfully updated volume: %v", volName)
+
+			log.InfoD("Delete the volume that is created for the test")
+			deleteVolumeCmd := fmt.Sprintf("volume delete %s", volName)
+			_, err = runPxctlCommand(deleteVolumeCmd, *selectedNode, nil)
+			log.FailOnError(err, "Failed to delete volume: %v", volName)
+		})
+	})
+})
+
+func writeFioDataToVolume(volName string, n node.Node, size int64) error {
+	mountPath := fmt.Sprintf("/var/lib/osd/mounts/%s", volName)
+	creatDir := fmt.Sprintf("mkdir %s", mountPath)
+
+	cmdConnectionOpts := node.ConnectionOpts{
+		Timeout:         15 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	}
+
+	log.Infof("Running command %s on %s", creatDir, n.Name)
+	_, err := Inst().N.RunCommandWithNoRetry(n, creatDir, cmdConnectionOpts)
+
 	if err != nil {
 		return err
 	}
-	log.Infof(output)
+
+	mountCmd := fmt.Sprintf("pxctl host mount --path %s %s", mountPath, volName)
+	log.Infof("Running command %s on %s", mountCmd, n.Name)
+	_, err = Inst().N.RunCommandWithNoRetry(n, mountCmd, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
+
+	writeCmd := fmt.Sprintf("fio --name=%s --ioengine=libaio --rw=write --bs=4k --numjobs=1 --size=%vG --iodepth=256 --directory=%s --output=/tmp/vol_write.log --verify=meta --direct=1 --randrepeat=1 --verify_pattern=0xbeddacef --end_fsync=1", volName, size, mountPath)
+
+	log.Infof("Running command %s on %s", writeCmd, n.Name)
+	_, err = Inst().N.RunCommandWithNoRetry(n, writeCmd, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
 
 	return nil
+
 }
 
-func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
-	params := make(map[string]string)
-	params["repl"] = "1"
-	params["io_profile"] = "none"
-	params["proxy_endpoint"] = fmt.Sprintf("nfs://%s", nfsServer)
-	params["proxy_nfs_exportpath"] = fmt.Sprintf("%s", mountPath)
-	params["mount_options"] = "vers=4.0"
-	v1obj := meta_v1.ObjectMeta{
-		Name: scName,
-	}
-	reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
-	bindMode := storageApi.VolumeBindingImmediate
-	allowWxpansion := true
-	scObj := storageApi.StorageClass{
-		ObjectMeta:           v1obj,
-		Provisioner:          "kubernetes.io/portworx-volume",
-		Parameters:           params,
-		ReclaimPolicy:        &reclaimPolicyDelete,
-		VolumeBindingMode:    &bindMode,
-		AllowVolumeExpansion: &allowWxpansion,
-	}
+var _ = Describe("{OverCommitVolumeTest}", func() {
+	/*
+						    https://portworx.atlassian.net/browse/PTX-19103
+							Total 5 scenarios Tested
+							1. Verify Thick Provisioning on Specific Nodes when resizing the volume are honoured
+							2. Verify Thick Provisioning (Global) OverCommitPercent when resizing the volume are honoured
+							3. Update the pxctl cluster with cluster option OverCommitPercent with 200(Enabeling Thick Provisioning) on a specific Node and thin provisioning on the other nodes
+							4. Thin Provisioning with Global and Node Specific Settings [300% on a certain node and 200% over commit on the other nodes]
+							5. Disable all imposed cluster options and try creating thin provisioned volumes
+		                    Process:
+							1. Update the pxctl cluster with cluster option OverCommitPercent
+						    2. Check the overall storage pool capacity of a particular node
+						    3. create a volume with max of target size of the pool
+						    4. Now update the volume size more than size of the storage pool
+						    5. Check vol size is successful or not
+						    6. Also validate the creation of volume with size more than available capacity on the node
 
-	k8sStorage := storage.Instance()
-	_, err = k8sStorage.CreateStorageClass(&scObj)
-	return err
-}
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("OverCommitVolumeTest", "Validate Overcommit volume size", nil, 0)
+	})
+	// check the size left in the node
+	itLog := "honor OverCommitPercent when resizing the volume"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		getRandomPoolandCalculateSize := func(snapshotPercent uint64) (selectedNode *node.Node, targetSizeGiB uint64) {
+			stNodes := node.GetStorageDriverNodes()
+			index := rand.Intn(len(stNodes))
+			selectedNode = &stNodes[index]
+			pools := selectedNode.Pools
+			poolToResize := pools[rand.Intn(len(pools))]
+			poolIDToResize := poolToResize.Uuid
+			originalSizeInBytes := poolToResize.TotalSize
+			log.InfoD("Original size of the pool %s is %d of node %s ", poolIDToResize, originalSizeInBytes, selectedNode.Name)
+			SnapshotPercent := snapshotPercent
+			SubtractSize := (SnapshotPercent * originalSizeInBytes) / 100
+			targetSizeInBytes := originalSizeInBytes - SubtractSize
+			targetSizeGiB = targetSizeInBytes / units.GiB
+			log.InfoD("Target size of the pool %s is %d", poolIDToResize, targetSizeGiB)
+			return selectedNode, targetSizeGiB
+		}
+		CreateVolumeandValidate := func(selectedNode *node.Node, multiple uint64, targetSizeGiB uint64) {
+			id := uuid.New()
+			VolName := fmt.Sprintf("volume_%s", id.String()[:8])
+			log.InfoD("Create a volume with a min size on node [%s]", selectedNode.Name)
+			basicVolumeCreate := fmt.Sprintf("volume create --nodes %s %s", selectedNode.Id, VolName)
+			_, err := runPxctlCommand(basicVolumeCreate, *selectedNode, nil)
+			log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
+			log.InfoD("Base Volume creation with volume name %s successful", VolName)
+			log.InfoD("Now Resize volume with a size of %d %d time of targetsize of pool on node [%s] as %d overcommit percent imposed", multiple*targetSizeGiB, multiple, selectedNode.Name, multiple*100)
+			resizeVolumeCmd := fmt.Sprintf("volume update --size %d %s", multiple*targetSizeGiB, VolName)
+			_, volCreateErr := runPxctlCommand(resizeVolumeCmd, *selectedNode, nil)
+			log.FailOnError(volCreateErr, "volume resize failed  on the cluster with volume name [%s]", VolName)
+			log.InfoD("Volume [%s] resized to %d GiB", VolName, multiple*targetSizeGiB)
+			log.InfoD("Resize the volume more than %d times available capacity on the node [%s]", multiple, selectedNode.Name)
+			resizeVolumeGreaterThanPoolSizeCmd := fmt.Sprintf("volume update --size %d %s", (multiple+1)*targetSizeGiB, VolName)
+			_, err = runPxctlCommand(resizeVolumeGreaterThanPoolSizeCmd, *selectedNode, nil)
+			if err != nil {
+				IsExpectederr := strings.Contains(err.Error(), "Failed to resize volume")
+				dash.VerifyFatal(IsExpectederr, true, err.Error())
+			}
+
+			err = Inst().V.DeleteVolume(VolName)
+			log.FailOnError(err, "Failed to delete volume [%s]", VolName)
+			log.InfoD("Successfully deleted volume [%s]", VolName)
+			log.InfoD("Try Creating a New Volume with size more than %d times available capacity on the node [%s]", multiple, selectedNode.Name)
+			id = uuid.New()
+			VolName = fmt.Sprintf("volume_%s", id.String()[:8])
+			volCreatecmd := fmt.Sprintf("volume create --size %d --nodes %s %s", (multiple+1)*targetSizeGiB, selectedNode.Id, VolName)
+			_, volerr := runPxctlCommand(volCreatecmd, *selectedNode, nil)
+			IsExpectederr := strings.Contains(volerr.Error(), "pools must not over-commit provisioning space")
+			if volerr != nil {
+				dash.VerifyFatal(IsExpectederr, true, volerr.Error())
+			} else {
+				PrintInspectVolume(VolName)
+				dash.VerifyFatal(volerr, fmt.Errorf("Volume Creation should be failed"), "Volume should not be created as we have imposed the cluster options")
+			}
+			DisableClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[]'"
+			_, disable_err := runPxctlCommand(DisableClusterOptionscmd, *selectedNode, nil)
+			log.FailOnError(disable_err, "Failed to set cluster options")
+			log.InfoD("Successfully set cluster options")
+
+		}
+
+		//Case 1: Verify Thick Provisioning on Specific Nodes when resizing the volume are honoured
+		stepLog = "Verify Thick Provisioning on Specific Nodes when resizing the volume are honoured "
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedNode, targetSizeGiB := getRandomPoolandCalculateSize(30)
+			SetClusterOptionscmdOnNode := fmt.Sprintf("cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 30,\"LabelSelector\": {\"node\": \"%s\"}} ]'", selectedNode.Id)
+			_, err := runPxctlCommand(SetClusterOptionscmdOnNode, *selectedNode, nil)
+			log.FailOnError(err, "Failed to set cluster options")
+			log.InfoD("Successfully set cluster options")
+			ClusterOptionsValidationcmd := "cluster options list -j | jq -r '.ProvisionCommitRule'"
+			output, err := runPxctlCommand(ClusterOptionsValidationcmd, *selectedNode, nil)
+			log.InfoD("The Current Cluster options: %v", output)
+			CreateVolumeandValidate(selectedNode, 1, targetSizeGiB)
+		})
+
+		// Case 2: Verify Thick Provisioning (Global) OverCommitPercent when resizing the volume are honoured
+		stepLog = "Verify Thick Provisioning (Global) OverCommitPercent when resizing the volume are honoured "
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedNode, targetSizeGiB := getRandomPoolandCalculateSize(15)
+			SetClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 100, \"SnapReservePercent\": 15}]'"
+			_, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
+			log.FailOnError(err, "Failed to set cluster options")
+			log.InfoD("Successfully set cluster options")
+			ClusterOptionsValidationcmd := "cluster options list -j | jq -r '.ProvisionCommitRule'"
+			output, err := runPxctlCommand(ClusterOptionsValidationcmd, *selectedNode, nil)
+			log.InfoD("The Current Cluster options: %v", output)
+			CreateVolumeandValidate(selectedNode, 1, targetSizeGiB)
+
+		})
+
+		//Case 3 : Verify Thin Provisioning 200% (Global)  when resizing the volume are honoured
+		stepLog = "Update the pxctl cluster with cluster option OverCommitPercent with 200(Enabeling Thick Provisioning)"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedNode, targetSizeGiB := getRandomPoolandCalculateSize(15)
+			SetClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 200, \"SnapReservePercent\": 15}]'"
+			_, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
+			log.FailOnError(err, "Failed to set cluster options")
+			log.InfoD("Successfully set cluster options")
+			ClusterOptionsValidationcmd := "cluster options list -j | jq -r '.ProvisionCommitRule'"
+			output, err := runPxctlCommand(ClusterOptionsValidationcmd, *selectedNode, nil)
+			log.InfoD("The Current Cluster options: %v", output)
+			CreateVolumeandValidate(selectedNode, 2, targetSizeGiB)
+
+		})
+
+		//Case 4: Thin Provisioning with Global and Node Specific Settings
+		stepLog = "Update the pxctl cluster with cluster option OverCommitPercent with 200(Enabeling Thick Provisioning) on a specific Node and thin provisioning on the other nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedNode, targetSizeGiB := getRandomPoolandCalculateSize(30)
+			SetClusterOptionscmd := fmt.Sprintf("cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 300, \"SnapReservePercent\": 30,\"LabelSelector\": {\"node\": \"%s\"}}, {\"OverCommitPercent\": 200, \"SnapReservePercent\": 15}]'", selectedNode.Id)
+			_, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
+			log.FailOnError(err, "Failed to set cluster options")
+			log.InfoD("Successfully set cluster options")
+			ClusterOptionsValidationcmd := "cluster options list -j | jq -r '.ProvisionCommitRule'"
+			output, err := runPxctlCommand(ClusterOptionsValidationcmd, *selectedNode, nil)
+			log.InfoD("The Current Cluster options: %v", output)
+			CreateVolumeandValidate(selectedNode, 3, targetSizeGiB)
+
+			log.Info("Try Creating a New Volume with size more than 200% available capacity on any other node ")
+			stNodes := node.GetStorageDriverNodes()
+			for _, node := range stNodes {
+				if node.Name != selectedNode.Name {
+					SetClusterOptionscmd := fmt.Sprintf("cluster options update  --provisioning-commit-labels '[{\"OverCommitPercent\": 300, \"SnapReservePercent\": 30,\"LabelSelector\": {\"node\": \"%s\"}}, {\"OverCommitPercent\": 200, \"SnapReservePercent\": 15}]'", selectedNode.Id)
+					_, err := runPxctlCommand(SetClusterOptionscmd, node, nil)
+					log.FailOnError(err, "Failed to set cluster options")
+					id := uuid.New()
+					VolName := fmt.Sprintf("volume_%s", id.String()[:8])
+					volCreatecmd := fmt.Sprintf("volume create --size %d --nodes %s %s", 3*targetSizeGiB, node.Id, VolName)
+					_, volerr := runPxctlCommand(volCreatecmd, node, nil)
+					if volerr != nil {
+						IsExpectederr := strings.Contains(volerr.Error(), "pools must not over-commit provisioning space")
+						dash.VerifyFatal(IsExpectederr, true, volerr.Error())
+
+					}
+					break
+				}
+
+			}
+
+		})
+		//Case 5 : Disable all imposed cluster options and try creating thin provisioned volumes
+		stepLog = "Create a volume again with size greater than Storage pool size as we have disabled the thick provisioning (Should Be created)"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedNode, targetSizeGiB := getRandomPoolandCalculateSize(0)
+			SetClusterOptionscmd := "cluster options update  --provisioning-commit-labels '[]'"
+			_, err := runPxctlCommand(SetClusterOptionscmd, *selectedNode, nil)
+			log.FailOnError(err, "Failed to set cluster options")
+			log.InfoD("Successfully set cluster options")
+			ClusterOptionsValidationcmd := "cluster options list -j | jq -r '.ProvisionCommitRule'"
+			output, err := runPxctlCommand(ClusterOptionsValidationcmd, *selectedNode, nil)
+			log.InfoD("The Current Cluster options: %v", output)
+			id := uuid.New()
+			VolName := fmt.Sprintf("volume_%s", id.String()[:8])
+			volerr := Inst().V.CreateVolumeUsingPxctlCmd(*selectedNode, VolName, 3*targetSizeGiB, 1)
+			log.FailOnError(volerr, "volume creation failed on the cluster with volume name [%s]", VolName)
+			log.InfoD("Volume created with name [%s]", VolName)
+			//Delete the Volume , As we have created it only for Validation Purpose
+			err = Inst().V.DeleteVolume(VolName)
+			log.FailOnError(err, "Failed to delete volume [%s]", VolName)
+
+		})
+
+	})
+})

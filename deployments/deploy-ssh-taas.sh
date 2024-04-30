@@ -63,9 +63,9 @@ if [ -z "${MIN_RUN_TIME}" ]; then
 fi
 
 if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
-    FAIL_FAST="--failFast"
+    FAIL_FAST="--fail-fast"
 else
-    FAIL_FAST="-keepGoing"
+    FAIL_FAST="-keep-going"
 fi
 
 SKIP_ARG=""
@@ -489,7 +489,8 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: ["sh", "-c", "cd /bin && ./taas"]
+    command: ["sh", "-c"]
+    args: ["cd /bin && ./taas -spec-dir=$SPEC_DIR"]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
@@ -690,7 +691,7 @@ function describe_pod_then_exit {
 
 first_iteration=true
 
-for i in $(seq 1 900); do
+for i in $(seq 1 600); do
   echo "Iteration: $i"
   state=$(kubectl get pod torpedo | grep -v NAME | awk '{print $3}')
 
@@ -698,17 +699,7 @@ for i in $(seq 1 900); do
     echo "Error: Torpedo finished with $state state"
     describe_pod_then_exit
   elif [ "$state" == "Running" ]; then
-    # For the first iteration, display all logs. Later, only from 1 minute ago
-    if [ "$first_iteration" = true ]; then
-      echo "Logs from first iteration"
-      kubectl logs -f torpedo
-      first_iteration=false
-    else
-      echo "Logs from iteration: $i"
-      kubectl logs -f --since=1m torpedo
-    fi
-  elif [ "$state" == "Completed" ]; then
-    echo "Success: Torpedo finished with $state state"
+    echo "Torpedo is up and running"
     exit 0
   fi
 

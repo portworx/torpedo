@@ -2,12 +2,20 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler/iks"
+	"github.com/portworx/torpedo/drivers/scheduler/oke"
 	"net/url"
 	"strings"
+	"time"
 
-	. "github.com/onsi/ginkgo"
+	oputil "github.com/libopenstorage/operator/pkg/util/test"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/aks"
+	"github.com/portworx/torpedo/drivers/scheduler/eks"
+	"github.com/portworx/torpedo/drivers/scheduler/gke"
+	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -35,22 +43,110 @@ var _ = Describe("{UpgradeCluster}", func() {
 		}
 		Expect(versions).NotTo(BeEmpty())
 
+		// TODO: Commenting out below changes as it doesn't work for most distros upgrades, see PTX-22409
+		/*var mError error
+		if Inst().S.String() != aks.SchedName {
+			stopSignal := make(chan struct{})
+			go getClusterNodesInfo(stopSignal, &mError)
+
+			defer func() {
+				close(stopSignal)
+			}()
+		}*/
+
 		for _, version := range versions {
-			Step("start scheduler upgrade", func() {
-				err := Inst().S.UpgradeScheduler(version)
-				Expect(err).NotTo(HaveOccurred())
+			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), version), func() {
+				stopSignal := make(chan struct{})
+
+				var mError error
+				opver, err := oputil.GetPxOperatorVersion()
+				if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) {
+					go DoPDBValidation(stopSignal, &mError)
+					defer func() {
+						close(stopSignal)
+					}()
+				} else {
+					log.Warnf("PDB validation skipped. Current Px-Operator version: [%s], minimum required: [%s]. Error: [%v].", opver, PDBValidationMinOpVersion, err)
+				}
+
+				err = Inst().S.UpgradeScheduler(version)
+				dash.VerifyFatal(mError, nil, "validation of PDB of px-storage during cluster upgrade successful")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
+
+				// Sleep needed for AKS cluster upgrades
+				if Inst().S.String() == aks.SchedName {
+					log.Warnf("Warning! This is [%s] scheduler, during Node Pool upgrades, AKS creates extra node, this node then becomes PX node. "+
+						"After the Node Pool upgrade is complete, AKS deletes this extra node, but PX Storage object still around for about ~20-30 mins. "+
+						"Recommended config is that you deploy PX with 6 nodes in 3 zones and set MaxStorageNodesPerZone to 2, "+
+						"so when extra AKS node gets created, PX gets deployed as Storageless node, otherwise if PX gets deployed as Storage node, "+
+						"PX storage objects will never be deleted and validation might fail!", Inst().S.String())
+					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(30 * time.Minute)
+				}
+
+				// Sleep needed for GKE cluster upgrades
+				if Inst().S.String() == gke.SchedName {
+					log.Warnf("This is [%s] scheduler, during Node Pool upgrades, GKE creates an extra node. "+
+						"After the Node Pool upgrade is complete, GKE deletes this extra node, but it takes some time.", Inst().S.String())
+					log.Infof("Sleeping for 10 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(10 * time.Minute)
+				}
+
+				// Sleep needed for EKS cluster upgrades
+				if Inst().S.String() == eks.SchedName {
+					log.Warnf("This is [%s] scheduler, during Node Group upgrades, EKS creates an extra node. "+
+						"After the Node Group upgrade is complete, EKS deletes this extra node, but it takes some time.", Inst().S.String())
+					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(30 * time.Minute)
+				}
+
+				// Sleep needed for IKS/OKE cluster upgrades
+				if Inst().S.String() == iks.SchedName || Inst().S.String() == oke.SchedName {
+					log.Warnf("This is [%s] scheduler, during Worker Pool upgrades, %s replaces all worker nodes. "+
+						"The replacement might affect cluster capacity temporarily, requiring time for stabilization.", Inst().S.String(), strings.ToUpper(Inst().S.String()))
+					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(30 * time.Minute)
+				}
+
+				PrintK8sClusterInfo()
+			})
+
+			Step("update node drive endpoints", func() {
+				// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
+				err = Inst().S.RefreshNodeRegistry()
+				log.FailOnError(err, "Refresh Node Registry failed")
+
+				// Refresh Driver Endpoints
+				err = Inst().V.RefreshDriverEndpoints()
+				log.FailOnError(err, "Refresh Driver Endpoints failed")
+
+				// Printing pxctl status after the upgrade
+				PrintPxctlStatus()
 			})
 
 			Step("validate storage components", func() {
-				u, err := url.Parse(fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion))
-				Expect(err).NotTo(HaveOccurred())
+				urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
+				u, err := url.Parse(urlToParse)
+				log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
 				err = Inst().V.ValidateDriver(u.String(), true)
-				Expect(err).NotTo(HaveOccurred())
+				if err != nil {
+					PrintPxctlStatus()
+				}
+				// Printing cluster node info after the upgrade
+				PrintK8sClusterInfo()
+				dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
+
 			})
+
+			// TODO: This currently doesn't work for most distros and commenting out this change, see PTX-22409
+			/*if Inst().S.String() != aks.SchedName {
+				dash.VerifyFatal(mError, nil, "validate no parallel upgrade of nodes")
+			}*/
 
 			Step("validate all apps after upgrade", func() {
 				ValidateApplications(contexts)
 			})
+			PerformSystemCheck()
 		}
 
 		Step("destroy apps", func() {

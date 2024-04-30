@@ -132,13 +132,16 @@ type Driver interface {
 	Init(nodeOpts InitOptions) error
 
 	// DeleteNode deletes the given node
-	DeleteNode(node Node, timeout time.Duration) error
+	//DeleteNode(node Node, timeout time.Duration) error
 
 	// String returns the string name of this driver.
 	String() string
 
 	// RebootNode reboots the given node
 	RebootNode(node Node, options RebootNodeOpts) error
+
+	// RebootNodeAndWait reboots a given node and waits for the node to be ready.
+	RebootNodeAndWait(n Node) error
 
 	// CrashNode Crashes the given node
 	CrashNode(node Node, options CrashNodeOpts) error
@@ -198,6 +201,12 @@ type Driver interface {
 	// DestroyVM powers VM
 	DestroyVM(node Node) error
 
+	// MoveDisks moves disks from one node to another
+	MoveDisks(sourceNode Node, targetNode Node) error
+
+	// RemoveNonRootDisks removes non-root disks from the node
+	RemoveNonRootDisks(node Node) error
+
 	// SystemctlUnitExist checks if a given service exists in a node
 	SystemctlUnitExist(n Node, service string, options SystemctlOpts) (bool, error)
 
@@ -217,6 +226,9 @@ type Driver interface {
 	// dropPercentage => intger value from 1 to 100
 	// delayInMilliseconds => 1 to 1000
 	InjectNetworkError(nodes []Node, errorInjectionType string, operationType string, dropPercentage int, delayInMilliseconds int) error
+
+	// InjectNetworkErrorWithRebootFallback by dropping packets or introdiucing delay in packet tramission and reboot nodes during fallback
+	InjectNetworkErrorWithRebootFallback(nodes []Node, errorInjectionType string, operationType string, dropPercentage int, delayInMilliseconds int) error
 
 	// GetDeviceMapperCount return devicemapper count
 	GetDeviceMapperCount(Node, time.Duration) (int, error)
@@ -275,6 +287,13 @@ func (d *notSupportedDriver) RebootNode(node Node, options RebootNodeOpts) error
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RebootNode()",
+	}
+}
+
+func (d *notSupportedDriver) RebootNodeAndWait(node Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RebootNodeAndWait()",
 	}
 }
 
@@ -477,6 +496,14 @@ func (d *notSupportedDriver) InjectNetworkError(nodes []Node, errorInjectionType
 	}
 }
 
+func (d *notSupportedDriver) InjectNetworkErrorWithRebootFallback(nodes []Node, errorInjectionType string, operationType string,
+	dropPercentage int, delayInMilliseconds int) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "InjectNetworkErrorWithRebootFallback()",
+	}
+}
+
 func (d *notSupportedDriver) RebalanceWorkerPool() error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -495,5 +522,19 @@ func (d *notSupportedDriver) GetSupportedDriveTypes() ([]string, error) {
 	return []string{}, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetSupportedDriveTypes()",
+	}
+}
+
+func (d *notSupportedDriver) MoveDisks(sourceNode Node, targetNode Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "MoveDisks()",
+	}
+}
+
+func (d *notSupportedDriver) RemoveNonRootDisks(node Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RemoveNonRootDisks()",
 	}
 }

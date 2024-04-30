@@ -9,7 +9,7 @@ import (
 	"time"
 
 	optest "github.com/libopenstorage/operator/pkg/util/test"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
@@ -159,7 +159,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 	AfterEach(func() {
 		Step("destroy apps", func() {
 			log.InfoD("destroying apps")
-			if CurrentGinkgoTestDescription().Failed {
+			if CurrentSpecReport().Failed() {
 				log.InfoD("not destroying apps because the test failed\n")
 				return
 			}
@@ -209,8 +209,8 @@ type LogglyEvent struct {
 }
 
 func getLogglyData(clusterUUID string, fromTime string) ([]byte, int, error) {
-	query := fmt.Sprintf("q=%s&from=%s&until=now", clusterUUID, fromTime)
-
+	// adds to the meteringData tag instead of http
+	query := fmt.Sprintf("q=tag:meteringData%%20json.cluster_uuid:%s&from=%s&until=now", clusterUUID, fromTime)
 	logglyToken, ok := os.LookupEnv(envLogglyAPIToken)
 	if !ok {
 		return nil, 0, fmt.Errorf("failed to fetch loggly api token")
@@ -218,6 +218,7 @@ func getLogglyData(clusterUUID string, fromTime string) ([]byte, int, error) {
 
 	headers := make(map[string]string)
 	headers["Authorization"] = fmt.Sprintf("Bearer %v", logglyToken)
+	log.InfoD("querying to  %v", fmt.Sprintf("%v?%v", logglyIterateUrl, query))
 	return rest.GET(fmt.Sprintf("%v?%v", logglyIterateUrl, query), nil, headers)
 }
 

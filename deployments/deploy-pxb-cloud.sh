@@ -50,9 +50,9 @@ if [ -z "${MIN_RUN_TIME}" ]; then
 fi
 
 if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
-    FAIL_FAST="--failFast"
+    FAIL_FAST="--fail-fast"
 else
-    FAIL_FAST="-keepGoing"
+    FAIL_FAST="-keep-going"
 fi
 
 SKIP_ARG=""
@@ -356,9 +356,6 @@ if [ -z "${NODE_DRIVER}" ]; then
 fi
 if [ -n "${K8S_VENDOR}" ]; then
     case "$K8S_VENDOR" in
-        gke)
-            NODE_DRIVER="gke"
-            ;;
         aks)
             NODE_DRIVER="aks"
             ;;
@@ -471,7 +468,8 @@ spec:
     args: [ "--trace",
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
-            "--slowSpecThreshold", "600",
+            "--poll-progress-after", "10m",
+            --junit-report=/testresults/junit_basic.xml,
             "$FOCUS_ARG",
             "$SKIP_ARG",
             $TEST_SUITE,
@@ -693,6 +691,8 @@ spec:
       value: "${S3_POLICY_SID}"
     - name: S3_ENCRYPTION_POLICY
       value: "${S3_ENCRYPTION_POLICY}"
+    - name: USE_GLOBAL_RULES
+      value: "${USE_GLOBAL_RULES}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

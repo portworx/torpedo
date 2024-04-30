@@ -6,7 +6,7 @@ import (
 
 	"github.com/portworx/torpedo/pkg/log"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -121,13 +121,18 @@ func performHaIncreaseRebootTest(testName string) {
 					}
 
 					if testName == "ha-inc-reboot-src" {
-						HaIncreaseRebootSourceNode(nil, ctx, v, storageNodeMap, REBOOT)
+						err = HaIncreaseErrorInjectSourceNode(nil, ctx, v, storageNodeMap, REBOOT)
+						dash.VerifyFatal(err, nil, "Validate HA increase and reboot source node")
+
 					} else if testName == "ha-inc-restartpx-src" {
-						HaIncreaseRebootSourceNode(nil, ctx, v, storageNodeMap, PX_RESTART)
+						err = HaIncreaseErrorInjectSourceNode(nil, ctx, v, storageNodeMap, PX_RESTART)
+						dash.VerifyFatal(err, nil, "Validate HA increase and restart source node")
 					} else if testName == "ha-inc-restartpx-tgt" {
-						HaIncreaseRebootTargetNode(nil, ctx, v, storageNodeMap, PX_RESTART)
+						err = HaIncreaseErrorInjectionTargetNode(nil, ctx, v, storageNodeMap, PX_RESTART)
+						dash.VerifyFatal(err, nil, "Validate HA increase and restart target node")
 					} else {
-						HaIncreaseRebootTargetNode(nil, ctx, v, storageNodeMap, REBOOT)
+						err = HaIncreaseErrorInjectionTargetNode(nil, ctx, v, storageNodeMap, REBOOT)
+						dash.VerifyFatal(err, nil, "Validate HA increase and reboot target node")
 					}
 				}
 			}

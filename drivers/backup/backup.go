@@ -8,7 +8,6 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
-	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
 // Image Generic struct
@@ -80,6 +79,10 @@ type Driver interface {
 	ActivityTimeLine
 	//Metrics interface
 	Metrics
+	//Receiver interface
+	Receiver
+	//Recipient interface
+	Recipient
 
 	// Init initializes the backup driver under a given scheduler
 	Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error
@@ -276,6 +279,9 @@ type Backup interface {
 
 	// UpdateBackupShare updates backupshare of existing backup object
 	UpdateBackupShare(ctx context.Context, req *api.BackupShareUpdateRequest) (*api.BackupShareUpdateResponse, error)
+
+	// GetBackupStatusWithReason returns the status and reason of the given backup name
+	GetBackupStatusWithReason(backupName string, ctx context.Context, orgID string) (api.BackupInfo_StatusInfo_Status, string, error)
 }
 
 // Restore object interface
@@ -433,9 +439,6 @@ type Rule interface {
 	// CreateRuleForBackup creates backup rule
 	CreateRuleForBackup(appName string, orgID string, prePostFlag string) (bool, string, error)
 
-	// CreateRuleForKubevirtBackup creates backup rule for kubevirt
-	CreateRuleForKubevirtBackup(ctx context.Context, virtualMachineList []kubevirtv1.VirtualMachine, orgID string, prePostFlag string, template string) (bool, string, error)
-
 	// DeleteRuleForBackup deletes backup rule
 	DeleteRuleForBackup(orgID string, ruleName string) error
 
@@ -475,6 +478,45 @@ type ActivityTimeLine interface {
 type Metrics interface {
 	// InspectMetrics inspects metricsData
 	InspectMetrics(ctx context.Context, req *api.MetricsInspectRequest) (*api.MetricsInspectResponse, error)
+}
+
+// Receiver object interface
+type Receiver interface {
+	// CreateReceiver creates receiver object
+	CreateReceiver(ctx context.Context, req *api.ReceiverCreateRequest) (*api.ReceiverCreateResponse, error)
+
+	// InspectReceiver inspects a receiver object
+	InspectReceiver(ctx context.Context, req *api.ReceiverInspectRequest) (*api.ReceiverInspectResponse, error)
+
+	// EnumerateReceiver enumerates all receiver object
+	EnumerateReceiver(ctx context.Context, req *api.ReceiverEnumerateRequest) (*api.ReceiverEnumerateResponse, error)
+
+	// DeleteReceiver deletes a receiver object
+	DeleteReceiver(ctx context.Context, req *api.ReceiverDeleteRequest) (*api.ReceiverDeleteResponse, error)
+
+	// UpdateReceiver updates a receiver object
+	UpdateReceiver(ctx context.Context, req *api.ReceiverUpdateRequest) (*api.ReceiverUpdateResponse, error)
+
+	// ValidateReceiver validates a receiver object
+	ValidateReceiver(ctx context.Context, req *api.ReceiverValidateSMTPRequest) (*api.ReceiverValidateSMTPResponse, error)
+}
+
+// Recipient object interface
+type Recipient interface {
+	// CreateRecipient creates Recipient object
+	CreateRecipient(ctx context.Context, req *api.RecipientCreateRequest) (*api.RecipientCreateResponse, error)
+
+	// InspectRecipient inspects a Recipient object
+	InspectRecipient(ctx context.Context, req *api.RecipientInspectRequest) (*api.RecipientInspectResponse, error)
+
+	// EnumerateRecipient enumerates all Recipient object
+	EnumerateRecipient(ctx context.Context, req *api.RecipientEnumerateRequest) (*api.RecipientEnumerateResponse, error)
+
+	// DeleteRecipient deletes a Recipient object
+	DeleteRecipient(ctx context.Context, req *api.RecipientDeleteRequest) (*api.RecipientDeleteResponse, error)
+
+	// UpdateRecipient updates a Recipient object
+	UpdateRecipient(ctx context.Context, req *api.RecipientUpdateRequest) (*api.RecipientUpdateResponse, error)
 }
 
 var backupDrivers = make(map[string]Driver)

@@ -2,20 +2,23 @@ package tests
 
 import (
 	"fmt"
-	. "github.com/onsi/ginkgo"
+	"strings"
+	"time"
+
+	"golang.org/x/sync/errgroup"
+	kubevirtv1 "kubevirt.io/api/core/v1"
+
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
-	"strings"
-	"time"
-
 	. "github.com/portworx/torpedo/tests"
 )
 
 // This testcase verifies if the backup pods are in Ready state or not
-var _ = Describe("{BackupClusterVerification}", func() {
+var _ = Describe("{BackupClusterVerification}", Label(TestCaseLabelsMap[BackupClusterVerification]...), func() {
 	JustBeforeEach(func() {
 		log.Infof("No pre-setup required for this testcase")
 		StartPxBackupTorpedoTest("BackupClusterVerification", "Validating backup cluster pods", nil, 0, Sagrawal, Q4FY23)
@@ -35,14 +38,14 @@ var _ = Describe("{BackupClusterVerification}", func() {
 })
 
 // This is a sample test case to verify User/Group Management and role mapping
-var _ = Describe("{UserGroupManagement}", func() {
+var _ = Describe("{UserGroupManagement}", Label(TestCaseLabelsMap[UserGroupManagement]...), func() {
 	JustBeforeEach(func() {
 		log.Infof("No pre-setup required for this testcase")
 		StartPxBackupTorpedoTest("UserGroupManagement", "Creating users and adding them to groups", nil, 0, Mkoppal, Q4FY23)
 	})
 	It("User and group role mappings", func() {
 		Step("Create Users", func() {
-			err := backup.AddUser("testuser1", "test", "user1", "testuser1@localhost.com", commonPassword)
+			err := backup.AddUser("testuser1", "test", "user1", "testuser1@localhost.com", CommonPassword)
 			log.FailOnError(err, "Failed to create user")
 		})
 		Step("Create Groups", func() {
@@ -86,7 +89,7 @@ var _ = Describe("{UserGroupManagement}", func() {
 })
 
 // This testcase verifies basic backup rule,backup location, cloud setting
-var _ = Describe("{BasicBackupCreation}", func() {
+var _ = Describe("{BasicBackupCreation}", Label(TestCaseLabelsMap[BasicBackupCreation]...), func() {
 
 	var (
 		backupNames          []string
@@ -107,6 +110,9 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		dailyName            string
 		weeklyName           string
 		monthlyName          string
+		controlChannel       chan string
+		errorGroup           *errgroup.Group
+		allVirtualMachines   []kubevirtv1.VirtualMachine
 	)
 
 	JustBeforeEach(func() {
@@ -115,7 +121,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		appList = Inst().AppList
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
-		providers = getProviders()
+		providers = GetBackupProviders()
 		intervalName = fmt.Sprintf("%s-%v", "interval", time.Now().Unix())
 		dailyName = fmt.Sprintf("%s-%v", "daily", time.Now().Unix())
 		weeklyName = fmt.Sprintf("%s-%v", "weekly", time.Now().Unix())
@@ -124,13 +130,33 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
 			for _, appCtx := range appContexts {
-				appCtx.ReadinessTimeout = appReadinessTimeout
+				appCtx.ReadinessTimeout = AppReadinessTimeout
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
 			}
 		}
+
+		log.InfoD("switching to destination context")
+		err := SetDestinationKubeConfig()
+		log.FailOnError(err, "failed to switch to context to destination cluster")
+		kubevirtOnDestinationCluster := IsKubevirtInstalled()
+
+		log.InfoD("switching to default context")
+		err = SetClusterContext("")
+		log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		kubevirtOnSourceCluster := IsKubevirtInstalled()
+
+		if kubevirtOnSourceCluster && kubevirtOnDestinationCluster {
+			log.InfoD("Get a list of all Vms in case of Kubevirt")
+			for _, appCtx := range scheduledAppContexts {
+				allVms, err := GetAllVMsInNamespace(appCtx.ScheduleOptions.Namespace)
+				log.FailOnError(err, "Unable to get Virtual Machines from [%s]", appCtx.ScheduleOptions.Namespace)
+				allVirtualMachines = append(allVirtualMachines, allVms...)
+			}
+		}
+
 	})
 
 	It("Basic Backup Creation", func() {
@@ -142,14 +168,15 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating rules for backup")
 			log.InfoD("Creating pre rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
-				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
+				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], BackupOrgID, "pre")
 				log.FailOnError(err, "Creating pre rule for deployed app [%s] failed", appList[i])
 				dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
 				if ruleName != "" {
@@ -158,7 +185,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			}
 			log.InfoD("Creating post rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
-				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
+				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], BackupOrgID, "post")
 				log.FailOnError(err, "Creating post rule for deployed app [%s] failed", appList[i])
 				dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
 				if ruleName != "" {
@@ -177,9 +204,9 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = backupLocationName
-				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
-				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "", true)
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
 				dash.VerifyFatal(err, nil, "Creating backup location")
 			}
 		})
@@ -188,22 +215,22 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			log.InfoD("Creating backup schedule policies")
 			log.InfoD("Creating backup interval schedule policy")
 			intervalSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 2)
-			intervalPolicyStatus := Inst().Backup.BackupSchedulePolicy(intervalName, uuid.New(), orgID, intervalSchedulePolicyInfo)
+			intervalPolicyStatus := Inst().Backup.BackupSchedulePolicy(intervalName, uuid.New(), BackupOrgID, intervalSchedulePolicyInfo)
 			dash.VerifyFatal(intervalPolicyStatus, nil, "Creating interval schedule policy")
 
 			log.InfoD("Creating backup daily schedule policy")
 			dailySchedulePolicyInfo := Inst().Backup.CreateDailySchedulePolicy(1, "9:00AM", 2)
-			dailyPolicyStatus := Inst().Backup.BackupSchedulePolicy(dailyName, uuid.New(), orgID, dailySchedulePolicyInfo)
+			dailyPolicyStatus := Inst().Backup.BackupSchedulePolicy(dailyName, uuid.New(), BackupOrgID, dailySchedulePolicyInfo)
 			dash.VerifyFatal(dailyPolicyStatus, nil, "Creating daily schedule policy")
 
 			log.InfoD("Creating backup weekly schedule policy")
 			weeklySchedulePolicyInfo := Inst().Backup.CreateWeeklySchedulePolicy(1, backup.Friday, "9:10AM", 2)
-			weeklyPolicyStatus := Inst().Backup.BackupSchedulePolicy(weeklyName, uuid.New(), orgID, weeklySchedulePolicyInfo)
+			weeklyPolicyStatus := Inst().Backup.BackupSchedulePolicy(weeklyName, uuid.New(), BackupOrgID, weeklySchedulePolicyInfo)
 			dash.VerifyFatal(weeklyPolicyStatus, nil, "Creating weekly schedule policy")
 
 			log.InfoD("Creating backup monthly schedule policy")
 			monthlySchedulePolicyInfo := Inst().Backup.CreateMonthlySchedulePolicy(1, 29, "9:20AM", 2)
-			monthlyPolicyStatus := Inst().Backup.BackupSchedulePolicy(monthlyName, uuid.New(), orgID, monthlySchedulePolicyInfo)
+			monthlyPolicyStatus := Inst().Backup.BackupSchedulePolicy(monthlyName, uuid.New(), BackupOrgID, monthlySchedulePolicyInfo)
 			dash.VerifyFatal(monthlyPolicyStatus, nil, "Creating monthly schedule policy")
 		})
 
@@ -212,19 +239,19 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
-			err = CreateApplicationClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
-			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
 
-			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 
-			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
 		})
 
 		Step("Taking backup of application from source cluster", func() {
@@ -236,10 +263,17 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			for i, appCtx := range scheduledAppContexts {
 				scheduledNamespace := appCtx.ScheduleOptions.Namespace
 				backupName := fmt.Sprintf("%s-%s-%v", "autogenerated-backup", scheduledNamespace, time.Now().Unix())
-				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, orgID, scheduledNamespace, backupLocationName)
-				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, orgID, sourceClusterUid, "", "", "", "")
+				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, scheduledNamespace, backupLocationName)
+				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
+				if len(allVirtualMachines) > 0 {
+					backupName := fmt.Sprintf("%s-%s-%v", "autogenerated-backup", scheduledNamespace, time.Now().Unix())
+					err = CreateVMBackupWithValidation(ctx, backupName, allVirtualMachines, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
+						labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", true)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of VM backup and Validation of backup [%s]", backupName))
+					backupNames = append(backupNames, backupName)
+				}
 			}
 		})
 
@@ -254,7 +288,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 					restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
 				}
 				log.InfoD("Restoring [%s] namespace from the [%s] backup", scheduledNamespace, backupNames[i])
-				err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts[i:i+1])
+				err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts[i:i+1])
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}
@@ -275,23 +309,24 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		if len(preRuleNameList) > 0 {
 			for _, ruleName := range preRuleNameList {
-				err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
+				err := Inst().Backup.DeleteRuleForBackup(BackupOrgID, ruleName)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup pre rules [%s]", ruleName))
 			}
 		}
 		if len(postRuleNameList) > 0 {
 			for _, ruleName := range postRuleNameList {
-				err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
+				err := Inst().Backup.DeleteRuleForBackup(BackupOrgID, ruleName)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup post rules [%s]", ruleName))
 			}
 		}
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, policyList)
 		dash.VerifySafely(err, nil, "Deleting backup schedule policies")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 
 		log.Info("Destroying scheduled apps on source cluster")
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		log.InfoD("switching to destination context")
 		err = SetDestinationKubeConfig()
@@ -316,15 +351,15 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		backupDriver := Inst().Backup
 		log.Info("Deleting backed up namespaces")
 		for _, backupName := range backupNames {
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctx)
+			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
 			log.FailOnError(err, "Backup [%s] could not be deleted", backupName)
 			dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying [%s] backup deletion is successful", backupName))
 		}
 		log.Info("Deleting restored namespaces")
 		for _, restoreName := range restoreNames {
-			err = DeleteRestore(restoreName, orgID, ctx)
+			err = DeleteRestore(restoreName, BackupOrgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
 		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)

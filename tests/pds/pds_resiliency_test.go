@@ -2,12 +2,11 @@ package tests
 
 import (
 	"fmt"
+	. "github.com/onsi/ginkgo/v2"
+	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
-	"net/http"
-
-	. "github.com/onsi/ginkgo"
-	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/portworx/torpedo/drivers/pds/controlplane"
 	dss "github.com/portworx/torpedo/drivers/pds/dataservice"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
@@ -15,6 +14,9 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
+	"math/rand"
+	"net/http"
+	"strconv"
 )
 
 var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
@@ -131,6 +133,265 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 	JustAfterEach(func() {
 		EndTorpedoTest()
 
+	})
+})
+
+var _ = Describe("{RebootNodeDuringAppResourceUpdate}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootNodeDuringAppResourceUpdate", "Reboot active node during application resource Update, example increase the CPU/Mem limits ", pdsLabels, 0)
+		pdslib.MarkResiliencyTC(true)
+		//Initializing the parameters required for workload generation
+		wkloadParams = pdsdriver.LoadGenParams{
+			LoadGenDepName: params.LoadGen.LoadGenDepName,
+			Namespace:      params.InfraToTest.Namespace,
+			NumOfRows:      params.LoadGen.NumOfRows,
+			Timeout:        params.LoadGen.Timeout,
+			Replicas:       params.LoadGen.Replicas,
+			TableName:      "wltestingnew",
+			Iterations:     params.LoadGen.Iterations,
+			FailOnError:    params.LoadGen.FailOnError,
+		}
+	})
+
+	It("Deploy Dataservices and Restart PX During App scaleup", func() {
+		var (
+			scaledUpdatedDeployment      *pds.ModelsDeployment
+			wlDeploymentsToBeCleaned     []*v1.Deployment
+			deploymentsToBeCleaned       []*pds.ModelsDeployment
+			depList                      []*pds.ModelsDeployment
+			scaledUpdatedDepList         []*pds.ModelsDeployment
+			stIds                        []string
+			resIds                       []string
+			resConfigModelUpdated        *pds.ModelsResourceSettingsTemplate
+			stConfigModelUpdated         *pds.ModelsStorageOptionsTemplate
+			newResourceTemplateID        string
+			newStorageTemplateID         string
+			increasedPvcSizeAfterScaleUp uint64
+			beforeResizePodAge           float64
+		)
+		stepLog := "Create Custom Templates , Deploy ds and Trigger Workload"
+		Step(stepLog, func() {
+			pdsdeploymentsmd5HashAfterResize := make(map[string]string)
+			for _, ds := range params.DataServiceToTest {
+				log.InfoD(stepLog)
+				CleanMapEntries(pdsdeploymentsmd5HashAfterResize)
+				stIds, resIds = nil, nil
+				depList, _, scaledUpdatedDepList, deploymentsToBeCleaned, restoredDeployments = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
+				wlDeploymentsToBeCleaned = []*v1.Deployment{}
+				deployment, _, resConfigModel, stConfigModel, appConfigID, _, _, _, err := DeployDSWithCustomTemplatesRunWorkloads(ds, tenantID, controlplane.Templates{
+					CpuLimit:       params.StorageConfigurations.CpuLimit,
+					CpuRequest:     params.StorageConfigurations.CpuRequest,
+					MemoryLimit:    params.StorageConfigurations.MemoryLimit,
+					MemoryRequest:  params.StorageConfigurations.MemoryRequest,
+					StorageRequest: params.StorageConfigurations.StorageRequest,
+					FsType:         "xfs",
+					ReplFactor:     2,
+					Provisioner:    "pxd.portworx.com",
+					Secure:         false,
+					VolGroups:      false,
+				})
+				stIds = append(stIds, stConfigModel.GetId())
+				resIds = append(resIds, resConfigModel.GetId())
+				depList = append(depList, deployment)
+				deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
+				dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
+				beforeResizePodAge, err = GetPodAge(deployment, params.InfraToTest.Namespace)
+				log.FailOnError(err, "unable to get pods AGE before Storage resize")
+				log.InfoD("Pods Age before storage resize is- [%v]Min", beforeResizePodAge)
+
+				stepLog = "Scale up the DS with increased storage size and Repl factor as 2 "
+				Step(stepLog, func() {
+					failuretype := pdslib.TypeOfFailure{
+						Type: RebootNodeDuringAppResourceUpdate,
+						Method: func() error {
+							return pdslib.RebootActiveNodeDuringDeployment(params.InfraToTest.Namespace, deployment, 1)
+						},
+					}
+					pdslib.DefineFailureType(failuretype)
+					newTemplateName1 := "autoTemp-" + strconv.Itoa(rand.Int())
+					newCpuLimit, _ := strconv.Atoi(*resConfigModel.CpuLimit)
+					newCpuReq, _ := strconv.Atoi(*resConfigModel.CpuRequest)
+					currMemoryLimit := *resConfigModel.StorageRequest
+					newMemoryLimit, _ := strconv.Atoi(currMemoryLimit[:len(currMemoryLimit)-1])
+					updatedMemoryLimit := strconv.Itoa(newMemoryLimit+2) + "G"
+					currMemoryReq := *resConfigModel.StorageRequest
+					newMemoryReq, _ := strconv.Atoi(currMemoryReq[:len(currMemoryReq)-1])
+					updatedMemoryReq := strconv.Itoa(newMemoryReq+2) + "G"
+					updatedTemplateConfig1 := controlplane.Templates{
+						CpuLimit:       fmt.Sprint(newCpuLimit + 2),
+						CpuRequest:     fmt.Sprint(newCpuReq + 2),
+						DataServiceID:  dataserviceID,
+						MemoryLimit:    updatedMemoryLimit,
+						MemoryRequest:  updatedMemoryReq,
+						Name:           newTemplateName1,
+						StorageRequest: params.StorageConfigurations.NewStorageSize,
+						FsType:         *stConfigModel.Fs,
+						ReplFactor:     *stConfigModel.Repl,
+						Provisioner:    *stConfigModel.Provisioner,
+						Secure:         false,
+						VolGroups:      false,
+					}
+					stConfigModelUpdated, resConfigModelUpdated, err = controlPlane.CreateCustomResourceTemplate(tenantID, updatedTemplateConfig1)
+					log.FailOnError(err, "Unable to update template")
+					log.InfoD("Successfully updated the template with ID- %v and ReplicationFactor- %v", resConfigModelUpdated.GetId(), updatedTemplateConfig1.ReplFactor)
+					newResourceTemplateID = resConfigModelUpdated.GetId()
+					newStorageTemplateID = stConfigModelUpdated.GetId()
+					stIds = append(stIds, newStorageTemplateID)
+					resIds = append(resIds, newResourceTemplateID)
+				})
+				stepLog = "Apply updated template to the dataservice deployment and Induce failure"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					if appConfigID == "" {
+						appConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
+						log.FailOnError(err, "Error while fetching AppConfigID")
+					}
+					scaledUpdatedDeployment, err = dsTest.UpdateDataServices(deployment.GetId(),
+						appConfigID, deployment.GetImageId(),
+						int32(ds.Replicas), newResourceTemplateID, params.InfraToTest.Namespace)
+					log.FailOnError(err, "Error while updating dataservices")
+					//wait for the scaled up data service and restart px
+					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, int32(ds.Replicas))
+					log.FailOnError(err, fmt.Sprintf("Error happened while restarting px for data service %v", *deployment.ClusterResourceName))
+				})
+				Step("Validate Deployments after template update", func() {
+					err = dsTest.ValidateDataServiceDeployment(scaledUpdatedDeployment, namespace)
+					log.FailOnError(err, "Error while validating dataservices")
+					log.InfoD("Data-service: %v is up and healthy", ds.Name)
+					scaledUpdatedDepList = append(scaledUpdatedDepList, scaledUpdatedDeployment)
+					increasedPvcSizeAfterScaleUp, err = GetVolumeCapacityInGB(namespace, scaledUpdatedDeployment)
+					log.InfoD("Increased Storage Size after scale-up is- %v", increasedPvcSizeAfterScaleUp)
+				})
+				Step("Validate resource update is successful after active node reboots during resource update", func() {
+					_, _, config, err := pdslib.ValidateDataServiceVolumes(scaledUpdatedDeployment, ds.Name, newResourceTemplateID, newStorageTemplateID, params.InfraToTest.Namespace)
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					dash.VerifyFatal(config.Resources.Requests.CPU, *resConfigModelUpdated.CpuRequest, "Verifying increase in CPU request from original deployment")
+					dash.VerifyFatal(config.Resources.Limits.CPU, *resConfigModelUpdated.CpuLimit, "Verifying increase in CPU Limits from original deployment")
+					dash.VerifyFatal(config.Resources.Requests.Memory, *resConfigModelUpdated.MemoryRequest, "Verifying increase in MEM request from original deployment")
+					dash.VerifyFatal(config.Resources.Limits.Memory, *resConfigModelUpdated.MemoryLimit, "Verifying increase in MEM limits from original deployment")
+				})
+				Step("Clean up workload deployments", func() {
+					for _, wlDep := range wlDeploymentsToBeCleaned {
+						err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+						log.FailOnError(err, "Failed while deleting the workload deployment")
+					}
+				})
+
+				Step("Delete Deployments", func() {
+					CleanupDeployments(deploymentsToBeCleaned)
+					err := controlPlane.CleanupCustomTemplates(stIds, resIds)
+					log.FailOnError(err, "Failed to delete custom templates")
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{KillPdsAgentPodDuringAppScaleUp}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("KillPdsAgentPodDuringAppScaleUp", "Kill PDS-Agent Pod during application is scaled up", pdsLabels, 0)
+		pdslib.MarkResiliencyTC(true)
+		//Initializing the parameters required for workload generation
+		wkloadParams = pdsdriver.LoadGenParams{
+			LoadGenDepName: params.LoadGen.LoadGenDepName,
+			Namespace:      params.InfraToTest.Namespace,
+			NumOfRows:      params.LoadGen.NumOfRows,
+			Timeout:        params.LoadGen.Timeout,
+			Replicas:       params.LoadGen.Replicas,
+			TableName:      params.LoadGen.TableName,
+			Iterations:     params.LoadGen.Iterations,
+			FailOnError:    params.LoadGen.FailOnError,
+		}
+	})
+
+	It("Deploy Dataservices and Kill PDS Pod Agent while App scaleup", func() {
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var wlDeploymentsToBeCleaned []*v1.Deployment
+
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+				})
+			}
+		})
+
+		defer func() {
+			for _, newDeployment := range deployments {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				err = pdslib.DeletePvandPVCs(*newDeployment.ClusterResourceName, false)
+				log.FailOnError(err, "Error while deleting PV and PVCs")
+			}
+		}()
+
+		Step("Scale Up Data Services and Restart Portworx", func() {
+			for ds, deployment := range deployments {
+				failuretype := pdslib.TypeOfFailure{
+					Type: KillPdsAgentPodDuringAppScaleUp,
+					Method: func() error {
+						return pdslib.KillPodsInNamespace(params.InfraToTest.PDSNamespace, pdslib.PdsAgentPod)
+					},
+				}
+				pdslib.DefineFailureType(failuretype)
+
+				log.InfoD("Scaling up DataService %v ", ds.Name)
+				dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
+				log.FailOnError(err, "Error while getting app configuration template")
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+
+				dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
+				log.FailOnError(err, "Error while getting resource setting template")
+				dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultResourceTemplateID")
+
+				updatedDeployment, err := dsTest.UpdateDataServices(deployment.GetId(),
+					dataServiceDefaultAppConfigID, deployment.GetImageId(),
+					int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
+				log.FailOnError(err, "Error while updating dataservices")
+
+				//wait for the scaled up data service and restart px
+				err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, int32(ds.ScaleReplicas))
+				log.FailOnError(err, fmt.Sprintf("Error happened while restarting px for data service %v", *deployment.ClusterResourceName))
+
+				id := pdslib.GetDataServiceID(ds.Name)
+				dash.VerifyFatal(id != "", true, "Validating dataservice id")
+				log.Infof("Getting versionID  for Data service version %s and buildID for %s ", ds.Version, ds.Image)
+
+				_, _, dsVersionBuildMap, err := pdslib.GetVersionsImage(ds.Version, ds.Image, id)
+				log.FailOnError(err, "Error while fetching versions/image information")
+
+				//TODO: Rename the method ValidateDataServiceVolumes
+				resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+				log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+				ValidateDeployments(resourceTemp, storageOp, config, ds.ScaleReplicas, dsVersionBuildMap)
+				dash.VerifyFatal(ds.ScaleReplicas, config.Replicas, "Validating replicas after scaling up of dataservice")
+			}
+		})
+		Step("Running Workloads", func() {
+			for _, deployment := range deployments {
+				ckSum2, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
+				log.FailOnError(err, "Error while Running workloads-%v", wlDep)
+				log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum2)
+				wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
+			}
+		})
+		Step("Clean up workload deployments", func() {
+			for _, wlDep := range wlDeploymentsToBeCleaned {
+				err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+				log.FailOnError(err, "Failed while deleting the workload deployment")
+			}
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
 	})
 })
 

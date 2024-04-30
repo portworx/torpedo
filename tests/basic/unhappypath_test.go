@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/node"
@@ -29,7 +29,7 @@ const (
 	totalTimeInHours              = 24
 	errorPersistTimeInMinutes     = 60 * time.Minute
 	snapshotScheduleRetryInterval = 10 * time.Second
-	snapshotScheduleRetryTimeout  = 5 * time.Minute
+	snapshotScheduleRetryTimeout  = 15 * time.Minute
 	waitTimeForPXAfterError       = 20 * time.Minute
 )
 

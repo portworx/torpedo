@@ -9,12 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/sirupsen/logrus"
-	storageapi "k8s.io/api/storage/v1"
-
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -22,10 +16,16 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-
 	"github.com/portworx/sched-ops/task"
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/stats"
 )
 
 var dash *aetosutil.Dashboard
@@ -57,6 +57,9 @@ const (
 	tempDir                = "/tmp"
 	portworxProvisioner    = "kubernetes.io/portworx-volume"
 	DefaultScName          = "async-sc"
+	FirstCluster = 0
+	SecondCluster = 1
+	ThirdCluster = 2
 )
 
 var (
@@ -192,6 +195,7 @@ func CreateMigration(
 	includeVolumes *bool,
 	includeResources *bool,
 	startApplications *bool,
+	transformSpecs []string,
 ) (*storkapi.Migration, error) {
 
 	migration := &storkapi.Migration{
@@ -206,6 +210,9 @@ func CreateMigration(
 			StartApplications: startApplications,
 			Namespaces:        []string{migrationNamespace},
 		},
+	}
+	if transformSpecs != nil && len(transformSpecs) > 0 {
+		migration.Spec.TransformSpecs = transformSpecs
 	}
 	// TODO figure out a way to check if it's an auth-enabled and add security annotations
 
@@ -295,10 +302,11 @@ func CreateSchedulePolicy(policyName string, interval int) (pol *storkapi.Schedu
 }
 
 // WaitForNumOfMigration waits for a certain number of migrations to complete.
-func WaitForNumOfMigration(schedName string, schedNamespace string, count int, miginterval int) (map[string]string, error) {
+func WaitForNumOfMigration(schedName string, schedNamespace string, count int, miginterval int) (map[string]string, []map[string]string, error) {
 	migInterval := time.Minute * time.Duration(miginterval)
 	migTimeout := time.Minute * time.Duration(count*miginterval)
 	expectedMigrations := make(map[string]string)
+	var migschedulestats []map[string]string
 	checkNumOfMigrations := func() (interface{}, bool, error) {
 		migSchedule, err := storkops.Instance().GetMigrationSchedule(schedName, schedNamespace)
 		if err != nil {
@@ -315,6 +323,9 @@ func WaitForNumOfMigration(schedName string, schedNamespace string, count int, m
 				expectedMigrations[migration.Name] = fmt.Sprintf("Migration failed with error: %v", err)
 			}
 			expectedMigrations[migration.Name] = "Successful"
+			// Getting migration stats
+			migstats := stats.GetStorkMigrationStats(migration)
+			migschedulestats = append(migschedulestats, migstats)
 		}
 		log.InfoD("Waiting to complete %v migrations in %v time, %v completed as of now", count, migTimeout, expectedMigrations)
 		if len(expectedMigrations) == count {
@@ -323,7 +334,7 @@ func WaitForNumOfMigration(schedName string, schedNamespace string, count int, m
 		return "", true, fmt.Errorf("some migrations are still pending")
 	}
 	_, err := task.DoRetryWithTimeout(checkNumOfMigrations, migTimeout, migInterval)
-	return expectedMigrations, err
+	return expectedMigrations, migschedulestats, err
 }
 
 func DeleteAndWaitForMigrationSchedDeletion(name, namespace string) error {

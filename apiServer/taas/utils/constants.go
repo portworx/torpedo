@@ -1,8 +1,9 @@
 package utils
 
 import (
-	"github.com/portworx/sched-ops/k8s/core"
 	"time"
+
+	"github.com/portworx/sched-ops/k8s/core"
 )
 
 type HelmPayload struct {
@@ -24,8 +25,6 @@ const (
 )
 
 var (
-	errors  []error
-	errChan = make(chan error, 100)
 	k8sCore = core.Instance()
 )
 

@@ -101,6 +101,22 @@ func (d *dcos) ValidateAutopilotRuleObjects() error {
 	}
 }
 
+// WaitForRebalanceToComplete validates autopilot rule objects for Rebalance
+func (d *dcos) WaitForRebalanceAROToComplete() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "WaitForRebalanceAROToComplete()",
+	}
+}
+
+// VerifyPoolResizeARO validates autopilot rule objects created for pool resize
+func (d *dcos) VerifyPoolResizeARO(apapi.AutopilotRule) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "VerifyPoolResizeARO()",
+	}
+}
+
 // GetSnapShotData retruns given snapshots
 func (d *dcos) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshotData, error) {
 	return nil, &errors.ErrNotSupported{
@@ -788,6 +804,23 @@ func (d *dcos) GetAutopilotNamespace() (string, error) {
 	}
 }
 
+func (d *dcos) IsAutopilotEnabled() (bool, error) {
+	// TODO implement this method
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAutopilotNamespace()",
+	}
+}
+
+// GetPortworxNamespace returns portworx namespace
+func (d *dcos) GetPortworxNamespace() (string, error) {
+	// TODO implement this method
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPortworxNamespace()",
+	}
+}
+
 // GetIOBandwidth returns the IO bandwidth for the given pod name and namespace
 func (d *dcos) GetIOBandwidth(string, string) (int, error) {
 	// TODO implement this method
@@ -877,6 +910,22 @@ func (d *dcos) UpgradeScheduler(version string) error {
 	}
 }
 
+func (d *dcos) GetZones() ([]string, error) {
+	// TODO: Add implementation
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetZones()",
+	}
+}
+
+func (d *dcos) GetASGClusterSize() (int64, error) {
+	// TODO: Add implementation
+	return 0, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetASGClusterSize()",
+	}
+}
+
 func (d *dcos) CreateSecret(namespace, name, dataField, secretDataString string) error {
 	// TODO: Add implementation
 	return &errors.ErrNotSupported{
@@ -909,14 +958,6 @@ func (d *dcos) ParseCharts(chartDir string) (*scheduler.HelmRepo, error) {
 	}
 }
 
-func (d *dcos) RecycleNode(n node.Node) error {
-	//Recycle is not supported
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "RecycleNode()",
-	}
-}
-
 func (d *dcos) ValidateTopologyLabel(ctx *scheduler.Context) error {
 	//ValidateTopologyLabel is not supported
 	return &errors.ErrNotSupported{
@@ -930,6 +971,14 @@ func (d *dcos) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CreateCsiSnapshotClass()",
+	}
+}
+
+func (d *dcos) CreateVolumeSnapshotClasses(snapClassName string, provisioner string, isDefault bool, deletePolicy string) (*volsnapv1.VolumeSnapshotClass, error) {
+	//CreateVolumeSnapshotClasses is not supported
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateVolumeSnapshotClasses()",
 	}
 }
 
@@ -1066,11 +1115,27 @@ func (d *dcos) GetNamespaceLabel(namespace string) (map[string]string, error) {
 	}
 }
 
+func (d *dcos) DeleteNode(node node.Node) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteNode()",
+	}
+}
+
 func (d *dcos) ScaleCluster(replicas int) error {
 	// ScaleCluster is not supported
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ScaleCluster()",
+	}
+}
+
+func (d *dcos) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetASGClusterSize()",
 	}
 }
 

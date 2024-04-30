@@ -3,6 +3,7 @@ package anthos
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/errors"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -102,12 +103,18 @@ const (
 	userClusterDescribeCmd       = "gkectl describe clusters"
 	adminWsIdRsa                 = "id_rsa"
 	kubeConfig                   = "kubeconfig"
+	kubeSystemNameSpace          = "kube-system"
+	clusterApiKey                = "api"
+	clusterApiValue              = "clusterapi"
+	clusterApiContainer          = "clusterapi-controller-manager"
+	vSphereCntrlManagerContainer = "vsphere-controller-manager"
 	clusterGrpPath               = "k8s/clusterGroup0"
 	gsUtilCmd                    = "./google-cloud-sdk/bin/gsutil"
 	jsonInstances                = "/instances.json"
 	userClusterConfPath          = "/home/ubuntu/user-cluster.yaml"
 	adminClusterConfPath         = "/home/ubuntu/admin-cluster.yaml"
 	errorTimeDuration            = 15 * time.Minute
+	logCollectFrequencyDuration  = 15 * time.Minute
 	defaultTestConnectionTimeout = 15 * time.Minute
 	defaultWaitUpgradeRetry      = 10 * time.Second
 )
@@ -370,10 +377,13 @@ func (anth *anthos) VerifyUpgradeVersion(upgradeVersion string) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse version: %s. Error: %v", fromVersion, err)
 	}
-	if (len(toVersion) > 0 && len(fromVersion) > 0) &&
-		(toVersion[0][1] != fromVersion[0][1] || (val2-val1) > 1) {
-		return fmt.Errorf("incorrect upgrade version:%s is provided."+
-			"One major version upgrade support at a time", upgradeVersion)
+	// Skip below check when current version is 1.16 and upgrading to version 1.28
+	if !strings.Contains(anth.version, "1.16") && !strings.Contains(upgradeVersion, "1.28") {
+		if (len(toVersion) > 0 && len(fromVersion) > 0) &&
+			(toVersion[0][1] != fromVersion[0][1] || (val2-val1) > 1) {
+			return fmt.Errorf("incorrect upgrade version:%s is provided."+
+				"One major version upgrade support at a time", upgradeVersion)
+		}
 	}
 	log.Debugf("Successfully verified the version:[%]", upgradeVersion)
 	return nil
@@ -448,7 +458,29 @@ func (anth *anthos) upgradeAdminWorkstation(version string) error {
 // upgradeUserCluster upgrade user cluster to newer version
 func (anth *anthos) upgradeUserCluster(version string) error {
 	log.Infof("Upgrading user cluster to a newer version: %s", version)
-	var cmd = fmt.Sprintf("%s%s.tgz  --kubeconfig %s", upgradePrepareCmd, version, adminKubeconfPath)
+	logChan := make(chan bool)
+	enableControlplaneV2 := false
+	controlPlaneEnableReg := regexp.MustCompile(`enableControlplaneV2:\s+true`)
+	userClusterName, err := anth.getUserClusterName()
+	if err != nil {
+		return err
+	}
+	// Describe user cluster command help to identify dataplanev2 cluster
+	cmd := fmt.Sprintf("%s --kubeconfig %s --cluster %s",
+		userClusterDescribeCmd, adminKubeconfPath, userClusterName)
+	log.Debugf("Executing command: %s", cmd)
+	out, err := anth.execOnAdminWSNode(cmd)
+	if err != nil {
+		return fmt.Errorf("describing user cluster is failing: [%s]. Err: (%v)", out, err)
+	}
+	matches := controlPlaneEnableReg.FindAllString(out, -1)
+	if len(matches) > 0 {
+		log.Infof("controlplanev2 is enabled in cluster: [%s]", matches[0])
+		enableControlplaneV2 = true
+	}
+
+	upgradeLogger := anth.startLogCollector(logChan, userClusterName, enableControlplaneV2)
+	cmd = fmt.Sprintf("%s%s.tgz  --kubeconfig %s", upgradePrepareCmd, version, adminKubeconfPath)
 	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
 		return fmt.Errorf("preparing user cluster for upgrade is failing: [%s]. Err: (%v)", out, err)
 	}
@@ -461,6 +493,7 @@ func (anth *anthos) upgradeUserCluster(version string) error {
 		return err
 	}
 	log.Debug("Successfully upgraded the user cluster")
+	anth.stopLogCollector(upgradeLogger, logChan)
 	return nil
 }
 
@@ -572,14 +605,21 @@ func (anth *anthos) checkUserClusterNodesUpgradeTime() error {
 	// As PX support one extra static IP across all node pool
 	// this means Anthos node upgrade will be sequential
 	startTime := initNodeUpgradeTime
+	errorMessages := make([]string, 0)
 	for _, node := range sortedNodes {
 		diff := node.CreationTimestamp.Sub(startTime)
-		if diff > errorTimeDuration {
-			return fmt.Errorf("[%s] node upgrade took: [%v] minutes which is longer than the expected timeout value: [%v]",
-				node.Name, diff, errorTimeDuration)
-		}
 		log.Infof("[%s] node took: [%v] time to upgrade the node", node.Name, diff)
+		if diff > errorTimeDuration {
+			errorMessages = append(errorMessages, fmt.Sprintf("[%s] node upgrade took: [%v] minutes which is longer than the expected timeout value: [%v]",
+				node.Name, diff, errorTimeDuration))
+		}
 		startTime = node.CreationTimestamp.Time
+	}
+	if len(errorMessages) > 0 {
+		for _, errMsg := range errorMessages {
+			log.Errorf(errMsg)
+		}
+		return fmt.Errorf("anthos node upgrade time exceeded the expected time")
 	}
 	return nil
 }
@@ -627,9 +667,12 @@ func (anth *anthos) getStartTimeForNodePoolUpgrade(userClusterName string) (time
 	}
 	matchTimeInMinute := timeMatchReg.FindAllString(matches[0], -1)
 	if matchTimeInMinute == nil {
-		return time.Time{}, fmt.Errorf("failed to parse start time")
+		return time.Time{}, fmt.Errorf("failed to parse any line matching time")
 	}
 	startTime, err := time.Parse(layout, matchTimeInMinute[0])
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse start time. Err: (%v)", err)
+	}
 	log.Debugf("Successfully retrieved startTime for user cluster [%s] upgrade: %s", userClusterName, startTime)
 	return startTime, nil
 }
@@ -641,6 +684,99 @@ func (anth *anthos) updateFileOwnership(dirPath string) error {
 		return fmt.Errorf("updating file permission after upgrade is failing: [%s]. Err: (%v)", out, err)
 	}
 	return nil
+}
+
+// dumpUpgradeLogs collects upgrade logs
+func (anth *anthos) dumpUpgradeLogs(clusterName string, enableControlplaneV2 bool) error {
+	adminKubeConfPath := path.Join(anth.confPath, kubeConfig)
+	adminInstance, err := core.NewInstanceFromConfigFile(adminKubeConfPath)
+	if err != nil {
+		return fmt.Errorf("creating admin cluster instance failing with error. Err: (%v)", err)
+	}
+	if err := anth.collectUpgradeLogsInNameSpace(adminInstance, kubeSystemNameSpace, "admin"); err != nil {
+		return err
+	}
+	userNamespaceInstance := adminInstance
+	userLogNameSpace := clusterName
+	if enableControlplaneV2 {
+		log.Debugf("Collecting logs from usercluster kube-system namespace for dataplanev2: [%s]", enableControlplaneV2)
+		userNamespaceInstance = k8sCore
+		userLogNameSpace = kubeSystemNameSpace
+	}
+	// Collecting pods logs from usercluster namespace
+	if err := anth.collectUpgradeLogsInNameSpace(userNamespaceInstance, userLogNameSpace, "user"); err != nil {
+		return err
+	}
+	return nil
+}
+
+// collectUpgradeLogsInNameSpace collect upgrade logs for namespace provided
+func (anth *anthos) collectUpgradeLogsInNameSpace(k8sInstance k8s.Ops, namespace string, clusterType string) error {
+	clusterApiLabel := make(map[string]string, 0)
+	clusterApiLabel[clusterApiKey] = clusterApiValue
+	podList, err := k8sInstance.GetPods(namespace, clusterApiLabel)
+	if err != nil {
+		return fmt.Errorf("retrieving cluster api pod is failing with error. Err: (%v)", err)
+	}
+	if len(podList.Items) == 0 {
+		return fmt.Errorf("no running pods found having label: [%v] in namespace: %s", clusterApiLabel, namespace)
+	}
+
+	// Collecting pods logs from kube-system namespace
+	for _, pod := range podList.Items {
+		if err = anth.writeContainerLog(k8sInstance, pod.Name, clusterApiContainer, namespace, clusterType); err != nil {
+			return err
+		}
+		if err = anth.writeContainerLog(k8sInstance, pod.Name, vSphereCntrlManagerContainer, namespace, clusterType); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeContainerLog dump container logs into file
+func (anth *anthos) writeContainerLog(k8sInstance k8s.Ops, podName string, containerName string, nameSpace string, clusterType string) error {
+	layout := "2006-01-02T15:04:05Z"
+	logOption := corev1.PodLogOptions{
+		Container: containerName,
+	}
+	containerLog, err := k8sInstance.GetPodLog(podName, nameSpace, &logOption)
+	if err != nil {
+		return fmt.Errorf("unable to retrieve [%s] container logs. Err: (%v)", containerName, err)
+	}
+	logFileName := fmt.Sprintf("%s-%s-%v-%s.log", containerName, nameSpace, time.Now().Format(layout), clusterType)
+	logPath := path.Join(anth.confPath, logFileName)
+	if err = ioutil.WriteFile(logPath, []byte(containerLog), 0744); err != nil {
+		return fmt.Errorf("unable to write log file for a container: [%s]. Err: (%v)", clusterApiContainer, err)
+	}
+	return nil
+}
+
+// startLogCollector start ticker for collecting upgrade logs
+func (anth *anthos) startLogCollector(logChan chan bool, clusterName string, enableControlplaneV2 bool) *time.Ticker {
+	logTicker := time.NewTicker(logCollectFrequencyDuration)
+	go func() {
+		for {
+			select {
+			case <-logChan:
+				return
+			case tm := <-logTicker.C:
+				log.Debugf("Collecting upgrade logs at: %v", tm)
+				if err := anth.dumpUpgradeLogs(clusterName, enableControlplaneV2); err != nil {
+					log.Fatalf("Log collection fails with error. Err: (%v)", err)
+				}
+			}
+		}
+	}()
+	return logTicker
+
+}
+
+// stopLogCollector stop ticker for collecting upgrade logs
+func (anth *anthos) stopLogCollector(logTicker *time.Ticker, logChan chan bool) {
+	log.Debugf("Stopping log collector at %t", time.Now())
+	logTicker.Stop()
+	logChan <- true
 }
 
 // getNodesSortByAge return sorted node list by their age
@@ -707,6 +843,38 @@ func getExecPath() (string, error) {
 	envPath := strings.TrimSpace(string(execPath))
 	return fmt.Sprintf("PATH=%s:%s:%s", curWkDir, envPath, gcloudExecPath), nil
 
+}
+
+func (anth *anthos) DeleteNode(node node.Node) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteNode()",
+	}
+}
+
+func (anth *anthos) GetZones() ([]string, error) {
+	// TODO: Add implementation
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetZones()",
+	}
+}
+
+func (anth *anthos) GetASGClusterSize() (int64, error) {
+	// TODO: Add implementation
+	return 0, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetASGClusterSize()",
+	}
+}
+
+func (anth *anthos) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetASGClusterSize()",
+	}
 }
 
 // init registering anthos sheduler

@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bufio"
+	context1 "context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
@@ -9,84 +10,72 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node/gke"
 
-	optest "github.com/libopenstorage/operator/pkg/util/test"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	"github.com/devans10/pugo/flasharray"
 
-	kubevirtv1 "kubevirt.io/api/core/v1"
-
-	"math/rand"
-	"net/http"
-	"regexp"
-	"runtime"
-
-	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"go.uber.org/multierr"
-
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"golang.org/x/sync/errgroup"
-
-	"github.com/pborman/uuid"
-	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/asyncdr"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
-	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 
 	"io/ioutil"
+	"math/rand"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"reflect"
+	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/portworx/torpedo/pkg/s3utils"
-
-	storageapi "k8s.io/api/storage/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
+	"cloud.google.com/go/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
-
+	"github.com/Masterminds/semver/v3"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/hashicorp/go-version"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/sched"
+	pxapi "github.com/libopenstorage/operator/api/px"
+	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
+	optest "github.com/libopenstorage/operator/pkg/util/test"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+	"github.com/pborman/uuid"
+	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/kubevirt"
+	"github.com/portworx/sched-ops/k8s/operator"
+	policyops "github.com/portworx/sched-ops/k8s/policy"
+	k8sStorage "github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/sched-ops/k8s/stork"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/monitor"
-	"github.com/portworx/torpedo/drivers/node"
-	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/jirautils"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/portworx/torpedo/pkg/pureutils"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/sirupsen/logrus"
+	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
+	"go.uber.org/multierr"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"gopkg.in/natefinch/lumberjack.v2"
+	yaml "gopkg.in/yaml.v2"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsapi "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -97,20 +86,46 @@ import (
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	storageapi "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	rest "k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
-	// import aks driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/aks"
+	"github.com/portworx/torpedo/drivers"
+	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
+	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
+	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/monitor"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/pds"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	appUtils "github.com/portworx/torpedo/drivers/utilities"
+	"github.com/portworx/torpedo/drivers/volume"
+	torpedovolume "github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/asyncdr"
+	"github.com/portworx/torpedo/pkg/jirautils"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/pureutils"
+	"github.com/portworx/torpedo/pkg/s3utils"
+	"github.com/portworx/torpedo/pkg/stats"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
+	"github.com/portworx/torpedo/pkg/units"
+
+	// import ssh driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/node/ssh"
 
 	// import backup driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/backup/portworx"
 	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aws"
-	// import gke driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/gke"
 	// import vsphere driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/vsphere"
 	// import ibm driver to invoke it's init
@@ -129,10 +144,23 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 
-	// import scheduler drivers to invoke it's init
+	// import ocp scheduler driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
-	rke "github.com/portworx/torpedo/drivers/scheduler/rke"
-	"github.com/portworx/torpedo/drivers/volume"
+
+	// import aks scheduler driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/aks"
+
+	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/eks"
+
+	// import gke scheduler driver to invoke it's init
+	"github.com/portworx/torpedo/drivers/scheduler/gke"
+	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
+
+	_ "github.com/portworx/torpedo/drivers/scheduler/oke"
+
+	// import rke scheduler drivers to invoke it's init
+	"github.com/portworx/torpedo/drivers/scheduler/rke"
 
 	// import portworx driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
@@ -161,14 +189,11 @@ import (
 	// import ibm driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ibm"
 
+	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/iks"
+
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
-
-	context1 "context"
-
-	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
-	"gopkg.in/natefinch/lumberjack.v2"
-	yaml "gopkg.in/yaml.v2"
 )
 
 const (
@@ -187,6 +212,16 @@ var (
 	clusterProviders       = []string{"k8s"}
 	GlobalCredentialConfig backup.BackupCloudConfig
 	GlobalGkeSecretString  string
+)
+
+var (
+	NamespaceAppWithDataMap    = make(map[string][]appDriver.ApplicationDriver)
+	IsReplacePolicySetToDelete = false // To check if the policy in the test is set to delete - Skip data continuity validation in this case
+)
+
+var (
+	// PDBValidationMinOpVersion specifies the minimum PX Operator version required to enable PDB validation in the UpgradeCluster
+	PDBValidationMinOpVersion, _ = version.NewVersion("24.1.0-")
 )
 
 type OwnershipAccessType int32
@@ -239,6 +274,7 @@ const (
 	backupScheduleScaleName              = "-scale"
 	configMapName                        = "kubeconfigs"
 	pxNamespace                          = "kube-system"
+	scaleAppTimeoutFlag                  = "scale-app-timeout"
 
 	pxbackupDeploymentName             = "px-backup"
 	pxbackupDeploymentNamespace        = "px-backup"
@@ -281,6 +317,7 @@ const (
 	anthosInstPathCliFlag            = "anthos-inst-path"
 	skipSystemCheckCliFlag           = "torpedo-skip-system-checks"
 	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
+	faSecretCliFlag                  = "fa-secret"
 )
 
 // Dashboard params
@@ -345,6 +382,7 @@ const (
 	defaultTorpedoJob                     = "torpedo-job"
 	defaultTorpedoJobType                 = "functional"
 	labelNameKey                          = "name"
+	serviceURL                            = "https://us-east.iaas.cloud.ibm.com/v1"
 )
 
 const (
@@ -375,7 +413,126 @@ const (
 	pxctlCDListCmd = "pxctl cd list"
 )
 
+const (
+	IBMHelmRepoName   = "ibm-helm-portworx"
+	IBMHelmRepoURL    = "https://raw.githubusercontent.com/portworx/ibm-helm/master/repo/stable"
+	IBMHelmValuesFile = "/tmp/values.yaml"
+)
+
+const (
+	ValidateStorageClusterTimeout = 40 * time.Minute
+)
+
+// LabLabel used to name the licensing features
+type LabLabel string
+
+const (
+	IBMTestLicenseSKU   = "PX-Enterprise IBM Cloud (test)"
+	IBMTestLicenseDRSKU = "PX-Enterprise IBM Cloud DR (test)"
+	IBMProdLicenseSKU   = "PX-Enterprise IBM Cloud"
+	IBMProdLicenseDRSKU = "PX-Enterprise IBM Cloud DR"
+)
+
+const (
+	// LabNodes - Number of nodes maximum
+	LabNodes LabLabel = "Nodes"
+	// LabVolumeSize - Volume capacity [TB] maximum
+	LabVolumeSize LabLabel = "VolumeSize"
+	// LabVolumes - Number of volumes per cluster maximum
+	LabVolumes LabLabel = "Volumes"
+	// LabSnapshots - Number of snapshots per volume maximum
+	LabSnapshots LabLabel = "Snapshots"
+	// LabHaLevel - Volume replica count
+	LabHaLevel LabLabel = "HaLevel"
+	// LabSharedVol - Shared volumes
+	LabSharedVol LabLabel = "SharedVolume"
+	// LabEncryptedVol - BYOK data encryption
+	LabEncryptedVol LabLabel = "EncryptedVolume"
+	// LabScaledVol - Volume sets
+	LabScaledVol LabLabel = "ScaledVolume"
+	// LabAggregatedVol - Storage aggregation
+	LabAggregatedVol LabLabel = "AggregatedVolume"
+	// LabResizeVolume - Resize volumes on demand
+	LabResizeVolume LabLabel = "ResizeVolume"
+	// LabCloudSnap - Snapshot to object store [CloudSnap]
+	LabCloudSnap LabLabel = "SnapshotToObjectStore"
+	// LabCloudSnapDaily - Number of CloudSnaps daily per volume maximum
+	LabCloudSnapDaily LabLabel = "SnapshotToObjectStoreDaily"
+	// LabCloudMigration -Cluster-level migration [Kube-motion/Data Migration]
+	LabCloudMigration LabLabel = "CloudMigration"
+	// LabDisasterRecovery - Disaster Recovery [PX-DR]
+	LabDisasterRecovery LabLabel = "DisasterRecovery"
+	// LabAUTCapacityMgmt - Autopilot Capacity Management
+	LabAUTCapacityMgmt LabLabel = "AUTCapacityManagement"
+	// LabPlatformBare - Bare-metal hosts
+	LabPlatformBare LabLabel = "EnablePlatformBare"
+	// LabPlatformVM - Virtual machine hosts
+	LabPlatformVM LabLabel = "EnablePlatformVM"
+	// LabNodeCapacity - Node disk capacity [TB] maximum
+	LabNodeCapacity LabLabel = "NodeCapacity"
+	// LabNodeCapacityExtend - Node disk capacity extension
+	LabNodeCapacityExtend LabLabel = "NodeCapacityExtension"
+	// LabLocalAttaches - Number of attached volumes per node maximum
+	LabLocalAttaches LabLabel = "LocalVolumeAttaches"
+	// LabOIDCSecurity - OIDC Security
+	LabOIDCSecurity LabLabel = "OIDCSecurity"
+	// LabGlobalSecretsOnly - Limit BYOK encryption to cluster-wide secrets
+	LabGlobalSecretsOnly LabLabel = "GlobalSecretsOnly"
+	// LabFastPath - FastPath extension [PX-FAST]
+	LabFastPath LabLabel = "FastPath"
+	// UnlimitedNumber represents the unlimited number of licensed resource.
+	// note - the max # Flex counts handle, is actually 999999999999999990
+	UnlimitedNumber = int64(0x7FFFFFFF) // C.FLX_FEATURE_UNCOUNTED_VALUE = 0x7FFFFFFF  (=2147483647)
+	Unlimited       = int64(0x7FFFFFFFFFFFFFFF)
+
+	// -- Testing maximums below
+
+	// MaxNumNodes is a maximum nodes in a cluster
+	MaxNumNodes = int64(1000)
+	// MaxNumVolumes is a maximum number of volumes in a cluster
+	MaxNumVolumes = int64(100000)
+	// MaxVolumeSize is a maximum volume size for single volume [in TB]
+	MaxVolumeSize = int64(40)
+	// MaxNodeCapacity defines the maximum node's disk capacity [in TB]
+	MaxNodeCapacity = int64(256)
+	// MaxLocalAttachCount is a maximum number of local volume attaches
+	MaxLocalAttachCount = int64(256)
+	// MaxHaLevel is a maximum replication factor
+	MaxHaLevel = int64(3)
+	// MaxNumSnapshots is a maximum number of snapshots
+	MaxNumSnapshots = int64(64)
+)
+
+var (
+	IBMLicense = map[LabLabel]interface{}{
+		LabNodes:              &pxapi.LicensedFeature_Count{Count: 1000},
+		LabVolumeSize:         &pxapi.LicensedFeature_CapacityTb{CapacityTb: 40},
+		LabVolumes:            &pxapi.LicensedFeature_Count{Count: 16384},
+		LabHaLevel:            &pxapi.LicensedFeature_Count{Count: MaxHaLevel},
+		LabSnapshots:          &pxapi.LicensedFeature_Count{Count: 64},
+		LabAggregatedVol:      &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabSharedVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabEncryptedVol:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabGlobalSecretsOnly:  &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabScaledVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabResizeVolume:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnap:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnapDaily:     &pxapi.LicensedFeature_Count{Count: Unlimited},
+		LabCloudMigration:     &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabDisasterRecovery:   &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabPlatformBare:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabPlatformVM:         &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabNodeCapacity:       &pxapi.LicensedFeature_CapacityTb{CapacityTb: 256},
+		LabNodeCapacityExtend: &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabLocalAttaches:      &pxapi.LicensedFeature_Count{Count: 256},
+		LabOIDCSecurity:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabAUTCapacityMgmt:    &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabFastPath:           &pxapi.LicensedFeature_Enabled{Enabled: false},
+	}
+)
+
 var pxRuntimeOpts string
+var pxClusterOpts string
 var PxBackupVersion string
 
 var (
@@ -428,11 +585,12 @@ var (
 )
 
 var (
-	includeResourcesFlag  = true
-	includeVolumesFlag    = true
-	startApplicationsFlag = true
-	tempDir               = "/tmp"
-	migrationList         []*storkapi.Migration
+	includeResourcesFlag        = true
+	includeVolumesFlag          = true
+	startApplicationsFlag       = true
+	tempDir                     = "/tmp"
+	bidirectionalClusterPairDir = "bidirectional-cluster-pair"
+	migrationList               []*storkapi.Migration
 )
 
 var (
@@ -565,6 +723,44 @@ func InitInstance() {
 	if pxVersion != "" {
 		t.Tags["px-version"] = pxVersion
 	}
+
+	PrintPxctlStatus()
+	ns, err := Inst().V.GetVolumeDriverNamespace()
+	log.FailOnError(err, "Error occured while getting volume driver namespace")
+	installGrafana(ns)
+	err = updatePxClusterOpts()
+	log.Errorf("%v", err)
+}
+
+func PrintPxctlStatus() {
+	PrintCommandOutput("pxctl status")
+}
+
+func PrintInspectVolume(volID string) {
+	PrintCommandOutput(fmt.Sprintf("pxctl volume inspect %s", volID))
+}
+
+func PrintCommandOutput(cmnd string) {
+	output, err := Inst().N.RunCommand(node.GetStorageNodes()[0], cmnd, node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	})
+	if err != nil {
+		log.Errorf("failed to run command [%s], Err: %v", cmnd, err)
+	}
+	log.Infof(output)
+
+}
+
+func PrintSvPoolStatus(node node.Node) {
+	output, err := runCmdGetOutput("pxctl sv pool show", node)
+	if err != nil {
+		log.Warnf("error getting pool data on node [%s], cause: %v", node.Name, err)
+		return
+	}
+	log.Infof(output)
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -613,7 +809,7 @@ func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
 		}
 	}()
 
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		stepLog := fmt.Sprintf("check health status of %s app", ctx.App.Key)
 
 		Step(stepLog, func() {
@@ -632,6 +828,39 @@ func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
 	})
 }
 
+func IsPoolAddDiskSupported() bool {
+	DMthin, err := IsDMthin()
+	log.FailOnError(err, "Error occured while checking if DMthin is enabled")
+	if DMthin {
+		dmthinSupportedPxVersion, px_err := semver.NewVersion("3.1.0")
+		if px_err != nil {
+			log.FailOnError(px_err, "Error occured :%s")
+		}
+		driverVersion, version_err := Inst().V.GetDriverVersion()
+		if version_err != nil {
+			log.FailOnError(version_err, "Error occured while fetching current version")
+		}
+		var new_trimmedVersion string
+		parts := strings.Split(driverVersion, "-")
+		trimmedVersion := strings.Split(parts[0], ".")
+		if len(trimmedVersion) > 3 {
+			new_trimmedVersion = strings.Join(trimmedVersion[:3], ".")
+		} else {
+			new_trimmedVersion = parts[0]
+		}
+		currentPxVersionOnCluster, semver_err := semver.NewVersion(new_trimmedVersion)
+		if semver_err != nil {
+			log.FailOnError(semver_err, "Error occured while comparing the current and expected version")
+		}
+		log.InfoD(fmt.Sprintf("The current version on the cluster is :%s", currentPxVersionOnCluster))
+		if currentPxVersionOnCluster.GreaterThan(dmthinSupportedPxVersion) {
+			log.Errorf("drive add to existing pool not supported for px-storev2 or px-cache pools as the current version is:%s", currentPxVersionOnCluster)
+			return false
+		}
+	}
+	return true
+}
+
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	defer func() {
@@ -639,17 +868,23 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
 		log.InfoD(fmt.Sprintf("Validating %s app", ctx.App.Key))
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
-		if ctx.ReadinessTimeout == time.Duration(0) {
+		if Inst().ScaleAppTimeout != time.Duration(0) {
+			timeout = Inst().ScaleAppTimeout
+		} else if ctx.ReadinessTimeout == time.Duration(0) {
 			timeout = appScaleFactor * defaultTimeout
 		} else {
 			timeout = appScaleFactor * ctx.ReadinessTimeout
 		}
 
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
+			// In case of tektoncd skip the volume validation as the pods are created through jobs and not deployments or sts
+			if strings.Contains(ctx.App.Key, "tektoncd") {
+				ctx.SkipVolumeValidation = true
+			}
 			if !ctx.SkipVolumeValidation {
 				log.InfoD(fmt.Sprintf("Validating %s app's volumes", ctx.App.Key))
 				ValidateVolumes(ctx, errChan...)
@@ -688,9 +923,18 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 			log.InfoD(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key))
 
-			vols, err := Inst().S.GetVolumes(ctx)
-			// Fixing issue where it is priniting nil
-			if err != nil {
+			var vols []*volume.Volume
+			var err error
+			t := func() (interface{}, bool, error) {
+				vols, err = Inst().S.GetVolumes(ctx)
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+
+			if _, err = task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
+				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
 				processError(err, errChan...)
 			}
 
@@ -706,10 +950,59 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 		})
 
-		Step("Validate Px pod restart count", func() {
-			ValidatePxPodRestartCount(ctx, errChan...)
-		})
+		// Validating px pod restart count only for portworx volume driver
+		if Inst().V.String() == "pxd" {
+			Step("Validate Px pod restart count", func() {
+				ValidatePxPodRestartCount(ctx, errChan...)
+			})
+		}
 	})
+}
+
+func ValidatePDB(pdbValue int, allowedDisruptions int, initialNumNodes int, isClusterParallelyUpgraded *bool, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+
+	currentPdbValue, _ := GetPDBValue()
+	if currentPdbValue == -1 {
+		err := fmt.Errorf("failed to get PDB value")
+		processError(err, errChan...)
+	}
+	Step("Validate PDB minAvailable for px storage", func() {
+		if currentPdbValue != pdbValue {
+			err := fmt.Errorf("PDB minAvailable value has changed. Expected: %d, Actual: %d", pdbValue, currentPdbValue)
+			processError(err, errChan...)
+		}
+	})
+	Step("Validate number of disruptions ", func() {
+		nodes, err := Inst().V.GetDriverNodes()
+		if err != nil {
+			processError(err, errChan...)
+		}
+		currentNumNodes := len(nodes)
+		if allowedDisruptions < initialNumNodes-currentNumNodes {
+			err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
+			processError(err, errChan...)
+		}
+		if initialNumNodes-currentNumNodes > 1 {
+			*isClusterParallelyUpgraded = true
+		}
+	})
+}
+
+func GetPDBValue() (int, int) {
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		return -1, -1
+	}
+	pdb, err := policyops.Instance().GetPodDisruptionBudget("px-storage", stc.Namespace)
+	if err != nil {
+		return -1, -1
+	}
+	return pdb.Spec.MinAvailable.IntValue(), int(pdb.Status.DisruptionsAllowed)
 }
 
 func ValidatePureCloudDriveTopologies() error {
@@ -792,7 +1085,7 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			close(*errChan[0])
 		}
 	}()
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
 		var isRaw bool
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -910,7 +1203,7 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 			close(*errChan[0])
 		}
 	}()
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 		if ctx.ReadinessTimeout == time.Duration(0) {
@@ -999,11 +1292,19 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 
 // ValidateVolumes is the ginkgo spec for validating volumes of a context
 func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an app's volumes", func() {
+	Step("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
-			vols, err := Inst().S.GetVolumes(ctx)
-			if err != nil {
+			var vols []*volume.Volume
+			t := func() (interface{}, bool, error) {
+				vols, err = Inst().S.GetVolumes(ctx)
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+
+			if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
 				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
 				processError(err, errChan...)
 			}
@@ -1060,7 +1361,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 
 // ValidatePureSnapshotsSDK is the ginkgo spec for validating Pure direct access volume snapshots using API for a context
 func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an app's volumes", func() {
+	Step("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1115,7 +1416,7 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 
 // ValidatePureVolumesPXCTL is the ginkgo spec for validating FA/FB DA volumes using PXCTL for a context
 func ValidatePureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an app's volumes", func() {
+	Step("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1140,7 +1441,7 @@ func ValidatePureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
 
 // ValidatePureSnapshotsPXCTL is the ginkgo spec for validating FADA volume snapshots using PXCTL for a context
 func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an app's volumes", func() {
+	Step("For validation of an app's volumes", func() {
 		var (
 			err  error
 			vols map[string]map[string]string
@@ -1182,7 +1483,7 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 
 // ValidateResizePurePVC is the ginkgo spec for validating resize of volumes
 func ValidateResizePurePVC(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an resizing pvc", func() {
+	Step("For validation of an resizing pvc", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1207,7 +1508,7 @@ func ValidateResizePurePVC(ctx *scheduler.Context, errChan ...*chan error) {
 
 // ValidatePureVolumeNoReplicaSet is the ginko spec for validating empty replicaset for pure volumes
 func ValidatePureVolumeNoReplicaSet(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an resizing pvc", func() {
+	Step("For validation of an resizing pvc", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1228,7 +1529,7 @@ func ValidatePureVolumeNoReplicaSet(ctx *scheduler.Context, errChan ...*chan err
 
 // ValidatePureVolumeStatisticsDynamicUpdate is the ginkgo spec for validating dynamic update of byteUsed statistic for pure volumes
 func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of a resizing pvc", func() {
+	Step("For validation of a resizing pvc", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1258,8 +1559,9 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 			err = osutils.Kubectl(cmdArgs)
 			processError(err, errChan...)
 			fmt.Println("sleeping to let volume usage get reflected")
-			// wait until the backends size is reflected before making the REST call
-			time.Sleep(time.Minute * 2)
+
+			// wait until the backends size is reflected before making the REST call, Max time for FBDA Update is 15 min
+			time.Sleep(time.Minute * 16)
 
 			byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
 			fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
@@ -1270,7 +1572,7 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 
 // ValidateCSISnapshotAndRestore is the ginkgo spec for validating actually creating a FADA snapshot, restoring and verifying the content
 func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an snapshot and restoring", func() {
+	Step("For validation of an snapshot and restoring", func() {
 		var err error
 		timestamp := strconv.Itoa(int(time.Now().Unix()))
 		snapShotClassName := PureSnapShotClass + "-" + timestamp
@@ -1321,7 +1623,7 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 
 // ValidateCSIVolumeClone is the ginkgo spec for cloning a volume and verifying the content
 func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an cloning", func() {
+	Step("For validation of an cloning", func() {
 		var err error
 		var vols []*volume.Volume
 		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
@@ -1351,7 +1653,7 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 
 // ValidatePureVolumeLargeNumOfClones is the ginkgo spec for restoring a snapshot to many volumes
 func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an restoring large number of volumes from a snapshot", func() {
+	Step("For validation of an restoring large number of volumes from a snapshot", func() {
 		var err error
 		timestamp := strconv.Itoa(int(time.Now().Unix()))
 		snapShotClassName := PureSnapShotClass + "." + timestamp
@@ -1390,7 +1692,7 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 
 // ValidatePoolExpansionWithPureVolumes is the ginkgo spec for executing a pool expansion when FA/FB volumes is attached
 func ValidatePoolExpansionWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an expanding storage pools while FA/FB volumes are attached", func() {
+	Step("For validation of an expanding storage pools while FA/FB volumes are attached", func() {
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		if err != nil {
 			err = fmt.Errorf("error getting storage pools list. Err: %v", err)
@@ -1435,10 +1737,18 @@ func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*cha
 			log.FailOnError(err, " Error Occured while getting storage class for pvc %s", pvcObj)
 		}
 		if strings.Contains(strings.Join(sc.MountOptions, ""), "nosuid") {
-			attachedNode, err := Inst().V.GetNodeForVolume(vol, defaultCmdTimeout*3, defaultCmdRetryInterval)
-			log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
-			err = Inst().V.ValidatePureFaFbMountOptions(vol.ID, requiredMountOptions, attachedNode)
-			dash.VerifySafely(err, nil, "Testing mount options are properly applied on pure volumes")
+			// Ignore mount path check if the volume type is purefile, https://purestorage.atlassian.net/issues/PWX-37040
+			isPureFile, err := Inst().V.IsPureFileVolume(vol)
+			log.FailOnError(err, "Failed to get details about PureFile")
+			log.Infof("Given Volume is [%v] and PureFile [%v]", vol.Name, isPureFile)
+
+			if !isPureFile {
+				attachedNode, err := Inst().V.GetNodeForVolume(vol, defaultCmdTimeout*3, defaultCmdRetryInterval)
+				log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
+
+				err = Inst().V.ValidatePureFaFbMountOptions(vol.ID, requiredMountOptions, attachedNode)
+				dash.VerifySafely(err, nil, "Testing mount options are properly applied on pure volumes")
+			}
 		} else {
 			log.Infof("There is no nosuid mount option in this volume %s", vol)
 		}
@@ -1464,23 +1774,28 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 			processError(err, errChan...)
 		}
 
-		attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
-		if err != nil {
-			err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
-			processError(err, errChan...)
-		}
-		if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
-			FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
-			if ok {
-				err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType, attachedNode)
-				dash.VerifySafely(err, nil, "File system create options specified in the storage class are properly applied to the pure volumes")
-			} else {
-				log.Infof("Storage class doesn't have key 'csi.storage.k8s.io/fstype' in parameters")
-			}
-		} else {
-			log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
-		}
+		isPureFile, err := Inst().V.IsPureFileVolume(v)
+		log.FailOnError(err, "Failed to get details about PureFile")
+		log.Infof("Given Volume is [%v] and PureFile [%v]", v.Name, isPureFile)
 
+		if !isPureFile {
+			attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
+			if err != nil {
+				err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
+				processError(err, errChan...)
+			}
+			if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
+				FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
+				if ok {
+					err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType, attachedNode)
+					dash.VerifySafely(err, nil, "File system create options specified in the storage class are properly applied to the pure volumes")
+				} else {
+					log.Infof("Storage class doesn't have key 'csi.storage.k8s.io/fstype' in parameters")
+				}
+			} else {
+				log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
+			}
+		}
 	}
 }
 
@@ -1541,7 +1856,7 @@ func ValidateRestoredApplications(contexts []*scheduler.Context, volumeParameter
 	volOptsMap[SkipClusterScopedObjects] = true
 
 	for _, ctx := range contexts {
-		ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+		Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 
 			Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 				appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1619,7 +1934,7 @@ func ValidateFastpathVolume(ctx *scheduler.Context, expectedStatus opsapi.Fastpa
 // StorageClass has to be deleted last because it has information that is required for when deleting PVC, if StorageClass objects are deleted before
 // deleting PVCs, especially with CSI + Auth enabled, PVC deletion will fail as Auth params are stored inside StorageClass objects
 func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
-	context("For tearing down of an app context", func() {
+	Step("For tearing down of an app context", func() {
 		var err error
 		var originalSkipClusterScopedObjects bool
 
@@ -1649,7 +1964,8 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		})
 
 		if !ctx.SkipVolumeValidation {
-			ValidateVolumesDeleted(ctx.App.Key, vols)
+			err = ValidateVolumesDeleted(ctx.App.Key, vols)
+			log.FailOnError(err, "Failed to delete volumes for app %s", ctx.App.Key)
 		}
 
 		// Delete Cluster Scope objects
@@ -1687,23 +2003,32 @@ func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*
 }
 
 // ValidateVolumesDeleted checks it given volumes got deleted
-func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
+func ValidateVolumesDeleted(appName string, vols []*volume.Volume) error {
 	for _, vol := range vols {
+		var err error
 		Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
 			appName, vol.Name), func() {
 			log.InfoD("validate %s app's volume %s has been deleted in the volume driver",
 				appName, vol.Name)
-			err := Inst().V.ValidateDeleteVolume(vol)
-			log.FailOnError(err, fmt.Sprintf("%s's volume %s deletion failed", appName, vol.Name))
-			dash.VerifyFatal(err, nil, fmt.Sprintf("%s's volume %s deleted successfully?", appName, vol.Name))
+			err = Inst().V.ValidateDeleteVolume(vol)
+			if err != nil {
+				log.Errorf(fmt.Sprintf("%s's volume %s deletion failed", appName, vol.Name))
+				return
+			}
+
 		})
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // DeleteVolumesAndWait deletes volumes of given context and waits till they are deleted
-func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.VolumeOptions) {
+func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.VolumeOptions) error {
 	vols := DeleteVolumes(ctx, options)
-	ValidateVolumesDeleted(ctx.App.Key, vols)
+	err := ValidateVolumesDeleted(ctx.App.Key, vols)
+	return err
 }
 
 // GetAppNamespace returns namespace in which context is created
@@ -1821,6 +2146,33 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	return contexts
 }
 
+// ScheduleApplicationsWithScheduleOptions schedules *the* applications taking scheduleOptions as input and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
+func ScheduleApplicationsWithScheduleOptions(testname string, appSpec string, provisioner string, errChan ...*chan error) []*scheduler.Context {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	var contexts []*scheduler.Context
+	var taskName string
+	var err error
+	options := scheduler.ScheduleOptions{
+		AppKeys:            []string{appSpec},
+		StorageProvisioner: provisioner,
+	}
+	taskName = fmt.Sprintf("%s", testname)
+	contexts, err = Inst().S.Schedule(taskName, options)
+	// Need to check err != nil before calling processError
+	if err != nil {
+		processError(err, errChan...)
+	}
+	if len(contexts) == 0 {
+		processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
+	}
+
+	return contexts
+}
+
 // ScheduleApplicationsOnNamespace ScheduleApplications schedules *the* applications and returns
 // the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
 func ScheduleApplicationsOnNamespace(namespace string, testname string, errChan ...*chan error) []*scheduler.Context {
@@ -1902,6 +2254,71 @@ func ValidateApplications(contexts []*scheduler.Context) {
 	})
 }
 
+// ValidateApplicationsStartData validates applications and start continous data injection to the same
+
+func ValidateApplicationsStartData(contexts []*scheduler.Context, context context1.Context) (chan string, *errgroup.Group) {
+
+	log.Infof("Is backup longevity run [%v]", IsBackupLongevityRun)
+	// Skipping map reset in case of longevity run
+	if !IsBackupLongevityRun {
+		// Resetting the global map before starting the new App Validations
+		NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
+	}
+
+	log.InfoD("Validate applications")
+	for _, ctx := range contexts {
+		ValidateContext(ctx)
+		appInfo, err := appUtils.ExtractConnectionInfo(ctx, context)
+		if err != nil {
+			log.InfoD("Some error occurred - [%s]", err)
+		}
+		log.InfoD("App Info - [%+v]", appInfo)
+		if context == nil {
+			log.Warnf("App Context is not proper - [%v]", context)
+			continue
+		}
+		if appInfo.StartDataSupport {
+			appHandler, err := appDriver.GetApplicationDriver(
+				appInfo.AppType,
+				appInfo.Hostname,
+				appInfo.User,
+				appInfo.Password,
+				appInfo.Port,
+				appInfo.DBName,
+				appInfo.NodePort,
+				appInfo.Namespace,
+				appInfo.IPAddress,
+				Inst().N)
+			if err != nil {
+				log.Infof("Error - %s", err.Error())
+			}
+			if appInfo.AppType == appType.Kubevirt && appInfo.StartDataSupport {
+				err = appHandler.WaitForVMToBoot()
+				log.FailOnError(err, "Some error occured while starting the VM")
+			}
+			log.InfoD("App handler created for [%s]", appInfo.Hostname)
+			NamespaceAppWithDataMap[appInfo.Namespace] = append(NamespaceAppWithDataMap[appInfo.Namespace], appHandler)
+		}
+	}
+
+	controlChannel := make(chan string)
+	errGroup := errgroup.Group{}
+
+	for _, allhandler := range NamespaceAppWithDataMap {
+		for _, handler := range allhandler {
+			currentHandler := handler
+			errGroup.Go(func() error {
+				err := currentHandler.StartData(controlChannel, context)
+				return err
+			})
+		}
+	}
+
+	log.InfoD("Channel - [%v], errGroup - [%v]", controlChannel, &errGroup)
+
+	return controlChannel, &errGroup
+}
+
 // StartVolDriverAndWait starts volume driver on given app nodes
 func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 	defer func() {
@@ -1909,10 +2326,10 @@ func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	context(fmt.Sprintf("starting volume driver %s", Inst().V.String()), func() {
+	Step(fmt.Sprintf("starting volume driver %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("start volume driver on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.Infof(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.StartDriver(n)
 				processError(err, errChan...)
@@ -1921,7 +2338,7 @@ func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 
 		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.Infof(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -1939,17 +2356,17 @@ func StopVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	context(fmt.Sprintf("stopping volume driver %s", Inst().V.String()), func() {
+	Step(fmt.Sprintf("stopping volume driver %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("stop volume driver on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.Infof(stepLog)
 			err := Inst().V.StopDriver(appNodes, false, nil)
 			processError(err, errChan...)
 		})
 
 		stepLog = fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.Infof(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverDownOnNode(n)
 				processError(err, errChan...)
@@ -1966,7 +2383,7 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	context(fmt.Sprintf("crashing volume driver %s", Inst().V.String()), func() {
+	Step(fmt.Sprintf("crashing volume driver %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("crash volume driver on nodes: %v", appNodes)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -1976,7 +2393,7 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 
 		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -1993,7 +2410,7 @@ func CrashPXDaemonAndWait(appNodes []node.Node, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	context(fmt.Sprintf("crashing px daemon %s", Inst().V.String()), func() {
+	Step(fmt.Sprintf("crashing px daemon %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("crash px daemon  on nodes: %v", appNodes)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -2038,6 +2455,50 @@ func DestroyApps(contexts []*scheduler.Context, opts map[string]bool) {
 			TearDownContext(ctx, opts)
 		}
 	})
+}
+
+// DestroyApps destroy applications with data validation
+func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, controlChannel chan string, errGroup *errgroup.Group) error {
+
+	defer ginkgo.GinkgoRecover()
+	var allErrors string
+
+	log.InfoD("Validating apps data continuity")
+
+	// Stopping all data flow to apps
+
+	for _, appList := range NamespaceAppWithDataMap {
+		for range appList {
+			controlChannel <- "Stop"
+		}
+	}
+
+	if err := errGroup.Wait(); err != nil {
+		allErrors += err.Error()
+	}
+
+	close(controlChannel)
+
+	log.InfoD("Destroying apps")
+	for _, ctx := range contexts {
+		// In case of tektoncd skip the volume validation
+		if Contains(Inst().AppList, "tektoncd") {
+			ctx.SkipVolumeValidation = true
+		}
+		TearDownContext(ctx, opts)
+	}
+
+	if allErrors != "" {
+		if IsReplacePolicySetToDelete {
+			log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
+			IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
+			return nil
+		} else {
+			return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
+		}
+	}
+
+	return nil
 }
 
 // AddLabelsOnNode adds labels on the node
@@ -2259,7 +2720,7 @@ func TogglePrometheusInStc() error {
 
 // ValidatePxPodRestartCount validates portworx restart count
 func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
-	context("Validating portworx pods restart count ...", func() {
+	Step("Validating portworx pods restart count ...", func() {
 		Step("Getting current restart counts for portworx pods and matching", func() {
 			pxLabel := make(map[string]string)
 			pxLabel[labelNameKey] = defaultStorageProvisioner
@@ -2302,8 +2763,8 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 
 // DescribeNamespace takes in the scheduler contexts and describes each object within the test context.
 func DescribeNamespace(contexts []*scheduler.Context) {
-	context("generating namespace info...", func() {
-		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentGinkgoTestDescription().TestText), func() {
+	Step("generating namespace info...", func() {
+		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentSpecReport().LeafNodeText), func() {
 			for _, ctx := range contexts {
 				filename := fmt.Sprintf("%s/%s-%s.namespace.log", defaultBundleLocation, ctx.App.Key, ctx.UID)
 				namespaceDescription, err := Inst().S.Describe(ctx)
@@ -2321,41 +2782,44 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 // ValidateClusterSize validates number of storage nodes in given cluster
 // using total cluster size `count` and max_storage_nodes_per_zone
 func ValidateClusterSize(count int64) {
-	zones, err := Inst().N.GetZones()
+	zones, err := Inst().S.GetZones()
 	log.FailOnError(err, "Zones empty")
 	log.InfoD("ASG is running in [%+v] zones\n", zones)
-	perZoneCount := count / int64(len(zones))
+
+	volDriverSpec, err := Inst().V.GetDriver()
+	log.FailOnError(err, "error getting storage cluster volDriverSpec")
+	perZoneCount := *volDriverSpec.Spec.CloudStorage.MaxStorageNodesPerZone
 
 	// Validate total node count
-	currentNodeCount, err := Inst().N.GetASGClusterSize()
+	currentNodeCount, err := Inst().S.GetASGClusterSize()
 	log.FailOnError(err, "Failed to Get ASG Cluster Size")
 
-	dash.VerifyFatal(currentNodeCount, perZoneCount*int64(len(zones)), "ASG cluster size is as expected?")
+	dash.VerifyFatal(currentNodeCount, count, "ASG cluster size is as expected?")
 
 	// Validate storage node count
-	var expectedStorageNodesPerZone int
-	if Inst().MaxStorageNodesPerAZ <= int(perZoneCount) {
-		expectedStorageNodesPerZone = Inst().MaxStorageNodesPerAZ
-	} else {
-		expectedStorageNodesPerZone = int(perZoneCount)
+	totalStorageNodesAllowed := int(perZoneCount) * len(zones)
+	expectedStoragesNodes := totalStorageNodesAllowed
+
+	if totalStorageNodesAllowed > int(count) {
+		expectedStoragesNodes = int(count)
 	}
 	storageNodes := node.GetStorageNodes()
-	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones), "Storage nodes matches the expected number?")
+	dash.VerifyFatal(len(storageNodes), expectedStoragesNodes, "Storage nodes matches the expected number?")
 }
 
 // GetStorageNodes get storage nodes in the cluster
 func GetStorageNodes() ([]node.Node, error) {
 
-	storageNodes := []node.Node{}
+	var storageNodes []node.Node
 	nodes := node.GetStorageDriverNodes()
 
-	for _, node := range nodes {
-		devices, err := Inst().V.GetStorageDevices(node)
+	for _, n := range nodes {
+		devices, err := Inst().V.GetStorageDevices(n)
 		if err != nil {
 			return nil, err
 		}
 		if len(devices) > 0 {
-			storageNodes = append(storageNodes, node)
+			storageNodes = append(storageNodes, n)
 		}
 	}
 	return storageNodes, nil
@@ -2363,7 +2827,7 @@ func GetStorageNodes() ([]node.Node, error) {
 
 // CollectSupport creates a support bundle
 func CollectSupport() {
-	context("generating support bundle...", func() {
+	Step("generating support bundle...", func() {
 		log.InfoD("generating support bundle...")
 		skipStr := os.Getenv(envSkipDiagCollection)
 		skipSystemCheck := false
@@ -2479,7 +2943,7 @@ func runCmdWithNoSudo(cmd string, n node.Node) error {
 
 // PerformSystemCheck check if core files are present on each node
 func PerformSystemCheck() {
-	context("checking for core files...", func() {
+	Step("checking for core files...", func() {
 		log.Info("checking for core files...")
 		Step("verifying if core files are present on each node", func() {
 			log.InfoD("verifying if core files are present on each node")
@@ -2638,6 +3102,18 @@ func CloneSpec(spec interface{}) (interface{}, error) {
 		clone := *specObj
 		return &clone, nil
 	} else if specObj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.Pipeline); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.Task); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.PipelineRun); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.TaskRun); ok {
 		clone := *specObj
 		return &clone, nil
 	} else if specObj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
@@ -2890,6 +3366,26 @@ func UpdateNamespace(in interface{}, namespaceMapping map[string]string) error {
 			specObj.SetNamespace(namespace)
 		}
 		return nil
+	} else if specObj, ok := in.(*tektoncdv1.Pipeline); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
+	} else if specObj, ok := in.(*tektoncdv1.PipelineRun); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
+	} else if specObj, ok := in.(*tektoncdv1.Task); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
+	} else if specObj, ok := in.(*tektoncdv1.TaskRun); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
 	}
 
 	return fmt.Errorf("unsupported object while setting namespace: %v", reflect.TypeOf(in))
@@ -2983,6 +3479,14 @@ func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
 	} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.Task); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.Pipeline); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.PipelineRun); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.TaskRun); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
 	}
 
 	return "", "", "", fmt.Errorf("unsupported object while obtaining spec details: %v", reflect.TypeOf(specObj))
@@ -3038,9 +3542,9 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 // AfterEachTest runs collect support bundle after each test when it fails
 func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	testStatus := "Pass"
-	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
-	if ginkgoTestDescr.Failed {
-		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
+	currentSpecReport := ginkgo.CurrentSpecReport()
+	if currentSpecReport.Failed() {
+		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 		CollectSupport()
 		DescribeNamespace(contexts)
 		testStatus = "Fail"
@@ -3079,7 +3583,7 @@ func SetClusterContext(clusterConfigPath string) error {
 		return nil
 	}
 	log.InfoD("Switching context to [%s]", clusterConfigPathForLog)
-	provider := getClusterProvider()
+	provider := GetClusterProvider()
 	if clusterConfigPath != "" {
 		switch provider {
 		case drivers.ProviderGke:
@@ -3121,10 +3625,10 @@ func SetClusterContext(clusterConfigPath string) error {
 		if err != nil {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 		}
-	} else if gkeNodeDriver, ok := Inst().N.(*gke.Gke); ok {
-		err = ssh.RefreshDriver(&gkeNodeDriver.SSH)
+	} else if gkeSchedDriver, ok := Inst().S.(*gke.Gke); ok {
+		err = ssh.RefreshDriver(&gkeSchedDriver.SSH)
 		if err != nil {
-			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
+			return fmt.Errorf("failed to switch to context. RefreshDriver (gkeSchedDriver.SSH) Error: [%v]", err)
 		}
 	}
 
@@ -3166,6 +3670,14 @@ func SetDestinationKubeConfig() error {
 		return err
 	}
 	return SetClusterContext(destClusterConfigPath)
+}
+
+func SetCustomKubeConfig(clusterConfigIndex int) error {
+	customClusterConfigPath, err := GetCustomClusterConfigPath(clusterConfigIndex)
+	if err != nil {
+		return err
+	}
+	return SetClusterContext(customClusterConfigPath)
 }
 
 // ScheduleValidateClusterPair Schedule a clusterpair by creating a yaml file and validate it
@@ -3299,6 +3811,154 @@ func CreateClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig 
 	return addStorageOptions(pairInfo, clusterPairFileName)
 }
 
+func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string, mode string, sourceCluster int, destCluster int) (err error) {
+	//var token string
+	// Setting kubeconfig to source because we will create bidirectional cluster pair based on source as reference
+	err = SetCustomKubeConfig(sourceCluster)
+	if err != nil {
+		return err
+	}
+
+	// Create namespace for the cluster pair on source cluster
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cpNamespace,
+			Labels: map[string]string{
+				"creator": "stork-test",
+			},
+		},
+	})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return fmt.Errorf("Failed to create namespace %s on source cluster", cpNamespace)
+	}
+
+	srcKubeConfigPath, err := GetCustomClusterConfigPath(sourceCluster)
+	if err != nil {
+		return fmt.Errorf("Failed to get config path for source cluster")
+	}
+
+	defer func() {
+		var config *rest.Config
+		config, err = clientcmd.BuildConfigFromFlags("", srcKubeConfigPath)
+		if err != nil {
+			return
+		}
+		core.Instance().SetConfig(config)
+		apps.Instance().SetConfig(config)
+		stork.Instance().SetConfig(config)
+	}()
+
+	err = SetCustomKubeConfig(destCluster)
+	if err != nil {
+		return err
+	}
+
+	// Create namespace for the cluster pair on destination cluster
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cpNamespace,
+			Labels: map[string]string{
+				"creator": "stork-test",
+			},
+		},
+	})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return fmt.Errorf("Failed to create namespace %s on destination cluster", cpNamespace)
+	}
+
+	destKubeConfigPath, err := GetCustomClusterConfigPath(destCluster)
+	if err != nil {
+		return fmt.Errorf("Failed to get config path for destination cluster")
+	}
+
+	err = SetCustomKubeConfig(sourceCluster)
+	if err != nil {
+		return err
+	}
+
+	// Create source --> destination and destination --> cluster pairs using storkctl
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
+	cmdArgs := []string{"create", "clusterpair", "-n", cpNamespace, cpName,
+		"--kubeconfig", srcKubeConfigPath,
+		"--src-kube-file", srcKubeConfigPath,
+		"--dest-kube-file", destKubeConfigPath,
+	}
+
+	if mode == "sync-dr" {
+		cmdArgs = []string{"create", "clusterpair", "-n", cpNamespace, cpName,
+			"--kubeconfig", srcKubeConfigPath,
+			"--src-kube-file", srcKubeConfigPath,
+			"--dest-kube-file", destKubeConfigPath,
+			"--mode", "sync-dr",
+		}
+	}
+
+	if projectMappings != "" {
+		cmdArgs = append(cmdArgs, "--project-mappings")
+		cmdArgs = append(cmdArgs, projectMappings)
+	}
+
+	// Get external object store details and append to the command accordingily
+	if objectStoreType != "" {
+		// Get external object store details and append to the command accordingily
+		objectStoreArgs, err := getObjectStoreArgs(objectStoreType, secretName)
+		if err != nil {
+			return fmt.Errorf("failed to get  %s secret in configmap secret-config in default namespace", objectStoreType)
+		}
+		cmdArgs = append(cmdArgs, objectStoreArgs...)
+	}
+
+	cmd.SetArgs(cmdArgs)
+	log.InfoD("Following is the bidirectional command: %v", cmdArgs)
+	if err := cmd.Execute(); err != nil {
+		return fmt.Errorf("Creation of bidirectional cluster pair using storkctl failed: %v", err)
+	}
+
+	return nil
+}
+
+func getObjectStoreArgs(objectStoreType storkv1.BackupLocationType, secretName string) ([]string, error) {
+	var objectStoreArgs []string
+	secretData, err := core.Instance().GetSecret(secretName, "default")
+	if err != nil {
+		return objectStoreArgs, fmt.Errorf("error getting secret %s in default namespace: %v", secretName, err)
+	}
+	if objectStoreType == storkv1.BackupLocationS3 {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "s3",
+				"--s3-access-key", string(secretData.Data["accessKeyID"]),
+				"--s3-secret-key", string(secretData.Data["secretAccessKey"]),
+				"--s3-region", string(secretData.Data["region"]),
+				"--s3-endpoint", string(secretData.Data["endpoint"]),
+			}...)
+		if val, ok := secretData.Data["disableSSL"]; ok && string(val) == "true" {
+			objectStoreArgs = append(objectStoreArgs, "--disable-ssl")
+		}
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	} else if objectStoreType == storkv1.BackupLocationAzure {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "azure", "--azure-account-name", string(secretData.Data["storageAccountName"]),
+				"--azure-account-key", string(secretData.Data["storageAccountKey"])}...)
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	} else if objectStoreType == storkv1.BackupLocationGoogle {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "google", "--google-project-id", string(secretData.Data["projectID"]), "--google-key-file-path", string(secretData.Data["accountKey"])}...)
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	}
+
+	return objectStoreArgs, nil
+}
+
 func addStorageOptions(pairInfo map[string]string, clusterPairFileName string) error {
 	file, err := os.OpenFile(clusterPairFileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
@@ -3348,7 +4008,7 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 			if err, ok := bkpErrors[namespace]; ok {
 				log.Infof("Skipping validating namespace %s because %s", namespace, err)
 			} else {
-				ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+				Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 
 					Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 						appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -4274,7 +4934,7 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 	case drivers.ProviderAws:
 		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID, validate)
+		err = CreateAzureBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate)
 	case drivers.ProviderGke:
 		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate)
 	case drivers.ProviderNfs:
@@ -5099,6 +5759,22 @@ func GetDestinationClusterConfigPath() (string, error) {
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]), nil
 }
 
+func GetCustomClusterConfigPath(clusterConfigIndex int) (string, error) {
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	if kubeconfigs == "" {
+		return "", fmt.Errorf("empty KUBECONFIGS environment variable")
+	}
+
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	if len(kubeconfigList) < 2 {
+		return "", fmt.Errorf(`Failed to get source config path.
+				At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
+	}
+
+	log.Infof("config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[clusterConfigIndex]))
+	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[clusterConfigIndex]), nil
+}
+
 // GetAzureCredsFromEnv get creds for azure
 func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey string) {
 	accountName = os.Getenv("AZURE_ACCOUNT_NAME")
@@ -5211,6 +5887,42 @@ func DeleteS3Bucket(bucketName string) {
 		fmt.Sprintf("Failed to delete bucket [%v]. Error: [%v]", bucketName, err))
 }
 
+func DeleteGcpBucket(bucketName string) {
+
+	ctx := context1.Background()
+
+	client, err := storage.NewClient(ctx, option.WithCredentialsJSON([]byte(GlobalGkeSecretString)))
+	if err != nil {
+		log.FailOnError(err, "Failed to create gcp client")
+	}
+	defer client.Close()
+
+	// List all objects in the bucket
+	it := client.Bucket(bucketName).Objects(ctx, nil)
+	for {
+		objAttrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			log.FailOnError(err, "error iterating over gcp bucket objects")
+		}
+
+		// Delete each object in the bucket
+		err = client.Bucket(bucketName).Object(objAttrs.Name).Delete(ctx)
+		if err != nil {
+			log.FailOnError(err, "error deleting object from gcp bucket %s", objAttrs.Name)
+		}
+		log.Infof("Deleted object: %s\n", objAttrs.Name)
+	}
+
+	// Delete the bucket
+	bucket := client.Bucket(bucketName)
+	if err := bucket.Delete(ctx); err != nil {
+		log.FailOnError(err, "failed to delete bucket [%v]", bucketName)
+	}
+}
+
 // DeleteAzureBucket delete bucket in azure
 func DeleteAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
@@ -5269,6 +5981,47 @@ func DeleteNfsSubPath(subPath string) {
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, workerNode, err))
 }
 
+// DeleteFilesFromNFSLocation deletes any file/directory from the supplied path
+func DeleteFilesFromNFSLocation(nfsPath string, fileName string) (err error) {
+	// Getting NFS share details from ENV variables.
+	creds := GetNfsInfoFromEnv()
+	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
+	workerNode := node.GetWorkerNodes()[0]
+
+	// Mounting the NFS share to the worker node.
+	mountCmds := []string{
+		fmt.Sprintf("mkdir -p %s", mountDir),
+		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
+	}
+
+	for _, cmd := range mountCmds {
+		err = runCmd(cmd, workerNode)
+		if err != nil {
+			return fmt.Errorf("failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, err)
+		}
+	}
+
+	defer func() {
+		// Unmounting the NFS share from the worker node.
+		umountCmds := []string{
+			fmt.Sprintf("umount %s", mountDir),
+			fmt.Sprintf("rm -rf %s", mountDir),
+		}
+		for _, cmd := range umountCmds {
+			if e := runCmd(cmd, workerNode); e != nil {
+				err = fmt.Errorf("failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, e)
+			}
+		}
+	}()
+
+	rmCmd := fmt.Sprintf("cd %s/%s && rm -rf %s", mountDir, nfsPath, fileName)
+	err = runCmd(rmCmd, workerNode)
+	if err != nil {
+		return err
+	}
+	return
+}
+
 // DeleteBucket deletes bucket from the cloud or shared subpath from NFS server
 func DeleteBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Delete bucket [%s]", bucketName), func() {
@@ -5280,32 +6033,32 @@ func DeleteBucket(provider string, bucketName string) {
 			DeleteAzureBucket(bucketName)
 		case drivers.ProviderNfs:
 			DeleteNfsSubPath(bucketName)
+		case drivers.ProviderGke:
+			DeleteGcpBucket(bucketName)
 		}
 	})
 }
 
-// HaIncreaseRebootTargetNode repl increase and reboot target node
-func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) {
+// HaIncreaseErrorInjectionTargetNode repl increase and reboot target node
+func HaIncreaseErrorInjectionTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) error {
 
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
 		Inst().V.String(), ctx.App.Key, v)
 	var replicaSets []*opsapi.ReplicaSet
+	var err error
 	Step(stepLog,
 		func() {
 			log.InfoD(stepLog)
-			currRep, err := Inst().V.GetReplicationFactor(v)
+			var currRep int64
+			currRep, err = Inst().V.GetReplicationFactor(v)
 
 			if err != nil {
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
-				log.Error(err)
-				UpdateOutcome(event, err)
 				return
 			}
 			//if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
-				log.Warn(err)
-				UpdateOutcome(event, err)
 				return
 			}
 
@@ -5329,28 +6082,30 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 					if !nExist {
 						newReplID = nID
 						newReplNode = node
-						poolsUsedSize, err := Inst().V.GetPoolsUsedSize(&newReplNode)
+						var poolsUsedSize map[string]string
+						var pools map[string]*opsapi.StoragePool
+						poolsUsedSize, err = Inst().V.GetPoolsUsedSize(&newReplNode)
 						if err != nil {
-							UpdateOutcome(event, err)
 							return
 						}
 
-						pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+						pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
 						if err != nil {
-							UpdateOutcome(event, err)
+
 							return
 						}
 						for p, u := range poolsUsedSize {
 							listPool := pools[p]
-							usedSize, err := strconv.ParseUint(u, 10, 64)
+							var usedSize uint64
+							var vol *opsapi.Volume
+							usedSize, err = strconv.ParseUint(u, 10, 64)
 							if err != nil {
-								UpdateOutcome(event, err)
+
 								return
 							}
 							freeSize := listPool.TotalSize - usedSize
-							vol, err := Inst().V.InspectVolume(v.ID)
+							vol, err = Inst().V.InspectVolume(v.ID)
 							if err != nil {
-								UpdateOutcome(event, err)
 								return
 							}
 							if freeSize >= vol.Usage {
@@ -5360,9 +6115,10 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 					}
 				}
 				if newReplID != "" {
-					nodeContexts, err := GetContextsOnNode(&[]*scheduler.Context{ctx}, &newReplNode)
+					var nodeContexts []*scheduler.Context
+					nodeContexts, err = GetContextsOnNode(&[]*scheduler.Context{ctx}, &newReplNode)
 					if err != nil {
-						UpdateOutcome(event, err)
+						return
 					}
 
 					stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
@@ -5376,10 +6132,18 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 
 							}
 							log.InfoD("Increasing repl with target node  [%v]", newReplID)
+							if event != nil {
+								dashStats := make(map[string]string)
+								dashStats["volume-name"] = v.Name
+								dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+								dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
+								updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
+							}
+
 							err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, nil, false)
 							if err != nil {
-								log.Errorf("There is an error increasing repl [%v]", err.Error())
-								UpdateOutcome(event, err)
+								err = fmt.Errorf("There is an error increasing repl [%v]", err.Error())
+								return
 							}
 						})
 
@@ -5390,6 +6154,9 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 						} else if errInj == CRASH {
 							action = "crash px on"
 						}
+						dashStats := make(map[string]string)
+						dashStats["node"] = newReplNode.Name
+
 						stepLog = fmt.Sprintf("%s target node %s while repl increase is in-progres", action,
 							newReplNode.Hostname)
 						Step(stepLog,
@@ -5398,22 +6165,26 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
 								time.Sleep(10 * time.Second)
 								if errInj == PX_RESTART {
-									testError := Inst().V.StopDriver([]node.Node{newReplNode}, false, nil)
-									if testError != nil {
-										log.Error(testError)
-										UpdateOutcome(event, err)
+
+									if event != nil {
+										updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
+									}
+									err = Inst().V.StopDriver([]node.Node{newReplNode}, false, nil)
+									if err != nil {
 										return
 									}
 									log.Infof("waiting for 15 mins before starting volume driver")
 									time.Sleep(15 * time.Minute)
-									testError = Inst().V.StartDriver(newReplNode)
-									if testError != nil {
-										log.Error(testError)
-										UpdateOutcome(event, err)
+									err = Inst().V.StartDriver(newReplNode)
+									if err != nil {
 										return
 									}
 									log.InfoD("PX restarted successfully on node %v", newReplNode)
 								} else if errInj == REBOOT {
+									if event != nil {
+										updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
+									}
+
 									err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
 										Force: true,
 										ConnectionOpts: node.ConnectionOpts{
@@ -5422,66 +6193,83 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 										},
 									})
 									if err != nil {
-										log.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
-										UpdateOutcome(event, err)
+										err = fmt.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
+
 									}
 								} else if errInj == CRASH {
+									if event != nil {
+										updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
+									}
+
 									errorChan := make(chan error, errorChannelSize)
 									CrashVolDriverAndWait([]node.Node{newReplNode}, &errorChan)
-									for err := range errorChan {
-										UpdateOutcome(event, err)
+									var errorMsgs []string
+									for chanError := range errorChan {
+										errorMsgs = append(errorMsgs, chanError.Error())
 									}
+									if len(errorMsgs) > 0 {
+										err = fmt.Errorf("%s", strings.Join(errorMsgs, ","))
+									}
+
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
 									err = fmt.Errorf("error in ha-increse after %s target node . Error: %v", action, err)
-									log.Error(err)
-									UpdateOutcome(event, err)
-								} else {
-									dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
+									return
 								}
+								dash.VerifySafely(err, nil, fmt.Sprintf("repl successfully increased to %d", currRep+1))
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
-									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
-									UpdateOutcome(event, err)
+									if event != nil {
+										dashStats = make(map[string]string)
+										dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+										dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+										dashStats["fastpath"] = "true"
+										dashStats["volume-name"] = v.Name
+										updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
+									}
+									err = ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+									dash.VerifySafely(err, nil, "fastpath volume successfully validated")
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
+									if err != nil {
+										return
+									}
 								}
 							})
 
 						err = ValidateDataIntegrity(&nodeContexts)
-						UpdateOutcome(event, err)
-
+						if err != nil {
+							return
+						}
 					}
 				} else {
-					UpdateOutcome(event, fmt.Errorf("no node identified to repl increase for vol: %s", v.Name))
+					err = fmt.Errorf("no node identified to repl increase for vol: %s", v.Name)
 				}
 			} else {
-				log.Error(err)
-				UpdateOutcome(event, err)
-
+				return
 			}
 		})
+	return err
 }
 
-// HaIncreaseRebootSourceNode repl increase and reboot source node
-func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) {
+// HaIncreaseErrorInjectSourceNode repl increase and reboot source node
+func HaIncreaseErrorInjectSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) error {
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
 		Inst().V.String(), ctx.App.Key, v)
+	var err error
+	var currRep int64
 	Step(stepLog,
 		func() {
 			log.InfoD(stepLog)
-			currRep, err := Inst().V.GetReplicationFactor(v)
+			currRep, err = Inst().V.GetReplicationFactor(v)
 			if err != nil {
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
-				log.Error(err)
-				UpdateOutcome(event, err)
 				return
+
 			}
 
 			//if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
-				log.Warn(err)
-				UpdateOutcome(event, err)
 				return
 			}
 
@@ -5498,47 +6286,60 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 				Step(stepLog,
 					func() {
 						log.InfoD(stepLog)
-						replicaSets, err := Inst().V.GetReplicaSets(v)
+						var replicaSets []*opsapi.ReplicaSet
+						replicaSets, err = Inst().V.GetReplicaSets(v)
 						if err == nil {
-
 							replicaNodes := replicaSets[0].Nodes
 							if strings.Contains(ctx.App.Key, fastpathAppName) {
-								newFastPathNode, err := AddFastPathLabel(ctx)
+								var newFastPathNode *node.Node
+								newFastPathNode, err = AddFastPathLabel(ctx)
 								if err == nil {
 									defer Inst().S.RemoveLabelOnNode(*newFastPathNode, k8s.NodeType)
 								}
-								UpdateOutcome(event, err)
 							}
+
+							if event != nil {
+								dashStats := make(map[string]string)
+								dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+								dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
+								dashStats["volume-name"] = v.Name
+								updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
+							}
+
 							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, false)
 							if err != nil {
-								log.Errorf("There is an error increasing repl [%v]", err.Error())
-								UpdateOutcome(event, err)
+								return
 							} else {
 								log.Infof("Waiting for 60 seconds for re-sync to initialize before source nodes reboot")
 								time.Sleep(60 * time.Second)
 								//rebooting source nodes one by one
 								for _, nID := range replicaNodes {
 									replNodeToReboot := storageNodeMap[nID]
+									dashStats := make(map[string]string)
+									dashStats["node"] = replNodeToReboot.Name
 									log.Infof("selected repl node: %s", replNodeToReboot.Name)
 									if errInj == PX_RESTART {
+										if event != nil {
+											updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
+										}
 
-										testError := Inst().V.StopDriver([]node.Node{replNodeToReboot}, false, nil)
-										if testError != nil {
-											log.Error(testError)
-											UpdateOutcome(event, err)
+										err = Inst().V.StopDriver([]node.Node{replNodeToReboot}, false, nil)
+										if err != nil {
 											return
 										}
 										log.Infof("waiting for 15 mins before starting volume driver")
 										time.Sleep(15 * time.Minute)
-										testError = Inst().V.StartDriver(replNodeToReboot)
-										if testError != nil {
-											log.Error(testError)
-											UpdateOutcome(event, err)
+										err = Inst().V.StartDriver(replNodeToReboot)
+										if err != nil {
 											return
 										}
 										log.InfoD("PX restarted successfully on node %s", replNodeToReboot.Name)
 
 									} else if errInj == REBOOT {
+										if event != nil {
+											updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
+										}
+
 										err = Inst().N.RebootNode(replNodeToReboot, node.RebootNodeOpts{
 											Force: true,
 											ConnectionOpts: node.ConnectionOpts{
@@ -5547,58 +6348,73 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 											},
 										})
 										if err != nil {
-											log.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
-											UpdateOutcome(event, err)
+											err = fmt.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
 										}
 									} else if errInj == CRASH {
+										if event != nil {
+											updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
+										}
+
 										errorChan := make(chan error, errorChannelSize)
 										CrashVolDriverAndWait([]node.Node{replNodeToReboot}, &errorChan)
-										for err := range errorChan {
-											UpdateOutcome(event, err)
+										var errorMsgs []string
+										for chanError := range errorChan {
+											errorMsgs = append(errorMsgs, chanError.Error())
+										}
+										if len(errorMsgs) > 0 {
+											err = fmt.Errorf("%s", strings.Join(errorMsgs, ","))
 										}
 									}
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
 									err = fmt.Errorf("error in ha-increse after  source node reboot. Error: %v", err)
-									log.Error(err)
-									UpdateOutcome(event, err)
-								} else {
-									dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
+									return
 								}
+								dash.VerifySafely(err, nil, fmt.Sprintf("repl successfully increased to %d", currRep+1))
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
-									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
-									UpdateOutcome(event, err)
+									if event != nil {
+										dashStats := make(map[string]string)
+										dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+										dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+										dashStats["fastpath"] = "true"
+										dashStats["volume-name"] = v.Name
+										updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
+									}
+									err = ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+
+									dash.VerifySafely(err, nil, "fastpath volume successfully validated")
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
+									if err != nil {
+										return
+									}
 								}
 
 								for _, nID := range replicaNodes {
+									var nodeContexts []*scheduler.Context
 									replNodeToReboot := storageNodeMap[nID]
-									nodeContexts, err := GetContextsOnNode(&[]*scheduler.Context{ctx}, &replNodeToReboot)
+									nodeContexts, err = GetContextsOnNode(&[]*scheduler.Context{ctx}, &replNodeToReboot)
 									if err != nil {
-										UpdateOutcome(event, err)
-										break
+										return
 									}
 									err = ValidateDataIntegrity(&nodeContexts)
-									UpdateOutcome(event, err)
+									if err != nil {
+										return
+									}
 								}
-
 							}
 
 						} else {
 							err = fmt.Errorf("error getting relicasets for volume %s, Error: %v", v.Name, err)
-							log.Error(err)
-							UpdateOutcome(event, err)
 						}
 
 					})
 			} else {
 				err = fmt.Errorf("error getting current replication factor for volume %s, Error: %v", v.Name, err)
-				log.Error(err)
-				UpdateOutcome(event, err)
 			}
 
 		})
+	return err
 }
 
 func AddFastPathLabel(ctx *scheduler.Context) (*node.Node, error) {
@@ -5654,6 +6470,9 @@ func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 		return result, err
 	case drivers.ProviderNfs:
 		result, err := IsNFSSubPathEmpty(bucketName)
+		return result, err
+	case drivers.ProviderGke:
+		result, err := IsGCPBucketEmpty(bucketName)
 		return result, err
 	default:
 		return false, fmt.Errorf("function does not support %s provider", provider)
@@ -5734,6 +6553,30 @@ func IsS3BucketEmpty(bucketName string) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+// IsGCPBucketEmpty returns true if bucket empty else false
+func IsGCPBucketEmpty(bucketName string) (bool, error) {
+	query := &storage.Query{Prefix: "", Delimiter: ""}
+	ctx := context1.Background()
+	client, err := storage.NewClient(ctx, option.WithCredentialsJSON([]byte(GlobalGkeSecretString)))
+	if err != nil {
+		log.Infof("Failed to create client gcp client : %v", err)
+		return false, fmt.Errorf("failed to create client gcp storage %s", err)
+	}
+	defer client.Close()
+
+	it := client.Bucket(bucketName).Objects(ctx, query)
+	_, err = it.Next()
+	if err == iterator.Done {
+		// Iterator finished, bucket is empty
+		return true, nil
+	} else if err != nil {
+		return false, fmt.Errorf("error occured while iterating over objects of gcp bucket %s", err)
+	}
+
+	// Iterator didn't finish, bucket is not empty
+	return false, nil
 }
 
 // CreateS3Bucket creates bucket in S3
@@ -5934,6 +6777,7 @@ type Torpedo struct {
 	Provisioner                         string
 	MaxStorageNodesPerAZ                int
 	DestroyAppTimeout                   time.Duration
+	ScaleAppTimeout                     time.Duration
 	DriverStartTimeout                  time.Duration
 	AutoStorageNodeRecoveryTimeout      time.Duration
 	LicenseExpiryTimeoutHours           time.Duration
@@ -5963,6 +6807,7 @@ type Torpedo struct {
 	AnthosAdminWorkStationNodeIP        string
 	AnthosInstPath                      string
 	SkipSystemChecks                    bool
+	FaSecret                            string
 }
 
 // ParseFlags parses command line flags
@@ -5986,6 +6831,7 @@ func ParseFlags() {
 	var storageNodesPerAZ int
 	var destroyAppTimeout time.Duration
 	var driverStartTimeout time.Duration
+	var scaleAppTimeout time.Duration
 	var autoStorageNodeRecoveryTimeout time.Duration
 	var licenseExpiryTimeoutHours time.Duration
 	var meteringIntervalMins time.Duration
@@ -6021,6 +6867,8 @@ func ParseFlags() {
 	var torpedoJobType string
 	var anthosWsNodeIp string
 	var anthosInstPath string
+	var faSecret string
+
 	log.Infof("The default scheduler is %v", defaultScheduler)
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -6048,7 +6896,8 @@ func ParseFlags() {
 	flag.StringVar(&csiAppsCSV, csiAppCliFlag, "", "Comma-separated list of apps to deploy with CSI provisioner")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
-	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
+	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum wait time for app to be deleted")
+	flag.DurationVar(&scaleAppTimeout, scaleAppTimeoutFlag, 0, "Maximum wait time for app to be ready")
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultDriverStartTimeout, "Maximum wait volume driver startup")
 	flag.DurationVar(&autoStorageNodeRecoveryTimeout, "storagenode-recovery-timeout", defaultAutoStorageNodeRecoveryTimeout, "Maximum wait time in minutes for storageless nodes to transition to storagenodes in case of ASG")
 	flag.DurationVar(&licenseExpiryTimeoutHours, licenseExpiryTimeoutHoursFlag, defaultLicenseExpiryTimeoutHours, "Maximum wait time in hours after which force expire license")
@@ -6087,11 +6936,14 @@ func ParseFlags() {
 	flag.StringVar(&testBranch, testBranchFlag, "master", "branch of the product")
 	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
 	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "comma separated list of run time options for cluster update")
+	flag.StringVar(&pxClusterOpts, "px-cluster-opts", "", "comma separated list of cluster options for cluster update")
 	flag.BoolVar(&pxPodRestartCheck, failOnPxPodRestartCount, false, "Set it true for px pods restart check during test")
 	flag.BoolVar(&deployPDSApps, deployPDSAppsFlag, false, "To deploy pds apps and return scheduler context for pds apps")
 	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, defaultPdsDriver, "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
+	flag.StringVar(&faSecret, faSecretCliFlag, "", "comma seperated list of famanagementip=tokenValue pairs")
+
 	// System checks https://github.com/portworx/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
 	// should be skipped from AfterSuite() if this flag is set to true. This is to avoid distracting test failures due to
 	// unstable testing environments.
@@ -6299,6 +7151,7 @@ func ParseFlags() {
 				Provisioner:                         provisionerName,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
 				DestroyAppTimeout:                   destroyAppTimeout,
+				ScaleAppTimeout:                     scaleAppTimeout,
 				DriverStartTimeout:                  driverStartTimeout,
 				AutoStorageNodeRecoveryTimeout:      autoStorageNodeRecoveryTimeout,
 				ConfigMap:                           configMapName,
@@ -6326,6 +7179,10 @@ func ParseFlags() {
 				AnthosInstPath:                      anthosInstPath,
 				IsPDSApps:                           deployPDSApps,
 				SkipSystemChecks:                    skipSystemChecks,
+				FaSecret:                            faSecret,
+			}
+			if instance.S.String() == "openshift" {
+				instance.LogLoc = "/mnt"
 			}
 		})
 	}
@@ -6758,8 +7615,21 @@ func WaitForExpansionToStart(poolID string) error {
 	return err
 }
 
-// RebootNodeAndWait reboots node and waits for to be up
-func RebootNodeAndWait(n node.Node) error {
+// RebootNodeAndWaitForPxUp reboots node and waits for  volume driver to be up
+func RebootNodeAndWaitForPxUp(n node.Node) error {
+
+	err := RebootNodeAndWaitForPxDown(n)
+	err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+// RebootNodeAndWaitForPxDown reboots node and waits for volume driver to be down
+func RebootNodeAndWaitForPxDown(n node.Node) error {
 
 	if &n == nil {
 		return fmt.Errorf("no Node is provided to reboot")
@@ -6788,10 +7658,6 @@ func RebootNodeAndWait(n node.Node) error {
 		return err
 	}
 	err = Inst().S.IsNodeReady(n)
-	if err != nil {
-		return err
-	}
-	err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 	if err != nil {
 		return err
 	}
@@ -7064,6 +7930,30 @@ func updatePxRuntimeOpts() error {
 
 }
 
+func updatePxClusterOpts() error {
+	if pxClusterOpts != "" {
+		log.InfoD("Setting cluster options: %s", pxClusterOpts)
+		optionsMap := make(map[string]string)
+		runtimeOpts, err := splitCsv(pxClusterOpts)
+		log.FailOnError(err, "Error parsing run time options")
+
+		for _, opt := range runtimeOpts {
+			if !strings.Contains(opt, "=") {
+				log.Fatalf("Given cluster option is not in expected format key=val, Actual : %v", opt)
+			}
+			optArr := strings.Split(opt, "=")
+			ketString := "--" + optArr[0]
+			optionsMap[ketString] = optArr[1]
+		}
+		currNode := node.GetWorkerNodes()[0]
+		return Inst().V.SetClusterOptsWithConfirmation(currNode, optionsMap)
+	} else {
+		log.Info("No cluster options provided to update")
+	}
+	return nil
+
+}
+
 // GetCloudDriveDeviceSpecs returns Cloud drive specs on the storage cluster
 func GetCloudDriveDeviceSpecs() ([]string, error) {
 	log.InfoD("Getting cloud drive specs")
@@ -7174,31 +8064,60 @@ func StartPxBackupTorpedoTest(testName string, testDescription string, tags map[
 
 // EndPxBackupTorpedoTest ends the logging for Px Backup torpedo test and updates results in testrail
 func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
+	defer func() {
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	}()
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
 	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
 		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
 	}
-	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
-	if ginkgoTestDescr.Failed {
-		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
+
+	currentSpecReport := ginkgo.CurrentSpecReport()
+	if currentSpecReport.Failed() {
+		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 	}
-	log.Infof(">>>> Collecting logs for testcase : %s", ginkgoTestDescr.FullTestText)
-	testCaseName := ginkgoTestDescr.FullTestText
-	matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTestDescr.FullTestText)
-	if len(matches) > 1 {
-		testCaseName = matches[1]
-	}
-	masterNode := node.GetMasterNodes()[0]
-	log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
-	err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
+	// Cleanup all the namespaces created by the testcase
+	err := DeleteAllNamespacesCreatedByTestCase()
 	if err != nil {
-		log.Errorf("Error in creating a directory [%s] to store logs. Err: %v", pxbLogDirPath, err.Error())
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
+
+	err = SetDestinationKubeConfig()
+	if err != nil {
+		log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
 		return
 	}
-	collectStorkLogs(testCaseName)
-	collectPxBackupLogs(testCaseName)
-	compressSubDirectories(pxbLogDirPath)
+
+	err = DeleteAllNamespacesCreatedByTestCase()
+	if err != nil {
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
+
+	err = SetSourceKubeConfig()
+	log.FailOnError(err, "failed to switch context to source cluster")
+
+	masterNodes := node.GetMasterNodes()
+	// TODO: enable the log collection for charmed k8s once we get the way to ssh into worker node from juju
+	if len(masterNodes) > 0 && GetClusterProvider() != "charmed" {
+		log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
+		testCaseName := currentSpecReport.FullText()
+		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(currentSpecReport.FullText())
+		if len(matches) > 1 {
+			testCaseName = matches[1]
+		}
+		masterNode := masterNodes[0]
+		log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
+		err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
+		if err != nil {
+			log.Errorf("Error in creating a directory [%s] to store logs. Err: %v", pxbLogDirPath, err.Error())
+			return
+		}
+		collectStorkLogs(testCaseName)
+		collectPxBackupLogs(testCaseName)
+		compressSubDirectories(pxbLogDirPath)
+	}
 }
 
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
@@ -7239,25 +8158,37 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 		}
 		if err != nil {
 			return createdVolIDs, fmt.Errorf("failed to creared volume %s, due to error : %v ", volName, err)
+
 		}
 		volPath = fmt.Sprintf("%v", out)
 		createdVolIDs[volId] = volPath
 		log.Infof("Volume %s attached to path %s", volId, volPath)
 		count--
+		log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s  after creating the volume", volName, volId)
+		PrintInspectVolume(volId)
 	}
 	return createdVolIDs, nil
 }
 
 // GetPoolsInUse lists all persistent volumes and returns the pool IDs
 func GetPoolsInUse() ([]string, error) {
+	var poolUuids []string
 	pvlist, err := k8sCore.GetPersistentVolumes()
 	if err != nil || pvlist == nil || len(pvlist.Items) == 0 {
 		return nil, fmt.Errorf("no persistent volume found. Error: %v", err)
 	}
-	volumeInUse := pvlist.Items[0]
-	volumeID := volumeInUse.GetName()
 
-	return GetPoolIDsFromVolName(volumeID)
+	for _, pv := range pvlist.Items {
+		volumeID := pv.GetName()
+		poolUuids, err = GetPoolIDsFromVolName(volumeID)
+		//Needed this logic as a workaround for PWX-35637
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			continue
+		}
+		break
+	}
+
+	return poolUuids, err
 }
 
 // GetPoolIDWithIOs returns the pools with IOs happening
@@ -7435,7 +8366,7 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 		return nil, err
 	}
 
-	var maxCloudDrives int32
+	var maxCloudDrives int
 
 	if _, err := core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
 		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
@@ -7449,32 +8380,15 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 		return nil, err
 	}
 
-	systemOpts := node.SystemctlOpts{
-		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         2 * time.Minute,
-			TimeBeforeRetry: defaultRetryInterval,
-		},
-		Action: "start",
-	}
-	drivesMap, err := Inst().N.GetBlockDrives(*stNode, systemOpts)
+	var currentNodeDrives int
+
+	drvM, err := Inst().V.GetPoolDrives(stNode)
 	if err != nil {
 		return nil, fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
 	}
-	var currentNodeDrives int32
 
-	driveCountMap := make(map[string]int32, 0)
-
-	for _, b := range drivesMap {
-		labels := b.Labels
-		for k, v := range labels {
-			if k == "pxpool" {
-				driveCountMap[v] += 1
-			}
-		}
-	}
-
-	for _, vals := range driveCountMap {
-		currentNodeDrives += vals
+	for _, devices := range drvM {
+		currentNodeDrives += len(devices)
 	}
 	eligibilityMap := make(map[string]bool)
 
@@ -7483,13 +8397,21 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 	if currentNodeDrives == maxCloudDrives {
 		eligibilityMap[stNode.Id] = false
 	}
+	nodePoolStatus, err := Inst().V.GetNodePoolsStatus(*stNode)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, pool := range stNode.StoragePools {
 		eligibilityMap[pool.Uuid] = true
 
-		d := driveCountMap[fmt.Sprintf("%d", pool.ID)]
-		log.Infof("pool %s has %d drives", pool.Uuid, d)
-		if d == POOL_MAX_CLOUD_DRIVES {
+		d := drvM[fmt.Sprintf("%d", pool.ID)]
+		log.Infof("pool %s has %d drives", pool.Uuid, len(d))
+		if len(d) == POOL_MAX_CLOUD_DRIVES {
+			eligibilityMap[pool.Uuid] = false
+		}
+
+		if nodePoolStatus[pool.Uuid] == "Offline" {
 			eligibilityMap[pool.Uuid] = false
 		}
 	}
@@ -7558,16 +8480,24 @@ func ExitNodesFromMaintenanceMode() error {
 }
 
 // GetPoolsDetailsOnNode returns all pools present in the Nodes
-func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
+func GetPoolsDetailsOnNode(n *node.Node) ([]*opsapi.StoragePool, error) {
 	var poolDetails []*opsapi.StoragePool
 
-	// Refreshing Node Registry to make sure all changes done to the nodes are refreshed
-	err := Inst().S.RefreshNodeRegistry()
+	// Refreshing Node Driver to make sure all changes done to the nodes are refreshed
+	err := Inst().V.RefreshDriverEndpoints()
 	if err != nil {
 		return nil, err
 	}
+	//updating the node info after refresh
+	stDriverNodes := node.GetStorageDriverNodes()
+	for _, stDriverNode := range stDriverNodes {
+		if stDriverNode.VolDriverNodeID == n.VolDriverNodeID {
+			n = &stDriverNode
+			break
+		}
+	}
 
-	if node.IsStorageNode(n) == false {
+	if node.IsStorageNode(*n) == false {
 		return nil, fmt.Errorf("Node [%s] is not Storage Node", n.Id)
 	}
 
@@ -7635,7 +8565,7 @@ func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
 func MakeStoragetoStoragelessNode(n node.Node) error {
 	storageLessNodeBeforePoolDelete := node.GetStorageLessNodes()
 	// Get total list of pools present on the node
-	poolList, err := GetPoolsDetailsOnNode(n)
+	poolList, err := GetPoolsDetailsOnNode(&n)
 	if err != nil {
 		return err
 	}
@@ -7789,7 +8719,7 @@ func WaitForPoolOffline(n node.Node) error {
 func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {
 	nodesPresent := node.GetStorageNodes()
 	for _, each := range nodesPresent {
-		poolsPresent, err := GetPoolsDetailsOnNode(each)
+		poolsPresent, err := GetPoolsDetailsOnNode(&each)
 		if err != nil {
 			return -1, err
 		}
@@ -8010,7 +8940,10 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) 
 	if err := Inst().V.DeletePool(stNode, poolIDToDelete, retry); err != nil {
 		return err
 	}
-	if err := ExitPoolMaintenance(stNode); err != nil {
+
+	err = ExitPoolMaintenance(stNode)
+
+	if err != nil && !strings.Contains(err.Error(), "not in pool maintenance mode") {
 		return err
 	}
 	return nil
@@ -8095,7 +9028,7 @@ func AsgKillNode(nodeToKill node.Node) error {
 			})
 
 		} else {
-			err = Inst().N.DeleteNode(nodeToKill, 5*time.Minute)
+			err = Inst().S.DeleteNode(nodeToKill)
 		}
 
 	})
@@ -8403,6 +9336,20 @@ func KillKvdbMemberUsingPid(kvdbNode node.Node) error {
 	return nil
 }
 
+// IsKVDBNode returns true if a node is kvdb node else it returns false
+func IsKVDBNode(n node.Node) (bool, error) {
+	KvdbNodes, err := GetAllKvdbNodes()
+	if err != nil {
+		return false, err
+	}
+	for _, each := range KvdbNodes {
+		if each.ID == n.Id {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // getReplicaNodes returns the list of nodes which has replicas
 func getReplicaNodes(vol *volume.Volume) ([]string, error) {
 	getReplicaSets, err := Inst().V.GetReplicaSets(vol)
@@ -8414,7 +9361,13 @@ func getReplicaNodes(vol *volume.Volume) ([]string, error) {
 
 // IsDMthin returns true if setup is dmthin enabled
 func IsDMthin() (bool, error) {
+	opBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
 	dmthinEnabled := false
+	if !opBasedInstall {
+		log.Warn("This is not PX Operator based install, DMTHIN is not supported on legacy Daemonset installs, skipping this check..")
+		return dmthinEnabled, nil
+	}
+
 	cluster, err := Inst().V.GetDriver()
 	if err != nil {
 		return dmthinEnabled, err
@@ -8656,21 +9609,11 @@ func GetPoolUuidsWithStorageFull() ([]string, error) {
 
 // GetVolumeConsumedSize returns size of the volume
 func GetVolumeConsumedSize(vol volume.Volume) (uint64, error) {
-	// Get Random Storage Node
-	cmd := fmt.Sprintf("pxctl v i %v -j | jq '.[].usage'", vol.ID)
-	output, err := runCmdGetOutput(cmd, node.GetStorageNodes()[0])
+	apiVol, err := Inst().V.InspectVolume(vol.ID)
 	if err != nil {
 		return 0, err
 	}
-	output = strings.ReplaceAll(output, "\"", "")
-	output = strings.TrimSpace(output)
-
-	num, err := strconv.ParseUint(output, 10, 64)
-	if err != nil {
-		return 0, err
-	}
-
-	return num, nil
+	return apiVol.Usage, nil
 }
 
 // GetAllVolumesWithIO Returns list of volumes with IO
@@ -8864,7 +9807,11 @@ func AddCloudDrive(stNode node.Node, poolID int32) error {
 	if err != nil {
 		return fmt.Errorf("pool re-balance failed, err: %v", err)
 	}
-	err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
+	n1, err := node.GetNodeByName(stNode.Name)
+	if err != nil {
+		return fmt.Errorf("error getting node by name %s, err: %v", stNode.Name, err)
+	}
+	err = Inst().V.WaitDriverUpOnNode(n1, addDriveUpTimeOut)
 	if err != nil {
 		return fmt.Errorf("volume driver is down on node %s, err: %v", stNode.Name, err)
 	}
@@ -8887,7 +9834,8 @@ func AddCloudDrive(stNode node.Node, poolID int32) error {
 	}
 	log.Info(fmt.Sprintf("updated pool size: %d GiB", newTotalPoolSize))
 	dash.VerifyFatal(isPoolSizeUpdated, true, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
-	return nil
+	err = Inst().V.RefreshDriverEndpoints()
+	return err
 }
 
 func IsJournalEnabled() (bool, error) {
@@ -8930,7 +9878,7 @@ func runDataIntegrityValidation(testName string) bool {
 }
 
 func ValidateDataIntegrity(contexts *[]*scheduler.Context) (mError error) {
-	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
+	testName := ginkgo.CurrentSpecReport().FullText()
 	if strings.Contains(testName, "Longevity") || strings.Contains(testName, "Trigger") {
 		pc, _, _, _ := runtime.Caller(1)
 		testName = runtime.FuncForPC(pc).Name()
@@ -8998,7 +9946,7 @@ outer:
 				}
 				return "", false, fmt.Errorf("volume %s is in %s state cannot proceed further", v.ID, replicationStatus)
 			}
-			_, mError = task.DoRetryWithTimeout(t, 60*time.Minute, 1*time.Minute)
+			_, mError = task.DoRetryWithTimeout(t, 120*time.Minute, 2*time.Minute)
 			if mError != nil {
 				return mError
 			}
@@ -9291,7 +10239,7 @@ func validateDmthinVolumeDataIntegrity(inspectVolume *opsapi.Volume, nodeDetail 
 // GetContextsOnNode returns the contexts which have volumes attached on the given node.
 func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*scheduler.Context, error) {
 	contextsOnNode := make([]*scheduler.Context, 0)
-	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
+	testName := ginkgo.CurrentSpecReport().FullText()
 
 	if strings.Contains(testName, "Longevity") || strings.Contains(testName, "Trigger") {
 		pc, _, _, _ := runtime.Caller(1)
@@ -9546,7 +10494,7 @@ func ValidateCRMigration(pods *v1.PodList, appData *asyncdr.AppData) error {
 	log.InfoD("Create cluster pair between source and destination clusters")
 	ScheduleValidateClusterPair(emptyCtx, false, true, defaultClusterPairDir, false)
 	migName := migrationKey + time.Now().Format("15h03m05s")
-	mig, err := asyncdr.CreateMigration(migName, appData.Ns, asyncdr.DefaultClusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+	mig, err := asyncdr.CreateMigration(migName, appData.Ns, asyncdr.DefaultClusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 	if err != nil {
 		return err
 	}
@@ -9757,7 +10705,7 @@ func GetAllPoolsOnNode(nodeUuid string) ([]string, error) {
 }
 
 // Set default provider as aws
-func getClusterProvider() string {
+func GetClusterProvider() string {
 	clusterProvider = os.Getenv("CLUSTER_PROVIDER")
 	return clusterProvider
 }
@@ -10072,4 +11020,1133 @@ func GetRandomSubset(elements []string, subsetSize int) ([]string, error) {
 	})
 
 	return shuffledElements[:subsetSize], nil
+}
+
+// DeleteAllNamespacesCreatedByTestCase deletes all the namespaces created for the test case
+func DeleteAllNamespacesCreatedByTestCase() error {
+
+	// Get all the namespaces on the cluster
+	k8sCore := core.Instance()
+	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
+	if err != nil {
+		return fmt.Errorf("error in listing namespaces. Err: %v", err.Error())
+	}
+
+	// Iterate and remove all namespaces
+	for _, ns := range allNamespaces.Items {
+		if strings.Contains(ns.Name, Inst().InstanceID) {
+			log.Infof("Deleting namespace [%s]", ns.Name)
+			err = k8sCore.DeleteNamespace(ns.Name)
+			if err != nil {
+				// Not returning anything as it's the best case effort
+				log.InfoD("Error in deleting namespace [%s]. Err: %v", ns.Name, err.Error())
+			}
+		}
+	}
+	return nil
+}
+
+func GetNodeForGivenVolumeName(volName string) (*node.Node, error) {
+
+	t := func() (interface{}, bool, error) {
+		pxVol, err := Inst().V.InspectVolume(volName)
+		if err != nil {
+			log.Warnf("Failed to inspect volume [%s], Err: %v", volName, err)
+			return nil, false, err
+		}
+
+		for _, n := range node.GetStorageDriverNodes() {
+			ok, err := Inst().V.IsVolumeAttachedOnNode(pxVol, n)
+			if err != nil {
+				return nil, false, err
+			}
+			if ok {
+				return &n, false, err
+			}
+		}
+
+		// Snapshots may not be attached to a node
+		if pxVol.Source.Parent != "" {
+			return nil, false, nil
+		}
+
+		return nil, true, fmt.Errorf("volume [%s] is not attached on any node", volName)
+	}
+
+	n, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	if n != nil {
+		attachedNode := n.(*node.Node)
+		return attachedNode, nil
+	}
+
+	return nil, fmt.Errorf("no attached node found for vol [%s]", volName)
+}
+
+// GetProcessPID returns the PID of KVDB master node
+func GetProcessPID(memberNode node.Node, processName string) (string, error) {
+	var processPid string
+	command := fmt.Sprintf("ps -ef | grep -i %s", processName)
+	out, err := Inst().N.RunCommand(memberNode, command, node.ConnectionOpts{
+		Timeout:         20 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, fmt.Sprintf("/usr/local/bin/%s", processName)) && !strings.Contains(line, "grep") {
+			fields := strings.Fields(line)
+			processPid = fields[1]
+			break
+		}
+	}
+	return processPid, err
+}
+
+// KillPxExecUsingPid return error in case of command failure
+func KillPxExecUsingPid(memberNode node.Node) error {
+	pid, err := GetProcessPID(memberNode, "pxexec")
+	if err != nil {
+		return err
+	}
+	if pid == "" {
+		log.InfoD("Procrss with PID doesnot exists !! ")
+		return nil
+	}
+	command := fmt.Sprintf("kill -9 %s", pid)
+	log.InfoD("killing PID using command [%s]", command)
+	err = runCmd(command, memberNode)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// KillPxStorageUsingPid return error in case of command failure
+func KillPxStorageUsingPid(memberNode node.Node) error {
+	nodes := []node.Node{}
+	nodes = append(nodes, memberNode)
+	err := Inst().V.StopDriver(nodes, true, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetAllPodsInNameSpace Returns list of pods running in the namespace
+func GetAllPodsInNameSpace(nameSpace string) ([]v1.Pod, error) {
+	pods, err := k8sCore.GetPods(nameSpace, nil)
+	if err != nil {
+		return nil, err
+	}
+	return pods.Items, nil
+}
+
+func installGrafana(namespace string) {
+	enableGrafana := false
+
+	// If true, enable grafana on the set up
+	if enableGrafanaVar := os.Getenv("ENABLE_GRAFANA"); enableGrafanaVar != "" {
+		enableGrafana, _ = strconv.ParseBool(enableGrafanaVar)
+	}
+	if enableGrafana {
+		grafanaScript := "/torpedo/deployments/setup_grafana.sh"
+		if _, err := os.Stat(grafanaScript); errors.Is(err, os.ErrNotExist) {
+			log.Warnf("Cannot find grafana set up script in path %s", grafanaScript)
+			return
+		}
+
+		// Change permission on file to be able to execute
+		if err := osutils.Chmod("+x", grafanaScript); err != nil {
+			log.Warnf("error changing permission for script [%s], err: %v", grafanaScript, err)
+			return
+		}
+
+		output, stErr, err := osutils.ExecTorpedoShell(fmt.Sprintf("%s %s", grafanaScript, namespace))
+		if err != nil {
+			log.Warnf("error running script [%s], err: %v", grafanaScript, err)
+			return
+		}
+		if stErr != "" {
+			log.Warnf("got standard error while running script [%s], err: %s", grafanaScript, stErr)
+			return
+		}
+		log.Infof(output)
+	}
+
+}
+
+func SetupProxyServer(n node.Node) error {
+
+	createDirCommand := "mkdir -p /exports/testnfsexportdir"
+	output, err := Inst().N.RunCommandWithNoRetry(n, createDirCommand, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	addVersionCmd := "echo -e \"MOUNTD_NFS_V4=\"yes\"\nRPCNFSDARGS=\"-N 2 -N 4\"\" >> /etc/sysconfig/nfs"
+	output, err = Inst().N.RunCommandWithNoRetry(n, addVersionCmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	updateExportsCmd := "echo \"/exports/testnfsexportdir *(rw,sync,no_root_squash)\" > /etc/exports"
+	output, err = Inst().N.RunCommandWithNoRetry(n, updateExportsCmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+	exportCmd := "exportfs -a"
+	output, err = Inst().N.RunCommandWithNoRetry(n, exportCmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	enableNfsServerCmd := "systemctl enable nfs-server"
+	output, err = Inst().N.RunCommandWithNoRetry(n, enableNfsServerCmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	startNfsServerCmd := "systemctl restart nfs-server"
+	output, err = Inst().N.RunCommandWithNoRetry(n, startNfsServerCmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	return nil
+}
+
+func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
+	params := make(map[string]string)
+	params["repl"] = "1"
+	params["io_profile"] = "none"
+	params["proxy_endpoint"] = fmt.Sprintf("nfs://%s", nfsServer)
+	params["proxy_nfs_exportpath"] = fmt.Sprintf("%s", mountPath)
+	params["mount_options"] = "vers=4.0"
+	v1obj := metav1.ObjectMeta{
+		Name: scName,
+	}
+	reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+	bindMode := storageapi.VolumeBindingImmediate
+	allowWxpansion := true
+	scObj := storageapi.StorageClass{
+		ObjectMeta:           v1obj,
+		Provisioner:          "kubernetes.io/portworx-volume",
+		Parameters:           params,
+		ReclaimPolicy:        &reclaimPolicyDelete,
+		VolumeBindingMode:    &bindMode,
+		AllowVolumeExpansion: &allowWxpansion,
+	}
+
+	k8sStorage := k8sStorage.Instance()
+	_, err := k8sStorage.CreateStorageClass(&scObj)
+	return err
+}
+
+func GetClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
+	stNodes := node.GetStorageNodes()
+
+	nodeSchedulableStatus := make(map[string]string)
+	stNodeNames := make(map[string]bool)
+
+	for _, stNode := range stNodes {
+		stNodeNames[stNode.Name] = true
+	}
+
+	//Handling case where we have storageless node as kvdb node with dedicated kvdb device attached.
+	kvdbNodes, _ := GetAllKvdbNodes()
+	for _, kvdbNode := range kvdbNodes {
+		sNode, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+		if err == nil {
+			stNodeNames[sNode.Name] = true
+		} else {
+			log.Errorf("got error while getting with id [%s]", kvdbNode.ID)
+		}
+	}
+
+	log.Infof("stnodes are %#v", stNodeNames)
+	itr := 1
+	for {
+		log.Infof("K8s node validation. iteration: #%d", itr)
+		select {
+		case <-stopSignal:
+			log.Infof("Exiting node validations routine")
+			return
+		default:
+			nodeList, err := core.Instance().GetNodes()
+			if err != nil {
+				log.Errorf("Got error : %s", err.Error())
+				*mError = err
+				return
+			}
+
+			nodeNotReadyeCount := 0
+			for _, k8sNode := range nodeList.Items {
+				for _, status := range k8sNode.Status.Conditions {
+					if status.Type == v1.NodeReady {
+						nodeSchedulableStatus[k8sNode.Name] = string(status.Status)
+						if status.Status != v1.ConditionTrue && stNodeNames[k8sNode.Name] {
+							nodeNotReadyeCount += 1
+						}
+						break
+					}
+				}
+
+			}
+			if nodeNotReadyeCount > 1 {
+				err = fmt.Errorf("multiple  nodes are Unschedulable at same time,"+
+					"node status:%#v", nodeSchedulableStatus)
+				log.Errorf("Got error : %s", err.Error())
+				log.Infof("Node Details: %#v", nodeList.Items)
+				output, err := Inst().N.RunCommand(stNodes[0], "pxctl status", node.ConnectionOpts{
+					IgnoreError:     false,
+					TimeBeforeRetry: defaultRetryInterval,
+					Timeout:         defaultTimeout,
+					Sudo:            true,
+				})
+				if err != nil {
+					log.Errorf("failed to get pxctl status, Err: %v", err)
+				}
+				log.Infof(output)
+				*mError = err
+				return
+			}
+		}
+		itr++
+		time.Sleep(30 * time.Second)
+	}
+}
+
+// PrintK8sClusterInfo prints info about K8s cluster nodes
+func PrintK8sClusterInfo() {
+	log.Info("Get cluster info..")
+	t := func() (interface{}, bool, error) {
+		nodeList, err := core.Instance().GetNodes()
+		if err != nil {
+			return "", true, fmt.Errorf("failed to get nodes, Err %v", err)
+		}
+		if len(nodeList.Items) > 0 {
+			for _, n := range nodeList.Items {
+				nodeType := "Worker"
+				if core.Instance().IsNodeMaster(n) {
+					nodeType = "Master"
+				}
+				log.Infof(
+					"Node Name: %s, Node Type: %s, Kernel Version: %s, Kubernetes Version: %s, OS: %s, Container Runtime: %s",
+					n.Name, nodeType,
+					n.Status.NodeInfo.KernelVersion, n.Status.NodeInfo.KubeletVersion, n.Status.NodeInfo.OSImage,
+					n.Status.NodeInfo.ContainerRuntimeVersion)
+			}
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("no nodes were found in the cluster")
+	}
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
+		log.Warnf("failed to get k8s cluster info, Err: %v", err)
+	}
+}
+
+func CreatePXCloudCredential() error {
+	/*
+		Creating a cloud credential for cloudsnap wit the given params
+		Deleting the existing cred if exists so that we can use same creds to delete the s3 bucket once test is completed.
+	*/
+	id, secret, endpoint, s3Region, disableSSl, err := getCreateCredParams()
+
+	if err != nil {
+		return err
+	}
+
+	n := node.GetStorageDriverNodes()[0]
+	uuidCmd := "cred list -j | grep uuid"
+
+	output, err := Inst().V.GetPxctlCmdOutputConnectionOpts(n, uuidCmd, node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}, false)
+	if err != nil {
+		err = fmt.Errorf("error getting uuid for cloudsnap credential, cause: %v", err)
+		return err
+	}
+
+	if output != "" {
+		log.Infof("Cloud Cred exists [%s]", output)
+		log.Warnf("Deleting existing cred and creating new cred with given params")
+		credUUID := strings.Split(output, ":")[1]
+		credUUID = strings.ReplaceAll(strings.TrimSpace(credUUID), "\"", "")
+		credDeleteCmd := fmt.Sprintf("cred delete %s", credUUID)
+		output, err = Inst().V.GetPxctlCmdOutputConnectionOpts(n, credDeleteCmd, node.ConnectionOpts{
+			IgnoreError:     false,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		}, false)
+
+		if err != nil {
+			err = fmt.Errorf("error deleting existing cred [%s], cause: %v", credUUID, err)
+			return err
+		}
+
+		log.Infof("Deleted exising cred [%s]", output)
+	}
+
+	cloudCredName := "px-cloud-cred"
+
+	credCreateCmd := fmt.Sprintf("cred create %s --provider s3 --s3-access-key %s --s3-secret-key %s --s3-endpoint %s --s3-region %s", cloudCredName, id, secret, endpoint, s3Region)
+
+	if disableSSl {
+		credCreateCmd = fmt.Sprintf("%s --s3-disable-ssl", credCreateCmd)
+	}
+
+	// Execute the command and check get rebalance status
+	output, err = Inst().V.GetPxctlCmdOutputConnectionOpts(node.GetStorageNodes()[0], credCreateCmd, node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}, false)
+
+	if err != nil {
+		err = fmt.Errorf("error creating cloud cred, cause: %v", err)
+		return err
+	}
+
+	log.Infof(output)
+
+	return nil
+
+}
+
+func DeleteCloudSnapBucket(contexts []*scheduler.Context) error {
+
+	var bucketName string
+	//Stopping cloudnsnaps before bucket deletion
+	for _, ctx := range contexts {
+		if strings.Contains(ctx.App.Key, "cloudsnap") {
+
+			if bucketName == "" {
+				vols, err := Inst().S.GetVolumeParameters(ctx)
+				if err != nil {
+					err = fmt.Errorf("error getting volume params for %s, cause: %v", ctx.App.Key, err)
+					return err
+				}
+				for vol, params := range vols {
+					csBksps, err := Inst().V.GetCloudsnaps(vol, params)
+					if err != nil {
+						err = fmt.Errorf("error getting cloud snaps for %s, cause: %v", vol, err)
+						return err
+					}
+					for _, csBksp := range csBksps {
+						bkid := csBksp.GetId()
+						bucketName = strings.Split(bkid, "/")[0]
+						break
+					}
+				}
+				log.Infof("Got Bucket Name [%s]", bucketName)
+			}
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				return err
+			}
+			for _, vol := range vols {
+				appVol, err := Inst().V.InspectVolume(vol.ID)
+				if err != nil {
+					return err
+				}
+				err = suspendCloudsnapBackup(appVol.Id)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	if bucketName != "" {
+		id, secret, endpoint, s3Region, _, err := getCreateCredParams()
+		if err != nil {
+			return err
+		}
+		var sess *session.Session
+		if strings.Contains(endpoint, "minio") {
+
+			sess, err = session.NewSessionWithOptions(session.Options{
+				Config: aws.Config{
+					Endpoint:         aws.String(endpoint),
+					Region:           aws.String(s3Region),
+					Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+					S3ForcePathStyle: aws.Bool(true),
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to initialize new session: %v", err)
+			}
+		}
+
+		if strings.Contains(endpoint, "amazonaws") {
+			sess, err = session.NewSessionWithOptions(session.Options{
+				Config: aws.Config{
+					Region:      aws.String(s3Region),
+					Credentials: credentials.NewStaticCredentials(id, secret, ""),
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to initialize new session: %v", err)
+			}
+		}
+
+		if sess == nil {
+			return fmt.Errorf("failed to initialize new session using endpoint [%s], Cause: %v", endpoint, err)
+		}
+
+		client := s3.New(sess)
+		err = deleteAndValidateBucketDeletion(client, bucketName)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func deleteAndValidateBucketDeletion(client *s3.S3, bucketName string) error {
+	// Delete all objects and versions in the bucket
+	log.Debugf("Deleting bucket [%s]", bucketName)
+	err := client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+	}, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+		// Iterate through the objects in the bucket and delete them
+		var objects []*s3.ObjectIdentifier
+		for _, obj := range page.Contents {
+			objects = append(objects, &s3.ObjectIdentifier{
+				Key: obj.Key,
+			})
+		}
+
+		_, err := client.DeleteObjects(&s3.DeleteObjectsInput{
+			Bucket: aws.String(bucketName),
+			Delete: &s3.Delete{
+				Objects: objects,
+				Quiet:   aws.Bool(true),
+			},
+		})
+		if err != nil {
+			fmt.Printf("Failed to delete objects in bucket: %v\n", err)
+			return false
+		}
+
+		return true
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete objects in bucket: %v", err)
+	}
+
+	// Delete the bucket
+	_, err = client.DeleteBucket(&s3.DeleteBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		var aerr awserr.Error
+		if errors.As(err, &aerr) {
+			if aerr.Code() == s3.ErrCodeNoSuchBucket {
+				log.Infof("Bucket: %v doesn't exist.!!", bucketName)
+				return nil
+			}
+			return fmt.Errorf("couldn't delete bucket: %v", err)
+		}
+	}
+
+	log.Infof("Successfully deleted the bucket: %v", bucketName)
+	return nil
+}
+
+func suspendCloudsnapBackup(volId string) error {
+
+	isBackupActive, err := IsCloudsnapBackupActiveOnVolume(volId)
+	if err != nil {
+		return fmt.Errorf("error checking backup status  for volume  [%s],Err: %v ", volId, err)
+	}
+	log.Infof("Backup status for vol [%s]: %v", volId, isBackupActive)
+
+	if isBackupActive {
+		scheduleOfVol, err := GetVolumeSnapShotScheduleOfVol(volId)
+		if err != nil {
+			return fmt.Errorf("error getting volumes snapshot schedule for volume [%s],Err: %v ", volId, err)
+		}
+
+		if !*scheduleOfVol.Spec.Suspend {
+			log.Infof("Snapshot schedule is not suspended. Suspending it")
+			makeSuspend := true
+			scheduleOfVol.Spec.Suspend = &makeSuspend
+			_, err := storkops.Instance().UpdateSnapshotSchedule(scheduleOfVol)
+			if err != nil {
+				return fmt.Errorf("error suspending volumes snapshot schedule for volume  [%s],Err: %v ", volId, err)
+			}
+
+		}
+	}
+	return nil
+}
+
+func getCreateCredParams() (id, secret, endpoint, s3Region string, disableSSLBool bool, err error) {
+
+	id = os.Getenv("S3_AWS_ACCESS_KEY_ID")
+	if id == "" {
+		id = os.Getenv("AWS_ACCESS_KEY_ID")
+	}
+
+	if id == "" {
+		err = fmt.Errorf("S3_AWS_ACCESS_KEY_ID or AWS_ACCESS_KEY_ID Environment variable is not provided")
+		return
+
+	}
+
+	secret = os.Getenv("S3_AWS_SECRET_ACCESS_KEY")
+	if secret == "" {
+		secret = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	}
+	if secret == "" {
+		err = fmt.Errorf("S3_AWS_SECRET_ACCESS_KEY or AWS_SECRET_ACCESS_KEY Environment variable is not provided")
+		return
+	}
+
+	endpoint = os.Getenv("S3_ENDPOINT")
+	if endpoint == "" {
+		err = fmt.Errorf("S3_ENDPOINT Environment variable is not provided")
+		return
+	}
+
+	s3Region = os.Getenv("S3_REGION")
+	if s3Region == "" {
+		err = fmt.Errorf("S3_REGION Environment variable is not provided")
+		return
+	}
+
+	disableSSL := os.Getenv("S3_DISABLE_SSL")
+	disableSSLBool = false
+
+	if len(disableSSL) > 0 {
+		disableSSLBool, err = strconv.ParseBool(disableSSL)
+		if err != nil {
+			err = fmt.Errorf("S3_DISABLE_SSL=%s is not a valid boolean value,err: %v", disableSSL, err)
+			return
+		}
+	}
+
+	return
+}
+
+// ExportSourceKubeConfig changes the KUBECONFIG environment variable to the source cluster config path
+func ExportSourceKubeConfig() error {
+	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	err = os.Unsetenv("KUBECONFIG")
+	if err != nil {
+		return err
+	}
+	return os.Setenv("KUBECONFIG", sourceClusterConfigPath)
+}
+
+// ExportDestinationKubeConfig changes the KUBECONFIG environment variable to the destination cluster config path
+func ExportDestinationKubeConfig() error {
+	DestinationClusterConfigPath, err := GetDestinationClusterConfigPath()
+	if err != nil {
+		return err
+	}
+
+	err = os.Unsetenv("KUBECONFIG")
+	if err != nil {
+		return err
+	}
+	return os.Setenv("KUBECONFIG", DestinationClusterConfigPath)
+}
+
+// SwitchBothKubeConfigANDContext switches both KUBECONFIG and context to the given cluster
+func SwitchBothKubeConfigANDContext(cluster string) error {
+	if cluster == "source" {
+		err := ExportSourceKubeConfig()
+		if err != nil {
+			return err
+		}
+		err = SetSourceKubeConfig()
+		if err != nil {
+			return err
+		}
+	} else if cluster == "destination" {
+		err := ExportDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DoPDBValidation continuously validates the Pod Disruption Budget against
+// cluster upgrades, appending errors to mError, until a stop signal is received.
+func DoPDBValidation(stopSignal <-chan struct{}, mError *error) {
+	pdbValue, allowedDisruptions := GetPDBValue()
+	isClusterParallelyUpgraded := false
+	nodes, err := Inst().V.GetDriverNodes()
+	if err != nil {
+		*mError = multierr.Append(*mError, err)
+		return
+	}
+	totalNodes := len(nodes)
+	itr := 1
+	for {
+		log.Infof("PDB validation iteration: #%d", itr)
+		select {
+		case <-stopSignal:
+			if allowedDisruptions > 1 && !isClusterParallelyUpgraded {
+				err := fmt.Errorf("cluster is not parallely upgraded")
+				*mError = multierr.Append(*mError, err)
+				log.Warnf("Cluster not parallely upgraded as expected")
+			}
+			log.Infof("Exiting PDB validation routine")
+			return
+		default:
+			errorChan := make(chan error, 50)
+			ValidatePDB(pdbValue, allowedDisruptions, totalNodes, &isClusterParallelyUpgraded, &errorChan)
+			for err := range errorChan {
+				*mError = multierr.Append(*mError, err)
+			}
+			if *mError != nil {
+				return
+			}
+			itr++
+			time.Sleep(10 * time.Second)
+		}
+	}
+}
+
+// GetVolumesOnNode returns the volume IDs which have repl on a give node
+func GetVolumesOnNode(nodeId string) ([]string, error) {
+	var volumes []string
+
+	pvs, err := k8sCore.GetPersistentVolumes()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, vol := range pvs.Items {
+		volDetails, err := Inst().V.InspectVolume(vol.GetName())
+		if err != nil {
+			return volumes, err
+		}
+		replSets := volDetails.GetReplicaSets()
+		var replNodes []string
+		for _, replSet := range replSets {
+			replNodes = append(replNodes, replSet.GetNodes()...)
+		}
+		if Contains(replNodes, nodeId) {
+			volumes = append(volumes, vol.GetName())
+		}
+	}
+
+	return volumes, nil
+}
+
+// IsKubevirtInstalled returns true if Kubevirt is installed else returns false
+func IsKubevirtInstalled() bool {
+	k8sApiExtensions := apiextensions.Instance()
+	crdList, err := k8sApiExtensions.ListCRDs()
+	if err != nil {
+		return false
+	}
+	for _, crd := range crdList.Items {
+		if crd.Name == "kubevirts.kubevirt.io" {
+			k8sKubevirt := kubevirt.Instance()
+			version, err := k8sKubevirt.GetVersion()
+			if err == nil && version != "" {
+				log.InfoD("Version %s", version)
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// IsCloudsnapBackupActiveOnVolume returns true is cloudsnap backup is active on the volume
+func IsCloudsnapBackupActiveOnVolume(volName string) (bool, error) {
+	params := make(map[string]string)
+	csBksps, err := Inst().V.GetCloudsnaps(volName, params)
+	if err != nil {
+		return false, err
+	}
+
+	for _, csBksp := range csBksps {
+		if csBksp.GetSrcVolumeName() == volName && (csBksp.GetStatus() == opsapi.SdkCloudBackupStatusType_SdkCloudBackupStatusTypeActive || csBksp.GetStatus() == opsapi.SdkCloudBackupStatusType_SdkCloudBackupStatusTypeNotStarted) {
+
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// GetVolumeSnapShotScheduleOfVol returns VolumeSnapshotSchedule for the given volume
+func GetVolumeSnapShotScheduleOfVol(volName string) (*storkapi.VolumeSnapshotSchedule, error) {
+
+	params := make(map[string]string)
+	csBksps, err := Inst().V.GetCloudsnaps(volName, params)
+	if err != nil {
+		return nil, err
+	}
+	volDetails, err := Inst().V.InspectVolume(volName)
+	if err != nil {
+		return nil, err
+	}
+
+	pvcName, ok := volDetails.Spec.VolumeLabels["pvc"]
+	if ok {
+
+		for _, csBksp := range csBksps {
+			if csBksp.GetSrcVolumeName() == volName {
+				ns := csBksp.GetNamespace()
+				snapshotSchedules, err := storkops.Instance().ListSnapshotSchedules(ns)
+				if err != nil {
+					return nil, err
+				}
+
+				for _, snapshotSched := range snapshotSchedules.Items {
+					if strings.Contains(snapshotSched.GetName(), pvcName) {
+						return &snapshotSched, nil
+					}
+				}
+			}
+
+		}
+
+	}
+
+	return nil, fmt.Errorf("snapshot schedule for volume [%s] not found", volName)
+}
+
+// MoveReplica moves the replica of a volume from one node to another
+func MoveReplica(volName, fromNode, toNode string) error {
+	appVol, err := Inst().V.InspectVolume(volName)
+	log.Infof("Updating replicas for volume [%s/%s]", appVol.Id, volName)
+	if err != nil {
+		return err
+	}
+	replNodes := appVol.GetReplicaSets()[0].GetNodes()
+	tpVol := &volume.Volume{ID: volName, Name: volName}
+	if len(replNodes) == 1 {
+
+		err = Inst().V.SetReplicationFactor(tpVol, 2, []string{toNode}, nil, true)
+		if err != nil {
+			return err
+		}
+		err = Inst().V.SetReplicationFactor(tpVol, 1, []string{fromNode}, nil, true)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = Inst().V.SetReplicationFactor(tpVol, int64(len(replNodes)-1), []string{fromNode}, nil, true)
+		if err != nil {
+			return err
+		}
+		err = Inst().V.SetReplicationFactor(tpVol, int64(len(replNodes)), []string{toNode}, nil, true)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func GetNodeIdToMoveReplica(volName string) (string, error) {
+
+	appVol, err := Inst().V.InspectVolume(volName)
+	if err != nil {
+		return "", err
+	}
+	replNodes := appVol.GetReplicaSets()[0].GetNodes()
+	stNodes := node.GetStorageNodes()
+	log.Infof("replNodes %v", replNodes)
+
+	ShuffleSlice(stNodes)
+
+	for _, stNode := range stNodes {
+		log.Infof("checking for node [%s]", stNode.VolDriverNodeID)
+		if !Contains(replNodes, stNode.VolDriverNodeID) {
+			return stNode.VolDriverNodeID, nil
+		}
+	}
+
+	return "", err
+}
+
+// ShuffleSlice shuffles the elements of a slice in place.
+func ShuffleSlice[T any](slice []T) {
+	source := rand.NewSource(time.Now().UnixNano())
+	rng := rand.New(source) // Initialize the random number generator
+
+	for i := range slice {
+		j := rng.Intn(i + 1)                    // Generate a random index from 0 to i.
+		slice[i], slice[j] = slice[j], slice[i] // Swap the elements at indices i and j.
+	}
+}
+
+func PrereqForNodeDecomm(nodeToDecommission node.Node, suspendedScheds []*storkapi.VolumeSnapshotSchedule) error {
+	nodeVols, err := GetVolumesOnNode(nodeToDecommission.VolDriverNodeID)
+	if err != nil {
+		return fmt.Errorf("error getting volumes node [%s],Err: %v ", nodeToDecommission.Name, err)
+	}
+
+	credCmd := "cred list -j | grep uuid"
+
+	output, err := Inst().V.GetPxctlCmdOutput(nodeToDecommission, credCmd)
+	if err == nil && len(output) > 0 {
+		log.InfoD("Cloudsnap is enabled. Checking if backup is active on volumes")
+		for _, vol := range nodeVols {
+			isBackupActive, err := IsCloudsnapBackupActiveOnVolume(vol)
+			if err != nil {
+				return fmt.Errorf("error checking backup status  for volume  [%s],Err: %v ", vol, err)
+			}
+			log.Infof("Backup status for vol [%s]: %v", vol, isBackupActive)
+
+			if isBackupActive {
+				scheduleOfVol, err := GetVolumeSnapShotScheduleOfVol(vol)
+				if err != nil {
+					return fmt.Errorf("error getting volumes snapshot schedule for volume [%s],Err: %v ", vol, err)
+				}
+
+				if !*scheduleOfVol.Spec.Suspend {
+					log.Infof("Snapshot schedule is not suspended. Suspending it")
+					makeSuspend := true
+					scheduleOfVol.Spec.Suspend = &makeSuspend
+					_, err := storkops.Instance().UpdateSnapshotSchedule(scheduleOfVol)
+					if err != nil {
+						return fmt.Errorf("error suspending volumes snapshot schedule for volume  [%s],Err: %v ", vol, err)
+					}
+					suspendedScheds = append(suspendedScheds, scheduleOfVol)
+				}
+			}
+
+		}
+	}
+
+	for _, vol := range nodeVols {
+		newReplicaNode, err := GetNodeIdToMoveReplica(vol)
+		log.Infof("newReplicaNode %s", newReplicaNode)
+		if err != nil {
+			return fmt.Errorf("error getting replica node for volume [%s],Err: %v ", vol, err)
+		}
+
+		err = MoveReplica(vol, nodeToDecommission.VolDriverNodeID, newReplicaNode)
+		if err != nil {
+			return fmt.Errorf("error moving replica from node [%s] to volume [%s],Err: %v ", nodeToDecommission.VolDriverNodeID, newReplicaNode, err)
+		}
+	}
+	return nil
+}
+
+// ValidatePXStatus validates if PX is running on all nodes
+func ValidatePXStatus() error {
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := Inst().V.WaitDriverUpOnNode(n, 30*time.Second); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// GetNodeFromIPAddress returns node details from the provided IP Address
+func GetNodeFromIPAddress(ipaddress string) (*node.Node, error) {
+	for _, eachNode := range node.GetNodes() {
+		log.Infof(fmt.Sprintf("Comparing [%v] with [%v]", eachNode.GetMgmtIp(), ipaddress))
+		if eachNode.GetMgmtIp() == ipaddress {
+			log.Infof("Matched IP Address [%v]", eachNode.MgmtIp)
+			return &eachNode, nil
+		}
+	}
+	return nil, fmt.Errorf("Unable to fetch Node details from ipaddress [%v]", ipaddress)
+}
+
+// IsVolumeTypePureBlock Returns true if the volume type if pureBlock
+func IsVolumeTypePureBlock(ctx *scheduler.Context, volName string) (bool, error) {
+	vols, err := Inst().S.GetVolumeParameters(ctx)
+	if err != nil {
+		return false, err
+	}
+	for vol, params := range vols {
+		log.Infof(fmt.Sprintf("Checking for Volume [%v]", vol))
+		if vol == volName && params["backend"] == k8s.PureBlock {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// SetUnSetDiscardMountRTOptions Set discard mount run time options on the Node
+func SetUnSetDiscardMountRTOptions(n *node.Node, unset bool) error {
+	rtOptions := 1
+	if !unset {
+		rtOptions = 0
+	}
+	optionsMap := make(map[string]string)
+	optionsMap["discard_mount_force"] = fmt.Sprintf("%v", rtOptions)
+	err := Inst().V.SetClusterRunTimeOpts(*n, optionsMap)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ValidatePxLicenseSummary validates the license summary by comparing SKU and feature quantities
+func ValidatePxLicenseSummary() error {
+	summary, err := Inst().V.GetLicenseSummary()
+	if err != nil {
+		return fmt.Errorf("failed to get license summary. Err: [%v]", err)
+	}
+	log.Infof("License summary: %v", summary)
+	switch {
+	case IsIksCluster():
+		log.Infof("Get SKU and compare with IBM cloud license activated using catalog")
+		// Get SKU and compare with IBM cloud license
+		isValidLicense := summary.SKU == IBMTestLicenseSKU || summary.SKU == IBMTestLicenseDRSKU || summary.SKU == IBMProdLicenseSKU || summary.SKU == IBMProdLicenseDRSKU
+		if !isValidLicense {
+			return fmt.Errorf("license type is not valid: %v", summary.SKU)
+		}
+		log.InfoD("Compare with PX IBM cloud licensed features")
+		isTestOrProdSKU := summary.SKU == IBMTestLicenseSKU || summary.SKU == IBMProdLicenseSKU
+		for _, feature := range summary.Features {
+			if limit, ok := IBMLicense[LabLabel(feature.Name)]; ok {
+				// Special handling for DisasterRecovery feature and certain SKUs
+				if !isTestOrProdSKU && LabLabel(feature.Name) == LabDisasterRecovery {
+					limit = &pxapi.LicensedFeature_Enabled{Enabled: true}
+				}
+				if !reflect.DeepEqual(feature.Quantity, limit) {
+					return fmt.Errorf("verifying quantity for [%v]: actual [%v], expected [%v]", feature.Name, feature.Quantity, limit)
+				}
+			}
+		}
+		log.Infof("Validated IBM cloud license successfully")
+	case IsAksCluster():
+		return fmt.Errorf("license validation is not supported on AKS cluster")
+	case IsEksCluster():
+		return fmt.Errorf("license validation is not supported on EKS cluster")
+	case IsOkeCluster():
+		return fmt.Errorf("license validation is not supported on OKE cluster")
+	case IsPksCluster():
+		return fmt.Errorf("license validation is not supported on PKS cluster")
+	default:
+		return fmt.Errorf("license validation is not supported on Unknown cluster")
+	}
+	return nil
+}
+
+// SplitStorageDriverUpgradeURL splits the given storage driver upgrade URL into endpoint and version
+// For the upgradeURL https://install.portworx.com/3.1.1, this returns Endpoint: https://install.portworx.com and Version: 3.1.1
+func SplitStorageDriverUpgradeURL(upgradeURL string) (string, string, error) {
+	parsedURL, err := url.Parse(upgradeURL)
+	if err != nil {
+		return "", "", err
+	}
+	pathSegments := strings.Split(strings.TrimSuffix(parsedURL.Path, "/"), "/")
+	endpoint := *parsedURL
+	endpoint.Path = strings.Join(pathSegments[:len(pathSegments)-1], "/")
+	pxVersion := pathSegments[len(pathSegments)-1]
+	return endpoint.String(), pxVersion, nil
+}
+
+// GetIQNOfNode returns the IQN of the given node in a FA setup
+func GetIQNOfNode(n node.Node) (string, error) {
+	cmd := "cat /etc/iscsi/initiatorname.iscsi"
+	output, err := runCmdGetOutput(cmd, n)
+	if err != nil {
+		return "", err
+	}
+
+	for _, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, "InitiatorName") {
+			return strings.Split(line, "=")[1], nil
+		}
+	}
+	return "", fmt.Errorf("iqn not found")
+}
+
+// GetIQNOfFA gets the IQN of the FA
+func GetIQNOfFA(n node.Node, FAclient flasharray.Client) (string, error) {
+	//Run iscsiadm commands to login to the controllers
+	networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(&FAclient, "iscsi")
+	log.FailOnError(err, "Failed to get network interfaces based on service type")
+
+	for _, networkInterface := range networkInterfaces {
+		ip := networkInterface.Address
+		log.InfoD("IP address of the iscsi service: %v", ip)
+		cmd := fmt.Sprintf("iscsiadm -m discovery -t st -p %s", ip)
+		output, err := runCmdGetOutput(cmd, n)
+		if err != nil {
+			return "", err
+		}
+		log.InfoD("Output of iscsiadm discovery command: %v", output)
+		// Split the input text by newline character to get each line
+		controllers := strings.Split(output, "\n")
+		// Loop through each line
+		for _, controller := range controllers {
+			// Split the line by space
+			parts := strings.Split(controller, " ")
+			if len(parts) == 2 {
+				iqn := parts[1]
+				return iqn, nil
+			}
+		}
+
+	}
+	return "", fmt.Errorf("IQN not found")
+
+}
+
+func RefreshIscsiSession(n node.Node) error {
+	cmd := "iscsiadm -m session --rescan"
+	_, err := runCmdGetOutput(cmd, n)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetPVCObjFromVol Returns pvc object from Volume
+func GetPVCObjFromVol(vol *volume.Volume) (*v1.PersistentVolumeClaim, error) {
+	return k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
+}
+
+// Enables and Sets trashcan on the cluster
+func EnableTrashcanOnCluster(size string) error {
+	currNode := node.GetStorageDriverNodes()[0]
+	log.Infof("setting value of trashcan (volume-expiration-minutes) to [%v] ", size)
+	err := Inst().V.SetClusterOptsWithConfirmation(currNode,
+		map[string]string{"--volume-expiration-minutes": fmt.Sprintf("%v", size)})
+	return err
 }
