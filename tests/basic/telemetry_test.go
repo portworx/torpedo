@@ -38,9 +38,7 @@ var (
 	}
 	isTelemetryOperatorEnabled = false
 	oneTimeInitDone            = false
-<<<<<<< HEAD
 	stcNameSpace               string
-=======
 
 	// Default PX diag directory
 	pxDiagDir = "/var/cores/"
@@ -49,7 +47,6 @@ var (
 	// Default PX diag directory for PKS clusters
 	PksPxDiagDir = "/var/vcap/store/cores/"
 	PksPxDir     = "/var/vcap/store/etc/pwx/"
->>>>>>> master
 )
 
 // Taken from SharedV4 tests...
