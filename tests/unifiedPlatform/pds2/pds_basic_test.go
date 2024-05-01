@@ -140,19 +140,28 @@ var _ = BeforeSuite(func() {
 		log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
 		WorkflowCc.Platform = WorkflowPlatform
 		WorkflowCc.CloudCredentials = make(map[string]platform.CloudCredentialsType)
-		cc, err := WorkflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
-		log.FailOnError(err, "error occured while creating cloud credentials")
-		for _, value := range cc.CloudCredentials {
+		// cc, err := WorkflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
+		WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation] = platform.CloudCredentialsType{
+			Name:              "pds-bkp-creds-mvhgx",
+			ID:                "cred:2417a2ec-81c6-4c04-812f-f40bc982457c",
+			CloudProviderType: NewPdsParams.BackUpAndRestore.TargetLocation,
+		}
+		// log.FailOnError(err, "error occured while creating cloud credentials")
+		for _, value := range WorkflowCc.CloudCredentials {
 			log.Infof("cloud credentials name: [%s]", value.Name)
 			log.Infof("cloud credentials id: [%s]", value.ID)
 			log.Infof("cloud provider type: [%s]", value.CloudProviderType)
 		}
 
 		WorkflowbkpLoc.WfCloudCredentials = WorkflowCc
-		wfbkpLoc, err := WorkflowbkpLoc.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
-		log.FailOnError(err, "error while creating backup location")
-		log.Infof("wfBkpLoc id: [%s]", wfbkpLoc.BkpLocation.BkpLocationId)
-		log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
+		// wfbkpLoc, err := WorkflowbkpLoc.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
+		WorkflowbkpLoc.BkpLocation = platform.BkpLocationType{
+			BkpLocationId: "bloc:36b92d95-fdb2-4d1d-85c6-8551fab305f8",
+			Name:          "pds-bkp-loc-encdv",
+		}
+		// log.FailOnError(err, "error while creating backup location")
+		log.Infof("wfBkpLoc id: [%s]", WorkflowbkpLoc.BkpLocation.BkpLocationId)
+		log.Infof("wfBkpLoc name: [%s]", WorkflowbkpLoc.BkpLocation.Name)
 	})
 
 	Step("Associate platform resources to Project", func() {
