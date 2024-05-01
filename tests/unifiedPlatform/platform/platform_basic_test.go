@@ -69,7 +69,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	defer dash.TestSetEnd()
+	defer Inst().Dash.TestSetEnd()
 	defer EndTorpedoTest()
 	log.InfoD("Test Finished")
 })

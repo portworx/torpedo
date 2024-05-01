@@ -171,8 +171,9 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	// TODO: Need tp add platform cleanup here
-	defer EndPDSTorpedoTest()
+	// TODO: Need to add platform cleanup here
+	defer Inst().Dash.TestSetEnd()
+	defer EndTorpedoTest()
 })
 
 func TestDataService(t *testing.T) {

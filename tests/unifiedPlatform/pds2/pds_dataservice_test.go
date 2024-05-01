@@ -304,7 +304,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataServices are not affected", nil, 0)
+		StartPDSTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataServices are not affected", nil, 0)
 	})
 
 	It("Delete pds pods and validate if its coming back online and dataserices are not affected", func() {
