@@ -104,18 +104,14 @@ func ReadNewParams(filename string) (*parameters.NewPDSParams, error) {
 
 // EndPDSTorpedoTest ends the logging for PDS torpedo test and updates results in testrail
 func EndPDSTorpedoTest() {
-	defer func() {
-		EndTorpedoTest()
-	}()
+	defer EndTorpedoTest()
 	defer func() {
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "failed to switch context to source cluster")
 	}()
 
 	Step("Purging all PDS related objects", func() {
-		// TODO: This needs to be added back once all cleanup issues are fixed
 		PurgePDS()
-		// log.Warnf("Skipping PDS resource cleanup")
 	})
 
 }
