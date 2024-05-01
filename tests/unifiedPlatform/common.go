@@ -31,7 +31,7 @@ const (
 	EnvControlPlaneUrl     = "CONTROL_PLANE_URL"
 	DefaultTestAccount     = "pds-qa"
 	DefaultProject         = "PDS-Project"
-	DefaultTenant          = "qa-automation-test-acc"
+	DefaultTenant          = "px-system-tenant"
 	EnvPlatformAccountName = "PLATFORM_ACCOUNT_NAME"
 	EnvAccountDisplayName  = "PLATFORM_ACCOUNT_DISPLAY_NAME"
 	EnvUserMailId          = "USER_MAIL_ID"
