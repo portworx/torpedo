@@ -421,11 +421,11 @@ var _ = Describe("{DeletePDSPods}", func() {
 		}
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		Step("Delete PDS CustomTemplates", func() {
 			log.InfoD("Cleaning Up templates...")
 			err := workFlowTemplates.DeleteCreatedCustomPdsTemplates(templates)
 			log.FailOnError(err, "Error while deleting dataservice")
 		})
-		defer EndTorpedoTest()
 	})
 })

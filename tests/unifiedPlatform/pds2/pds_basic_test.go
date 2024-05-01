@@ -159,7 +159,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	EndTorpedoTest()
+	defer dash.TestSetEnd()
 	//TODO: Steps to delete Backup location, Target and Bucket
 	// TODO: Add namespace cleanup once deployment cleanup cleans up the services too
 	//err := WorkflowNamespace.Purge()
