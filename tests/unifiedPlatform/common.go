@@ -3,10 +3,8 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
-	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
@@ -106,32 +104,18 @@ func ReadNewParams(filename string) (*parameters.NewPDSParams, error) {
 
 // EndPDSTorpedoTest ends the logging for PDS torpedo test and updates results in testrail
 func EndPDSTorpedoTest() {
-
-	// Creating empty contexts as no contexts are created during PDS test
-	contexts := make([]*scheduler.Context, 0)
-
+	defer func() {
+		EndTorpedoTest()
+	}()
 	defer func() {
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "failed to switch context to source cluster")
-
-		CloseLogger(TestLogger)
-		Inst().Dash.TestCaseEnd()
-		if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
-			AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
-		}
-
-		currentSpecReport := ginkgo.CurrentSpecReport()
-		if currentSpecReport.Failed() {
-			log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
-		}
 	}()
 
 	Step("Purging all PDS related objects", func() {
-
 		// TODO: This needs to be added back once all cleanup issues are fixed
 		PurgePDS()
 		// log.Warnf("Skipping PDS resource cleanup")
-
 	})
 
 }
