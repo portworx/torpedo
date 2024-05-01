@@ -69,6 +69,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+	// TODO: Add platform cleanup for these tests
 	defer Inst().Dash.TestSetEnd()
 	defer EndTorpedoTest()
 	log.InfoD("Test Finished")
