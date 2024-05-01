@@ -42,6 +42,7 @@ func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, depl
 	// TODO: Wait for backup to complete is to be implemented
 
 	backupConfig.Backups[name] = createBackup.Create
+	log.Infof("Backup config creates - Name - [%s] - ID - [%s]", *createBackup.Create.Meta.Name, *createBackup.Create.Meta.Uid)
 
 	if value, ok := backupConfig.SkipValidatation[ValidatePdsBackupConfig]; ok {
 		if value == true {
