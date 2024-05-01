@@ -88,6 +88,7 @@ var _ = Describe("{Longevity}", func() {
 		AutopilotRebalance:                TriggerAutopilotPoolRebalance,
 		VolumeCreatePxRestart:             TriggerVolumeCreatePXRestart,
 		DeleteOldNamespaces:               TriggerDeleteOldNamespaces,
+		DeleteCloudsnaps:                  TriggerDeleteCloudsnaps,
 		MetroDRMigrationSchedule:          TriggerMetroDRMigrationSchedule,
 		CloudSnapShotRestore:              TriggerCloudSnapshotRestore,
 		LocalSnapShotRestore:              TriggerLocalSnapshotRestore,

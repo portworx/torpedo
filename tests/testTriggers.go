@@ -517,6 +517,8 @@ const (
 	UpdateIOProfile = "updateIOProfile"
 	// NodeDecommission decommission random node in the PX cluster
 	NodeDecommission = "nodeDecomm"
+	// Delelete cloudsnaps
+	DeleteCloudsnaps = "deleteCloudsnaps"
 	//NodeRejoin rejoins the decommissioned node into the PX cluster
 	NodeRejoin = "nodeRejoin"
 	// RelaxedReclaim enables RelaxedReclaim in PX cluster
@@ -3498,6 +3500,57 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 		updateMetrics(*event)
 	})
 
+}
+
+//TriggerDeleteCloudsnaps
+func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord){
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(DeleteCloudsnaps)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DeleteCloudsnaps,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	stepLog := "Delete all cloudsnaps"
+	Step(stepLog, func() {
+		log.Infof(stepLog)
+		for _, ctx := range *contexts {
+			vols, err := Inst().S.GetVolumeParameters(ctx)
+			log.Infof("Validating context: %v", ctx.App.Key)
+			log.Infof("Volumes : %v", vols)
+			log.Infof("error while get volume parameters : %v", err)
+
+			//log.FailOnError(err, fmt.Sprintf("error getting volume params for %s", ctx.App.Key))
+
+			for vol, params := range vols {
+				csBksps, err := Inst().V.GetCloudsnaps(vol, params)
+				log.Infof("Volume Name : %s", vol)
+				log.Infof("Volsnapshot err: %v", err)
+
+				//log.FailOnError(err, fmt.Sprintf("error getting cloud snaps for %s", vol))
+				for _, bk := range csBksps {
+					log.Infof("Deleting : %s having status : %v, Source volume: %s", bk.Id, bk.Status, bk.SrcVolumeName)
+					err = Inst().V.DeleteAllCloudsnaps(vol, bk.SrcVolumeId, params)
+					if err != nil && strings.Contains(err.Error(), "Key already exists") {
+						continue
+					}
+					log.Infof("ERROR while deleting %v",err)
+					
+					//log.FailOnError(err, fmt.Sprintf("error deleting Cloudsnap %s", bk.Id))
+				}
+			}
+		}
+		updateMetrics(*event)
+	})
 }
 
 // TriggerCloudSnapshotRestore perform in-place cloud snap restore
