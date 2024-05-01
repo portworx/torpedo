@@ -164,30 +164,15 @@ var _ = BeforeSuite(func() {
 			[]string{},
 			[]string{},
 		)
-		log.FailOnError(err, "Unable to associate platform resources to Project")
+		log.FailOnError(err, "Unable to associate Cluster to Project")
 		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
 	})
 
 })
 
 var _ = AfterSuite(func() {
-
-	Step("Purging all platform related objects", func() {
-
-		// TODO: This needs to be added back once cleanup issues are fixed
-		log.Warnf("Skipping Platform resource cleanup")
-		//log.InfoD("Deleting projects")
-		//err := WorkflowProject.DeleteProject()
-		//log.FailOnError(err, "unable to delete projects")
-	})
-
-	EndTorpedoTest()
-	//TODO: Steps to delete Backup location, Target and Bucket
-	// TODO: Add namespace cleanup once deployment cleanup cleans up the services too
-	//err := WorkflowNamespace.Purge()
-	//log.FailOnError(err, "Unable to cleanup all namespaces")
-	//log.InfoD("All namespaces cleaned up successfully")
-	log.InfoD("Test Finished")
+	// TODO: Need tp add platform cleanup here
+	defer EndPDSTorpedoTest()
 })
 
 func TestDataService(t *testing.T) {

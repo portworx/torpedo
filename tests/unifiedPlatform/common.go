@@ -114,7 +114,7 @@ func EndPDSTorpedoTest() {
 
 	Step("Purging all PDS related objects", func() {
 		// TODO: This needs to be added back once all cleanup issues are fixed
-		// PurgePDS()
+		PurgePDS()
 		// log.Warnf("Skipping PDS resource cleanup")
 	})
 
