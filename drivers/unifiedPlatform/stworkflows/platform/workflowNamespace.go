@@ -208,7 +208,7 @@ func (workflowNamespace *WorkflowNamespace) ValidateNamespaceDeletion(id string)
 
 		for _, eachNamespace := range allNamespaces.List.Namespaces {
 			if *eachNamespace.Meta.Uid == id {
-				return nil, true, fmt.Errorf("Namespace [%s] found after deletion", id)
+				return nil, true, fmt.Errorf("Namespace [%s] found after deletion, CurrentPhase - [%s]", id, *eachNamespace.Status.Phase)
 			}
 		}
 
