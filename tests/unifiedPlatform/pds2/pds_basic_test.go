@@ -92,8 +92,21 @@ var _ = BeforeSuite(func() {
 		log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
 	})
 
-	Step("Create Buckets", func() {
-		if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
+	Step("Associate namespace and cluster to Project", func() {
+		err := WorkflowProject.Associate(
+			[]string{WorkflowTargetCluster.ClusterUID},
+			[]string{WorkflowNamespace.Namespaces[PDS_DEFAULT_NAMESPACE]},
+			[]string{},
+			[]string{},
+			[]string{},
+			[]string{},
+		)
+		log.FailOnError(err, "Unable to associate Cluster to Project")
+		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+	})
+
+	if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
+		Step("Create Buckets", func() {
 			PDSBucketName = strings.ToLower("pds-test-buck-" + utilities.RandString(5))
 			switch NewPdsParams.BackUpAndRestore.TargetLocation {
 			case "s3-comp":
@@ -109,40 +122,43 @@ var _ = BeforeSuite(func() {
 				err := platformUtils.CreateS3CompBucket(PDSBucketName)
 				log.FailOnError(err, "error while creating s3-comp bucket")
 			}
-		}
-	})
+		})
 
-	Step("Create Cloud Credential and BackUpLocation", func() {
-		log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
-		WorkflowCc.Platform = WorkflowPlatform
-		WorkflowCc.CloudCredentials = make(map[string]platform.CloudCredentialsType)
-		cc, err := WorkflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
-		log.FailOnError(err, "error occured while creating cloud credentials")
-		for _, value := range cc.CloudCredentials {
-			log.Infof("cloud credentials name: [%s]", value.Name)
-			log.Infof("cloud credentials id: [%s]", value.ID)
-			log.Infof("cloud provider type: [%s]", value.CloudProviderType)
-		}
+		Step("Create Cloud Credential and BackUpLocation", func() {
+			log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
+			WorkflowCc.Platform = WorkflowPlatform
+			WorkflowCc.CloudCredentials = make(map[string]platform.CloudCredentialsType)
+			cc, err := WorkflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
+			log.FailOnError(err, "error occured while creating cloud credentials")
+			for _, value := range cc.CloudCredentials {
+				log.Infof("cloud credentials name: [%s]", value.Name)
+				log.Infof("cloud credentials id: [%s]", value.ID)
+				log.Infof("cloud provider type: [%s]", value.CloudProviderType)
+			}
 
-		WorkflowbkpLoc.WfCloudCredentials = WorkflowCc
-		wfbkpLoc, err := WorkflowbkpLoc.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
-		log.FailOnError(err, "error while creating backup location")
-		log.Infof("wfBkpLoc id: [%s]", wfbkpLoc.BkpLocation.BkpLocationId)
-		log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
-	})
+			WorkflowbkpLoc.WfCloudCredentials = WorkflowCc
+			wfbkpLoc, err := WorkflowbkpLoc.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
+			log.FailOnError(err, "error while creating backup location")
+			log.Infof("wfBkpLoc id: [%s]", wfbkpLoc.BkpLocation.BkpLocationId)
+			log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
+		})
 
-	Step("Associate namespace and cluster to Project", func() {
-		err := WorkflowProject.Associate(
-			[]string{WorkflowTargetCluster.ClusterUID},
-			[]string{WorkflowNamespace.Namespaces[PDS_DEFAULT_NAMESPACE]},
-			[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
-			[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
-			[]string{},
-			[]string{},
-		)
-		log.FailOnError(err, "Unable to associate Cluster to Project")
-		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
-	})
+		Step("Associate bkpLocation and cloudCredentials to the Project", func() {
+			err := WorkflowProject.Associate(
+				[]string{},
+				[]string{},
+				[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
+				[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
+				[]string{},
+				[]string{},
+			)
+			log.FailOnError(err, "Unable to associate Cluster to Project")
+			log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+		})
+
+	} else {
+		log.Debugf("Skipping Bucket Creation and Credential Creation")
+	}
 
 	Step("Dumping kubeconfigs file", func() {
 		kubeconfigs := os.Getenv("KUBECONFIGS")
@@ -159,7 +175,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	EndTorpedoTest()
+	defer dash.TestSetEnd()
 	//TODO: Steps to delete Backup location, Target and Bucket
 	// TODO: Add namespace cleanup once deployment cleanup cleans up the services too
 	//err := WorkflowNamespace.Purge()

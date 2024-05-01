@@ -7,6 +7,7 @@ import (
 	k8sutils "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
+	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,6 +33,11 @@ const (
 	targetClusterHealthTimeOut = 5 * time.Minute
 	pxTargetSecret             = "px-target-cluster-secret"
 	ManifestPath               = "/tmp/manifest.yaml"
+	//PDS-Deployments
+	PDS_BACKUP_OPERATOR     = "pds-backups-operator"
+	PDS_DEPLOYMENT_OPERATOR = "pds-deployments-operator"
+	PDS_EXTERNAL_DNS        = "pds-external-dns"
+	PDS_MUTATOR             = "pds-mutator"
 )
 
 var (
@@ -140,6 +146,45 @@ func (targetCluster *WorkflowTargetCluster) DeregisterFromControlPlane() error {
 }
 
 // ValidatePlatformComponents used to validate all k8s object in pds-system namespace
+func (targetCluster *WorkflowTargetCluster) ValidatePdsComponents() error {
+	var options metav1.ListOptions
+	var count = 0
+	pdsComponents := []string{PDS_MUTATOR, PDS_EXTERNAL_DNS, PDS_BACKUP_OPERATOR, PDS_DEPLOYMENT_OPERATOR}
+	waitErr := wait.Poll(DefaultRetryInterval, targetClusterHealthTimeOut, func() (bool, error) {
+		//gets the available deployments in the platformNamespace
+		deploymentList, err := apps.Instance().ListDeployments(platformNamespace, options)
+		if err != nil {
+			return false, err
+		}
+
+		//checks if the list deployments captures the pds deployments aswell
+		for _, deployment := range deploymentList.Items {
+			if utilities.Contains(pdsComponents, deployment.Name) {
+				log.InfoD("Deployment %s found in namespace %s\n", deployment.Name, platformNamespace)
+				count++
+			}
+		}
+
+		//once all the pds deployments are captured by the list deployments return true and break the polling
+		if count == len(pdsComponents) {
+			return true, nil
+		}
+		log.Infof("PDS Deployments not available in the %s namespace, Retrying...", platformNamespace)
+		return false, nil
+	})
+	if waitErr != nil {
+		return waitErr
+	}
+
+	// ValidatePlatformComponents validates all the deployments are up and running
+	err := targetCluster.ValidatePlatformComponents()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ValidatePlatformComponents used to validate all k8s object in pds-system namespace
 func (targetCluster *WorkflowTargetCluster) ValidatePlatformComponents() error {
 	var options metav1.ListOptions
 	deploymentList, err := apps.Instance().ListDeployments(platformNamespace, options)
@@ -178,13 +223,7 @@ func (targetCluster *WorkflowTargetCluster) InstallPDSAppOnTC(clusterId string) 
 	}
 
 	log.InfoD("Verify the health of all the deployments in %s namespace", platformNamespace)
-	err = wait.Poll(DefaultRetryInterval, targetClusterHealthTimeOut, func() (bool, error) {
-		err := targetCluster.ValidatePlatformComponents()
-		if err != nil {
-			return false, nil
-		}
-		return true, nil
-	})
+	err = targetCluster.ValidatePdsComponents()
 	if err != nil {
 		return err
 	}
