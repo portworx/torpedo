@@ -3,7 +3,6 @@ package tests
 import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -259,33 +258,30 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 
 var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 	var (
-		workflowDataservice  pds.WorkflowDataService
-		workflowBackUpConfig pds.WorkflowPDSBackupConfig
-		workflowRestore      pds.WorkflowPDSRestore
-		workflowBackup       pds.WorkflowPDSBackup
-		workFlowTemplates    pds.WorkflowPDSTemplates
-		deployments          []*automationModels.PDSDeploymentResponse
-		latestBackupUid      string
-		pdsBackupConfigName  string
-		restoreNamespaces    map[string]string
-		restoreNames         []string
-		deploymentNamespace  string
-		allBackupIds         []string
+		deployments         []*automationModels.PDSDeploymentResponse
+		latestBackupUid     string
+		pdsBackupConfigName string
+		restoreNames        []string
+		deploymentNamespace string
+		allBackupIds        []string
+		dsNameAndAppTempId  map[string]string
+		err                 error
 	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformSimultaneousRestoresDifferentDataService", "Perform multiple backup and restore simultaneously for different dataservices.", nil, 0)
-		workflowDataservice.DataServiceDeployment = make(map[string]string)
-
-		workflowRestore.Destination = &WorkflowNamespace
-		workflowDataservice.Dash = dash
-		restoreNamespaces = make(map[string]string)
 		restoreNames = make([]string, 0)
 		deployments = make([]*automationModels.PDSDeploymentResponse, 0)
 		allBackupIds = make([]string, 0)
 	})
 
 	It("Perform multiple backup and restore simultaneously for different dataservices", func() {
+
+		Step("Create Service Configuration, Resource and Storage Templates", func() {
+			//dsNameAndAppTempId = workFlowTemplates.CreateAppTemplate(NewPdsParams)
+			dsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 
@@ -311,21 +307,12 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 
 			Step("Deploy multiple dataservice", func() {
 
-				workFlowTemplates.Platform = WorkflowPlatform
+				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
+				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
-				workflowDataservice.Namespace = &WorkflowNamespace
-				workflowDataservice.NamespaceName = deploymentNamespace
-
-				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-				log.FailOnError(err, "Unable to create Custom Templates for PDS")
-
-				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId[ds.Name]
-				workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
-				workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
-
-				currDeployment, err := workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
+				currDeployment, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while deploying ds")
-				log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
+				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 				deployments = append(deployments, currDeployment)
 
 				//stepLog := "Running Workloads on deployment"
@@ -337,62 +324,60 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 		}
 
 		Step("Create multiple Adhoc backup config for the existing deployment", func() {
-			workflowBackUpConfig.WorkflowDataService = &workflowDataservice
-			workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
+			var wg sync.WaitGroup
+
 			for _, deployment := range deployments {
-				for i := 0; i < 3; i++ {
-					pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
-					workflowBackUpConfig.Backups = make(map[string]automationModels.V1BackupConfig)
-					bkpConfigResponse, err := workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
-					log.FailOnError(err, "Error occured while creating backupConfig")
-					log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
-					log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
-				}
+				wg.Add(1)
+				go func() {
+
+					defer wg.Done()
+					defer GinkgoRecover()
+
+					for i := 0; i < 3; i++ {
+						pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
+						bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
+						log.FailOnError(err, "Error occured while creating backupConfig")
+						log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
+					}
+				}()
 			}
+
+			wg.Wait()
+			log.InfoD("Simultaneous backup config creation succeeded")
 		})
 
 		Step("Get the backup detail for the backup configs", func() {
-			workflowBackup.WorkflowDataService = &workflowDataservice
-			log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
 			for _, deployment := range deployments {
-				allBackupResponse, err := workflowBackup.ListAllBackups(*deployment.Create.Meta.Name)
+				allBackupResponse, err := WorkflowPDSBackup.ListAllBackups(*deployment.Create.Meta.Name)
 				log.FailOnError(err, "Error occured while creating backup")
 				for _, backupResponse := range allBackupResponse {
 					latestBackupUid = *backupResponse.Meta.Uid
 					log.Infof("Backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
-					err = workflowBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
+					err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
 					log.FailOnError(err, "Error occured while waiting for backup to complete")
 					allBackupIds = append(allBackupIds, latestBackupUid)
 				}
 			}
-		})
 
-		Step("Create a new namespaces for restore", func() {
-			for i, backupId := range allBackupIds {
-				restoreNamespace := "restore-" + RandomString(5) + strconv.Itoa(i)
-				_, err := WorkflowNamespace.CreateNamespaces(restoreNamespace)
-				log.FailOnError(err, "Unable to create namespace")
-				log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
-				restoreNamespaces[backupId] = restoreNamespace
-			}
+			log.InfoD("Simultaneous backups creation succeeded")
 		})
 
 		Step("Creating Simultaneous restores from the dataservices", func() {
 			var wg sync.WaitGroup
 
-			workflowRestore.Restores = make(map[string]automationModels.PDSRestore)
-			workflowRestore.Destination = &WorkflowNamespace
-
-			for backupId, restoreNs := range restoreNamespaces {
-				defer wg.Done()
-				defer GinkgoRecover()
+			for _, backupId := range allBackupIds {
 
 				wg.Add(1)
+
 				go func() {
-					_, err := workflowRestore.CreateRestore(restoreNs, backupId, restoreNs)
+					defer wg.Done()
+					defer GinkgoRecover()
+
+					restoreName := "restore-" + RandomString(5)
+					_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupId, restoreName)
 					log.FailOnError(err, "Restore Failed")
-					log.Infof("Restore created successfully with ID - [%s]", workflowRestore.Restores[restoreNs].Meta.Uid)
-					restoreNames = append(restoreNames, restoreNs)
+					log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+					restoreNames = append(restoreNames, restoreName)
 				}()
 
 			}
@@ -403,22 +388,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 	})
 
 	JustAfterEach(func() {
-		for _, deployment := range deployments {
-			log.Infof("Cleaning up all resources")
-			err := workflowBackup.Purge()
-			log.FailOnError(err, "Backup cleanup failed")
-			err = workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
-			log.FailOnError(err, "Data Service cleanup failed")
-		}
-
-		err := workflowBackUpConfig.Purge(true)
-		log.FailOnError(err, "Backup Configs cleanup failed")
-
-		for _, restoreName := range restoreNames {
-			err = workflowDataservice.DeleteDeployment(workflowRestore.Restores[restoreName].Config.DestinationReferences.DeploymentId)
-			log.FailOnError(err, "Restored Data Service cleanup failed")
-		}
-		defer EndTorpedoTest()
+		defer EndPDSTorpedoTest()
 	})
 
 })
