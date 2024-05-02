@@ -58,20 +58,22 @@ func (workflowProject *WorkflowProject) GetProject() (*automationModels.WorkFlow
 
 // DeleteProject will delete the project of given project id
 func (workflowProject *WorkflowProject) DeleteProject() error {
-	log.Infof("Disscoiate all resources from project")
-	err := workflowProject.Dissociate(
-		workflowProject.AssociatedResources.Clusters,
-		workflowProject.AssociatedResources.Namespaces,
-		workflowProject.AssociatedResources.Credentials,
-		workflowProject.AssociatedResources.BackupLocations,
-		workflowProject.AssociatedResources.Templates,
-		workflowProject.AssociatedResources.BackupPolicies,
-	)
 
-	if err != nil {
-		return err
-	}
-	err = platformLibs.DeleteProject(workflowProject.ProjectId)
+	// TODO: Add this as part of the Purge method when implemented
+	//log.Infof("Disscoiate all resources from project")
+	//err := workflowProject.Dissociate(
+	//	workflowProject.AssociatedResources.Clusters,
+	//	workflowProject.AssociatedResources.Namespaces,
+	//	workflowProject.AssociatedResources.Credentials,
+	//	workflowProject.AssociatedResources.BackupLocations,
+	//	workflowProject.AssociatedResources.Templates,
+	//	workflowProject.AssociatedResources.BackupPolicies,
+	//)
+	//
+	//if err != nil {
+	//	return err
+	//}
+	err := platformLibs.DeleteProject(workflowProject.ProjectId)
 	if err != nil {
 		return err
 	}
