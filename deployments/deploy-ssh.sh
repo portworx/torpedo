@@ -423,6 +423,10 @@ if [ -n "${TORPEDO_CUSTOM_PARAM_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_CUSTOM_PARAM_MOUNT}"
 fi
 
+if [ -z "${FA_SECRET}" ]; then
+    FA_SECRET=""
+fi
+
 BUSYBOX_IMG="busybox"
 if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
     BUSYBOX_IMG="${INTERNAL_DOCKER_REGISTRY}/busybox"
