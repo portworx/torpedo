@@ -4,16 +4,15 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
 )
 
 var dash *aetosutil.Dashboard
@@ -68,14 +67,11 @@ func createMigrationScheduleCli(schedName string, cmdArgs map[string]string, ext
 			return fmt.Errorf("Error in executing create migration schedule command: %v", err)
 		}
 	}
-	// Get the captured output as a string
-	actualOutput := outputBuffer.String()
-	logrus.Infof("Actual output is: %s", actualOutput)
 	return nil
 }
 
-func PerformFailoverOrFailbackStlCli(action, namespace, migSchdRef string, skipSourceOp bool, extraArgs map[string]string) (error, string) {
-	var pfCmdArgs []string
+func PerformFailoverOrFailback(action, namespace, migSchdRef string, skipSourceOp bool, extraArgs map[string]string) (error, string) {
+	failoverFailbackCmdArgs := []string{"perform", action, "--migration-reference", migSchdRef, "--namespace", migSchedNs}
 	if namespace != "" {
 		migSchedNs = namespace 
 	}
@@ -83,26 +79,20 @@ func PerformFailoverOrFailbackStlCli(action, namespace, migSchdRef string, skipS
 	factory := storkctl.NewFactory()
 	var outputBuffer bytes.Buffer
 	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
-	if action == "failover" {
-		if skipSourceOp {
-			pfCmdArgs = []string{"perform", "failover", "--migration-reference", migSchdRef, "--namespace", migSchedNs, "--skip-source-operations"}
-		} else {
-			pfCmdArgs = []string{"perform", "failover", "--migration-reference", migSchdRef, "--namespace", migSchedNs}
-		}
-	} else {
-		pfCmdArgs = []string{"perform", "failback", "--migration-reference", migSchdRef, "--namespace", migSchedNs}
+	if skipSourceOp && action == "failover" {
+		failoverFailbackCmdArgs = append(failoverFailbackCmdArgs, "--skip-source-operations")
 	}
 	if extraArgs != nil {
 		for key, value := range extraArgs {
-			pfCmdArgs = append(pfCmdArgs, "--"+key)
+			failoverFailbackCmdArgs = append(failoverFailbackCmdArgs, "--"+key)
 			if value != "" {
-				pfCmdArgs = append(pfCmdArgs, value)
+				failoverFailbackCmdArgs = append(failoverFailbackCmdArgs, value)
 			}
 		}
 	}
-	cmd.SetArgs(pfCmdArgs)
+	cmd.SetArgs(failoverFailbackCmdArgs)
 	// execute the command
-	logrus.Infof("The storkctl command being executed is %v", pfCmdArgs)
+	logrus.Infof("The storkctl command being executed is %v", failoverFailbackCmdArgs)
 	if err := cmd.Execute(); err != nil {
 		if err != nil {
 			return fmt.Errorf("Error in executing perform %v command: %v", action, err), ""
@@ -114,39 +104,24 @@ func PerformFailoverOrFailbackStlCli(action, namespace, migSchdRef string, skipS
 	return nil, actualOutput
 }
 
-func GetDRActionStatus(actionType storkv1.ActionType, actionName string, actionNamespace string, configPath string) (string, error) {
-	factory := storkctl.NewFactory()
-	var outputBuffer bytes.Buffer
-	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
-	cmdArgs := []string{"get", string(actionType), actionName, "-n", actionNamespace, "--kubeconfig", configPath}
-	cmd.SetArgs(cmdArgs)
-	if err := cmd.Execute(); err != nil {
-		if err != nil {
-			return "", fmt.Errorf("Error in executing perform %v command: %v", string(actionType), err)
-		}
+func GetDRActionStatus(actionName, actionNamespace string) (string, string, error) {
+	var action *storkv1.Action
+	action, err := storkops.Instance().GetAction(actionName, actionNamespace)
+	if err != nil {
+		return "", "", err
 	}
-	// Get the captured output as a string
-	actualOutput := outputBuffer.String()
-	log.InfoD("Actual output is: %s", actualOutput)
-	output := strings.Split(actualOutput, "\n")
-	startIndex := make(map[string]int)
-	columns := []string{"NAME", "CREATED", "STAGE", "STATUS", "MORE INFO"}
-	for _, column := range columns {
-		startIndex[column] = strings.Index(output[0], column)
-	}
-	currentStatus := strings.TrimSpace(output[1][startIndex["STATUS"]:startIndex["MORE INFO"]])
-	return currentStatus, nil
+	return string(action.Status.Status), string(action.Status.Stage), nil
 }
 
 // WaitForMigration - waits until all migrations in the given list are successful
-func WaitForActionSuccessful(actionType storkv1.ActionType, actionName string, actionNamespace string, configPath string) error {
+func WaitForActionSuccessful(actionName string, actionNamespace string, timeoutScale int) error {
 	checkMigrations := func() (interface{}, bool, error) {
 		isComplete := true
-		status, err := GetDRActionStatus(actionType, actionName, actionNamespace, configPath)
+		status, stage, err := GetDRActionStatus(actionName, actionNamespace)
 		if err != nil {
 			return "", false, err
 		}
-		if status != "Successful" {
+		if status != "Successful" || stage != "Final" {
 			isComplete = false
 		}
 		if isComplete {
@@ -154,6 +129,7 @@ func WaitForActionSuccessful(actionType storkv1.ActionType, actionName string, a
 		}
 		return "", true, fmt.Errorf("Action status is %v waiting for successful status", status)
 	}
-	_, err := task.DoRetryWithTimeout(checkMigrations, actionRetryTimeout, actionRetryInterval)
+	actionTimeout := actionRetryTimeout * time.Duration(timeoutScale)
+	_, err := task.DoRetryWithTimeout(checkMigrations, actionTimeout, actionRetryInterval)
 	return err
 }

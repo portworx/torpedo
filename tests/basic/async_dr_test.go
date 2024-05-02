@@ -23,6 +23,7 @@ import (
 	"github.com/portworx/torpedo/pkg/asyncdr"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/storkctlcli"
+
 	//"github.com/portworx/torpedo/driver	"github.com/portworx/torpedo/drivers/scheduler"
 	//"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -48,6 +49,19 @@ const (
 var (
 	kubeConfigWritten   bool
 )
+
+type failoverFailbackParam struct {
+	action string
+	failoverOrFailbackNs string
+	migrationSchedName string
+	configPath string
+	single bool
+	skipSourceOp bool
+	includeNs bool
+	excludeNs bool
+	extraArgsFailoverFailback map[string]string
+	contexts []*scheduler.Context
+}
 
 // This test performs basic test of starting an application, creating cluster pair,
 // and migrating application to the destination clsuter
@@ -500,7 +514,19 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 	if excludeNs {
 		extraArgsFailoverFailback["exclude-namespaces"] = migrationNamespaces[0]
 	}
-	performFailoverFailback("failover", defaultNs, migrationSchedName, kubeConfigPathDest, single, skipSourceOp, includeNs, excludeNs, extraArgsFailoverFailback, contexts)
+	failoverParam := failoverFailbackParam{
+		action: "failover",
+		failoverOrFailbackNs: defaultNs,
+		migrationSchedName: migrationSchedName,
+		configPath: kubeConfigPathDest,
+		single: single,
+		skipSourceOp: skipSourceOp,
+		includeNs: includeNs,
+		excludeNs: excludeNs,
+		extraArgsFailoverFailback: extraArgsFailoverFailback,
+		contexts: contexts,
+	}
+	performFailoverFailback(failoverParam)
 	if skipSourceOp {
 		err = hardSetConfig(kubeConfigPathSrc)
 	    log.FailOnError(err, "Error setting source config: %v", err)
@@ -520,7 +546,19 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 			extraArgsFailoverFailback["exclude-namespaces"] = migrationNamespaces[1]
 		}
 		createMigSchdAndValidateMigration(newMigSched, cpName, defaultNs, kubeConfigPathDest, extraArgs)
-		performFailoverFailback("failback", defaultNs, newMigSched, kubeConfigPathDest, single, false, includeNs, excludeNs, extraArgsFailoverFailback, contexts)
+		failoverback := failoverFailbackParam{
+			action: "failback",
+			failoverOrFailbackNs: defaultNs,
+			migrationSchedName: newMigSched,
+			configPath: kubeConfigPathDest,
+			single: single,
+			skipSourceOp: false,
+			includeNs: includeNs,
+			excludeNs: excludeNs,
+			extraArgsFailoverFailback: extraArgsFailoverFailback,
+			contexts: contexts,
+		}
+		performFailoverFailback(failoverback)
 	}
 	err = asyncdr.WaitForNamespaceDeletion(migrationNamespaces)
 	if err != nil {
@@ -700,54 +738,53 @@ func createMigSchdAndValidateMigration(migSchedName, cpName, migNs, resetConfigP
 	}
 }
 
-func performFailoverFailback(action, failoverOrFailbackNs, migrationSchedName, configPath string, single, skipSourceOp, includeNs, excludeNs bool, extraArgsFailoverFailback map[string]string, contexts []*scheduler.Context) {
-	err, output := storkctlcli.PerformFailoverOrFailbackStlCli(action, failoverOrFailbackNs, migrationSchedName, skipSourceOp, extraArgsFailoverFailback)
-	log.FailOnError(err, "Error running perform %v: %v", action, err)
+func performFailoverFailback(foFbParams failoverFailbackParam) {
+	err, output := storkctlcli.PerformFailoverOrFailback(foFbParams.action, foFbParams.failoverOrFailbackNs, foFbParams.migrationSchedName, foFbParams.skipSourceOp, foFbParams.extraArgsFailoverFailback)
+	log.FailOnError(err, "Error running perform %v: %v", foFbParams.action, err)
 	splitOutput := strings.Split(output, "\n")
-	prefix := fmt.Sprintf("To check %s status use the command : `", action)
+	prefix := fmt.Sprintf("To check %s status use the command : `", foFbParams.action)
 	getStatusCommand := strings.TrimSpace(strings.TrimPrefix(splitOutput[1], prefix))
 	getStatusCommand = strings.TrimSuffix(getStatusCommand, "`")
 	getStatusCmdArgs := strings.Split(getStatusCommand, " ")
 	// Extract the action Name from the command args
 	actionName := getStatusCmdArgs[3]
-	if action == "failover" {
-		err = storkctlcli.WaitForActionSuccessful(storkapi.ActionTypeFailover, actionName, failoverOrFailbackNs, configPath)
-	} else {
-		err = storkctlcli.WaitForActionSuccessful(storkapi.ActionTypeFailback, actionName, failoverOrFailbackNs, configPath)
-	}
-	log.FailOnError(err, "Error in performing %v: %v", action, err)
-	validatePodsRunning(action, single, includeNs, excludeNs, contexts) 
+	err = storkctlcli.WaitForActionSuccessful(actionName, foFbParams.failoverOrFailbackNs, Inst().GlobalScaleFactor)
+	log.FailOnError(err, "Error in performing %v: %v", foFbParams.action, err)
+	validatePodsRunning(foFbParams.action, foFbParams.single, foFbParams.includeNs, foFbParams.excludeNs, foFbParams.contexts) 
 }
 
 func validatePodsRunning(action string, single, includeNs, excludeNs bool, contexts []*scheduler.Context) {
-	if action == "failback" {
-		kubeConfigPathSrc, err := GetCustomClusterConfigPath(asyncdr.FirstCluster)
-		log.FailOnError(err, "Failed to get source configPath: %v", err)
-		err = hardSetConfig(kubeConfigPathSrc)
-	    log.FailOnError(err, "Error setting source config")
-	}
-	if single {
-		waitForPodsToBeRunning(contexts[0], false)
-	} else if includeNs {
-		if action == "failover" {
+	switch action {
+	case "failover":
+		if includeNs {
 			waitForPodsToBeRunning(contexts[0], false)
 			for i := 1; i < len(contexts); i++ {
 				ctx := contexts[i]
 				waitForPodsToBeRunning(ctx, true)
 			}
-		} else if action == "failback" {
-			for _, ctx := range contexts {
-				waitForPodsToBeRunning(ctx, false)
-			}
-		}
-	} else if excludeNs {
-		if action == "failover" {
+		} else if excludeNs {
 			waitForPodsToBeRunning(contexts[0], true)
 			for i := 1; i < len(contexts); i++ {
 				ctx := contexts[i]
 				waitForPodsToBeRunning(ctx, false)
 			}
-	    } else if action == "failback" {
+		} else if single {
+			waitForPodsToBeRunning(contexts[0], false)
+		} else {
+			for _, ctx := range contexts {
+				waitForPodsToBeRunning(ctx, false)
+			}
+		}
+	case "failback":
+		kubeConfigPathSrc, err := GetCustomClusterConfigPath(asyncdr.FirstCluster)
+		log.FailOnError(err, "Failed to get source configPath: %v", err)
+		err = hardSetConfig(kubeConfigPathSrc)
+		log.FailOnError(err, "Error setting source config")
+		if includeNs {
+			for _, ctx := range contexts {
+				waitForPodsToBeRunning(ctx, false)
+			}
+		} else if excludeNs {
 			for i := 1; i < len(contexts); i++ {
 				ctx := contexts[i]
 				if i == 1 {
@@ -756,10 +793,12 @@ func validatePodsRunning(action string, single, includeNs, excludeNs bool, conte
 					waitForPodsToBeRunning(ctx, false)
 				}
 			}
-		}
-	} else {
-		for _, ctx := range contexts {
-			waitForPodsToBeRunning(ctx, false)
+		} else if single {
+			waitForPodsToBeRunning(contexts[0], false)
+		} else {
+			for _, ctx := range contexts {
+				waitForPodsToBeRunning(ctx, false)
+			}
 		}
 	}
 }
