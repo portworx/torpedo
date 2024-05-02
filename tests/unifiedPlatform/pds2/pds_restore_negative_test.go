@@ -42,7 +42,7 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			workflowDataService.Namespace = WorkflowNamespace
+			workflowDataService.Namespace = &WorkflowNamespace
 			workflowDataService.NamespaceName = Namespace
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
@@ -76,7 +76,7 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 	})
 	It("Perform adhoc backup before killing deployment pods.", func() {
 		var bkpConfigResponse *automationModels.PDSBackupConfigResponse
-		workflowBackUpConfig.WorkflowDataService = workflowDataService
+		workflowBackUpConfig.WorkflowDataService = &workflowDataService
 		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
 
 		Step("Take Backup and validate", func() {
@@ -102,7 +102,7 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 	})
 	It("Perform adhoc backup, restore after killing few pods to validate HA", func() {
 		var bkpConfigResponse *automationModels.PDSBackupConfigResponse
-		workflowBackUpConfig.WorkflowDataService = workflowDataService
+		workflowBackUpConfig.WorkflowDataService = &workflowDataService
 		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
 
 		Step("Take Backup and validate", func() {
@@ -119,7 +119,7 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		}()
 
 		Step("Perform Restore and validate", func() {
-			workflowRestore.WorkflowProject = WorkflowProject
+			workflowRestore.Source = &WorkflowNamespace
 			backupUid := *bkpConfigResponse.Create.Meta.Uid
 			deploymentName := *deployment.Create.Meta.Name
 			cloudSnapId := ""
@@ -167,8 +167,8 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 		StartTorpedoTest("PerformRestorePDSPodsDown", "Perform restore while simultaneously deleting backup controller manager & target controller pods.", nil, 0)
 		workflowDataservice.DataServiceDeployment = make(map[string]string)
 
-		workflowRestore.Destination = WorkflowNamespace
-		workflowRestore.WorkflowProject = WorkflowProject
+		workflowRestore.Destination = &WorkflowNamespace
+		workflowRestore.Source = &WorkflowNamespace
 		workflowDataservice.Dash = dash
 		restoreNamespace = "pds-restore-namespace-" + RandomString(5)
 	})
@@ -177,7 +177,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			Step("Deploy dataservice", func() {
 				workFlowTemplates.Platform = WorkflowPlatform
-				workflowDataservice.Namespace = WorkflowNamespace
+				workflowDataservice.Namespace = &WorkflowNamespace
 				workflowDataservice.NamespaceName = PDS_DEFAULT_NAMESPACE
 
 				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
@@ -199,7 +199,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 			})
 
 			Step("Create Adhoc backup config of the existing deployment", func() {
-				workflowBackUpConfig.WorkflowDataService = workflowDataservice
+				workflowBackUpConfig.WorkflowDataService = &workflowDataservice
 				workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
 				pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
 				workflowBackUpConfig.Backups = make(map[string]automationModels.V1BackupConfig)
@@ -210,7 +210,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 			})
 
 			Step("Get the latest backup detail for the deployment", func() {
-				workflowBackup.WorkflowDataService = workflowDataservice
+				workflowBackup.WorkflowDataService = &workflowDataservice
 				log.Infof("All deployments - [%+v]", workflowDataservice.DataServiceDeployment)
 				backupResponse, err := workflowBackup.GetLatestBackup(*deployment.Create.Meta.Name)
 				log.FailOnError(err, "Error occured while creating backup")
@@ -253,8 +253,8 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 
 			Step("Create Restore from the latest backup Id", func() {
 				restoreName := "testing_restore_" + RandomString(5)
-				workflowRestore.Destination = WorkflowNamespace
-				workflowRestore.WorkflowProject = WorkflowProject
+				workflowRestore.Destination = &WorkflowNamespace
+				workflowRestore.Source = &WorkflowNamespace
 				_, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
 				log.FailOnError(err, "Restore Failed")
 

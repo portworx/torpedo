@@ -116,7 +116,7 @@ func (template *PLATFORM_API_V1) GetTemplates(templateReq *PlatformTemplatesRequ
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `TemplateServiceGetTemplateExecute`: %v\n.Full HTTP response: %v", err, res)
 	}
-	log.InfoD("Successfully fetched the template Roles")
+	log.Infof("Successfully fetched the template Roles")
 	log.Infof("Value of template - [%v]", templateModel)
 	err = utilities.CopyStruct(templateModel, &templateResponse.Get)
 	log.Infof("Value of template after copy - [%v]", templateResponse.Get)

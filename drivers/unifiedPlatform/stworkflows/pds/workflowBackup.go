@@ -12,7 +12,8 @@ import (
 )
 
 type WorkflowPDSBackup struct {
-	WorkflowDataService WorkflowDataService
+	WorkflowDataService *WorkflowDataService
+	AllBackups          map[string]string
 }
 
 const (
@@ -53,6 +54,7 @@ func (backup WorkflowPDSBackup) WaitForBackupToComplete(backupId string) error {
 		} else {
 			log.Infof("Backup completed successfully - [%s]", *backupModel.Get.Meta.Name)
 			log.Infof("Backup Status - [%s]", *backupModel.Get.Status.CloudSnapId)
+			backup.AllBackups[*backupModel.Get.Meta.Name] = backupId
 			return nil, false, nil
 		}
 	}
@@ -101,21 +103,17 @@ func (backup WorkflowPDSBackup) ValidateBackupDeletion(id string) error {
 }
 
 // Purge deletes all backups for a given deployment
-func (backup WorkflowPDSBackup) Purge(deploymentName string) error {
+func (backup WorkflowPDSBackup) Purge() error {
 
-	allBackups, err := backup.ListAllBackups(deploymentName)
-	if err != nil {
-		return err
-	}
+	log.Infof("Total number of backups found - [%d]", len(backup.AllBackups))
 
-	log.Infof("Total number of backups found for [%s] are [%d]", deploymentName, len(allBackups))
-
-	for _, eachBackup := range allBackups {
-		err := backup.DeleteBackup(*eachBackup.Meta.Uid)
+	for _, eachBackup := range backup.AllBackups {
+		log.InfoD("Deleting [%s]", eachBackup)
+		err := backup.DeleteBackup(eachBackup)
 		if err != nil {
 			return err
 		}
-		err = backup.ValidateBackupDeletion(*eachBackup.Meta.Uid)
+		err = backup.ValidateBackupDeletion(eachBackup)
 		if err != nil {
 			return fmt.Errorf("Backup deleted but validation failed. Error - [%s]", err.Error())
 		}

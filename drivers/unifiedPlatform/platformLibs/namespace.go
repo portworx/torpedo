@@ -18,7 +18,7 @@ func CreatePDSNamespace(namespace string) error {
 	k8sCore := core.Instance()
 	_, err := k8sCore.GetNamespace(namespace)
 	if err != nil {
-		log.Warnf("Namespace not found %v", err)
+		log.Infof("Namespace not found %v", err)
 		if strings.Contains(err.Error(), "not found") {
 			nsName := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
@@ -26,7 +26,7 @@ func CreatePDSNamespace(namespace string) error {
 					Labels: map[string]string{portorxLabel: "true"},
 				},
 			}
-			log.InfoD("Creating namespace %v", namespace)
+			log.Infof("Creating namespace %v", namespace)
 			_, err = k8sCore.CreateNamespace(nsName)
 			if err != nil {
 				return fmt.Errorf("Error while creating namespace [%s]", err.Error())
@@ -50,7 +50,7 @@ func ValidateLabel(namespace string) error {
 	for key, value := range ns.Labels {
 		log.Infof("key: %v values: %v", key, value)
 		if key == portorxLabel && value == "true" {
-			log.InfoD("key: %v values: %v", key, value)
+			log.Infof("key: %v values: %v", key, value)
 			isAvailable = true
 			break
 		}

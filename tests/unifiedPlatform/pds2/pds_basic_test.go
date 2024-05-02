@@ -19,7 +19,6 @@ import (
 )
 
 var _ = BeforeSuite(func() {
-	PDS_DEFAULT_NAMESPACE = "pds-namespace-" + RandomString(5)
 	steplog := "Get prerequisite params to run platform tests"
 
 	log.InfoD(steplog)
@@ -56,6 +55,18 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "error while initialising api components in ds utils")
 	})
 
+	Step("Dumping kubeconfigs file", func() {
+		kubeconfigs := os.Getenv("KUBECONFIGS")
+		if kubeconfigs != "" {
+			kubeconfigList := strings.Split(kubeconfigs, ",")
+			if len(kubeconfigList) < 2 {
+				log.FailOnError(fmt.Errorf("At least minimum two kubeconfigs required but has"),
+					"Failed to get k8s config path.At least minimum two kubeconfigs required")
+			}
+			DumpKubeconfigs(kubeconfigList)
+		}
+	})
+
 	Step("Get Default Tenant", func() {
 		log.Infof("Initialising values for tenant")
 		WorkflowPlatform.AdminAccountId = AccID
@@ -65,12 +76,14 @@ var _ = BeforeSuite(func() {
 
 	Step("Get Default Project", func() {
 		var err error
+		DEFAULT_PROJECT_NAME := "pds-project-" + RandomString(5)
 		WorkflowProject.Platform = WorkflowPlatform
-		ProjectId, err = WorkflowProject.GetDefaultProject(DefaultProject)
-		log.FailOnError(err, "Unable to get default project")
-		log.Infof("Default project ID - [%s]", ProjectId)
-		WorkflowProject.ProjectId = ProjectId
-		WorkflowProject.ProjectName = DefaultProject
+		WorkflowProject.ProjectName = DEFAULT_PROJECT_NAME
+		_, err = WorkflowProject.CreateProject()
+		log.FailOnError(err, "unable to create project")
+		ProjectId, err = WorkflowProject.GetDefaultProject(DEFAULT_PROJECT_NAME)
+		log.FailOnError(err, "Unable to get current project")
+		log.Infof("Current project ID - [%s]", ProjectId)
 	})
 
 	Step("Register Target Cluster and Install PDS app", func() {
@@ -84,29 +97,27 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "Unable to Install pds on target cluster")
 	})
 
-	Step("Create a namespace for PDS", func() {
-		WorkflowNamespace.TargetCluster = WorkflowTargetCluster
-		WorkflowNamespace.Namespaces = make(map[string]string)
-		_, err := WorkflowNamespace.CreateNamespaces(PDS_DEFAULT_NAMESPACE)
-		log.FailOnError(err, "Unable to create namespace")
-		log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
+	Step("Register Destination target Cluster", func() {
+
+		defer func() {
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "failed to switch context to source cluster")
+		}()
+
+		err := SetDestinationKubeConfig()
+		log.FailOnError(err, "Failed to switched to destination cluster")
+
+		WorkflowTargetClusterDestination.Project = WorkflowProject
+		log.Infof("Tenant ID [%s]", WorkflowTargetClusterDestination.Project.Platform.TenantId)
+		WorkflowTargetClusterDestination, err := WorkflowTargetClusterDestination.RegisterToControlPlane(false)
+		log.FailOnError(err, "Unable to register target cluster")
+		log.Infof("Destination Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
+		err = WorkflowTargetClusterDestination.InstallPDSAppOnTC(WorkflowTargetCluster.ClusterUID)
+		log.FailOnError(err, "Unable to Install pds on destination target cluster")
 	})
 
-	Step("Associate namespace and cluster to Project", func() {
-		err := WorkflowProject.Associate(
-			[]string{WorkflowTargetCluster.ClusterUID},
-			[]string{WorkflowNamespace.Namespaces[PDS_DEFAULT_NAMESPACE]},
-			[]string{},
-			[]string{},
-			[]string{},
-			[]string{},
-		)
-		log.FailOnError(err, "Unable to associate Cluster to Project")
-		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
-	})
-
-	if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
-		Step("Create Buckets", func() {
+	Step("Create Buckets", func() {
+		if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
 			PDSBucketName = strings.ToLower("pds-test-buck-" + utilities.RandString(5))
 			switch NewPdsParams.BackUpAndRestore.TargetLocation {
 			case "s3-comp":
@@ -122,7 +133,8 @@ var _ = BeforeSuite(func() {
 				err := platformUtils.CreateS3CompBucket(PDSBucketName)
 				log.FailOnError(err, "error while creating s3-comp bucket")
 			}
-		})
+		}
+	})
 
 		Step("Create Cloud Credential and BackUpLocation", func() {
 			log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
@@ -143,45 +155,25 @@ var _ = BeforeSuite(func() {
 			log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
 		})
 
-		Step("Associate bkpLocation and cloudCredentials to the Project", func() {
-			err := WorkflowProject.Associate(
-				[]string{},
-				[]string{},
-				[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
-				[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
-				[]string{},
-				[]string{},
-			)
-			log.FailOnError(err, "Unable to associate Cluster to Project")
-			log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
-		})
-
-	} else {
-		log.Debugf("Skipping Bucket Creation and Credential Creation")
-	}
-
-	Step("Dumping kubeconfigs file", func() {
-		kubeconfigs := os.Getenv("KUBECONFIGS")
-		if kubeconfigs != "" {
-			kubeconfigList := strings.Split(kubeconfigs, ",")
-			if len(kubeconfigList) < 2 {
-				log.FailOnError(fmt.Errorf("At least minimum two kubeconfigs required but has"),
-					"Failed to get k8s config path.At least minimum two kubeconfigs required")
-			}
-			DumpKubeconfigs(kubeconfigList)
-		}
+	Step("Associate platform resources to Project", func() {
+		err := WorkflowProject.Associate(
+			[]string{WorkflowTargetCluster.ClusterUID, WorkflowTargetClusterDestination.ClusterUID},
+			[]string{},
+			[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
+			[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
+			[]string{},
+			[]string{},
+		)
+		log.FailOnError(err, "Unable to associate Cluster to Project")
+		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
 	})
 
 })
 
 var _ = AfterSuite(func() {
-	defer dash.TestSetEnd()
-	//TODO: Steps to delete Backup location, Target and Bucket
-	// TODO: Add namespace cleanup once deployment cleanup cleans up the services too
-	//err := WorkflowNamespace.Purge()
-	//log.FailOnError(err, "Unable to cleanup all namespaces")
-	//log.InfoD("All namespaces cleaned up successfully")
-	log.InfoD("Test Finished")
+	// TODO: Need to add platform cleanup here
+	defer Inst().Dash.TestSetEnd()
+	defer EndTorpedoTest()
 })
 
 func TestDataService(t *testing.T) {

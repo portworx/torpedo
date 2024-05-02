@@ -83,7 +83,7 @@ func CreateServiceConfigTemplate(tenantId string, dsName string, serviceConfig S
 			},
 		},
 	}}
-	log.InfoD("Create ServiceConfiguration Request formed is- {%v}", createReq)
+	log.Infof("Create ServiceConfiguration Request formed is- {%v}", createReq)
 	templateResponse, err := v2Components.Platform.CreateTemplates(&createReq)
 	if err != nil {
 		return templateResponse, err
@@ -109,7 +109,7 @@ func CreateStorageConfigTemplate(tenantId string, templateConfigs StorageConfigu
 			},
 		},
 	}}
-	log.InfoD("Create StorageConfiguration Request formed is- {%v}", createReq)
+	log.Infof("Create StorageConfiguration Request formed is- {%v}", createReq)
 	templateResponse, err := v2Components.Platform.CreateTemplates(&createReq)
 	if err != nil {
 		return templateResponse, err
@@ -136,7 +136,7 @@ func CreateResourceConfigTemplate(tenantId string, templateConfigs ResourceConfi
 			Status: nil,
 		},
 	}}
-	log.InfoD("Create ResourceConfiguration Request formed is- {%v}", createReq)
+	log.Infof("Create ResourceConfiguration Request formed is- {%v}", createReq)
 	templateResponse, err := v2Components.Platform.CreateTemplates(&createReq)
 	if err != nil {
 		return templateResponse, err

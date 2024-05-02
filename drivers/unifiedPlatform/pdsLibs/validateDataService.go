@@ -162,7 +162,7 @@ func ValidateDeploymentIsDeleted(deploymentId string) error {
 	err = wait.Poll(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
 		res, err := v2Components.PDS.GetDeployment(deploymentId)
 		if err != nil && strings.Contains(err.Error(), "resource not found") {
-			log.Errorf("Error occured while getting deployment status %v", err)
+			log.Infof("Error occured while getting deployment status %v", err)
 			return true, nil
 		}
 		log.Debugf("Health status -  %v", *res.Get.Status.Health)
