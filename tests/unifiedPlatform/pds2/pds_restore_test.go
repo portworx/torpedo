@@ -709,7 +709,6 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 
 	JustBeforeEach(func() {
 		StartPDSTorpedoTest("PerformRestoreAfterDataServiceUpdate", "Perform restore after ds update", nil, 0)
-
 	})
 
 	Step("Create Service Configuration, Resource and Storage Templates", func() {
