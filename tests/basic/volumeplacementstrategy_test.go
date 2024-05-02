@@ -2,14 +2,11 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
-	"math/rand"
-	"time"
-
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/talisman"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/talisman/pkg/apis/portworx/v1beta1"
 	"github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
 	"github.com/portworx/torpedo/drivers/node"
@@ -19,6 +16,8 @@ import (
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/portworx/torpedo/pkg/vpsutil"
 	. "github.com/portworx/torpedo/tests"
+	"math/rand"
+	"time"
 )
 
 var _ = Describe("{VolumePlacementStrategyFunctional}", func() {
