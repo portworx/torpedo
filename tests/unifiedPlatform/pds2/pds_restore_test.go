@@ -725,7 +725,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
-				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Name, ds.Version)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 
