@@ -6,6 +6,7 @@ import (
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
+	"time"
 )
 
 type WorkflowPDSRestore struct {
@@ -22,6 +23,8 @@ const (
 )
 
 func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, namespace string) (*automationModels.PDSRestoreResponse, error) {
+
+	log.Infof("Restore [%s] started at [%s]", name, time.Now().Format("2006-01-02 15:04:05"))
 
 	log.Infof("Name of restore - [%s]", name)
 	log.Infof("Backup UUID - [%s]", backupUid)

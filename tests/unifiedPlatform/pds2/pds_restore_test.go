@@ -258,14 +258,15 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 
 var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 	var (
-		deployments         []*automationModels.PDSDeploymentResponse
-		latestBackupUid     string
-		pdsBackupConfigName string
-		restoreNames        []string
-		deploymentNamespace string
-		allBackupIds        []string
-		dsNameAndAppTempId  map[string]string
-		err                 error
+		deployments          []*automationModels.PDSDeploymentResponse
+		latestBackupUid      string
+		pdsBackupConfigName  string
+		restoreNames         []string
+		deploymentNamespace  string
+		allBackupIds         []string
+		dsNameAndAppTempId   map[string]string
+		err                  error
+		BackupsPerDeployment int
 	)
 
 	JustBeforeEach(func() {
@@ -273,6 +274,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 		restoreNames = make([]string, 0)
 		deployments = make([]*automationModels.PDSDeploymentResponse, 0)
 		allBackupIds = make([]string, 0)
+		BackupsPerDeployment = 5
 	})
 
 	It("Perform multiple backup and restore simultaneously for different dataservices", func() {
@@ -327,19 +329,19 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 			var wg sync.WaitGroup
 
 			for _, deployment := range deployments {
-				wg.Add(1)
-				go func() {
+				for i := 0; i < BackupsPerDeployment; i++ {
+					wg.Add(1)
+					go func() {
 
-					defer wg.Done()
-					defer GinkgoRecover()
+						defer wg.Done()
+						defer GinkgoRecover()
 
-					for i := 0; i < 3; i++ {
 						pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
 						bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
 						log.FailOnError(err, "Error occured while creating backupConfig")
 						log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
-					}
-				}()
+					}()
+				}
 			}
 
 			wg.Wait()
