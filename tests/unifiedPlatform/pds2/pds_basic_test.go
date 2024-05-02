@@ -136,24 +136,24 @@ var _ = BeforeSuite(func() {
 		}
 	})
 
-	Step("Create Cloud Credential and BackUpLocation", func() {
-		log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
-		WorkflowCc.Platform = WorkflowPlatform
-		WorkflowCc.CloudCredentials = make(map[string]platform.CloudCredentialsType)
-		cc, err := WorkflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
-		log.FailOnError(err, "error occured while creating cloud credentials")
-		for _, value := range cc.CloudCredentials {
-			log.Infof("cloud credentials name: [%s]", value.Name)
-			log.Infof("cloud credentials id: [%s]", value.ID)
-			log.Infof("cloud provider type: [%s]", value.CloudProviderType)
-		}
+		Step("Create Cloud Credential and BackUpLocation", func() {
+			log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
+			WorkflowCc.Platform = WorkflowPlatform
+			WorkflowCc.CloudCredentials = make(map[string]platform.CloudCredentialsType)
+			cc, err := WorkflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
+			log.FailOnError(err, "error occured while creating cloud credentials")
+			for _, value := range cc.CloudCredentials {
+				log.Infof("cloud credentials name: [%s]", value.Name)
+				log.Infof("cloud credentials id: [%s]", value.ID)
+				log.Infof("cloud provider type: [%s]", value.CloudProviderType)
+			}
 
-		WorkflowbkpLoc.WfCloudCredentials = WorkflowCc
-		wfbkpLoc, err := WorkflowbkpLoc.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
-		log.FailOnError(err, "error while creating backup location")
-		log.Infof("wfBkpLoc id: [%s]", wfbkpLoc.BkpLocation.BkpLocationId)
-		log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
-	})
+			WorkflowbkpLoc.WfCloudCredentials = WorkflowCc
+			wfbkpLoc, err := WorkflowbkpLoc.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
+			log.FailOnError(err, "error while creating backup location")
+			log.Infof("wfBkpLoc id: [%s]", wfbkpLoc.BkpLocation.BkpLocationId)
+			log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
+		})
 
 	Step("Associate platform resources to Project", func() {
 		err := WorkflowProject.Associate(

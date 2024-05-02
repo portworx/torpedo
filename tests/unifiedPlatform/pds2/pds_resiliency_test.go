@@ -51,12 +51,23 @@ var _ = Describe("{ValidatePdsHealthIncaseofFailures}", func() {
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 			})
 
+			//stepLog := "Running Workloads before taking backups"
+			//Step(stepLog, func() {
+			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			//	log.FailOnError(err, "Error while running workloads on ds")
+			//})
+
 			Step("Delete PdsDeploymentPods and check the deployment health", func() {
 				workflowResiliency.WfDataService = &WorkflowDataService
 				workflowResiliency.ResiliencyFlag = true
 				workflowResiliency.InduceFailureAndExecuteResiliencyScenario(ds, deployment, DeletePdsDeploymentPodAndValidateDeploymentHealth)
 			})
 
+			//stepLog = "Running Workloads after ScaleUp of DataService"
+			//Step(stepLog, func() {
+			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			//	log.FailOnError(err, "Error while running workloads on ds")
+			//})
 		}
 	})
 

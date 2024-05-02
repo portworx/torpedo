@@ -46,6 +46,12 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 			})
 
+			//stepLog := "Running Workloads before taking backups"
+			//Step(stepLog, func() {
+			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			//	log.FailOnError(err, "Error while running workloads on ds")
+			//})
+
 			Step("ScaleUp DataService", func() {
 				log.InfoD("Scaling Up dataServices...")
 				updateDeployment, err := WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
@@ -53,6 +59,11 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
 			})
 
+			//stepLog = "Running Workloads after ScaleUp of DataService"
+			//Step(stepLog, func() {
+			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			//	log.FailOnError(err, "Error while running workloads on ds")
+			//})
 		}
 	})
 
@@ -99,6 +110,11 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 				_, err := WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while updating ds")
 
+				//stepLog := "Running Workloads after upgrading the ds image"
+				//Step(stepLog, func() {
+				//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+				//	log.FailOnError(err, "Error while running workloads on ds")
+				//})
 			})
 
 		}
@@ -328,6 +344,12 @@ var _ = Describe("{DeletePDSPods}", func() {
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 			})
+
+			//stepLog := "Running Workloads before deleting pods in Px-System namespace"
+			//Step(stepLog, func() {
+			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			//	log.FailOnError(err, "Error while running workloads on ds")
+			//})
 
 			Step("Delete PDSPods", func() {
 				err := WorkflowDataService.DeletePDSPods()
