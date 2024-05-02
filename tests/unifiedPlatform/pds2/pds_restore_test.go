@@ -269,7 +269,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("PerformSimultaneousRestoresDifferentDataService", "Perform multiple backup and restore simultaneously for different dataservices.", nil, 0)
+		StartPDSTorpedoTest("PerformSimultaneousRestoresDifferentDataService", "Perform multiple backup and restore simultaneously for different dataservices.", nil, 0)
 		restoreNames = make([]string, 0)
 		deployments = make([]*automationModels.PDSDeploymentResponse, 0)
 		allBackupIds = make([]string, 0)
