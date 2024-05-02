@@ -538,7 +538,7 @@ var _ = Describe("{VPSValueDoesntExist}", func() {
 
 					for _, pvc := range pvcs.Items {
 						log.InfoD("PVC %s status is %s", pvc.Name, pvc.Status.Phase)
-						if pvc.Status.Phase != "Bound" {
+						if pvc.Status.Phase == "Pending" {
 							return nil, false, nil
 						}
 					}
