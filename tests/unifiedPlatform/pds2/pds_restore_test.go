@@ -478,7 +478,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 
 		stepLog := "Running Workloads before upgrading the ds image"
 		Step(stepLog, func() {
-			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams, "")
 			log.FailOnError(err, "Error while running workloads on ds")
 		})
 	})
@@ -511,7 +511,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 
 		stepLog := "Running Workloads after upgrading the ds image"
 		Step(stepLog, func() {
-			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams, "")
 			log.FailOnError(err, "Error while running workloads on ds")
 		})
 	})
@@ -534,7 +534,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 
 			stepLog := "Running Workloads after upgrading the ds image"
 			Step(stepLog, func() {
-				err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+				err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams, "")
 				log.FailOnError(err, "Error while running workloads on ds")
 			})
 		})
@@ -602,7 +602,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 		}()
 		stepLog := "Running Workloads before taking backups"
 		Step(stepLog, func() {
-			err := workflowDataService.RunDataServiceWorkloads(NewPdsParams)
+			err := workflowDataService.RunDataServiceWorkloads(NewPdsParams, "")
 			log.FailOnError(err, "Error while running workloads on ds")
 		})
 	})
@@ -667,7 +667,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 		})
 		stepLog = "Running Workloads after Resize of PVC"
 		Step(stepLog, func() {
-			err := workflowDataService.RunDataServiceWorkloads(NewPdsParams)
+			err := workflowDataService.RunDataServiceWorkloads(NewPdsParams, "")
 			log.FailOnError(err, "Error while running workloads on ds")
 		})
 	})
@@ -769,7 +769,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 
 		stepLog := "Running Workloads before upgrading the ds image"
 		Step(stepLog, func() {
-			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams, "")
 			log.FailOnError(err, "Error while running workloads on ds")
 		})
 	})
@@ -829,7 +829,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 
 		stepLog := "Running Workloads after upgrading the ds image"
 		Step(stepLog, func() {
-			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams, "")
 			log.FailOnError(err, "Error while running workloads on ds")
 		})
 	})
@@ -937,7 +937,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 
 		stepLog := "Running Workloads before upgrading the ds image"
 		Step(stepLog, func() {
-			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams, "")
 			log.FailOnError(err, "Error while running workloads on ds")
 		})
 	})

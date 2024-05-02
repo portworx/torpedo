@@ -115,9 +115,8 @@ var _ = BeforeSuite(func() {
 		err = WorkflowTargetClusterDestination.InstallPDSAppOnTC(WorkflowTargetCluster.ClusterUID)
 		log.FailOnError(err, "Unable to Install pds on destination target cluster")
 	})
-
-	Step("Create Buckets", func() {
-		if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
+	if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
+		Step("Create Buckets", func() {
 			PDSBucketName = strings.ToLower("pds-test-buck-" + utilities.RandString(5))
 			switch NewPdsParams.BackUpAndRestore.TargetLocation {
 			case "s3-comp":
@@ -133,8 +132,7 @@ var _ = BeforeSuite(func() {
 				err := platformUtils.CreateS3CompBucket(PDSBucketName)
 				log.FailOnError(err, "error while creating s3-comp bucket")
 			}
-		}
-	})
+		})
 
 		Step("Create Cloud Credential and BackUpLocation", func() {
 			log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
@@ -155,18 +153,19 @@ var _ = BeforeSuite(func() {
 			log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
 		})
 
-	Step("Associate platform resources to Project", func() {
-		err := WorkflowProject.Associate(
-			[]string{WorkflowTargetCluster.ClusterUID, WorkflowTargetClusterDestination.ClusterUID},
-			[]string{},
-			[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
-			[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
-			[]string{},
-			[]string{},
-		)
-		log.FailOnError(err, "Unable to associate Cluster to Project")
-		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
-	})
+		Step("Associate platform resources to Project", func() {
+			err := WorkflowProject.Associate(
+				[]string{WorkflowTargetCluster.ClusterUID, WorkflowTargetClusterDestination.ClusterUID},
+				[]string{},
+				[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
+				[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
+				[]string{},
+				[]string{},
+			)
+			log.FailOnError(err, "Unable to associate Cluster to Project")
+			log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+		})
+	}
 
 })
 

@@ -70,7 +70,7 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 
 		stepLog := "Running Workloads before taking backups"
 		Step(stepLog, func() {
-			err := workflowDataService.RunDataServiceWorkloads(NewPdsParams)
+			err := workflowDataService.RunDataServiceWorkloads(NewPdsParams, "")
 			log.FailOnError(err, "Error while running workloads on ds")
 		})
 	})

@@ -57,7 +57,8 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		return nil, err
 	}
 
-	wfDataService.DataServiceDeployment[*deployment.Create.Meta.Name] = *deployment.Create.Meta.Uid
+	log.InfoD("Actual Deployment Name:[%s]", *deployment.Create.Status.CustomResourceName)
+	wfDataService.DataServiceDeployment[*deployment.Create.Status.CustomResourceName] = *deployment.Create.Meta.Uid
 	wfDataService.NamespaceMap[*deployment.Create.Meta.Name] = namespaceName
 
 	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
@@ -209,12 +210,12 @@ func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId strin
 	return nil
 }
 
-func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(params *parameters.NewPDSParams) error {
+func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(params *parameters.NewPDSParams, dsName string) error {
 
 	//Initializing the parameters required for workload generation
 	wkloadParams := dslibs.LoadGenParams{
 		LoadGenDepName: params.LoadGen.LoadGenDepName,
-		Namespace:      params.InfraToTest.Namespace,
+		Namespace:      wfDataService.NamespaceName,
 		NumOfRows:      params.LoadGen.NumOfRows,
 		Timeout:        params.LoadGen.Timeout,
 		Replicas:       params.LoadGen.Replicas,
@@ -223,13 +224,15 @@ func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(params *parame
 		FailOnError:    params.LoadGen.FailOnError,
 	}
 
-	chkSum, wlDep, err := dslibs.InsertDataAndReturnChecksum(wfDataService.DataServiceDeployment, wkloadParams)
+	//wfDataService.DataServiceDeployment = map[string]string{"pg-test2-j1fhpv": "dep:ecd43ec6-25d6-47af-8cf1-92282341c15c"}
+	chkSum, wlDep, err := dslibs.InsertDataAndReturnChecksum(wfDataService.DataServiceDeployment, dsName, wkloadParams)
 	if err != nil {
 		return err
 	}
 
 	deploymentName, _ := GetDeploymentNameAndId(wfDataService.DataServiceDeployment)
 
+	wfDataService.SourceDeploymentMd5Hash = make(map[string]string)
 	wfDataService.SourceDeploymentMd5Hash[deploymentName] = chkSum
 
 	return dslibs.DeleteWorkloadDeployments(wlDep)
@@ -239,7 +242,7 @@ func (wfDataService *WorkflowDataService) ValidateDataServiceWorkloads(params *p
 	//Initializing the parameters required for workload generation
 	wkloadParams := dslibs.LoadGenParams{
 		LoadGenDepName: params.LoadGen.LoadGenDepName,
-		Namespace:      params.InfraToTest.Namespace,
+		Namespace:      wfDataService.NamespaceName,
 		NumOfRows:      params.LoadGen.NumOfRows,
 		Timeout:        params.LoadGen.Timeout,
 		Replicas:       params.LoadGen.Replicas,
@@ -251,7 +254,7 @@ func (wfDataService *WorkflowDataService) ValidateDataServiceWorkloads(params *p
 	deployment := make(map[string]string)
 	deployment[*restoredDeployment.Create.Meta.Name] = *restoredDeployment.Create.Meta.Uid
 	// chkSum, wlDep, err := dslibs.ReadDataAndReturnChecksum(deployment, wkloadParams)
-	_, wlDep, err := dslibs.ReadDataAndReturnChecksum(deployment, wkloadParams)
+	_, wlDep, err := dslibs.ReadDataAndReturnChecksum(deployment, "", wkloadParams)
 	if err != nil {
 		return err
 	}

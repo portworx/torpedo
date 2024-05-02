@@ -148,9 +148,9 @@ func (targetCluster *WorkflowTargetCluster) DeregisterFromControlPlane() error {
 // ValidatePlatformComponents used to validate all k8s object in pds-system namespace
 func (targetCluster *WorkflowTargetCluster) ValidatePdsComponents() error {
 	var options metav1.ListOptions
-	var count = 0
 	pdsComponents := []string{PDS_MUTATOR, PDS_EXTERNAL_DNS, PDS_BACKUP_OPERATOR, PDS_DEPLOYMENT_OPERATOR}
 	waitErr := wait.Poll(DefaultRetryInterval, targetClusterHealthTimeOut, func() (bool, error) {
+		var count = 0
 		//gets the available deployments in the platformNamespace
 		deploymentList, err := apps.Instance().ListDeployments(platformNamespace, options)
 		if err != nil {
@@ -202,7 +202,6 @@ func (targetCluster *WorkflowTargetCluster) ValidatePlatformComponents() error {
 }
 
 func (targetCluster *WorkflowTargetCluster) InstallPDSAppOnTC(clusterId string) error {
-	time.Sleep(10000)
 	appName := "pds"
 	// Check if PDS tcApp already exists
 	objects, err := k8sutils.GetCRObject(platformNamespace, "core.portworx.com", "v1", "targetclusterapplications")

@@ -21,6 +21,24 @@ var _ = Describe("{CleanUpDeployments}", func() {
 	})
 })
 
+var _ = Describe("{ValidateWorkloads}", func() {
+
+	JustBeforeEach(func() {
+		tests.StartPDSTorpedoTest("ValidateWorkloads", "validate  workloads", nil, 0)
+	})
+	It("Validate Workloads", func() {
+		stepLog := "Running Workloads before upgrading the ds image"
+		Step(stepLog, func() {
+			err := tests.WorkflowDataService.RunDataServiceWorkloads(tests.NewPdsParams, "postgresql")
+			log.FailOnError(err, "Error while running workloads on ds")
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 var _ = Describe("{ValidateDnsEndPoint}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ValidateDnsEndPoint", "validate dns endpoint", nil, 0)

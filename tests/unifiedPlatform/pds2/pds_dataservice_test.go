@@ -46,11 +46,11 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 			})
 
-			//stepLog := "Running Workloads before taking backups"
-			//Step(stepLog, func() {
-			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-			//	log.FailOnError(err, "Error while running workloads on ds")
-			//})
+			stepLog := "Running Workloads before scaling up data service"
+			Step(stepLog, func() {
+				err := WorkflowDataService.RunDataServiceWorkloads(NewPdsParams, ds.Name)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
 
 			Step("ScaleUp DataService", func() {
 				log.InfoD("Scaling Up dataServices...")
@@ -59,11 +59,11 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
 			})
 
-			//stepLog = "Running Workloads after ScaleUp of DataService"
-			//Step(stepLog, func() {
-			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-			//	log.FailOnError(err, "Error while running workloads on ds")
-			//})
+			stepLog = "Running Workloads after ScaleUp of DataService"
+			Step(stepLog, func() {
+				err := WorkflowDataService.RunDataServiceWorkloads(NewPdsParams, ds.Name)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
 		}
 	})
 
@@ -106,21 +106,25 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 			})
 
+			stepLog := "Running Workloads before upgrading the ds image"
+			Step(stepLog, func() {
+				err := WorkflowDataService.RunDataServiceWorkloads(NewPdsParams, ds.Name)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+
 			Step("Upgrade DataService Image", func() {
 				_, err := WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while updating ds")
+			})
 
-				//stepLog := "Running Workloads after upgrading the ds image"
-				//Step(stepLog, func() {
-				//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-				//	log.FailOnError(err, "Error while running workloads on ds")
-				//})
+			stepLog = "Running Workloads after upgrading the ds image"
+			Step(stepLog, func() {
+				err := WorkflowDataService.RunDataServiceWorkloads(NewPdsParams, ds.Name)
+				log.FailOnError(err, "Error while running workloads on ds")
 			})
 
 		}
 	})
-
-	//TODO: Take backup and Restore the deployment once restore issue is resolved
 
 	JustAfterEach(func() {
 		defer EndPDSTorpedoTest()
@@ -291,7 +295,7 @@ var _ = Describe("{GetPVCFullCondition}", func() {
 			}()
 
 			log.InfoD("Running Workloads to fill up the PVC")
-			err = workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			err = workflowDataservice.RunDataServiceWorkloads(NewPdsParams, ds.Name)
 			log.FailOnError(err, "Error while running workloads on ds")
 
 			log.InfoD("Compute the PVC usage")
@@ -345,11 +349,11 @@ var _ = Describe("{DeletePDSPods}", func() {
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 			})
 
-			//stepLog := "Running Workloads before deleting pods in Px-System namespace"
-			//Step(stepLog, func() {
-			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-			//	log.FailOnError(err, "Error while running workloads on ds")
-			//})
+			stepLog := "Running Workloads before deleting pods in Px-System namespace"
+			Step(stepLog, func() {
+				err := WorkflowDataService.RunDataServiceWorkloads(NewPdsParams, ds.Name)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
 
 			Step("Delete PDSPods", func() {
 				err := WorkflowDataService.DeletePDSPods()
@@ -364,6 +368,12 @@ var _ = Describe("{DeletePDSPods}", func() {
 					ds.Version,
 					ds.Image)
 				log.FailOnError(err, "Error while Validating dataservice")
+			})
+
+			stepLog = "Running Workloads after deleting pods in Px-System namespace"
+			Step(stepLog, func() {
+				err := WorkflowDataService.RunDataServiceWorkloads(NewPdsParams, ds.Name)
+				log.FailOnError(err, "Error while running workloads on ds")
 			})
 		}
 	})
