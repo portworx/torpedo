@@ -284,9 +284,9 @@ func DisableNetworkInterface(faClient *flasharray.Client, iface string) (bool, e
 		return false, err
 	}
 	if !interfaces.Enabled {
-		return true, nil
+		return false, nil
 	}
-	return false, fmt.Errorf("Failed to disable network interface [%v]", iface)
+	return true, fmt.Errorf("Failed to disable network interface [%v]", iface)
 }
 
 // GetHostFromIqn returns host name from iqn
