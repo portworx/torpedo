@@ -3532,11 +3532,11 @@ func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *E
 			log.Infof("Volumes : %v", vols)
 			UpdateOutcome(event, err)
 			for vol, params := range vols {
+				log.Infof("Volume Name : %s", vol)
 				inspectedVol, err:= Inst().V.InspectVolume(vol)
 				UpdateOutcome(event, err)
 				csBksps, err := Inst().V.GetCloudsnapsOfGivenVolume(vol, inspectedVol.Id, params)
 				UpdateOutcome(event, err)
-				log.Infof("Volume Name : %s", vol)
 				var cloudsnapIds []string
 				for _, bk := range csBksps {
 					log.Infof("Before Backup ID : %s having status : %v, Source volume: %s", bk.Id, bk.Status, bk.SrcVolumeName)
@@ -3551,8 +3551,6 @@ func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *E
 						continue
 					}
 					UpdateOutcome(event, err)
-				}else{
-					log.Infof("No cloudsnap for vol : %s", vol )
 				}
 			}
 		}
@@ -3564,6 +3562,7 @@ func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *E
 				for vol, params := range vols {
 					log.Infof("Volume Name : %s", vol)
 					inspectedVol, err:= Inst().V.InspectVolume(vol)
+					UpdateOutcome(event, err)
 					csBksps, err := Inst().V.GetCloudsnapsOfGivenVolume(vol, inspectedVol.Id, params)
 					UpdateOutcome(event, err)
 					cloudsnapIds, ok := volCloudsnapMap[vol]
@@ -3573,8 +3572,6 @@ func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *E
 								log.Infof("Cloud snap hasn not deleted successfully : %s: vol %s", bk.Id , vol )
 								UpdateOutcome(event, fmt.Errorf("Cloud snap has not deleted successfully : %s: vol %s", bk.Id , vol))
 							}
-							// log.Infof("after backup ID : %s having status : %v, Source volume: %s", bk.Id, bk.Status, bk.SrcVolumeName)
-							// log.Infof("bk.GetMetadata() : %v , Source volume: %s", bk.GetMetadata(), bk.SrcVolumeName)
 						}
 					}
 				}
