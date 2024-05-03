@@ -267,6 +267,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 		dsNameAndAppTempId   map[string]string
 		err                  error
 		BackupsPerDeployment int
+		allErrors            []error
 	)
 
 	JustBeforeEach(func() {
@@ -338,13 +339,17 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 
 						pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
 						bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
-						log.FailOnError(err, "Error occured while creating backupConfig")
+						if err != nil {
+							log.Errorf("Some error occurred while creating backup [%s], Error - [%s]", pdsBackupConfigName, err.Error())
+							allErrors = append(allErrors, err)
+						}
 						log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
 					}()
 				}
 			}
 
 			wg.Wait()
+			dash.VerifyFatal(len(allErrors), 0, "Some error occurred while creating backup configs")
 			log.InfoD("Simultaneous backup config creation succeeded")
 		})
 
@@ -352,6 +357,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 			for _, deployment := range deployments {
 				allBackupResponse, err := WorkflowPDSBackup.ListAllBackups(*deployment.Create.Meta.Name)
 				log.FailOnError(err, "Error occured while creating backup")
+				dash.VerifyFatal(len(allBackupResponse), BackupsPerDeployment, fmt.Sprintf("Total number of backups found for [%s] are not consisten with backup configs created.", *deployment.Create.Meta.Name))
 				for _, backupResponse := range allBackupResponse {
 					latestBackupUid = *backupResponse.Meta.Uid
 					log.Infof("Backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
@@ -377,7 +383,9 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 
 					restoreName := "restore-" + RandomString(5)
 					_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupId, restoreName)
-					log.FailOnError(err, "Restore Failed")
+					if err != nil {
+						log.Errorf("Error occurred while creating [%s], Error - [%s]", restoreName, err.Error())
+					}
 					log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
 					restoreNames = append(restoreNames, restoreName)
 				}()
@@ -385,6 +393,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 			}
 
 			wg.Wait()
+			dash.VerifyFatal(len(allErrors), 0, "Some error occurred while creating restores")
 			log.InfoD("Simultaneous restores succeeded")
 		})
 	})
