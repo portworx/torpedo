@@ -360,6 +360,7 @@ func IsVMBindMounted(virtualMachineCtx *scheduler.Context, wait bool) (bool, err
 	}
 	globalReplicSet := volInspect.ReplicaSets
 	log.InfoD("Length of replicaset: %d", len(globalReplicSet))
+	log.Infof("RK=> Global replica set volume: %s", volInspect.Id)
 
 	// The criteria to call the bind mount successful is to check if the replicaset of all volumes should be same and should be locally attached to the node
 	// check if the replicaset values is same as the global replicaset
@@ -404,14 +405,20 @@ func ReplicaSetsMatch(replicaset []*api.ReplicaSet, globalReplicSet []*api.Repli
 
 	for _, rs := range replicaset {
 		for _, rsNode := range rs.Nodes {
+			log.Infof("RK=> Replica set nodes: %s", rsNode)
 			replicasetNodes[rsNode] = true
 		}
 	}
 
 	for _, grs := range globalReplicSet {
 		for _, grsNode := range grs.Nodes {
+			log.Infof("RK=> Global Replica set nodes: %s", grsNode)
+		}
+	}
+	for _, grs := range globalReplicSet {
+		for _, grsNode := range grs.Nodes {
 			if _, ok := replicasetNodes[grsNode]; !ok {
-				return fmt.Errorf("replicaset mismatch node not found in global replicaset")
+				return fmt.Errorf("replicaset mismatch node %s not found in global replicaset", grsNode)
 			}
 		}
 	}
@@ -555,6 +562,7 @@ func AreVolumeReplicasCollocated(vol *volume.Volume, globalReplicSet []*api.Repl
 	}
 
 	replicaset := volInspect.ReplicaSets
+	log.Infof("RK=> Replica set for volume ID: %s volume Name: %s", vol.ID, vol.Name)
 
 	// check if the replicaset size is same as the global replicaset size
 	if len(replicaset) != len(globalReplicSet) {
@@ -562,7 +570,7 @@ func AreVolumeReplicasCollocated(vol *volume.Volume, globalReplicSet []*api.Repl
 	}
 	err = ReplicaSetsMatch(replicaset, globalReplicSet)
 	if err != nil {
-		return fmt.Errorf("replicaset mismatch for volume [%s] and volume [%s]", vol.ID, volInspect.Id)
+		return fmt.Errorf("replicaset mismatch for volume [%s] and volume [%s].err: %v", vol.ID, volInspect.Id, err)
 	}
 	return nil
 }

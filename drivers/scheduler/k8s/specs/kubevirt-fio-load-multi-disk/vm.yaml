@@ -2,6 +2,8 @@ apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
   name: fio-vm-multi-disk
+  annotations:
+    isWFFC: "true"
 spec:
   running: true
   template:

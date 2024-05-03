@@ -181,6 +181,7 @@ const (
 	cdiImportComplete                 = "Import Complete"
 	cdiImageImportTimeout             = 20 * time.Minute
 	cdiImageImportRetry               = 30 * time.Second
+	isWffcAnnotation                  = "isWFFC"
 )
 
 const (
@@ -5465,10 +5466,16 @@ func (k *K8s) createVirtualMachineObjects(
 	app *spec.AppSpec,
 ) (interface{}, error) {
 	isPVCcloned := false
+	isWffc := false
 	if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
 		if source, exists := obj.Annotations["pvc.source"]; exists {
 			if source == "cloned" {
 				isPVCcloned = true
+			}
+		}
+		if source, exists := obj.Annotations[isWffcAnnotation]; exists {
+			if source == "true" {
+				isWffc = true
 			}
 		}
 		if !isPVCcloned {
@@ -5476,9 +5483,12 @@ func (k *K8s) createVirtualMachineObjects(
 			virtualMachineVolumes := obj.Spec.Template.Spec.Volumes
 			if len(virtualMachineVolumes) > 0 {
 				for _, v := range virtualMachineVolumes {
-					err := k.WaitForImageImportForVM(obj.Name, ns.Name, v)
-					if err != nil {
-						return nil, err
+					// Do NOT wait if it's WFFC since we want VM to be provisioned instead of waiting for PVC to be bound
+					if !isWffc {
+						err := k.WaitForImageImportForVM(obj.Name, ns.Name, v)
+						if err != nil {
+							return nil, err
+						}
 					}
 				}
 			}

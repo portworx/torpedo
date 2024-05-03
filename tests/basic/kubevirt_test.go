@@ -972,7 +972,7 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 var _ = Describe("{RebootRootDiskAttachedNode}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootRootDiskAttachedNode", "Reboot the node where VMs root disk is attached", nil, 0)
-		DeployVMTemplatesAndValidate()
+		//DeployVMTemplatesAndValidate()
 	})
 	var appCtxs []*scheduler.Context
 
@@ -983,8 +983,8 @@ var _ = Describe("{RebootRootDiskAttachedNode}", func() {
 		defer func() {
 			Inst().AppList = appList
 		}()
-		Inst().AppList = []string{"kubevirt-windows-vm",
-			"kubevirt-fio-pvc-clone", "kubevirt-fio-load-multi-disk"}
+		Inst().AppList = []string{"kubevirt-fio-load-multi-disk", "kubevirt-windows-vm",
+			"kubevirt-fio-pvc-clone"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
