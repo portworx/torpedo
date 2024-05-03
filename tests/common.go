@@ -313,7 +313,7 @@ const (
 	clusterCreationRetryTime = 10 * time.Second
 
 	vsphereCDApiCallIdentifier = "Fetched from cache:"
-	faCDApiCallIdentifier      = ""
+	faCDApiCallIdentifier      = "/connections|/hosts|/ports|/volumes"
 
 	// Anthos
 	anthosWsNodeIpCliFlag            = "anthos-ws-node-ip"
@@ -635,7 +635,6 @@ const (
 // TpLogPath torpedo log path
 var tpLogPath string
 var suiteLogger *lumberjack.Logger
-
 var dataIntegrityValidationTests string
 
 // TestLogger for logging test logs
@@ -643,6 +642,9 @@ var TestLogger *lumberjack.Logger
 var dash *aetosutil.Dashboard
 var post_rule_uid string
 var pre_rule_uid string
+
+// API count variable
+var startAPICallCounts map[string]int
 
 type PlatformCredentialStruct struct {
 	credName string
@@ -8016,9 +8018,9 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 		RunIdForSuite = testrailuttils.AddRunsToMilestone(testRepoID)
 		CurrentTestRailTestCaseId = testRepoID
 	}
-	apiCalls := countAPICallsOnNodes()
+	startAPICallCounts = countAPICallsOnNodes()
 	log.Infof("API Count per node (Start of Test):")
-	for node, count := range apiCalls {
+	for node, count := range startAPICallCounts {
 		log.Infof("%s: %d", node, count)
 	}
 }
@@ -8060,10 +8062,16 @@ func EnableAutoFSTrim() {
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
-	apiCalls := countAPICallsOnNodes()
-	log.Infof("API Count per node (End of Test):")
-	for node, count := range apiCalls {
+	endAPICallCounts := countAPICallsOnNodes()
+	log.Infof("Consolidated API Count per node (End of Test):")
+	for node, count := range endAPICallCounts {
 		log.Infof("%s: %d", node, count)
+	}
+	log.Infof("Difference in API Counts from Start to End of Test:")
+	for node, endCount := range endAPICallCounts {
+		startCount := startAPICallCounts[node]
+		diff := endCount - startCount
+		log.Infof("%s: %d", node, diff)
 	}
 }
 
@@ -12314,8 +12322,14 @@ func EnableFlashArrayNetworkInterface(faMgmtIP string, iface string) error {
 func countAPICallsOnNodes() map[string]int {
 	nodes := node.GetStorageDriverNodes()
 	apiCallCounts := make(map[string]int)
+	arrays, err := GetFADetailsUsed()
+	var apiCallIdentifier string = vsphereCDApiCallIdentifier
+	// Check if FACD backend then switch to the relevant API Calls
+	if err == nil && len(arrays) > 0 {
+		apiCallIdentifier = faCDApiCallIdentifier
+	}
 	for _, node := range nodes {
-		cmd := fmt.Sprintf("journalctl -lu portworx* | grep '%s' | wc -l", vsphereCDApiCallIdentifier)
+		cmd := fmt.Sprintf("journalctl -lu portworx* | grep -E '%s' | wc -l", apiCallIdentifier)
 		output, err := runCmdGetOutput(cmd, node)
 		if err != nil {
 			log.Errorf("Failed to run command on node %s: %v", node.Name, err)
