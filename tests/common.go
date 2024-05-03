@@ -12312,6 +12312,6 @@ func GetFBDetailsFromCluster() ([]pureutils.FlashBladeEntry, error) {
 	if len(pxPureSecret.Blades) > 0 {
 		return pxPureSecret.Blades, nil
 	}
-	return nil, fmt.Errorf("Failed to list FA Arrays ")
+	return nil, fmt.Errorf("Failed to list available blades from FB ")
 }
 
