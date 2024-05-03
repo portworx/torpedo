@@ -12301,7 +12301,7 @@ func GetFBDetailsFromCluster() ([]pureutils.FlashBladeEntry, error) {
 	//get the flash array details
 	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get details on FlashArray used in the cluster")
+		return nil, fmt.Errorf("Failed to get details on FlashBlade used in the cluster")
 	}
 
 	pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
