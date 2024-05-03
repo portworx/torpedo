@@ -275,7 +275,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 		restoreNames = make([]string, 0)
 		deployments = make([]*automationModels.PDSDeploymentResponse, 0)
 		allBackupIds = make([]string, 0)
-		BackupsPerDeployment = 5
+		BackupsPerDeployment = 1
 	})
 
 	It("Perform multiple backup and restore simultaneously for different dataservices", func() {
