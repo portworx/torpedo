@@ -312,6 +312,9 @@ const (
 	clusterCreationTimeout   = 5 * time.Minute
 	clusterCreationRetryTime = 10 * time.Second
 
+	vsphereCDApiCallIdentifier = "Fetched from cache:"
+	faCDApiCallIdentifier      = ""
+
 	// Anthos
 	anthosWsNodeIpCliFlag            = "anthos-ws-node-ip"
 	anthosInstPathCliFlag            = "anthos-inst-path"
@@ -8013,6 +8016,10 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 		RunIdForSuite = testrailuttils.AddRunsToMilestone(testRepoID)
 		CurrentTestRailTestCaseId = testRepoID
 	}
+	log.Infof("API Count per node (Start of Test):")
+	for node, count := range countAPICallsOnNodes() {
+		log.Infof("API calls made by node %s: %d", node, count)
+	}
 }
 
 // enableAutoFSTrim on supported PX version.
@@ -8052,6 +8059,10 @@ func EnableAutoFSTrim() {
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
+	log.Infof("API Count per node (End of Test):")
+	for node, count := range countAPICallsOnNodes() {
+		log.Infof("API calls made by node %s: %d", node, count)
+	}
 }
 
 // StartPxBackupTorpedoTest starts the logging for Px Backup torpedo test
@@ -12294,4 +12305,28 @@ func EnableFlashArrayNetworkInterface(faMgmtIP string, iface string) error {
 		}
 	}
 	return fmt.Errorf("Enabling Interface failed for interface [%v] on Mgmt Ip [%v]", iface, faMgmtIP)
+}
+
+// countAPICallsOnNodes method counts the occurence of a set API Identifier string
+// on each storage node and returns a map of the node name against the count
+func countAPICallsOnNodes() map[string]int {
+	nodes := node.GetStorageDriverNodes()
+	apiCallCounts := make(map[string]int)
+	for _, node := range nodes {
+		cmd := fmt.Sprintf("journalctl -lu portworx* | grep '%s' | wc -l", vsphereCDApiCallIdentifier)
+		output, err := runCmdGetOutput(cmd, node)
+		if err != nil {
+			log.Errorf("Failed to run command on node %s: %v", node.Name, err)
+			apiCallCounts[node.Name] = 0
+			continue
+		}
+		count, err := strconv.Atoi(strings.TrimSpace(output))
+		if err != nil {
+			log.Errorf("Failed to parse output for node %s: %v", node.Name, err)
+			apiCallCounts[node.Name] = 0
+			continue
+		}
+		apiCallCounts[node.Name] = count
+	}
+	return apiCallCounts
 }
