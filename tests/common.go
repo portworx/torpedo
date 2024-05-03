@@ -12295,3 +12295,22 @@ func EnableFlashArrayNetworkInterface(faMgmtIP string, iface string) error {
 	}
 	return fmt.Errorf("Enabling Interface failed for interface [%v] on Mgmt Ip [%v]", iface, faMgmtIP)
 }
+
+// GetFADetailsUsed Returns list of FlashArrays used in the cluster
+func GetFBDetailsFromCluster() ([]pureutils.FlashBladeEntry, error) {
+	//get the flash array details
+	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get details on FlashArray used in the cluster")
+	}
+
+	pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to get Px Pure Secret")
+	}
+
+	if len(pxPureSecret.Blades) > 0 {
+		return pxPureSecret.Blades, nil
+	}
+	return nil, fmt.Errorf("Failed to list FA Arrays ")
+}
