@@ -283,7 +283,7 @@ func DisableNetworkInterface(faClient *flasharray.Client, iface string) (bool, e
 	if err != nil {
 		return false, err
 	}
-	if !interfaces.Enabled {
+	if interfaces.Enabled {
 		return false, nil
 	}
 	return true, fmt.Errorf("Failed to disable network interface [%v]", iface)
