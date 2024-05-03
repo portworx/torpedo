@@ -8016,9 +8016,10 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 		RunIdForSuite = testrailuttils.AddRunsToMilestone(testRepoID)
 		CurrentTestRailTestCaseId = testRepoID
 	}
+	apiCalls := countAPICallsOnNodes()
 	log.Infof("API Count per node (Start of Test):")
-	for node, count := range countAPICallsOnNodes() {
-		log.Infof("API calls made by node %s: %d", node, count)
+	for node, count := range apiCalls {
+		log.Infof("%s: %d", node, count)
 	}
 }
 
@@ -8059,9 +8060,10 @@ func EnableAutoFSTrim() {
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
+	apiCalls := countAPICallsOnNodes()
 	log.Infof("API Count per node (End of Test):")
-	for node, count := range countAPICallsOnNodes() {
-		log.Infof("API calls made by node %s: %d", node, count)
+	for node, count := range apiCalls {
+		log.Infof("%s: %d", node, count)
 	}
 }
 
