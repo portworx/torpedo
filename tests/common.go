@@ -12296,7 +12296,7 @@ func EnableFlashArrayNetworkInterface(faMgmtIP string, iface string) error {
 	return fmt.Errorf("Enabling Interface failed for interface [%v] on Mgmt Ip [%v]", iface, faMgmtIP)
 }
 
-// GetFADetailsUsed Returns list of FlashArrays used in the cluster
+// GetFBDetailsFromCluster Returns list of FlashBlades used in the cluster
 func GetFBDetailsFromCluster() ([]pureutils.FlashBladeEntry, error) {
 	//get the flash array details
 	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
