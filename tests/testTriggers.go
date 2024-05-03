@@ -18,6 +18,7 @@ import (
 	"text/template"
 	"time"
 
+
 	"github.com/devans10/pugo/flasharray"
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
@@ -25,6 +26,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	"github.com/portworx/torpedo/drivers/scheduler/iks"
 	"github.com/portworx/torpedo/pkg/osutils"
+	"golang.org/x/exp/slices"
 
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -3523,31 +3525,59 @@ func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *E
 	stepLog := "Delete all cloudsnaps"
 	Step(stepLog, func() {
 		log.Infof(stepLog)
+        var volCloudsnapMap = make(map[string][]string)
 		for _, ctx := range *contexts {
 			vols, err := Inst().S.GetVolumeParameters(ctx)
 			log.Infof("Validating context: %v", ctx.App.Key)
 			log.Infof("Volumes : %v", vols)
-			log.Infof("error while get volume parameters : %v", err)
-
-			//log.FailOnError(err, fmt.Sprintf("error getting volume params for %s", ctx.App.Key))
-
+			UpdateOutcome(event, err)
 			for vol, params := range vols {
-				csBksps, err := Inst().V.GetCloudsnaps(vol, params)
+				inspectedVol, err:= Inst().V.InspectVolume(vol)
+				UpdateOutcome(event, err)
+				csBksps, err := Inst().V.GetCloudsnapsOfGivenVolume(vol, inspectedVol.Id, params)
+				UpdateOutcome(event, err)
 				log.Infof("Volume Name : %s", vol)
-				log.Infof("Volsnapshot err: %v", err)
-
-				//log.FailOnError(err, fmt.Sprintf("error getting cloud snaps for %s", vol))
+				var cloudsnapIds []string
 				for _, bk := range csBksps {
-					log.Infof("Deleting : %s having status : %v, Source volume: %s", bk.Id, bk.Status, bk.SrcVolumeName)
-					err = Inst().V.DeleteAllCloudsnaps(vol, bk.SrcVolumeId, params)
+					log.Infof("Before Backup ID : %s having status : %v, Source volume: %s", bk.Id, bk.Status, bk.SrcVolumeName)
+					log.Infof("bk.GetMetadata() : %v , Source volume: %s", bk.GetMetadata(), bk.SrcVolumeName)
+					cloudsnapIds = append(cloudsnapIds, bk.Id)
+				}
+				if len(csBksps) > 0 {
+					volCloudsnapMap[vol] = cloudsnapIds
+					err = Inst().V.DeleteAllCloudsnaps(vol,csBksps[0].SrcVolumeId, params)
 					if err != nil && strings.Contains(err.Error(), "Key already exists") {
+						log.Infof("KEY EXiST observed %v", err)
 						continue
 					}
-					log.Infof("ERROR while deleting %v",err)
-					
-					//log.FailOnError(err, fmt.Sprintf("error deleting Cloudsnap %s", bk.Id))
+					UpdateOutcome(event, err)
+				}else{
+					log.Infof("No cloudsnap for vol : %s", vol )
 				}
 			}
+		}
+		log.Infof("Wait for 10 minutes")
+		time.Sleep(600 * time.Second)
+		for _, ctx := range *contexts {
+				vols, err := Inst().S.GetVolumeParameters(ctx)
+				UpdateOutcome(event, err)
+				for vol, params := range vols {
+					log.Infof("Volume Name : %s", vol)
+					inspectedVol, err:= Inst().V.InspectVolume(vol)
+					csBksps, err := Inst().V.GetCloudsnapsOfGivenVolume(vol, inspectedVol.Id, params)
+					UpdateOutcome(event, err)
+					cloudsnapIds, ok := volCloudsnapMap[vol]
+					if ok {
+						for _, bk := range csBksps {
+							if slices.Contains(cloudsnapIds, bk.Id ){
+								log.Infof("Cloud snap hasn not deleted successfully : %s: vol %s", bk.Id , vol )
+								UpdateOutcome(event, fmt.Errorf("Cloud snap has not deleted successfully : %s: vol %s", bk.Id , vol))
+							}
+							// log.Infof("after backup ID : %s having status : %v, Source volume: %s", bk.Id, bk.Status, bk.SrcVolumeName)
+							// log.Infof("bk.GetMetadata() : %v , Source volume: %s", bk.GetMetadata(), bk.SrcVolumeName)
+						}
+					}
+				}
 		}
 		updateMetrics(*event)
 	})
