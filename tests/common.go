@@ -12314,3 +12314,4 @@ func GetFBDetailsFromCluster() ([]pureutils.FlashBladeEntry, error) {
 	}
 	return nil, fmt.Errorf("Failed to list FA Arrays ")
 }
+
