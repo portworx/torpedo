@@ -108,6 +108,7 @@ var _ = Describe("{Longevity}", func() {
 		SetDiscardMounts:                  TriggerSetDiscardMounts,
 		PowerOffAllVMs:                    TriggerPowerOffAllVMs,
 		ResetDiscardMounts:                TriggerResetDiscardMounts,
+		ScaleFADAVolumeAttach:             TriggerScaleFADAVolumeAttach,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
