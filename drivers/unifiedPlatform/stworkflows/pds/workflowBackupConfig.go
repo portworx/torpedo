@@ -8,6 +8,7 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
 	"strings"
+	"time"
 )
 
 type WorkflowPDSBackupConfig struct {
@@ -23,6 +24,8 @@ const (
 
 // CreateBackupConfig creates a backup config
 func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, deploymentName string) (*automationModels.PDSBackupConfigResponse, error) {
+
+	log.Infof("Backup [%s] started at [%s]", name, time.Now().Format("2006-01-02 15:04:05"))
 
 	log.Infof("Backup name - [%s]", name)
 	log.Infof("Deployment Name - [%s]", deploymentName)

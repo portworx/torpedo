@@ -51,6 +51,8 @@ func (backup WorkflowPDSBackup) WaitForBackupToComplete(backupId string) error {
 		}
 		if *backupModel.Get.Status.Phase != stworkflows.COMPLETED {
 			return nil, true, fmt.Errorf("Backup is not completed yet, Phase - [%s]", *backupModel.Get.Status.Phase)
+		} else if *backupModel.Get.Status.Phase == stworkflows.FAILED {
+			return nil, false, fmt.Errorf("Backup Status - [%s]", *backupModel.Get.Status.Phase)
 		} else {
 			log.Infof("Backup completed successfully - [%s]", *backupModel.Get.Meta.Name)
 			log.Infof("Backup Status - [%s]", *backupModel.Get.Status.CloudSnapId)
