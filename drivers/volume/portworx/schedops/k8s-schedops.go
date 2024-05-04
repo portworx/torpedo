@@ -74,7 +74,7 @@ const (
 
 	// PureVolumeOUI is used to identify if a mapper device is of Pure origin
 	// (if it matches with /dev/mapper/.*24a937.*, it's a Pure volume, if it's some other format it's not)
-	PureVolumeOUI   = "24a937"
+	PureVolumeOUI   = "(24a937|eui)"
 	PureMapperRegex = "/dev/mapper/.*" + PureVolumeOUI + ".*"
 )
 
