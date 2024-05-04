@@ -723,7 +723,6 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 
 	It("Deploy data services and perform backup and restore on the same cluster", func() {
 		Step("Create Service Configuration, Resource and Storage Templates", func() {
-			//dsNameAndAppTempId = workFlowTemplates.CreateAppTemplate(NewPdsParams)
 			dsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
 		})

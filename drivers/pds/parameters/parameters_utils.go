@@ -192,11 +192,16 @@ type NewPDSParams struct {
 		Secure      string `json:"Secure"`
 	} `json:"StorageConfiguration"`
 	ResourceConfiguration struct {
-		Cpu_Limit       string `json:"Cpu_Limit"`
-		Cpu_Request     string `json:"Cpu_Request"`
-		Memory_Limit    string `json:"Memory_Limit"`
-		Memory_Request  string `json:"Memory_Request"`
-		Storage_Request string `json:"Storage_Request"`
+		Cpu_Limit           string `json:"Cpu_Limit"`
+		Cpu_Request         string `json:"Cpu_Request"`
+		Memory_Limit        string `json:"Memory_Limit"`
+		Memory_Request      string `json:"Memory_Request"`
+		Storage_Request     string `json:"Storage_Request"`
+		New_Cpu_Limit       string `json:"New_Cpu_Limit"`
+		New_Cpu_Request     string `json:"New_Cpu_Request"`
+		New_Memory_Limit    string `json:"New_Memory_Limit"`
+		New_Memory_Request  string `json:"New_Memory_Request"`
+		New_Storage_Request string `json:"New_Storage_Request"`
 	} `json:"ResourceConfiguration"`
 	ServiceConfiguration struct {
 		MAX_CONNECTIONS string `json:"MAX_CONNECTIONS"`

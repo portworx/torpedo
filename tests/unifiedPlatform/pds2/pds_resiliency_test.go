@@ -120,7 +120,7 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 		})
 
 		//Update Ds With New Values of Resource Templates
-		resourceConfigUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Meta.Name, 1)
+		resourceConfigUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams)
 		log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
 		log.InfoD("Updated Storage Template ID- [updated- %v]", resourceConfigUpdated)
