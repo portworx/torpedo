@@ -3393,3 +3393,114 @@ var _ = Describe("{IscsiPortsDownDuringPoolExpandInProgress}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{IscsiPortsDownDuringNewPoolCreateInProgress}", func() {
+
+	/*
+			PTX : https://purestorage.atlassian.net/browse/PTX-23835
+		bring iscsi port down when pool Creation in progress
+
+	*/
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("IscsiPortsDownDuringNewPoolCreateInProgress",
+			"bring all iscsi port down when New Pool Creation in progress",
+			nil, 0)
+	})
+
+	itLog := "IscsiPortsDownDuringNewPoolCreateInProgress"
+	It(itLog, func() {
+		var contexts []*scheduler.Context
+		var wg sync.WaitGroup
+
+		//var k8sCore = core.Instance()
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolresizeiscsidown-%d", i))...)
+			}
+		})
+		defer appsValidateAndDestroy(contexts)
+
+		poolId, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to Get Details of pool with Running IO")
+
+		// Get the list of nodes present in the cluster
+		nodeId, err := GetNodeFromPoolUUID(poolId)
+		log.FailOnError(err, fmt.Sprintf("Failed to Get Details of Node with Pool UUID [%v]", poolId))
+
+		// Get Details of iscsi ports present in the cluster
+		flashArrays, err := FlashArrayGetIscsiPorts()
+		log.FailOnError(err, "Failed to Get Details on Flasharray iscsi ports that are in Use ")
+
+		defer enableInterfaces(flashArrays)
+
+		// Wait for Px to come up
+		// Verify Px goes down on all the nodes present in the cluster
+		storageNodes := node.GetStorageNodes()
+		for _, eachNodes := range storageNodes {
+			log.FailOnError(Inst().V.WaitDriverUpOnNode(eachNodes, Inst().DriverStartTimeout),
+				fmt.Sprintf("Driver on the Node [%v] is not Up yet", eachNodes.Name))
+		}
+
+		createNewPool := func(selectedNode *node.Node) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			newSpec := "size=250"
+			err = Inst().V.AddCloudDrive(selectedNode, newSpec, -1)
+			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", selectedNode.Name))
+		}
+
+		stepLog = "Initiate New Pool Creation on the  node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			// Get List of Pools present in the cluster
+			poolDetails := []*api.StoragePool{}
+			poolsAvailable, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "Failed to list storage pools")
+			log.Infof("List of pools present in the cluster [%v]", poolsAvailable)
+			for _, v := range poolsAvailable {
+				poolDetails = append(poolDetails, v)
+			}
+
+			wg.Add(1)
+			go createNewPool(nodeId)
+
+			time.Sleep(20 * time.Second)
+
+			// Block Iptable Ports on each element
+			disableInterfaces(flashArrays)
+			wg.Wait()
+			time.Sleep(10 * time.Minute)
+
+			// Enable Back network interfaces on all the nodes
+			enableInterfaces(flashArrays)
+
+			// Verify Px goes down on all the nodes present in the cluster
+			for _, eachNodes := range node.GetStorageNodes() {
+				log.FailOnError(Inst().V.WaitDriverUpOnNode(eachNodes, Inst().DriverStartTimeout),
+					fmt.Sprintf("Driver on the Node [%v] is not Up yet", eachNodes.Name))
+			}
+
+			// Get List of Pools present in the cluster
+			poolDetailsAfterEnable := []*api.StoragePool{}
+			poolsAvailableAfterEnable, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "Failed to list storage pools")
+			log.Infof("List of pools present in the cluster [%v]", poolsAvailableAfterEnable)
+			for _, v := range poolsAvailableAfterEnable {
+				poolDetailsAfterEnable = append(poolDetailsAfterEnable, v)
+			}
+
+			// Comparing if new pool is created
+			dash.VerifyFatal(len(poolDetailsAfterEnable) > len(poolDetails), true, "New pool created ?")
+		})
+
+	})
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
