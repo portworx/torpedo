@@ -385,8 +385,9 @@ func GetDataServiceImageId(dsName, dsImageTag, dsVersionBuild string) (string, e
 		return "", err
 	}
 
-	var dsImageId string
+	dsImageId := ""
 	for _, imgResp := range imgResps.DataServiceImageList {
+		log.Debugf("imgResp.Info.Build [%v]", *imgResp.Info.Build)
 		if *imgResp.Info.Build == dsImageTag {
 			dsImageId = *imgResp.Meta.Uid
 			break

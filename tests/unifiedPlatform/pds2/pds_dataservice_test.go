@@ -15,10 +15,10 @@ import (
 
 var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	var (
-		deployment         *automationModels.PDSDeploymentResponse
-		dsNameAndAppTempId map[string]string
-		templates          []string
-		err                error
+		deployment *automationModels.PDSDeploymentResponse
+		//dsNameAndAppTempId map[string]string
+		//templates []string
+		err error
 	)
 
 	JustBeforeEach(func() {
@@ -26,19 +26,19 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	})
 
 	It("Deploy,Validate and ScaleUp DataService", func() {
-		Step("Create Service Configuration, Resource and Storage Templates", func() {
-			//dsNameAndAppTempId = workFlowTemplates.CreateAppTemplate(NewPdsParams)
-			dsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-		})
+		//Step("Create Service Configuration, Resource and Storage Templates", func() {
+		//	//DsNameAndAppTempId = workFlowTemplates.CreateAppTemplate(NewPdsParams)
+		//	DsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
+		//	log.FailOnError(err, "Unable to create Custom Templates for PDS")
+		//})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			Step("Deploy DataService", func() {
 
-				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
-				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
+				//WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
+				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = DsNameAndAppTempId[ds.Name]
 
-				templates = append(templates, dsNameAndAppTempId[ds.Name])
+				//templates = append(templates, DsNameAndAppTempId[ds.Name])
 
 				log.Debugf("Deploying DataService [%s]", ds.Name)
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
@@ -74,10 +74,10 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 
 var _ = Describe("{UpgradeDataServiceImage}", func() {
 	var (
-		deployment         *automationModels.PDSDeploymentResponse
-		templates          []string
-		dsNameAndAppTempId map[string]string
-		err                error
+		deployment *automationModels.PDSDeploymentResponse
+		templates  []string
+		//DsNameAndAppTempId map[string]string
+		err error
 	)
 
 	JustBeforeEach(func() {
@@ -87,7 +87,7 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 	It("Deploy, Validate and Upgrade Data service Image", func() {
 
 		Step("Create Service Configuration, Resource and Storage Templates", func() {
-			dsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
+			DsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
 		})
@@ -96,9 +96,9 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 			Step("Deploy DataService", func() {
 
 				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
-				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
+				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = DsNameAndAppTempId[ds.Name]
 
-				templates = append(templates, dsNameAndAppTempId[ds.Name])
+				templates = append(templates, DsNameAndAppTempId[ds.Name])
 
 				log.Debugf("Deploying DataService [%s]", ds.Name)
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.OldImage, ds.Version)
