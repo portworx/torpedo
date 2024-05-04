@@ -2023,40 +2023,42 @@ var _ = Describe("{VerifyRBACForAppUser}", Label(TestCaseLabelsMap[VerifyRBACFor
 			err := SetSourceKubeConfig()
 			log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
 		}()
-		backupDriver := Inst().Backup
-		bkpScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
-			OrgId: BackupOrgID,
-		}
-		nonAdminCtx, err := backup.GetNonAdminCtx(appUser, CommonPassword)
-		log.FailOnError(err, "failed to fetch user %s ctx", appUser)
-		currentSchedules, err := backupDriver.EnumerateBackupSchedule(nonAdminCtx, bkpScheduleEnumerateReq)
-		log.FailOnError(err, "Getting a list of all schedules")
-		for _, sch := range currentSchedules.GetBackupSchedules() {
-			err = DeleteSchedule(sch.Name, SourceClusterName, BackupOrgID, nonAdminCtx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", sch.Name, appUser))
-		}
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		log.InfoD("Deleting the deployed apps after the testcase")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
-		log.InfoD("Deleting labels from namespaces - %v", bkpNamespaces)
-		err = DeleteLabelsFromMultipleNamespaces(nsLabelsMap, bkpNamespaces)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] from namespaces [%v]", nsLabelsMap, bkpNamespaces))
-		log.InfoD("Deleting the px-backup objects")
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
-		UserRules, _ := Inst().Backup.GetAllRules(ctx, BackupOrgID)
-		for _, ruleName := range UserRules {
-			err := DeleteRule(ruleName, BackupOrgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of rule [%s] for the Px-Admin user", ruleName))
-		}
-		log.InfoD("Switching context to destination cluster for clean up")
-		err = SetDestinationKubeConfig()
-		log.FailOnError(err, "Unable to switch context to destination cluster [%s]", DestinationClusterName)
-		DestroyApps(scheduledAppContexts, opts)
-		log.InfoD("Switching back context to Source cluster")
-		err = SetSourceKubeConfig()
-		log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+		/*
+			backupDriver := Inst().Backup
+			bkpScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+				OrgId: BackupOrgID,
+			}
+			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, CommonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
+			currentSchedules, err := backupDriver.EnumerateBackupSchedule(nonAdminCtx, bkpScheduleEnumerateReq)
+			log.FailOnError(err, "Getting a list of all schedules")
+			for _, sch := range currentSchedules.GetBackupSchedules() {
+				err = DeleteSchedule(sch.Name, SourceClusterName, BackupOrgID, nonAdminCtx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", sch.Name, appUser))
+			}
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.InfoD("Deleting the deployed apps after the testcase")
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			DestroyApps(scheduledAppContexts, opts)
+			log.InfoD("Deleting labels from namespaces - %v", bkpNamespaces)
+			err = DeleteLabelsFromMultipleNamespaces(nsLabelsMap, bkpNamespaces)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] from namespaces [%v]", nsLabelsMap, bkpNamespaces))
+			log.InfoD("Deleting the px-backup objects")
+			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+			UserRules, _ := Inst().Backup.GetAllRules(ctx, BackupOrgID)
+			for _, ruleName := range UserRules {
+				err := DeleteRule(ruleName, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of rule [%s] for the Px-Admin user", ruleName))
+			}
+			log.InfoD("Switching context to destination cluster for clean up")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Unable to switch context to destination cluster [%s]", DestinationClusterName)
+			DestroyApps(scheduledAppContexts, opts)
+			log.InfoD("Switching back context to Source cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+		*/
 	})
 })

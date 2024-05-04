@@ -3345,8 +3345,10 @@ func ValidateRestore(ctx context1.Context, restoreName string, orgID string, exp
 				}
 				for _, restoredVol := range actualRestoredVolumes {
 					actualVolumeMap[restoredVol.ID] = restoredVol
+					log.Infof(fmt.Sprintf("adilk..restoredVol.ID : %v", restoredVol.ID))
 				}
 				log.Infof("volumes bounded to the PVCs in the context [%s] are [%+v]", expectedRestoredAppContextNamespace, actualRestoredVolumes)
+				log.Infof(fmt.Sprintf("adilk..actual volume map [%v]", actualVolumeMap))
 			}
 		}
 
