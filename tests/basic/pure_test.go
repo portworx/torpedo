@@ -3504,3 +3504,25 @@ var _ = Describe("{IscsiPortsDownDuringNewPoolCreateInProgress}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{ContinuousCreateFADAVolumes}", func() {
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("ContinuousCreateFADAVolumes",
+			"Continuously create FADA Volumes on the cluster",
+			nil, 0)
+	})
+
+	itLog := "ContinuousCreateFADAVolumes"
+	It(itLog, func() {
+		var contexts []*scheduler.Context
+		var wg sync.WaitGroup
+
+	})
+
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
