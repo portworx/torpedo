@@ -71,6 +71,9 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		}
 	}
 
+	log.Infof("Sleeping for 1 minutes to make sure deployment gets healthy")
+	time.Sleep(1 * time.Minute)
+
 	return deployment, nil
 }
 
