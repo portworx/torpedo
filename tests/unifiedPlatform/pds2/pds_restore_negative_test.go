@@ -237,7 +237,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 				}()
 
 				wg.Wait()
-				dash.VerifyFatal(len(allErrors), 0, fmt.Sprintf("Some error occurred while restoring or killing PDS pods. Errors - [%s]", strings.Join(allErrors, "\n")))
+				dash.VerifyFatal(len(allErrors), 0, fmt.Sprintf("Verifying restores with restarted px pods. Error - [%s]", strings.Join(allErrors, "\n")))
 				log.Infof("Restore created successfully with ID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
 			})
 		}

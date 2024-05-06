@@ -71,6 +71,10 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		}
 	}
 
+	// TODO: This needs to be removed once below bugs are fixed:
+	// https://purestorage.atlassian.net/issues/DS-9591
+	// https://purestorage.atlassian.net/issues/DS-9546
+	// https://purestorage.atlassian.net/issues/DS-9305
 	log.Infof("Sleeping for 1 minutes to make sure deployment gets healthy")
 	time.Sleep(1 * time.Minute)
 
