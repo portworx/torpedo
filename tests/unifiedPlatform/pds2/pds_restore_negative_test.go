@@ -220,9 +220,10 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 			})
 
 			Step("Create Restore from the latest backup Id", func() {
-
+				wg.Add(1)
 				go func() {
-					wg.Add(1)
+					defer wg.Done()
+					defer GinkgoRecover()
 					WorkflowPDSRestore.Destination = &WorkflowNamespaceDestination
 					CheckforClusterSwitch()
 					_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
