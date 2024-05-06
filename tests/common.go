@@ -12346,7 +12346,7 @@ func countAPICallsOnNodes() map[string]map[string]int {
                 print "connections:" connections " hosts:" hosts " ports:" ports " volumes:" volumes
             }'`
 	} else {
-		command = fmt.Sprintf(`journalctl -lu portworx* | grep -c '%s'`, vsphereCDApiCallIdentifier)
+		command = fmt.Sprintf(`journalctl -lu portworx* | grep -c '%s' | awk '{print "vsphere:" $1}'`, vsphereCDApiCallIdentifier)
 	}
 
 	for _, node := range nodes {
