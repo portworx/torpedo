@@ -268,6 +268,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 		err                  error
 		BackupsPerDeployment int
 		allErrors            []error
+		RestoresPerBackup    int
 	)
 
 	JustBeforeEach(func() {
@@ -276,6 +277,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 		deployments = make([]*automationModels.PDSDeploymentResponse, 0)
 		allBackupIds = make([]string, 0)
 		BackupsPerDeployment = 1
+		RestoresPerBackup = 3
 	})
 
 	It("Perform multiple backup and restore simultaneously for different dataservices", func() {
@@ -373,22 +375,27 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 		Step("Creating Simultaneous restores from the dataservices", func() {
 			var wg sync.WaitGroup
 
+			WorkflowPDSRestore.Destination = &WorkflowNamespaceDestination
+			CheckforClusterSwitch()
+
 			for _, backupId := range allBackupIds {
 
-				wg.Add(1)
+				for i := 0; i < RestoresPerBackup; i++ {
+					wg.Add(1)
 
-				go func() {
-					defer wg.Done()
-					defer GinkgoRecover()
+					go func() {
+						defer wg.Done()
+						defer GinkgoRecover()
 
-					restoreName := "restore-" + RandomString(5)
-					_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupId, restoreName)
-					if err != nil {
-						log.Errorf("Error occurred while creating [%s], Error - [%s]", restoreName, err.Error())
-					}
-					log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
-					restoreNames = append(restoreNames, restoreName)
-				}()
+						restoreName := "restore-" + RandomString(5)
+						_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupId, restoreName)
+						if err != nil {
+							log.Errorf("Error occurred while creating [%s], Error - [%s]", restoreName, err.Error())
+						}
+						log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+						restoreNames = append(restoreNames, restoreName)
+					}()
+				}
 
 			}
 
