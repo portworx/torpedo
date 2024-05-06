@@ -3504,3 +3504,88 @@ var _ = Describe("{IscsiPortsDownDuringNewPoolCreateInProgress}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{DeleteFADAVolumeFromBackend}", func() {
+
+	/*
+			PTX : https://purestorage.atlassian.net/browse/PTX-23835
+		Px Should throw proper error message when backend volumes from FA is deleted
+
+	*/
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("DeleteFADAVolumeFromBackend",
+			"Delete FADA volume from Backend and verify Pod status once volume deleted",
+			nil, 0)
+	})
+
+	itLog := "DeleteFADAVolumeFromBackend"
+	It(itLog, func() {
+		var contexts []*scheduler.Context
+
+		//var k8sCore = core.Instance()
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolresizeiscsidown-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get all the volumes with IO running
+		vols, err := GetAllVolumesWithIO(contexts)
+		log.FailOnError(err, "Failed to get list of all volumes")
+
+		pureVols, err := FilterAllPureVolumes(vols)
+		log.FailOnError(err, "Failed to get list of pure volumes")
+
+		// Pick a Random Volume with IO
+		randomIndex := rand.Intn(len(pureVols))
+		pickVolume := pureVols[randomIndex]
+		log.InfoD("Volume picked for deletion is [%v]", pickVolume.Name)
+
+		pvc, err := GetPVCObjFromVol(&pickVolume)
+		log.FailOnError(err, "Failed to get details about the PVC")
+		log.Infof("PVC Name for the volume is [%v]", pvc.Name)
+
+		// Pod details after blocking IP
+		podsOnBlock, err := k8sCore.GetPodsUsingPVC(pvc.Name, pvc.Namespace)
+		log.FailOnError(err, "unable to find the node from the pod")
+
+		// Verify that Pod Bounces and not in Running state till the time iscsi rules are not reverted
+		for _, eachPodAfter := range podsOnBlock {
+			log.Infof("Pod [%v] is in State [%v]", eachPodAfter.Name, eachPodAfter.Status.Phase)
+		}
+
+		log.Infof("Deleting the PVC from FA Backend")
+		faDetails, err := GetFADetailsFromVolumeName(pickVolume.Name)
+		log.FailOnError(err, "Failed to get list of all volumes")
+
+		for _, eachFA := range faDetails {
+			deleted, err := DeleteVolumeFromFABackend(eachFA, pickVolume.Name)
+			log.FailOnError(err, "delete volume [%v] from FA Backend [%v] returned error", pickVolume.Name, eachFA)
+			dash.VerifyFatal(deleted, true, "is volume deleted from backend")
+		}
+
+		// Sleep for some time after deleting the PVC
+
+		// Pod details after blocking IP
+		podsOnBlock, err = k8sCore.GetPodsUsingPVC(pvc.Name, pvc.Namespace)
+		log.FailOnError(err, "unable to find the node from the pod")
+
+		// Verify that Pod Bounces and not in Running state till the time iscsi rules are not reverted
+		for _, eachPodAfter := range podsOnBlock {
+			log.Infof("Pod [%v] is in State [%v]", eachPodAfter.Name, eachPodAfter.Status.Phase)
+		}
+
+	})
+
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})

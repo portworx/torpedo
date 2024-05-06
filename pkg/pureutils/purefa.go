@@ -94,6 +94,20 @@ func ListAllTheVolumesFromSpecificFA(faClient *flasharray.Client) ([]flasharray.
 	return volumes, nil
 }
 
+// Verifies if Volumes
+func IsFAVolumeExists(faClient *flasharray.Client, volumeName string) (bool, error) {
+	allVolumes, err := ListAllTheVolumesFromSpecificFA(faClient)
+	if err != nil {
+		return false, err
+	}
+	for _, eachVol := range allVolumes {
+		if strings.Contains(eachVol.Name, volumeName) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // GetAllHostGroups Get all Available Host Groups from array
 func GetAllHostGroups(faClient *flasharray.Client) ([]flasharray.Hostgroup, error) {
 	hostGroup, err := faClient.Hostgroups.ListHostgroups(nil)

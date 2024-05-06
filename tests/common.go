@@ -12272,6 +12272,7 @@ func EnableFlashArrayNetworkInterface(faMgmtIP string, iface string) error {
 		faClient, err := pureutils.PureCreateClientAndConnect(eachFaInt.MgmtEndPoint, eachFaInt.APIToken)
 		if err != nil {
 			log.Errorf("Failed to connect to FA using Mgmt IP [%v]", eachFaInt.MgmtEndPoint)
+			return err
 		}
 
 		if eachFaInt.MgmtEndPoint == faMgmtIP {
@@ -12315,3 +12316,78 @@ func GetFBDetailsFromCluster() ([]pureutils.FlashBladeEntry, error) {
 	return nil, fmt.Errorf("Failed to list available blades from FB ")
 }
 
+// FilterAllPureVolumes returns filtered Pure Volumes from list of Volumes
+func FilterAllPureVolumes(volumes []*volume.Volume) ([]volume.Volume, error) {
+	pureVolumes := []volume.Volume{}
+	for _, eachVol := range volumes {
+		isPureVol, err := Inst().V.IsPureVolume(eachVol)
+		log.FailOnError(err, "validating pureVolume returned err")
+		if isPureVol {
+			pureVolumes = append(pureVolumes, *eachVol)
+		}
+	}
+	return pureVolumes, nil
+}
+
+// GetFADetailsFromVolumeName returns FA Struct of FA where the volume is created
+func GetFADetailsFromVolumeName(volumeName string) ([]pureutils.FlashArrayEntry, error) {
+	faEntries := []pureutils.FlashArrayEntry{}
+	allFAs, err := GetFADetailsUsed()
+	if err != nil {
+		return nil, err
+	}
+	for _, eachFA := range allFAs {
+		// Connect to FA Client
+		faClient, err := pureutils.PureCreateClientAndConnect(eachFA.MgmtEndPoint, eachFA.APIToken)
+		if err != nil {
+			log.Errorf("Failed to connect to FA using Mgmt IP [%v]", eachFA.MgmtEndPoint)
+			return nil, err
+		}
+
+		// List all the Volumes present in FA
+		allVolumes, err := pureutils.ListAllTheVolumesFromSpecificFA(faClient)
+		if err != nil {
+			return nil, err
+		}
+		for _, eachVol := range allVolumes {
+			if strings.Contains(eachVol.Name, volumeName) {
+				faEntries = append(faEntries, eachFA)
+			}
+		}
+	}
+	return faEntries, nil
+}
+
+// DeleteVolumeFromFABackend returns true if volume is deleted from backend
+func DeleteVolumeFromFABackend(fa pureutils.FlashArrayEntry, volumeName string) (bool, error) {
+	faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
+	if err != nil {
+		log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+		return false, err
+	}
+	// Verify if volume exists in specific FA
+	isExists, err := pureutils.IsFAVolumeExists(faClient, volumeName)
+	if err != nil {
+		return false, err
+	}
+	if !isExists {
+		log.Infof("Volume [%v] doesn't exist on the FA Cluster [%v]", volumeName, fa.MgmtEndPoint)
+		return true, nil
+	}
+	// Delete the Volume from FA Backend
+	_, err = pureutils.DeleteVolumeOnFABackend(faClient, volumeName)
+	if err != nil {
+		return false, err
+	}
+	// Verify if the volume is still exists on FA
+	// Verify if volume exists in specific FA
+	isExists, err = pureutils.IsFAVolumeExists(faClient, volumeName)
+	if err != nil {
+		return false, err
+	}
+	if isExists {
+		return false, fmt.Errorf("Volume [%v] still exist in backend", volumeName)
+	}
+	return true, nil
+
+}
