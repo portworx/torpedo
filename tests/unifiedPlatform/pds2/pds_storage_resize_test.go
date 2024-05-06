@@ -77,7 +77,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				// Run Workloads
 
 				log.InfoD("Increase the storage size by 1 gb through template")
-				resConfigIdUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Status.CustomResourceName, 1)
+				resConfigIdUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams)
 
 				log.FailOnError(err, "Unable to create Custom Templates for PDS")
 				templates = append(templates, resConfigIdUpdated)
@@ -106,7 +106,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				beforeResizePodAge2, err := workflowDataservice.GetPodAgeForDeployment(*deployment.Create.Status.CustomResourceName, workflowDataservice.NamespaceName)
 
 				log.InfoD("Increase the storage size again after Scale-UP")
-				resConfigIdUpdatedScaled, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams, *deployment.Create.Status.CustomResourceName, 1)
+				resConfigIdUpdatedScaled, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams)
 				log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
 				log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdatedScaled)
