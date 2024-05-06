@@ -345,8 +345,10 @@ func (wfDataService *WorkflowDataService) DeletePDSPods() error {
 	}
 	log.Infof("PDS System Pods")
 	for _, pod := range podList.Items {
-		log.Infof("%v", pod.Name)
-		pdsPods = append(pdsPods, pod)
+		if strings.Contains(strings.ToLower(pod.Name), "pds") {
+			log.Infof("%v", pod.Name)
+			pdsPods = append(pdsPods, pod)
+		}
 	}
 	log.InfoD("Deleting PDS System Pods")
 	err = utils.DeletePods(pdsPods)
