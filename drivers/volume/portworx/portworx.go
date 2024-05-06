@@ -5572,7 +5572,7 @@ func (d *portworx) GetTrashCanVolumeIds(n node.Node) ([]string, error) {
 
 	res := data.([]interface{})
 
-	trashcanVols := make([]string, 50)
+	trashcanVols := make([]string, 0)
 
 	for _, v := range res {
 		var tp map[string]interface{} = v.(map[string]interface{})

@@ -3628,3 +3628,130 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 
 	})
 })
+
+var _ = Describe("{VolumeTrashCanTest}", func() {
+
+	/*
+				1. Deploy application with volume
+				2. Enable trash can on the node
+			    3. Delete the volume while it is in resync
+			    4. Check the volume is moved to trash can
+				5. Restore the volume from trash can
+			    6. Check the volume is restored successfully and delete the volume
+		https://purestorage.atlassian.net/browse/PTX-23568
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolumeTrashCanTest", "Validate Volume Trash Can", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	var wg sync.WaitGroup
+
+	itLog := "VolumeTrashCanTest"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		//Enable trash can on the cluster
+		err := EnableTrashcanOnCluster("90")
+		log.FailOnError(err, "Failed to enable trash can on the cluster")
+
+		stepLog := "schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("voltrashcan-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+
+		stepLog = "Do ha-update on the volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Check for replication factor of volumes
+			for _, ctx := range contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes for app [%s]", ctx.App.Key)
+				for _, vol := range vols {
+					wg.Add(1)
+					go func(vol *volume.Volume) {
+						defer wg.Done()
+						defer GinkgoRecover()
+						currRep, err := Inst().V.GetReplicationFactor(vol)
+						log.FailOnError(err, "Failed to get replication factor")
+						opts := volume.Options{
+							ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+						}
+						if currRep == 3 {
+							err := Inst().V.SetReplicationFactor(vol, 2, nil, nil, true, opts)
+							log.FailOnError(err, "Failed to update replication factor")
+							time.Sleep(20 * time.Second)
+
+							err = Inst().V.SetReplicationFactor(vol, 3, nil, nil, false, opts)
+							log.FailOnError(err, "Failed to update replication factor")
+						} else {
+							err := Inst().V.SetReplicationFactor(vol, 3, nil, nil, false, opts)
+							log.FailOnError(err, "Failed to update replication factor")
+						}
+					}(vol)
+				}
+			}
+		})
+
+		stepLog = "Delete the volume and check the volume is moved to trash can"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			appVolumes := make([]*volume.Volume, 0)
+			for _, ctx := range contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes for app [%s]", ctx.App.Key)
+				for _, vols := range vols {
+					appVolumes = append(appVolumes, vols)
+				}
+			}
+			DestroyApps(contexts, nil)
+			// Get all the volumes in trashcan
+			volsInTrashCan, err := Inst().V.GetTrashCanVolumeIds(node.GetStorageNodes()[0])
+			log.FailOnError(err, "Failed to get volumes in trash can")
+			if len(volsInTrashCan) > 0 {
+				log.Infof("Volumes in trashcan: %v", volsInTrashCan)
+			}
+		})
+
+		stepLog = "Restore the volume from trash can and disable trashcan and delete the volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Restore the volumes from trashcan
+			volsInTrashCan, err := Inst().V.GetTrashCanVolumeIds(node.GetStorageNodes()[0])
+			log.FailOnError(err, "Failed to get volumes in trash can")
+			count := 0
+			for _, volID := range volsInTrashCan {
+				log.Infof("Volume in trashcan: %v", volID)
+			}
+
+			for i, volID := range volsInTrashCan {
+				volRestoreName := fmt.Sprintf("restored-%d", i)
+				err := trashcanRestore(volID, volRestoreName)
+				log.FailOnError(err, "Failed to restore volume [%s] from trash can", volID)
+				count++
+			}
+
+			// Disable trashcan
+			err = EnableTrashcanOnCluster("0")
+			log.FailOnError(err, "Failed to disable trash can on the cluster")
+
+			// Delete the volumes
+			for i := 0; i < count; i++ {
+				volName := fmt.Sprintf("restored-%d", i)
+				err := Inst().V.DeleteVolume(volName)
+				log.FailOnError(err, "Failed to delete volume [%s]", volName)
+			}
+		})
+		wg.Wait()
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+})
