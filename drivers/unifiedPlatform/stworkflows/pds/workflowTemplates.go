@@ -8,12 +8,11 @@ import (
 )
 
 type WorkflowPDSTemplates struct {
-	Platform                platform.WorkflowPlatform
-	ResourceTemplateId      string
-	StorageTemplateId       string
-	ServiceConfigTemplateId string
-	AppTempIdAndDsName      map[string]string
-	UpdateTemplateNameAndId map[string]string
+	Platform                  platform.WorkflowPlatform
+	ResourceTemplateId        string
+	StorageTemplateId         string
+	ServiceConfigTepmplateIds map[string]string
+	UpdateTemplateNameAndId   map[string]string
 }
 
 func (cusTemp *WorkflowPDSTemplates) CreateAppTemplate(params *parameters.NewPDSParams) map[string]string {
@@ -27,7 +26,6 @@ func (cusTemp *WorkflowPDSTemplates) CreateAppTemplate(params *parameters.NewPDS
 		appConfig, _ := pdslibs.NewCreateServiceConfigTemplate(cusTemp.Platform.TenantId, conf.Name, conf.Configurations)
 		log.InfoD("appConfig ID-  %v", *appConfig.Create.Meta.Uid)
 		appConfigId := appConfig.Create.Meta.Uid
-		cusTemp.ServiceConfigTemplateId = *appConfigId
 		appTempIdAndDsName[conf.Name] = *appConfigId
 	}
 	return appTempIdAndDsName
@@ -51,7 +49,7 @@ func (cusTemp *WorkflowPDSTemplates) CreatePdsCustomTemplatesAndFetchIds(templat
 	}
 
 	appTemplateNameAndId := cusTemp.CreateAppTemplate(templates)
-	cusTemp.AppTempIdAndDsName = appTemplateNameAndId
+	cusTemp.ServiceConfigTepmplateIds = appTemplateNameAndId
 
 	stConfig, _ := pdslibs.CreateStorageConfigTemplate(cusTemp.Platform.TenantId, stConfigParams)
 	log.InfoD("stConfig ID-  %v", *stConfig.Create.Meta.Uid)
@@ -111,7 +109,7 @@ func (cusTemp *WorkflowPDSTemplates) Purge() error {
 		return err
 	}
 
-	for _, template := range cusTemp.AppTempIdAndDsName {
+	for _, template := range cusTemp.ServiceConfigTepmplateIds {
 		log.Infof("Deleting ServiceConfigTemplate - [%s]", template)
 		err = cusTemp.DeleteCreatedCustomPdsTemplates([]string{template})
 		if err != nil {

@@ -39,7 +39,7 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	namespaceName := wfDataService.NamespaceName
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
-	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
+	appConfigId := wfDataService.PDSTemplates.ServiceConfigTepmplateIds[ds.Name]
 	resConfigId := wfDataService.PDSTemplates.ResourceTemplateId
 	stConfigId := wfDataService.PDSTemplates.StorageTemplateId
 	log.Infof("targetClusterId [%s]", targetClusterId)
@@ -89,7 +89,7 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 	namespaceName := wfDataService.NamespaceName
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
-	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
+	appConfigId := wfDataService.PDSTemplates.ServiceConfigTepmplateIds[ds.Name]
 	resConfigId := wfDataService.PDSTemplates.ResourceTemplateId
 	stConfigId := wfDataService.PDSTemplates.StorageTemplateId
 	log.Infof("targetClusterId [%s]", targetClusterId)

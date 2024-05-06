@@ -22,7 +22,6 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		pdsBackupConfigName string
 		restoreNamespace    string
 		restoreName         string
-		dsNameAndAppTempId  map[string]string
 		err                 error
 	)
 
@@ -35,19 +34,9 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 
 	It("Deploy data services and perform backup and restore on the same cluster", func() {
 
-		Step("Create Service Configuration, Resource and Storage Templates", func() {
-			//dsNameAndAppTempId = workFlowTemplates.CreateAppTemplate(NewPdsParams)
-			dsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-		})
-
 		for _, ds := range NewPdsParams.DataServiceToTest {
 
 			Step("Deploy dataservice", func() {
-
-				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
-				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
-
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
@@ -99,7 +88,6 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 		pdsBackupConfigName string
 		restoreNamespace    string
 		restoreName         string
-		dsNameAndAppTempId  map[string]string
 		err                 error
 	)
 	JustBeforeEach(func() {
@@ -111,18 +99,9 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 
 	It("Deploy data services and perform backup and restore on the different cluster", func() {
 
-		Step("Create Service Configuration, Resource and Storage Templates", func() {
-			//dsNameAndAppTempId = workFlowTemplates.CreateAppTemplate(NewPdsParams)
-			dsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-		})
-
 		for _, ds := range NewPdsParams.DataServiceToTest {
 
 			Step("Deploy dataservice", func() {
-
-				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
-				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while deploying ds")
@@ -172,7 +151,6 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 		restoreNamespace    string
 		restoreName         string
 		deployment          *automationModels.PDSDeploymentResponse
-		dsNameAndAppTempId  map[string]string
 		err                 error
 	)
 
@@ -185,18 +163,9 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 
 	It("Deploy data services and perform backup and restore on the different cluster", func() {
 
-		Step("Create Service Configuration, Resource and Storage Templates", func() {
-			//dsNameAndAppTempId = workFlowTemplates.CreateAppTemplate(NewPdsParams)
-			dsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-		})
-
 		for _, ds := range NewPdsParams.DataServiceToTest {
 
 			Step("Deploy dataservice", func() {
-
-				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
-				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while deploying ds")
@@ -264,8 +233,6 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 		restoreNames         []string
 		deploymentNamespace  string
 		allBackupIds         []string
-		dsNameAndAppTempId   map[string]string
-		err                  error
 		BackupsPerDeployment int
 		allErrors            []error
 	)
@@ -279,12 +246,6 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 	})
 
 	It("Perform multiple backup and restore simultaneously for different dataservices", func() {
-
-		Step("Create Service Configuration, Resource and Storage Templates", func() {
-			//dsNameAndAppTempId = workFlowTemplates.CreateAppTemplate(NewPdsParams)
-			dsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 
@@ -309,9 +270,6 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 			})
 
 			Step("Deploy multiple dataservice", func() {
-
-				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
-				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
 				currDeployment, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while deploying ds")
@@ -440,9 +398,8 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 			workflowDataservice.Namespace = &WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
 
-			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
+			_, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId[ds.Name]
 			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 
@@ -560,7 +517,6 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 			workflowDataService.NamespaceName = Namespace
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-			workflowDataService.PDSTemplates.ServiceConfigTemplateId = serviceConfigId[ds.Name]
 			workflowDataService.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataService.PDSTemplates.ResourceTemplateId = resConfigId
 			tempList = append(tempList, serviceConfigId[ds.Name], stConfigId, resConfigId)
@@ -711,7 +667,6 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 		latestBackupUid       string
 		pdsBackupConfigName   string
 		restoreName           string
-		dsNameAndAppTempId    map[string]string
 		err                   error
 		backupIdBeforeUpgrade string
 	)
@@ -722,17 +677,10 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 	})
 
 	It("Deploy data services and perform backup and restore on the same cluster", func() {
-		Step("Create Service Configuration, Resource and Storage Templates", func() {
-			dsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 
 			Step("Deploy dataservice", func() {
-
-				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
-				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while deploying ds")
@@ -861,9 +809,8 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 			workflowDataservice.Namespace = &WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
 
-			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
+			_, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId[ds.Name]
 			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 
