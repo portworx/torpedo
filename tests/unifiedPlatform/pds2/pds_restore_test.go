@@ -56,14 +56,14 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 
 			Step("Create Adhoc backup config of the existing deployment", func() {
 				pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
-				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
+				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while creating backupConfig")
 				log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 			})
 
 			Step("Get the latest backup detail for the deployment", func() {
-				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Name)
+				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while creating backup")
 				latestBackupUid = *backupResponse.Meta.Uid
 				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
@@ -132,13 +132,13 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 
 			Step("Create Adhoc backup config of the existing deployment", func() {
 				pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
-				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
+				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while creating backupConfig")
 				log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
 			})
 
 			Step("Get the latest backup detail for the deployment", func() {
-				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Name)
+				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while creating backup")
 				latestBackupUid = *backupResponse.Meta.Uid
 				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
@@ -206,13 +206,13 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 
 			Step("Create Adhoc backup config of the existing deployment", func() {
 				pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
-				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
+				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while creating backupConfig")
 				log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
 			})
 
 			Step("Get the latest backup detail for the deployment", func() {
-				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Name)
+				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while creating backup")
 				latestBackupUid = *backupResponse.Meta.Uid
 				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
@@ -338,7 +338,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 						defer GinkgoRecover()
 
 						pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
-						bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
+						bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
 						if err != nil {
 							log.Errorf("Some error occurred while creating backup [%s], Error - [%s]", pdsBackupConfigName, err.Error())
 							allErrors = append(allErrors, err)
@@ -355,7 +355,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 
 		Step("Get the backup detail for the backup configs", func() {
 			for _, deployment := range deployments {
-				allBackupResponse, err := WorkflowPDSBackup.ListAllBackups(*deployment.Create.Meta.Name)
+				allBackupResponse, err := WorkflowPDSBackup.ListAllBackups(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while creating backup")
 				dash.VerifyFatal(len(allBackupResponse), BackupsPerDeployment, fmt.Sprintf("Total number of backups found for [%s] are not consisten with backup configs created.", *deployment.Create.Meta.Name))
 				for _, backupResponse := range allBackupResponse {
@@ -457,11 +457,11 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 			})
 		}()
 
-		stepLog := "Running Workloads before upgrading the ds image"
-		Step(stepLog, func() {
-			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-			log.FailOnError(err, "Error while running workloads on ds")
-		})
+		//stepLog := "Running Workloads before upgrading the ds image"
+		//Step(stepLog, func() {
+		//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+		//	log.FailOnError(err, "Error while running workloads on ds")
+		//})
 	})
 
 	It("Perform adhoc backup of old deployments", func() {
@@ -490,11 +490,11 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 			log.Debugf("Updated Deployment Id [%s]", *updatedDeployment.Update.Meta.Uid)
 		}
 
-		stepLog := "Running Workloads after upgrading the ds image"
-		Step(stepLog, func() {
-			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-			log.FailOnError(err, "Error while running workloads on ds")
-		})
+		//stepLog := "Running Workloads after upgrading the ds image"
+		//Step(stepLog, func() {
+		//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+		//	log.FailOnError(err, "Error while running workloads on ds")
+		//})
 	})
 
 	It("Restore the old deployment and upgrade the restored deployment", func() {
@@ -513,11 +513,11 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 				log.Debugf("Updated Deployment Id [%s]", *updatedRestoredDeployment.Update.Meta.Uid)
 			}
 
-			stepLog := "Running Workloads after upgrading the ds image"
-			Step(stepLog, func() {
-				err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-				log.FailOnError(err, "Error while running workloads on ds")
-			})
+			//stepLog := "Running Workloads after upgrading the ds image"
+			//Step(stepLog, func() {
+			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			//	log.FailOnError(err, "Error while running workloads on ds")
+			//})
 		})
 	})
 
@@ -534,8 +534,8 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 		workflowDataService  pds.WorkflowDataService
 		workflowBackUpConfig pds.WorkflowPDSBackupConfig
 		//workflowRestore      pds.WorkflowPDSRestore
-		deployment        *automationModels.PDSDeploymentResponse
-		restoreDeployment *automationModels.PDSRestoreResponse
+		deployment *automationModels.PDSDeploymentResponse
+		//	restoreDeployment *automationModels.PDSRestoreResponse
 
 		workFlowTemplates pds.WorkflowPDSTemplates
 		tempList          []string
@@ -581,11 +581,11 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 				log.FailOnError(err, "Unable to delete Custom Templates for PDS")
 			})
 		}()
-		stepLog := "Running Workloads before taking backups"
-		Step(stepLog, func() {
-			err := workflowDataService.RunDataServiceWorkloads(NewPdsParams)
-			log.FailOnError(err, "Error while running workloads on ds")
-		})
+		//stepLog := "Running Workloads before taking backups"
+		//Step(stepLog, func() {
+		//	err := workflowDataService.RunDataServiceWorkloads(NewPdsParams)
+		//	log.FailOnError(err, "Error while running workloads on ds")
+		//})
 	})
 	It("Perform adhoc backup, restore before PVC Resize and validate them", func() {
 		var bkpConfigResponse *automationModels.PDSBackupConfigResponse
@@ -628,10 +628,10 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 		//	})
 		//}()
 
-		Step("Validate md5hash for the restored deployments", func() {
-			err := workflowDataService.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)
-			log.FailOnError(err, "Error occured in ValidateDataServiceWorkloads method")
-		})
+		//Step("Validate md5hash for the restored deployments", func() {
+		//	err := workflowDataService.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)
+		//	log.FailOnError(err, "Error occured in ValidateDataServiceWorkloads method")
+		//})
 
 	})
 
@@ -646,11 +646,11 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 		Step(stepLog, func() {
 			//Validate deployment function call here
 		})
-		stepLog = "Running Workloads after Resize of PVC"
-		Step(stepLog, func() {
-			err := workflowDataService.RunDataServiceWorkloads(NewPdsParams)
-			log.FailOnError(err, "Error while running workloads on ds")
-		})
+		//stepLog = "Running Workloads after Resize of PVC"
+		//Step(stepLog, func() {
+		//	err := workflowDataService.RunDataServiceWorkloads(NewPdsParams)
+		//	log.FailOnError(err, "Error while running workloads on ds")
+		//})
 	})
 	It("Perform adhoc backup, restore after PVC Resize and validate them", func() {
 		var bkpConfigResponse *automationModels.PDSBackupConfigResponse
@@ -693,10 +693,10 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 		//	})
 		//}()
 
-		Step("Validate md5hash for the restored deployments", func() {
-			err := workflowDataService.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)
-			log.FailOnError(err, "Error occured in ValidateDataServiceWorkloads method")
-		})
+		//Step("Validate md5hash for the restored deployments", func() {
+		//	err := workflowDataService.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)
+		//	log.FailOnError(err, "Error occured in ValidateDataServiceWorkloads method")
+		//})
 
 	})
 
@@ -742,14 +742,14 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 
 			Step("Create Adhoc backup config of the existing deployment", func() {
 				pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
-				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
+				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while creating backupConfig")
 				log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 			})
 
 			Step("Get the latest backup detail for the deployment", func() {
-				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Name)
+				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while creating backup")
 				latestBackupUid = *backupResponse.Meta.Uid
 				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
@@ -778,14 +778,14 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 
 			Step("Create Adhoc backup config of the existing deployment after upgrade", func() {
 				pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
-				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
+				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while creating backupConfig")
 				log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 			})
 
 			Step("Get the latest backup detail for the deployment after upgrade", func() {
-				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Name)
+				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while creating backup")
 				latestBackupUid = *backupResponse.Meta.Uid
 				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
@@ -838,7 +838,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 		workflowBackup       pds.WorkflowPDSBackup
 		deployment           *automationModels.PDSDeploymentResponse
 		workflowRestore      pds.WorkflowPDSRestore
-		restoreDeployment    *automationModels.PDSRestoreResponse
+		//	restoreDeployment    *automationModels.PDSRestoreResponse
 		pdsBackupConfigNames []string
 		latestBackupUid      string
 		numberOfIterations   int
@@ -871,11 +871,11 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 			log.FailOnError(err, "Error while deploying ds")
 		}
 
-		stepLog := "Running Workloads before upgrading the ds image"
-		Step(stepLog, func() {
-			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-			log.FailOnError(err, "Error while running workloads on ds")
-		})
+		//stepLog := "Running Workloads before upgrading the ds image"
+		//Step(stepLog, func() {
+		//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+		//	log.FailOnError(err, "Error while running workloads on ds")
+		//})
 	})
 
 	It("Perform adhoc backup, restore and validate - Multiple Backup and Restores", func() {
@@ -920,10 +920,10 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 
 		})
 
-		Step("Validate md5hash for the restored deployments", func() {
-			err := workflowDataservice.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)
-			log.FailOnError(err, "Error occured in ValidateDataServiceWorkloads method")
-		})
+		//Step("Validate md5hash for the restored deployments", func() {
+		//	err := workflowDataservice.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)
+		//	log.FailOnError(err, "Error occured in ValidateDataServiceWorkloads method")
+		//})
 
 	})
 

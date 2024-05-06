@@ -295,7 +295,7 @@ var _ = Describe("{GetPVCFullCondition}", func() {
 			}()
 
 			log.InfoD("Running Workloads to fill up the PVC")
-			err = workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			_, err = workflowDataservice.RunDataServiceWorkloads(*deployment.Create.Meta.Uid, NewPdsParams)
 			log.FailOnError(err, "Error while running workloads on ds")
 
 			log.InfoD("Compute the PVC usage")

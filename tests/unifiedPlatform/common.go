@@ -150,9 +150,8 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		log.Infof("Creating data service struct")
 		WorkflowDataService.NamespaceName = PDS_DEFAULT_NAMESPACE
 		WorkflowDataService.Namespace = &WorkflowNamespace
-		WorkflowDataService.DataServiceDeployment = make(map[string]string)
+		WorkflowDataService.DataServiceDeployment = make(map[string]automationModels.DataServiceDetails)
 		WorkflowDataService.Dash = Inst().Dash
-		WorkflowDataService.NamespaceMap = make(map[string]string)
 
 		log.Infof("Creating backup config struct")
 		WorkflowPDSBackupConfig.WorkflowBackupLocation = WorkflowbkpLoc
@@ -168,8 +167,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowPDSRestore.Restores = make(map[string]automationModels.PDSRestore)
 		WorkflowPDSRestore.Destination = &WorkflowNamespace
 		WorkflowPDSRestore.RestoredDeployments = pds.WorkflowDataService{}
-		WorkflowPDSRestore.RestoredDeployments.DataServiceDeployment = make(map[string]string)
-		WorkflowPDSRestore.RestoredDeployments.NamespaceMap = make(map[string]string)
+		WorkflowPDSRestore.RestoredDeployments.DataServiceDeployment = make(map[string]automationModels.DataServiceDetails)
 		WorkflowPDSRestore.SourceNamespace = PDS_DEFAULT_NAMESPACE
 
 		log.Infof("Creating PDS template object")

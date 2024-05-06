@@ -14,7 +14,7 @@ type PDSDeploymentRequest struct {
 type PDSDeploymentResponse struct {
 	Create V1Deployment
 	Update V1DeploymentUpdate
-	Get    V1DeploymentGet
+	Get    V1Deployment
 	List   []V1Deployment
 }
 
@@ -41,12 +41,6 @@ type DeploymentUpdateConfig struct {
 }
 
 type V1Deployment struct {
-	Meta   Meta               `copier:"must,nopanic"`
-	Config V1Config1          `copier:"must,nopanic"`
-	Status Deploymentv1Status `copier:"must,nopanic"`
-}
-
-type V1DeploymentGet struct {
 	Meta   Meta               `copier:"must,nopanic"`
 	Config V1Config1          `copier:"must,nopanic"`
 	Status Deploymentv1Status `copier:"must,nopanic"`

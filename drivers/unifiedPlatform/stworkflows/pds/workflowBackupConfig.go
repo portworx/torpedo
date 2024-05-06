@@ -23,18 +23,18 @@ const (
 )
 
 // CreateBackupConfig creates a backup config
-func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, deploymentName string) (*automationModels.PDSBackupConfigResponse, error) {
+func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, deploymentId string) (*automationModels.PDSBackupConfigResponse, error) {
 
 	log.Infof("Backup [%s] started at [%s]", name, time.Now().Format("2006-01-02 15:04:05"))
 
 	log.Infof("Backup name - [%s]", name)
-	log.Infof("Deployment Name - [%s]", deploymentName)
-	log.Infof("Delplyment UID - [%s]", backupConfig.WorkflowDataService.DataServiceDeployment[deploymentName])
+	log.Infof("Deployment Name - [%s]", backupConfig.WorkflowDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name)
+	log.Infof("Delplyment UID - [%s]", deploymentId)
 	log.Infof("Project Id - [%s]", backupConfig.WorkflowDataService.Namespace.TargetCluster.Project.ProjectId)
 	log.Infof("Backup Location Id - [%s]", backupConfig.WorkflowBackupLocation.BkpLocation.BkpLocationId)
 
 	createBackup, err := pdslibs.CreateBackupConfig(name,
-		backupConfig.WorkflowDataService.DataServiceDeployment[deploymentName],
+		deploymentId,
 		backupConfig.WorkflowDataService.Namespace.TargetCluster.Project.ProjectId,
 		backupConfig.WorkflowBackupLocation.BkpLocation.BkpLocationId)
 
@@ -52,7 +52,7 @@ func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, depl
 			log.Infof("Skipping Backup Validation")
 		}
 	} else {
-		err = pdslibs.ValidateAdhocBackup(backupConfig.WorkflowDataService.DataServiceDeployment[deploymentName], *createBackup.Create.Meta.Uid)
+		err = pdslibs.ValidateAdhocBackup(deploymentId, *createBackup.Create.Meta.Uid)
 		if err != nil {
 			return nil, err
 		}

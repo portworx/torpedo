@@ -100,7 +100,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				stIncrease.InitialCapacity = initialCapacity
 				stIncrease.IncreasedStorageSize = increasedPvcSize
 				stIncrease.BeforeResizePodAge = beforeResizePodAge
-				err = workflowDataservice.ValidateDepConfigPostStorageIncrease(ds.Name, *deployment.Create.Meta.Uid, &stIncrease)
+				err = workflowDataservice.ValidateDepConfigPostStorageIncrease(*deployment.Create.Meta.Uid, &stIncrease)
 				log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 
 				beforeResizePodAge2, err := workflowDataservice.GetPodAgeForDeployment(*deployment.Create.Status.CustomResourceName, workflowDataservice.NamespaceName)
@@ -128,7 +128,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				stIncrease.InitialCapacity = increasedPvcSize
 				stIncrease.IncreasedStorageSize = increasedPvcSizeScaleUp
 				stIncrease.BeforeResizePodAge = beforeResizePodAge2
-				err = workflowDataservice.ValidateDepConfigPostStorageIncrease(ds.Name, *deployment.Create.Meta.Uid, &stIncreaseScaleup)
+				err = workflowDataservice.ValidateDepConfigPostStorageIncrease(*deployment.Create.Meta.Uid, &stIncreaseScaleup)
 				log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 
 			}

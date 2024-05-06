@@ -64,10 +64,18 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 	}
 
 	restore.Restores[name] = createRestore.Create
+	deployment, _, err := pdslibs.GetDeployment(createRestore.Create.Config.DestinationReferences.DeploymentId)
+	if err != nil {
+		return nil, err
+	}
 
-	restore.RestoredDeployments.Namespace = restore.Destination
-	restore.RestoredDeployments.DataServiceDeployment[name] = createRestore.Create.Config.DestinationReferences.DeploymentId
-	restore.RestoredDeployments.NamespaceMap[name] = namespace
+	// TODO: The Get MD5Hash needs to be run here to get the Md5CheckSum
+	restore.RestoredDeployments.DataServiceDeployment[createRestore.Create.Config.DestinationReferences.DeploymentId] = automationModels.DataServiceDetails{
+		Deployment:        deployment.Get,
+		Namespace:         namespace,
+		NamespaceId:       restore.Destination.Namespaces[namespace],
+		SourceMd5Checksum: "",
+	}
 
 	log.Infof("Restore completed successfully - [%s]", *createRestore.Create.Meta.Name)
 

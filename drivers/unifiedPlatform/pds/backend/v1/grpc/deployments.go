@@ -34,7 +34,7 @@ func (deployment *PdsGrpc) getDeploymentClient() (context.Context, publicdeploym
 
 func (deployment *PdsGrpc) GetDeployment(deploymentId string) (*PDSDeploymentResponse, error) {
 	depResponse := PDSDeploymentResponse{
-		Get: V1DeploymentGet{},
+		Get: V1Deployment{},
 	}
 	ctx, client, _, err := deployment.getDeploymentClient()
 	if err != nil {
@@ -83,7 +83,7 @@ func (deployment *PdsGrpc) DeleteDeployment(deploymentId string) error {
 
 func (deployment *PdsGrpc) ListDeployment(projectId string) (*PDSDeploymentResponse, error) {
 	depResponse := PDSDeploymentResponse{
-		Get: V1DeploymentGet{},
+		Get: V1Deployment{},
 	}
 	ctx, client, _, err := deployment.getDeploymentClient()
 	if err != nil {

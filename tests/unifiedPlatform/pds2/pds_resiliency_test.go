@@ -115,7 +115,7 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 
 		stepLog := "Running Workloads before Storage Resize"
 		Step(stepLog, func() {
-			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			_, err := workflowDataservice.RunDataServiceWorkloads(*deployment.Create.Meta.Uid, NewPdsParams)
 			log.FailOnError(err, "Error while running workloads on ds")
 		})
 
