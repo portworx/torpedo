@@ -725,6 +725,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 
 	JustBeforeEach(func() {
 		StartPDSTorpedoTest("PerformRestoreAfterDataServiceUpdate", "Perform restore after ds update", nil, 0)
+
 	})
 
 	It("Deploy data services and perform backup and restore on the same cluster", func() {
