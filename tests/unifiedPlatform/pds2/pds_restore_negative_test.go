@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
@@ -10,6 +11,7 @@ import (
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 	"strings"
 	"sync"
+	"time"
 )
 
 var _ = Describe("{PerformRestoreValidatingHA}", func() {
@@ -159,7 +161,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 		restoreName         string
 		dsNameAndAppTempId  map[string]string
 		err                 error
-		allErrors           []error
+		allErrors           []string
 	)
 
 	JustBeforeEach(func() {
@@ -207,20 +209,22 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 			})
 
 			Step("Simultaneously fetch and delete backupController pods from the pds namespace", func() {
+				log.InfoD("Bringing down PDS related pods from cluster - [%s]", time.Now().Format("2006-01-02 15:04:05"))
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
 					defer GinkgoRecover()
-					log.InfoD("Delete backup controller and Target Controller operator pod")
+					log.Infof("Delete backup controller and Target Controller operator pod")
 					err := WorkflowDataService.DeletePDSPods()
 					if err != nil {
-						allErrors = append(allErrors, err)
+						allErrors = append(allErrors, err.Error())
 					}
 				}()
 			})
 
 			Step("Create Restore from the latest backup Id", func() {
 				wg.Add(1)
+				log.InfoD("Triggering restore - [%s]", time.Now().Format("2006-01-02 15:04:05"))
 				go func() {
 					defer wg.Done()
 					defer GinkgoRecover()
@@ -228,12 +232,12 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 					CheckforClusterSwitch()
 					_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
 					if err != nil {
-						allErrors = append(allErrors, err)
+						allErrors = append(allErrors, err.Error())
 					}
 				}()
 
 				wg.Wait()
-				dash.VerifyFatal(len(allErrors), 0, "Some error occurred while restoring or killing PDS pods")
+				dash.VerifyFatal(len(allErrors), 0, fmt.Sprintf("Some error occurred while restoring or killing PDS pods. Errors - [%s]", strings.Join(allErrors, "\n")))
 				log.Infof("Restore created successfully with ID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
 			})
 		}
