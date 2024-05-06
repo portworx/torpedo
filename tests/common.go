@@ -644,7 +644,7 @@ var post_rule_uid string
 var pre_rule_uid string
 
 // API count variable
-var startAPICallCounts map[string]int
+var startAPICallCounts map[string]map[string]int
 
 type PlatformCredentialStruct struct {
 	credName string
@@ -8019,10 +8019,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 		CurrentTestRailTestCaseId = testRepoID
 	}
 	startAPICallCounts = countAPICallsOnNodes()
-	log.Infof("API Count per node (Start of Test):")
-	for node, count := range startAPICallCounts {
-		log.Infof("%s: %d", node, count)
-	}
+	logAPICallCounts("API Count per node (Start of Test):", startAPICallCounts)
 }
 
 // enableAutoFSTrim on supported PX version.
@@ -8063,15 +8060,30 @@ func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
 	endAPICallCounts := countAPICallsOnNodes()
-	log.Infof("Consolidated API Count per node (End of Test):")
-	for node, count := range endAPICallCounts {
-		log.Infof("%s: %d", node, count)
-	}
+	logAPICallCounts("Consolidated API Count per node (End of Test):", endAPICallCounts)
+	logDifferencesInCounts(startAPICallCounts, endAPICallCounts)
+}
+
+func logDifferencesInCounts(startCounts, endCounts map[string]map[string]int) {
 	log.Infof("Difference in API Counts from Start to End of Test:")
-	for node, endCount := range endAPICallCounts {
-		startCount := startAPICallCounts[node]
-		diff := endCount - startCount
-		log.Infof("%s: %d", node, diff)
+	for node, endNodeCounts := range endCounts {
+		startNodeCounts := startCounts[node]
+		log.Infof("Node %s:", node)
+		for key, endCount := range endNodeCounts {
+			startCount := startNodeCounts[key]
+			diff := endCount - startCount
+			log.Infof("  %s: %d", key, diff)
+		}
+	}
+}
+
+func logAPICallCounts(prefix string, apiCallCounts map[string]map[string]int) {
+	log.Infof(prefix)
+	for node, counts := range apiCallCounts {
+		log.Infof("Node %s:", node)
+		for key, count := range counts {
+			log.Infof("  %s: %d", key, count)
+		}
 	}
 }
 
@@ -12319,30 +12331,51 @@ func EnableFlashArrayNetworkInterface(faMgmtIP string, iface string) error {
 
 // countAPICallsOnNodes method counts the occurence of a set API Identifier string
 // on each storage node and returns a map of the node name against the count
-func countAPICallsOnNodes() map[string]int {
+func countAPICallsOnNodes() map[string]map[string]int {
 	nodes := node.GetStorageDriverNodes()
-	apiCallCounts := make(map[string]int)
+	apiCallCounts := make(map[string]map[string]int)
 	arrays, err := GetFADetailsUsed()
-	var apiCallIdentifier string = vsphereCDApiCallIdentifier
-	// Check if FACD backend then switch to the relevant API Calls
+	
 	if err == nil && len(arrays) > 0 {
-		apiCallIdentifier = faCDApiCallIdentifier
-	}
-	for _, node := range nodes {
-		cmd := fmt.Sprintf("journalctl -lu portworx* | grep -E '%s' | wc -l", apiCallIdentifier)
-		output, err := runCmdGetOutput(cmd, node)
-		if err != nil {
-			log.Errorf("Failed to run command on node %s: %v", node.Name, err)
-			apiCallCounts[node.Name] = 0
-			continue
+		facdEndpoints := []string{"/connections", "/hosts", "/ports", "/volumes"}
+		for _, node := range nodes {
+			nodeCounts := make(map[string]int)
+			total := 0
+			for _, endpoint := range facdEndpoints {
+				cmd := fmt.Sprintf("journalctl -lu portworx* | grep '%s' | wc -l", endpoint)
+				output, err := runCmdGetOutput(cmd, node)
+				if err != nil {
+					log.Errorf("Failed to run command for endpoint %s on node %s: %v", endpoint, node.Name, err)
+					nodeCounts[endpoint] = 0
+					continue
+				}
+				count, err := strconv.Atoi(strings.TrimSpace(output))
+				if err != nil {
+					log.Errorf("Failed to parse output for endpoint %s on node %s: %v", endpoint, node.Name, err)
+					nodeCounts[endpoint] = 0
+					continue
+				}
+				nodeCounts[endpoint] = count
+				total += count
+			}
+			nodeCounts["total"] = total
+			apiCallCounts[node.Name] = nodeCounts
 		}
-		count, err := strconv.Atoi(strings.TrimSpace(output))
-		if err != nil {
-			log.Errorf("Failed to parse output for node %s: %v", node.Name, err)
-			apiCallCounts[node.Name] = 0
-			continue
+	} else {
+		for _, node := range nodes {
+			cmd := fmt.Sprintf("journalctl -lu portworx* | grep '%s' | wc -l", vsphereCDApiCallIdentifier)
+			output, err := runCmdGetOutput(cmd, node)
+			if err != nil {
+				log.Errorf("Failed to run command on node %s: %v", node.Name, err)
+				continue
+			}
+			count, err := strconv.Atoi(strings.TrimSpace(output))
+			if err != nil {
+				log.Errorf("Failed to parse output for node %s: %v", node.Name, err)
+				continue
+			}
+			apiCallCounts[node.Name] = map[string]int{"vsphere": count, "total": count}
 		}
-		apiCallCounts[node.Name] = count
 	}
 	return apiCallCounts
 }
