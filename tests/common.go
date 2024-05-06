@@ -12334,48 +12334,46 @@ func EnableFlashArrayNetworkInterface(faMgmtIP string, iface string) error {
 func countAPICallsOnNodes() map[string]map[string]int {
 	nodes := node.GetStorageDriverNodes()
 	apiCallCounts := make(map[string]map[string]int)
+	var command string
 	arrays, err := GetFADetailsUsed()
-	
 	if err == nil && len(arrays) > 0 {
-		facdEndpoints := []string{"/connections", "/hosts", "/ports", "/volumes"}
-		for _, node := range nodes {
-			nodeCounts := make(map[string]int)
-			total := 0
-			for _, endpoint := range facdEndpoints {
-				cmd := fmt.Sprintf("journalctl -lu portworx* | grep '%s' | wc -l", endpoint)
-				output, err := runCmdGetOutput(cmd, node)
-				if err != nil {
-					log.Errorf("Failed to run command for endpoint %s on node %s: %v", endpoint, node.Name, err)
-					nodeCounts[endpoint] = 0
-					continue
-				}
-				count, err := strconv.Atoi(strings.TrimSpace(output))
-				if err != nil {
-					log.Errorf("Failed to parse output for endpoint %s on node %s: %v", endpoint, node.Name, err)
-					nodeCounts[endpoint] = 0
-					continue
-				}
-				nodeCounts[endpoint] = count
-				total += count
-			}
-			nodeCounts["total"] = total
-			apiCallCounts[node.Name] = nodeCounts
-		}
+		command = `journalctl -lu portworx* | awk '
+            /\/connections/ {connections++}
+            /\/hosts/ {hosts++}
+            /\/ports/ {ports++}
+            /\/volumes/ {volumes++}
+            END {
+                print "connections:" connections " hosts:" hosts " ports:" ports " volumes:" volumes
+            }'`
 	} else {
-		for _, node := range nodes {
-			cmd := fmt.Sprintf("journalctl -lu portworx* | grep '%s' | wc -l", vsphereCDApiCallIdentifier)
-			output, err := runCmdGetOutput(cmd, node)
+		command = fmt.Sprintf(`journalctl -lu portworx* | grep -c '%s'`, vsphereCDApiCallIdentifier)
+	}
+
+	for _, node := range nodes {
+		output, err := runCmdGetOutput(command, node)
+		if err != nil {
+			log.Errorf("Failed to run command on node %s: %v", node.Name, err)
+			continue
+		}
+		counts := parseCounts(output)
+		apiCallCounts[node.Name] = counts
+	}
+
+	return apiCallCounts
+}
+
+func parseCounts(output string) map[string]int {
+	counts := make(map[string]int)
+	for _, entry := range strings.Fields(output) {
+		parts := strings.Split(entry, ":")
+		if len(parts) == 2 {
+			count, err := strconv.Atoi(parts[1])
 			if err != nil {
-				log.Errorf("Failed to run command on node %s: %v", node.Name, err)
+				log.Errorf("Failed to parse count from output: %v", err)
 				continue
 			}
-			count, err := strconv.Atoi(strings.TrimSpace(output))
-			if err != nil {
-				log.Errorf("Failed to parse output for node %s: %v", node.Name, err)
-				continue
-			}
-			apiCallCounts[node.Name] = map[string]int{"vsphere": count, "total": count}
+			counts[parts[0]] = count
 		}
 	}
-	return apiCallCounts
+	return counts
 }
