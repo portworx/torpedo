@@ -3534,21 +3534,27 @@ var _ = Describe("{DeleteFADAVolumeFromBackend}", func() {
 		//ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		// Get all the volumes with IO running
-		vols, err := GetAllVolumesWithIO(contexts)
-		log.FailOnError(err, "Failed to get list of all volumes")
+		allPureVolumes := []volume.Volume{}
 
-		pureVols, err := FilterAllPureVolumes(vols)
-		log.FailOnError(err, "Failed to get list of pure volumes")
+		// Get all the volumes with IO running
+		for _, eachCtx := range contexts {
+			volumes, err := Inst().S.GetVolumes(eachCtx)
+			log.FailOnError(err, "Failed to get list of all volumes")
+
+			pureVols, err := FilterAllPureVolumes(volumes)
+			log.FailOnError(err, "Failed to get list of pure volumes")
+
+			allPureVolumes = append(allPureVolumes, pureVols...)
+		}
 
 		// Pick a Random Volume with IO
-		randomIndex := rand.Intn(len(pureVols))
-		pickVolume := pureVols[randomIndex]
-		log.InfoD("Volume picked for deletion is [%v]", pickVolume.Name)
+		randomIndex := rand.Intn(len(allPureVolumes))
+		pickVolume := allPureVolumes[randomIndex]
+		log.InfoD("Volume picked for deletion is [%v] with ID [%v]", pickVolume.Name, pickVolume.ID)
 
 		pvc, err := GetPVCObjFromVol(&pickVolume)
 		log.FailOnError(err, "Failed to get details about the PVC")
-		log.Infof("PVC Name for the volume is [%v]", pvc.Name)
+		log.Infof("PVC Name for the volume [%v] is [%v]", pvc.Spec.VolumeName, pvc.Name)
 
 		// Pod details after blocking IP
 		podsOnBlock, err := k8sCore.GetPodsUsingPVC(pvc.Name, pvc.Namespace)
@@ -3559,17 +3565,19 @@ var _ = Describe("{DeleteFADAVolumeFromBackend}", func() {
 			log.Infof("Pod [%v] is in State [%v]", eachPodAfter.Name, eachPodAfter.Status.Phase)
 		}
 
-		log.Infof("Deleting the PVC from FA Backend")
-		faDetails, err := GetFADetailsFromVolumeName(pickVolume.Name)
+		log.Infof("Deleting the PVC [%v] from FA Backend", pickVolume.ID)
+		faDetails, err := GetFADetailsFromVolumeName(pickVolume.ID)
 		log.FailOnError(err, "Failed to get list of all volumes")
 
 		for _, eachFA := range faDetails {
-			deleted, err := DeleteVolumeFromFABackend(eachFA, pickVolume.Name)
+			log.Infof("Delete volume [%v] with Name [%v] from FA Backend [%v] returned error", pickVolume.Name, pickVolume.ID, eachFA)
+			deleted, err := DeleteVolumeFromFABackend(eachFA, pickVolume.ID)
 			log.FailOnError(err, "delete volume [%v] from FA Backend [%v] returned error", pickVolume.Name, eachFA)
 			dash.VerifyFatal(deleted, true, "is volume deleted from backend")
 		}
 
 		// Sleep for some time after deleting the PVC
+		time.Sleep(5 * time.Minute)
 
 		// Pod details after blocking IP
 		podsOnBlock, err = k8sCore.GetPodsUsingPVC(pvc.Name, pvc.Namespace)

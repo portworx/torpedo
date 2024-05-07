@@ -148,6 +148,24 @@ func CreateNewHostOnFA(faClient *flasharray.Client, hostName string) (*flasharra
 	return host, nil
 }
 
+// ListVolumesFromHosts returns list of Volumes
+func ListVolumesFromHosts(faClient *flasharray.Client) (map[string][]flasharray.ConnectedVolume, error) {
+	allHostVolumes := make(map[string][]flasharray.ConnectedVolume)
+	allHosts, err := ListAllHosts(faClient)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, eachHost := range allHosts {
+		hostVolumes, err := faClient.Hosts.ListHostConnections(eachHost.Name, nil)
+		if err != nil {
+			return nil, err
+		}
+		allHostVolumes[eachHost.Name] = hostVolumes
+	}
+	return allHostVolumes, nil
+}
+
 // ConnectVolumeToHost Connects Volume to Host
 func ConnectVolumeToHost(faClient *flasharray.Client, hostName string, volName string) (*flasharray.ConnectedVolume, error) {
 	connectedVol, err := faClient.Hosts.ConnectHost(hostName, volName, nil)
