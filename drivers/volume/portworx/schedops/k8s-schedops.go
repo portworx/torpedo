@@ -425,6 +425,9 @@ PodLoop:
 						isNvme = true
 					}
 					pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
+					if pxMountNvmeRegex.MatchString(line) {
+						isNvme = true
+					}
 
 					if len(pxMounts) > 0 {
 						log.Debugf("Pod [%s/%s] container [%s] has PX mount: %v", pod.Namespace, pod.Name, containerName, pxMounts)
