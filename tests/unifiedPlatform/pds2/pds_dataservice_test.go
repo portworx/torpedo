@@ -41,7 +41,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 				templates = append(templates, dsNameAndAppTempId[ds.Name])
 
 				log.Debugf("Deploying DataService [%s]", ds.Name)
-				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 			})
@@ -101,7 +101,7 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 				templates = append(templates, dsNameAndAppTempId[ds.Name])
 
 				log.Debugf("Deploying DataService [%s]", ds.Name)
-				deployment, err = WorkflowDataService.DeployDataService(ds, ds.OldImage, ds.Version)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.OldImage, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 			})
@@ -150,7 +150,7 @@ var _ = Describe("{ScaleUpCpuMemLimitsandStorageOfDS}", func() {
 				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
 				log.Debugf("Deploying DataService [%s]", ds.Name)
-				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 			})
@@ -207,7 +207,6 @@ var _ = Describe("{IncreasePVCby1gb}", func() {
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = &WorkflowNamespace
-			workflowDataservice.NamespaceName = Namespace
 
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
@@ -216,7 +215,7 @@ var _ = Describe("{IncreasePVCby1gb}", func() {
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 
 			log.InfoD("Original Storage Template ID- [resTempId- %v]", stConfigId)
-			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion, PDS_DEFAULT_NAMESPACE)
 			log.FailOnError(err, "Error while deploying ds")
 		}
 
@@ -262,7 +261,6 @@ var _ = Describe("{GetPVCFullCondition}", func() {
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = &WorkflowNamespace
-			workflowDataservice.NamespaceName = Namespace
 
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
@@ -272,7 +270,7 @@ var _ = Describe("{GetPVCFullCondition}", func() {
 			templates = append(templates, serviceConfigId[ds.Name], stConfigId, resConfigId)
 
 			log.InfoD("Original Storage Template ID- [resTempId- %v]", stConfigId)
-			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion, PDS_DEFAULT_NAMESPACE)
 			log.FailOnError(err, "Error while deploying ds")
 			deployments[ds] = deployment
 
@@ -295,19 +293,19 @@ var _ = Describe("{GetPVCFullCondition}", func() {
 			}()
 
 			log.InfoD("Running Workloads to fill up the PVC")
-			err = workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			_, err = workflowDataservice.RunDataServiceWorkloads(*deployment.Create.Meta.Uid, NewPdsParams)
 			log.FailOnError(err, "Error while running workloads on ds")
 
 			log.InfoD("Compute the PVC usage")
-			err = workflowDataservice.CheckPVCStorageFullCondition(workflowDataservice.NamespaceName, *deployment.Create.Status.CustomResourceName, 85)
+			err = workflowDataservice.CheckPVCStorageFullCondition(workflowDataservice.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace, *deployment.Create.Status.CustomResourceName, 85)
 			log.FailOnError(err, "Error while checking for pvc full condition")
 
 			log.InfoD("Once pvc has reached threshold, increase the ovc by 1gb")
-			err = workflowDataservice.IncreasePvcSizeBy1gb(workflowDataservice.NamespaceName, *deployment.Create.Status.CustomResourceName, 1)
+			err = workflowDataservice.IncreasePvcSizeBy1gb(workflowDataservice.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace, *deployment.Create.Status.CustomResourceName, 1)
 			log.FailOnError(err, "Failing while Increasing the PVC name...")
 
 			log.InfoD("Validate deployment after PVC increase")
-			err = workflowDataservice.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, resConfigId, stConfigId, workflowDataservice.NamespaceName, ds.Version, ds.Image)
+			err = workflowDataservice.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, resConfigId, stConfigId, workflowDataservice.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace, ds.Version, ds.Image)
 		}
 	})
 	JustAfterEach(func() {
@@ -344,7 +342,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 				templates = append(templates, dsNameAndAppTempId[ds.Name])
 
 				log.Debugf("Deploying DataService [%s]", ds.Name)
-				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 			})
@@ -364,7 +362,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 					ds.Replicas,
 					WorkflowDataService.PDSTemplates.ResourceTemplateId,
 					WorkflowDataService.PDSTemplates.StorageTemplateId,
-					WorkflowDataService.NamespaceName,
+					PDS_DEFAULT_NAMESPACE,
 					ds.Version,
 					ds.Image)
 				log.FailOnError(err, "Error while Validating dataservice")
