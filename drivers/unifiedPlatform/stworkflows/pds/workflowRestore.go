@@ -70,7 +70,7 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 	}
 
 	// TODO: The Get MD5Hash needs to be run here to get the Md5CheckSum
-	restore.RestoredDeployments.DataServiceDeployment[createRestore.Create.Config.DestinationReferences.DeploymentId] = automationModels.DataServiceDetails{
+	restore.RestoredDeployments.DataServiceDeployment[createRestore.Create.Config.DestinationReferences.DeploymentId] = pdslibs.DataServiceDetails{
 		Deployment:        deployment.Get,
 		Namespace:         namespace,
 		NamespaceId:       restore.Destination.Namespaces[namespace],

@@ -37,15 +37,18 @@ type ValidateStorageIncrease struct {
 
 // GetDeploymentConfigurations returns the deployment CRObject response
 func GetDeploymentConfigurations(namespace, dataServiceName, deploymentName string) (DeploymentConfig, error) {
-	var dbConfig DeploymentConfig
-	objects, err := GetCRObject(namespace, CRGroup, Version, strings.ToLower(dataServiceName)+"s")
-	if err != nil {
-		return dbConfig, err
-	}
 	log.Debugf("namespace [%s]", namespace)
 	log.Debugf("CRGroup [%s]", CRGroup)
 	log.Debugf("Version [%s]", Version)
 	log.Debugf("dsName [%s]", strings.ToLower(dataServiceName)+"s")
+
+	var dbConfig DeploymentConfig
+
+	objects, err := GetCRObject(namespace, CRGroup, Version, strings.ToLower(dataServiceName)+"s")
+	if err != nil {
+		return dbConfig, err
+	}
+
 	log.Debugf("objects [%+v]", objects)
 
 	// Iterate over the CRD objects and print their names.
@@ -207,7 +210,7 @@ func ValidateDataMd5Hash(deploymentHash, restoredDepHash map[string]string) bool
 }
 
 // InsertDataAndReturnChecksum Inserts Data into the db and returns the checksum
-func InsertDataAndReturnChecksum(dataServiceDetails automationModels.DataServiceDetails, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
+func InsertDataAndReturnChecksum(dataServiceDetails DataServiceDetails, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "write"
 
 	deploymentName := *dataServiceDetails.Deployment.Meta.Name
@@ -224,7 +227,7 @@ func InsertDataAndReturnChecksum(dataServiceDetails automationModels.DataService
 }
 
 // ReadDataAndReturnChecksum Reads Data from the db and returns the checksum
-func ReadDataAndReturnChecksum(dataServiceDetails automationModels.DataServiceDetails, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
+func ReadDataAndReturnChecksum(dataServiceDetails DataServiceDetails, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "read"
 
 	deploymentName := *dataServiceDetails.Deployment.Meta.Name

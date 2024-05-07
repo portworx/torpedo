@@ -3,6 +3,7 @@ package tests
 import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
@@ -165,7 +166,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestorePDSPodsDown", "Perform restore while simultaneously deleting backup controller manager & target controller pods.", nil, 0)
-		workflowDataservice.DataServiceDeployment = make(map[string]automationModels.DataServiceDetails)
+		workflowDataservice.DataServiceDeployment = make(map[string]dslibs.DataServiceDetails)
 
 		workflowRestore.Destination = &WorkflowNamespace
 		workflowRestore.Source = &WorkflowNamespace

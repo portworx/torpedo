@@ -20,7 +20,7 @@ type WorkflowDataService struct {
 	PDSTemplates WorkflowPDSTemplates
 	// TODO: NamespaceName should be taken as a parameter in the method
 	NamespaceName           string
-	DataServiceDeployment   map[string]automationModels.DataServiceDetails
+	DataServiceDeployment   map[string]dslibs.DataServiceDetails
 	SkipValidatation        map[string]bool
 	Dash                    *aetosutil.Dashboard
 	ValidateStorageIncrease dslibs.ValidateStorageIncrease
@@ -62,12 +62,13 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	//	return nil, fmt.Errorf("unable to run workloads. error - [%s]", err.Error())
 	//}
 
-	wfDataService.DataServiceDeployment[*deployment.Create.Meta.Uid] = automationModels.DataServiceDetails{
+	wfDataService.DataServiceDeployment[*deployment.Create.Meta.Uid] = dslibs.DataServiceDetails{
 		Deployment:  deployment.Create,
 		Namespace:   namespaceName,
 		NamespaceId: namespaceId,
 		//SourceMd5Checksum: chkSum,
 		SourceMd5Checksum: "",
+		DSParams:          ds,
 	}
 
 	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
@@ -158,7 +159,7 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deploymentId 
 		return resourceTemp, storageOp, dbConfig, err
 	}
 
-	dbConfig, err = dslibs.GetDeploymentConfigurations(wfDataService.DataServiceDeployment[deploymentId].Namespace, *wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name, podName)
+	dbConfig, err = dslibs.GetDeploymentConfigurations(wfDataService.DataServiceDeployment[deploymentId].Namespace, wfDataService.DataServiceDeployment[deploymentId].DSParams.Name, podName)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
