@@ -421,9 +421,6 @@ PodLoop:
 				pxMountNvmeRegex := regexp.MustCompile(`\/dev\/mapper\/eui\.00.*24a937.*`)
 				pxMountFound := false
 				for _, line := range mounts {
-					if pxMountNvmeRegex.MatchString(line) {
-						isNvme = true
-					}
 					pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
 					if pxMountNvmeRegex.MatchString(line) {
 						isNvme = true
@@ -472,7 +469,6 @@ PodLoop:
 				grepPattern = fmt.Sprintf("%s | grep %s", grepPattern[:14], grepPattern[14:])
 			}
 		}
-
 		log.Debugf("Executing command [%s] on node [%s]", fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_|/dev/mapper)' | grep %s", grepPattern), currentNode.Name)
 		volMount, _ := d.RunCommand(currentNode,
 			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_|/dev/mapper)' | grep %s", grepPattern), connOpts)
