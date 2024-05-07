@@ -2,9 +2,10 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"strings"
 	"sync"
+
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
@@ -347,7 +348,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 			}
 
 			wg.Wait()
-			dash.VerifyFatal(len(allErrors), 0, "Some error occurred while creating backup configs")
+			dash.VerifyFatal(len(allErrors), 0, "Verifying multiple backup creation")
 			log.InfoD("Simultaneous backup config creation succeeded")
 		})
 
@@ -392,7 +393,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 			}
 
 			wg.Wait()
-			dash.VerifyFatal(len(allErrors), 0, "Some error occurred while creating restores")
+			dash.VerifyFatal(len(allErrors), 0, "Verifying multiple restore creation")
 			log.InfoD("Simultaneous restores succeeded")
 		})
 	})

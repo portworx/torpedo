@@ -2,15 +2,16 @@ package tests
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	utils "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 const AVAILABLE = "AVAILABLE"
@@ -372,8 +373,7 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 
 				log.Debugf("Deploying DataService [%s]", ds.Name)
 				log.InfoD("Deploying dataservice in [%s] namespace", evenNamespaces[0])
-				WorkflowDataService.NamespaceName = evenNamespaces[0]
-				_, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
+				_, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, evenNamespaces[0])
 				// TODO: Error message needs to be changed once https://purestorage.atlassian.net/browse/DS-9607 is resolved
 				dash.VerifyFatal(err, "not allowed", "Verifying disable namespace usage")
 			})

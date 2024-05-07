@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"time"
+
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
@@ -12,7 +14,6 @@ import (
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	corev1 "k8s.io/api/core/v1"
-	"time"
 )
 
 type WorkflowDataService struct {
@@ -81,6 +82,11 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		}
 	}
 
+	// TODO: This needs to be removed once below bugs are fixed:
+	// https://purestorage.atlassian.net/issues/DS-9591
+	// https://purestorage.atlassian.net/issues/DS-9546
+	// https://purestorage.atlassian.net/issues/DS-9305
+	log.Infof("Sleeping for 1 minutes to make sure deployment gets healthy")
 	time.Sleep(1 * time.Minute)
 
 	return deployment, nil
@@ -356,8 +362,10 @@ func (wfDataService *WorkflowDataService) DeletePDSPods() error {
 	}
 	log.Infof("PDS System Pods")
 	for _, pod := range podList.Items {
-		log.Infof("%v", pod.Name)
-		pdsPods = append(pdsPods, pod)
+		if strings.Contains(strings.ToLower(pod.Name), "pds-backups") || strings.Contains(strings.ToLower(pod.Name), "pds-target") {
+			log.Infof("%v", pod.Name)
+			pdsPods = append(pdsPods, pod)
+		}
 	}
 	log.InfoD("Deleting PDS System Pods")
 	err = utils.DeletePods(pdsPods)
