@@ -28,8 +28,8 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 		nsLablesApply                 map[string]string
 		TotalToggles                  int
 		waitTime                      time.Duration
-		// TODO: This needs to be uncommented once https://purestorage.atlassian.net/browse/DS-9607 is resolved
-		//dsNameAndAppTempId            map[string]string
+		dsNameAndAppTempId            map[string]string
+		err                           error
 	)
 
 	JustBeforeEach(func() {
@@ -48,12 +48,11 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 
 	It("Enables and Disables pds on a namespace multiple times", func() {
 
-		// TODO: This needs to be uncommented once https://purestorage.atlassian.net/browse/DS-9607 is resolved
-		//Step("Create Service Configuration, Resource and Storage Templates", func() {
-		//	//dsNameAndAppTempId = workFlowTemplates.CreateAppTemplate(NewPdsParams)
-		//	dsNameAndAppTempId, _, _, err := WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-		//	log.FailOnError(err, "Unable to create Custom Templates for PDS")
-		//})
+		Step("Create Service Configuration, Resource and Storage Templates", func() {
+			//dsNameAndAppTempId = workFlowTemplates.CreateAppTemplate(NewPdsParams)
+			dsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+		})
 
 		Step(fmt.Sprintf("Creating [%d] namespaces with labels", numberOfNamespacesTobeCreated), func() {
 			var wg sync.WaitGroup
@@ -365,19 +364,20 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 			dash.VerifyFatal(len(allError), 0, "Verifying update namespaces")
 		})
 
-		// TODO: This needs to be uncommented once https://purestorage.atlassian.net/browse/DS-9607 is resolved
-		//for _, ds := range NewPdsParams.DataServiceToTest {
-		//	Step("Deploy DataService", func() {
-		//
-		//		WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
-		//		WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
-		//
-		//		log.Debugf("Deploying DataService [%s]", ds.Name)
-		//		_, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
-		// TODO: <FAILURE NEEDS TO BE ADDED HERE> needs to be replaced with actual failure
-		//		dash.VerifyFatal(err, "<FAILURE NEEDS TO BE ADDED HERE>", "Verifying disable namespace usage")
-		//	})
-		//}
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+
+				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
+				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
+
+				log.Debugf("Deploying DataService [%s]", ds.Name)
+				log.InfoD("Deploying dataservice in [%s] namespace", evenNamespaces[0])
+				WorkflowDataService.NamespaceName = evenNamespaces[0]
+				_, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
+				// TODO: Error message needs to be changed once https://purestorage.atlassian.net/browse/DS-9607 is resolved
+				dash.VerifyFatal(err, "not allowed", "Verifying disable namespace usage")
+			})
+		}
 
 	})
 
