@@ -3577,17 +3577,20 @@ var _ = Describe("{DeleteFADAVolumeFromBackend}", func() {
 		}
 
 		// Sleep for some time after deleting the PVC
-		time.Sleep(5 * time.Minute)
+		time.Sleep(15 * time.Minute)
 
 		// Pod details after blocking IP
-		podsOnBlock, err = k8sCore.GetPodsUsingPVC(pvc.Name, pvc.Namespace)
+		podsAfter, err := k8sCore.GetPodsUsingPVC(pvc.Name, pvc.Namespace)
 		log.FailOnError(err, "unable to find the node from the pod")
 
 		// Verify that Pod Bounces and not in Running state till the time iscsi rules are not reverted
-		for _, eachPodAfter := range podsOnBlock {
-			log.Infof("Pod [%v] is in State [%v]", eachPodAfter.Name, eachPodAfter.Status.Phase)
+		// TODO : Exact behaviour not known ( https://purestorage.atlassian.net/browse/PWX-37170 )
+		// The function below will be updated later once the issue is fixed
+		for _, eachPodAfter := range podsAfter {
+			if eachPodAfter.Status.Phase == "Running" {
+				log.FailOnError(fmt.Errorf("Pod [%v] still in Running state even after backend volumes are deleted", eachPodAfter.Name), "is Pod still running ?")
+			}
 		}
-
 	})
 
 	JustAfterEach(func() {
