@@ -239,7 +239,7 @@ func PurgePDS() {
 	log.FailOnError(err, "some error occurred while purging namespace objects")
 
 	log.InfoD("Purging all templates")
-	err = WorkflowPDSTemplate.Purge()
+	err = WorkflowPDSTemplate.Purge(true)
 	log.FailOnError(err, "some error occurred while purging data service templates")
 }
 

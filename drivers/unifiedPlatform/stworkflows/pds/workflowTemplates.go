@@ -5,6 +5,7 @@ import (
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
+	"strings"
 )
 
 type WorkflowPDSTemplates struct {
@@ -95,35 +96,40 @@ func (cusTemp *WorkflowPDSTemplates) CreateResourceTemplateWithCustomValue(templ
 	return *resourceConfigId, nil
 }
 
-func (cusTemp *WorkflowPDSTemplates) Purge() error {
+func (cusTemp *WorkflowPDSTemplates) Purge(ignoreError bool) error {
 
-	log.Infof("Deleting ResourceTemplate - [%s]", cusTemp.ResourceTemplateId)
-
-	err := cusTemp.DeleteCreatedCustomPdsTemplates([]string{cusTemp.ResourceTemplateId})
-	if err != nil {
-		return err
-	}
-
-	log.Infof("Deleting StorageTemplate - [%s]", cusTemp.StorageTemplateId)
-
-	err = cusTemp.DeleteCreatedCustomPdsTemplates([]string{cusTemp.StorageTemplateId})
-	if err != nil {
-		return err
-	}
-
-	for _, template := range cusTemp.AppTempIdAndDsName {
-		log.Infof("Deleting ServiceConfigTemplate - [%s]", template)
-		err = cusTemp.DeleteCreatedCustomPdsTemplates([]string{template})
+	if cusTemp.ResourceTemplateId != "" {
+		log.Infof("Deleting ResourceTemplate - [%s]", cusTemp.ResourceTemplateId)
+		err := cusTemp.DeleteCreatedCustomPdsTemplates([]string{cusTemp.ResourceTemplateId})
 		if err != nil {
 			return err
 		}
 	}
 
+	if cusTemp.StorageTemplateId != "" {
+		log.Infof("Deleting StorageTemplate - [%s]", cusTemp.StorageTemplateId)
+		err := cusTemp.DeleteCreatedCustomPdsTemplates([]string{cusTemp.StorageTemplateId})
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, template := range cusTemp.AppTempIdAndDsName {
+		log.Infof("Deleting ServiceConfigTemplate - [%s]", template)
+		err := cusTemp.DeleteCreatedCustomPdsTemplates([]string{template})
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Debugf("length of UpdateTemplateNameAndId [%d]", len(cusTemp.UpdateTemplateNameAndId))
 	for _, template := range cusTemp.UpdateTemplateNameAndId {
 		log.Infof("Deleting ResourceConfigTemplate - [%s]", template)
 		err = cusTemp.DeleteCreatedCustomPdsTemplates([]string{template})
 		if err != nil {
-			return err
+			if ignoreError && !strings.Contains(err.Error(), "404 Not Found") {
+				return err
+			}
 		}
 	}
 
