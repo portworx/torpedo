@@ -97,23 +97,25 @@ func (cusTemp *WorkflowPDSTemplates) CreateResourceTemplateWithCustomValue(templ
 
 func (cusTemp *WorkflowPDSTemplates) Purge() error {
 
-	log.Infof("Deleting ResourceTemplate - [%s]", cusTemp.ResourceTemplateId)
-
-	err := cusTemp.DeleteCreatedCustomPdsTemplates([]string{cusTemp.ResourceTemplateId})
-	if err != nil {
-		return err
+	if cusTemp.ResourceTemplateId != "" {
+		log.Infof("Deleting ResourceTemplate - [%s]", cusTemp.ResourceTemplateId)
+		err := cusTemp.DeleteCreatedCustomPdsTemplates([]string{cusTemp.ResourceTemplateId})
+		if err != nil {
+			return err
+		}
 	}
 
-	log.Infof("Deleting StorageTemplate - [%s]", cusTemp.StorageTemplateId)
-
-	err = cusTemp.DeleteCreatedCustomPdsTemplates([]string{cusTemp.StorageTemplateId})
-	if err != nil {
-		return err
+	if cusTemp.StorageTemplateId != "" {
+		log.Infof("Deleting StorageTemplate - [%s]", cusTemp.StorageTemplateId)
+		err := cusTemp.DeleteCreatedCustomPdsTemplates([]string{cusTemp.StorageTemplateId})
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, template := range cusTemp.AppTempIdAndDsName {
 		log.Infof("Deleting ServiceConfigTemplate - [%s]", template)
-		err = cusTemp.DeleteCreatedCustomPdsTemplates([]string{template})
+		err := cusTemp.DeleteCreatedCustomPdsTemplates([]string{template})
 		if err != nil {
 			return err
 		}
