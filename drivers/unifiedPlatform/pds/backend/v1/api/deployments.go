@@ -17,7 +17,7 @@ var (
 
 func (ds *PDS_API_V1) GetDeployment(deploymentId string) (*automationModels.PDSDeploymentResponse, error) {
 	dsResponse := automationModels.PDSDeploymentResponse{
-		Get: automationModels.V1DeploymentGet{},
+		Get: automationModels.V1Deployment{},
 	}
 	ctx, dsClient, err := ds.getDeploymentClient()
 	if err != nil {

@@ -32,7 +32,7 @@ func (workflowNamespace *WorkflowNamespace) CreateNamespaces(namespace string) (
 		return workflowNamespace, err
 	}
 
-	uid, err := workflowNamespace.GetNamespaceUID(namespace)
+	uid, err := workflowNamespace.ValidateNamespaceUID(namespace)
 	if err != nil {
 		return workflowNamespace, err
 	}
@@ -52,7 +52,7 @@ func (workflowNamespace *WorkflowNamespace) DeleteNamespace(namespace string) er
 	}
 	log.Infof("Delete [%s] from the cluster", namespace)
 
-	id, err := workflowNamespace.GetNamespaceUID(namespace)
+	id, err := workflowNamespace.ValidateNamespaceUID(namespace)
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,25 @@ func (workflowNamespace *WorkflowNamespace) ListNamespaces(tenantId string, labe
 	return allNamespaces, nil
 }
 
-func (workflowNamespace *WorkflowNamespace) GetNamespaceUID(namespace string) (string, error) {
+func (workflowNamespace *WorkflowNamespace) GetNamespace(namespace string) (automationModels.V1Namespace, error) {
+	allNamespaces, err := workflowNamespace.ListNamespaces(
+		workflowNamespace.TargetCluster.Project.Platform.TenantId, "", "CREATED_AT", "DESC")
+
+	if err != nil {
+		return automationModels.V1Namespace{}, err
+	}
+
+	for _, eachNamespace := range allNamespaces.List.Namespaces {
+		log.Infof("Namespace - [%s]", *eachNamespace.Meta.Name)
+		if *eachNamespace.Meta.Name == namespace {
+			return eachNamespace, nil
+		}
+	}
+
+	return automationModels.V1Namespace{}, fmt.Errorf("Namespace [%s] not found in the list of namespaces", namespace)
+}
+
+func (workflowNamespace *WorkflowNamespace) ValidateNamespaceUID(namespace string) (string, error) {
 	waitForNSToReflect := func() (interface{}, bool, error) {
 		allNamespaces, err := workflowNamespace.ListNamespaces(
 			workflowNamespace.TargetCluster.Project.Platform.TenantId, "", "CREATED_AT", "DESC")
