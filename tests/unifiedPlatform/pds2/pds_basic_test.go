@@ -155,32 +155,13 @@ var _ = BeforeSuite(func() {
 		log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
 	})
 
-	Step("Create PDS templates for source project", func() {
-		WorkflowPDSTemplate.Platform = WorkflowPlatform
-		_, _, _, err := WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-		log.FailOnError(err, "Unable to create Custom Templates for PDS")
-
-	})
-
 	Step("Associate platform resources to Project", func() {
-
-		var allConfigIds []string
-
-		// Appending all ServiceConfigIds to allConfigIDs
-		for _, id := range WorkflowPDSTemplate.ServiceConfigTepmplateIds {
-			allConfigIds = append(allConfigIds, id)
-		}
-		// Appending resource template ID
-		allConfigIds = append(allConfigIds, WorkflowPDSTemplate.ResourceTemplateId)
-		// Appending storage template ID
-		allConfigIds = append(allConfigIds, WorkflowPDSTemplate.StorageTemplateId)
-
 		err := WorkflowProject.Associate(
 			[]string{WorkflowTargetCluster.ClusterUID, WorkflowTargetClusterDestination.ClusterUID},
 			[]string{},
 			[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
 			[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
-			allConfigIds,
+			[]string{},
 			[]string{},
 		)
 		log.FailOnError(err, "Unable to associate Cluster to Project")

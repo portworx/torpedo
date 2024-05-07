@@ -46,7 +46,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 				log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
-				// workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId[ds.Name]
+				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId[ds.Name]
 				workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 				workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 				templates = append(templates, serviceConfigId[ds.Name], stConfigId, resConfigId)
