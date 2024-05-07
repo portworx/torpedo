@@ -360,7 +360,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 					log.Infof("Backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
 					err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
 					log.FailOnError(err, "Error occured while waiting for backup to complete")
-					allBackupIds[*deployment.Create.Meta.Uid] = append(allBackupIds[WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace], *backupResponse.Meta.Uid)
+					allBackupIds[WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace] = append(allBackupIds[WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace], *backupResponse.Meta.Uid)
 				}
 			}
 

@@ -427,10 +427,10 @@ func (wfDataService *WorkflowDataService) Purge() error {
 
 	errors = make([]string, 0)
 
-	for dsId, _ := range wfDataService.DataServiceDeployment {
+	for dsId, dsDetails := range wfDataService.DataServiceDeployment {
 
 		dsName := *wfDataService.DataServiceDeployment[dsId].Deployment.Meta.Name
-		log.Infof("Deleting [%s] with id [%d]", dsName, dsId)
+		log.Infof("Deleting [%s] with id [%s] from [%s]-[%s] namespace ", dsName, dsId, dsDetails.Namespace, dsDetails.NamespaceId)
 
 		deploymentDetails, _, err := dslibs.GetDeployment(dsId)
 		if err != nil {
@@ -458,7 +458,7 @@ func (wfDataService *WorkflowDataService) Purge() error {
 			log.Infof("All PVs associated with [%s] deleted successfully", dsName)
 		}
 
-		err = utils.RemoveFinalizersFromAllResources(wfDataService.DataServiceDeployment[dsId].Namespace)
+		err = utils.RemoveFinalizersFromAllResources(dsDetails.Namespace)
 		if err != nil {
 			log.Warnf("Unable to remove finalizers. Error - [%s]", err.Error())
 			errors = append(errors, err.Error())
