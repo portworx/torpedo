@@ -19,7 +19,6 @@ type WorkflowDataService struct {
 	Namespace    *platform.WorkflowNamespace
 	PDSTemplates WorkflowPDSTemplates
 	// TODO: NamespaceName should be taken as a parameter in the method
-	NamespaceName           string
 	DataServiceDeployment   map[string]dslibs.DataServiceDetails
 	SkipValidatation        map[string]bool
 	Dash                    *aetosutil.Dashboard
@@ -34,9 +33,9 @@ const (
 	PDS_DEPLOYMENT_AVAILABLE   = "AVAILABLE"
 )
 
-func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService, image, version string) (*automationModels.PDSDeploymentResponse, error) {
-	namespaceId := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
-	namespaceName := wfDataService.NamespaceName
+func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService, image, version string, namespace string) (*automationModels.PDSDeploymentResponse, error) {
+	namespaceId := wfDataService.Namespace.Namespaces[namespace]
+	namespaceName := namespace
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
 	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
@@ -86,8 +85,8 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 }
 
 func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataService, deploymentId, image, version string) (*automationModels.PDSDeploymentResponse, error) {
-	namespaceId := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
-	namespaceName := wfDataService.NamespaceName
+	namespaceId := wfDataService.DataServiceDeployment[deploymentId].NamespaceId
+	namespaceName := wfDataService.DataServiceDeployment[deploymentId].Namespace
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
 	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
@@ -320,26 +319,26 @@ func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string,
 	return err
 }
 
-func (wfDataService *WorkflowDataService) KillDBMasterNodeToValidateHA(dsName string, deploymentName string) error {
-	dbMaster, isNativelyDistributed := utils.GetDbMasterNode(wfDataService.NamespaceName, dsName, deploymentName, wfDataService.Namespace.TargetCluster.KubeConfig)
+func (wfDataService *WorkflowDataService) KillDBMasterNodeToValidateHA(dsName string, deploymentId string) error {
+	dbMaster, isNativelyDistributed := utils.GetDbMasterNode(wfDataService.DataServiceDeployment[deploymentId].Namespace, dsName, *wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name, wfDataService.Namespace.TargetCluster.KubeConfig)
 	if isNativelyDistributed {
-		err := utils.DeleteK8sPods(dbMaster, wfDataService.NamespaceName, wfDataService.Namespace.TargetCluster.KubeConfig)
+		err := utils.DeleteK8sPods(dbMaster, wfDataService.DataServiceDeployment[deploymentId].Namespace, wfDataService.Namespace.TargetCluster.KubeConfig)
 		if err != nil {
 			return err
 		}
 		//validate DataService Deployment here
-		newDbMaster, _ := utils.GetDbMasterNode(wfDataService.NamespaceName, dsName, deploymentName, wfDataService.Namespace.TargetCluster.KubeConfig)
+		newDbMaster, _ := utils.GetDbMasterNode(wfDataService.DataServiceDeployment[deploymentId].Namespace, dsName, *wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name, wfDataService.Namespace.TargetCluster.KubeConfig)
 		if dbMaster == newDbMaster {
 			log.FailOnError(fmt.Errorf("leader node is not reassigned"), fmt.Sprintf("Leader pod %v", dbMaster))
 		}
 	} else {
-		podName, err := utils.GetAnyPodName(deploymentName, wfDataService.NamespaceName)
+		podName, err := utils.GetAnyPodName(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name, wfDataService.DataServiceDeployment[deploymentId].Namespace)
 		if err != nil {
-			return fmt.Errorf("failed while fetching pod for stateful set %v ", deploymentName)
+			return fmt.Errorf("failed while fetching pod for stateful set %v ", *wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name)
 		}
-		err = utils.KillPodsInNamespace(wfDataService.NamespaceName, podName)
+		err = utils.KillPodsInNamespace(wfDataService.DataServiceDeployment[deploymentId].Namespace, podName)
 		if err != nil {
-			return fmt.Errorf("failed while deleting pod %v ", deploymentName)
+			return fmt.Errorf("failed while deleting pod %v ", *wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name)
 		}
 		//validate DataService Deployment here
 	}
@@ -411,7 +410,7 @@ func (wfDataService *WorkflowDataService) ValidateDepConfigPostStorageIncrease(d
 
 	stringRelFactor := storageTemp.Replicas
 	wfDataService.Dash.VerifyFatal(dbConfig.Spec.Topologies[0].StorageOptions.Replicas, stringRelFactor, "Validating the Replication Factor count post storage resize (RepelFactor-LEVEL)")
-	podAgeAfterResize, err := utils.GetPodAge(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name, wfDataService.NamespaceName)
+	podAgeAfterResize, err := utils.GetPodAge(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name, wfDataService.DataServiceDeployment[deploymentId].Namespace)
 	err = dslibs.VerifyStorageSizeIncreaseAndNoPodRestarts(stIncrease.InitialCapacity, stIncrease.IncreasedStorageSize, stIncrease.BeforeResizePodAge, podAgeAfterResize)
 	if err != nil {
 		return err

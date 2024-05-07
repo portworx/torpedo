@@ -46,7 +46,7 @@ var _ = Describe("{ValidatePdsHealthIncaseofFailures}", func() {
 				templates = append(templates, dsNameAndAppTempId[ds.Name])
 
 				log.Debugf("Deploying DataService [%s]", ds.Name)
-				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 			})
@@ -101,7 +101,6 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = &WorkflowNamespace
-			workflowDataservice.NamespaceName = Namespace
 
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
@@ -109,7 +108,7 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 
-			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion, PDS_DEFAULT_NAMESPACE)
 			log.FailOnError(err, "Error while deploying ds")
 		}
 

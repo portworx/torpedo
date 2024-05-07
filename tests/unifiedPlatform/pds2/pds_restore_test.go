@@ -48,7 +48,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
-				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 
@@ -77,8 +77,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 					log.FailOnError(err, "failed to switch context to source cluster")
 				}()
 				CheckforClusterSwitch()
-				WorkflowPDSRestore.SourceNamespace = WorkflowDataService.NamespaceName
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
 				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
@@ -124,7 +123,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
-				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 
@@ -149,7 +148,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 			Step("Create Restore from the latest backup Id", func() {
 				WorkflowPDSRestore.Destination = &WorkflowNamespaceDestination
 				CheckforClusterSwitch()
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Restore Failed")
 
 				log.Infof("Restore created successfully with ID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
@@ -198,7 +197,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
-				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 
@@ -243,7 +242,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 			Step("Create Restore from the latest backup Id", func() {
 				WorkflowPDSRestore.Destination = &WorkflowNamespaceDestination
 				CheckforClusterSwitch()
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
 			})
@@ -259,11 +258,10 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 	var (
 		deployments          []*automationModels.PDSDeploymentResponse
-		latestBackupUid      string
 		pdsBackupConfigName  string
 		restoreNames         []string
 		deploymentNamespace  string
-		allBackupIds         []string
+		allBackupIds         map[string][]string
 		dsNameAndAppTempId   map[string]string
 		err                  error
 		BackupsPerDeployment int
@@ -274,7 +272,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 		StartPDSTorpedoTest("PerformSimultaneousRestoresDifferentDataService", "Perform multiple backup and restore simultaneously for different dataservices.", nil, 0)
 		restoreNames = make([]string, 0)
 		deployments = make([]*automationModels.PDSDeploymentResponse, 0)
-		allBackupIds = make([]string, 0)
+		allBackupIds = make(map[string][]string)
 		BackupsPerDeployment = 1
 	})
 
@@ -313,7 +311,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
-				currDeployment, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
+				currDeployment, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, deploymentNamespace)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 				deployments = append(deployments, currDeployment)
@@ -359,11 +357,10 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 				log.FailOnError(err, "Error occured while creating backup")
 				dash.VerifyFatal(len(allBackupResponse), BackupsPerDeployment, fmt.Sprintf("Total number of backups found for [%s] are not consisten with backup configs created.", *deployment.Create.Meta.Name))
 				for _, backupResponse := range allBackupResponse {
-					latestBackupUid = *backupResponse.Meta.Uid
 					log.Infof("Backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
 					err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
 					log.FailOnError(err, "Error occured while waiting for backup to complete")
-					allBackupIds = append(allBackupIds, latestBackupUid)
+					allBackupIds[*deployment.Create.Meta.Uid] = append(allBackupIds[WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace], *backupResponse.Meta.Uid)
 				}
 			}
 
@@ -373,22 +370,24 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 		Step("Creating Simultaneous restores from the dataservices", func() {
 			var wg sync.WaitGroup
 
-			for _, backupId := range allBackupIds {
+			for ns, backupIds := range allBackupIds {
 
-				wg.Add(1)
+				for _, backupId := range backupIds {
+					wg.Add(1)
 
-				go func() {
-					defer wg.Done()
-					defer GinkgoRecover()
+					go func() {
+						defer wg.Done()
+						defer GinkgoRecover()
 
-					restoreName := "restore-" + RandomString(5)
-					_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupId, restoreName)
-					if err != nil {
-						log.Errorf("Error occurred while creating [%s], Error - [%s]", restoreName, err.Error())
-					}
-					log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
-					restoreNames = append(restoreNames, restoreName)
-				}()
+						restoreName := "restore-" + RandomString(5)
+						_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupId, restoreName, ns)
+						if err != nil {
+							log.Errorf("Error occurred while creating [%s], Error - [%s]", restoreName, err.Error())
+						}
+						log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+						restoreNames = append(restoreNames, restoreName)
+					}()
+				}
 
 			}
 
@@ -438,7 +437,6 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = &WorkflowNamespace
-			workflowDataservice.NamespaceName = Namespace
 
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
@@ -446,7 +444,7 @@ var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() 
 			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 
-			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion, PDS_DEFAULT_NAMESPACE)
 			log.FailOnError(err, "Error while deploying ds")
 		}
 
@@ -557,14 +555,13 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataService.Namespace = &WorkflowNamespace
-			workflowDataService.NamespaceName = Namespace
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
 			workflowDataService.PDSTemplates.ServiceConfigTemplateId = serviceConfigId[ds.Name]
 			workflowDataService.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataService.PDSTemplates.ResourceTemplateId = resConfigId
 			tempList = append(tempList, serviceConfigId[ds.Name], stConfigId, resConfigId)
-			deployment, err = workflowDataService.DeployDataService(ds, ds.Image, ds.Version)
+			deployment, err = workflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 			log.FailOnError(err, "Error while deploying ds")
 		}
 
@@ -638,7 +635,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 	It("Increase PVC Size by 1 GB of DataService from K8s", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			log.InfoD("Dataservice on which the PVC needs to be resized is- [%v]", ds.Name)
-			err = workflowDataService.IncreasePvcSizeBy1gb(workflowDataService.NamespaceName, *deployment.Create.Status.CustomResourceName, 1)
+			err = workflowDataService.IncreasePvcSizeBy1gb(workflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace, *deployment.Create.Status.CustomResourceName, 1)
 			log.FailOnError(err, "Failing while Increasing the PVC name...")
 
 		}
@@ -734,7 +731,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
-				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 
@@ -765,7 +762,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 				}()
 				restoreName = "restore-bu-" + RandomString(5)
 				CheckforClusterSwitch()
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreName)
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreName, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
 				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
@@ -800,7 +797,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 				}()
 				restoreName = "restore-au-" + RandomString(5)
 				CheckforClusterSwitch()
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreName)
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreName, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
 				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
@@ -813,7 +810,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 				}()
 				restoreName = "restore-aubi-" + RandomString(5)
 				CheckforClusterSwitch()
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupIdBeforeUpgrade, restoreName)
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupIdBeforeUpgrade, restoreName, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
 				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
@@ -859,7 +856,6 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = &WorkflowNamespace
-			workflowDataservice.NamespaceName = Namespace
 
 			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
@@ -867,7 +863,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 
-			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion, PDS_DEFAULT_NAMESPACE)
 			log.FailOnError(err, "Error while deploying ds")
 		}
 
@@ -913,7 +909,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 				log.Infof("Current backup ID [%s], Name [%s]", *eachBackup.Meta.Uid, *eachBackup.Meta.Name)
 				restoreName := "pds-restore-before-update-" + RandomString(5)
 				workflowRestore.Destination = &WorkflowNamespace
-				restoreDeployment, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, Namespace)
+				restoreDeployment, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, Namespace, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while taking restore")
 				log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
 			}

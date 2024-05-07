@@ -41,7 +41,6 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			for _, repl := range NewPdsParams.StorageConfigurationsSSIE.ReplFactor {
 				workflowDataservice.Namespace = &WorkflowNamespace
-				workflowDataservice.NamespaceName = Namespace
 				NewPdsParams.StorageConfiguration.Repl = repl
 				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 				log.FailOnError(err, "Unable to create Custom Templates for PDS")
@@ -51,15 +50,15 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 				templates = append(templates, serviceConfigId[ds.Name], stConfigId, resConfigId)
 
-				deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
+				deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 
-				initialCapacity, _ = workflowDataservice.GetVolumeCapacityInGBForDeployment(workflowDataservice.NamespaceName, *deployment.Create.Status.CustomResourceName)
+				initialCapacity, _ = workflowDataservice.GetVolumeCapacityInGBForDeployment(workflowDataservice.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace, *deployment.Create.Status.CustomResourceName)
 				log.FailOnError(err, "Error while fetching pvc size for the ds")
 				log.InfoD("Initial volume storage size is : %v", initialCapacity)
 
-				beforeResizePodAge, _ = workflowDataservice.GetPodAgeForDeployment(*deployment.Create.Status.CustomResourceName, workflowDataservice.NamespaceName)
+				beforeResizePodAge, _ = workflowDataservice.GetPodAgeForDeployment(*deployment.Create.Status.CustomResourceName, workflowDataservice.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace)
 				//log.FailOnError(err, "unable to get pods AGE before Storage resize")
 				log.InfoD("Pods Age before storage resize is- [%v]Min", beforeResizePodAge)
 
@@ -90,7 +89,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				log.Debugf("Updated Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 
 				//Verify storage size before and after storage resize - Verify at STS, PV,PVC level
-				increasedPvcSize, err = workflowDataservice.GetVolumeCapacityInGBForDeployment(workflowDataservice.NamespaceName, *deployment.Create.Status.CustomResourceName)
+				increasedPvcSize, err = workflowDataservice.GetVolumeCapacityInGBForDeployment(workflowDataservice.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace, *deployment.Create.Status.CustomResourceName)
 				log.InfoD("Increased Storage Size is- %v", increasedPvcSize)
 
 				log.InfoD("Verify storage size before and after storage resize - Verify at STS, PV,PVC level")
@@ -103,7 +102,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				err = workflowDataservice.ValidateDepConfigPostStorageIncrease(*deployment.Create.Meta.Uid, &stIncrease)
 				log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 
-				beforeResizePodAge2, err := workflowDataservice.GetPodAgeForDeployment(*deployment.Create.Status.CustomResourceName, workflowDataservice.NamespaceName)
+				beforeResizePodAge2, err := workflowDataservice.GetPodAgeForDeployment(*deployment.Create.Status.CustomResourceName, workflowDataservice.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace)
 
 				log.InfoD("Increase the storage size again after Scale-UP")
 				resConfigIdUpdatedScaled, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams)
@@ -117,7 +116,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				log.FailOnError(err, "Error while updating ds")
 				log.Debugf("Updated Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 
-				increasedPvcSizeScaleUp, err := workflowDataservice.GetVolumeCapacityInGBForDeployment(workflowDataservice.NamespaceName, *deployment.Create.Status.CustomResourceName)
+				increasedPvcSizeScaleUp, err := workflowDataservice.GetVolumeCapacityInGBForDeployment(workflowDataservice.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace, *deployment.Create.Status.CustomResourceName)
 				log.InfoD("Increased Storage Size is- %v", increasedPvcSizeScaleUp)
 
 				//Verify storage size before and after storage resize - Verify at STS, PV,PVC level

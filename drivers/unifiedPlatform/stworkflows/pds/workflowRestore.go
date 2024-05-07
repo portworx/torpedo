@@ -10,7 +10,6 @@ import (
 )
 
 type WorkflowPDSRestore struct {
-	SourceNamespace     string
 	Source              *platform.WorkflowNamespace
 	Destination         *platform.WorkflowNamespace
 	SkipValidatation    map[string]bool
@@ -22,7 +21,7 @@ const (
 	ValidatePdsRestore = "VALIDATE_PDS_RESTORE"
 )
 
-func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, namespace string) (*automationModels.PDSRestoreResponse, error) {
+func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, namespace string, sourceNamespace string) (*automationModels.PDSRestoreResponse, error) {
 
 	log.Infof("Restore [%s] started at [%s]", name, time.Now().Format("2006-01-02 15:04:05"))
 
@@ -31,7 +30,7 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 	log.Infof("Destination Cluster Id - [%s]", restore.Destination.TargetCluster.ClusterUID)
 	log.Infof("Source project Id - [%s]", restore.Source.TargetCluster.Project.ProjectId)
 	log.Infof("Destination project Id - [%s]", restore.Destination.TargetCluster.Project.ProjectId)
-	err := restore.CreateAndAssociateRestoreNamespace(namespace)
+	err := restore.CreateAndAssociateRestoreNamespace(namespace, sourceNamespace)
 	if err != nil {
 		return nil, err
 	}
@@ -104,11 +103,11 @@ func (restore WorkflowPDSRestore) Purge() error {
 	return nil
 }
 
-func (restore WorkflowPDSRestore) CreateAndAssociateRestoreNamespace(namespace string) error {
+func (restore WorkflowPDSRestore) CreateAndAssociateRestoreNamespace(namespace string, sourceNamespace string) error {
 
 	// TODO: Remove this once https://purestorage.atlassian.net/browse/DS-9443 is resolved
-	log.InfoD("Creating restore namespace on source - [%s]", restore.SourceNamespace)
-	_, err := restore.Destination.CreateNamespaces(restore.SourceNamespace)
+	log.InfoD("Creating restore namespace on source - [%s]", sourceNamespace)
+	_, err := restore.Destination.CreateNamespaces(sourceNamespace)
 	if err != nil {
 		return fmt.Errorf("unable to create source namespace - [%s]", err.Error())
 	}
@@ -123,7 +122,7 @@ func (restore WorkflowPDSRestore) CreateAndAssociateRestoreNamespace(namespace s
 
 	err = restore.Destination.TargetCluster.Project.Associate(
 		[]string{},
-		[]string{restore.Destination.Namespaces[namespace], restore.Destination.Namespaces[restore.SourceNamespace]},
+		[]string{restore.Destination.Namespaces[namespace], restore.Destination.Namespaces[sourceNamespace]},
 		[]string{},
 		[]string{},
 		[]string{},
