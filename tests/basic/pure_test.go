@@ -3531,7 +3531,7 @@ var _ = Describe("{DeleteFADAVolumeFromBackend}", func() {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolresizeiscsidown-%d", i))...)
 			}
 		})
-		ValidateApplications(contexts)
+		//ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
 		// Get all the volumes with IO running

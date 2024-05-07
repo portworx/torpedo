@@ -361,7 +361,7 @@ func (k *k8sSchedOps) validateMountsInPods(
 
 	validatedMountPods := make([]string, 0)
 	nodes := node.GetNodesByName()
-	isNVME := false
+	isNvme := false
 PodLoop:
 	for _, p := range pods {
 		pod, err := k8sCore.GetPodByName(p.Name, p.Namespace)
@@ -418,10 +418,11 @@ PodLoop:
 			for _, path := range paths {
 				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s",
 					PureMapperRegex, path))
+				pxMountNvmeRegex := regexp.MustCompile(`\/dev\/mapper\/eui\.00.*24a937.*`)
 				pxMountFound := false
 				for _, line := range mounts {
-					if strings.Contains(line, "eui.") {
-						isNVME = true
+					if pxMountNvmeRegex.MatchString(line) {
+						isNvme = true
 					}
 					pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
 
@@ -462,8 +463,11 @@ PodLoop:
 		}
 
 		grepPattern := pvName // For normal PX vols, and for FBDA, we can grep for the filesystem name
-		if pureType, ok := vol.Labels[k8sdriver.PureDAVolumeLabel]; ok && pureType == k8sdriver.PureDAVolumeLabelValueFA && !isNVME {
+		if pureType, ok := vol.Labels[k8sdriver.PureDAVolumeLabel]; ok && pureType == k8sdriver.PureDAVolumeLabelValueFA {
 			grepPattern = strings.ToLower(vol.Labels[k8sdriver.FADAVolumeSerialLabel]) // FADA we need to grep by volume serial
+		}
+		if isNvme {
+			grepPattern = fmt.Sprintf("%v | grep %v", grepPattern[:15], grepPattern[15:])
 		}
 		log.Debugf("Executing command [%s] on node [%s]", fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_|/dev/mapper)' | grep %s", grepPattern), currentNode.Name)
 		volMount, _ := d.RunCommand(currentNode,
