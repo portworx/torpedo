@@ -125,7 +125,7 @@ func (cusTemp *WorkflowPDSTemplates) Purge(ignoreError bool) error {
 	log.Debugf("length of UpdateTemplateNameAndId [%d]", len(cusTemp.UpdateTemplateNameAndId))
 	for _, template := range cusTemp.UpdateTemplateNameAndId {
 		log.Infof("Deleting ResourceConfigTemplate - [%s]", template)
-		err = cusTemp.DeleteCreatedCustomPdsTemplates([]string{template})
+		err := cusTemp.DeleteCreatedCustomPdsTemplates([]string{template})
 		if err != nil {
 			if ignoreError && !strings.Contains(err.Error(), "404 Not Found") {
 				return err
