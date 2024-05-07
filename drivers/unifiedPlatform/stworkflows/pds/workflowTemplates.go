@@ -5,6 +5,7 @@ import (
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
+	"strings"
 )
 
 type WorkflowPDSTemplates struct {
@@ -95,7 +96,7 @@ func (cusTemp *WorkflowPDSTemplates) CreateResourceTemplateWithCustomValue(templ
 	return *resourceConfigId, nil
 }
 
-func (cusTemp *WorkflowPDSTemplates) Purge() error {
+func (cusTemp *WorkflowPDSTemplates) Purge(ignoreError bool) error {
 
 	log.Infof("Deleting ResourceTemplate - [%s]", cusTemp.ResourceTemplateId)
 
@@ -119,11 +120,14 @@ func (cusTemp *WorkflowPDSTemplates) Purge() error {
 		}
 	}
 
+	log.Debugf("length of UpdateTemplateNameAndId [%d]", len(cusTemp.UpdateTemplateNameAndId))
 	for _, template := range cusTemp.UpdateTemplateNameAndId {
 		log.Infof("Deleting ResourceConfigTemplate - [%s]", template)
 		err = cusTemp.DeleteCreatedCustomPdsTemplates([]string{template})
 		if err != nil {
-			return err
+			if ignoreError && !strings.Contains(err.Error(), "404 Not Found") {
+				return err
+			}
 		}
 	}
 
