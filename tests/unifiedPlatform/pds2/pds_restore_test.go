@@ -495,19 +495,6 @@ var _ = Describe("{UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore}", func(
 				log.FailOnError(err, "Error occured while waiting for backup to complete")
 			})
 
-			Step("Create Restore from the latest backup Id after upgrade", func() {
-				defer func() {
-					err := SetSourceKubeConfig()
-					log.FailOnError(err, "failed to switch context to source cluster")
-				}()
-				restoreName = "restr-latest-bkp" + RandomString(5)
-				CheckforClusterSwitch()
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreName)
-				log.FailOnError(err, "Restore Failed")
-				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
-				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
-			})
-
 			Step("Create Restore from the backup Ids before upgrade", func() {
 				defer func() {
 					err := SetSourceKubeConfig()
@@ -515,8 +502,23 @@ var _ = Describe("{UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore}", func(
 				}()
 				restoreName = "restr-old-bkp-" + RandomString(5)
 				CheckforClusterSwitch()
-				WorkflowPDSRestore.ValidatePdsRestoreBeforeUpgrade = true
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupIdBeforeUpgrade, restoreName)
+				WorkflowPDSRestore.Validatation = make(map[string]bool)
+				WorkflowPDSRestore.Validatation["VALIDATE_RESTORE_AFTER_SRC_DEPLOYMENT_UPGRADE"] = true
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupIdBeforeUpgrade, restoreNamespace)
+				log.FailOnError(err, "Restore Failed")
+				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
+				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+				WorkflowPDSRestore.Validatation["VALIDATE_RESTORE_AFTER_SRC_DEPLOYMENT_UPGRADE"] = false
+			})
+
+			Step("Create Restore from the latest backup Id after upgrade", func() {
+				defer func() {
+					err := SetSourceKubeConfig()
+					log.FailOnError(err, "failed to switch context to source cluster")
+				}()
+				restoreName = "restr-latest-bkp" + RandomString(5)
+				CheckforClusterSwitch()
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
 				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)

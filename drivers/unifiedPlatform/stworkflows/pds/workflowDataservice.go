@@ -71,6 +71,9 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		}
 	}
 
+	log.Debugf("waiting for a minute before taking backup...")
+	time.Sleep(1 * time.Minute)
+
 	return deployment, nil
 }
 

@@ -109,13 +109,16 @@ func ValidateRestore(sourceDep, destDep automationModels.DeploymentTopology) err
 	//TODO : This validation needs to be revisited once we have the working pds templates api
 
 	// Validate the Resource configuration
-	//log.Infof("Source Deployment Topology - [%+v]", sourceDeployment.Get.Config.DeploymentTopologies)
-	//log.Infof("Destination Deployment Topology - [%+v]", destinationDeployment.Get.Config.DeploymentTopologies)
+	log.Debugf("Source Deployment Topology - [%+v]", sourceDep)
+	log.Debugf("Destination Deployment Topology - [%+v]", destDep)
 	//sourceDep := sourceDeployment.Get.Config.DeploymentTopologies[0]
 	//destDep := destinationDeployment.Get.Config.DeploymentTopologies[0]
 
 	sourceResourceSettings := sourceDep.ResourceSettings
 	destResourceSettings := destDep.ResourceSettings
+	log.Debugf("Source Deployment resource settings - [%+v]", sourceResourceSettings)
+	log.Debugf("Destination resource settings - [%+v]", destResourceSettings)
+
 	log.Debugf("source resource settings - [%v]", *sourceResourceSettings.Id)
 	if !reflect.DeepEqual(sourceResourceSettings, destResourceSettings) {
 		return fmt.Errorf("restored resource configuration are not same as backed up resource config")
@@ -124,6 +127,8 @@ func ValidateRestore(sourceDep, destDep automationModels.DeploymentTopology) err
 	// Validate the StorageOption configuration
 	sourceStorageOption := sourceDep.StorageOptions
 	destStorageOption := destDep.StorageOptions
+	log.Debugf("Source Deployment storage options - [%+v]", sourceStorageOption)
+	log.Debugf("Destination storage options - [%+v]", destStorageOption)
 	if !reflect.DeepEqual(sourceStorageOption, destStorageOption) {
 		return fmt.Errorf("restored storage options configuration are not same as backed up resource storage options config")
 	}
@@ -131,6 +136,8 @@ func ValidateRestore(sourceDep, destDep automationModels.DeploymentTopology) err
 	// Validate the Application configuration
 	sourceAppConfig := sourceDep.ServiceConfigurations
 	destAppConfig := destDep.ServiceConfigurations
+	log.Debugf("Source Deployment app config - [%+v]", sourceAppConfig)
+	log.Debugf("Destination app config - [%+v]", destAppConfig)
 	if !reflect.DeepEqual(sourceAppConfig, destAppConfig) {
 		return fmt.Errorf("restored application configuration are not same as backed up application config")
 	}
@@ -138,7 +145,8 @@ func ValidateRestore(sourceDep, destDep automationModels.DeploymentTopology) err
 	// Validate the replicas
 	sourceReplicas := sourceDep.Replicas
 	destReplicas := destDep.Replicas
-	if !reflect.DeepEqual(sourceReplicas, destReplicas) {
+	log.Debugf("source replicas [%d], dest repicas [%d]", *sourceReplicas, *destReplicas)
+	if *sourceReplicas != *destReplicas {
 		return fmt.Errorf("restored replicas are not same as backed up resource config")
 	}
 
