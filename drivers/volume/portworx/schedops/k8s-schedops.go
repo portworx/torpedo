@@ -465,10 +465,11 @@ PodLoop:
 		grepPattern := pvName // For normal PX vols, and for FBDA, we can grep for the filesystem name
 		if pureType, ok := vol.Labels[k8sdriver.PureDAVolumeLabel]; ok && pureType == k8sdriver.PureDAVolumeLabelValueFA {
 			grepPattern = strings.ToLower(vol.Labels[k8sdriver.FADAVolumeSerialLabel]) // FADA we need to grep by volume serial
+			if isNvme {
+				grepPattern = fmt.Sprintf("%s | grep %s", grepPattern[:14], grepPattern[14:])
+			}
 		}
-		if isNvme {
-			grepPattern = fmt.Sprintf("%v | grep %v", grepPattern[:15], grepPattern[15:])
-		}
+
 		log.Debugf("Executing command [%s] on node [%s]", fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_|/dev/mapper)' | grep %s", grepPattern), currentNode.Name)
 		volMount, _ := d.RunCommand(currentNode,
 			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_|/dev/mapper)' | grep %s", grepPattern), connOpts)
