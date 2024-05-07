@@ -466,7 +466,7 @@ PodLoop:
 		if pureType, ok := vol.Labels[k8sdriver.PureDAVolumeLabel]; ok && pureType == k8sdriver.PureDAVolumeLabelValueFA {
 			grepPattern = strings.ToLower(vol.Labels[k8sdriver.FADAVolumeSerialLabel]) // FADA we need to grep by volume serial
 			if isNvme {
-				grepPattern = strings.ToLower(fmt.Sprintf("%v | grep %v", grepPattern[:15], grepPattern[15:]))
+				grepPattern = fmt.Sprintf("%s | grep %s", grepPattern[:15], grepPattern[15:])
 			}
 		}
 		log.Debugf("Executing command [%s] on node [%s]", fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_|/dev/mapper)' | grep %s", grepPattern), currentNode.Name)
