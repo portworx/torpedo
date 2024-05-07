@@ -510,14 +510,21 @@ func RemoveFinalizersFromAllResources(namespace string) error {
 
 // UpdatePDSNamespce updates the namespace
 func UpdatePDSNamespce(name string, nsLables map[string]string) (*corev1.Namespace, error) {
+
+	currentNSDetails, err := k8sCore.GetNamespace(name)
+	if err != nil {
+		return nil, err
+	}
+
 	nsSpec := &corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
 			Kind:       "Namespace",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   name,
-			Labels: nsLables,
+			Name:        name,
+			Labels:      nsLables,
+			Annotations: currentNSDetails.Annotations,
 		},
 	}
 	ns, err := k8sCore.UpdateNamespace(nsSpec)

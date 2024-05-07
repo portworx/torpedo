@@ -43,7 +43,7 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 		nsLablesApply = map[string]string{
 			portorxLabel: "true",
 		}
-		waitTime = 5 * time.Minute
+		waitTime = 60 * time.Second
 	})
 
 	It("Enables and Disables pds on a namespace multiple times", func() {
@@ -117,7 +117,7 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 					log.Errorf(strings.Join(allError, "\n"))
 				}
 				dash.VerifyFatal(len(allError), 0, "Verifying update namespaces - Remove label from odd namespaces")
-				log.InfoD("Sleeping for 5 minutes for the changes to be updated on control plane")
+				log.InfoD("Sleeping for 60 seconds for the changes to be updated on control plane")
 				time.Sleep(waitTime)
 			})
 
@@ -209,7 +209,7 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 					log.Errorf(strings.Join(allError, "\n"))
 				}
 				dash.VerifyFatal(len(allError), 0, "Verifying namespace toggle")
-				log.InfoD("Sleeping for 5 minutes for the changes to be updated on control plane")
+				log.InfoD("Sleeping for 60 seconds for the changes to be updated on control plane")
 				time.Sleep(waitTime)
 			})
 
@@ -301,7 +301,7 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 					log.Errorf(strings.Join(allError, "\n"))
 				}
 				dash.VerifyFatal(len(allError), 0, "Verifying update to all namespaces")
-				log.InfoD("Sleeping for 5 minutes for the changes to be updated on control plane")
+				log.InfoD("Sleeping for 60 seconds for the changes to be updated on control plane")
 				time.Sleep(waitTime)
 
 			})
@@ -331,7 +331,7 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 				log.Errorf(strings.Join(allError, "\n"))
 			}
 			dash.VerifyFatal(len(allError), 0, "Verifying update namespaces")
-			log.InfoD("Sleeping for 5 minutes for the changes to be updated on control plane")
+			log.InfoD("Sleeping for 60 seconds for the changes to be updated on control plane")
 			time.Sleep(waitTime)
 		})
 
