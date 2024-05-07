@@ -60,17 +60,42 @@ func ValidateRestoreDeployment(restoreId, namespace string) error {
 		return fmt.Errorf("error while validating restored deployment readiness")
 	}
 
-	sourceDeployment, err := v2Components.PDS.GetDeployment(restore.Get.Config.SourceReferences.DeploymentId)
+	sourceDeployment, _, err := GetDeployment(restore.Get.Config.SourceReferences.DeploymentId)
 	if err != nil {
 		return fmt.Errorf("error while fetching source deployment object")
 	}
-	destinationDeployment, err := v2Components.PDS.GetDeployment(restore.Get.Config.DestinationReferences.DeploymentId)
 
+	destinationDeployment, _, err := GetDeployment(restore.Get.Config.DestinationReferences.DeploymentId)
 	if err != nil {
 		return fmt.Errorf("error while fetching destination deployment object")
 	}
 
-	err = ValidateRestore(sourceDeployment, destinationDeployment)
+	err = ValidateRestore(sourceDeployment.Get.Config.DeploymentTopologies[0], destinationDeployment.Get.Config.DeploymentTopologies[0])
+	if err != nil {
+		return fmt.Errorf("error while validation data service entities(i.e App config, resource etc). Err: %v", err)
+	}
+
+	return nil
+}
+
+// ValidateRestoreAfterSourceDeploymentUpgrade Validates the restored deployment config with source deployment config before upgrade
+func ValidateRestoreAfterSourceDeploymentUpgrade(restoreId string, sourceDeploymentConfig automationModels.DeploymentTopology) error {
+	restore, err := ValidateRestoreStatus(restoreId)
+	if err != nil {
+		return err
+	}
+
+	err = ValidateDataServiceDeploymentHealth(restore.Get.Config.DestinationReferences.DeploymentId, PDS_DEPLOYMENT_AVAILABLE)
+	if err != nil {
+		return fmt.Errorf("error while validating restored deployment readiness")
+	}
+
+	destinationDeployment, _, err := GetDeployment(restore.Get.Config.DestinationReferences.DeploymentId)
+	if err != nil {
+		return fmt.Errorf("error while fetching destination deployment object")
+	}
+
+	err = ValidateRestore(sourceDeploymentConfig, destinationDeployment.Get.Config.DeploymentTopologies[0])
 	if err != nil {
 		return fmt.Errorf("error while validation data service entities(i.e App config, resource etc). Err: %v", err)
 	}
@@ -79,15 +104,15 @@ func ValidateRestoreDeployment(restoreId, namespace string) error {
 }
 
 // ValidateRestore validates the Resource, App and Storage configurations of source and destination deployments
-func ValidateRestore(sourceDeployment, destinationDeployment *automationModels.PDSDeploymentResponse) error {
+func ValidateRestore(sourceDep, destDep automationModels.DeploymentTopology) error {
 
 	//TODO : This validation needs to be revisited once we have the working pds templates api
 
 	// Validate the Resource configuration
-	log.Infof("Source Deployment Topology - [%+v]", sourceDeployment.Get.Config.DeploymentTopologies)
-	log.Infof("Destination Deployment Topology - [%+v]", destinationDeployment.Get.Config.DeploymentTopologies)
-	sourceDep := sourceDeployment.Get.Config.DeploymentTopologies[0]
-	destDep := destinationDeployment.Get.Config.DeploymentTopologies[0]
+	//log.Infof("Source Deployment Topology - [%+v]", sourceDeployment.Get.Config.DeploymentTopologies)
+	//log.Infof("Destination Deployment Topology - [%+v]", destinationDeployment.Get.Config.DeploymentTopologies)
+	//sourceDep := sourceDeployment.Get.Config.DeploymentTopologies[0]
+	//destDep := destinationDeployment.Get.Config.DeploymentTopologies[0]
 
 	sourceResourceSettings := sourceDep.ResourceSettings
 	destResourceSettings := destDep.ResourceSettings

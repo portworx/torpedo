@@ -10,12 +10,14 @@ import (
 )
 
 type WorkflowPDSRestore struct {
-	SourceNamespace     string
-	Source              *platform.WorkflowNamespace
-	Destination         *platform.WorkflowNamespace
-	SkipValidatation    map[string]bool
-	Restores            map[string]automationModels.PDSRestore
-	RestoredDeployments WorkflowDataService
+	SourceNamespace                     string
+	Source                              *platform.WorkflowNamespace
+	Destination                         *platform.WorkflowNamespace
+	SkipValidatation                    map[string]bool
+	Restores                            map[string]automationModels.PDSRestore
+	RestoredDeployments                 WorkflowDataService
+	SourceDeploymentConfigBeforeUpgrade *automationModels.DeploymentTopology
+	ValidatePdsRestoreBeforeUpgrade     bool
 }
 
 const (
@@ -57,9 +59,13 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 		}
 	} else {
 		log.Infof("Restore UID - [%s]", *createRestore.Create.Meta.Uid)
-		err = pdslibs.ValidateRestoreDeployment(*createRestore.Create.Meta.Uid, namespace)
-		if err != nil {
-			return nil, err
+		if restore.ValidatePdsRestoreBeforeUpgrade {
+			pdslibs.ValidateRestoreAfterSourceDeploymentUpgrade(*createRestore.Create.Meta.Uid, *restore.SourceDeploymentConfigBeforeUpgrade)
+		} else {
+			err = pdslibs.ValidateRestoreDeployment(*createRestore.Create.Meta.Uid, namespace)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
