@@ -10264,12 +10264,12 @@ func selectPoolDeletableNodes() []node.Node {
 	log.InfoD("storage nodes %+v", stNodes)
 
 	kvdbNodesIDs := []string{}
-	kvdbMembers, err := Inst().V.GetKvdbMembers(stNodes[0])
+	kvdbMembers, err := GetAllKvdbNodes()
 	log.FailOnError(err, "Error getting KVDB members")
 	log.InfoD("kvdb members %+v", kvdbMembers)
 
 	for _, n := range kvdbMembers {
-		kvdbNodesIDs = append(kvdbNodesIDs, n.Name)
+		kvdbNodesIDs = append(kvdbNodesIDs, n.ID)
 	}
 
 	// testNodes for pool deletable: [non-kvdb-nodes] + [kvdb-nodes with >= 2 pools]
