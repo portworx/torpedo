@@ -48,7 +48,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 
 			stepLog := "Running Workloads before scaling up data service"
 			Step(stepLog, func() {
-				err := WorkflowDataService.RunDataServiceWorkloads(NewPdsParams, ds.Name)
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid, NewPdsParams)
 				log.FailOnError(err, "Error while running workloads on ds")
 			})
 
@@ -61,7 +61,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 
 			stepLog = "Running Workloads after ScaleUp of DataService"
 			Step(stepLog, func() {
-				err := WorkflowDataService.RunDataServiceWorkloads(NewPdsParams, ds.Name)
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Update.Meta.Uid, NewPdsParams)
 				log.FailOnError(err, "Error while running workloads on ds")
 			})
 		}
@@ -108,7 +108,7 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 
 			stepLog := "Running Workloads before upgrading the ds image"
 			Step(stepLog, func() {
-				err := WorkflowDataService.RunDataServiceWorkloads(NewPdsParams, ds.Name)
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid, NewPdsParams)
 				log.FailOnError(err, "Error while running workloads on ds")
 			})
 
@@ -119,7 +119,7 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 
 			stepLog = "Running Workloads after upgrading the ds image"
 			Step(stepLog, func() {
-				err := WorkflowDataService.RunDataServiceWorkloads(NewPdsParams, ds.Name)
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid, NewPdsParams)
 				log.FailOnError(err, "Error while running workloads on ds")
 			})
 
@@ -297,7 +297,7 @@ var _ = Describe("{GetPVCFullCondition}", func() {
 			}()
 
 			log.InfoD("Running Workloads to fill up the PVC")
-			err = workflowDataservice.RunDataServiceWorkloads(NewPdsParams, ds.Name)
+			_, err = workflowDataservice.RunDataServiceWorkloads(*deployment.Create.Meta.Uid, NewPdsParams)
 			log.FailOnError(err, "Error while running workloads on ds")
 
 			log.InfoD("Compute the PVC usage")
@@ -353,7 +353,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 			stepLog := "Running Workloads before deleting pods in Px-System namespace"
 			Step(stepLog, func() {
-				err := WorkflowDataService.RunDataServiceWorkloads(NewPdsParams, ds.Name)
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid, NewPdsParams)
 				log.FailOnError(err, "Error while running workloads on ds")
 			})
 
@@ -374,7 +374,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 			stepLog = "Running Workloads after deleting pods in Px-System namespace"
 			Step(stepLog, func() {
-				err := WorkflowDataService.RunDataServiceWorkloads(NewPdsParams, ds.Name)
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid, NewPdsParams)
 				log.FailOnError(err, "Error while running workloads on ds")
 			})
 		}

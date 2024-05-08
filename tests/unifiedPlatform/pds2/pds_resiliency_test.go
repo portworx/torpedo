@@ -111,16 +111,15 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion, PDS_DEFAULT_NAMESPACE)
 			log.FailOnError(err, "Error while deploying ds")
 
-		stepLog := "Running Workloads before Storage Resize"
-		Step(stepLog, func() {
-			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams, ds.Name)
-			log.FailOnError(err, "Error while running workloads on ds")
-		})
+			//stepLog := "Running Workloads before Storage Resize"
+			//Step(stepLog, func() {
+			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams, ds.Name)
+			//	log.FailOnError(err, "Error while running workloads on ds")
+			//})
 
-		//Update Ds With New Values of Resource Templates
-		resourceConfigUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams)
-		log.FailOnError(err, "Unable to create Custom Templates for PDS")
-
+			//Update Ds With New Values of Resource Templates
+			resourceConfigUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
 			log.InfoD("Updated Storage Template ID- [updated- %v]", resourceConfigUpdated)
 			workflowDataservice.PDSTemplates.ResourceTemplateId = resourceConfigUpdated

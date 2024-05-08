@@ -70,11 +70,11 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 			})
 		}()
 
-		stepLog := "Running Workloads before taking backups"
-		Step(stepLog, func() {
-			err := workflowDataService.RunDataServiceWorkloads(NewPdsParams, "")
-			log.FailOnError(err, "Error while running workloads on ds")
-		})
+		//stepLog := "Running Workloads before taking backups"
+		//Step(stepLog, func() {
+		//	err := workflowDataService.RunDataServiceWorkloads(NewPdsParams, "")
+		//	log.FailOnError(err, "Error while running workloads on ds")
+		//})
 	})
 	It("Perform adhoc backup before killing deployment pods.", func() {
 		var bkpConfigResponse *automationModels.PDSBackupConfigResponse

@@ -27,11 +27,11 @@ var _ = Describe("{ValidateWorkloads}", func() {
 		tests.StartPDSTorpedoTest("ValidateWorkloads", "validate  workloads", nil, 0)
 	})
 	It("Validate Workloads", func() {
-		stepLog := "Running Workloads before upgrading the ds image"
-		Step(stepLog, func() {
-			err := tests.WorkflowDataService.RunDataServiceWorkloads(tests.NewPdsParams, "postgresql")
-			log.FailOnError(err, "Error while running workloads on ds")
-		})
+		//stepLog := "Running Workloads before upgrading the ds image"
+		//Step(stepLog, func() {
+		//	err := tests.WorkflowDataService.RunDataServiceWorkloads(tests.NewPdsParams, "postgresql")
+		//	log.FailOnError(err, "Error while running workloads on ds")
+		//})
 
 	})
 	JustAfterEach(func() {

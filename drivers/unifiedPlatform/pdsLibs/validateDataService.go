@@ -213,9 +213,9 @@ func ValidateDataMd5Hash(deploymentHash, restoredDepHash map[string]string) bool
 func InsertDataAndReturnChecksum(dataServiceDetails DataServiceDetails, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "write"
 
-	deploymentName := *dataServiceDetails.Deployment.Meta.Name
+	deploymentName := *dataServiceDetails.Deployment.Status.CustomResourceName
 
-	_, dep, err := GenerateWorkload(deploymentName, wkloadGenParams)
+	_, dep, err := GenerateWorkload(deploymentName, dataServiceDetails.DSParams.Name, wkloadGenParams)
 	if err == nil {
 		err := k8sApps.DeleteDeployment(dep.Name, dep.Namespace)
 		if err != nil {
@@ -224,16 +224,16 @@ func InsertDataAndReturnChecksum(dataServiceDetails DataServiceDetails, wkloadGe
 	} else {
 		return "", nil, err
 	}
-	ckSum, wlDep, err := ReadDataAndReturnChecksum(dataServiceDetails, wkloadGenParams)
+	ckSum, wlDep, err := ReadDataAndReturnChecksum(dataServiceDetails, dataServiceDetails.DSParams.Name, wkloadGenParams)
 	return ckSum, wlDep, err
 }
 
 // ReadDataAndReturnChecksum Reads Data from the db and returns the checksum
-func ReadDataAndReturnChecksum(dataServiceDetails DataServiceDetails, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
+func ReadDataAndReturnChecksum(dataServiceDetails DataServiceDetails, dataServiceName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "read"
 
 	deploymentName := *dataServiceDetails.Deployment.Meta.Name
-	ckSum, wlDep, err := GenerateWorkload(deploymentName, wkloadGenParams)
+	ckSum, wlDep, err := GenerateWorkload(deploymentName, dataServiceName, wkloadGenParams)
 	if err != nil {
 		return "", nil, fmt.Errorf("error while reading the workload deployment data")
 	}
@@ -241,7 +241,7 @@ func ReadDataAndReturnChecksum(dataServiceDetails DataServiceDetails, wkloadGenP
 }
 
 // GenerateWorkload creates a deployment using the given params(perform read/write) and returns the checksum
-func GenerateWorkload(deploymentName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
+func GenerateWorkload(deploymentName, dataServiceName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	var checksum string
 	dsName := deploymentName
 	dataservice := dataServiceName
