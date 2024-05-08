@@ -214,7 +214,6 @@ func InsertDataAndReturnChecksum(dataServiceDetails DataServiceDetails, wkloadGe
 	wkloadGenParams.Mode = "write"
 
 	deploymentName := *dataServiceDetails.Deployment.Status.CustomResourceName
-
 	_, dep, err := GenerateWorkload(deploymentName, dataServiceDetails.DSParams.Name, wkloadGenParams)
 	if err == nil {
 		err := k8sApps.DeleteDeployment(dep.Name, dep.Namespace)
