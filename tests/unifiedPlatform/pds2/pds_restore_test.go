@@ -772,11 +772,10 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 		pdsBackupConfigName  string
 		restoreNames         []string
 		allBackupIds         map[string][]string
-		dsNameAndAppTempId   map[string]string
-		err                  error
 		backupsPerDeployment int
 		allErrors            []error
 		deploymentCount      int
+		wg                   sync.WaitGroup
 	)
 	JustBeforeEach(func() {
 		StartPDSTorpedoTest("PerformSimultaneousBackupRestoreForMultipleDeployments", "Perform multiple backup and restore simultaneously for different deployments.", nil, 0)
@@ -785,13 +784,6 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 	})
 
 	It("Perform multiple backup and restore simultaneously for different deployments.", func() {
-		Step("Create Service Configuration, Resource and Storage Templates", func() {
-			//dsNameAndAppTempId = workFlowTemplates.CreateAppTemplate(NewPdsParams)
-			dsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-		})
-		var wg sync.WaitGroup
-
 		for _, ds := range NewPdsParams.DataServiceToTest {
 
 			for i := 0; i < deploymentCount; i++ {
@@ -858,8 +850,6 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 		}
 
 		Step("Create multiple Adhoc backup config for the existing deployment", func() {
-			var wg sync.WaitGroup
-
 			for _, deployment := range deployments {
 				for i := 0; i < backupsPerDeployment; i++ {
 					wg.Add(1)
@@ -901,8 +891,6 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 		})
 
 		Step("Creating Simultaneous restores from the dataservices and triggering parallel backup", func() {
-			var wg sync.WaitGroup
-
 			// Creating parallel restores
 			for ns, backupIds := range allBackupIds {
 
