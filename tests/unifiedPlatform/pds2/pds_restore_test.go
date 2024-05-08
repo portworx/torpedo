@@ -849,71 +849,63 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 			dsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
 		})
-		var wg sync.WaitGroup
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 
 			for i := 0; i < deploymentCount; i++ {
-				wg.Add(1)
-				go func() {
+				var deploymentNamespace string
 
-					var deploymentNamespace string
+				Step("Create a namespace for PDS", func() {
+					deploymentNamespace = fmt.Sprintf("%s-%s", strings.ToLower(ds.Name), RandomString(5))
+					_, err := WorkflowNamespace.CreateNamespaces(deploymentNamespace)
+					if err != nil {
+						log.Errorf("Error occured while creating namespace - [%s]", err.Error())
+						allErrors = append(allErrors, err)
+						return
+					}
+					log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
+				})
 
-					defer wg.Done()
-					defer GinkgoRecover()
+				Step("Associate namespace to Project", func() {
 
-					Step("Create a namespace for PDS", func() {
-						deploymentNamespace = fmt.Sprintf("%s-%s", strings.ToLower(ds.Name), RandomString(5))
-						_, err := WorkflowNamespace.CreateNamespaces(deploymentNamespace)
-						if err != nil {
-							log.Errorf("Error occured while creating namespace - [%s]", err.Error())
-							allErrors = append(allErrors, err)
-							return
-						}
-						log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
-					})
+					log.InfoD("Asscoaiting [%s]-[%s] to the project", deploymentNamespace, WorkflowNamespace.Namespaces[deploymentNamespace])
 
-					Step("Associate namespace to Project", func() {
+					err := WorkflowProject.Associate(
+						[]string{},
+						[]string{WorkflowNamespace.Namespaces[deploymentNamespace]},
+						[]string{},
+						[]string{},
+						[]string{},
+						[]string{},
+					)
+					if err != nil {
+						log.Errorf("Error occured while associating namespace - [%s]", err.Error())
+						allErrors = append(allErrors, err)
+						return
+					}
+					log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+				})
 
-						log.InfoD("Asscoaiting [%s]-[%s] to the project", deploymentNamespace, WorkflowNamespace.Namespaces[deploymentNamespace])
+				Step("Deploy dataservice", func() {
 
-						err := WorkflowProject.Associate(
-							[]string{},
-							[]string{WorkflowNamespace.Namespaces[deploymentNamespace]},
-							[]string{},
-							[]string{},
-							[]string{},
-							[]string{},
-						)
-						if err != nil {
-							log.Errorf("Error occured while associating namespace - [%s]", err.Error())
-							allErrors = append(allErrors, err)
-							return
-						}
-						log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
-					})
+					log.InfoD("Starting deployment in [%s] namespace", deploymentNamespace)
 
-					Step("Deploy dataservice", func() {
+					WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
+					WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
-						log.InfoD("Starting deployment in [%s] namespace", deploymentNamespace)
+					currDeployment, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, deploymentNamespace)
+					if err != nil {
+						log.Errorf("Error occured while creating deployment on [%s] - [%s]", deploymentNamespace, err.Error())
+						allErrors = append(allErrors, err)
+						return
+					}
+					log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
+					deployments = append(deployments, currDeployment)
 
-						WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
-						WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
+				})
 
-						currDeployment, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, deploymentNamespace)
-						if err != nil {
-							log.Errorf("Error occured while creating deployment on [%s] - [%s]", deploymentNamespace, err.Error())
-							allErrors = append(allErrors, err)
-							return
-						}
-						log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
-						deployments = append(deployments, currDeployment)
-
-					})
-				}()
 			}
 
-			wg.Wait()
 			dash.VerifyFatal(len(allErrors), 0, "Verifying parallel deployments")
 		}
 
