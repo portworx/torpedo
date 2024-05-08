@@ -116,6 +116,35 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "Unable to Install pds on destination target cluster")
 	})
 
+	Step("Create Service Configuration, Resource and Storage Templates", func() {
+		var err error
+		WorkflowPDSTemplate.Platform = WorkflowPlatform
+		DsNameAndAppTempId, StTemplateId, ResourceTemplateId, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
+		log.FailOnError(err, "Unable to create Custom Templates for PDS")
+
+		for _, AppTemplateId := range DsNameAndAppTempId {
+			TemplateIds = append(TemplateIds, AppTemplateId)
+		}
+		TemplateIds = append(TemplateIds, ResourceTemplateId, StTemplateId)
+
+		for _, tempId := range TemplateIds {
+			log.Debugf("TemplateID: [%s]", tempId)
+		}
+	})
+
+	Step("Associate templates to the Project", func() {
+		err := WorkflowProject.Associate(
+			[]string{},
+			[]string{},
+			[]string{},
+			[]string{},
+			TemplateIds,
+			[]string{},
+		)
+		log.FailOnError(err, "Unable to associate Templates to Project")
+		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+	})
+
 	Step("Create Buckets", func() {
 		if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
 			PDSBucketName = strings.ToLower("pds-test-buck-" + utilities.RandString(5))
@@ -177,7 +206,7 @@ var _ = BeforeSuite(func() {
 			[]string{},
 			[]string{},
 		)
-		log.FailOnError(err, "Unable to associate Cluster to Project")
+		log.FailOnError(err, "Unable to associate platform resources to Project")
 		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
 	})
 

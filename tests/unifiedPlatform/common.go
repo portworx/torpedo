@@ -60,6 +60,10 @@ var (
 	NewPdsParams                     *parameters.NewPDSParams
 	PdsLabels                        = make(map[string]string)
 	PDS_DEFAULT_NAMESPACE            string
+	DsNameAndAppTempId               map[string]string
+	StTemplateId                     string
+	ResourceTemplateId               string
+	TemplateIds                      []string
 )
 
 // ReadParams reads the params from given or default json
@@ -153,6 +157,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowDataService.Namespace = &WorkflowNamespace
 		WorkflowDataService.DataServiceDeployment = make(map[string]dslibs.DataServiceDetails)
 		WorkflowDataService.Dash = Inst().Dash
+		WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 
 		log.Infof("Creating backup config struct")
 		WorkflowPDSBackupConfig.WorkflowBackupLocation = WorkflowbkpLoc
@@ -170,7 +175,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowPDSRestore.RestoredDeployments = pds.WorkflowDataService{}
 		WorkflowPDSRestore.RestoredDeployments.DataServiceDeployment = make(map[string]dslibs.DataServiceDetails)
 
-		log.Infof("Creating PDS template object")
+		log.Infof("Creating Platform object for Template Workflow")
 		WorkflowPDSTemplate.Platform = WorkflowPlatform
 
 	})
