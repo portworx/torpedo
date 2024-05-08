@@ -776,11 +776,13 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 		allErrors            []error
 		deploymentCount      int
 		wg                   sync.WaitGroup
+		restoreCount         int
 	)
 	JustBeforeEach(func() {
 		StartPDSTorpedoTest("PerformSimultaneousBackupRestoreForMultipleDeployments", "Perform multiple backup and restore simultaneously for different deployments.", nil, 0)
 		deploymentCount = 2
-		backupsPerDeployment = 5
+		backupsPerDeployment = 1
+		restoreCount = 3
 		allBackupIds = make(map[string][]string)
 	})
 
@@ -883,7 +885,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 			for _, deployment := range deployments {
 				allBackupResponse, err := WorkflowPDSBackup.ListAllBackups(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while fetching backups")
-				// dash.VerifyFatal(len(allBackupResponse), backupsPerDeployment, fmt.Sprintf("Total number of backups found for [%s] are not consisten with backup configs created.", *deployment.Create.Meta.Name))
+				dash.VerifyFatal(len(allBackupResponse), backupsPerDeployment, fmt.Sprintf("Total number of backups found for [%s] are not consisten with backup configs created.", *deployment.Create.Meta.Name))
 				for _, backupResponse := range allBackupResponse {
 					log.Infof("Backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
 					err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
@@ -896,27 +898,34 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 		})
 
 		Step("Creating Simultaneous restores from the dataservices and triggering parallel backup", func() {
+
+			log.InfoD("Creating parallel restores")
+
 			// Creating parallel restores
 			for ns, backupIds := range allBackupIds {
 
 				for _, backupId := range backupIds {
-					wg.Add(1)
 
-					go func(namespace string, backup string) {
-						defer wg.Done()
-						defer GinkgoRecover()
+					for i := 0; i < restoreCount; i++ {
+						wg.Add(1)
+						go func(namespace string, backup string) {
+							defer wg.Done()
+							defer GinkgoRecover()
 
-						restoreName := "restore-" + RandomString(5)
-						_, err := WorkflowPDSRestore.CreateRestore(restoreName, backup, restoreName, namespace)
-						if err != nil {
-							log.Errorf("Error occurred while creating [%s], Error - [%s]", restoreName, err.Error())
-						}
-						log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
-						restoreNames = append(restoreNames, restoreName)
-					}(ns, backupId)
+							restoreName := "restore-" + RandomString(5)
+							_, err := WorkflowPDSRestore.CreateRestore(restoreName, backup, restoreName, namespace)
+							if err != nil {
+								log.Errorf("Error occurred while creating [%s], Error - [%s]", restoreName, err.Error())
+							}
+							log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+							restoreNames = append(restoreNames, restoreName)
+						}(ns, backupId)
+					}
 				}
 
 			}
+
+			log.InfoD("Creating backups parallel with restores")
 
 			// Creating parallel backups
 			for _, deployment := range deployments {
