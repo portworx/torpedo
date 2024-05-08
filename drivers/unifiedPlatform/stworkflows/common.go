@@ -7,6 +7,7 @@ import (
 
 const (
 	COMPLETED = "COMPLETED"
+	FAILED    = "FAILED"
 )
 
 const (

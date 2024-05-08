@@ -22,8 +22,8 @@ func (wkflwResi *WorkflowPDSResiliency) MarkResiliencyTC(resiliency bool) {
 func (wkflwResi *WorkflowPDSResiliency) InduceFailureAndExecuteResiliencyScenario(ds resiLibs.PDSDataService, deployment *automationModels.PDSDeploymentResponse, failureType string) error {
 	wfDataService := wkflwResi.WfDataService
 	deploymentId := *deployment.Create.Meta.Uid
-	namespaceName := wfDataService.NamespaceName
-	namespaceId := wfDataService.Namespace.Namespaces[namespaceName]
+	namespaceName := wfDataService.DataServiceDeployment[deploymentId].Namespace
+	namespaceId := wfDataService.DataServiceDeployment[deploymentId].NamespaceId
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
 	resConfigId := wfDataService.PDSTemplates.ResourceTemplateId
