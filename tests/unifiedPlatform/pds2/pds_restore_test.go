@@ -435,7 +435,7 @@ var _ = Describe("{UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore}", func(
 				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
-				deployment, err = WorkflowDataService.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.OldImage, ds.OldVersion, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 				WorkflowPDSRestore.SourceDeploymentConfigBeforeUpgrade = &deployment.Create.Config.DeploymentTopologies[0]
@@ -466,8 +466,7 @@ var _ = Describe("{UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore}", func(
 					log.FailOnError(err, "failed to switch context to source cluster")
 				}()
 				CheckforClusterSwitch()
-				WorkflowPDSRestore.SourceNamespace = WorkflowDataService.NamespaceName
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
 				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
@@ -504,7 +503,7 @@ var _ = Describe("{UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore}", func(
 				CheckforClusterSwitch()
 				WorkflowPDSRestore.Validatation = make(map[string]bool)
 				WorkflowPDSRestore.Validatation["VALIDATE_RESTORE_AFTER_SRC_DEPLOYMENT_UPGRADE"] = true
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupIdBeforeUpgrade, restoreNamespace)
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupIdBeforeUpgrade, restoreNamespace, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
 				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
@@ -518,7 +517,7 @@ var _ = Describe("{UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore}", func(
 				}()
 				restoreName = "restr-latest-bkp" + RandomString(5)
 				CheckforClusterSwitch()
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace)
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
 				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
