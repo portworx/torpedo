@@ -889,7 +889,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 						log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
 					})
 
-					Step(fmt.Sprintf("Deploy dataservice", i+1), func() {
+					Step("Deploy dataservice", func() {
 
 						WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 						WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
