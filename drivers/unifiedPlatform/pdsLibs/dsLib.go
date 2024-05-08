@@ -10,6 +10,14 @@ import (
 
 const DEPLOYMENT_TOPOLOGY = "pds-qa-test-topology"
 
+type DataServiceDetails struct {
+	Deployment        automationModels.V1Deployment
+	Namespace         string
+	NamespaceId       string
+	SourceMd5Checksum string
+	DSParams          PDSDataService
+}
+
 // InitUnifiedApiComponents
 func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 	v2Components, err = unifiedPlatform.NewUnifiedPlatformComponents(controlPlaneURL, accountID)

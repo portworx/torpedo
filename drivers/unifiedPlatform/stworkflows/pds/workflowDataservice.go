@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"time"
+
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
@@ -12,20 +14,16 @@ import (
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	corev1 "k8s.io/api/core/v1"
-	"time"
 )
 
 type WorkflowDataService struct {
 	Namespace    *platform.WorkflowNamespace
 	PDSTemplates WorkflowPDSTemplates
 	// TODO: NamespaceName should be taken as a parameter in the method
-	NamespaceName           string
-	DataServiceDeployment   map[string]string
+	DataServiceDeployment   map[string]dslibs.DataServiceDetails
 	SkipValidatation        map[string]bool
-	SourceDeploymentMd5Hash map[string]string
 	Dash                    *aetosutil.Dashboard
 	ValidateStorageIncrease dslibs.ValidateStorageIncrease
-	NamespaceMap            map[string]string
 }
 
 const (
@@ -36,9 +34,9 @@ const (
 	PDS_DEPLOYMENT_AVAILABLE   = "AVAILABLE"
 )
 
-func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService, image, version string) (*automationModels.PDSDeploymentResponse, error) {
-	namespaceId := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
-	namespaceName := wfDataService.NamespaceName
+func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService, image, version string, namespace string) (*automationModels.PDSDeploymentResponse, error) {
+	namespaceId := wfDataService.Namespace.Namespaces[namespace]
+	namespaceName := namespace
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
 	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
@@ -57,8 +55,21 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		return nil, err
 	}
 
-	wfDataService.DataServiceDeployment[*deployment.Create.Meta.Name] = *deployment.Create.Meta.Uid
-	wfDataService.NamespaceMap[*deployment.Create.Meta.Name] = namespaceName
+	// TODO: This needs to be done along with a switch so that we have an option to run or skip this validation
+	//chkSum, err := wfDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid, &parameters.NewPDSParams{})
+	//
+	//if err != nil {
+	//	return nil, fmt.Errorf("unable to run workloads. error - [%s]", err.Error())
+	//}
+
+	wfDataService.DataServiceDeployment[*deployment.Create.Meta.Uid] = dslibs.DataServiceDetails{
+		Deployment:  deployment.Create,
+		Namespace:   namespaceName,
+		NamespaceId: namespaceId,
+		//SourceMd5Checksum: chkSum,
+		SourceMd5Checksum: "",
+		DSParams:          ds,
+	}
 
 	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
 		if value == true {
@@ -71,15 +82,19 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		}
 	}
 
-	log.Debugf("waiting for a minute before taking backup...")
+	// TODO: This needs to be removed once below bugs are fixed:
+	// https://purestorage.atlassian.net/issues/DS-9591
+	// https://purestorage.atlassian.net/issues/DS-9546
+	// https://purestorage.atlassian.net/issues/DS-9305
+	log.Infof("Sleeping for 1 minutes to make sure deployment gets healthy")
 	time.Sleep(1 * time.Minute)
 
 	return deployment, nil
 }
 
 func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataService, deploymentId, image, version string) (*automationModels.PDSDeploymentResponse, error) {
-	namespaceId := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
-	namespaceName := wfDataService.NamespaceName
+	namespaceId := wfDataService.DataServiceDeployment[deploymentId].NamespaceId
+	namespaceName := wfDataService.DataServiceDeployment[deploymentId].Namespace
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
 	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
@@ -126,7 +141,7 @@ func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(depl
 	}
 
 	// Get data service deployment resources
-	resourceTemplateOps, storageOps, DeploymentConfigs, err := wfDataService.GetDsDeploymentResources(wfDataService.DataServiceDeployment, ds.Name, resConfigId, stConfigId, namespace)
+	resourceTemplateOps, storageOps, DeploymentConfigs, err := wfDataService.GetDsDeploymentResources(deploymentId)
 	if err != nil {
 		return err
 	}
@@ -138,32 +153,30 @@ func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(depl
 	return nil
 }
 
-func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deployment map[string]string, dataServiceName, resourceTemplateID, storageTemplateID, namespace string) (dslibs.ResourceSettingTemplate, dslibs.StorageOps, dslibs.DeploymentConfig, error) {
+func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deploymentId string) (dslibs.ResourceSettingTemplate, dslibs.StorageOps, dslibs.DeploymentConfig, error) {
 	var (
 		resourceTemp dslibs.ResourceSettingTemplate
 		storageOp    dslibs.StorageOps
 		dbConfig     dslibs.DeploymentConfig
 		err          error
 	)
-	deploymentName, deploymentId := GetDeploymentNameAndId(deployment)
-	log.Debugf("deployment Name [%s] and Id [%s]", deploymentName, deploymentId)
 
 	_, podName, err := dslibs.GetDeployment(deploymentId)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
 
-	dbConfig, err = dslibs.GetDeploymentConfigurations(namespace, dataServiceName, podName)
+	dbConfig, err = dslibs.GetDeploymentConfigurations(wfDataService.DataServiceDeployment[deploymentId].Namespace, wfDataService.DataServiceDeployment[deploymentId].DSParams.Name, podName)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
 
-	resourceTemp, err = dslibs.GetResourceTemplateConfigs(resourceTemplateID)
+	resourceTemp, err = dslibs.GetResourceTemplateConfigs(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Config.DeploymentTopologies[0].ResourceSettings.Id)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
 
-	storageOp, err = dslibs.GetStorageTemplateConfigs(storageTemplateID)
+	storageOp, err = dslibs.GetStorageTemplateConfigs(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Config.DeploymentTopologies[0].StorageOptions.Id)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
@@ -187,6 +200,10 @@ func (wfDataService *WorkflowDataService) DeleteDeployment(deploymentId string) 
 			return err
 		}
 	}
+
+	// Removing the data service entry from map
+	delete(wfDataService.DataServiceDeployment, deploymentId)
+
 	return nil
 }
 
@@ -212,7 +229,7 @@ func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId strin
 	return nil
 }
 
-func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(params *parameters.NewPDSParams) error {
+func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(deploymentId string, params *parameters.NewPDSParams) (string, error) {
 
 	//Initializing the parameters required for workload generation
 	wkloadParams := dslibs.LoadGenParams{
@@ -226,50 +243,47 @@ func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(params *parame
 		FailOnError:    params.LoadGen.FailOnError,
 	}
 
-	chkSum, wlDep, err := dslibs.InsertDataAndReturnChecksum(wfDataService.DataServiceDeployment, wkloadParams)
+	chkSum, wlDep, err := dslibs.InsertDataAndReturnChecksum(wfDataService.DataServiceDeployment[deploymentId], wkloadParams)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	deploymentName, _ := GetDeploymentNameAndId(wfDataService.DataServiceDeployment)
-
-	wfDataService.SourceDeploymentMd5Hash[deploymentName] = chkSum
-
-	return dslibs.DeleteWorkloadDeployments(wlDep)
+	return chkSum, dslibs.DeleteWorkloadDeployments(wlDep)
 }
 
-func (wfDataService *WorkflowDataService) ValidateDataServiceWorkloads(params *parameters.NewPDSParams, restoredDeployment *automationModels.PDSRestoreResponse) error {
-	//Initializing the parameters required for workload generation
-	wkloadParams := dslibs.LoadGenParams{
-		LoadGenDepName: params.LoadGen.LoadGenDepName,
-		Namespace:      params.InfraToTest.Namespace,
-		NumOfRows:      params.LoadGen.NumOfRows,
-		Timeout:        params.LoadGen.Timeout,
-		Replicas:       params.LoadGen.Replicas,
-		TableName:      params.LoadGen.TableName,
-		Iterations:     params.LoadGen.Iterations,
-		FailOnError:    params.LoadGen.FailOnError,
-	}
-
-	deployment := make(map[string]string)
-	deployment[*restoredDeployment.Create.Meta.Name] = *restoredDeployment.Create.Meta.Uid
-	// chkSum, wlDep, err := dslibs.ReadDataAndReturnChecksum(deployment, wkloadParams)
-	_, wlDep, err := dslibs.ReadDataAndReturnChecksum(deployment, wkloadParams)
-	if err != nil {
-		return err
-	}
-
-	// deploymentName, _ := GetDeploymentNameAndId(deployment)
-	_, _ = GetDeploymentNameAndId(deployment)
-
-	// TODO: Commenting this out for now, this needs to be refactored as per current design
-	//wfDataService.RestoredDeploymentMd5Hash[deploymentName] = chkSum
-	//
-	//result := dslibs.ValidateDataMd5Hash(wfDataService.SourceDeploymentMd5Hash, wfDataService.RestoredDeploymentMd5Hash)
-	//wfDataService.Dash.VerifyFatal(result, true, "Validate md5 hash after restore")
-
-	return dslibs.DeleteWorkloadDeployments(wlDep)
-}
+// TODO: Commenting this methods out, this needs to be refatcored as per current design
+//func (wfDataService *WorkflowDataService) ValidateDataServiceWorkloads(params *parameters.NewPDSParams, restoredDeployment *automationModels.PDSRestoreResponse) error {
+//	//Initializing the parameters required for workload generation
+//	wkloadParams := dslibs.LoadGenParams{
+//		LoadGenDepName: params.LoadGen.LoadGenDepName,
+//		Namespace:      params.InfraToTest.Namespace,
+//		NumOfRows:      params.LoadGen.NumOfRows,
+//		Timeout:        params.LoadGen.Timeout,
+//		Replicas:       params.LoadGen.Replicas,
+//		TableName:      params.LoadGen.TableName,
+//		Iterations:     params.LoadGen.Iterations,
+//		FailOnError:    params.LoadGen.FailOnError,
+//	}
+//
+//	deployment := make(map[string]string)
+//	deployment[*restoredDeployment.Create.Meta.Name] = *restoredDeployment.Create.Meta.Uid
+//	// chkSum, wlDep, err := dslibs.ReadDataAndReturnChecksum(deployment, wkloadParams)
+//	_, wlDep, err := dslibs.ReadDataAndReturnChecksum(deployment, wkloadParams)
+//	if err != nil {
+//		return err
+//	}
+//
+//	// deploymentName, _ := GetDeploymentNameAndId(deployment)
+//	_, _ = GetDeploymentNameAndId(deployment)
+//
+//	// TODO: Commenting this out for now, this needs to be refactored as per current design
+//	//wfDataService.RestoredDeploymentMd5Hash[deploymentName] = chkSum
+//	//
+//	//result := dslibs.ValidateDataMd5Hash(wfDataService.SourceDeploymentMd5Hash, wfDataService.RestoredDeploymentMd5Hash)
+//	//wfDataService.Dash.VerifyFatal(result, true, "Validate md5 hash after restore")
+//
+//	return dslibs.DeleteWorkloadDeployments(wlDep)
+//}
 
 func GetDeploymentNameAndId(deployment map[string]string) (string, string) {
 	var (
@@ -313,26 +327,26 @@ func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string,
 	return err
 }
 
-func (wfDataService *WorkflowDataService) KillDBMasterNodeToValidateHA(dsName string, deploymentName string) error {
-	dbMaster, isNativelyDistributed := utils.GetDbMasterNode(wfDataService.NamespaceName, dsName, deploymentName, wfDataService.Namespace.TargetCluster.KubeConfig)
+func (wfDataService *WorkflowDataService) KillDBMasterNodeToValidateHA(dsName string, deploymentId string) error {
+	dbMaster, isNativelyDistributed := utils.GetDbMasterNode(wfDataService.DataServiceDeployment[deploymentId].Namespace, dsName, *wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name, wfDataService.Namespace.TargetCluster.KubeConfig)
 	if isNativelyDistributed {
-		err := utils.DeleteK8sPods(dbMaster, wfDataService.NamespaceName, wfDataService.Namespace.TargetCluster.KubeConfig)
+		err := utils.DeleteK8sPods(dbMaster, wfDataService.DataServiceDeployment[deploymentId].Namespace, wfDataService.Namespace.TargetCluster.KubeConfig)
 		if err != nil {
 			return err
 		}
 		//validate DataService Deployment here
-		newDbMaster, _ := utils.GetDbMasterNode(wfDataService.NamespaceName, dsName, deploymentName, wfDataService.Namespace.TargetCluster.KubeConfig)
+		newDbMaster, _ := utils.GetDbMasterNode(wfDataService.DataServiceDeployment[deploymentId].Namespace, dsName, *wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name, wfDataService.Namespace.TargetCluster.KubeConfig)
 		if dbMaster == newDbMaster {
 			log.FailOnError(fmt.Errorf("leader node is not reassigned"), fmt.Sprintf("Leader pod %v", dbMaster))
 		}
 	} else {
-		podName, err := utils.GetAnyPodName(deploymentName, wfDataService.NamespaceName)
+		podName, err := utils.GetAnyPodName(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name, wfDataService.DataServiceDeployment[deploymentId].Namespace)
 		if err != nil {
-			return fmt.Errorf("failed while fetching pod for stateful set %v ", deploymentName)
+			return fmt.Errorf("failed while fetching pod for stateful set %v ", *wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name)
 		}
-		err = utils.KillPodsInNamespace(wfDataService.NamespaceName, podName)
+		err = utils.KillPodsInNamespace(wfDataService.DataServiceDeployment[deploymentId].Namespace, podName)
 		if err != nil {
-			return fmt.Errorf("failed while deleting pod %v ", deploymentName)
+			return fmt.Errorf("failed while deleting pod %v ", *wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name)
 		}
 		//validate DataService Deployment here
 	}
@@ -348,8 +362,10 @@ func (wfDataService *WorkflowDataService) DeletePDSPods() error {
 	}
 	log.Infof("PDS System Pods")
 	for _, pod := range podList.Items {
-		log.Infof("%v", pod.Name)
-		pdsPods = append(pdsPods, pod)
+		if strings.Contains(strings.ToLower(pod.Name), "pds-backups") || strings.Contains(strings.ToLower(pod.Name), "pds-target") {
+			log.Infof("%v", pod.Name)
+			pdsPods = append(pdsPods, pod)
+		}
 	}
 	log.InfoD("Deleting PDS System Pods")
 	err = utils.DeletePods(pdsPods)
@@ -390,9 +406,9 @@ func (wfDataService *WorkflowDataService) CheckPVCStorageFullCondition(namespace
 	return nil
 }
 
-func (wfDataService *WorkflowDataService) ValidateDepConfigPostStorageIncrease(dsName string, deploymentName string, stIncrease *dslibs.ValidateStorageIncrease) error {
+func (wfDataService *WorkflowDataService) ValidateDepConfigPostStorageIncrease(deploymentId string, stIncrease *dslibs.ValidateStorageIncrease) error {
 	// Get data service deployment resources
-	resourceTemp, storageTemp, dbConfig, err := wfDataService.GetDsDeploymentResources(wfDataService.DataServiceDeployment, dsName, stIncrease.ResConfigIdUpdated, stIncrease.StorageConfigIdUpdated, wfDataService.NamespaceName)
+	resourceTemp, storageTemp, dbConfig, err := wfDataService.GetDsDeploymentResources(deploymentId)
 	if err != nil {
 		return err
 	}
@@ -404,7 +420,7 @@ func (wfDataService *WorkflowDataService) ValidateDepConfigPostStorageIncrease(d
 
 	stringRelFactor := storageTemp.Replicas
 	wfDataService.Dash.VerifyFatal(dbConfig.Spec.Topologies[0].StorageOptions.Replicas, stringRelFactor, "Validating the Replication Factor count post storage resize (RepelFactor-LEVEL)")
-	podAgeAfterResize, err := utils.GetPodAge(deploymentName, wfDataService.NamespaceName)
+	podAgeAfterResize, err := utils.GetPodAge(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name, wfDataService.DataServiceDeployment[deploymentId].Namespace)
 	err = dslibs.VerifyStorageSizeIncreaseAndNoPodRestarts(stIncrease.InitialCapacity, stIncrease.IncreasedStorageSize, stIncrease.BeforeResizePodAge, podAgeAfterResize)
 	if err != nil {
 		return err
@@ -419,8 +435,10 @@ func (wfDataService *WorkflowDataService) Purge() error {
 
 	errors = make([]string, 0)
 
-	for dsName, dsId := range wfDataService.DataServiceDeployment {
-		log.Infof("Deleting [%s] with id [%d]", dsName, dsId)
+	for dsId, dsDetails := range wfDataService.DataServiceDeployment {
+
+		dsName := *wfDataService.DataServiceDeployment[dsId].Deployment.Meta.Name
+		log.Infof("Deleting [%s] with id [%s] from [%s]-[%s] namespace ", dsName, dsId, dsDetails.Namespace, dsDetails.NamespaceId)
 
 		deploymentDetails, _, err := dslibs.GetDeployment(dsId)
 		if err != nil {
@@ -448,7 +466,7 @@ func (wfDataService *WorkflowDataService) Purge() error {
 			log.Infof("All PVs associated with [%s] deleted successfully", dsName)
 		}
 
-		err = utils.RemoveFinalizersFromAllResources(wfDataService.NamespaceMap[dsName])
+		err = utils.RemoveFinalizersFromAllResources(dsDetails.Namespace)
 		if err != nil {
 			log.Warnf("Unable to remove finalizers. Error - [%s]", err.Error())
 			errors = append(errors, err.Error())
