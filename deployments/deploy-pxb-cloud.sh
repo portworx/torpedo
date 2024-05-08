@@ -693,6 +693,8 @@ spec:
       value: "${S3_ENCRYPTION_POLICY}"
     - name: USE_GLOBAL_RULES
       value: "${USE_GLOBAL_RULES}"
+    - name: USE_DOCKER_IO
+      value: "${USE_DOCKER_IO}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
