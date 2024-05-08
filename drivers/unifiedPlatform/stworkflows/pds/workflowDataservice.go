@@ -87,7 +87,7 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	// https://purestorage.atlassian.net/issues/DS-9546
 	// https://purestorage.atlassian.net/issues/DS-9305
 	log.Infof("Sleeping for 1 minutes to make sure deployment gets healthy")
-	time.Sleep(1 * time.Minute)
+	time.Sleep(5 * time.Minute)
 
 	return deployment, nil
 }
