@@ -851,22 +851,26 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 		}
 
 		Step("Create multiple Adhoc backup config for the existing deployment", func() {
+
+			log.Infof("All Deployments - [%v]", deployments)
+
 			for _, deployment := range deployments {
 				for i := 0; i < backupsPerDeployment; i++ {
+
 					wg.Add(1)
-					go func() {
+					go func(dep *automationModels.PDSDeploymentResponse) {
 
 						defer wg.Done()
 						defer GinkgoRecover()
 
 						pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
-						bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
+						bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *dep.Create.Meta.Uid)
 						if err != nil {
 							log.Errorf("Some error occurred while creating backup [%s], Error - [%s]", pdsBackupConfigName, err.Error())
 							allErrors = append(allErrors, err)
 						}
 						log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
-					}()
+					}(deployment)
 				}
 			}
 
@@ -898,18 +902,18 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 				for _, backupId := range backupIds {
 					wg.Add(1)
 
-					go func() {
+					go func(namespace string, backup string) {
 						defer wg.Done()
 						defer GinkgoRecover()
 
 						restoreName := "restore-" + RandomString(5)
-						_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupId, restoreName, ns)
+						_, err := WorkflowPDSRestore.CreateRestore(restoreName, backup, restoreName, namespace)
 						if err != nil {
 							log.Errorf("Error occurred while creating [%s], Error - [%s]", restoreName, err.Error())
 						}
 						log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
 						restoreNames = append(restoreNames, restoreName)
-					}()
+					}(ns, backupId)
 				}
 
 			}
@@ -918,20 +922,20 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 			for _, deployment := range deployments {
 				for i := 0; i < backupsPerDeployment; i++ {
 					wg.Add(1)
-					go func() {
+					go func(dep *automationModels.PDSDeploymentResponse) {
 
 						defer wg.Done()
 						defer GinkgoRecover()
 
 						pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
-						bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
+						bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *dep.Create.Meta.Uid)
 						if err != nil {
 							log.Errorf("Some error occurred while creating backup [%s], Error - [%s]", pdsBackupConfigName, err.Error())
 							allErrors = append(allErrors, err)
 						}
 						log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
 
-					}()
+					}(deployment)
 				}
 			}
 
