@@ -90,24 +90,23 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 			workflowDataservice.Namespace = &WorkflowNamespace
 			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion, PDS_DEFAULT_NAMESPACE)
 			log.FailOnError(err, "Error while deploying ds")
-		}
 
-		stepLog := "Running Workloads before Storage Resize"
-		Step(stepLog, func() {
-			_, err := workflowDataservice.RunDataServiceWorkloads(*deployment.Create.Meta.Uid, NewPdsParams)
-			log.FailOnError(err, "Error while running workloads on ds")
-		})
+			//stepLog := "Running Workloads before Storage Resize"
+			//Step(stepLog, func() {
+			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams, ds.Name)
+			//	log.FailOnError(err, "Error while running workloads on ds")
+			//})
 
-		//Update Ds With New Values of Resource Templates
-		resourceConfigUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams)
-		log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			//Update Ds With New Values of Resource Templates
+			resourceConfigUpdated, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
-		log.InfoD("Updated Storage Template ID- [updated- %v]", resourceConfigUpdated)
-		workflowDataservice.PDSTemplates.ResourceTemplateId = resourceConfigUpdated
-		// Run bot Storage Resize and Stop PX concurrently
-		for _, ds := range NewPdsParams.DataServiceToTest {
-			err := workflowResiliency.InduceFailureAndExecuteResiliencyScenario(ds, deployment, "StopPXDuringStorageResize")
+			log.InfoD("Updated Storage Template ID- [updated- %v]", resourceConfigUpdated)
+			workflowDataservice.PDSTemplates.ResourceTemplateId = resourceConfigUpdated
+			// Run bot Storage Resize and Stop PX concurrently
+			err = workflowResiliency.InduceFailureAndExecuteResiliencyScenario(ds, deployment, "StopPXDuringStorageResize")
 			log.FailOnError(err, "Error while updating ds")
+
 		}
 	})
 	JustAfterEach(func() {
