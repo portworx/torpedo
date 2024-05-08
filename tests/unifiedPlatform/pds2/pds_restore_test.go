@@ -830,7 +830,6 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 		deployments          []*automationModels.PDSDeploymentResponse
 		pdsBackupConfigName  string
 		restoreNames         []string
-		deploymentNamespace  string
 		allBackupIds         map[string][]string
 		dsNameAndAppTempId   map[string]string
 		err                  error
@@ -839,7 +838,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 		deploymentCount      int
 	)
 	JustBeforeEach(func() {
-		StartTorpedoTest("PerformSimultaneousBackupRestoreForMultipleDeployments", "Perform multiple backup and restore simultaneously for different deployments.", nil, 0)
+		StartPDSTorpedoTest("PerformSimultaneousBackupRestoreForMultipleDeployments", "Perform multiple backup and restore simultaneously for different deployments.", nil, 0)
 		deploymentCount = 2
 		backupsPerDeployment = 1
 	})
@@ -858,6 +857,8 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 				wg.Add(1)
 				go func() {
 
+					var deploymentNamespace string
+
 					defer wg.Done()
 					defer GinkgoRecover()
 
@@ -873,6 +874,9 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 					})
 
 					Step("Associate namespace to Project", func() {
+
+						log.InfoD("Asscoaiting [%s]-[%s] to the project", deploymentNamespace, WorkflowNamespace.Namespaces[deploymentNamespace])
+
 						err := WorkflowProject.Associate(
 							[]string{},
 							[]string{WorkflowNamespace.Namespaces[deploymentNamespace]},
@@ -891,12 +895,14 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 
 					Step("Deploy dataservice", func() {
 
+						log.InfoD("Starting deployment in [%s] namespace", deploymentNamespace)
+
 						WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 						WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
 						currDeployment, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, deploymentNamespace)
 						if err != nil {
-							log.Errorf("Error occured while creating deployment - [%s]", err.Error())
+							log.Errorf("Error occured while creating deployment on [%s] - [%s]", deploymentNamespace, err.Error())
 							allErrors = append(allErrors, err)
 							return
 						}
@@ -1022,6 +1028,6 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPDSTorpedoTest()
 	})
 })
