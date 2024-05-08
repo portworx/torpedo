@@ -23,11 +23,11 @@ const (
 )
 
 // GetBackupIDByName returns the ID of given backup
-func (backup WorkflowPDSBackup) GetLatestBackup(deploymentName string) (automationModels.V1Backup, error) {
+func (backup WorkflowPDSBackup) GetLatestBackup(deploymentId string) (automationModels.V1Backup, error) {
 
 	var latestBackup automationModels.V1Backup
 
-	allBackups, err := pdslibs.ListBackup(backup.WorkflowDataService.DataServiceDeployment[deploymentName])
+	allBackups, err := pdslibs.ListBackup(deploymentId)
 
 	if err != nil {
 		return latestBackup, err
@@ -51,6 +51,8 @@ func (backup WorkflowPDSBackup) WaitForBackupToComplete(backupId string) error {
 		}
 		if *backupModel.Get.Status.Phase != stworkflows.COMPLETED {
 			return nil, true, fmt.Errorf("Backup is not completed yet, Phase - [%s]", *backupModel.Get.Status.Phase)
+		} else if *backupModel.Get.Status.Phase == stworkflows.FAILED {
+			return nil, false, fmt.Errorf("Backup Status - [%s]", *backupModel.Get.Status.Phase)
 		} else {
 			log.Infof("Backup completed successfully - [%s]", *backupModel.Get.Meta.Name)
 			log.Infof("Backup Status - [%s]", *backupModel.Get.Status.CloudSnapId)
@@ -72,11 +74,11 @@ func (backup WorkflowPDSBackup) DeleteBackup(id string) error {
 }
 
 // ListAllBackups lists all backups
-func (backup WorkflowPDSBackup) ListAllBackups(deploymentName string) ([]automationModels.V1Backup, error) {
+func (backup WorkflowPDSBackup) ListAllBackups(deploymentId string) ([]automationModels.V1Backup, error) {
 
 	allBackups := make([]automationModels.V1Backup, 0)
 
-	response, err := pdslibs.ListBackup(backup.WorkflowDataService.DataServiceDeployment[deploymentName])
+	response, err := pdslibs.ListBackup(deploymentId)
 
 	if err != nil {
 		return allBackups, err

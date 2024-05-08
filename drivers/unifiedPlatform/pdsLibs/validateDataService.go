@@ -1,5 +1,7 @@
 package pdslibs
 
+//TODO: This needs to be moved to workflow level
+
 import (
 	"encoding/json"
 	"fmt"
@@ -35,15 +37,18 @@ type ValidateStorageIncrease struct {
 
 // GetDeploymentConfigurations returns the deployment CRObject response
 func GetDeploymentConfigurations(namespace, dataServiceName, deploymentName string) (DeploymentConfig, error) {
-	var dbConfig DeploymentConfig
-	objects, err := GetCRObject(namespace, CRGroup, Version, strings.ToLower(dataServiceName)+"s")
-	if err != nil {
-		return dbConfig, err
-	}
 	log.Debugf("namespace [%s]", namespace)
 	log.Debugf("CRGroup [%s]", CRGroup)
 	log.Debugf("Version [%s]", Version)
 	log.Debugf("dsName [%s]", strings.ToLower(dataServiceName)+"s")
+
+	var dbConfig DeploymentConfig
+
+	objects, err := GetCRObject(namespace, CRGroup, Version, strings.ToLower(dataServiceName)+"s")
+	if err != nil {
+		return dbConfig, err
+	}
+
 	log.Debugf("objects [%+v]", objects)
 
 	// Iterate over the CRD objects and print their names.
@@ -172,6 +177,7 @@ func ValidateDeploymentIsDeleted(deploymentId string) error {
 		log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Replicas, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
 		return false, nil
 	})
+
 	return err
 }
 
@@ -204,13 +210,12 @@ func ValidateDataMd5Hash(deploymentHash, restoredDepHash map[string]string) bool
 }
 
 // InsertDataAndReturnChecksum Inserts Data into the db and returns the checksum
-func InsertDataAndReturnChecksum(deployment map[string]string, dsName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
+func InsertDataAndReturnChecksum(dataServiceDetails DataServiceDetails, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "write"
 
-	deploymentName, _ := GetDeploymentNameAndId(deployment)
-	log.Debugf("Starting Workload for the deployment [%s]", deploymentName)
+	deploymentName := *dataServiceDetails.Deployment.Meta.Name
 
-	_, dep, err := GenerateWorkload(deploymentName, dsName, wkloadGenParams)
+	_, dep, err := GenerateWorkload(deploymentName, wkloadGenParams)
 	if err == nil {
 		err := k8sApps.DeleteDeployment(dep.Name, dep.Namespace)
 		if err != nil {
@@ -219,16 +224,16 @@ func InsertDataAndReturnChecksum(deployment map[string]string, dsName string, wk
 	} else {
 		return "", nil, err
 	}
-	ckSum, wlDep, err := ReadDataAndReturnChecksum(deployment, dsName, wkloadGenParams)
+	ckSum, wlDep, err := ReadDataAndReturnChecksum(dataServiceDetails, wkloadGenParams)
 	return ckSum, wlDep, err
 }
 
 // ReadDataAndReturnChecksum Reads Data from the db and returns the checksum
-func ReadDataAndReturnChecksum(deployment map[string]string, dsName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
+func ReadDataAndReturnChecksum(dataServiceDetails DataServiceDetails, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "read"
 
-	deploymentName, _ := GetDeploymentNameAndId(deployment)
-	ckSum, wlDep, err := GenerateWorkload(deploymentName, dsName, wkloadGenParams)
+	deploymentName := *dataServiceDetails.Deployment.Meta.Name
+	ckSum, wlDep, err := GenerateWorkload(deploymentName, wkloadGenParams)
 	if err != nil {
 		return "", nil, fmt.Errorf("error while reading the workload deployment data")
 	}
@@ -236,7 +241,7 @@ func ReadDataAndReturnChecksum(deployment map[string]string, dsName string, wklo
 }
 
 // GenerateWorkload creates a deployment using the given params(perform read/write) and returns the checksum
-func GenerateWorkload(deploymentName, dataServiceName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
+func GenerateWorkload(deploymentName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	var checksum string
 	dsName := deploymentName
 	dataservice := dataServiceName
