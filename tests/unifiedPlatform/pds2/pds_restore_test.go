@@ -781,6 +781,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 		StartPDSTorpedoTest("PerformSimultaneousBackupRestoreForMultipleDeployments", "Perform multiple backup and restore simultaneously for different deployments.", nil, 0)
 		deploymentCount = 2
 		backupsPerDeployment = 5
+		allBackupIds = make(map[string][]string)
 	})
 
 	It("Perform multiple backup and restore simultaneously for different deployments.", func() {
