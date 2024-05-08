@@ -232,7 +232,7 @@ func InsertDataAndReturnChecksum(dataServiceDetails DataServiceDetails, wkloadGe
 func ReadDataAndReturnChecksum(dataServiceDetails DataServiceDetails, dataServiceName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "read"
 
-	deploymentName := *dataServiceDetails.Deployment.Meta.Name
+	deploymentName := *dataServiceDetails.Deployment.Status.CustomResourceName
 	ckSum, wlDep, err := GenerateWorkload(deploymentName, dataServiceName, wkloadGenParams)
 	if err != nil {
 		return "", nil, fmt.Errorf("error while reading the workload deployment data")
@@ -243,8 +243,7 @@ func ReadDataAndReturnChecksum(dataServiceDetails DataServiceDetails, dataServic
 // GenerateWorkload creates a deployment using the given params(perform read/write) and returns the checksum
 func GenerateWorkload(deploymentName, dataServiceName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	var checksum string
-	dsName := deploymentName
-	dataservice := dataServiceName
+	dataservice := strings.ToLower(dataServiceName)
 	workloadDepName := wkloadGenParams.LoadGenDepName
 	namespace := wkloadGenParams.Namespace
 	failOnError := wkloadGenParams.FailOnError
@@ -257,7 +256,10 @@ func GenerateWorkload(deploymentName, dataServiceName string, wkloadGenParams Lo
 	replacePassword := wkloadGenParams.ReplacePassword
 	clusterMode := wkloadGenParams.ClusterMode
 
-	serviceAccount, err := pds.CreatePolicies(namespace, dataServiceName)
+	log.Debugf("DeploymentName [%s]", deploymentName)
+	log.Debugf("dataServiceName [%s]", dataservice)
+
+	serviceAccount, err := pds.CreatePolicies(namespace, dataservice)
 	if err != nil {
 		return "", nil, fmt.Errorf("Error while creating policies %v\n", err)
 	}
@@ -283,7 +285,7 @@ func GenerateWorkload(deploymentName, dataServiceName string, wkloadGenParams Lo
 							Image:           pdsWorkloadImage,
 							ImagePullPolicy: "Always",
 							Env: []corev1.EnvVar{
-								{Name: "PDS_DEPLOYMENT", Value: dsName},
+								{Name: "PDS_DEPLOYMENT", Value: deploymentName},
 								{Name: "NAMESPACE", Value: namespace},
 								{Name: "DATASERVICE", Value: dataservice},
 								{Name: "FAIL_ON_ERROR", Value: failOnError},
@@ -395,8 +397,9 @@ func GetDataServiceImageId(dsName, dsImageTag, dsVersionBuild string) (string, e
 		return "", err
 	}
 
-	var dsImageId string
+	dsImageId := ""
 	for _, imgResp := range imgResps.DataServiceImageList {
+		log.Debugf("imgResp.Info.Build [%v]", *imgResp.Info.Build)
 		if *imgResp.Info.Build == dsImageTag {
 			dsImageId = *imgResp.Meta.Uid
 			break

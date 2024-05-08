@@ -21,8 +21,6 @@ var _ = Describe("{ValidatePdsHealthIncaseofFailures}", func() {
 	var (
 		workflowResiliency pds.WorkflowPDSResiliency
 		deployment         *automationModels.PDSDeploymentResponse
-		templates          []string
-		dsNameAndAppTempId map[string]string
 		err                error
 	)
 
@@ -31,20 +29,8 @@ var _ = Describe("{ValidatePdsHealthIncaseofFailures}", func() {
 	})
 
 	It("Deploy and Validate DataService", func() {
-		Step("Create Service Configuration, Resource and Storage Templates", func() {
-			//dsNameAndAppTempId = workFlowTemplates.CreateAppTemplate(NewPdsParams)
-			dsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-		})
-
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			Step("Deploy DataService", func() {
-
-				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
-				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
-
-				templates = append(templates, dsNameAndAppTempId[ds.Name])
-
 				log.Debugf("Deploying DataService [%s]", ds.Name)
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
@@ -85,6 +71,7 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 		workflowDataservice pds.WorkflowDataService
 		workFlowTemplates   pds.WorkflowPDSTemplates
 		deployment          *automationModels.PDSDeploymentResponse
+		err                 error
 	)
 	workflowResiliency.WfDataService = &workflowDataservice
 	It("Deploy and Validate DataService", func() {
@@ -101,13 +88,6 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = &WorkflowNamespace
-
-			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId[ds.Name]
-			workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
-			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
-
 			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion, PDS_DEFAULT_NAMESPACE)
 			log.FailOnError(err, "Error while deploying ds")
 

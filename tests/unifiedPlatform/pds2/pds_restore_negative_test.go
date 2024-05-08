@@ -46,12 +46,6 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataService.Namespace = &WorkflowNamespace
-			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-			workflowDataService.PDSTemplates.ServiceConfigTemplateId = serviceConfigId[ds.Name]
-			workflowDataService.PDSTemplates.StorageTemplateId = stConfigId
-			workflowDataService.PDSTemplates.ResourceTemplateId = resConfigId
-			tempList = append(tempList, serviceConfigId[ds.Name], stConfigId, resConfigId)
 			deployment, err = workflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 			log.FailOnError(err, "Error while deploying ds")
 		}
@@ -159,7 +153,6 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 		restoreNamespace    string
 		wg                  sync.WaitGroup
 		restoreName         string
-		dsNameAndAppTempId  map[string]string
 		err                 error
 		allErrors           []string
 	)
@@ -171,20 +164,9 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 	})
 
 	It("Perform restore while simultaneously deleting backup controller manager & target controller pods.", func() {
-
-		Step("Create Service Configuration, Resource and Storage Templates", func() {
-			//dsNameAndAppTempId = workFlowTemplates.CreateAppTemplate(NewPdsParams)
-			dsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-		})
-
 		for _, ds := range NewPdsParams.DataServiceToTest {
 
 			Step("Deploy dataservice", func() {
-
-				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
-				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
-
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
