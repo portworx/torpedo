@@ -25,7 +25,7 @@ func (wkflwResi *WorkflowPDSResiliency) InduceFailureAndExecuteResiliencyScenari
 	namespaceName := wfDataService.DataServiceDeployment[deploymentId].Namespace
 	namespaceId := wfDataService.DataServiceDeployment[deploymentId].NamespaceId
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
-	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
+	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateIds[ds.Name]
 	resConfigId := wfDataService.PDSTemplates.ResourceTemplateId
 	stConfigId := wfDataService.PDSTemplates.StorageTemplateId
 	image := ds.Image

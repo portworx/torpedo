@@ -29,8 +29,6 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 		nsLablesApply                 map[string]string
 		TotalToggles                  int
 		waitTime                      time.Duration
-		dsNameAndAppTempId            map[string]string
-		err                           error
 	)
 
 	JustBeforeEach(func() {
@@ -48,13 +46,6 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 	})
 
 	It("Enables and Disables pds on a namespace multiple times", func() {
-
-		Step("Create Service Configuration, Resource and Storage Templates", func() {
-			//dsNameAndAppTempId = workFlowTemplates.CreateAppTemplate(NewPdsParams)
-			dsNameAndAppTempId, _, _, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-		})
-
 		Step(fmt.Sprintf("Creating [%d] namespaces with labels", numberOfNamespacesTobeCreated), func() {
 			var wg sync.WaitGroup
 
@@ -367,9 +358,6 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			Step("Deploy DataService", func() {
-
-				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
-				WorkflowDataService.PDSTemplates.ServiceConfigTemplateId = dsNameAndAppTempId[ds.Name]
 
 				log.Debugf("Deploying DataService [%s]", ds.Name)
 				log.InfoD("Deploying dataservice in [%s] namespace", evenNamespaces[0])

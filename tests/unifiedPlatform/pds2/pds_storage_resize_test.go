@@ -25,6 +25,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 		initialCapacity        uint64
 		increasedPvcSize       uint64
 		beforeResizePodAge     float64
+		err                    error
 	)
 	It("Perform PVC Resize and validate the updated vol in the storage config", func() {
 		Step("Create a PDS Namespace", func() {
@@ -42,14 +43,6 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 			for _, repl := range NewPdsParams.StorageConfigurationsSSIE.ReplFactor {
 				workflowDataservice.Namespace = &WorkflowNamespace
 				NewPdsParams.StorageConfiguration.Repl = repl
-				serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-				log.FailOnError(err, "Unable to create Custom Templates for PDS")
-
-				workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId[ds.Name]
-				workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
-				workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
-				templates = append(templates, serviceConfigId[ds.Name], stConfigId, resConfigId)
-
 				deployment, err = workflowDataservice.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
