@@ -234,7 +234,7 @@ func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(deploymentId s
 	//Initializing the parameters required for workload generation
 	wkloadParams := dslibs.LoadGenParams{
 		LoadGenDepName: params.LoadGen.LoadGenDepName,
-		Namespace:      params.InfraToTest.Namespace,
+		Namespace:      wfDataService.DataServiceDeployment[deploymentId].Namespace,
 		NumOfRows:      params.LoadGen.NumOfRows,
 		Timeout:        params.LoadGen.Timeout,
 		Replicas:       params.LoadGen.Replicas,

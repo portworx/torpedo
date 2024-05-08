@@ -138,7 +138,7 @@ func createRoleBinding(namespace string, account *corev1.ServiceAccount) error {
 	return err
 }
 
-func createClusterRole() (*rbacv1.ClusterRole, error) {
+func createClusterRole(resourceName string) (*rbacv1.ClusterRole, error) {
 	clusterRoleName := "pds-loadgen-cluster"
 	clusterRole := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
@@ -146,8 +146,8 @@ func createClusterRole() (*rbacv1.ClusterRole, error) {
 		},
 		Rules: []rbacv1.PolicyRule{
 			{
-				APIGroups: []string{"deployments.pds.io"},
-				Resources: []string{"databases"},
+				APIGroups: []string{"deployments.pds.portworx.com"},
+				Resources: []string{resourceName + "s"},
 				Verbs:     []string{"get", "list"},
 			},
 		},
@@ -171,7 +171,7 @@ func createClusterRole() (*rbacv1.ClusterRole, error) {
 }
 
 func createClusterRoleBinding(namespace string, account *corev1.ServiceAccount, clusterRole *rbacv1.ClusterRole) error {
-	clusterRoleBindingName := "pds-loadgen:pds-loadgen-c"
+	clusterRoleBindingName := "pds-loadgen:pds-loadgen-cluster"
 
 	clusterRoleBinding := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -209,7 +209,7 @@ func createClusterRoleBinding(namespace string, account *corev1.ServiceAccount, 
 	return err
 }
 
-func CreatePolicies(namespace string) (*corev1.ServiceAccount, error) {
+func CreatePolicies(namespace, dsName string) (*corev1.ServiceAccount, error) {
 	serviceAccount, err := createServiceAccount(namespace)
 	if err != nil {
 		return nil, fmt.Errorf("error while creating service Account %v", err)
@@ -225,7 +225,7 @@ func CreatePolicies(namespace string) (*corev1.ServiceAccount, error) {
 		return nil, fmt.Errorf("error while creating rolebinding %v", err)
 	}
 
-	clusterRole, err := createClusterRole()
+	clusterRole, err := createClusterRole(dsName)
 	if err != nil {
 		return nil, fmt.Errorf("error while creating cluster role %v", err)
 	}
@@ -304,7 +304,7 @@ func (ds *DataserviceType) GenerateWorkload(pdsDeployment *pds.ModelsDeployment,
 	replacePassword := wkloadGenParams.ReplacePassword
 	clusterMode := wkloadGenParams.ClusterMode
 
-	serviceAccount, err := CreatePolicies(namespace)
+	serviceAccount, err := CreatePolicies(namespace, "")
 	if err != nil {
 		return "", nil, fmt.Errorf("error while creating policies")
 	}

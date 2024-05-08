@@ -45,7 +45,7 @@ const (
 	bkpMaxtimeInterval             = 10 * time.Minute
 	restoreTimeInterval            = 20 * time.Second
 	BACKUP_JOB_SUCCEEDED           = "Succeeded"
-	pdsWorkloadImage               = "portworx/pds-loadtests:sample-load-pds-qa"
+	pdsWorkloadImage               = "portworx/pds-loadtests:sample-load-pds2-qa"
 	awsS3endpoint                  = "s3.amazonaws.com"
 )
 const (

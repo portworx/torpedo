@@ -202,7 +202,6 @@ func (targetCluster *WorkflowTargetCluster) ValidatePlatformComponents() error {
 }
 
 func (targetCluster *WorkflowTargetCluster) InstallPDSAppOnTC(clusterId string) error {
-	time.Sleep(10000)
 	appName := "pds"
 	// Check if PDS tcApp already exists
 	objects, err := k8sutils.GetCRObject(platformNamespace, "core.portworx.com", "v1", "targetclusterapplications")
