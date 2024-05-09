@@ -12503,7 +12503,7 @@ func GetAllMultipathDevicesPresent(n *node.Node) ([]MultipathDevices, error) {
 			if initPatternFound {
 				multiPathDevs = append(multiPathDevs, multipathDevices)
 			}
-			multipathDevices := MultipathDevices{}
+			multipathDevices = MultipathDevices{}
 			multipathDevices.DevId = matched[1]
 			multipathDevices.DmID = matched[2]
 			multipathDevices.Type = matched[3]
