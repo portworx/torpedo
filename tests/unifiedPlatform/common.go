@@ -116,8 +116,7 @@ func EndPDSTorpedoTest() {
 	}()
 
 	Step("Purging all PDS related objects", func() {
-		// PurgePDS()
-		log.Infof("Skipping purge")
+		PurgePDS()
 	})
 
 }
@@ -213,6 +212,18 @@ func PurgePDS() {
 		log.Infof("Source and target cluster are same. Switch is not required")
 	}
 
+	log.InfoD("Purging all dataservice objects")
+	err = WorkflowDataService.Purge()
+	log.FailOnError(err, "some error occurred while purging data service objects")
+
+	log.InfoD("Purging all restore source namespaces")
+	err = WorkflowPDSRestore.Source.Purge()
+	log.FailOnError(err, "some error occurred while purging restore source namespaces")
+
+	log.InfoD("Purging all source namespace objects")
+	err = WorkflowNamespace.Purge()
+	log.FailOnError(err, "some error occurred while purging namespace objects")
+
 	log.InfoD("Purging all backup objects")
 	err = WorkflowPDSBackup.Purge()
 	// TODO: Uncomment once https://purestorage.atlassian.net/browse/DS-9546 is fixed
@@ -228,18 +239,6 @@ func PurgePDS() {
 	if err != nil {
 		log.Infof("Error while deleting backup config objects - Error - [%s]", err.Error())
 	}
-
-	log.InfoD("Purging all dataservice objects")
-	err = WorkflowDataService.Purge()
-	log.FailOnError(err, "some error occurred while purging data service objects")
-
-	log.InfoD("Purging all restore source namespaces")
-	err = WorkflowPDSRestore.Source.Purge()
-	log.FailOnError(err, "some error occurred while purging restore source namespaces")
-
-	log.InfoD("Purging all source namespace objects")
-	err = WorkflowNamespace.Purge()
-	log.FailOnError(err, "some error occurred while purging namespace objects")
 
 	log.InfoD("Purging all templates")
 	err = WorkflowPDSTemplate.Purge(true)
