@@ -12487,7 +12487,7 @@ func GetAllMultipathDevicesPresent(n *node.Node) ([]MultipathDevices, error) {
 	log.Infof("Output Details before parsing [%v]", output)
 
 	regexPattern := map[string]*regexp.Regexp{
-		"devDetailsPattern": regexp.MustCompile(`^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)`),
+		"devDetailsPattern": regexp.MustCompile(`.*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)`),
 		"sizeMatchPattern":  regexp.MustCompile(`.*size=([0-9]+G)\s+.*`),
 		"statusMatchPatern": regexp.MustCompile(`status\=(\w+)`),
 		"sdMatchPattern":    regexp.MustCompile(`.*\s+(\d+:\d+:\d+:\d+)+\s+(sd\w+)\s+([0-9:]+)\s+(.*)`),
