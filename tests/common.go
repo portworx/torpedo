@@ -12497,7 +12497,7 @@ func GetAllMultipathDevicesPresent(n *node.Node) ([]MultipathDevices, error) {
 
 	initPatternFound := false
 	multipathDevices := MultipathDevices{}
-	for _, eachLine := range reader {
+	for i, eachLine := range reader {
 		matched := devDetailsPattern.FindStringSubmatch(eachLine)
 		if len(matched) > 1 {
 			if initPatternFound {
@@ -12527,7 +12527,10 @@ func GetAllMultipathDevicesPresent(n *node.Node) ([]MultipathDevices, error) {
 			paths.Status = matched[4]
 			multipathDevices.Paths = append(multipathDevices.Paths, paths)
 		}
-
+		// Validate Last Line 
+		if i == len(reader)-1 {
+			multiPathDevs = append(multiPathDevs, multipathDevices)
+		}
 	}
 
 	return multiPathDevs, nil
