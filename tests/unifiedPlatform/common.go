@@ -116,7 +116,8 @@ func EndPDSTorpedoTest() {
 	}()
 
 	Step("Purging all PDS related objects", func() {
-		PurgePDS()
+		log.Infof("Skipping PDS cleanup")
+		// PurgePDS()
 	})
 
 }
