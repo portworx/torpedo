@@ -355,124 +355,119 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 
 })
 
-var _ = Describe("{UpgradeDataServiceImageAndVersionWithBackUpRestore}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("UpgradeDataServiceImageAndVersionWithBackUpRestore", "Upgrade Data Service Version and Image", nil, 0)
-	})
+var _ = Describe("{UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore}", func() {
 	var (
-		workflowDataservice  pds.WorkflowDataService
-		workFlowTemplates    pds.WorkflowPDSTemplates
-		workflowBackUpConfig pds.WorkflowPDSBackupConfig
-		//workflowRestore      pds.WorkflowPDSRestore
-		deployment        *automationModels.PDSDeploymentResponse
-		updatedDeployment *automationModels.PDSDeploymentResponse
-		//restoreDeployment    *automationModels.PDSRestoreResponse
-		bkpConfigResponse   *automationModels.PDSBackupConfigResponse
-		pdsBackupConfigName string
-		oldDeploymentId     string
-		newDeploymentId     string
-		err                 error
+		deployment            *automationModels.PDSDeploymentResponse
+		latestBackupUid       string
+		pdsBackupConfigName   string
+		restoreNamespace      string
+		restoreName           string
+		err                   error
+		backupIdBeforeUpgrade string
 	)
 
-	It("Deploy and Validate DataService", func() {
-		Step("Create a PDS Namespace", func() {
-			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
-			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
-			workFlowTemplates.Platform = WorkflowPlatform
-			WorkflowNamespace.Namespaces = make(map[string]string)
-			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
-			log.FailOnError(err, "Unable to create namespace")
-			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
-			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore", "Upgrade Data Service Image and ScaleUp Ds Replicas", nil, 0)
+		restoreNamespace = "restore-" + RandomString(5)
+		restoreName = "restore-" + RandomString(5)
+	})
 
-		})
+	It("Deploy data services and perform backup and restore on the same cluster", func() {
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			workflowDataservice.Namespace = &WorkflowNamespace
-
-			//serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
-			//log.FailOnError(err, "Unable to create Custom Templates for PDS")
-			//workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId[ds.Name]
-			//workflowDataservice.PDSTemplates.StorageTemplateId = stConfigId
-			//workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
-
-			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion, PDS_DEFAULT_NAMESPACE)
-			log.FailOnError(err, "Error while deploying ds")
-		}
-
-		defer func() {
-			Step("Delete DataServiceDeployment", func() {
-				err := workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
-				log.FailOnError(err, "Error while deleting dataservice")
+			Step("Deploy dataservice", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.OldImage, ds.OldVersion, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
+				WorkflowPDSRestore.SourceDeploymentConfigBeforeUpgrade = &deployment.Create.Config.DeploymentTopologies[0]
 			})
-		}()
 
-		//stepLog := "Running Workloads before upgrading the ds image"
-		//Step(stepLog, func() {
-		//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-		//	log.FailOnError(err, "Error while running workloads on ds")
-		//})
-	})
-
-	It("Perform adhoc backup of old deployments", func() {
-		workflowBackUpConfig.WorkflowDataService = &workflowDataservice
-		workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
-		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
-
-		Step("Take Backup and validate", func() {
-			bkpConfigResponse, err = workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
-			log.FailOnError(err, "Error occured while creating backupConfig")
-			log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
-		})
-
-		defer func() {
-			Step("Delete Backups", func() {
-				err = workflowBackUpConfig.DeleteBackupConfig(pdsBackupConfigName)
-				log.FailOnError(err, "Error while deleting BackupConfig [%s]", pdsBackupConfigName)
+			Step("Create Adhoc backup config of the existing deployment", func() {
+				pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
+				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
+				log.FailOnError(err, "Error occured while creating backupConfig")
+				log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
+				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 			})
-		}()
-	})
 
-	It("Upgrade DataService Version and Image", func() {
-		for _, ds := range NewPdsParams.DataServiceToTest {
-			updatedDeployment, err = workflowDataservice.UpdateDataService(ds, oldDeploymentId, ds.Image, ds.Version)
-			log.FailOnError(err, "Error while updating ds")
-			log.Debugf("Updated Deployment Id [%s]", *updatedDeployment.Update.Meta.Uid)
-		}
+			Step("Get the latest backup detail for the deployment", func() {
+				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Name)
+				log.FailOnError(err, "Error occured while creating backup")
+				latestBackupUid = *backupResponse.Meta.Uid
+				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
+				err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
+				log.FailOnError(err, "Error occured while waiting for backup to complete")
+				backupIdBeforeUpgrade = *backupResponse.Meta.Uid
+				log.FailOnError(err, "Error occured while waiting for backup to complete")
+			})
 
-		//stepLog := "Running Workloads after upgrading the ds image"
-		//Step(stepLog, func() {
-		//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-		//	log.FailOnError(err, "Error while running workloads on ds")
-		//})
-	})
+			Step("Create Restore from the latest backup Id", func() {
+				defer func() {
+					err := SetSourceKubeConfig()
+					log.FailOnError(err, "failed to switch context to source cluster")
+				}()
+				CheckforClusterSwitch()
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Restore Failed")
+				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
+				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+			})
 
-	It("Restore the old deployment and upgrade the restored deployment", func() {
-
-		//defer func() {
-		//	Step("Delete RestoredDeployment", func() {
-		//		err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
-		//		log.FailOnError(err, "Error while deleting restore")
-		//	})
-		//}()
-
-		Step("Update restored DataService Version and Image", func() {
-			for _, ds := range NewPdsParams.DataServiceToTest {
-				updatedRestoredDeployment, err := workflowDataservice.UpdateDataService(ds, newDeploymentId, ds.Image, ds.Version)
+			Step("Upgrade DataService Image", func() {
+				_, err := WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while updating ds")
-				log.Debugf("Updated Deployment Id [%s]", *updatedRestoredDeployment.Update.Meta.Uid)
-			}
+			})
 
-			//stepLog := "Running Workloads after upgrading the ds image"
-			//Step(stepLog, func() {
-			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-			//	log.FailOnError(err, "Error while running workloads on ds")
-			//})
-		})
+			Step("Create Adhoc backup config of the existing deployment after upgrade", func() {
+				pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
+				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
+				log.FailOnError(err, "Error occured while creating backupConfig")
+				log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
+				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
+			})
+
+			Step("Get the latest backup detail for the deployment after upgrade", func() {
+				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Name)
+				log.FailOnError(err, "Error occured while creating backup")
+				latestBackupUid = *backupResponse.Meta.Uid
+				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
+				err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
+				log.FailOnError(err, "Error occured while waiting for backup to complete")
+			})
+
+			Step("Create Restore from the backup Ids before upgrade", func() {
+				defer func() {
+					err := SetSourceKubeConfig()
+					log.FailOnError(err, "failed to switch context to source cluster")
+				}()
+				restoreName = "restr-old-bkp-" + RandomString(5)
+				CheckforClusterSwitch()
+				WorkflowPDSRestore.Validatation = make(map[string]bool)
+				WorkflowPDSRestore.Validatation["VALIDATE_RESTORE_AFTER_SRC_DEPLOYMENT_UPGRADE"] = true
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupIdBeforeUpgrade, restoreNamespace, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Restore Failed")
+				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
+				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+				WorkflowPDSRestore.Validatation["VALIDATE_RESTORE_AFTER_SRC_DEPLOYMENT_UPGRADE"] = false
+			})
+
+			Step("Create Restore from the latest backup Id after upgrade", func() {
+				defer func() {
+					err := SetSourceKubeConfig()
+					log.FailOnError(err, "failed to switch context to source cluster")
+				}()
+				restoreName = "restr-latest-bkp" + RandomString(5)
+				CheckforClusterSwitch()
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Restore Failed")
+				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
+				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+			})
+		}
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPDSTorpedoTest()
 	})
 })
 

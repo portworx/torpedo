@@ -12,13 +12,15 @@ import (
 type WorkflowPDSRestore struct {
 	Source              *platform.WorkflowNamespace
 	Destination         *platform.WorkflowNamespace
-	SkipValidatation    map[string]bool
+	Validatation    map[string]bool
 	Restores            map[string]automationModels.PDSRestore
 	RestoredDeployments WorkflowDataService
+	SourceDeploymentConfigBeforeUpgrade *automationModels.DeploymentTopology
 }
 
 const (
-	ValidatePdsRestore = "VALIDATE_PDS_RESTORE"
+	ValidatePdsRestore                          = "VALIDATE_PDS_RESTORE"
+	ValidateRestoreAfterSourceDeploymentUpgrade = "VALIDATE_RESTORE_AFTER_SRC_DEPLOYMENT_UPGRADE"
 )
 
 func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, namespace string, sourceNamespace string) (*automationModels.PDSRestoreResponse, error) {
@@ -50,15 +52,26 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 		return nil, err
 	}
 
-	if value, ok := restore.SkipValidatation[ValidatePdsRestore]; ok {
+	if value, ok := restore.Validatation[ValidatePdsRestore]; ok {
 		if value == true {
 			log.Infof("Skipping Restore Validation")
 		}
 	} else {
 		log.Infof("Restore UID - [%s]", *createRestore.Create.Meta.Uid)
-		err = pdslibs.ValidateRestoreDeployment(*createRestore.Create.Meta.Uid, namespace)
-		if err != nil {
-			return nil, err
+		if value, ok = restore.Validatation[ValidateRestoreAfterSourceDeploymentUpgrade]; ok {
+			if value == true {
+				log.Debugf("validating restore after source deployment upgrade")
+				err = pdslibs.ValidateRestoreAfterSourceDeploymentUpgrade(*createRestore.Create.Meta.Uid, *restore.SourceDeploymentConfigBeforeUpgrade)
+				if err != nil {
+					return nil, err
+				}
+			}
+		} else {
+			log.Debugf("Starting Restore Validation")
+			err = pdslibs.ValidateRestoreDeployment(*createRestore.Create.Meta.Uid, namespace)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
