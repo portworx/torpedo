@@ -12486,51 +12486,49 @@ func GetAllMultipathDevicesPresent(n *node.Node) ([]MultipathDevices, error) {
 	}
 	log.Infof("Output Details before parsing [%v]", output)
 
-	regexPattern := map[string]*regexp.Regexp{
-		"devDetailsPattern": regexp.MustCompile(`^(.*)\s+(dm-.*)\s+(.*)\,.*`),
-		"sizeMatchPattern":  regexp.MustCompile(`.*size=([0-9]+G)\s+.*`),
-		"statusMatchPatern": regexp.MustCompile(`.*status\=(\w+)`),
-		"sdMatchPattern":    regexp.MustCompile(`.*\s+(\d+:\d+:\d+:\d+)+\s+(sd\w+)\s+([0-9:]+)\s+(.*)`),
-	}
+	devDetailsPattern := regexp.MustCompile(`^(.*)\s+(dm-.*)\s+(.*)\,.*`)
+	sizeMatchPattern := regexp.MustCompile(`.*size=([0-9]+G)\s+.*`)
+	statusMatchPatern := regexp.MustCompile(`.*status\=(\w+)`)
+	sdMatchPattern := regexp.MustCompile(`.*\s+(\d+:\d+:\d+:\d+)+\s+(sd\w+)\s+([0-9:]+)\s+(.*)`)
 
 	// Create a Reader from the string
 	reader := strings.Split(output, "\n")
 	log.Infof("Output Details [%v]", reader)
 
-	ParseFirstLine := false
+	initPatternFound := false
 	multipathDevices := MultipathDevices{}
 	for _, eachLine := range reader {
-		for key, pattern := range regexPattern {
-			log.Infof("Validating Line [%v]", eachLine)
-			matches := pattern.FindStringSubmatch(eachLine)
-			if len(matches) > 1 {
-				switch key {
-				case "devDetailsPattern":
-					if ParseFirstLine == true {
-						multiPathDevs = append(multiPathDevs, multipathDevices)
-					}
-					log.Infof("Matched DEV is %v", matches)
-					multipathDevices := MultipathDevices{}
-					multipathDevices.DevId = matches[1]
-					multipathDevices.DmID = matches[2]
-					multipathDevices.Type = matches[3]
-					ParseFirstLine = true
-				case "sizeMatchPattern":
-					log.Infof("Matched Size is %v", matches)
-					multipathDevices.Size = matches[1]
-				case "statusMatchPatern":
-					log.Infof("Matched Status is %v", matches)
-					multipathDevices.Status = matches[1]
-				case "sdMatchPattern":
-					log.Infof("Matched Pattern is %v", matches)
-					paths := PathInfo{}
-					paths.Devnode = matches[2]
-					paths.Status = matches[4]
-					multipathDevices.Paths = append(multipathDevices.Paths, paths)
-				}
+		matched := devDetailsPattern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			if initPatternFound {
+				multiPathDevs = append(multiPathDevs, multipathDevices)
 			}
+			multipathDevices := MultipathDevices{}
+			multipathDevices.DevId = matched[1]
+			multipathDevices.DmID = matched[2]
+			multipathDevices.Type = matched[3]
+			initPatternFound = true
+		}
+
+		matched = sizeMatchPattern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			multipathDevices.Size = matched[1]
+		}
+
+		matched = statusMatchPatern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			multipathDevices.Status = matched[1]
+		}
+
+		matched = sdMatchPattern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			paths := PathInfo{}
+			paths.Devnode = matched[2]
+			paths.Status = matched[4]
+			multipathDevices.Paths = append(multipathDevices.Paths, paths)
 		}
 
 	}
+
 	return multiPathDevs, nil
 }
