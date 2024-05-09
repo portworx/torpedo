@@ -23,6 +23,7 @@ type Deployment interface {
 
 type DeploymentConfig interface {
 	UpdateDeployment(updateRequest *PDSDeploymentRequest) (*PDSDeploymentResponse, error)
+	GetDeploymentConfig(getRequest *PDSDeploymentRequest) (*PDSDeploymentResponse, error)
 }
 
 type BackupConfig interface {

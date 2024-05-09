@@ -47,7 +47,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 
 			stepLog = "Running Workloads after ScaleUp of DataService"
 			Step(stepLog, func() {
-				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Update.Meta.Uid, NewPdsParams)
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid, NewPdsParams)
 				log.FailOnError(err, "Error while running workloads on ds")
 			})
 		}
@@ -130,9 +130,7 @@ var _ = Describe("{ScaleUpCpuMemLimitsandStorageOfDS}", func() {
 			//Update Ds With New Values of Resource Templates
 			resConfigIdUpdated, err := WorkflowPDSTemplate.CreateResourceTemplateWithCustomValue(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-
 			log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdated)
-			WorkflowDataService.PDSTemplates.ResourceTemplateId = resConfigIdUpdated
 
 			_, err = WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
 			log.FailOnError(err, "Error while updating ds")

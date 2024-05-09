@@ -27,6 +27,19 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 	return nil
 }
 
+func GetDeploymentConfig(deploymentConfigId string) (*automationModels.PDSDeploymentResponse, error) {
+	depInputs := &automationModels.PDSDeploymentRequest{
+		Update: automationModels.PDSDeploymentUpdate{
+			DeploymentConfigId: deploymentConfigId,
+		},
+	}
+	deployment, err := v2Components.PDS.GetDeploymentConfig(depInputs)
+	if err != nil {
+		return nil, err
+	}
+	return deployment, err
+}
+
 func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, imageId, appConfigId, resConfigId, stConfigId string) (*automationModels.PDSDeploymentResponse, error) {
 	log.Info("Update Data service will be performed")
 	depInputs := &automationModels.PDSDeploymentRequest{
