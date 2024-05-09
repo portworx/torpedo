@@ -78,7 +78,12 @@ type V1Config struct {
 }
 
 type Status struct {
-	Phase string
+	Phase              string      `copier:"must,nopanic"`
+	StartedAt          time.Time   `copier:"must,nopanic"`
+	CompletedAt        time.Time   `copier:"must,nopanic"`
+	ErrorCode          V1ErrorCode `copier:"must,nopanic"`
+	ErrorMessage       string      `copier:"must,nopanic"`
+	CustomResourceName string      `copier:"must,nopanic"`
 }
 
 type StatusPhase string
