@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"bytes"
 	context1 "context"
 	"fmt"
 	"io/ioutil"
@@ -15,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -3931,13 +3933,73 @@ func PxBackupUpgrade(versionToUpgrade string) error {
 
 	// Execute helm upgrade using cmd
 	log.Infof("Upgrading Px-Backup version from %s to %s", currentBackupVersionString, versionToUpgrade)
-	flagFromEnv := os.Getenv("USE_DOCKER_IO")
-	if flagFromEnv == "" {
+	customRegistry := os.Getenv("CUSTOM_REGISTRY")
+	customRepo := os.Getenv("CUSTOM_REPO")
+	if customRegistry == "" || customRepo == "" {
 		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
 			versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
 	} else {
-		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true,images.pxcentralApiServerImage.repo=\"portworx\",images.pxcentralApiServerImage.registry=\"docker.io\",images.pxcentralFrontendImage.repo=\"portworx\",images.pxcentralFrontendImage.registry=\"docker.io\",images.pxcentralBackendImage.repo=\"portworx\",images.pxcentralBackendImage.registry=\"docker.io\",images.pxcentralMiddlewareImage.repo=\"portworx\",images.pxcentralMiddlewareImage.registry=\"docker.io\",images.postInstallSetupImage.repo=\"portworx\",images.postInstallSetupImage.registry=\"docker.io\",images.keycloakBackendImage.repo=\"portworx\",images.keycloakBackendImage.registry=\"docker.io\",images.keycloakFrontendImage.repo=\"portworx\",images.keycloakFrontendImage.registry=\"docker.io\",images.keycloakLoginThemeImage.repo=\"portworx\",images.keycloakLoginThemeImage.registry=\"docker.io\",images.keycloakInitContainerImage.repo=\"portworx\",images.keycloakInitContainerImage.registry=\"docker.io\",images.mysqlImage.repo=\"portworx\",images.mysqlImage.registry=\"docker.io\",images.pxBackupImage.repo=\"portworx\",images.pxBackupImage.registry=\"docker.io\",images.mongodbImage.repo=\"portworx\",images.mongodbImage.registry=\"docker.io\",images.licenseServerImage.repo=\"portworx\",images.licenseServerImage.registry=\"docker.io\",images.cortexImage.repo=\"portworx\",images.cortexImage.registry=\"docker.io\",images.cassandraImage.repo=\"portworx\",images.cassandraImage.registry=\"docker.io\",images.proxyConfigImage.repo=\"portworx\",images.proxyConfigImage.registry=\"docker.io\",images.consulImage.repo=\"portworx\",images.consulImage.registry=\"docker.io\",images.dnsmasqImage.repo=\"portworx\",images.dnsmasqImage.registry=\"docker.io\",images.grafanaImage.repo=\"portworx\",images.grafanaImage.registry=\"docker.io\",images.prometheusImage.repo=\"portworx\",images.prometheusImage.registry=\"docker.io\",images.prometheusConfigReloadrImage.repo=\"portworx\",images.prometheusConfigReloadrImage.registry=\"docker.io\",images.prometheusOperatorImage.repo=\"portworx\",images.prometheusOperatorImage.registry=\"docker.io\",images.memcachedMetricsImage.repo=\"portworx\",images.memcachedMetricsImage.registry=\"docker.io\",images.memcachedIndexImage.repo=\"portworx\",images.memcachedIndexImage.registry=\"docker.io\",images.memcachedImage.repo=\"portworx\",images.memcachedImage.registry=\"docker.io\",images.pxBackupPrometheusImage.repo=\"portworx\",images.pxBackupPrometheusImage.registry=\"docker.io\",images.pxBackupAlertmanagerImage.repo=\"portworx\",images.pxBackupAlertmanagerImage.registry=\"docker.io\",images.pxBackupPrometheusOperatorImage.repo=\"portworx\",images.pxBackupPrometheusOperatorImage.registry=\"docker.io\",images.pxBackupPrometheusConfigReloaderImage.repo=\"portworx\",images.pxBackupPrometheusConfigReloaderImage.registry=\"docker.io\"",
+		cmd := fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
 			versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
+
+		// Additional settings to be appended using template
+		tmpl := `,{{range .Images}}images.{{.Name}}.repo="{{$.CustomRepo}}",images.{{.Name}}.registry="{{$.CustomRegistry}}",{{end}}`
+
+		// Define the template
+		t, err := template.New("cmd").Parse(tmpl)
+		if err != nil {
+			return err
+		}
+
+		// Data for the template
+		data := struct {
+			CustomRegistry string
+			CustomRepo     string
+			Images         []struct{ Name string }
+		}{
+			CustomRegistry: customRegistry,
+			CustomRepo:     customRepo,
+			Images: []struct{ Name string }{
+				{Name: "pxcentralApiServerImage"},
+				{Name: "pxcentralFrontendImage"},
+				{Name: "pxcentralBackendImage"},
+				{Name: "pxcentralMiddlewareImage"},
+				{Name: "postInstallSetupImage"},
+				{Name: "keycloakBackendImage"},
+				{Name: "keycloakFrontendImage"},
+				{Name: "keycloakLoginThemeImage"},
+				{Name: "keycloakInitContainerImage"},
+				{Name: "mysqlImage"},
+				{Name: "pxBackupImage"},
+				{Name: "mongodbImage"},
+				{Name: "licenseServerImage"},
+				{Name: "cortexImage"},
+				{Name: "cassandraImage"},
+				{Name: "proxyConfigImage"},
+				{Name: "consulImage"},
+				{Name: "dnsmasqImage"},
+				{Name: "grafanaImage"},
+				{Name: "prometheusImage"},
+				{Name: "prometheusConfigReloadrImage"},
+				{Name: "prometheusOperatorImage"},
+				{Name: "memcachedMetricsImage"},
+				{Name: "memcachedIndexImage"},
+				{Name: "memcachedImage"},
+				{Name: "pxBackupPrometheusImage"},
+				{Name: "pxBackupAlertmanagerImage"},
+				{Name: "pxBackupPrometheusOperatorImage"},
+				{Name: "pxBackupPrometheusConfigReloaderImage"},
+			},
+		}
+
+		// Execute the template and append the result to the existing command
+		var buf bytes.Buffer
+		if err := t.Execute(&buf, data); err != nil {
+			return err
+		}
+
+		// Append the dynamically generated settings to the initial command
+		cmd += buf.String()
 	}
 	log.Infof("helm command: %v ", cmd)
 
