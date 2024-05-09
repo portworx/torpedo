@@ -134,7 +134,7 @@ func GetStorageTemplateConfigs(storageTemplateID string) (StorageOps, error) {
 // ValidateDeploymentConfigUpdate take deploymentConfigUpdateId and validates the status of the update
 func ValidateDeploymentConfigUpdate(deploymentConfigUpdateId, expectedPhase string) error {
 	log.Infof("DeploymentConfigUpdateId [%s]", deploymentConfigUpdateId)
-	waitErr := wait.Poll(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
+	waitErr := wait.PollImmediate(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
 		deploymentConfig, err := GetDeploymentConfig(deploymentConfigUpdateId)
 		if err != nil {
 			log.Errorf("Error occured while getting deployment status %v", err)
