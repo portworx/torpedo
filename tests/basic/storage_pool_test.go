@@ -10560,14 +10560,24 @@ var _ = Describe("{PoolDeleteNegative}", func() {
 		replAddNode, err := findNodeForReplAdd(testVolume)
 		log.FailOnError(err, "failed to find node for repl add")
 		dash.VerifyFatal(replAddNode != nil, true, "expect to find a node to do repl add")
-		replAddPool := replAddNode.StoragePools[0]
+
+		nodePools, err := Inst().V.GetNodePools(*replAddNode)
+		log.FailOnError(err, "failed to get pools for the node")
+		var poolDelUUID string
+		var poolDelID string
+
+		for uuid, id := range nodePools {
+		    poolDelUUID = uuid
+		    poolDelID = id
+		}
+
 		// TODO add check that pool doesn't contain metadata
 
 		stepLog = fmt.Sprintf("Increasing the volume repls for %s", contextAppKey)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			log.Infof("Increase repl for volume: %v", testVolume.ID)
-			pxctlCmdFull := fmt.Sprintf("v ha-update -r 3 --node %v %v", replAddPool.Uuid, testVolume.ID)
+			pxctlCmdFull := fmt.Sprintf("v ha-update -r 3 --node %v %v", poolDelUUID, testVolume.ID)
 			output, err := Inst().V.GetPxctlCmdOutput(node.GetStorageNodes()[0], pxctlCmdFull)
 			log.FailOnError(err, fmt.Sprintf("error update ha for volume %v", testVolume.ID))
 			log.Infof(output)
@@ -10591,7 +10601,7 @@ var _ = Describe("{PoolDeleteNegative}", func() {
 
 		log.FailOnError(EnterPoolMaintenance(*replAddNode), "failed to enter pool maintenance mode")
 		errRegExp := regexp.MustCompile("Cannot delete pool: Following volumes have data on pool")
-		deletePoolAndValidateFaliure(fmt.Sprintf("%v", replAddPool.ID), replAddNode, errRegExp)
+		deletePoolAndValidateFaliure(fmt.Sprintf("%v", poolDelID), replAddNode, errRegExp)
 		log.FailOnError(ExitPoolMaintenance(*replAddNode), "failed to exit pool maintenance mode")
 	})
 
