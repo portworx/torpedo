@@ -839,17 +839,25 @@ func (s *SSH) getConnection(n node.Node, options node.ConnectionOpts) (*ssh_pkg.
 func (s *SSH) getConnectionOnUsableAddr(n node.Node, options node.ConnectionOpts) (*ssh_pkg.Client, error) {
 	var sshErr error
 	var cli interface{}
-	log.Debugf("checking for usable address in: %v for node [%s]", n.Addresses, n.Name)
+	log.Infof("checking for usable address in: %v for node [%s]", n.Addresses, n.Name)
 	for _, addr := range n.Addresses {
 		t := func() (interface{}, bool, error) {
 			// check if address is responding on port 22
 			endpoint := net.JoinHostPort(addr, strconv.Itoa(int(DefaultSSHPort)))
 			conn, err := ssh_pkg.Dial("tcp", endpoint, s.sshConfig)
+			log.Infof("The err from dial is %v", err)
 			return conn, true, err
 		}
+		options.Timeout = 20 * time.Minute
+		options.TimeBeforeRetry = 10 * time.Second
+		log.Infof("Options for retry timeout and retry time: %v %v", options.Timeout, options.TimeBeforeRetry)
 		if cli, sshErr = task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); sshErr == nil {
 			n.UsableAddr = addr
-			log.Debugf("usable address: [%s] for node [%s]", n.UsableAddr, n.Name)
+			err := node.UpdateNode(n)
+			if err != nil {
+				log.Errorf("failed to update node with usable address: %v", err)
+			}
+			log.Infof("usable address: [%s] for node [%s]", n.UsableAddr, n.Name)
 			return cli.(*ssh_pkg.Client), nil
 		}
 	}

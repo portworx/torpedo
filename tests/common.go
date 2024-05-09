@@ -2915,7 +2915,9 @@ func runCmd(cmd string, n node.Node) error {
 
 func runCmdOnce(cmd string, n node.Node) (string, error) {
 	output, err := Inst().N.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
-		Sudo: true,
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
+		Sudo:            true,
 	})
 	if err != nil {
 		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
