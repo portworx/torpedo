@@ -47,7 +47,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 
 			stepLog = "Running Workloads after ScaleUp of DataService"
 			Step(stepLog, func() {
-				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Update.Meta.Uid, NewPdsParams)
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid, NewPdsParams)
 				log.FailOnError(err, "Error while running workloads on ds")
 			})
 		}

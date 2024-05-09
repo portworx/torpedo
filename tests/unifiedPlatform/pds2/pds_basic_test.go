@@ -201,6 +201,9 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	// TODO: Need to add platform cleanup here
+	log.InfoD("Purging all templates")
+	err := WorkflowPDSTemplate.Purge(true)
+	log.FailOnError(err, "some error occurred while purging data service templates")
 	defer Inst().Dash.TestSetEnd()
 	defer EndTorpedoTest()
 })

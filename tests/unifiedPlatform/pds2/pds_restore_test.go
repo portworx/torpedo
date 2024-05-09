@@ -384,14 +384,14 @@ var _ = Describe("{UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore}", func(
 
 			Step("Create Adhoc backup config of the existing deployment", func() {
 				pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
-				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
+				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while creating backupConfig")
 				log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 			})
 
 			Step("Get the latest backup detail for the deployment", func() {
-				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Name)
+				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while creating backup")
 				latestBackupUid = *backupResponse.Meta.Uid
 				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
@@ -420,14 +420,14 @@ var _ = Describe("{UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore}", func(
 
 			Step("Create Adhoc backup config of the existing deployment after upgrade", func() {
 				pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
-				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Name)
+				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while creating backupConfig")
 				log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 			})
 
 			Step("Get the latest backup detail for the deployment after upgrade", func() {
-				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Name)
+				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error occured while creating backup")
 				latestBackupUid = *backupResponse.Meta.Uid
 				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)

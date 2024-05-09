@@ -240,9 +240,9 @@ func PurgePDS() {
 	err = WorkflowNamespace.Purge()
 	log.FailOnError(err, "some error occurred while purging namespace objects")
 
-	log.InfoD("Purging all templates")
-	err = WorkflowPDSTemplate.Purge(true)
-	log.FailOnError(err, "some error occurred while purging data service templates")
+	//log.InfoD("Purging all templates")
+	//err = WorkflowPDSTemplate.Purge(true)
+	//log.FailOnError(err, "some error occurred while purging data service templates")
 }
 
 // CheckforClusterSwitch checks if restore needs to be created on source or dest
