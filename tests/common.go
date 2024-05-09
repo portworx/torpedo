@@ -11242,7 +11242,9 @@ func SetupProxyServer(n node.Node) error {
 
 	createDirCommand := "mkdir -p /exports/testnfsexportdir"
 	output, err := Inst().N.RunCommandWithNoRetry(n, createDirCommand, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -11251,7 +11253,9 @@ func SetupProxyServer(n node.Node) error {
 
 	addVersionCmd := "echo -e \"MOUNTD_NFS_V4=\"yes\"\nRPCNFSDARGS=\"-N 2 -N 4\"\" >> /etc/sysconfig/nfs"
 	output, err = Inst().N.RunCommandWithNoRetry(n, addVersionCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -11260,7 +11264,9 @@ func SetupProxyServer(n node.Node) error {
 
 	updateExportsCmd := "echo \"/exports/testnfsexportdir *(rw,sync,no_root_squash)\" > /etc/exports"
 	output, err = Inst().N.RunCommandWithNoRetry(n, updateExportsCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -11268,7 +11274,9 @@ func SetupProxyServer(n node.Node) error {
 	log.Infof(output)
 	exportCmd := "exportfs -a"
 	output, err = Inst().N.RunCommandWithNoRetry(n, exportCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -11277,7 +11285,9 @@ func SetupProxyServer(n node.Node) error {
 
 	enableNfsServerCmd := "systemctl enable nfs-server"
 	output, err = Inst().N.RunCommandWithNoRetry(n, enableNfsServerCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -11286,7 +11296,9 @@ func SetupProxyServer(n node.Node) error {
 
 	startNfsServerCmd := "systemctl restart nfs-server"
 	output, err = Inst().N.RunCommandWithNoRetry(n, startNfsServerCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
