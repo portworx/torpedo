@@ -3619,7 +3619,7 @@ var _ = Describe("{GetAllMultipathDevices}", func() {
 	It(itLog, func() {
 		for _, eachNode := range node.GetStorageNodes() {
 			log.Infof("Get Multipath device from Node")
-			multipathDevices, err := GetAllMultipathDevicesPresent(eachNode)
+			multipathDevices, err := GetAllMultipathDevicesPresent(&eachNode)
 			log.Info(err)
 			log.Infof("%v", multipathDevices)
 		}

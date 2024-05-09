@@ -2915,7 +2915,9 @@ func runCmd(cmd string, n node.Node) error {
 
 func runCmdOnce(cmd string, n node.Node) (string, error) {
 	output, err := Inst().N.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
-		Sudo: true,
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
+		Sudo:            true,
 	})
 	if err != nil {
 		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
@@ -12474,15 +12476,14 @@ type PathInfo struct {
 	Status  string
 }
 
-func GetAllMultipathDevicesPresent(n node.Node) ([]MultipathDevices, error) {
+// Returns all the list of multipath devices present in the cluster
+func GetAllMultipathDevicesPresent(n *node.Node) ([]MultipathDevices, error) {
 	multiPathDevs := []MultipathDevices{}
-	command := fmt.Sprintf("multipath -ll")
-
-	output, err := runCmdOnce(command, n)
+	output, err := runCmdOnce(fmt.Sprintf("multipath -ll"), *n)
+	log.Infof("%v", err)
 	if err != nil {
 		return nil, err
 	}
-
 	log.Infof("Output Details before parsing [%v]", output)
 
 	regexPattern := map[string]*regexp.Regexp{
@@ -12515,20 +12516,20 @@ func GetAllMultipathDevicesPresent(n node.Node) ([]MultipathDevices, error) {
 					if ParseFirstLine == true {
 						multiPathDevs = append(multiPathDevs, multipathDevices)
 					}
-					log.Infof("%v", matches)
+					log.Infof("Matched DEV is %v", matches)
 					multipathDevices := MultipathDevices{}
 					multipathDevices.DevId = matches[1]
 					multipathDevices.DmID = matches[2]
 					multipathDevices.Type = matches[3]
 					ParseFirstLine = true
 				case "sizeMatchPattern":
-					log.Infof("%v", matches)
+					log.Infof("Matched Size is %v", matches)
 					multipathDevices.Size = matches[1]
 				case "statusMatchPatern":
-					log.Infof("%v", matches)
+					log.Infof("Matched Status is %v", matches)
 					multipathDevices.Status = matches[1]
 				case "sdMatchPattern":
-					log.Infof("%v", matches)
+					log.Infof("Matched Pattern is %v", matches)
 					paths := PathInfo{}
 					paths.Devnode = matches[2]
 					paths.Status = matches[4]
