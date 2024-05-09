@@ -12494,22 +12494,15 @@ func GetAllMultipathDevicesPresent(n *node.Node) ([]MultipathDevices, error) {
 	}
 
 	// Create a Reader from the string
-	reader := strings.NewReader(output)
+	reader := strings.Split(output, "\n")
 	log.Infof("Output Details [%v]", reader)
 
-	// Read the output line by line
-	scanner := bufio.NewScanner(reader)
-	// Check for any errors during scanning
-	if err := scanner.Err(); err != nil {
-		fmt.Println("Error scanning:", err)
-		return nil, err
-	}
 	ParseFirstLine := false
 	multipathDevices := MultipathDevices{}
-	for scanner.Scan() {
-		line := scanner.Text()
+	for _, eachLine := range reader {
 		for key, pattern := range regexPattern {
-			matches := pattern.FindStringSubmatch(line)
+			log.Infof("Validating Line [%v]", eachLine)
+			matches := pattern.FindStringSubmatch(eachLine)
 			if len(matches) > 1 {
 				switch key {
 				case "devDetailsPattern":
