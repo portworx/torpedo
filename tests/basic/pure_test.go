@@ -3600,3 +3600,35 @@ var _ = Describe("{DeleteFADAVolumeFromBackend}", func() {
 	})
 
 })
+
+var _ = Describe("{GetAllMultipathDevices}", func() {
+
+	/*
+			PTX : https://purestorage.atlassian.net/browse/PTX-23835
+		Px Should throw proper error message when backend volumes from FA is deleted
+
+	*/
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("DeleteFADAVolumeFromBackend",
+			"Delete FADA volume from Backend and verify Pod status once volume deleted",
+			nil, 0)
+	})
+
+	itLog := "DeleteFADAVolumeFromBackend"
+	It(itLog, func() {
+		for _, eachNode := range node.GetStorageNodes() {
+			log.Infof("Get Multipath device from Node")
+			multipathDevices, err := GetAllMultipathDevicesPresent(eachNode)
+			log.Info(err)
+			log.Infof("%v", multipathDevices)
+		}
+	})
+
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})

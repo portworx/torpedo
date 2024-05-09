@@ -12457,3 +12457,86 @@ func DeleteVolumeFromFABackend(fa pureutils.FlashArrayEntry, volumeName string) 
 	return true, nil
 
 }
+
+type MultipathDevices struct {
+	DevId  string
+	DmID   string
+	Size   string
+	Status string
+	Type   string
+	Disks  []string
+	Paths  []PathInfo
+}
+
+// PathInfo represents information about a path of a multipath device.
+type PathInfo struct {
+	Devnode string
+	Status  string
+}
+
+func GetAllMultipathDevicesPresent(n node.Node) ([]MultipathDevices, error) {
+	multiPathDevs := []MultipathDevices{}
+	command := fmt.Sprintf("multipath -ll")
+
+	output, err := runCmdOnce(command, n)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("Output Details before parsing [%v]", output)
+
+	regexPattern := map[string]*regexp.Regexp{
+		"devDetailsPattern": regexp.MustCompile(`([0-9a-f]+)\s+(dm-[0-9]+)\s+(\w+).*/,(.*)\n`),
+		"sizeMatchPattern":  regexp.MustCompile(`size=([0-9]+G)\s+.*\n`),
+		"statusMatchPatern": regexp.MustCompile(`status\=(\w+)`),
+		"sdMatchPattern":    regexp.MustCompile(`.*(\d+:\d+:\d+:\d+)+\s+(sd\w+)\s+([0-9:]+)\s+(.*)\n`),
+	}
+
+	// Create a Reader from the string
+	reader := strings.NewReader(output)
+	log.Infof("Output Details [%v]", reader)
+
+	// Read the output line by line
+	scanner := bufio.NewScanner(reader)
+	// Check for any errors during scanning
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Error scanning:", err)
+		return nil, err
+	}
+	ParseFirstLine := false
+	multipathDevices := MultipathDevices{}
+	for scanner.Scan() {
+		line := scanner.Text()
+		for key, pattern := range regexPattern {
+			matches := pattern.FindStringSubmatch(line)
+			if len(matches) > 1 {
+				switch key {
+				case "devDetailsPattern":
+					if ParseFirstLine == true {
+						multiPathDevs = append(multiPathDevs, multipathDevices)
+					}
+					log.Infof("%v", matches)
+					multipathDevices := MultipathDevices{}
+					multipathDevices.DevId = matches[1]
+					multipathDevices.DmID = matches[2]
+					multipathDevices.Type = matches[3]
+					ParseFirstLine = true
+				case "sizeMatchPattern":
+					log.Infof("%v", matches)
+					multipathDevices.Size = matches[1]
+				case "statusMatchPatern":
+					log.Infof("%v", matches)
+					multipathDevices.Status = matches[1]
+				case "sdMatchPattern":
+					log.Infof("%v", matches)
+					paths := PathInfo{}
+					paths.Devnode = matches[2]
+					paths.Status = matches[4]
+					multipathDevices.Paths = append(multipathDevices.Paths, paths)
+				}
+			}
+		}
+
+	}
+	return multiPathDevs, nil
+}
