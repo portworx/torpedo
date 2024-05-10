@@ -131,6 +131,35 @@ func GetStorageTemplateConfigs(storageTemplateID string) (StorageOps, error) {
 	return storageOp, nil
 }
 
+// ValidateDeploymentConfigUpdate take deploymentConfigUpdateId and validates the status of the update
+func ValidateDeploymentConfigUpdate(deploymentConfigUpdateId, expectedPhase string) error {
+	log.Infof("DeploymentConfigUpdateId [%s]", deploymentConfigUpdateId)
+	waitErr := wait.PollImmediate(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
+		deploymentConfig, err := GetDeploymentConfig(deploymentConfigUpdateId)
+		if err != nil {
+			log.Errorf("Error occured while getting deployment status %v", err)
+			return false, nil
+		}
+		log.Debugf("Health status -  %v", *deploymentConfig.Update.Status.Phase)
+		if string(*deploymentConfig.Update.Status.Phase) == expectedPhase {
+			log.Infof("Deployment ConfigUpdate status: phase - %v retry-count - %v", *deploymentConfig.Update.Status.Phase, *deploymentConfig.Update.Status.RetryCount)
+			if ResiFlag {
+				ResiliencyCondition <- true
+				log.InfoD("Resiliency Condition Met")
+			}
+			return true, nil
+		}
+		log.Infof("Condition still not met. Will retry to see if it has met now.....")
+		return false, nil
+	})
+
+	if waitErr != nil {
+		return err
+	}
+
+	return nil
+}
+
 // ValidateDataServiceDeploymentHealth takes the deployment map(name and id), namespace and returns error
 func ValidateDataServiceDeploymentHealth(deploymentId string, expectedHealth automationModels.V1StatusHealth) error {
 	log.Infof("DeploymentId [%s]", deploymentId)

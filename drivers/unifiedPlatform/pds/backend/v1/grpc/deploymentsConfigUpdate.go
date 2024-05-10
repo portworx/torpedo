@@ -33,6 +33,16 @@ func (deployment *PdsGrpc) getDeploymentConfigClient() (context.Context, publicd
 	return ctx, depClient, token, nil
 }
 
+func (deployment *PdsGrpc) GetDeploymentConfig(updateDeploymentRequest *automationModels.PDSDeploymentRequest) (*automationModels.PDSDeploymentResponse, error) {
+	depResponse := automationModels.PDSDeploymentResponse{
+		Update: automationModels.V1DeploymentUpdate{},
+	}
+
+	//TODO: Fill this once we take up grpc client validation
+
+	return &depResponse, nil
+}
+
 func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *automationModels.PDSDeploymentRequest) (*automationModels.PDSDeploymentResponse, error) {
 	depResponse := automationModels.PDSDeploymentResponse{
 		Update: automationModels.V1DeploymentUpdate{},

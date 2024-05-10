@@ -62,7 +62,6 @@ func (cusTemp *WorkflowPDSTemplates) CreatePdsCustomTemplatesAndFetchIds(templat
 	log.InfoD("resConfig ID-  %v", *resConfig.Create.Meta.Uid)
 	resourceConfigId := resConfig.Create.Meta.Uid
 	cusTemp.ResourceTemplateId = *resourceConfigId
-	cusTemp.UpdateTemplateNameAndId[*resConfig.Create.Meta.Name] = *resourceConfigId
 	return appTemplateNameAndId, *stConfigId, *resourceConfigId, nil
 }
 
@@ -90,7 +89,6 @@ func (cusTemp *WorkflowPDSTemplates) CreateResourceTemplateWithCustomValue(templ
 	resConfig, _ := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, resConfigParams)
 	log.InfoD("resConfig ID-  %v", *resConfig.Create.Meta.Uid)
 	resourceConfigId := resConfig.Create.Meta.Uid
-	cusTemp.ResourceTemplateId = *resourceConfigId
 	cusTemp.UpdateTemplateNameAndId[*resConfig.Create.Meta.Name] = *resourceConfigId
 	return *resourceConfigId, nil
 }

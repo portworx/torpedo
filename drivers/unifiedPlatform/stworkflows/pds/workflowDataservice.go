@@ -107,6 +107,10 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 		return nil, err
 	}
 
+	if resConfigId == "" {
+		resConfigId = wfDataService.PDSTemplates.UpdateTemplateNameAndId[ds.Name]
+	}
+
 	deployment, err := dslibs.UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, resConfigId, stConfigId)
 	if err != nil {
 		return nil, err
@@ -117,6 +121,12 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 			log.Infof("Skipping Validation")
 		}
 	} else {
+		//Validate the deploymentConfig update status
+		err := dslibs.ValidateDeploymentConfigUpdate(*deployment.Update.Meta.Uid, "COMPLETED")
+		if err != nil {
+			return nil, err
+		}
+
 		err = wfDataService.ValidatePdsDataServiceDeployments(*deployment.Update.Config.DeploymentMeta.Uid, ds, ds.ScaleReplicas, resConfigId, stConfigId, namespaceName, version, image)
 		if err != nil {
 			return nil, err

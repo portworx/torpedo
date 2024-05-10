@@ -450,6 +450,7 @@ var _ = Describe("{UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore}", func(
 				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
 				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
 				WorkflowPDSRestore.Validatation["VALIDATE_RESTORE_AFTER_SRC_DEPLOYMENT_UPGRADE"] = false
+				delete(WorkflowPDSRestore.Validatation, "VALIDATE_RESTORE_AFTER_SRC_DEPLOYMENT_UPGRADE")
 			})
 
 			Step("Create Restore from the latest backup Id after upgrade", func() {
@@ -457,7 +458,7 @@ var _ = Describe("{UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore}", func(
 					err := SetSourceKubeConfig()
 					log.FailOnError(err, "failed to switch context to source cluster")
 				}()
-				restoreName = "restr-latest-bkp" + RandomString(5)
+				restoreName = "restr-latest-bkp-" + RandomString(5)
 				CheckforClusterSwitch()
 				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Restore Failed")

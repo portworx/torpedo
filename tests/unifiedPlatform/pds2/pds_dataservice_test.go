@@ -130,9 +130,7 @@ var _ = Describe("{ScaleUpCpuMemLimitsandStorageOfDS}", func() {
 			//Update Ds With New Values of Resource Templates
 			resConfigIdUpdated, err := WorkflowPDSTemplate.CreateResourceTemplateWithCustomValue(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
-
 			log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdated)
-			WorkflowDataService.PDSTemplates.ResourceTemplateId = resConfigIdUpdated
 
 			_, err = WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
 			log.FailOnError(err, "Error while updating ds")

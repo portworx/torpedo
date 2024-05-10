@@ -55,7 +55,9 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "error while initialising api components in ds utils")
 	})
 
-	Step("Dumping kubeconfigs file", func() {
+	steplog = "Dumping kubeconfigs file"
+	Step(steplog, func() {
+		log.InfoD(steplog)
 		kubeconfigs := os.Getenv("KUBECONFIGS")
 		if kubeconfigs != "" {
 			kubeconfigList := strings.Split(kubeconfigs, ",")
@@ -67,14 +69,18 @@ var _ = BeforeSuite(func() {
 		}
 	})
 
-	Step("Get Default Tenant", func() {
+	steplog = "Get Default Tenant"
+	Step(steplog, func() {
+		log.InfoD(steplog)
 		log.Infof("Initialising values for tenant")
 		WorkflowPlatform.AdminAccountId = AccID
 		_, err := WorkflowPlatform.TenantInit()
 		log.FailOnError(err, "error while getting Default TenantId")
 	})
 
-	Step("Get Default Project", func() {
+	steplog = "Get Default Project"
+	Step(steplog, func() {
+		log.InfoD(steplog)
 		var err error
 		DEFAULT_PROJECT_NAME := "pds-project-" + RandomString(5)
 		WorkflowProject.Platform = WorkflowPlatform
@@ -86,7 +92,9 @@ var _ = BeforeSuite(func() {
 		log.Infof("Current project ID - [%s]", ProjectId)
 	})
 
-	Step("Register Target Cluster and Install PDS app", func() {
+	steplog = "Register Target Cluster and Install PDS app"
+	Step(steplog, func() {
+		log.InfoD(steplog)
 		WorkflowTargetCluster.Project = WorkflowProject
 		log.Infof("Tenant ID [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
 		WorkflowTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane(false)
@@ -97,8 +105,9 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "Unable to Install pds on target cluster")
 	})
 
-	Step("Register Destination target Cluster", func() {
-
+	steplog = "Register Destination target Cluster"
+	Step(steplog, func() {
+		log.InfoD(steplog)
 		defer func() {
 			err := SetSourceKubeConfig()
 			log.FailOnError(err, "failed to switch context to source cluster")
@@ -116,7 +125,9 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "Unable to Install pds on destination target cluster")
 	})
 
-	Step("Create Service Configuration, Resource and Storage Templates", func() {
+	steplog = "Create Service Configuration, Resource and Storage Templates"
+	Step(steplog, func() {
+		log.InfoD(steplog)
 		var err error
 		WorkflowPDSTemplate.Platform = WorkflowPlatform
 		DsNameAndAppTempId, StTemplateId, ResourceTemplateId, err = WorkflowPDSTemplate.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams)
@@ -132,7 +143,9 @@ var _ = BeforeSuite(func() {
 		}
 	})
 
-	Step("Associate templates to the Project", func() {
+	steplog = "Associate templates to the Project"
+	Step(steplog, func() {
+		log.InfoD(steplog)
 		err := WorkflowProject.Associate(
 			[]string{},
 			[]string{},
@@ -146,7 +159,9 @@ var _ = BeforeSuite(func() {
 	})
 
 	if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
-		Step("Create Buckets", func() {
+		steplog = "Create Buckets"
+		Step(steplog, func() {
+			log.InfoD(steplog)
 			PDSBucketName = strings.ToLower("pds-test-buck-" + utilities.RandString(5))
 			switch NewPdsParams.BackUpAndRestore.TargetLocation {
 			case "s3-comp":
@@ -164,7 +179,9 @@ var _ = BeforeSuite(func() {
 			}
 		})
 
-		Step("Create Cloud Credential and BackUpLocation", func() {
+		steplog = "Create Cloud Credential and BackUpLocation"
+		Step(steplog, func() {
+			log.InfoD(steplog)
 			log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
 			WorkflowCc.Platform = WorkflowPlatform
 			WorkflowCc.CloudCredentials = make(map[string]platform.CloudCredentialsType)
@@ -183,7 +200,9 @@ var _ = BeforeSuite(func() {
 			log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
 		})
 
-		Step("Associate platform resources to Project", func() {
+		steplog = "Associate platform resources to Project"
+		Step(steplog, func() {
+			log.InfoD(steplog)
 			err := WorkflowProject.Associate(
 				[]string{WorkflowTargetCluster.ClusterUID, WorkflowTargetClusterDestination.ClusterUID},
 				[]string{},

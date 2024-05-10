@@ -150,8 +150,9 @@ type PDSDeployment struct {
 }
 
 type PDSDeploymentUpdate struct {
-	NamespaceID  string             `copier:"must,nopanic"`
-	ProjectID    string             `copier:"must,nopanic"`
-	DeploymentID string             `copier:"must,nopanic"`
-	V1Deployment V1DeploymentUpdate `copier:"must,nopanic"`
+	NamespaceID        string             `copier:"must,nopanic"`
+	ProjectID          string             `copier:"must,nopanic"`
+	DeploymentID       string             `copier:"must,nopanic"`
+	DeploymentConfigId string             `copier:"must,nopanic"`
+	V1Deployment       V1DeploymentUpdate `copier:"must,nopanic"`
 }
