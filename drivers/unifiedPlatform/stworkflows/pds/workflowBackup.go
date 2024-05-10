@@ -49,10 +49,10 @@ func (backup WorkflowPDSBackup) WaitForBackupToComplete(backupId string) error {
 		if err != nil {
 			return nil, false, fmt.Errorf("Some error occurred while polling for backup. Error - [%s]", err.Error())
 		}
-		if *backupModel.Get.Status.Phase != stworkflows.COMPLETED {
-			return nil, true, fmt.Errorf("Backup is not completed yet, Phase - [%s]", *backupModel.Get.Status.Phase)
-		} else if *backupModel.Get.Status.Phase == stworkflows.FAILED {
+		if *backupModel.Get.Status.Phase == stworkflows.FAILED {
 			return nil, false, fmt.Errorf("Backup Status - [%s]", *backupModel.Get.Status.Phase)
+		} else if *backupModel.Get.Status.Phase != stworkflows.COMPLETED {
+			return nil, true, fmt.Errorf("Backup is not completed yet, Phase - [%s]", *backupModel.Get.Status.Phase)
 		} else {
 			log.Infof("Backup completed successfully - [%s]", *backupModel.Get.Meta.Name)
 			log.Infof("Backup Status - [%s]", *backupModel.Get.Status.CloudSnapId)
@@ -64,7 +64,6 @@ func (backup WorkflowPDSBackup) WaitForBackupToComplete(backupId string) error {
 	_, err := task.DoRetryWithTimeout(waitforBackupToComplete, backupTimeOut, defaultRetryInterval)
 
 	return err
-
 }
 
 // GetBackupIDByName deletes the given backup

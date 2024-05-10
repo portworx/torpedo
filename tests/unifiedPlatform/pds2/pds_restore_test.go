@@ -282,19 +282,19 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 			for _, deployment := range deployments {
 				for i := 0; i < BackupsPerDeployment; i++ {
 					wg.Add(1)
-					go func() {
+					go func(dep *automationModels.PDSDeploymentResponse) {
 
 						defer wg.Done()
 						defer GinkgoRecover()
 
 						pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
-						bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
+						bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *dep.Create.Meta.Uid)
 						if err != nil {
 							log.Errorf("Some error occurred while creating backup [%s], Error - [%s]", pdsBackupConfigName, err.Error())
 							allErrors = append(allErrors, err)
 						}
 						log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
-					}()
+					}(deployment)
 				}
 			}
 
@@ -327,18 +327,19 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 				for _, backupId := range backupIds {
 					wg.Add(1)
 
-					go func() {
+					go func(namespace string, backup string) {
 						defer wg.Done()
 						defer GinkgoRecover()
 
 						restoreName := "restore-" + RandomString(5)
-						_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupId, restoreName, ns)
+						_, err := WorkflowPDSRestore.CreateRestore(restoreName, backup, restoreName, namespace)
 						if err != nil {
 							log.Errorf("Error occurred while creating [%s], Error - [%s]", restoreName, err.Error())
+						} else {
+							log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+							restoreNames = append(restoreNames, restoreName)
 						}
-						log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
-						restoreNames = append(restoreNames, restoreName)
-					}()
+					}(ns, backupId)
 				}
 
 			}
@@ -762,105 +763,210 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 })
 
 var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("PerformSimultaneousBackupRestoreForMultipleDeployments", "Perform multiple backup and restore simultaneously for different deployments.", nil, 0)
-	})
 	var (
-		workflowDataservice  pds.WorkflowDataService
-		workFlowTemplates    pds.WorkflowPDSTemplates
-		workflowBackUpConfig pds.WorkflowPDSBackupConfig
-		workflowBackup       pds.WorkflowPDSBackup
-		deployment           *automationModels.PDSDeploymentResponse
-		workflowRestore      pds.WorkflowPDSRestore
-		//	restoreDeployment    *automationModels.PDSRestoreResponse
-		pdsBackupConfigNames []string
-		latestBackupUid      string
-		numberOfIterations   int
-		err                  error
+		deployments          []*automationModels.PDSDeploymentResponse
+		pdsBackupConfigName  string
+		restoreNames         []string
+		allBackupIds         map[string][]string
+		backupsPerDeployment int
+		allErrors            []error
+		deploymentCount      int
+		wg                   sync.WaitGroup
+		restoreCount         int
 	)
-
-	It("Deploy and Validate DataService", func() {
-		Step("Create a PDS Namespace", func() {
-			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
-			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
-			workFlowTemplates.Platform = WorkflowPlatform
-			WorkflowNamespace.Namespaces = make(map[string]string)
-			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
-			log.FailOnError(err, "Unable to create namespace")
-			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
-			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
-
-		})
-
-		for _, ds := range NewPdsParams.DataServiceToTest {
-			workflowDataservice.Namespace = &WorkflowNamespace
-
-			deployment, err = workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion, PDS_DEFAULT_NAMESPACE)
-			log.FailOnError(err, "Error while deploying ds")
-		}
-
-		//stepLog := "Running Workloads before upgrading the ds image"
-		//Step(stepLog, func() {
-		//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-		//	log.FailOnError(err, "Error while running workloads on ds")
-		//})
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("PerformSimultaneousBackupRestoreForMultipleDeployments", "Perform multiple backup and restore simultaneously for different deployments.", nil, 0)
+		deploymentCount = 2
+		backupsPerDeployment = 1
+		restoreCount = 3
+		allBackupIds = make(map[string][]string)
 	})
 
-	It("Perform adhoc backup, restore and validate - Multiple Backup and Restores", func() {
-		workflowBackUpConfig.WorkflowDataService = &workflowDataservice
-		workflowBackUpConfig.WorkflowBackupLocation = WorkflowbkpLoc
-		numberOfIterations = 10
+	It("Perform multiple backup and restore simultaneously for different deployments.", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
 
-		Step("Start Multiple Backup Simultaneously", func() {
-			var wg sync.WaitGroup
-			for i := 0; i < numberOfIterations; i++ {
+			for i := 0; i < deploymentCount; i++ {
 				wg.Add(1)
 				go func() {
+
+					var deploymentNamespace string
+
 					defer wg.Done()
 					defer GinkgoRecover()
-					pdsBackupConfigName := strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
-					bkpConfigResponse, err := workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
-					log.FailOnError(err, "Error occured while creating backupConfig")
-					log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
-					pdsBackupConfigNames = append(pdsBackupConfigNames, pdsBackupConfigName)
 
+					Step("Create a namespace for PDS", func() {
+						deploymentNamespace = fmt.Sprintf("%s-%s", strings.ToLower(ds.Name), RandomString(5))
+						_, err := WorkflowNamespace.CreateNamespaces(deploymentNamespace)
+						if err != nil {
+							log.Errorf("Error occured while creating namespace - [%s]", err.Error())
+							allErrors = append(allErrors, err)
+							return
+						}
+						log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
+					})
+
+					Step("Associate namespace to Project", func() {
+
+						log.InfoD("Asscoaiting [%s]-[%s] to the project", deploymentNamespace, WorkflowNamespace.Namespaces[deploymentNamespace])
+
+						err := WorkflowProject.Associate(
+							[]string{},
+							[]string{WorkflowNamespace.Namespaces[deploymentNamespace]},
+							[]string{},
+							[]string{},
+							[]string{},
+							[]string{},
+						)
+						if err != nil {
+							log.Errorf("Error occured while associating namespace - [%s]", err.Error())
+							allErrors = append(allErrors, err)
+							return
+						}
+						log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+					})
+
+					Step("Deploy dataservice", func() {
+
+						log.InfoD("Starting deployment in [%s] namespace", deploymentNamespace)
+
+						WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
+
+						currDeployment, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, deploymentNamespace)
+						if err != nil {
+							log.Errorf("Error occured while creating deployment on [%s] - [%s]", deploymentNamespace, err.Error())
+							allErrors = append(allErrors, err)
+							return
+						}
+						log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
+						deployments = append(deployments, currDeployment)
+
+					})
 				}()
 			}
+
 			wg.Wait()
-			log.Infof("All backups are completed successfully")
-		})
+			dash.VerifyFatal(len(allErrors), 0, "Verifying parallel deployments")
+		}
 
-		Step("Trigger multiple restores simultaneously", func() {
-			// TODO: Keeping restores as sequential, needs to be changed to parallel later as multiple ns will be required
-			allBackups, err := workflowBackup.ListAllBackups(*deployment.Create.Meta.Name)
-			log.FailOnError(err, "Error occured while creating backup")
-			log.Infof("Number of backups - [%d]", len(allBackups))
+		Step("Create multiple Adhoc backup config for the existing deployment", func() {
 
-			for _, eachBackup := range allBackups {
-				latestBackupUid = *eachBackup.Meta.Uid
-				log.Infof("Current backup ID [%s], Name [%s]", *eachBackup.Meta.Uid, *eachBackup.Meta.Name)
-				restoreName := "pds-restore-before-update-" + RandomString(5)
-				workflowRestore.Destination = &WorkflowNamespace
-				restoreDeployment, err := workflowRestore.CreateRestore(restoreName, latestBackupUid, Namespace, PDS_DEFAULT_NAMESPACE)
-				log.FailOnError(err, "Error while taking restore")
-				log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
+			log.Infof("All Deployments - [%v]", deployments)
+
+			for _, deployment := range deployments {
+				for i := 0; i < backupsPerDeployment; i++ {
+
+					wg.Add(1)
+					go func(dep *automationModels.PDSDeploymentResponse) {
+
+						defer wg.Done()
+						defer GinkgoRecover()
+
+						pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
+						bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *dep.Create.Meta.Uid)
+						if err != nil {
+							log.Errorf("Some error occurred while creating backup [%s], Error - [%s]", pdsBackupConfigName, err.Error())
+							allErrors = append(allErrors, err)
+						}
+						log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
+					}(deployment)
+				}
 			}
 
+			wg.Wait()
+			dash.VerifyFatal(len(allErrors), 0, "Verifying multiple backup creation")
+			log.InfoD("Simultaneous backup config creation succeeded")
 		})
 
-		//Step("Validate md5hash for the restored deployments", func() {
-		//	err := workflowDataservice.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)
-		//	log.FailOnError(err, "Error occured in ValidateDataServiceWorkloads method")
-		//})
+		Step("Get the backup detail for the backup configs", func() {
+			for _, deployment := range deployments {
+				allBackupResponse, err := WorkflowPDSBackup.ListAllBackups(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error occured while fetching backups")
+				dash.VerifyFatal(len(allBackupResponse), backupsPerDeployment, fmt.Sprintf("Total number of backups found for [%s] are not consisten with backup configs created.", *deployment.Create.Meta.Name))
+				for _, backupResponse := range allBackupResponse {
+					log.Infof("Backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
+					err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
+					log.FailOnError(err, "Error occured while waiting for backup to complete")
+					allBackupIds[WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace] = append(allBackupIds[WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace], *backupResponse.Meta.Uid)
+				}
+			}
 
-	})
+			log.InfoD("Simultaneous backups creation succeeded")
+		})
 
-	It("Delete DataServiceDeployment", func() {
-		err := workflowDataservice.DeleteDeployment(*deployment.Create.Meta.Uid)
-		log.FailOnError(err, "Error while deleting data Service")
+		Step("Creating Simultaneous restores from the dataservices and triggering parallel backup", func() {
+
+			log.InfoD("Creating parallel restores")
+
+			// Creating parallel restores
+			for ns, backupIds := range allBackupIds {
+
+				for _, backupId := range backupIds {
+
+					for i := 0; i < restoreCount; i++ {
+						wg.Add(1)
+						go func(namespace string, backup string) {
+							defer wg.Done()
+							defer GinkgoRecover()
+
+							restoreName := "restore-" + RandomString(5)
+							_, err := WorkflowPDSRestore.CreateRestore(restoreName, backup, restoreName, namespace)
+							if err != nil {
+								log.Errorf("Error occurred while creating [%s], Error - [%s]", restoreName, err.Error())
+							} else {
+								log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+								restoreNames = append(restoreNames, restoreName)
+							}
+						}(ns, backupId)
+					}
+				}
+
+			}
+
+			log.InfoD("Creating backups parallel with restores")
+
+			// Creating parallel backups
+			for _, deployment := range deployments {
+				for i := 0; i < backupsPerDeployment; i++ {
+					wg.Add(1)
+					go func(dep *automationModels.PDSDeploymentResponse) {
+
+						defer wg.Done()
+						defer GinkgoRecover()
+
+						pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
+						bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *dep.Create.Meta.Uid)
+						if err != nil {
+							log.Errorf("Some error occurred while creating backup [%s], Error - [%s]", pdsBackupConfigName, err.Error())
+							allErrors = append(allErrors, err)
+						}
+						log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
+
+					}(deployment)
+				}
+			}
+
+			wg.Wait()
+			dash.VerifyFatal(len(allErrors), 0, "Verifying multiple backup config/restore creation in parallel")
+
+			log.InfoD("Waiting for all backups to be successful")
+			// Validating parallel backup success
+			for _, deployment := range deployments {
+				allBackupResponse, err := WorkflowPDSBackup.ListAllBackups(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error occured while creating backup")
+				dash.VerifyFatal(len(allBackupResponse), backupsPerDeployment*2, fmt.Sprintf("Total number of backups found for [%s] are not consisten with backup configs created.", *deployment.Create.Meta.Name))
+				for _, backupResponse := range allBackupResponse {
+					log.Infof("Backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
+					err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
+					log.FailOnError(err, "Error occured while waiting for backup to complete")
+					allBackupIds[WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace] = append(allBackupIds[WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace], *backupResponse.Meta.Uid)
+				}
+			}
+
+			log.InfoD("Simultaneous backup/restores succeeded")
+		})
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPDSTorpedoTest()
 	})
 })

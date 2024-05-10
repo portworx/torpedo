@@ -3,6 +3,11 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"path/filepath"
+	"strconv"
+	"time"
+
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
@@ -12,10 +17,6 @@ import (
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"io/ioutil"
-	"path/filepath"
-	"strconv"
-	"time"
 )
 
 var dash *aetosutil.Dashboard
@@ -215,6 +216,14 @@ func PurgePDS() {
 	log.InfoD("Purging all dataservice objects")
 	err = WorkflowDataService.Purge()
 	log.FailOnError(err, "some error occurred while purging data service objects")
+
+	log.InfoD("Purging all restore source namespaces")
+	err = WorkflowPDSRestore.Source.Purge()
+	log.FailOnError(err, "some error occurred while purging restore source namespaces")
+
+	log.InfoD("Purging all source namespace objects")
+	err = WorkflowNamespace.Purge()
+	log.FailOnError(err, "some error occurred while purging namespace objects")
 
 	//log.InfoD("Purging all backup objects")
 	//err = WorkflowPDSBackup.Purge()
