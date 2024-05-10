@@ -3942,6 +3942,7 @@ func PxBackupUpgrade(versionToUpgrade string) error {
 			versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
 	} else {
 		cmd := fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
+		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
 			versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
 
 		// Additional settings to be appended using template
