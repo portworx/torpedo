@@ -213,25 +213,26 @@ func ValidateDataMd5Hash(deploymentHash, restoredDepHash map[string]string) bool
 func InsertDataAndReturnChecksum(dataServiceDetails DataServiceDetails, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "write"
 
-	deploymentName := *dataServiceDetails.Deployment.Meta.Name
-
-	_, dep, err := GenerateWorkload(deploymentName, wkloadGenParams)
+	deploymentName := *dataServiceDetails.Deployment.Status.CustomResourceName
+	_, dep, err := GenerateWorkload(deploymentName, dataServiceDetails.DSParams.Name, wkloadGenParams)
 	if err == nil {
 		err := k8sApps.DeleteDeployment(dep.Name, dep.Namespace)
 		if err != nil {
 			return "", nil, fmt.Errorf("error while deleting the workload deployment")
 		}
+	} else {
+		return "", nil, err
 	}
-	ckSum, wlDep, err := ReadDataAndReturnChecksum(dataServiceDetails, wkloadGenParams)
+	ckSum, wlDep, err := ReadDataAndReturnChecksum(dataServiceDetails, dataServiceDetails.DSParams.Name, wkloadGenParams)
 	return ckSum, wlDep, err
 }
 
 // ReadDataAndReturnChecksum Reads Data from the db and returns the checksum
-func ReadDataAndReturnChecksum(dataServiceDetails DataServiceDetails, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
+func ReadDataAndReturnChecksum(dataServiceDetails DataServiceDetails, dataServiceName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "read"
 
-	deploymentName := *dataServiceDetails.Deployment.Meta.Name
-	ckSum, wlDep, err := GenerateWorkload(deploymentName, wkloadGenParams)
+	deploymentName := *dataServiceDetails.Deployment.Status.CustomResourceName
+	ckSum, wlDep, err := GenerateWorkload(deploymentName, dataServiceName, wkloadGenParams)
 	if err != nil {
 		return "", nil, fmt.Errorf("error while reading the workload deployment data")
 	}
@@ -239,9 +240,9 @@ func ReadDataAndReturnChecksum(dataServiceDetails DataServiceDetails, wkloadGenP
 }
 
 // GenerateWorkload creates a deployment using the given params(perform read/write) and returns the checksum
-func GenerateWorkload(deploymentName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
+func GenerateWorkload(deploymentName, dataServiceName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	var checksum string
-	dsName := deploymentName
+	dataservice := strings.ToLower(dataServiceName)
 	workloadDepName := wkloadGenParams.LoadGenDepName
 	namespace := wkloadGenParams.Namespace
 	failOnError := wkloadGenParams.FailOnError
@@ -254,9 +255,12 @@ func GenerateWorkload(deploymentName string, wkloadGenParams LoadGenParams) (str
 	replacePassword := wkloadGenParams.ReplacePassword
 	clusterMode := wkloadGenParams.ClusterMode
 
-	serviceAccount, err := pds.CreatePolicies(namespace)
+	log.Debugf("DeploymentName [%s]", deploymentName)
+	log.Debugf("dataServiceName [%s]", dataservice)
+
+	serviceAccount, err := pds.CreatePolicies(namespace, dataservice)
 	if err != nil {
-		return "", nil, fmt.Errorf("error while creating policies")
+		return "", nil, fmt.Errorf("Error while creating policies %v\n", err)
 	}
 
 	deploymentSpec := &v1.Deployment{
@@ -280,8 +284,9 @@ func GenerateWorkload(deploymentName string, wkloadGenParams LoadGenParams) (str
 							Image:           pdsWorkloadImage,
 							ImagePullPolicy: "Always",
 							Env: []corev1.EnvVar{
-								{Name: "PDS_DEPLOYMENT", Value: dsName},
+								{Name: "PDS_DEPLOYMENT", Value: deploymentName},
 								{Name: "NAMESPACE", Value: namespace},
+								{Name: "DATASERVICE", Value: dataservice},
 								{Name: "FAIL_ON_ERROR", Value: failOnError},
 								{Name: "MODE", Value: mode},
 								{Name: "SEED", Value: seed},
