@@ -335,9 +335,10 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 						_, err := WorkflowPDSRestore.CreateRestore(restoreName, backup, restoreName, namespace)
 						if err != nil {
 							log.Errorf("Error occurred while creating [%s], Error - [%s]", restoreName, err.Error())
+						} else {
+							log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+							restoreNames = append(restoreNames, restoreName)
 						}
-						log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
-						restoreNames = append(restoreNames, restoreName)
 					}(ns, backupId)
 				}
 
@@ -916,9 +917,10 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 							_, err := WorkflowPDSRestore.CreateRestore(restoreName, backup, restoreName, namespace)
 							if err != nil {
 								log.Errorf("Error occurred while creating [%s], Error - [%s]", restoreName, err.Error())
+							} else {
+								log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+								restoreNames = append(restoreNames, restoreName)
 							}
-							log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
-							restoreNames = append(restoreNames, restoreName)
 						}(ns, backupId)
 					}
 				}
