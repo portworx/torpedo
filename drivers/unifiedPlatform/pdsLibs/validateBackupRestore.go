@@ -136,8 +136,7 @@ func ValidateRestoreStatus(restoreId string) (*automationModels.PDSRestoreRespon
 		}
 		log.Infof("[%s] phase -  %v", *restoreResp.Get.Meta.Name, state)
 		if strings.ToLower(state) == strings.ToLower(restoreFailed) {
-			log.Errorf("Name [%s], Phase - [%s], ErrorCode - [%s], errorMessage - [%s]", *restoreResp.Get.Meta.Name, restoreResp.Get.Status.Phase, restoreResp.Get.Status.ErrorCode, restoreResp.Get.Status.ErrorMessage)
-			return true, fmt.Errorf("Restore [%s] failed. Phase - [%s]", *restoreResp.Get.Meta.Name, state)
+			return true, fmt.Errorf("Restore failed - Name [%s], ID [%s], Phase - [%s], ErrorCode - [%s], errorMessage - [%s]", *restoreResp.Get.Meta.Name, *restoreResp.Get.Meta.Uid, restoreResp.Get.Status.Phase, restoreResp.Get.Status.ErrorCode, restoreResp.Get.Status.ErrorMessage)
 		}
 		if strings.ToLower(state) != strings.ToLower(restoreCompleted) {
 			return false, nil

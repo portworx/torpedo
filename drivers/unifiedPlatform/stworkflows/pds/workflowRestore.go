@@ -37,7 +37,7 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 
 	log.Infof("Destination Namespace Id - [%s]", restore.Destination.Namespaces[namespace])
 
-	log.InfoD("Creating restore - [%s]", name)
+	log.Infof("Creating restore - [%s]", name)
 	createRestore, err := pdslibs.CreateRestore(
 		name,
 		backupUid, restore.Destination.TargetCluster.ClusterUID,
@@ -45,6 +45,8 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 		restore.Source.TargetCluster.Project.ProjectId,
 		restore.Destination.TargetCluster.Project.ProjectId,
 	)
+
+	log.InfoD("Restore triggered. Name - [%s], UID - [%s]", *createRestore.Create.Meta.Name, *createRestore.Create.Meta.Uid)
 
 	if err != nil {
 		return nil, err
@@ -75,8 +77,6 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 		NamespaceId:       restore.Destination.Namespaces[namespace],
 		SourceMd5Checksum: "",
 	}
-
-	log.Infof("Restore completed successfully - [%s]", *createRestore.Create.Meta.Name)
 
 	return createRestore, nil
 }
