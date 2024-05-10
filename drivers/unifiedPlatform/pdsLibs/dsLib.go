@@ -6,6 +6,7 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
+	"strings"
 )
 
 const DEPLOYMENT_TOPOLOGY = "pds-qa-test-topology"
@@ -148,7 +149,7 @@ func GetDataServiceId(dsName string) (string, error) {
 	}
 	for _, dataService := range ds.DataServiceList {
 		log.Debugf("Dataservice name: [%s]", *dataService.Meta.Name)
-		if *dataService.Meta.Name == dsName {
+		if strings.Contains(*dataService.Meta.Name, dsName) {
 			return *dataService.Meta.Uid, nil
 		}
 	}
