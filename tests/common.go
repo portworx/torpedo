@@ -12466,7 +12466,6 @@ type MultipathDevices struct {
 	Size   string
 	Status string
 	Type   string
-	Disks  []string
 	Paths  []PathInfo
 }
 
@@ -12527,7 +12526,7 @@ func GetAllMultipathDevicesPresent(n *node.Node) ([]MultipathDevices, error) {
 			paths.Status = matched[4]
 			multipathDevices.Paths = append(multipathDevices.Paths, paths)
 		}
-		// Validate Last Line 
+		// Validate Last Line
 		if i == len(reader)-1 {
 			multiPathDevs = append(multiPathDevs, multipathDevices)
 		}
