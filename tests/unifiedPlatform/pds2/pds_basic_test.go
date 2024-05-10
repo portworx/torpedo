@@ -214,6 +214,7 @@ var _ = BeforeSuite(func() {
 			log.FailOnError(err, "Unable to associate Cluster to Project")
 			log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
 		})
+
 	}
 
 })
