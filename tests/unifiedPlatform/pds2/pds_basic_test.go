@@ -145,8 +145,8 @@ var _ = BeforeSuite(func() {
 		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
 	})
 
-	if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
-		Step("Create Buckets", func() {
+	Step("Create Buckets", func() {
+		if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
 			PDSBucketName = strings.ToLower("pds-test-buck-" + utilities.RandString(5))
 			switch NewPdsParams.BackUpAndRestore.TargetLocation {
 			case "s3-comp":
@@ -162,48 +162,58 @@ var _ = BeforeSuite(func() {
 				err := platformUtils.CreateS3CompBucket(PDSBucketName)
 				log.FailOnError(err, "error while creating s3-comp bucket")
 			}
-		})
+		}
+	})
 
-		Step("Create Cloud Credential and BackUpLocation", func() {
-			log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
-			WorkflowCc.Platform = WorkflowPlatform
-			WorkflowCc.CloudCredentials = make(map[string]platform.CloudCredentialsType)
-			cc, err := WorkflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
-			log.FailOnError(err, "error occured while creating cloud credentials")
-			for _, value := range cc.CloudCredentials {
-				log.Infof("cloud credentials name: [%s]", value.Name)
-				log.Infof("cloud credentials id: [%s]", value.ID)
-				log.Infof("cloud provider type: [%s]", value.CloudProviderType)
-			}
+	Step("Create Cloud Credential and BackUpLocation", func() {
+		log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
+		WorkflowCc.Platform = WorkflowPlatform
+		WorkflowCc.CloudCredentials = make(map[string]platform.CloudCredentialsType)
+		// cc, err := WorkflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
+		WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation] = platform.CloudCredentialsType{
+			Name:              "pds-bkp-creds-zjlsa",
+			ID:                "cred:038a6fd9-e8fb-402b-b5db-a7b53ce3797e",
+			CloudProviderType: NewPdsParams.BackUpAndRestore.TargetLocation,
+		}
+		// log.FailOnError(err, "error occured while creating cloud credentials")
+		for _, value := range WorkflowCc.CloudCredentials {
+			log.Infof("cloud credentials name: [%s]", value.Name)
+			log.Infof("cloud credentials id: [%s]", value.ID)
+			log.Infof("cloud provider type: [%s]", value.CloudProviderType)
+		}
 
-			WorkflowbkpLoc.WfCloudCredentials = WorkflowCc
-			wfbkpLoc, err := WorkflowbkpLoc.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
-			log.FailOnError(err, "error while creating backup location")
-			log.Infof("wfBkpLoc id: [%s]", wfbkpLoc.BkpLocation.BkpLocationId)
-			log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
-		})
+		WorkflowbkpLoc.WfCloudCredentials = WorkflowCc
+		//wfbkpLoc, err := WorkflowbkpLoc.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
+		//log.FailOnError(err, "error while creating backup location")
+		//log.Infof("wfBkpLoc id: [%s]", wfbkpLoc.BkpLocation.BkpLocationId)
+		//log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
+		// wfbkpLoc, err := WorkflowbkpLoc.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
+		WorkflowbkpLoc.BkpLocation = platform.BkpLocationType{
+			BkpLocationId: "bloc:8c44e664-6b72-442f-bfdb-6b65b1ad4b14",
+			Name:          "pds-bkp-loc-rkqix",
+		}
+		// log.FailOnError(err, "error while creating backup location")
+		log.Infof("wfBkpLoc id: [%s]", WorkflowbkpLoc.BkpLocation.BkpLocationId)
+		log.Infof("wfBkpLoc name: [%s]", WorkflowbkpLoc.BkpLocation.Name)
+	})
 
-		Step("Associate platform resources to Project", func() {
-			err := WorkflowProject.Associate(
-				[]string{WorkflowTargetCluster.ClusterUID, WorkflowTargetClusterDestination.ClusterUID},
-				[]string{},
-				[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
-				[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
-				[]string{},
-				[]string{},
-			)
-			log.FailOnError(err, "Unable to associate Cluster to Project")
-			log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
-		})
-	}
+	Step("Associate platform resources to Project", func() {
+		err := WorkflowProject.Associate(
+			[]string{WorkflowTargetCluster.ClusterUID, WorkflowTargetClusterDestination.ClusterUID},
+			[]string{},
+			[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
+			[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
+			[]string{},
+			[]string{},
+		)
+		log.FailOnError(err, "Unable to associate platform resources to Project")
+		log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+	})
 
 })
 
 var _ = AfterSuite(func() {
 	// TODO: Need to add platform cleanup here
-	log.InfoD("Purging all templates")
-	err := WorkflowPDSTemplate.Purge(true)
-	log.FailOnError(err, "some error occurred while purging data service templates")
 	defer Inst().Dash.TestSetEnd()
 	defer EndTorpedoTest()
 })
