@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -100,6 +101,8 @@ var _ = BeforeSuite(func() {
 		WorkflowTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane(false)
 		log.FailOnError(err, "Unable to register target cluster")
 		log.Infof("Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
+
+		time.Sleep(1 * time.Minute)
 
 		err = WorkflowTargetCluster.InstallPDSAppOnTC(WorkflowTargetCluster.ClusterUID)
 		log.FailOnError(err, "Unable to Install pds on target cluster")
