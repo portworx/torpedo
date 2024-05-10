@@ -12475,7 +12475,7 @@ type PathInfo struct {
 	Status  string
 }
 
-// Returns all the list of multipath devices present in the cluster
+// Returns all the list of multipath devices present in the cluster nodes
 func GetAllMultipathDevicesPresent(n *node.Node) ([]MultipathDevices, error) {
 	multiPathDevs := []MultipathDevices{}
 	output, err := runCmdOnce(fmt.Sprintf("multipath -ll"), *n)
