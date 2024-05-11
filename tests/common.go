@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/devans10/pugo/flasharray"
 
@@ -62,6 +63,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/operator"
 	policyops "github.com/portworx/sched-ops/k8s/policy"
 	k8sStorage "github.com/portworx/sched-ops/k8s/storage"
+	schedstorage "github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/k8s/stork"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
@@ -89,6 +91,7 @@ import (
 	storageapi "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12533,4 +12536,147 @@ func GetAllMultipathDevicesPresent(n *node.Node) ([]MultipathDevices, error) {
 	}
 
 	return multiPathDevs, nil
+}
+
+// CreateNameSpace Creates new NameSpace
+func CreateNameSpace(nameSpace string) error {
+	ns := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nameSpace,
+		},
+	}
+	_, err := core.Instance().CreateNamespace(ns)
+	if err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			log.Infof("Namespace %s already exists. Skipping creation.", ns.Name)
+		} else {
+			return err
+		}
+	}
+	return nil
+}
+
+// Delete Namespace on the cluster
+func DeleteNameSpace(nameSpace string) error {
+	return core.Instance().DeleteNamespace(nameSpace)
+}
+
+// CreateFlashStorageClass Creates storage class for Purity Backend
+func CreateFlashStorageClass(scName string, scType string, params map[string]string) error {
+	param := make(map[string]string)
+	for key, value := range params {
+		param[key] = value
+	}
+	// add pure backend type
+	param["backend"] = scType
+	param["repl"] = "1"
+
+	v1obj := metav1.ObjectMeta{
+		Name: scName,
+	}
+	reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+	bindMode := storageapi.VolumeBindingImmediate
+	scObj := storageapi.StorageClass{
+		ObjectMeta:        v1obj,
+		Provisioner:       k8s.CsiProvisioner,
+		Parameters:        params,
+		ReclaimPolicy:     &reclaimPolicyDelete,
+		VolumeBindingMode: &bindMode,
+	}
+
+	k8storage := schedstorage.Instance()
+	_, err := k8storage.CreateStorageClass(&scObj)
+	return err
+}
+
+// CreateFlashPVCOnCluster Creates PVC on the Cluster
+func CreateFlashPVCOnCluster(pvcName string, scName string, nameSpace string, sizeGb string) error {
+	log.InfoD("creating PVC [%s] in namespace [%s]", pvcName, nameSpace)
+	pvcObj := &v1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: nameSpace,
+		},
+		Spec: v1.PersistentVolumeClaimSpec{
+			AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+			StorageClassName: &scName,
+			Resources: v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceStorage: resource.MustParse(sizeGb),
+				},
+			},
+		},
+	}
+	_, err := core.Instance().CreatePersistentVolumeClaim(pvcObj)
+	return err
+}
+
+// GetAllPVCFromNs returns all PVC's Created on specific NameSpace
+func GetAllPVCFromNs(nsName string, labelSelector map[string]string) ([]v1.PersistentVolumeClaim, error) {
+	pvcList, err := core.Instance().GetPersistentVolumeClaims(nsName, labelSelector)
+	if err != nil {
+		return nil, err
+	}
+	return pvcList.Items, nil
+}
+
+// Returns details about cloud drives present in the cluster
+type CldConfigs struct {
+	Type              string            `json:"Type"`
+	Size              int               `json:"Size"`
+	ID                string            `json:"ID"`
+	PoolID            string            `json:"PoolID"`
+	Path              string            `json:"Path"`
+	Iops              int               `json:"Iops"`
+	Vpus              int               `json:"Vpus"`
+	PXType            string            `json:"PXType"`
+	State             string            `json:"State"`
+	Labels            map[string]string `json:"labels"`
+	AttachOptions     interface{}       `json:"AttachOptions"`
+	Provisioner       string            `json:"Provisioner"`
+	EncryptionKeyInfo string            `json:"EncryptionKeyInfo"`
+}
+
+type CldDriveData struct {
+	Configs            map[string]CldConfigs `json:"Configs"`
+	NodeID             string                `json:"NodeID"`
+	ReservedInstanceID string                `json:"ReservedInstanceID"`
+	SchedulerNodeName  string                `json:"SchedulerNodeName"`
+	NodeIndex          int                   `json:"NodeIndex"`
+	CreateTimestamp    time.Time             `json:"CreateTimestamp"`
+	InstanceID         string                `json:"InstanceID"`
+	Zone               string                `json:"Zone"`
+	State              string                `json:"State"`
+	Labels             map[string]string     `json:"labels"`
+}
+
+// GetCloudDriveDetailsOnCluster returns list of cloud drives on the cluster
+func GetCloudDriveList() (*CldDriveData, error) {
+	var data CldDriveData
+	allNodes := node.GetStorageNodes()
+	for _, eachNode := range allNodes {
+
+		stNode, err := Inst().V.GetDriverNode(&eachNode)
+		if err != nil {
+			return nil, err
+		}
+		if stNode.Status != opsapi.Status_STATUS_OK {
+			continue
+		}
+		command := "pxctl cd list -j"
+		output, err := runCmdOnce(command, eachNode)
+		log.Infof("%v", err)
+		if err != nil {
+			return nil, err
+		}
+		log.Infof("Output Details before parsing [%v]", output)
+
+		err = json.Unmarshal([]byte(output), &data)
+		if err != nil {
+			return nil, err
+		}
+		break
+	}
+	return &data, nil
+
 }

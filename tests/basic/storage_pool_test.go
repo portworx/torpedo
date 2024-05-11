@@ -86,6 +86,9 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 	stepLog := "should get the existing pool and expand it by adding a disk"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		if !IsPoolAddDiskSupported() {
+			Skip("Pool Add Disk is not supported on DMthin Cluster")
+		}
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -141,33 +144,31 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			enterPoolMaintenanceAddDisk(poolIDToResize)
 			defer exitPoolMaintenance(poolIDToResize)
 
-			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
-			if err != nil {
-				isPoolAddDiskSupported := IsPoolAddDiskSupported()
-				if !isPoolAddDiskSupported {
-					IsExpectederr := strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
-					dash.VerifyFatal(IsExpectederr, true, err.Error())
-					log.InfoD("Drive add not supported :%s, hence skipping the test", err.Error())
-					Skip("drive add to existing pool not supported for px-storev2 or px-cache pools")
-
+			if IsPoolAddDiskSupported() {
+				err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+				if err != nil {
+					log.FailOnError(err, "is Pool Expand using Add disk successful ?")
 				}
+				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+				resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
+				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
 			}
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
 		})
 		Step("Ensure that new pool has been expanded to the expected size", func() {
-			ValidateApplications(contexts)
-			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
-			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
-			newPoolSize := resizedPool.TotalSize / units.GiB
-			isExpansionSuccess := false
-			if newPoolSize >= expectedSizeWithJournal {
-				isExpansionSuccess = true
+			if IsPoolAddDiskSupported() {
+				ValidateApplications(contexts)
+				resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
+				newPoolSize := resizedPool.TotalSize / units.GiB
+				isExpansionSuccess := false
+				if newPoolSize >= expectedSizeWithJournal {
+					isExpansionSuccess = true
+				}
+				dash.VerifyFatal(isExpansionSuccess, true,
+					fmt.Sprintf("expected new pool size to be %v or %v if pool has journal, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
+				appsValidateAndDestroy(contexts)
 			}
-			dash.VerifyFatal(isExpansionSuccess, true,
-				fmt.Sprintf("expected new pool size to be %v or %v if pool has journal, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
-			appsValidateAndDestroy(contexts)
+
 		})
 	})
 	JustAfterEach(func() {
@@ -2082,7 +2083,7 @@ var _ = Describe("{AddWithPXRestart}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -3682,7 +3683,7 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Pool Add disk is not supported on DMThin Cluster")
 		}
 		log.InfoD(stepLog)
 
@@ -3760,28 +3761,20 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 			isjournal, err := IsJournalEnabled()
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
-			log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
-			if err != nil {
-				isPoolAddDiskSupported := IsPoolAddDiskSupported()
-				if !isPoolAddDiskSupported {
-					IsExpectederr := strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
-					dash.VerifyFatal(IsExpectederr, true, err.Error())
-					log.InfoD("Drive add not supported :%s, hence skipping the test", err.Error())
-					Skip("drive add to existing pool not supported for px-storev2 or px-cache pools")
+			if IsPoolAddDiskSupported() {
+				log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
+				err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+				log.FailOnError(err, "Pool Expand using Add Disk Failed ")
 
-				}
-
+				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+				resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
+				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", poolToBeResized.Uuid, stNode.Name))
 			}
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-			resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", poolToBeResized.Uuid, stNode.Name))
-
+			status, err = Inst().V.GetNodeStatus(*stNode)
+			log.FailOnError(err, "err getting node [%s] status", stNode.Name)
+			log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
 		})
 
-		status, err = Inst().V.GetNodeStatus(*stNode)
-		log.FailOnError(err, "err getting node [%s] status", stNode.Name)
-		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
 	})
 
 	JustAfterEach(func() {
@@ -4339,7 +4332,7 @@ var _ = Describe("{PXRestartAddDisk}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -7127,6 +7120,10 @@ var _ = Describe("{ExpandUsingAddDriveAndPXRestart}", func() {
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		if !IsPoolAddDiskSupported() {
+			Skip("Add disk is not supported in DMThin")
+		}
+
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvrestrt-%d", i))...)
@@ -7192,6 +7189,10 @@ var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", func() {
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+
+		if !IsPoolAddDiskSupported() {
+			Skip("Add disk is not supported on DMThin Cluster")
+		}
 
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -7275,7 +7276,7 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -7328,24 +7329,26 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool [%s] on expansion using auto option", poolToBeResized.Uuid))
 
-		expectedSize += drvSize
+		if IsPoolAddDiskSupported() {
+			expectedSize += drvSize
 
-		// Expand Pool using Add Drive and verify if the Pool is expanded successfully
-		err = Inst().V.ExpandPool(poolToBeResized.Uuid,
-			api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
-			expectedSize, true)
-		dash.VerifyFatal(err,
-			nil,
-			"Pool expansion init successful?")
+			// Expand Pool using Add Drive and verify if the Pool is expanded successfully
+			err = Inst().V.ExpandPool(poolToBeResized.Uuid,
+				api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
+				expectedSize, true)
+			dash.VerifyFatal(err,
+				nil,
+				"Pool expansion init successful?")
 
-		resizeErr = waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
-		dash.VerifyFatal(resizeErr, nil,
-			fmt.Sprintf("Verify pool [%s] on expansion using auto option", poolUUID))
+			resizeErr = waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			dash.VerifyFatal(resizeErr, nil,
+				fmt.Sprintf("Verify pool [%s] on expansion using auto option", poolUUID))
 
-		allPoolsOnNodeAfterResize, err := GetPoolsDetailsOnNode(nodeDetail)
-		log.FailOnError(err, fmt.Sprintf("Failed to get all Pools present in Node [%s]", nodeDetail.Name))
-		dash.VerifyFatal(len(allPoolsOnNode) <= len(allPoolsOnNodeAfterResize), true,
-			"New pool is created on trying to expand pool using add disk option")
+			allPoolsOnNodeAfterResize, err := GetPoolsDetailsOnNode(nodeDetail)
+			log.FailOnError(err, fmt.Sprintf("Failed to get all Pools present in Node [%s]", nodeDetail.Name))
+			dash.VerifyFatal(len(allPoolsOnNode) <= len(allPoolsOnNodeAfterResize), true,
+				"New pool is created on trying to expand pool using add disk option")
+		}
 
 	})
 	JustAfterEach(func() {
