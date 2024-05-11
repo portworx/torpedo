@@ -12621,7 +12621,7 @@ func GetAllPVCFromNs(nsName string, labelSelector map[string]string) ([]v1.Persi
 }
 
 // Returns details about cloud drives present in the cluster
-type CldConfigs struct {
+type CloudConfig struct {
 	Type              string            `json:"Type"`
 	Size              int               `json:"Size"`
 	ID                string            `json:"ID"`
@@ -12637,22 +12637,22 @@ type CldConfigs struct {
 	EncryptionKeyInfo string            `json:"EncryptionKeyInfo"`
 }
 
-type CldDriveData struct {
-	Configs            map[string]CldConfigs `json:"Configs"`
-	NodeID             string                `json:"NodeID"`
-	ReservedInstanceID string                `json:"ReservedInstanceID"`
-	SchedulerNodeName  string                `json:"SchedulerNodeName"`
-	NodeIndex          int                   `json:"NodeIndex"`
-	CreateTimestamp    time.Time             `json:"CreateTimestamp"`
-	InstanceID         string                `json:"InstanceID"`
-	Zone               string                `json:"Zone"`
-	State              string                `json:"State"`
-	Labels             map[string]string     `json:"labels"`
+type CloudData struct {
+	Configs            map[string]CloudConfig `json:"Configs"`
+	NodeID             string                 `json:"NodeID"`
+	ReservedInstanceID string                 `json:"ReservedInstanceID"`
+	SchedulerNodeName  string                 `json:"SchedulerNodeName"`
+	NodeIndex          int                    `json:"NodeIndex"`
+	CreateTimestamp    time.Time              `json:"CreateTimestamp"`
+	InstanceID         string                 `json:"InstanceID"`
+	Zone               string                 `json:"Zone"`
+	State              string                 `json:"State"`
+	Labels             map[string]string      `json:"labels"`
 }
 
 // GetCloudDriveDetailsOnCluster returns list of cloud drives on the cluster
-func GetCloudDriveList() (*CldDriveData, error) {
-	var data CldDriveData
+func GetCloudDriveList() (*map[string]CloudData, error) {
+	var data map[string]CloudData
 	allNodes := node.GetStorageNodes()
 	for _, eachNode := range allNodes {
 
@@ -12669,14 +12669,29 @@ func GetCloudDriveList() (*CldDriveData, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.Infof("Output Details before parsing [%v]", output)
 
 		err = json.Unmarshal([]byte(output), &data)
 		if err != nil {
+			fmt.Println("Error:", err)
 			return nil, err
 		}
 		break
 	}
+	log.Infof("%v", &data)
 	return &data, nil
 
+}
+
+// GetCloudDrivesOnSpecificNode Returns details of all Cloud drives from specific Node
+func GetCloudDrivesOnSpecificNode(n *node.Node) (*CloudData, error) {
+	allCloudDrives, err := GetCloudDriveList()
+	if err != nil {
+		return nil, err
+	}
+	for nodeId, cList := range *allCloudDrives {
+		if nodeId == n.Id {
+			return &cList, nil
+		}
+	}
+	return nil, fmt.Errorf("Failed to get Cloud Drive on Specific Node [%v]", n.Name)
 }
