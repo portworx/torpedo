@@ -7652,6 +7652,20 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", func() {
 })
 
 func deletePoolAndValidate(stNode node.Node, poolIDToDelete string) {
+	isPureBackend := false
+	validateMultipath := []string{}
+	if IsPureCluster() {
+		isPureBackend = true
+	}
+
+	if isPureBackend {
+		// if pure backend , we get the list of all multipath devices used while creating the pool
+		// later check if those multipath devices are still exist post deleting the pool
+		multipathDevBeforeDelete, err := GetMultipathDeviceOnPool(&stNode)
+		log.FailOnError(err, fmt.Sprintf("Failed to get list of Multipath devices on Node [%v]", stNode.Name))
+		validateMultipath = multipathDevBeforeDelete[poolIDToDelete]
+	}
+
 	poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 	log.FailOnError(err, "Failed to list storage pools")
 
@@ -7675,6 +7689,16 @@ func deletePoolAndValidate(stNode node.Node, poolIDToDelete string) {
 		_, ok := poolsMap[poolIDToDelete]
 		dash.VerifyFatal(ok, false, "verify drive is deleted from the node")
 
+		if isPureBackend {
+			// Get list of all Multipath devices after deleting the pool
+			allMultipathDev, err := GetMultipathDeviceIDsOnNode(&stNode)
+			log.FailOnError(err, fmt.Sprintf("failed to get multipath devices on Node [%v]", stNode.Name))
+			for _, eachMultipath := range allMultipathDev {
+				for _, validateEach := range validateMultipath {
+					dash.VerifyFatal(validateEach == eachMultipath, false, fmt.Sprintf("Multipath device [%v] did not delete on Deleting Pool", validateEach))
+				}
+			}
+		}
 	})
 }
 

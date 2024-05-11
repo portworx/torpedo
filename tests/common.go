@@ -8731,6 +8731,7 @@ func WaitForPoolOffline(n node.Node) error {
 	return err
 }
 
+// GetPoolIDFromPoolUUID Returns Pool ID from Pool UUID
 func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {
 	nodesPresent := node.GetStorageNodes()
 	for _, each := range nodesPresent {
@@ -8745,6 +8746,20 @@ func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {
 		}
 	}
 	return -1, nil
+}
+
+// GetPoolObjFromPoolIdOnNode Returns pool object from pool ID on a specific Node
+func GetPoolObjFromPoolIdOnNode(n *node.Node, poolID int) (*opsapi.StoragePool, error) {
+	poolDetails, err := GetPoolsDetailsOnNode(n)
+	if err != nil {
+		return nil, err
+	}
+	for _, eachPool := range poolDetails {
+		if eachPool.ID == int32(poolID) {
+			return eachPool, nil
+		}
+	}
+	return nil, fmt.Errorf("Failed to get details of Storage Pool On specific Node ")
 }
 
 func GetAutoFsTrimStatusForCtx(ctx *scheduler.Context) (map[string]opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
@@ -12538,6 +12553,19 @@ func GetAllMultipathDevicesPresent(n *node.Node) ([]MultipathDevices, error) {
 	return multiPathDevs, nil
 }
 
+// GetMultipathDeviceIDsOnNode returns List of all Multipath Devices on Node
+func GetMultipathDeviceIDsOnNode(n *node.Node) ([]string, error) {
+	multiPathDev := []string{}
+	multiPathDevices, err := GetAllMultipathDevicesPresent(n)
+	if err != nil {
+		return nil, err
+	}
+	for _, eachMultipathDev := range multiPathDevices {
+		multiPathDev = append(multiPathDev, eachMultipathDev.DevId)
+	}
+	return multiPathDev, nil
+}
+
 // CreateNameSpace Creates new NameSpace
 func CreateNameSpace(nameSpace string) error {
 	ns := &v1.Namespace{
@@ -12694,4 +12722,65 @@ func GetCloudDrivesOnSpecificNode(n *node.Node) (*CloudData, error) {
 		}
 	}
 	return nil, fmt.Errorf("Failed to get Cloud Drive on Specific Node [%v]", n.Name)
+}
+
+// IsPureCluster returns True if backend Type is Pure
+func IsPureCluster() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsPure(stc) {
+			logrus.Infof("Pure installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsPureCloudProvider Returns true if cloud Provider is Pure
+func IsPureCloudProvider() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.GetCloudProvider(stc) == "pure" {
+			return true
+		}
+	}
+	return false
+}
+
+// GetDrivesFromSpecificPoolOnNode returns List of Drives On Specific Node
+func GetDrivesFromSpecificPoolOnNode(n *node.Node, poolId string) ([]string, error) {
+	allPools, err := Inst().V.GetPoolDrives(n)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("All Pool IDs [%v]", allPools)
+	if val, ok := allPools[poolId]; ok {
+		return val, nil
+	}
+	return nil, fmt.Errorf("Failed to get details of Drive on Pool [%v]", poolId)
+}
+
+// GetMultipathDeviceOnPool Returns list of multipath devices on Pool
+func GetMultipathDeviceOnPool(n *node.Node) (map[string][]string, error) {
+	multipathMap := make(map[string][]string)
+
+	// Get All Multipath Devices on the perticular Node
+	allMultipathDev, err := GetMultipathDeviceIDsOnNode(n)
+	if err != nil {
+		return nil, err
+	}
+
+	allPools, err := Inst().V.GetPoolDrives(n)
+	if err != nil {
+		return nil, err
+	}
+
+	for eachPoolId, eachDev := range allPools {
+		for _, dev := range eachDev {
+			for _, multiDev := range allMultipathDev {
+				if strings.Contains(dev, multiDev) {
+					multipathMap[eachPoolId] = append(multipathMap[eachPoolId], multiDev)
+				}
+			}
+		}
+	}
+	return multipathMap, nil
 }
