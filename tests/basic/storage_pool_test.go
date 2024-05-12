@@ -149,7 +149,6 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 				if err != nil {
 					log.FailOnError(err, "is Pool Expand using Add disk successful ?")
 				}
-				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 				resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
 				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
 			}
@@ -3765,8 +3764,6 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 				log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
 				err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 				log.FailOnError(err, "Pool Expand using Add Disk Failed ")
-
-				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 				resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
 				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", poolToBeResized.Uuid, stNode.Name))
 			}
