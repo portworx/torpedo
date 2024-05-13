@@ -99,7 +99,7 @@ func (d *azure) UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) err
 	log.Warnf("UpdateFBDANFSEndpoint function has not been implemented for volume driver - %s", d.String())
 	return &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "InspectVolume()",
+		Operation: "UpdateFBDANFSEndpoint()",
 	}
 }
 

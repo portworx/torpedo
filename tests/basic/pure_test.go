@@ -2867,6 +2867,7 @@ var _ = Describe("{FBDAMultiTenancyUpdatePureNFSEnpoint}", func() {
 	var contexts []*scheduler.Context
 	var customConfigAppName string
 	var origCustomAppConfigs, customAppConfigs map[string]scheduler.AppConfig
+
 	testName := "fbda-mt-update-endp"
 
 	JustBeforeEach(func() {
@@ -2882,7 +2883,6 @@ var _ = Describe("{FBDAMultiTenancyUpdatePureNFSEnpoint}", func() {
 
 		// update the custom app config with empty string for Pure NFS endpoint
 		// So that app uses NFS endpoint from pure.json secret.
-		Inst().AppList = []string{customConfigAppName}
 		Inst().CustomAppConfig[customConfigAppName] = scheduler.AppConfig{
 			StorageClassPureNfsEndpoint: "",
 		}

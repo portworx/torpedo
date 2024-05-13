@@ -152,7 +152,7 @@ func (d *linstor) UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) e
 	log.Warnf("UpdateFBDANFSEndpoint function has not been implemented for volume driver - %s", d.String())
 	return &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "InspectVolume()",
+		Operation: "UpdateFBDANFSEndpoint()",
 	}
 }
 

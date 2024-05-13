@@ -106,7 +106,7 @@ func (i *ibm) UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) error
 	log.Warnf("UpdateFBDANFSEndpoint function has not been implemented for volume driver - %s", i.String())
 	return &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "InspectVolume()",
+		Operation: "UpdateFBDANFSEndpoint()",
 	}
 }
 

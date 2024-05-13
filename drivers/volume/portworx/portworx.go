@@ -1914,7 +1914,7 @@ func (d *portworx) UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) 
 			TimeBeforeRetry: defaultRetryInterval,
 		})
 	if err != nil {
-		return fmt.Errorf("failed setting FBDA NFS endpoint for volume '%s' to '%s', Err: %v", volumeName, newEndpoint, err)
+		return fmt.Errorf("failed setting FBDA NFS endpoint for volume [%s] to [%s] from node [%s], Err: %v", volumeName, newEndpoint, nodes[0], err)
 	}
 	return nil
 }
