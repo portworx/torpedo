@@ -12569,11 +12569,6 @@ func GetMultipathDeviceIDsOnNode(n *node.Node) ([]string, error) {
 	return multiPathDev, nil
 }
 
-// DeleteNamespace Deletes Namespace on the cluster
-func DeleteNamespace(nameSpace string) error {
-	return core.Instance().DeleteNamespace(nameSpace)
-}
-
 // CreateFlashStorageClass Creates storage class for Purity Backend
 func CreateFlashStorageClass(scName string, scType string, params map[string]string) error {
 	param := make(map[string]string)
