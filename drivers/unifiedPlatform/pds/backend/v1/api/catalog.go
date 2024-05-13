@@ -70,8 +70,7 @@ func (ds *PDS_API_V1) ListDataServiceImages(input *automationModels.WorkFlowRequ
 	}
 
 	dsRequest := catalogv1.ApiImageServiceListImagesRequest{}
-	dsRequest = dsRequest.DataServiceId(input.DataServiceId)
-	dsRequest.DataServiceVersionId(input.DataServiceVersionId)
+	dsRequest = dsRequest.DataServiceId(input.DataServiceId).DataServiceVersionId(input.DataServiceVersionId)
 
 	dsImagesModel, res, err := dsClient.ImageServiceListImagesExecute(dsRequest)
 

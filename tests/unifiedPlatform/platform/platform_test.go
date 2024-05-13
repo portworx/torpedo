@@ -82,7 +82,7 @@ var _ = Describe("{PlatformBasicTest}", func() {
 		Step("Register Target Cluster", func() {
 			workflowTargetCluster.Project = workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
-			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane(false)
+			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane()
 			log.FailOnError(err, "Unable to register target cluster")
 			log.InfoD("Target cluster registered with uid - [%s]", workflowTargetCluster.ClusterUID)
 		})
@@ -189,7 +189,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 		Step("Register Target Cluster", func() {
 			workflowTargetCluster.Project = workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
-			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane(false)
+			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane()
 			log.FailOnError(err, "Unable to register target cluster")
 			log.InfoD("Target cluster registered with uid - [%s]", workflowTargetCluster.ClusterUID)
 		})
@@ -265,7 +265,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 			workflowServiceAccount.SwitchToServiceAccount(projectAdmin)
 			workflowTargetCluster.Project = workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
-			_, err := workflowTargetCluster.RegisterToControlPlane(false)
+			_, err := workflowTargetCluster.RegisterToControlPlane()
 			dash.VerifyFatal(strings.Contains(err.Error(), "403 Forbidden"), true, "Register Target Cluster with Admin - 403 Forbidden")
 		})
 
@@ -276,7 +276,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 			workflowServiceAccount.SwitchToServiceAccount(tenantAdmin)
 			workflowTargetCluster.Project = workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
-			_, err := workflowTargetCluster.RegisterToControlPlane(false)
+			_, err := workflowTargetCluster.RegisterToControlPlane()
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Target cluster registered - Tenant Admin"))
 		})
 
