@@ -12579,6 +12579,7 @@ func CreateFlashStorageClass(scName string,
 	ReclaimPolicy v1.PersistentVolumeReclaimPolicy,
 	params map[string]string,
 	MountOptions []string,
+	AllowVolumeExpansion *bool,
 	VolumeBinding storageapi.VolumeBindingMode,
 	AllowedTopologies map[string][]string) error {
 
@@ -12624,13 +12625,14 @@ func CreateFlashStorageClass(scName string,
 	}
 
 	scObj := storageapi.StorageClass{
-		ObjectMeta:        v1obj,
-		Provisioner:       k8s.CsiProvisioner,
-		Parameters:        params,
-		MountOptions:      MountOptions,
-		ReclaimPolicy:     &reclaimPolicy,
-		VolumeBindingMode: &VolumeBinding,
-		AllowedTopologies: allowedTopologies,
+		ObjectMeta:           v1obj,
+		Provisioner:          k8s.CsiProvisioner,
+		Parameters:           params,
+		MountOptions:         MountOptions,
+		ReclaimPolicy:        &reclaimPolicy,
+		AllowVolumeExpansion: AllowVolumeExpansion,
+		VolumeBindingMode:    &VolumeBinding,
+		AllowedTopologies:    allowedTopologies,
 	}
 
 	k8storage := schedstorage.Instance()
