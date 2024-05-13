@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/portworx/sched-ops/k8s/core"
@@ -14,12 +15,9 @@ import (
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
-	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
-
-var dash *aetosutil.Dashboard
 
 var (
 	WorkflowDataService     pds.WorkflowDataService
@@ -118,7 +116,13 @@ func EndPDSTorpedoTest() {
 
 	Step("Purging all PDS related objects", func() {
 		errors := PurgePDS()
-		dash.VerifyFatal(len(errors), 0, "errors occured while PDS resource cleanup")
+		if len(errors) > 0 {
+			var errorStrings []string
+			for _, err := range errors {
+				errorStrings = append(errorStrings, err.Error())
+			}
+			log.FailOnError(fmt.Errorf("[%s]", strings.Join(errorStrings, "\n\n")), "errors occurred while cleanup")
+		}
 	})
 
 }
