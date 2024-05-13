@@ -3710,7 +3710,7 @@ var _ = Describe("{ExpandMultiplePoolsWhenFBDAVolumeCreationInProgress}", func()
 
 	/*
 			https://purestorage.atlassian.net/browse/PTX-24081
-		Expand multiple pools in parallel , when lots of FADA Volumes are being created
+		Expand multiple pools in parallel , when lots of FBDA Volumes are being created
 
 	*/
 	JustBeforeEach(func() {
@@ -3825,7 +3825,7 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 
 	/*
 			https://purestorage.atlassian.net/browse/PTX-23974
-		Expand multiple pools in parallel , when lots of FADA Volumes are being created
+		Expand multiple pools in parallel , when lots of FADA and FBDA Volumes are being created
 
 	*/
 	JustBeforeEach(func() {
