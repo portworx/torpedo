@@ -6483,15 +6483,15 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 	updateMetrics(*event)
 }
 
-// TriggerVolumeUpdate enables to test volume update
+// TriggerVolumeIOProfileUpdate enables to test volume IO profile update
 func TriggerVolumeIOProfileUpdate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
-	startLongevityTest(UpdateVolume)
+	startLongevityTest(UpdateIOProfile)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: UpdateVolume,
+			Type: UpdateIOProfile,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -6650,7 +6650,7 @@ func updateIOProfile(event *EventRecord, pvcProfileMap map[string]VolumeIOProfil
 					UpdateOutcome(event, err)
 				}
 				log.InfoD("IO profile after update %v", appVol.Spec.IoProfile.SimpleString())
-				log.InfoD("Dervived IO profile after update %v", appVol.DerivedIoProfile.SimpleString())
+				log.InfoD("Derived IO profile after update %v", appVol.DerivedIoProfile.SimpleString())
 				if ioProfileTo != appVol.Spec.IoProfile {
 					err = fmt.Errorf("Failed to update volume %v with expected IO profile %v ", pvcName, ioProfileTo)
 					UpdateOutcome(event, err)
