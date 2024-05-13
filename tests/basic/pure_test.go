@@ -3755,8 +3755,6 @@ var _ = Describe("{FBDATopologyCreateTest}", func() {
 					Name: nsName,
 				},
 			}
-			core.Instance().DeleteNamespace(nsName)
-			time.Sleep(1 * time.Second)
 			log.InfoD("Create NS %v", nsName)
 			_, err := core.Instance().CreateNamespace(ns)
 			if err != nil {
@@ -3789,7 +3787,7 @@ var _ = Describe("{FBDATopologyCreateTest}", func() {
 			}
 
 			core.Instance().DeletePersistentVolumeClaim(pvcName, appNs)
-			time.Sleep(1 * time.Second)
+			time.Sleep(30 * time.Second)
 			_, err := core.Instance().CreatePersistentVolumeClaim(pvcObj)
 			if err != nil {
 				log.Errorf("Error creating pvc[%v], error[%v]", pvcName, err)
@@ -3929,7 +3927,7 @@ var _ = Describe("{FBDATopologyCreateTestNoRegion}", func() {
 				},
 			}
 			core.Instance().DeletePersistentVolumeClaim(pvcName, appNs)
-			time.Sleep(1 * time.Second)
+			time.Sleep(30 * time.Second)
 			_, err := core.Instance().CreatePersistentVolumeClaim(pvcObj)
 			if err != nil {
 				log.Errorf("Error creating pvc[%v], error[%v]", pvcName, err)
