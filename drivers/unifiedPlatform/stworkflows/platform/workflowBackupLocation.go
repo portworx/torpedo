@@ -69,3 +69,10 @@ func (bkpLoc *WorkflowBackupLocation) ListBackupLocation() ([]*WorkflowBackupLoc
 func (bkpLoc *WorkflowBackupLocation) DeleteBackupLocation(bkpLocationId string) error {
 	return platformLibs.DeleteBackupLocation(bkpLocationId)
 }
+
+// Deleting all automation created backup locations
+func (bkpLoc *WorkflowBackupLocation) Purge() error {
+	log.Infof("Deleteing [%s] from control plane", bkpLoc.BkpLocation.Name)
+	err := bkpLoc.DeleteBackupLocation(bkpLoc.BkpLocation.BkpLocationId)
+	return err
+}
