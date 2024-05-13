@@ -2104,7 +2104,7 @@ var _ = Describe("{PVCLUNValidation}", func() {
 		}
 
 		for _, pvc := range pvcList.Items {
-			err := Inst().S.WaitForSinglePVCToBound(pvc.Name, nsName)
+			err := Inst().S.WaitForSinglePVCToBound(pvc.Name, nsName, 0)
 			log.FailOnError(err, fmt.Sprintf("error validating PVC [%s] status in namespace [%s]", pvc.Name, nsName))
 		}
 
@@ -3809,7 +3809,7 @@ var _ = Describe("{FBDATopologyCreateTest}", func() {
 		time.Sleep(10 * time.Second)
 		pvc1, err := core.Instance().GetPersistentVolumeClaim(pvc, ns)
 		log.InfoD("PVC pvc[%v] err[%v]", pvc1, err)
-		err = Inst().S.WaitForSinglePVCToBound(pvc, ns)
+		err = Inst().S.WaitForSinglePVCToBound(pvc, ns, 3)
 		log.FailOnError(err, fmt.Sprintf("error validating pvc"))
 	})
 	JustAfterEach(func() {
@@ -3880,8 +3880,6 @@ var _ = Describe("{FBDATopologyCreateTestNoRegion}", func() {
 					Name: nsName,
 				},
 			}
-			core.Instance().DeleteNamespace(nsName)
-			time.Sleep(1 * time.Second)
 			log.InfoD("Create NS %v", nsName)
 			_, err := core.Instance().CreateNamespace(ns)
 			if err != nil {
@@ -3945,7 +3943,7 @@ var _ = Describe("{FBDATopologyCreateTestNoRegion}", func() {
 		time.Sleep(10 * time.Second)
 		pvc1, err := core.Instance().GetPersistentVolumeClaim(pvc, ns)
 		log.InfoD("PVC pvc[%v] err[%v]", pvc1, err)
-		err = Inst().S.WaitForSinglePVCToBound(pvc, ns)
+		err = Inst().S.WaitForSinglePVCToBound(pvc, ns, 3)
 		if err == nil {
 			err = fmt.Errorf("PVC Bound Unexpectedly")
 			log.FailOnError(err, fmt.Sprintf("error validating pvc"))
@@ -4057,7 +4055,7 @@ var _ = Describe("{FBDATopologyCreateTestNoSCTopology}", func() {
 		time.Sleep(10 * time.Second)
 		pvc1, err := core.Instance().GetPersistentVolumeClaim(pvc, ns)
 		log.InfoD("PVC pvc[%v] err[%v]", pvc1, err)
-		err = Inst().S.WaitForSinglePVCToBound(pvc, ns)
+		err = Inst().S.WaitForSinglePVCToBound(pvc, ns, 3)
 		if err == nil {
 			err = fmt.Errorf("PVC Bound Unexpectedly")
 			log.FailOnError(err, fmt.Sprintf("error validating pvc"))
