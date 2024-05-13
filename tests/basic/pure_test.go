@@ -3688,6 +3688,136 @@ var _ = Describe("{IscsiPortsDownDuringNewPoolCreateInProgress}", func() {
 	})
 })
 
+var _ = Describe("{FBDATopologyCreateTest}", func() {
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("FBDATopologyCreateTest",
+			"Try Creating FBDA pvcs using various topology options", nil, 0)
+	})
+	itLog := "FBDATopologyCreateTest"
+	It(itLog, func() {
+		/*
+			var contexts []*scheduler.Context
+			k8sCore = core.Instance()
+			contexts = make([]*scheduler.Context, 0)
+			contexts = append(contexts, ScheuleApplications(fmt.Sprintf("fbdatoplogytest"))...)
+		*/
+		scName := "fbda-top-1"
+		log.InfoD("Creating storage class %s", scName)
+		createSC := func(scName string) {
+			params := make(map[string]string)
+			params["repl"] = "1"
+			params["priority_io"] = "high"
+			params["io_profile"] = "auto"
+			params["backend"] = "pure_file"
+			params["pure_nfs_endpoint"] = "10.9.126.67"
+			bindMode := storageApi.VolumeBindingImmediate
+			reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+			v1obj := metav1.ObjectMeta{
+				Name: scName,
+			}
+
+			//kvmap1 := make(map[string][]string)
+			//kvmap2:= make(map[string][]string)
+			var zoneList []string
+			zoneList = append(zoneList, "zone-0")
+			//kvmap1["topology.portworx.io/zone"] = zoneList
+			var regionList []string
+			regionList = append(zoneList, "region-0")
+			//kvmap2["topology.portworx.io/region"] = regionList
+			var list []v1.TopologySelectorLabelRequirement
+			var req v1.TopologySelectorLabelRequirement
+			req.Key = "toplogy.portworx.io/zone"
+			req.Values = zoneList
+			var req1 v1.TopologySelectorLabelRequirement
+			req1.Key = "toplogy.portworx.io/region"
+			req1.Values = regionList
+			list = append(list, req)
+			list = append(list, req1)
+
+			var allowedTop []v1.TopologySelectorTerm
+			var top v1.TopologySelectorTerm
+			top.MatchLabelExpressions = list
+			allowedTop = append(allowedTop, top)
+			/*
+				allowedTop = append(allowedTop, kvmap1)
+				/*
+				allowedTop.MatchLabelExpressions = list
+				allowedTop = append(allowedTop, kvmap1)
+				allowedTop = append(allowedTop, kvmap2)
+				v1Topology := v1.AllowedTopologies {
+					MatchLabelExpressions: list,
+				}
+			*/
+			scObj := storageApi.StorageClass{
+				ObjectMeta:        v1obj,
+				Provisioner:       k8s.CsiProvisioner,
+				Parameters:        params,
+				ReclaimPolicy:     &reclaimPolicyDelete,
+				VolumeBindingMode: &bindMode,
+				AllowedTopologies: allowedTop,
+			}
+			sc, err := storage.Instance().CreateStorageClass(&scObj)
+			log.Infof("Phani: Creation of sc[%v] got err[%v]", sc, err)
+
+		}
+		createNS := func(nsName string) {
+			ns := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nsName,
+				},
+			}
+			log.InfoD("Create NS %v", nsName)
+			_, err := core.Instance().CreateNamespace(ns)
+			if err != nil {
+				if apierrors.IsAlreadyExists(err) {
+					log.Infof("Namespace %s already exists. Skipping creation.", ns.Name)
+				} else {
+					log.FailOnError(err, fmt.Sprintf("error creating namespace [%s]", nsName))
+				}
+			}
+		}
+		createPVC := func(pvcName, scName, appNs string) {
+			log.InfoD("creating PVC [%s] in namespace [%s]", pvcName, appNs)
+
+			pvcObj := &v1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      pvcName,
+					Namespace: appNs,
+				},
+				Spec: v1.PersistentVolumeClaimSpec{
+					AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+					StorageClassName: &scName,
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{
+							v1.ResourceStorage: resource.MustParse("5Gi"),
+						},
+					},
+				},
+			}
+			_, err := core.Instance().CreatePersistentVolumeClaim(pvcObj)
+			if err != nil {
+				log.FailOnError(err, fmt.Sprintf("Error creating pvc[%v]", pvcName))
+			}
+
+		}
+
+		createSC("phani")
+		createNS("testNS")
+		createPVC("pvcwithtop", "phani", "testNS")
+		time.Sleep(10 * time.Second)
+		pvc, err := core.Instance().GetPersistentVolumeClaim("pvcwithtop", "testNS")
+		log.InfoD("Phani: PVC pvc[%v] err[%v]", pvc, err)
+		err = Inst().S.WaitForSinglePVCToBound("pvcwithtop", "testNS")
+		log.FailOnError(err, fmt.Sprintf("error validating pvc"))
+	})
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+	})
+
+})
+
 var _ = Describe("{DeleteFADAVolumeFromBackend}", func() {
 
 	/*
