@@ -91,7 +91,6 @@ import (
 	storageapi "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -9454,16 +9453,20 @@ func AddMetadataDisk(n node.Node) error {
 }
 
 // createNamespaces Create N number of namespaces and return namespace list
-func createNamespaces(numberOfNamespaces int) ([]string, error) {
+func createNamespaces(nsName string, numberOfNamespaces int) ([]string, error) {
 
 	// Create multiple namespaces in string
 	var (
 		namespaces []string
 	)
+	namespace := fmt.Sprintf("large-resource-%v", time.Now().Unix())
+	if nsName != "" {
+		namespace = fmt.Sprintf("%s", nsName)
+	}
 
 	// Create a good number of namespaces
-	for i := 0; i < numberOfNamespaces; i++ {
-		namespace := fmt.Sprintf("large-resource-%d-%v", i, time.Now().Unix())
+	for nsCount := 0; nsCount < numberOfNamespaces; nsCount++ {
+		namespace := fmt.Sprintf("%v-%v", namespace, nsCount)
 		nsName := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namespace,
@@ -12566,26 +12569,8 @@ func GetMultipathDeviceIDsOnNode(n *node.Node) ([]string, error) {
 	return multiPathDev, nil
 }
 
-// CreateNameSpace Creates new NameSpace
-func CreateNameSpace(nameSpace string) error {
-	ns := &v1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: nameSpace,
-		},
-	}
-	_, err := core.Instance().CreateNamespace(ns)
-	if err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			log.Infof("Namespace %s already exists. Skipping creation.", ns.Name)
-		} else {
-			return err
-		}
-	}
-	return nil
-}
-
-// Delete Namespace on the cluster
-func DeleteNameSpace(nameSpace string) error {
+// DeleteNamespace Deletes Namespace on the cluster
+func DeleteNamespace(nameSpace string) error {
 	return core.Instance().DeleteNamespace(nameSpace)
 }
 
