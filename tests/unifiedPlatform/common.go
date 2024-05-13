@@ -117,7 +117,8 @@ func EndPDSTorpedoTest() {
 	}()
 
 	Step("Purging all PDS related objects", func() {
-		PurgePDS()
+		errors := PurgePDS()
+		dash.VerifyFatal(len(errors), 0, "errors occured while PDS resource cleanup")
 	})
 
 }
@@ -187,43 +188,60 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 }
 
 // PurgePDS purges all default PDS related resources created during testcase run
-func PurgePDS() {
+func PurgePDS() []error {
+
+	var allErrors []error
 
 	if WorkflowPDSRestore.Source.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
 		err := SetDestinationKubeConfig()
-		log.FailOnError(err, "Failed to switched to destination cluster")
+		log.FailOnError(err, "Unable to switch cluster kubeconfig")
 	} else {
 		log.Infof("Source and target cluster are same. Switch is not required")
 	}
 
 	log.InfoD("Purging all restore objects")
 	err := WorkflowPDSRestore.Purge()
-	log.FailOnError(err, "some error occurred while purging restore objects")
+	if err != nil {
+		log.Errorf("error while purging restore - [%s]", err.Error())
+		allErrors = append(allErrors, err)
+	}
 
 	if WorkflowPDSRestore.Source.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
 		log.InfoD("Purging all restore destination namespaces")
 		err = WorkflowPDSRestore.Destination.Purge()
-		log.FailOnError(err, "some error occurred while purging restore destination namespaces")
+		if err != nil {
+			log.Errorf("error while purging destination namespaces - [%s]", err.Error())
+			allErrors = append(allErrors, err)
+		}
 	}
 
 	if WorkflowPDSRestore.Source.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
 		err = SetSourceKubeConfig()
-		log.FailOnError(err, "failed to switch context to source cluster")
+		log.FailOnError(err, "Unable to switch cluster kubeconfig")
 	} else {
 		log.Infof("Source and target cluster are same. Switch is not required")
 	}
 
 	log.InfoD("Purging all dataservice objects")
 	err = WorkflowDataService.Purge()
-	log.FailOnError(err, "some error occurred while purging data service objects")
+	if err != nil {
+		log.Errorf("error while purging dataservices - [%s]", err.Error())
+		allErrors = append(allErrors, err)
+	}
 
 	log.InfoD("Purging all restore source namespaces")
 	err = WorkflowPDSRestore.Source.Purge()
-	log.FailOnError(err, "some error occurred while purging restore source namespaces")
+	if err != nil {
+		log.Errorf("error while purging restored namespaces - [%s]", err.Error())
+		allErrors = append(allErrors, err)
+	}
 
 	log.InfoD("Purging all source namespace objects")
 	err = WorkflowNamespace.Purge()
-	log.FailOnError(err, "some error occurred while purging namespace objects")
+	if err != nil {
+		log.Errorf("error while purging all namespaces - [%s]", err.Error())
+		allErrors = append(allErrors, err)
+	}
 
 	//log.InfoD("Purging all backup objects")
 	//err = WorkflowPDSBackup.Purge()
@@ -241,13 +259,7 @@ func PurgePDS() {
 	//	log.Infof("Error while deleting backup config objects - Error - [%s]", err.Error())
 	//}
 
-	log.InfoD("Purging all restore source namespaces")
-	err = WorkflowPDSRestore.Source.Purge()
-	log.FailOnError(err, "some error occurred while purging restore source namespaces")
-
-	log.InfoD("Purging all source namespace objects")
-	err = WorkflowNamespace.Purge()
-	log.FailOnError(err, "some error occurred while purging namespace objects")
+	return allErrors
 }
 
 // CheckforClusterSwitch checks if restore needs to be created on source or dest
