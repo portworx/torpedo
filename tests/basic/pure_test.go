@@ -1170,9 +1170,15 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 					log.FailOnError(err, "Failed to get volumes from context")
 					log.InfoD(fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
 						Inst().V.String(), ctx.App.Key, appVolumes))
+					//for _, eachVol := range appVolumes {
+					//	pvc, err := GetPVCObjFromVol(eachVol)
+					//	log.FailOnError(err, "Failed to get PVC Details from Volume [%v]", eachVol.Name)
+					//
+					//}
 					pvcs, err := GetContextPVCs(ctx)
 					log.FailOnError(err, "Failed to get pvc's from context")
 					for _, pvc := range pvcs {
+						log.InfoD("debug statement %v", pvc)
 						pvcSize := pvc.Spec.Resources.Requests.Storage().String()
 						pvcSize = strings.TrimSuffix(pvcSize, "Gi")
 						pvcSizeInt, err := strconv.Atoi(pvcSize)
@@ -1194,6 +1200,7 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 				pvcs, err := GetContextPVCs(ctx)
 				log.FailOnError(err, "Failed to get pvc's from context")
 				for _, pvc := range pvcs {
+					log.InfoD("debug statement %v", pvc)
 					pvcSize := pvc.Spec.Resources.Requests.Storage().String()
 					pvcSize = strings.TrimSuffix(pvcSize, "Gi")
 					pvcSizeInt, err := strconv.Atoi(pvcSize)
