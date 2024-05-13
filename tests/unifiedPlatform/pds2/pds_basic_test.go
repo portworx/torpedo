@@ -38,7 +38,7 @@ var _ = BeforeSuite(func() {
 
 		log.InfoD("Get Account ID")
 		//TODO: Get the accountID
-		AccID = "acc:f50fbd20-626a-43c1-8cf1-cb2518770c4e"
+		AccID = "acc:a84dcc32-d04d-488f-8627-3cb38e214e43"
 
 		err = platformUtils.InitUnifiedApiComponents(os.Getenv(EnvControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
@@ -237,19 +237,19 @@ var _ = AfterSuite(func() {
 		allErrors = append(allErrors, err)
 	}
 
-	//log.InfoD("Purging all backup locations")
-	//err = WorkflowbkpLoc.Purge()
-	//if err != nil {
-	//	log.Errorf("some error occurred while purging backup locations - [%s]", err.Error())
-	//	allErrors = append(allErrors, err)
-	//}
-	//
-	//log.InfoD("Purging all cloud credentials")
-	//err = WorkflowCc.Purge()
-	//if err != nil {
-	//	log.Errorf("some error occurred while purging cloud credentials - [%s]", err.Error())
-	//	allErrors = append(allErrors, err)
-	//}
+	log.InfoD("Purging all backup locations")
+	err = WorkflowbkpLoc.Purge()
+	if err != nil {
+		log.Errorf("some error occurred while purging backup locations - [%s]", err.Error())
+		allErrors = append(allErrors, err)
+	}
+
+	log.InfoD("Purging all cloud credentials")
+	err = WorkflowCc.Purge()
+	if err != nil {
+		log.Errorf("some error occurred while purging cloud credentials - [%s]", err.Error())
+		allErrors = append(allErrors, err)
+	}
 
 	if len(allErrors) > 0 {
 		var allErrorStrings []string
