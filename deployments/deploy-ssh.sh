@@ -497,7 +497,7 @@ spec:
     args: [ "--trace",
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
-            "--poll-progress-after", "10m",
+            "--poll-progress-after", "20m",
             --junit-report=$JUNIT_REPORT_PATH,
             "$FOCUS_ARG",
             "$SKIP_ARG",
@@ -568,6 +568,7 @@ spec:
             "--torpedo-job-name=$TORPEDO_JOB_NAME",
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
+            "--fa-secret=${FA_SECRET}",
             "$APP_DESTROY_TIMEOUT_ARG",
             "$SCALE_APP_TIMEOUT_ARG",
     ]

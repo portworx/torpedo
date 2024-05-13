@@ -235,6 +235,11 @@ var _ = BeforeSuite(func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for Global Post-rule of application"))
 		}
 	}
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	log.FailOnError(err, "failed to get Px-Backup namespace")
+	PvcListBeforeRun, err = GetPVCListForNamespace(pxBackupNamespace)
+	log.FailOnError(err, "failed to list PVCs before run")
+	log.Infof("PVC list before the run is [%s]", PvcListBeforeRun)
 })
 
 var _ = AfterSuite(func() {
@@ -417,6 +422,20 @@ var _ = AfterSuite(func() {
 				log.Infof("Group %s was not deleted", group.Name)
 			}
 		}
+
+		// Fetch PVC list for Px-Backup namespace
+		pxBackupNamespace, err := backup.GetPxBackupNamespace()
+		log.FailOnError(err, "failed to get Px-Backup namespace")
+		PvcListAfterRun, err = GetPVCListForNamespace(pxBackupNamespace)
+		log.FailOnError(err, "failed to list PVCs after run")
+		log.Infof("PVC list after the run is [%s]", PvcListAfterRun)
+
+		//TO DO: Uncomment the below part after fixing ValidatePVCCleanup
+		// Verify PVC Cleanup on PX-Backup namespace
+		//if err := ValidatePVCCleanup(PvcListBeforeRun, PvcListAfterRun); err != nil {
+		//	log.FailOnError(err, "PVC cleanup validation failed")
+		//}
+		//fmt.Println("PVC cleanup validation passed.")
 	}
 })
 
