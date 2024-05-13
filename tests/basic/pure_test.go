@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
 
@@ -3591,6 +3590,101 @@ var _ = Describe("{DeleteFADAVolumeFromBackend}", func() {
 				log.FailOnError(fmt.Errorf("Pod [%v] still in Running state even after backend volumes are deleted", eachPodAfter.Name), "is Pod still running ?")
 			}
 		}
+	})
+
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})
+
+var _ = Describe("{ExpandMultiplePoolsWhenFADAVolumeCreationInProgress}", func() {
+
+	/*
+			https://purestorage.atlassian.net/browse/PTX-23977
+		Px Should throw proper error message when backend volumes from FA is deleted
+
+	*/
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("CreateNewPoolWhenFADAVolumeCreationInProgress",
+			"Automate Scenario Create new pools when lots of Create / Delete FBDA Volumes are in progress",
+			nil, 0)
+	})
+
+	itLog := "DeleteFADAVolumeFromBackend"
+	It(itLog, func() {
+
+		// Create Namespace on the cluster
+		nsuuid := uuid.New()
+		nsName := fmt.Sprintf("fada-ns-%s", nsuuid.String())
+
+		log.Infof("Create Namespace with Name [%v]", nsName)
+		namespace, err := CreateNamespaces(nsName, 1)
+		log.FailOnError(err, "Failed to create Namespace")
+
+		deleteNamespaces := func() {
+			err := DeleteNamespaces(namespace)
+			log.FailOnError(err, fmt.Sprintf("Failed to Delete namespaces [%v]", namespace))
+		}
+		defer deleteNamespaces()
+
+		// Create Storage Class
+		scName := fmt.Sprintf("fada-sc-%s", nsuuid.String())
+		log.Infof("Create Storage class with Name [%v]", scName)
+		err = CreateFlashStorageClass(scName,
+			"pure_block",
+			v1.PersistentVolumeReclaimDelete,
+			nil, nil,
+			storageApi.VolumeBindingImmediate,
+			nil)
+		log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", scName))
+
+		var wgfada sync.WaitGroup
+		wgfada.Add(1)
+		createFADAVolumes := func(wg *sync.WaitGroup) {
+			defer GinkgoRecover()
+			wg.Done()
+			for _, eachNs := range namespace {
+				// Create 100 PVCs on the Namespace
+				for i := 0; i < 100; i++ {
+					pvcName := fmt.Sprintf("fada-pvc-%d-%s", i, nsuuid.String())
+					log.FailOnError(CreateFlashPVCOnCluster(pvcName, scName, eachNs, "100"),
+						"Failed to create PVC on the cluster")
+				}
+			}
+		}
+
+		// Expand Pools on all available Nodes while Volume Creation in Progress
+		poolIdsToExpand := []string{}
+		for _, eachNodes := range node.GetStorageNodes() {
+			pools, err := GetPoolsDetailsOnNode(&eachNodes)
+			// Get random Pool
+			randomIndex := rand.Intn(len(pools))
+			pickPool := pools[randomIndex]
+			if err == nil {
+				poolIdsToExpand = append(poolIdsToExpand, pickPool.Uuid)
+			} else {
+				log.InfoD("Errored while getting Pool IDs , ignoring for now ...")
+			}
+		}
+		dash.VerifyFatal(len(poolIdsToExpand) > 0, true,
+			fmt.Sprintf("No pools with IO present ?"))
+
+		go createFADAVolumes(&wgfada)
+
+		expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_ADD_DISK}
+		if !IsPoolAddDiskSupported() {
+			expandType = []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+		}
+		wg, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
+		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
+
+		wg.Wait()
+		wgfada.Wait()
+
 	})
 
 	JustAfterEach(func() {
