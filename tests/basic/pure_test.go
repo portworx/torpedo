@@ -1120,6 +1120,111 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 	})
 })
 
+var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-23985
+		1. Deploy an app which uses FADA volume and an app which uses
+		2. Parallely resize the pvc of FADA deployed app and also resize the base volume
+		3. Validate the volume resize
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("TestParallelPxAndFadaVolumeResize", "Px Volume Resize in parallel to FADA/FBDA Volume Resize ( PVC Resize )", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	itLog := "Px Volume Resize in parallel to FADA/FBDA Volume Resize ( PVC Resize )"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		stepLog := "Deploy applications"
+		Step(stepLog, func() {
+
+			Inst().AppList = []string{"fio"}
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("baseapps-%d", i))...)
+			}
+
+		})
+
+		stepLog = "Deploy a app which uses FADA volume and validate"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			context, err := Inst().S.Schedule("test-fada-volume", scheduler.ScheduleOptions{
+				AppKeys:            []string{"fio-fa-davol"},
+				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
+				PvcSize:            6 * units.GiB,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", "test-fada-volume")
+			contexts = append(contexts, context...)
+
+		})
+		ValidateApplications(contexts)
+
+		stepLog = "Do parallel resize of base apps volume and FADA volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			go func() {
+				for _, ctx := range contexts[:1] {
+					var appVolumes []*volume.Volume
+					var err error
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "Failed to get volumes from context")
+					log.InfoD(fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
+						Inst().V.String(), ctx.App.Key, appVolumes))
+					pvcs, err := GetContextPVCs(ctx)
+					log.FailOnError(err, "Failed to get pvc's from context")
+					for _, pvc := range pvcs {
+						pvcSize := pvc.Spec.Resources.Requests.Storage().String()
+						pvcSize = strings.TrimSuffix(pvcSize, "Gi")
+						pvcSizeInt, err := strconv.Atoi(pvcSize)
+						log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
+						resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSizeInt))
+						log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
+						log.InfoD("Vol uid %v", resizedVol.ID)
+					}
+				}
+
+			}()
+			for _, ctx := range contexts[1:] {
+				var appVolumes []*volume.Volume
+				var err error
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes from context")
+				log.InfoD(fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
+					Inst().V.String(), ctx.App.Key, appVolumes))
+				pvcs, err := GetContextPVCs(ctx)
+				log.FailOnError(err, "Failed to get pvc's from context")
+				for _, pvc := range pvcs {
+					pvcSize := pvc.Spec.Resources.Requests.Storage().String()
+					pvcSize = strings.TrimSuffix(pvcSize, "Gi")
+					pvcSizeInt, err := strconv.Atoi(pvcSize)
+					log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
+					resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSizeInt))
+					log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
+					log.InfoD("Vol uid %v", resizedVol.ID)
+				}
+			}
+		})
+		stepLog = "Validate volume resize on both base volume and FADA volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				var appVolumes []*volume.Volume
+				var err error
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes from context")
+				for _, v := range appVolumes {
+					err := Inst().V.ValidateUpdateVolume(v, nil)
+					log.FailOnError(err, "Could not validate volume resize %v", v.Name)
+				}
+			}
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 // This test Kills the PX nodes where FADA volumes are attached, Deletes the pods and PVCs.
 /*
 https://portworx.testrail.net/index.php?/cases/view/92893
