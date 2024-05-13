@@ -3932,17 +3932,21 @@ var _ = Describe("{FBDATopologyCreateTestNoRegion}", func() {
 		pvc := "pvcwithtop-noregion"
 		err := createSC(sc)
 		log.FailOnError(err, fmt.Sprintf("Failed to create SC, error[%v]", err))
+		/*
 		defer func() {
 			storage.Instance().DeleteStorageClass(sc)
 		}()
+		*/
 		err = createNS(ns)
 		log.FailOnError(err, fmt.Sprintf("Failed to create NS, error[%v]", err))
 		err = createPVC(pvc, sc, ns)
 		log.FailOnError(err, fmt.Sprintf("Failed to create PVC, error[%v]", err))
+		/*
 		defer func() {
 			core.Instance().DeletePersistentVolumeClaim(pvc, ns)
 			core.Instance().DeleteNamespace(ns)
 		}()
+		*/
 
 		time.Sleep(10 * time.Second)
 		pvc1, err := core.Instance().GetPersistentVolumeClaim(pvc, ns)
