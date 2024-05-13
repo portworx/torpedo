@@ -1222,6 +1222,7 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		appsValidateAndDestroy(contexts)
 	})
 })
 
