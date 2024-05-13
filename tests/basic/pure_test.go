@@ -1179,11 +1179,10 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 					log.FailOnError(err, "Failed to get pvc's from context")
 					for _, pvc := range pvcs {
 						log.InfoD("debug statement %v", pvc)
-						pvcSize := pvc.Spec.Resources.Requests.Storage().String()
-						pvcSize = strings.TrimSuffix(pvcSize, "Gi")
-						pvcSizeInt, err := strconv.Atoi(pvcSize)
-						log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
-						resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSizeInt))
+						pvcSizeObj := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+						pvcSize, _ := pvcSizeObj.AsInt64()
+						log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSize, pvc.UID)
+						resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSize))
 						log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
 						log.InfoD("Vol uid %v", resizedVol.ID)
 					}
