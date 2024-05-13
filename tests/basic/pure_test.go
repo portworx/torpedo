@@ -3802,13 +3802,16 @@ var _ = Describe("{FBDATopologyCreateTest}", func() {
 
 		}
 
-		createSC("phani")
-		createNS("testNS")
-		createPVC("pvcwithtop", "phani", "testNS")
+		sc := "phani"
+		ns :=  "testns"
+		pvc := "pvcwithtop"
+		createSC(sc)
+		createNS(ns)
+		createPVC(pvc, sc, ns)
 		time.Sleep(10 * time.Second)
-		pvc, err := core.Instance().GetPersistentVolumeClaim("pvcwithtop", "testNS")
-		log.InfoD("Phani: PVC pvc[%v] err[%v]", pvc, err)
-		err = Inst().S.WaitForSinglePVCToBound("pvcwithtop", "testNS")
+		pvc1, err := core.Instance().GetPersistentVolumeClaim(pvc, ns)
+		log.InfoD("Phani: PVC pvc[%v] err[%v]", pvc1, err)
+		err = Inst().S.WaitForSinglePVCToBound(pvc, ns)
 		log.FailOnError(err, fmt.Sprintf("error validating pvc"))
 	})
 	JustAfterEach(func() {
