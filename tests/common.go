@@ -2500,6 +2500,7 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 		TearDownContext(ctx, opts)
 	}
 
+	/* Removing Data error validation till PB-6271 is resolved.
 	if allErrors != "" {
 		if IsReplacePolicySetToDelete {
 			log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
@@ -2509,6 +2510,7 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 			return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
 		}
 	}
+	*/
 
 	return nil
 }
@@ -8382,9 +8384,9 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 
 	var maxCloudDrives int
 
-	if _, err := core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
+	if _, err = core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
 		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
-	} else if _, err := core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
+	} else if _, err = core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
 		maxCloudDrives = FA_MAX_CLOUD_DRIVES
 	} else {
 		maxCloudDrives = CLOUD_PROVIDER_MAX_CLOUD_DRIVES

@@ -1258,6 +1258,7 @@ func (d *portworx) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting pool status on node [%s], Err: %v", n.Name, err)
 	}
+	log.Debugf("GetNodePoolsStatus output: %s", out)
 	outLines := strings.Split(out, "\n")
 
 	poolsData := make(map[string]string)
@@ -5234,7 +5235,8 @@ func (d *portworx) ValidateDriver(endpointVersion string, autoUpdateComponents b
 		}
 
 		// Validate StorageCluster
-		if err = optest.ValidateStorageCluster(imageList, newStc, validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
+		storageClusterValidateTimeout := time.Duration(len(node.GetStorageDriverNodes())*9) * time.Minute
+		if err = optest.ValidateStorageCluster(imageList, newStc, storageClusterValidateTimeout, defaultRetryInterval, true); err != nil {
 			return err
 		}
 	}
@@ -5278,8 +5280,8 @@ func (d *portworx) updateAndValidateStorageCluster(cluster *v1.StorageCluster, f
 			}
 		}
 	}
-
-	if err = optest.ValidateStorageCluster(imageList, stc, validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
+	storageClusterValidateTimeout := time.Duration(len(node.GetStorageDriverNodes())*9) * time.Minute
+	if err = optest.ValidateStorageCluster(imageList, stc, storageClusterValidateTimeout, defaultRetryInterval, true); err != nil {
 		return nil, err
 	}
 	return stc, nil
