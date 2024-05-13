@@ -16,10 +16,9 @@ import (
 )
 
 type WorkflowTargetCluster struct {
-	KubeConfig           string
-	Project              WorkflowProject
-	ClusterUID           string
-	DestinationClusterId string
+	KubeConfig string
+	Project    WorkflowProject
+	ClusterUID string
 }
 
 const (
@@ -45,7 +44,7 @@ var (
 )
 
 // RegisterToControlPlane register the target cluster to control plane.
-func (targetCluster *WorkflowTargetCluster) RegisterToControlPlane(isDestinationTargetCluster bool) (*WorkflowTargetCluster, error) {
+func (targetCluster *WorkflowTargetCluster) RegisterToControlPlane() (*WorkflowTargetCluster, error) {
 
 	var cmd string
 	// Get Manifest from API
@@ -85,6 +84,13 @@ func (targetCluster *WorkflowTargetCluster) RegisterToControlPlane(isDestination
 		log.Infof("Terminal output: %v", output)
 	}
 
+	clusterId, err := targetCluster.GetClusterIdByName(clusterName)
+	if err != nil {
+		return targetCluster, fmt.Errorf("Failed to get clusterId: %v\n", err)
+	}
+
+	targetCluster.ClusterUID = clusterId
+
 	log.InfoD("Verify the TargetCluster is connected to Control Plane")
 	err = wait.Poll(DefaultRetryInterval, targetClusterHealthTimeOut, func() (bool, error) {
 		err := targetCluster.CheckTargetClusterHealth()
@@ -102,17 +108,6 @@ func (targetCluster *WorkflowTargetCluster) RegisterToControlPlane(isDestination
 		}
 		return true, nil
 	})
-
-	clusterId, err := targetCluster.GetClusterIdByName(clusterName)
-	if err != nil {
-		return targetCluster, fmt.Errorf("Failed to get clusterId: %v\n", err)
-	}
-
-	if isDestinationTargetCluster {
-		targetCluster.DestinationClusterId = clusterId
-	} else {
-		targetCluster.ClusterUID = clusterId
-	}
 
 	return targetCluster, nil
 }
@@ -231,21 +226,32 @@ func (targetCluster *WorkflowTargetCluster) InstallPDSAppOnTC(clusterId string) 
 }
 
 func (targetCluster *WorkflowTargetCluster) GetClusterIdByName(clusterName string) (string, error) {
-	tcList, err := platformLibs.ListTargetClusters(targetCluster.Project.Platform.TenantId)
-	if err != nil {
-		return "", err
+	var ClusterId string
+
+	waitErr := wait.Poll(DefaultRetryInterval, targetClusterHealthTimeOut, func() (bool, error) {
+		tcList, err := platformLibs.ListTargetClusters(targetCluster.Project.Platform.TenantId)
+		if err != nil {
+			return false, err
+		}
+
+		var index int
+		log.Infof("All clusters - [%+v]", tcList)
+		for index = 0; index < len(tcList.Clusters); index++ {
+			log.Infof("Cluster Details - [%+v]", *tcList.Clusters[index].Meta)
+			log.Infof("Cluster Name - [%s]", *tcList.Clusters[index].Meta.Name)
+			if *tcList.Clusters[index].Meta.Name == clusterName {
+				ClusterId = *tcList.Clusters[index].Meta.Uid
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+
+	if ClusterId == "" {
+		return "", fmt.Errorf("Cluster Name not found in list of targetclusters\n")
 	}
 
-	var index int
-	log.Infof("All clusters - [%+v]", tcList)
-	for index = 0; index < len(tcList.Clusters); index++ {
-		log.Infof("Cluster Details - [%+v]", *tcList.Clusters[index].Meta)
-		log.Infof("Cluster Name - [%s]", *tcList.Clusters[index].Meta.Name)
-		if *tcList.Clusters[index].Meta.Name == clusterName {
-			return *tcList.Clusters[index].Meta.Uid, nil
-		}
-	}
-	return "", fmt.Errorf("Cluster Name not found in list of targetclusters\n")
+	return ClusterId, waitErr
 
 }
 

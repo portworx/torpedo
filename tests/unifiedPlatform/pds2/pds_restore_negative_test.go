@@ -120,7 +120,7 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 			deploymentName := *deployment.Create.Meta.Name
 			cloudSnapId := ""
 			// Set the DestClusterId same as the current ClusterId
-			workflowRestore.Destination.TargetCluster.DestinationClusterId = WorkflowTargetCluster.ClusterUID
+			workflowRestore.Destination.TargetCluster.ClusterUID = WorkflowTargetCluster.ClusterUID
 			restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId, PDS_DEFAULT_NAMESPACE)
 			log.FailOnError(err, "Error while taking restore")
 			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)

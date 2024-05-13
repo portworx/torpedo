@@ -98,7 +98,7 @@ var _ = BeforeSuite(func() {
 		log.InfoD(steplog)
 		WorkflowTargetCluster.Project = WorkflowProject
 		log.Infof("Tenant ID [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
-		WorkflowTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane(false)
+		WorkflowTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane()
 		log.FailOnError(err, "Unable to register target cluster")
 		log.Infof("Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
 
@@ -121,7 +121,7 @@ var _ = BeforeSuite(func() {
 
 		WorkflowTargetClusterDestination.Project = WorkflowProject
 		log.Infof("Tenant ID [%s]", WorkflowTargetClusterDestination.Project.Platform.TenantId)
-		WorkflowTargetClusterDestination, err := WorkflowTargetClusterDestination.RegisterToControlPlane(false)
+		WorkflowTargetClusterDestination, err := WorkflowTargetClusterDestination.RegisterToControlPlane()
 		log.FailOnError(err, "Unable to register target cluster")
 		log.Infof("Destination Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
 		err = WorkflowTargetClusterDestination.InstallPDSAppOnTC(WorkflowTargetCluster.ClusterUID)
