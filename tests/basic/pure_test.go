@@ -1138,7 +1138,7 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 		stepLog := "Deploy applications"
 		Step(stepLog, func() {
 
-			Inst().AppList = []string{"fio"}
+			Inst().AppList = []string{"fio-cloudsnap"}
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("baseapps-%d", i))...)
 			}
@@ -1149,7 +1149,7 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			context, err := Inst().S.Schedule("test-fada-volume", scheduler.ScheduleOptions{
-				AppKeys:            []string{"fio-fa-davol"},
+				AppKeys:            []string{"fio-fa-cloud-drives"},
 				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
 				PvcSize:            6 * units.GiB,
 			})
