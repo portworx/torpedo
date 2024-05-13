@@ -1166,17 +1166,17 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 				for _, ctx := range contexts[:1] {
 					var appVolumes []*volume.Volume
 					var err error
+					var pvcs []*v1.PersistentVolumeClaim
 					appVolumes, err = Inst().S.GetVolumes(ctx)
 					log.FailOnError(err, "Failed to get volumes from context")
 					log.InfoD(fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
 						Inst().V.String(), ctx.App.Key, appVolumes))
-					//for _, eachVol := range appVolumes {
-					//	pvc, err := GetPVCObjFromVol(eachVol)
-					//	log.FailOnError(err, "Failed to get PVC Details from Volume [%v]", eachVol.Name)
-					//
-					//}
-					pvcs, err := GetContextPVCs(ctx)
-					log.FailOnError(err, "Failed to get pvc's from context")
+					for _, eachVol := range appVolumes {
+						pvc, err := GetPVCObjFromVol(eachVol)
+						log.FailOnError(err, "Failed to get PVC Details from Volume [%v]", eachVol.Name)
+						pvcs = append(pvcs, pvc)
+
+					}
 					for _, pvc := range pvcs {
 						log.InfoD("debug statement %v", pvc)
 						pvcSizeObj := pvc.Spec.Resources.Requests[v1.ResourceStorage]
@@ -1192,19 +1192,23 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 			for _, ctx := range contexts[1:] {
 				var appVolumes []*volume.Volume
 				var err error
+				var pvcs []*v1.PersistentVolumeClaim
 				appVolumes, err = Inst().S.GetVolumes(ctx)
 				log.FailOnError(err, "Failed to get volumes from context")
 				log.InfoD(fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
 					Inst().V.String(), ctx.App.Key, appVolumes))
-				pvcs, err := GetContextPVCs(ctx)
-				log.FailOnError(err, "Failed to get pvc's from context")
+				for _, eachVol := range appVolumes {
+					pvc, err := GetPVCObjFromVol(eachVol)
+					log.FailOnError(err, "Failed to get PVC Details from Volume [%v]", eachVol.Name)
+					pvcs = append(pvcs, pvc)
+
+				}
 				for _, pvc := range pvcs {
 					log.InfoD("debug statement %v", pvc)
-					pvcSize := pvc.Spec.Resources.Requests.Storage().String()
-					pvcSize = strings.TrimSuffix(pvcSize, "Gi")
-					pvcSizeInt, err := strconv.Atoi(pvcSize)
-					log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
-					resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSizeInt))
+					pvcSizeObj := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+					pvcSize, _ := pvcSizeObj.AsInt64()
+					log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSize, pvc.UID)
+					resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSize))
 					log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
 					log.InfoD("Vol uid %v", resizedVol.ID)
 				}
