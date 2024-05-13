@@ -3704,7 +3704,7 @@ var _ = Describe("{FBDATopologyCreateTest}", func() {
 		*/
 		scName := "fbda-top-1"
 		log.InfoD("Creating storage class %s", scName)
-		createSC := func(scName string) {
+		createSC := func(scName string) error {
 			params := make(map[string]string)
 			params["repl"] = "1"
 			params["priority_io"] = "high"
@@ -3717,14 +3717,10 @@ var _ = Describe("{FBDATopologyCreateTest}", func() {
 				Name: scName,
 			}
 
-			//kvmap1 := make(map[string][]string)
-			//kvmap2:= make(map[string][]string)
 			var zoneList []string
 			zoneList = append(zoneList, "zone-0")
-			//kvmap1["topology.portworx.io/zone"] = zoneList
 			var regionList []string
 			regionList = append(zoneList, "region-0")
-			//kvmap2["topology.portworx.io/region"] = regionList
 			var list []v1.TopologySelectorLabelRequirement
 			var req v1.TopologySelectorLabelRequirement
 			req.Key = "toplogy.portworx.io/zone"
@@ -3739,16 +3735,6 @@ var _ = Describe("{FBDATopologyCreateTest}", func() {
 			var top v1.TopologySelectorTerm
 			top.MatchLabelExpressions = list
 			allowedTop = append(allowedTop, top)
-			/*
-				allowedTop = append(allowedTop, kvmap1)
-				/*
-				allowedTop.MatchLabelExpressions = list
-				allowedTop = append(allowedTop, kvmap1)
-				allowedTop = append(allowedTop, kvmap2)
-				v1Topology := v1.AllowedTopologies {
-					MatchLabelExpressions: list,
-				}
-			*/
 			scObj := storageApi.StorageClass{
 				ObjectMeta:        v1obj,
 				Provisioner:       k8s.CsiProvisioner,
@@ -3758,10 +3744,10 @@ var _ = Describe("{FBDATopologyCreateTest}", func() {
 				AllowedTopologies: allowedTop,
 			}
 			sc, err := storage.Instance().CreateStorageClass(&scObj)
-			log.Infof("Phani: Creation of sc[%v] got err[%v]", sc, err)
-
+			log.Infof("Creation of sc[%v] got err[%v]", sc, err)
+			return err
 		}
-		createNS := func(nsName string) {
+		createNS := func(nsName string) error {
 			ns := &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: nsName,
@@ -3772,12 +3758,14 @@ var _ = Describe("{FBDATopologyCreateTest}", func() {
 			if err != nil {
 				if apierrors.IsAlreadyExists(err) {
 					log.Infof("Namespace %s already exists. Skipping creation.", ns.Name)
+					err = nil
 				} else {
-					log.FailOnError(err, fmt.Sprintf("error creating namespace [%s]", nsName))
+					log.Infof(fmt.Sprintf("error creating namespace [%s] failed [%v]", nsName, err))
 				}
 			}
+			return err
 		}
-		createPVC := func(pvcName, scName, appNs string) {
+		createPVC := func(pvcName, scName, appNs string) error {
 			log.InfoD("creating PVC [%s] in namespace [%s]", pvcName, appNs)
 
 			pvcObj := &v1.PersistentVolumeClaim{
@@ -3797,20 +3785,31 @@ var _ = Describe("{FBDATopologyCreateTest}", func() {
 			}
 			_, err := core.Instance().CreatePersistentVolumeClaim(pvcObj)
 			if err != nil {
-				log.FailOnError(err, fmt.Sprintf("Error creating pvc[%v]", pvcName))
+				log.Errorf("Error creating pvc[%v], error[%v]", pvcName, err)
 			}
-
+			return err
 		}
 
 		sc := "phani"
-		ns :=  "testns"
+		ns := "testns"
 		pvc := "pvcwithtop"
-		createSC(sc)
-		createNS(ns)
-		createPVC(pvc, sc, ns)
+		err := createSC(sc)
+		log.FailOnError(err, fmt.Sprintf("Failed to create SC, error[%v]", err))
+		defer func() {
+			storage.Instance().DeleteStorageClass(sc)
+		}()
+		err = createNS(ns)
+		log.FailOnError(err, fmt.Sprintf("Failed to create NS, error[%v]", err))
+		err = createPVC(pvc, sc, ns)
+		log.FailOnError(err, fmt.Sprintf("Failed to create PVC, error[%v]", err))
+		defer func() {
+			core.Instance().DeletePersistentVolumeClaim(pvc, ns)
+			core.Instance().DeleteNamespace(ns)
+		}()
+
 		time.Sleep(10 * time.Second)
 		pvc1, err := core.Instance().GetPersistentVolumeClaim(pvc, ns)
-		log.InfoD("Phani: PVC pvc[%v] err[%v]", pvc1, err)
+		log.InfoD("PVC pvc[%v] err[%v]", pvc1, err)
 		err = Inst().S.WaitForSinglePVCToBound(pvc, ns)
 		log.FailOnError(err, fmt.Sprintf("error validating pvc"))
 	})
