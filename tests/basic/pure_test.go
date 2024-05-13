@@ -3831,16 +3831,8 @@ var _ = Describe("{FBDATopologyCreateTestNoRegion}", func() {
 		StartTorpedoTest("FBDATopologyCreateTestNoRegion",
 			"Try Creating FBDA pvcs using various topology options", nil, 0)
 	})
-	itLog := "FBDATopologyCreateTest"
+	itLog := "FBDATopologyCreateTestNoRegion"
 	It(itLog, func() {
-		/*
-			var contexts []*scheduler.Context
-			k8sCore = core.Instance()
-			contexts = make([]*scheduler.Context, 0)
-			contexts = append(contexts, ScheuleApplications(fmt.Sprintf("fbdatoplogytest"))...)
-		*/
-		scName := "fbda-top-1"
-		log.InfoD("Creating storage class %s", scName)
 		createSC := func(scName string) error {
 			params := make(map[string]string)
 			params["repl"] = "1"
@@ -3959,6 +3951,7 @@ var _ = Describe("{FBDATopologyCreateTestNoRegion}", func() {
 		if err == nil {
 			err = fmt.Errorf("PVC Bound Unexpectedly")
 			log.FailOnError(err, fmt.Sprintf("error validating pvc"))
+			time.Sleep(15 * time.Minute)
 		}
 		err = nil
 	})
@@ -3966,7 +3959,117 @@ var _ = Describe("{FBDATopologyCreateTestNoRegion}", func() {
 		log.Infof("In Teardown")
 		defer EndTorpedoTest()
 	})
+})
 
+var _ = Describe("{FBDATopologyCreateTestNoSCTopology}", func() {
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("FBDATopologyCreateTestNoSCTopology",
+			"Try Creating FBDA pvcs without specifying topology in SC", nil, 0)
+	})
+	itLog := "FBDATopologyCreateTestNoSCTopology"
+	It(itLog, func() {
+		createSC := func(scName string) error {
+			params := make(map[string]string)
+			params["repl"] = "1"
+			params["priority_io"] = "high"
+			params["io_profile"] = "auto"
+			params["backend"] = "pure_file"
+			params["pure_nfs_endpoint"] = "10.9.126.67"
+			bindMode := storageApi.VolumeBindingImmediate
+			reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+			v1obj := metav1.ObjectMeta{
+				Name: scName,
+			}
+			scObj := storageApi.StorageClass{
+				ObjectMeta:        v1obj,
+				Provisioner:       k8s.CsiProvisioner,
+				Parameters:        params,
+				ReclaimPolicy:     &reclaimPolicyDelete,
+				VolumeBindingMode: &bindMode,
+			}
+			storage.Instance().DeleteStorageClass(scName)
+			time.Sleep(1 * time.Second)
+			sc, err := storage.Instance().CreateStorageClass(&scObj)
+			log.Infof("Creation of sc[%v] got err[%v]", sc, err)
+			return err
+		}
+		createNS := func(nsName string) error {
+			ns := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nsName,
+				},
+			}
+			log.InfoD("Create NS %v", nsName)
+			_, err := core.Instance().CreateNamespace(ns)
+			if err != nil {
+				if apierrors.IsAlreadyExists(err) {
+					log.Infof("Namespace %s already exists. Skipping creation.", ns.Name)
+					err = nil
+				} else {
+					log.Infof(fmt.Sprintf("error creating namespace [%s] failed [%v]", nsName, err))
+				}
+			}
+			return err
+		}
+		createPVC := func(pvcName, scName, appNs string) error {
+			log.InfoD("creating PVC [%s] in namespace [%s]", pvcName, appNs)
+
+			pvcObj := &v1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      pvcName,
+					Namespace: appNs,
+				},
+				Spec: v1.PersistentVolumeClaimSpec{
+					AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+					StorageClassName: &scName,
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{
+							v1.ResourceStorage: resource.MustParse("5Gi"),
+						},
+					},
+				},
+			}
+			core.Instance().DeletePersistentVolumeClaim(pvcName, appNs)
+			time.Sleep(30 * time.Second)
+			_, err := core.Instance().CreatePersistentVolumeClaim(pvcObj)
+			if err != nil {
+				log.Errorf("Error creating pvc[%v], error[%v]", pvcName, err)
+			}
+			return err
+		}
+
+		sc := "fbda-notop"
+		ns := "test-fbda-notop"
+		pvc := "pvcwithtop-notop"
+		err := createSC(sc)
+		log.FailOnError(err, fmt.Sprintf("Failed to create SC, error[%v]", err))
+		defer func() {
+			storage.Instance().DeleteStorageClass(sc)
+		}()
+		err = createNS(ns)
+		log.FailOnError(err, fmt.Sprintf("Failed to create NS, error[%v]", err))
+		err = createPVC(pvc, sc, ns)
+		log.FailOnError(err, fmt.Sprintf("Failed to create PVC, error[%v]", err))
+		defer func() {
+			core.Instance().DeletePersistentVolumeClaim(pvc, ns)
+			core.Instance().DeleteNamespace(ns)
+		}()
+
+		time.Sleep(10 * time.Second)
+		pvc1, err := core.Instance().GetPersistentVolumeClaim(pvc, ns)
+		log.InfoD("PVC pvc[%v] err[%v]", pvc1, err)
+		err = Inst().S.WaitForSinglePVCToBound(pvc, ns)
+		if err == nil {
+			err = fmt.Errorf("PVC Bound Unexpectedly")
+			log.FailOnError(err, fmt.Sprintf("error validating pvc"))
+			time.Sleep(15 * time.Minute)
+		}
+	})
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+	})
 })
 
 var _ = Describe("{DeleteFADAVolumeFromBackend}", func() {
