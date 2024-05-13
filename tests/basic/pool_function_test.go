@@ -127,9 +127,7 @@ var _ = Describe("{PoolExpandSmoke}", func() {
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
-		log.InfoD("Do no enter since it's a DMThin Pool")
 		if isDMthin, _ := IsDMthin(); !isDMthin {
-			log.InfoD("Still entered?")
 			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
 			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
@@ -197,9 +195,7 @@ var _ = Describe("{PoolExpandRejectConcurrentDiskResize}", func() {
 		var pools []*api.StoragePool
 		Step("Verify multiple pools are present on this node", func() {
 			// collect all pools available
-			for _, p := range storageNode.Pools {
-				pools = append(pools, p)
-			}
+			pools = append(pools, storageNode.Pools...)
 			dash.VerifyFatal(len(pools) > 1, true, "This test requires more than 1 pool.")
 		})
 
@@ -238,11 +234,6 @@ var _ = Describe("{PoolExpandRejectConcurrentDiskResize}", func() {
 		expandType := api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK
 		targetSize := poolToResize.TotalSize/units.GiB + 100
 		err = Inst().V.ExpandPool(poolIDToResize, expandType, targetSize, true)
-		// wait for expansion to start
-		// TODO: this is a hack to wait for expansion to start. The existing WaitForExpansionToStart() risks returning
-		// when the expansion has already completed.
-		// time.Sleep(1 * time.Second)
-		// verify pool expansion is in progress
 		isExpandInProgress, expandErr := poolResizeIsInProgress(poolToResize)
 		if expandErr != nil {
 			log.Fatalf("Error checking if pool expansion is in progress: %v", expandErr)
@@ -289,9 +280,7 @@ var _ = Describe("{PoolExpandRejectConcurrentDiskAdd}", func() {
 		var pools []*api.StoragePool
 		Step("Verify multiple pools are present on this node", func() {
 			// collect all pools available
-			for _, p := range storageNode.Pools {
-				pools = append(pools, p)
-			}
+			pools = append(pools, storageNode.Pools...)
 			dash.VerifyFatal(len(pools) > 1, true, "This test requires more than 1 pool.")
 		})
 
@@ -587,7 +576,6 @@ var _ = Describe("{PoolExpandDiskAddPXRestart}", func() {
 
 var _ = Describe("{PoolExpandInvalidSize}", func() {
 	// TestrailId: https://portworx.testrail.net/index.php?/tests/view/34542945
-
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpansionDiskResizeInvalidSize",
 			"Initiate pool expansion using invalid expansion size", nil, 34542945)
@@ -615,7 +603,6 @@ var _ = Describe("{PoolExpandInvalidSize}", func() {
 
 var _ = Describe("{PoolExpandResizeInvalidPoolID}", func() {
 	// TestrailID: https://portworx.testrail.net/index.php?/tests/view/34542946
-
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandResizeInvalidPoolID",
 			"Initiate pool expansion using invalid Id", nil, 34542946)
@@ -727,7 +714,6 @@ var _ = Describe("{PoolExpandDiskResizeAndVerifyFromOtherNode}", func() {
 
 var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 	// TestrailID: https://portworx.testrail.net/index.php?/tests/view/34542840
-
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandDiskAddAndVerifyFromOtherNode",
 			"Initiate pool expansion and verify from other node", nil, 34542840)
@@ -1870,6 +1856,8 @@ var _ = Describe("{PoolExpandStorageFullPoolResize}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		// Cores are expected with StoragePool full.
+		// AfterEachTest will fail due to cores found during the test.
 		// AfterEachTest(contexts, testrailID, runID)
 	})
 })
