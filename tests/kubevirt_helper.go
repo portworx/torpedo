@@ -3,7 +3,6 @@ package tests
 import (
 	context1 "context"
 	"fmt"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"regexp"
 	"strings"
 	"time"
@@ -19,17 +18,27 @@ import (
 
 	kubevirtdy "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
 const (
 	mountTypeBind = "bind"
 	mountTypeNFS  = "nfs"
+
+	kubevirtTemplates                     = "kubevirt-templates"
+	kubevirtTemplateNamespace             = "openshift-virtualization-os-images"
+	kubevirtCDIStorageConditionAnnotation = "cdi.kubevirt.io/storage.condition.running.reason"
+	kubevirtCDIStoragePodPhaseAnnotation  = "cdi.kubevirt.io/storage.pod.phase"
 )
 
 var (
 	defaultVmMountCheckTimeout       = 15 * time.Minute
 	defaultVmMountCheckRetryInterval = 30 * time.Second
+	k8sKubevirt                      = kubevirt.Instance()
+	importerPodCompletionTimeout     = 30 * time.Minute
+	importerPodRetryInterval         = 20 * time.Second
 )
 
 // AddDisksToKubevirtVM is a function which takes number of disks to add and adds them to the kubevirt VMs passed (Please provide size in Gi)
@@ -45,7 +54,7 @@ func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks in
 		}
 		for _, v := range vms {
 			t := func() (interface{}, bool, error) {
-				diskCountOutput, err := GetNumberOfDisksInVM(v)
+				diskCountOutput, err := GetNumberOfDisksInVMViaVirtLauncherPod(appCtx)
 				if err != nil {
 					return nil, false, fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]", v.Name, v.Namespace)
 				}
@@ -92,8 +101,8 @@ func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks in
 			if err != nil {
 				return false, err
 			}
-			log.InfoD("Sleep for 5mins for vm to come up")
-			time.Sleep(5 * time.Minute)
+			log.InfoD("Sleep for 30 seconds for vm to come up")
+			time.Sleep(30 * time.Second)
 
 			//After adding the pvcs check the number of disks in the VM
 			vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
@@ -102,7 +111,7 @@ func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks in
 			}
 			for _, v := range vms {
 				t = func() (interface{}, bool, error) {
-					diskCountOutput, err := GetNumberOfDisksInVM(v)
+					diskCountOutput, err := GetNumberOfDisksInVMViaVirtLauncherPod(appCtx)
 					if err != nil {
 						return nil, false, fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]", v.Name, v.Namespace)
 					}
@@ -126,6 +135,80 @@ func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks in
 		}
 	}
 	return true, nil
+}
+
+// RunCmdInVirtLauncherPod runs a command in the virt-launcher pod of the VM
+func RunCmdInVirtLauncherPod(virtualMachineCtx *scheduler.Context, cmd []string) (string, error) {
+	vols, err := Inst().S.GetVolumes(virtualMachineCtx)
+	if err != nil {
+		return "", err
+	}
+
+	// Check if the pod is in the 'Running' state before executing the command
+	_, err = task.DoRetryWithTimeout(func() (interface{}, bool, error) {
+		vmPod, err := GetVirtLauncherPodForVM(virtualMachineCtx, vols[0])
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get pod: %s", err)
+		}
+		if vmPod.Status.Phase != corev1.PodRunning {
+			return nil, true, fmt.Errorf("pod %s is not in running state, current state: %s", vmPod.Name, vmPod.Status.Phase)
+		}
+		return nil, false, nil
+	}, 10*time.Minute, 10*time.Second)
+
+	vmPod, err := GetVirtLauncherPodForVM(virtualMachineCtx, vols[0])
+	if err != nil {
+		return "", err
+	}
+
+	output, err := core.Instance().RunCommandInPod(cmd, vmPod.Name, "compute", vmPod.Namespace)
+	if err != nil {
+		return "", err
+	}
+	log.InfoD("Output of command: %s", output)
+	return core.Instance().RunCommandInPod(cmd, vmPod.Name, "compute", vmPod.Namespace)
+
+}
+
+// GetNumberOfDisksInVMViaVirtLauncherPod gets the number of disks in the VM via the virt-launcher pod
+func GetNumberOfDisksInVMViaVirtLauncherPod(virtualMachineCtx *scheduler.Context) (int, error) {
+	cmd := []string{"lsblk"}
+
+	t := func() (interface{}, bool, error) {
+		output, err := RunCmdInVirtLauncherPod(virtualMachineCtx, cmd)
+		log.InfoD("Output of command: %s", output)
+		if err != nil {
+			return 0, false, err
+		}
+		// Splitting the output into lines
+		lines := strings.Split(output, "\n")
+
+		// Count of lines containing "/run/kubevirt-private/vmi-disks/" and "pxd"
+		numberOfDisks := 0
+
+		// Loop through each line
+		for _, line := range lines {
+			// Check if the line contains "/run/kubevirt-private/vmi-disks/" and "pxd"
+			fmt.Println(line)
+			if strings.Contains(line, "/run/kubevirt-private/vmi-disks/") && strings.Contains(line, "pxd") {
+				// Increment count if both conditions are met
+				numberOfDisks++
+			}
+		}
+
+		if err != nil {
+			return 0, false, err
+		}
+		if numberOfDisks == 0 {
+			return 0, true, nil
+		}
+		return numberOfDisks, numberOfDisks == 0, nil
+	}
+	d, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		return 0, err
+	}
+	return d.(int), nil
 }
 
 // GetStorageClassOfVmPVC returns the storage class of pvc attached to the VM
@@ -194,7 +277,7 @@ func StartAndWaitForVMIMigration(virtualMachineCtx *scheduler.Context, ctx conte
 		if err != nil {
 			return "", false, fmt.Errorf("failed to get migration for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
 		}
-		if !migr.Completed {
+		if !(migr.Phase == "Succeeded") {
 			return "", true, fmt.Errorf("waiting for migration to complete for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
 		}
 
@@ -280,9 +363,13 @@ func IsVMBindMounted(virtualMachineCtx *scheduler.Context, wait bool) (bool, err
 	// The criteria to call the bind mount successful is to check if the replicaset of all volumes should be same and should be locally attached to the node
 	// check if the replicaset values is same as the global replicaset
 	// Here we are considering globalreplicaset to be source of truth for comparison
-
+	var vmPod *corev1.Pod
 	for _, vol := range vols {
-		err := IsVolumeBindMounted(virtualMachineCtx, vmNodeName, vol, wait)
+		if vmPod == nil {
+			vmPod, _ = GetVirtLauncherPodForVM(virtualMachineCtx, vol)
+		}
+		// Commenting this code till PWX-36842 is not fixed
+		err := IsVolumeBindMounted(virtualMachineCtx, vmNodeName, vol, wait, vmPod)
 		if err != nil {
 			return false, err
 		}
@@ -390,7 +477,7 @@ func getVMDiskMountType(pod *corev1.Pod, vmDisk *volume.Volume, diskName string)
 }
 
 // IsVolumeBindMounted verifies if the volume is bind mounted on the VM pod or not
-func IsVolumeBindMounted(virtualMachineCtx *scheduler.Context, vmNodeName string, vol *volume.Volume, wait bool) error {
+func IsVolumeBindMounted(virtualMachineCtx *scheduler.Context, vmNodeName string, vol *volume.Volume, wait bool, vmPod *corev1.Pod) error {
 	volInspect, err := Inst().V.InspectVolume(vol.ID)
 	if err != nil {
 		return fmt.Errorf("failed to inspect volume [%s]: %w", vol.ID, err)
@@ -407,11 +494,13 @@ func IsVolumeBindMounted(virtualMachineCtx *scheduler.Context, vmNodeName string
 
 	isBindMounted := false
 	t := func() (interface{}, bool, error) {
-		vmPod, err := GetVirtLauncherPodForVM(virtualMachineCtx, vol)
-		if err != nil {
-			// this is expected while the live migration is running since there will be 2 VM pods
-			log.Infof("Could not get VM pod for %s for context %s: %v", vol.Name, virtualMachineCtx.App.Key, err)
-			return false, false, nil
+		if vmPod == nil {
+			vmPod, err = GetVirtLauncherPodForVM(virtualMachineCtx, vol)
+			if err != nil {
+				// this is expected while the live migration is running since there will be 2 VM pods
+				log.Infof("Could not get VM pod for %s for context %s: %v", vol.Name, virtualMachineCtx.App.Key, err)
+				return false, false, nil
+			}
 		}
 		log.Infof("Verifying bind mount for %s", vol)
 		diskName := ""
@@ -477,24 +566,199 @@ func AreVolumeReplicasCollocated(vol *volume.Volume, globalReplicSet []*api.Repl
 	return nil
 }
 
-func CreateConfigMap() {
+// CreateConfigMap creates configmap for vm creds
+func CreateConfigMap() error {
 	// Check if a config map named kubevirt-creds exist
-	configMap, err := core.Instance().GetConfigMap("kubevirt-creds", "default")
+	configMap, err := k8sCore.GetConfigMap("kubevirt-creds", "default")
 	log.Infof("configMap: %v", configMap)
 	log.Infof("err: %v", err)
 	if err != nil {
-		configMap = &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "kubevirt-creds",
-			},
-			Data: map[string]string{
-				"fio-vm-multi-disk": "toor",
-			},
+		if errors.IsNotFound(err) {
+			// ConfigMap does not exist, so create it
+			configMap = &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "kubevirt-creds",
+					Namespace: "default",
+				},
+				Data: map[string]string{
+					"fio-vm-multi-disk": "ubuntu",
+				},
+			}
+			_, err = k8sCore.CreateConfigMap(configMap)
+			if err != nil {
+				log.Infof("Failed to create config map kubevirt-creds: %v", err)
+				return err
+			}
+			log.Infof("Created config map kubevirt-creds")
+		} else {
+			// An unexpected error occurred when retrieving the ConfigMap
+			log.Infof("Failed to retrieve config map kubevirt-creds: %v", err)
+			return err
 		}
-		_, err = core.Instance().CreateConfigMap(configMap)
-		if err != nil {
-			log.Fatalf("failed to create config map kubevirt-creds: %v", err)
-		}
-		log.Infof("created config map kubevirt-creds")
+	} else {
+		log.Infof("Config map kubevirt-creds already exists")
 	}
+	return nil
+}
+
+// WriteFilesAndStoreMD5InVM write few files in the VM and calculates the md5sum
+func WriteFilesAndStoreMD5InVM(virtualMachines []*scheduler.Context, namespace string, fileCount int, maxFileSize int) error {
+	log.Infof("Creating %d files and storing their MD5 checksums in namespace %s", fileCount, namespace)
+	createFilesCmd := fmt.Sprintf("mkdir -p ~/testfiles && cd ~/testfiles && "+
+		"rm -f ~/file_checksums.md5 && for i in $(seq 1 %d); do "+
+		"head -c $(($RANDOM %% %d)) </dev/urandom >file$i; md5sum file$i >> ~/file_checksums.md5; done", fileCount, maxFileSize)
+	for _, appCtx := range virtualMachines {
+		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+		if err != nil {
+			return err
+		}
+		for _, v := range vms {
+			_, err := RunCmdInVM(v, createFilesCmd, context1.TODO())
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// ValidateFileIntegrityInVM validates the md5sum of files that we wrote in the VM
+func ValidateFileIntegrityInVM(virtualMachines []*scheduler.Context, namespace string) error {
+	log.Infof("Validating file integrity in namespace %s", namespace)
+	validateFilesCmd := "cd ~/testfiles && md5sum -c ~/file_checksums.md5"
+	for _, appCtx := range virtualMachines {
+		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+		if err != nil {
+			return err
+		}
+		for _, v := range vms {
+			_, err := RunCmdInVM(v, validateFilesCmd, context1.TODO())
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// ListEvents lists all events in a namespace in logs.
+func ListEvents(namespace string) error {
+	eventList, err := k8sCore.ListEvents(namespace, metav1.ListOptions{})
+	if err != nil {
+		log.Infof("Failed to list events in namespace %s: %v", namespace, err)
+		return err
+	}
+	log.Infof("Events in namespace %s:", namespace)
+	for _, event := range eventList.Items {
+		log.Infof("Time: %v, Event: %s, Type: %s, Reason: %s, Object: %s/%s, Message: %s",
+			event.FirstTimestamp, event.Name, event.Type, event.Reason, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Message)
+	}
+	return nil
+}
+
+// HotAddPVCsToKubevirtVM hot adds disk to a running VM
+func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks int, size string) error {
+	for _, appCtx := range virtualMachines {
+		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+		if err != nil {
+			return fmt.Errorf("failed to get VMs from context: %w", err)
+		}
+		for _, v := range vms {
+			diskCountOutput, err := GetNumberOfDisksInVMViaVirtLauncherPod(appCtx)
+			if err != nil {
+				return fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]: %w", v.Name, v.Namespace, err)
+			}
+			log.Infof("Currently having %v number of disks in the VM", diskCountOutput)
+			storageClass, err := GetStorageClassOfVmPVC(appCtx)
+			if err != nil {
+				return fmt.Errorf("failed to get storage class for VM [%s]: %w", v.Name, err)
+			}
+			pvcs, err := CreatePVCsForVM(v, numberOfDisks, storageClass, size)
+			if err != nil {
+				return fmt.Errorf("failed to create PVCs for VM [%s]: %w", v.Name, err)
+			}
+
+			vm, err := k8sKubevirt.GetVirtualMachine(v.Name, v.Namespace)
+			if err != nil {
+				return fmt.Errorf("failed to get VM [%s]: %w", v.Name, err)
+			}
+
+			for _, pvc := range pvcs {
+				diskName := fmt.Sprintf("disk-%s", pvc.Name)
+				// Appending the disk and volume definitions to the VM spec
+				vm.Spec.Template.Spec.Domain.Devices.Disks = append(vm.Spec.Template.Spec.Domain.Devices.Disks, kubevirtv1.Disk{
+					Name: diskName,
+					DiskDevice: kubevirtv1.DiskDevice{
+						Disk: &kubevirtv1.DiskTarget{
+							Bus: "virtio",
+						},
+					},
+				})
+
+				vm.Spec.Template.Spec.Volumes = append(vm.Spec.Template.Spec.Volumes, kubevirtv1.Volume{
+					Name: diskName,
+					VolumeSource: kubevirtv1.VolumeSource{
+						PersistentVolumeClaim: &kubevirtv1.PersistentVolumeClaimVolumeSource{
+							PersistentVolumeClaimVolumeSource: corev1.PersistentVolumeClaimVolumeSource{
+								ClaimName: pvc.Name,
+							},
+							Hotpluggable: true,
+						},
+					},
+				})
+			}
+
+			_, err = k8sKubevirt.UpdateVirtualMachine(vm)
+			if err != nil {
+				return fmt.Errorf("failed to update VM [%s]: %w", vm.Name, err)
+			}
+
+			err = RestartKubevirtVM(v.Name, v.Namespace, true)
+			if err != nil {
+				return err
+			}
+			log.InfoD("Sleep for 5mins for vm to come up")
+			time.Sleep(5 * time.Minute)
+			NewDiskCountOutput, err := GetNumberOfDisksInVMViaVirtLauncherPod(appCtx)
+			if err != nil {
+				return fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]", v.Name, v.Namespace)
+			}
+			if NewDiskCountOutput == diskCountOutput {
+				log.Infof("Disk successfully added")
+			} else {
+				return fmt.Errorf("Disk cannot be added.")
+			}
+		}
+	}
+	return nil
+}
+func DeployVMTemplatesAndValidate() error {
+	_, err := Inst().S.Schedule("",
+		scheduler.ScheduleOptions{
+			AppKeys:   []string{kubevirtTemplates},
+			Namespace: kubevirtTemplateNamespace,
+		})
+
+	// if new templates are deployed, this function will wait for them to get imported else it will exit
+	waitForCompletedAnnotations := func() (interface{}, bool, error) {
+		// Loop through all PVCs and check for annotations that signify existing downloaded templates
+		pvcTemplates, err := core.Instance().GetPersistentVolumeClaims(kubevirtTemplateNamespace, nil)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get any PVCs in namespace: %s. Retrying.", kubevirtTemplateNamespace)
+		}
+		for _, pvc := range pvcTemplates.Items {
+			if pvc.ObjectMeta.Annotations[kubevirtCDIStorageConditionAnnotation] != "Completed" {
+				return nil, true, fmt.Errorf("storage condition is not completed on pvc %s. Status: %s. Retrying.",
+					pvc.Name, pvc.ObjectMeta.Annotations[kubevirtCDIStorageConditionAnnotation])
+			}
+			if pvc.ObjectMeta.Annotations[kubevirtCDIStoragePodPhaseAnnotation] != "Succeeded" {
+				return nil, true, fmt.Errorf("pod phase has not succeeded on pvc %s. Phase: %s. Retrying.",
+					pvc.Name, pvc.ObjectMeta.Annotations[kubevirtCDIStoragePodPhaseAnnotation])
+			}
+		}
+		log.Infof("All templates are downloaded.")
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(waitForCompletedAnnotations, importerPodCompletionTimeout, importerPodRetryInterval)
+	return err
 }

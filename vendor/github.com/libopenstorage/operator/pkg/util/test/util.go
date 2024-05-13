@@ -174,6 +174,9 @@ const (
 	defaultRunCmdInPxPodTimeout  = 25 * time.Second
 	defaultRunCmdInPxPodInterval = 5 * time.Second
 
+	defaultCheckFreshInstallTimeout  = 120 * time.Second
+	defaultCheckFreshInstallInterval = 5 * time.Second
+
 	etcHostsFile       = "/etc/hosts"
 	tempEtcHostsMarker = "### px-operator unit-test"
 )
@@ -192,6 +195,9 @@ var (
 	opVer23_7, _                      = version.NewVersion("23.7.0-")
 	minOpVersionForKubeSchedConfig, _ = version.NewVersion("1.10.2-")
 	OpVer23_10_3, _                   = version.NewVersion("23.10.3-")
+
+	minimumPxVersionCO, _    = version.NewVersion("3.2")
+	minimumCcmGoVersionCO, _ = version.NewVersion("1.2.3")
 
 	// OCP Dynamic Plugin is only supported in starting with OCP 4.12+ which is k8s v1.25.0+
 	minK8sVersionForDynamicPlugin, _ = version.NewVersion("1.25.0")
@@ -758,9 +764,17 @@ func ValidateStorageCluster(
 		os.Setenv("KUBECONFIG", kubeconfig[0])
 	}
 
+	freshInstall, err := IsThisFreshInstall(clusterSpec, defaultCheckFreshInstallTimeout, defaultCheckFreshInstallInterval)
+	if err != nil {
+		return err
+	}
+
+	if freshInstall {
+		logrus.Debug("This is fresh PX installation!")
+	}
+
 	// Validate StorageCluster
 	var liveCluster *corev1.StorageCluster
-	var err error
 	if shouldStartSuccessfully {
 		liveCluster, err = ValidateStorageClusterIsOnline(clusterSpec, timeout, interval)
 		if err != nil {
@@ -826,6 +840,41 @@ func ValidateStorageCluster(
 	}
 
 	return nil
+}
+
+// IsThisFreshInstall checks if its fresh install or not and returns true or false
+func IsThisFreshInstall(clusterSpec *corev1.StorageCluster, timeout, interval time.Duration) (bool, error) {
+	var isFreshInstall bool
+	t := func() (interface{}, bool, error) {
+		cluster, err := operatorops.Instance().GetStorageCluster(clusterSpec.Name, clusterSpec.Namespace)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get StorageCluster [%s] in [%s], Err: %v", clusterSpec.Name, cluster.Namespace, err)
+		}
+		return cluster, false, nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, timeout, interval)
+	if err != nil {
+		return isFreshInstall, fmt.Errorf("failed to determine if this is fresh install or not, Err: %v", err)
+	}
+	cluster := out.(*corev1.StorageCluster)
+
+	// Check if PX install if fresh
+	isFreshInstall = isThisFreshInstall(cluster)
+	if !isFreshInstall {
+		logrus.Debug("This is not a fresh PX installation!")
+	}
+	return isFreshInstall, nil
+}
+
+// IsThisFreshInstall checks whether it's a fresh Portworx install, copied this function her due to import cycle not allowed
+func isThisFreshInstall(cluster *corev1.StorageCluster) bool {
+	// To handle failures during fresh install e.g. validation failures,
+	// extra check for px runtime states is added here to avoid unexpected behaviors
+	return cluster.Status.Phase == "" ||
+		cluster.Status.Phase == string(corev1.ClusterStateInit) ||
+		(cluster.Status.Phase == string(corev1.ClusterStateDegraded) &&
+			util.GetStorageClusterCondition(cluster, "Portworx", corev1.ClusterConditionTypeRuntimeState) == nil)
 }
 
 // ValidateClusterProviderHealth validates health of the cluster provider environment
@@ -4160,6 +4209,116 @@ func ValidateAlertManagerDisabled(pxImageList map[string]string, cluster *corev1
 	return nil
 }
 
+// This validates the telemetry container orchestrator usage.  Container orchestrator manages the telemetry registration certificate secret.
+// The container orchestrator is a server running in PX which handles gprc requests to save/retrieve/delete the registration certificate secret.
+func ValidateTelemetryContainerOrchestrator(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	const (
+		OsdBaseLogDir = "/var/lib/osd/log"
+		coStateDir    = OsdBaseLogDir + "/coState"
+	)
+
+	logrus.Infof("Validating telemetry container orchestrator usage...")
+
+	configMap, err := coreops.Instance().GetConfigMap("px-telemetry-register", cluster.Namespace)
+	if err != nil {
+		return err
+	}
+
+	logrus.Infof("Obtained px-telemetry-register configmap...")
+
+	isCOenabled := strings.Contains(configMap.Data["config_properties_px.yaml"], "certStoreType: \"kvstore\"")
+	if !isCOenabled {
+		return fmt.Errorf("telemetry container orchestrator 'certStoreType: kvstore' is expected to be set in 'px-telemetry-register' configmap")
+	}
+
+	logrus.Infof("Validated 'certStoreType: kvstore' configmap setting")
+
+	// Test validation is done by checking timestamp entries of when the container orchestrator operations were called (server start, secret set/get).
+	// The timestamps for secret set/get must be after the timestamp for the start.
+	labelSelector := map[string]string{"role": "px-telemetry-registration"}
+	nodeList, err := coreops.Instance().GetNodes()
+	if err != nil {
+		return err
+	}
+
+	logrus.Infof("find telemetry registration pod node and px pod on that node...")
+
+	var pxPod v1.Pod
+	for _, node := range nodeList.Items {
+		// Get telemetry registration pod
+		podList, err := coreops.Instance().GetPodsByNodeAndLabels(node.Name, cluster.Namespace, labelSelector)
+		if err != nil {
+			return err
+		}
+
+		if len(podList.Items) == 0 {
+			continue
+		}
+		tregPod := podList.Items[0]
+		logrus.Infof("Found telemetry registration pod [%s] on node [%s]", tregPod.Name, node.Name)
+		labelSelector = map[string]string{"name": "portworx"}
+		podList, err = coreops.Instance().GetPodsByNodeAndLabels(node.Name, cluster.Namespace, labelSelector)
+		if err != nil {
+			return err
+		}
+
+		if len(podList.Items) == 0 {
+			return fmt.Errorf("failed to find Portworx pod on telemetry registration node [%s]", node.Name)
+		}
+		pxPod = podList.Items[0]
+		logrus.Infof("Found PX pod [%s] on telemetry registration node [%s]", pxPod.Name, node.Name)
+		break
+	}
+
+	getCoStateTimeStamp := func(tsFileName string) (int64, error) {
+		tmData, err := runCmdInsidePxPod(&pxPod, "cat "+tsFileName, cluster.Namespace, false)
+		if err != nil {
+			return 0, err
+		}
+
+		tm, terr := strconv.ParseInt(string(tmData), 10, 64)
+		if terr != nil {
+			return 0, terr
+		}
+		return tm, nil
+	}
+
+	coStartTime, startErr := getCoStateTimeStamp(coStateDir + "/kvStart.ts")
+	if startErr != nil {
+		return fmt.Errorf("container orchestrator validated failed, error obtaining start time from costate file: %v", startErr)
+	}
+	logrus.Infof("container orchestrater server start time: %v", time.Unix(coStartTime, 0))
+
+	coSetTime, setErr := getCoStateTimeStamp(coStateDir + "/kvSet.ts")
+	coGetTime, getErr := getCoStateTimeStamp(coStateDir + "/kvGet.ts")
+
+	if setErr == nil {
+		// secret set time exists, check it
+		logrus.Infof("container orchestrater set time: %v\n", time.Unix(coSetTime, 0))
+		if coSetTime > coStartTime {
+			logrus.Infof("container orchestrator validated via set time")
+			return nil
+		}
+		setErr = fmt.Errorf("set time is less than start time, check for upgrade")
+		logrus.Infof("%s", setErr.Error())
+	}
+
+	if setErr != nil && getErr != nil {
+		// No secret handler timestamp exists
+		return fmt.Errorf("container orchestrator validated failed, error obtaining costate file: %v and %v", setErr, getErr)
+	}
+
+	// secret get time stamp exists, check it
+	logrus.Infof("container orchestrater get time: %v\n", time.Unix(coGetTime, 0))
+	if coGetTime < coStartTime {
+		return fmt.Errorf("container orchestrator validated failed, get time is less than start time")
+	}
+
+	logrus.Infof("container orchestrator validated via get time")
+
+	return nil
+}
+
 // ValidateTelemetryV2Enabled validates telemetry component is running as expected
 func ValidateTelemetryV2Enabled(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
 	logrus.Info("Validate Telemetry components are enabled")
@@ -4248,6 +4407,29 @@ func ValidateTelemetryV2Enabled(pxImageList map[string]string, cluster *corev1.S
 	// Validate Telemetry is Healthy in pxctl status
 	if err := validateTelemetryStatusInPxctl(true, cluster); err != nil {
 		return fmt.Errorf("failed to validate that Telemetry is Healthy in pxctl status, Err: %v", err)
+	}
+
+	// Validate registration certificate management via Container Orchestrator
+	ccmGoImage, ok := pxImageList["telemetry"]
+	if !ok {
+		return fmt.Errorf("failed to find image for telemetry")
+	}
+
+	ccmGoVersionStr := strings.Split(ccmGoImage, ":")[len(strings.Split(ccmGoImage, ":"))-1]
+	ccmGoVersion, err := version.NewSemver(ccmGoVersionStr)
+	if err != nil {
+		return fmt.Errorf("failed to find telemetry image version")
+	}
+
+	masterOpVersion, _ := version.NewVersion(PxOperatorMasterVersion)
+	opVersion, _ := GetPxOperatorVersion()
+	pxVersion := GetPortworxVersion(cluster)
+
+	// NOTE: These versions will need to be updated when we move the CO code to a release. Currently its bound to master branches
+	if opVersion.GreaterThanOrEqual(masterOpVersion) && pxVersion.GreaterThanOrEqual(minimumPxVersionCO) && ccmGoVersion.GreaterThanOrEqual(minimumCcmGoVersionCO) { // Validate the versions
+		if err := ValidateTelemetryContainerOrchestrator(pxImageList, cluster, timeout, interval); err != nil {
+			return err
+		}
 	}
 
 	logrus.Infof("All Telemetry components were successfully enabled/installed")

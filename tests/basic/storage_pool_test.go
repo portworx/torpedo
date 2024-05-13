@@ -6,6 +6,12 @@ import (
 	"math/rand"
 	"reflect"
 	"regexp"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/portworx/torpedo/drivers/node/ssh"
@@ -18,18 +24,15 @@ import (
 
 	"github.com/portworx/torpedo/pkg/log"
 
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -83,6 +86,9 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 	stepLog := "should get the existing pool and expand it by adding a disk"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		if !IsPoolAddDiskSupported() {
+			Skip("Pool Add Disk is not supported on DMthin Cluster")
+		}
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -123,7 +129,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 		stepLog = "Calculate expected pool size and trigger pool resize"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
+			expectedSize = (poolToBeResized.TotalSize / units.GiB) + 100
 			expectedSize = roundUpValue(expectedSize)
 			isjournal, err := IsJournalEnabled()
 			log.FailOnError(err, "Failed to check is Journal enabled")
@@ -138,33 +144,28 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			enterPoolMaintenanceAddDisk(poolIDToResize)
 			defer exitPoolMaintenance(poolIDToResize)
 
-			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
-			if err != nil {
-				isPoolAddDiskSupported := IsPoolAddDiskSupported()
-				if !isPoolAddDiskSupported {
-					IsExpectederr := strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
-					dash.VerifyFatal(IsExpectederr, true, err.Error())
-					log.InfoD("Drive add not supported :%s, hence skipping the test", err.Error())
-					Skip("drive add to existing pool not supported for px-storev2 or px-cache pools")
-
-				}
+			if IsPoolAddDiskSupported() {
+				err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+				log.FailOnError(err, "is Pool Expand using Add disk successful ?")
+				resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
+				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
 			}
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
 		})
 		Step("Ensure that new pool has been expanded to the expected size", func() {
-			ValidateApplications(contexts)
-			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
-			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
-			newPoolSize := resizedPool.TotalSize / units.GiB
-			isExpansionSuccess := false
-			if newPoolSize >= expectedSizeWithJournal {
-				isExpansionSuccess = true
+			if IsPoolAddDiskSupported() {
+				ValidateApplications(contexts)
+				resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
+				newPoolSize := resizedPool.TotalSize / units.GiB
+				isExpansionSuccess := false
+				if newPoolSize >= expectedSizeWithJournal {
+					isExpansionSuccess = true
+				}
+				dash.VerifyFatal(isExpansionSuccess, true,
+					fmt.Sprintf("expected new pool size to be %v or %v if pool has journal, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
+				appsValidateAndDestroy(contexts)
 			}
-			dash.VerifyFatal(isExpansionSuccess, true,
-				fmt.Sprintf("expected new pool size to be %v or %v if pool has journal, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
-			appsValidateAndDestroy(contexts)
+
 		})
 	})
 	JustAfterEach(func() {
@@ -996,6 +997,12 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 	}
 
 	_, err := task.DoRetryWithTimeout(f, poolResizeTimeout, retryTimeout)
+	n, terr := GetNodeWithGivenPoolID(poolIDToResize)
+	if terr == nil {
+		PrintSvPoolStatus(*n)
+	} else {
+		log.Warnf("error getting node for pool uuid [%s]. Cause: %v", poolIDToResize, terr)
+	}
 	return err
 }
 
@@ -2073,7 +2080,7 @@ var _ = Describe("{AddWithPXRestart}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -3673,7 +3680,7 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Pool Add disk is not supported on DMThin Cluster")
 		}
 		log.InfoD(stepLog)
 
@@ -3751,28 +3758,18 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 			isjournal, err := IsJournalEnabled()
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
-			log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
-			if err != nil {
-				isPoolAddDiskSupported := IsPoolAddDiskSupported()
-				if !isPoolAddDiskSupported {
-					IsExpectederr := strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
-					dash.VerifyFatal(IsExpectederr, true, err.Error())
-					log.InfoD("Drive add not supported :%s, hence skipping the test", err.Error())
-					Skip("drive add to existing pool not supported for px-storev2 or px-cache pools")
-
-				}
-
+			if IsPoolAddDiskSupported() {
+				log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
+				err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+				log.FailOnError(err, "Pool Expand using Add Disk Failed ")
+				resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
+				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", poolToBeResized.Uuid, stNode.Name))
 			}
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-			resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", poolToBeResized.Uuid, stNode.Name))
-
+			status, err = Inst().V.GetNodeStatus(*stNode)
+			log.FailOnError(err, "err getting node [%s] status", stNode.Name)
+			log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
 		})
 
-		status, err = Inst().V.GetNodeStatus(*stNode)
-		log.FailOnError(err, "err getting node [%s] status", stNode.Name)
-		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
 	})
 
 	JustAfterEach(func() {
@@ -4330,7 +4327,7 @@ var _ = Describe("{PXRestartAddDisk}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -6440,8 +6437,21 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
+		kvdbNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "failed to get kvdb nodes")
+
+		kvdbNodeIDs := make([]string, 0)
+		for _, kvdbNode := range kvdbNodes {
+			poolIDs, err := GetAllPoolsOnNode(kvdbNode.ID)
+			log.FailOnError(err, "failed to get all pools on node [%s]", kvdbNode.ID)
+			if len(poolIDs) < 2 {
+				log.Infof("Excluding KVDB node [%s] as it has less than 2 pools", kvdbNode.ID)
+				kvdbNodeIDs = append(kvdbNodeIDs, kvdbNode.ID)
+			}
+		}
+
 		// Get the Pool UUID on which IO is running
-		poolUUID := pickPoolToResize()
+		poolUUID := pickPoolToResize(kvdbNodeIDs...)
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
 		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
@@ -6505,7 +6515,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 			alerts, err := Inst().V.GetAlertsUsingResourceTypeBySeverity(api.ResourceType_RESOURCE_TYPE_POOL,
 				eachAlert)
 			log.Infof("alerts generated: %v for resource type: %v", alerts, eachAlert)
-			if strings.Contains(err.Error(), "EOF") == true {
+			if err != nil && strings.Contains(err.Error(), "EOF") == true {
 				log.Infof("Alerts not generated for severity type [%v] of resource Type [%v]", eachAlert, "Pool")
 				continue
 			}
@@ -6519,13 +6529,13 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 					api.ResourceType_RESOURCE_TYPE_POOL,
 					eachAlert))
 		}
+	})
 
-		JustAfterEach(func() {
-			defer EndTorpedoTest()
-			log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
-			log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
-			AfterEachTest(contexts, testrailID, runID)
-		})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
+		log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
@@ -7105,6 +7115,10 @@ var _ = Describe("{ExpandUsingAddDriveAndPXRestart}", func() {
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		if !IsPoolAddDiskSupported() {
+			Skip("Add disk is not supported in DMThin")
+		}
+
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvrestrt-%d", i))...)
@@ -7170,6 +7184,10 @@ var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", func() {
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+
+		if !IsPoolAddDiskSupported() {
+			Skip("Add disk is not supported on DMThin Cluster")
+		}
 
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -7253,7 +7271,7 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -7306,24 +7324,26 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool [%s] on expansion using auto option", poolToBeResized.Uuid))
 
-		expectedSize += drvSize
+		if IsPoolAddDiskSupported() {
+			expectedSize += drvSize
 
-		// Expand Pool using Add Drive and verify if the Pool is expanded successfully
-		err = Inst().V.ExpandPool(poolToBeResized.Uuid,
-			api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
-			expectedSize, true)
-		dash.VerifyFatal(err,
-			nil,
-			"Pool expansion init successful?")
+			// Expand Pool using Add Drive and verify if the Pool is expanded successfully
+			err = Inst().V.ExpandPool(poolToBeResized.Uuid,
+				api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
+				expectedSize, true)
+			dash.VerifyFatal(err,
+				nil,
+				"Pool expansion init successful?")
 
-		resizeErr = waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
-		dash.VerifyFatal(resizeErr, nil,
-			fmt.Sprintf("Verify pool [%s] on expansion using auto option", poolUUID))
+			resizeErr = waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			dash.VerifyFatal(resizeErr, nil,
+				fmt.Sprintf("Verify pool [%s] on expansion using auto option", poolUUID))
 
-		allPoolsOnNodeAfterResize, err := GetPoolsDetailsOnNode(nodeDetail)
-		log.FailOnError(err, fmt.Sprintf("Failed to get all Pools present in Node [%s]", nodeDetail.Name))
-		dash.VerifyFatal(len(allPoolsOnNode) <= len(allPoolsOnNodeAfterResize), true,
-			"New pool is created on trying to expand pool using add disk option")
+			allPoolsOnNodeAfterResize, err := GetPoolsDetailsOnNode(nodeDetail)
+			log.FailOnError(err, fmt.Sprintf("Failed to get all Pools present in Node [%s]", nodeDetail.Name))
+			dash.VerifyFatal(len(allPoolsOnNode) <= len(allPoolsOnNodeAfterResize), true,
+				"New pool is created on trying to expand pool using add disk option")
+		}
 
 	})
 	JustAfterEach(func() {
@@ -7627,6 +7647,20 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", func() {
 })
 
 func deletePoolAndValidate(stNode node.Node, poolIDToDelete string) {
+	isPureBackend := false
+	validateMultipath := []string{}
+	if IsPureCluster() {
+		isPureBackend = true
+	}
+
+	if isPureBackend {
+		// if pure backend , we get the list of all multipath devices used while creating the pool
+		// later check if those multipath devices are still exist post deleting the pool
+		multipathDevBeforeDelete, err := GetMultipathDeviceOnPool(&stNode)
+		log.FailOnError(err, fmt.Sprintf("Failed to get list of Multipath devices on Node [%v]", stNode.Name))
+		validateMultipath = multipathDevBeforeDelete[poolIDToDelete]
+	}
+
 	poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 	log.FailOnError(err, "Failed to list storage pools")
 
@@ -7650,6 +7684,16 @@ func deletePoolAndValidate(stNode node.Node, poolIDToDelete string) {
 		_, ok := poolsMap[poolIDToDelete]
 		dash.VerifyFatal(ok, false, "verify drive is deleted from the node")
 
+		if isPureBackend {
+			// Get list of all Multipath devices after deleting the pool
+			allMultipathDev, err := GetMultipathDeviceIDsOnNode(&stNode)
+			log.FailOnError(err, fmt.Sprintf("failed to get multipath devices on Node [%v]", stNode.Name))
+			for _, eachMultipath := range allMultipathDev {
+				for _, validateEach := range validateMultipath {
+					dash.VerifyFatal(validateEach == eachMultipath, false, fmt.Sprintf("Multipath device [%v] did not delete on Deleting Pool", validateEach))
+				}
+			}
+		}
 	})
 }
 
@@ -8699,7 +8743,7 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 				}
 				log.InfoD("adding journal failed as expected. verifying the error")
 				re := regexp.MustCompile(".*journal exists*")
-				re1 := regexp.MustCompile(".*Journal device.*is alredy configured*")
+				re1 := regexp.MustCompile(".*Journal device.*is already configured*")
 				dash.VerifyFatal(re.MatchString(fmt.Sprintf("%v", err)) || re1.MatchString(fmt.Sprintf("%v", err)),
 					true,
 					fmt.Sprintf("Errored while adding Pool as expected on Node [%v]", nodeDetail.Name))
@@ -9812,15 +9856,36 @@ func scheduleApps() []*scheduler.Context {
 	return contexts
 }
 
-func pickPoolToResize() string {
+func pickPoolToResize(excludeNodeIDs ...string) string {
 	poolWithIO, err := GetPoolIDWithIOs(contexts)
-	if poolWithIO == "" || err != nil {
+
+	if err != nil {
+		log.Warnf("Error identifying pool with IOs, Errot: %v", err)
+	}
+	if poolWithIO != "" {
+		return poolWithIO
+	} else {
 		log.Warnf("No pool with IO found, picking a random pool in use to resize")
 	}
 	poolIDsInUseByTestingApp, err := GetPoolsInUse()
 	failOnError(err, "Error identifying pool to run test")
 	verifyArrayNotEmpty(poolIDsInUseByTestingApp, "Found no pool used by persistent volumes. ")
 	rand.Seed(time.Now().UnixNano())
+	if len(excludeNodeIDs) > 0 {
+		log.Infof("Filtering out pools belonging to nodes [%v]", excludeNodeIDs)
+		eligiblePoolIDs := make([]string, 0)
+		for _, poolID := range poolIDsInUseByTestingApp {
+			n, err := GetNodeWithGivenPoolID(poolID)
+			failOnError(err, "failed to get node details from PoolUUID [%v]", poolID)
+			if !slices.Contains(excludeNodeIDs, n.Id) {
+				eligiblePoolIDs = append(eligiblePoolIDs, poolID)
+			} else {
+				log.Infof("Excluding pool [%s] from resize as it is on node [%s]", poolID, n.Id)
+			}
+		}
+		poolIDToResize := eligiblePoolIDs[rand.Intn(len(eligiblePoolIDs))]
+		return poolIDToResize
+	}
 	poolIDToResize := poolIDsInUseByTestingApp[rand.Intn(len(poolIDsInUseByTestingApp))]
 	return poolIDToResize
 }
@@ -9894,6 +9959,13 @@ func waitForOngoingPoolExpansionToComplete(poolIDToResize string) error {
 	}
 
 	_, err := task.DoRetryWithTimeout(f, poolResizeTimeout, poolExpansionStatusCheckInterval)
+	n, terr := GetNodeWithGivenPoolID(poolIDToResize)
+	if terr == nil {
+		PrintSvPoolStatus(*n)
+	} else {
+		log.Warnf("error getting node for pool uuid [%s]", poolIDToResize)
+	}
+
 	return err
 }
 
@@ -10212,41 +10284,74 @@ func findNodeForReplAdd(vol *volume.Volume) (*node.Node, error) {
 	return nil, fmt.Errorf("failed to find a node for repl add for volume %v", vol.ID)
 }
 
-func selectPoolDeletableNode(allowKvdbNode bool) *node.Node {
-	var testNode *node.Node
-	log.Info("Select non-kvdb node or node with >1 pools)")
+// return a list of pool deletable nodes: prioritize for non-kvdb nodes
+func selectPoolDeletableNodes() []node.Node {
+	testNodes := []node.Node{}
+	log.Info("Select non-kvdb node or node with > 1 pools)")
 	stNodes := node.GetStorageNodes()
+	log.InfoD("storage nodes %+v", stNodes)
 
 	kvdbNodesIDs := []string{}
 	kvdbMembers, err := Inst().V.GetKvdbMembers(stNodes[0])
 	log.FailOnError(err, "Error getting KVDB members")
+	log.InfoD("kvdb members %+v", kvdbMembers)
+
 	for _, n := range kvdbMembers {
 		kvdbNodesIDs = append(kvdbNodesIDs, n.Name)
 	}
 
+	// testNodes for pool deletable: [non-kvdb-nodes] + [kvdb-nodes with >= 2 pools]
+	// collect non-kvdb firsts
 	for _, n := range stNodes {
-		if !Contains(kvdbNodesIDs, n.Id) {
-			testNode = &n
-			break
+		if !Contains(kvdbNodesIDs, n.Id) { // non kvdb node
+			log.InfoD("get non-kvdb node %v", n.Name)
+			poolsMap, err := Inst().V.GetPoolDrives(&n)
+			log.FailOnError(err, "cannot get pool drives")
+			log.InfoD("non-kvdb node %v has %v pools %+v", n.Name, len(poolsMap), poolsMap)
+			if len(poolsMap) > 0 {
+				testNodes = append(testNodes, n)
+			}
 		}
 	}
-	if testNode == nil {
-		dash.VerifyFatal(allowKvdbNode, true, "kvdb node be selected for the pool delete test?")
-		testNode = &stNodes[0]
-		log.InfoD("cannot find nonkvdb node, select kvdb node %v for test", testNode.Addresses)
-		poolsMap, err := Inst().V.GetPoolDrives(testNode)
+
+	// kvdb nodes, need at least 2 pools
+	for _, n := range stNodes {
+		if Contains(kvdbNodesIDs, n.Id) {
+			log.InfoD("get kvdb node %v", n.Name)
+			poolsMap, err := Inst().V.GetPoolDrives(&n)
+			log.FailOnError(err, "cannot get pool drives")
+			log.InfoD("kvdb node %v has %v pools %+v", n.Name, len(poolsMap), poolsMap)
+			if len(poolsMap) > 1 {
+				testNodes = append(testNodes, n)
+			}
+		}
+	}
+
+	if len(testNodes) == 0 { // it means all nodes are kvdb-nodes with 1 pools
+		testNode := stNodes[0]
+		log.InfoD("select kvdb node %v for test, the node need to have at least 2 pools", testNode.Name)
+		poolsMap, err := Inst().V.GetPoolDrives(&testNode)
 		log.FailOnError(err, "cannot get pool drives")
-		log.InfoD("node %v has pools %+v", testNode.Addresses, poolsMap)
+		log.InfoD("the kvdb node %v has pools %+v", testNode.Name, poolsMap)
 		if len(poolsMap) <= 1 {
 			log.InfoD("try create new pool for test")
-			err = AddCloudDrive(*testNode, -1)
+			err = AddCloudDrive(testNode, -1)
 			log.FailOnError(err, "drive add failed")
 		}
-	} else {
-		log.InfoD("found non-kvdb storage node %v", testNode.Addresses)
+		testNodes = append(testNodes, testNode)
 	}
-	dash.VerifyFatal(testNode != nil, true, "select test node")
-	return testNode
+
+	for _, n := range testNodes {
+		log.InfoD("found pool deletable node %v", n.Name)
+	}
+
+	dash.VerifyFatal(len(testNodes) > 0, true, "select test node")
+	return testNodes
+}
+
+func selectPoolDeletableNode() *node.Node {
+	poolDeletableNodes := selectPoolDeletableNodes()
+	return &poolDeletableNodes[0]
 }
 
 var _ = Describe("{PoolDeleteFunctionality}", func() {
@@ -10264,16 +10369,17 @@ var _ = Describe("{PoolDeleteFunctionality}", func() {
 
 	ItLog := "Initiate pool delete, then add a new pool and expand the pool"
 	It(ItLog, func() {
-		testNode := selectPoolDeletableNode(false)
+		testNode := selectPoolDeletableNode()
 		dash.VerifyFatal(testNode != nil, true, "verify if select test node ok")
 		selectedNode := *testNode
-		nodePools := selectedNode.StoragePools
-
+		nodePools := selectedNode.Pools
+		log.Infof("node %v has pools %+v", testNode.Name, nodePools)
 		poolToAddBack := nodePools[rand.Intn(len(nodePools))]
 		stepLog = fmt.Sprintf("Delete [%v/%v] pools on node [%v], so that 1 pool remains", len(nodePools)-1, len(nodePools), selectedNode.Name)
 		Step(stepLog, func() {
 			for _, pool := range nodePools[:len(nodePools)-1] {
-				poolID := strconv.Itoa(int(pool.ID))
+				poolID := fmt.Sprintf("%v", pool.GetID())
+				log.Infof("delete pool %v", poolID)
 				deletePoolAndValidate(selectedNode, poolID)
 			}
 		})
@@ -10289,6 +10395,7 @@ var _ = Describe("{PoolDeleteFunctionality}", func() {
 
 			poolsMap, err := Inst().V.GetPoolDrives(&selectedNode)
 			log.FailOnError(err, "error getting pool drive from the node [%s]", selectedNode.Name)
+			log.Infof("poolMap %+v", poolsMap)
 			dash.VerifyFatal(len(poolsMap) == 0, true, "verify all pools deleted")
 
 			err = Inst().V.RefreshDriverEndpoints()
@@ -10391,6 +10498,12 @@ var _ = Describe("{PoolDeleteNegative}", func() {
 		StartTorpedoTest("PoolDeleteNegative", "RunPoolDeleteNegativeTests tests cases where pool deletion should not happen", nil, 0)
 	})
 
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		selectedNode = selectPoolDeletableNode()
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
 	ItLog := "Delete pool using invalid pool ids"
 	It(ItLog, func() {
 		log.InfoD(stepLog)
@@ -10401,8 +10514,6 @@ var _ = Describe("{PoolDeleteNegative}", func() {
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
-
-		selectedNode := &node.GetStorageNodes()[0]
 
 		// test pool delete without entering pool maintenance mode - should fail
 		// TODO (do we need this check?) if IsLocalCluster(*selectedNode) || IsIksCluster() {
@@ -10523,32 +10634,26 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 	/*
 				migrated from px-test: PoolDeleteVariations
 		 		1. Verify pool deletion after creating 50 volumes
-				2. Verify pool deletion after creating 30 snaps
+				2. Verify pool deletion after creating 75 snaps
 	*/
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolDeleteVariations", "Pool delete with variations", nil, 0)
 	})
-
-	var testNode *node.Node
-	BeforeEach(func() {
-		testNode = selectPoolDeletableNode(true)
-		dash.VerifyFatal(testNode != nil, true, "very if select test node ok")
-	})
 	var contexts []*scheduler.Context
 
 	itLog := fmt.Sprintf("Verify pool delete variations")
 	It(itLog, func() {
-		log.InfoD(itLog)
 		numVolCreate := 50
 		stepLog := fmt.Sprintf("1. Verify pool deletion after creating %v volumes", numVolCreate)
 		Step(stepLog, func() {
-			deletablePools := make(map[string]string) // poolUUID to ID
-			for _, p := range testNode.Pools {
-				deletablePools[p.Uuid] = fmt.Sprintf("%v", p.GetID())
+			log.InfoD(itLog)
+			poolDeletableNodes := selectPoolDeletableNodes()
+			poolDeletableNodesMap := map[string]*node.Node{}
+			for _, p := range poolDeletableNodes {
+				poolDeletableNodesMap[p.Id] = &p
 			}
-
-			log.InfoD("deletable pools %+v", deletablePools)
+			log.Infof("Deletable pools %+v", poolDeletableNodesMap)
 
 			volumesCreated := []string{}
 			for i := 0; i < numVolCreate; i++ {
@@ -10563,17 +10668,33 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 			}
 
 			// select a pool with volume on it to delete
+			testNode := (*node.Node)(nil)
 			poolIDToDelete := ""
 			for _, vol := range volumesCreated {
 				appVol, err := Inst().V.InspectVolume(vol)
 				log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", vol))
-				replPools := appVol.ReplicaSets[0].PoolUuids
-				for _, p := range replPools {
-					if id, ok := deletablePools[p]; ok {
-						poolIDToDelete = id
+				replNodes := appVol.ReplicaSets[0].Nodes
+				for _, n := range replNodes {
+					// the node can do pool delete
+					if t, ok := poolDeletableNodesMap[n]; ok {
+						testNode = t
+						// get poolUUID to ID in the node
+						deletablePools := make(map[string]string)
+						for _, p := range testNode.Pools {
+							deletablePools[p.Uuid] = fmt.Sprintf("%v", p.GetID())
+						}
+						replPools := appVol.ReplicaSets[0].PoolUuids
+						// find the pool id to delete
+						for _, p := range replPools {
+							if id, ok := deletablePools[p]; ok {
+								poolIDToDelete = id
+								break
+							}
+						}
 						break
 					}
 				}
+
 				if poolIDToDelete != "" {
 					break
 				}
@@ -10610,9 +10731,12 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 		stepLog = fmt.Sprintf("2. Verify pool deletion after creating vols and each with %v snaps %v", numVols, numVolSnaps)
 
 		Step(stepLog, func() {
-			deletablePools, err := Inst().V.GetNodePools(*testNode)
-			log.FailOnError(err, "failed to get node pool info")
-			log.Infof("Deletable pools %+v", deletablePools)
+			poolDeletableNodes := selectPoolDeletableNodes()
+			poolDeletableNodesMap := map[string]*node.Node{}
+			for _, p := range poolDeletableNodes {
+				poolDeletableNodesMap[p.Id] = &p
+			}
+			log.Infof("Deletable pools %+v", poolDeletableNodesMap)
 
 			volIDs := []string{}
 			for i := 0; i < numVols; i++ {
@@ -10639,25 +10763,39 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 			}
 
 			// select a pool with volume on it to delete
+			testNode := (*node.Node)(nil)
 			poolIDToDelete := ""
 			for _, vol := range snapshotList {
 				appVol, err := Inst().V.InspectVolume(vol)
 				log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", vol))
-				replPools := appVol.ReplicaSets[0].PoolUuids
-				log.Infof("vol %+v, replPools %+v", vol, replPools)
-				for _, p := range replPools {
-					if id, ok := deletablePools[p]; ok {
-						poolIDToDelete = id
+				replNodes := appVol.ReplicaSets[0].Nodes
+				for _, n := range replNodes {
+					// the node can do pool delete
+					if t, ok := poolDeletableNodesMap[n]; ok {
+						testNode = t
+						// get poolUUID to ID in the node
+						deletablePools := make(map[string]string)
+						for _, p := range testNode.Pools {
+							deletablePools[p.Uuid] = fmt.Sprintf("%v", p.GetID())
+						}
+						replPools := appVol.ReplicaSets[0].PoolUuids
+						// find the pool id to delete
+						for _, p := range replPools {
+							if id, ok := deletablePools[p]; ok {
+								poolIDToDelete = id
+								break
+							}
+						}
 						break
 					}
 				}
+
 				if poolIDToDelete != "" {
 					break
 				}
 			}
-
+			log.InfoD("select testNode %v poolID %v to delete", testNode.Addresses, poolIDToDelete)
 			dash.VerifyFatal(poolIDToDelete != "", true, fmt.Sprintf("target pool deletion ID: %v", poolIDToDelete))
-
 			log.InfoD("deleting all vols")
 			for _, volID := range volIDs {
 				err = Inst().V.DeleteVolume(volID)
@@ -10709,7 +10847,7 @@ var _ = Describe("{PoolDeleteServiceDisruption}", func() {
 
 	itLog := "PoolDeleteServiceDisruption"
 	It(itLog, func() {
-		testNode := selectPoolDeletableNode(true)
+		testNode := selectPoolDeletableNode()
 		poolIDToDelete := ""
 
 		drvMap, err := Inst().V.GetPoolDrives(testNode)
@@ -11889,10 +12027,469 @@ var _ = Describe("{PoolResizeWhenReplOneVolinPool}", func() {
 		})
 		Wg.Wait()
 	})
+})
+
+var _ = Describe("{PoolDeleteMultiplePools}", func() {
+
+	/*
+		1. Have multiple pools
+		2. Delete one of the middle pools like pool 1
+		3. Do pool maintenance operations like pool expand
+		4. Do pool delete which is greater than pool id deleted in step 2
+		5. Restart the node to make sure things remain the same
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolDeleteMultiplePools", "Pool delete with multiple pools", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+
+	itLog := "PoolDeleteMultiplePools"
+	It(itLog, func() {
+		testNode := selectPoolDeletableNode()
+
+		drvMap, err := Inst().V.GetPoolDrives(testNode)
+		log.FailOnError(err, "error getting pool drives from node [%s]", testNode.Name)
+
+		numPools := len(drvMap)
+		targetNumPools := 3
+
+		for i := numPools; i < targetNumPools; i++ {
+			err = AddCloudDrive(*testNode, -1)
+			log.FailOnError(err, "drive add failed")
+		}
+
+		drvMap, err = Inst().V.GetPoolDrives(testNode)
+		log.FailOnError(err, "error getting pool drives from node [%s]", testNode.Name)
+
+		poolIDs := []string{}
+
+		for poolID := range drvMap {
+			poolIDs = append(poolIDs, poolID)
+		}
+
+		sort.Strings(poolIDs)
+
+		dash.VerifyFatal(len(poolIDs) >= targetNumPools, true, fmt.Sprintf("requires %v pools, but only has %+v", targetNumPools, drvMap))
+
+		log.Info("test node %v, pools %+v", testNode.Name, poolIDs)
+
+		stepLog := fmt.Sprintf("1. delete second pool, id %v", poolIDs[1])
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			deletePoolAndValidate(*testNode, poolIDs[1])
+		})
+
+		// add a pool back
+		stepLog = "2. Add a drive back"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info("Wait 1 min for stabling everything after reboot")
+			err = AddCloudDrive(*testNode, -1)
+		})
+
+		stepLog = fmt.Sprintf("3. delete third pool, id %v", poolIDs[2])
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			deletePoolAndValidate(*testNode, poolIDs[2])
+		})
+		stepLog = "4. Verify reboot"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = RebootNodeAndWaitForPxUp(*testNode)
+			log.FailOnError(err, "Failed to reboot node and wait till it is up")
+			log.Info("Verify reboot succeed")
+		})
+	})
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 
+})
+
+var _ = Describe("{VolResizeAllVolumes}", func() {
+
+	/*
+		PTX-23576
+		Trigger vol resize on all volumes at once
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolResizeAllVolumes", "Trigger vol resize on all volumes at once", nil, 0)
+	})
+
+	itLog := "VolResizeAllVolumes"
+	It(itLog, func() {
+		var contexts []*scheduler.Context
+		var k8sCore = core.Instance()
+
+		type VolumeDetails struct {
+			vol *volume.Volume
+			pvc *corev1.PersistentVolumeClaim
+			ctx *scheduler.Context
+		}
+		volSizeMap := []*VolumeDetails{}
+
+		stepLog = "Enable Trashcan on the cluster"
+		Step(stepLog,
+			func() {
+				log.InfoD(stepLog)
+				err := EnableTrashcanOnCluster("90")
+				log.FailOnError(err, "failed to enable trashcan on the cluster")
+			})
+
+		stepLog = "Schedule Applications on the cluster and get details of Volumes"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volresizeallvol-%d", i))...)
+			}
+		})
+		appsDeleted := false
+		deleteApps := func() {
+			if !appsDeleted {
+				appsValidateAndDestroy(contexts)
+			}
+		}
+
+		ValidateApplications(contexts)
+		defer deleteApps()
+
+		stepLog = "Verify parallel resize of all the volumes "
+		Step(stepLog, func() {
+			for _, eachCtx := range contexts {
+				vols, err := Inst().S.GetVolumes(eachCtx)
+				log.FailOnError(err, "Failed to get list of Volumes in the cluster")
+				for _, eachVol := range vols {
+					volDetails := VolumeDetails{}
+
+					// Get details on the Volume
+					volDetails.vol = eachVol
+
+					// Get PVC object from the Volume
+					pvc, err := GetPVCObjFromVol(eachVol)
+					log.FailOnError(err, "Failed to get PVC Details from Volume [%v]", eachVol.Name)
+
+					// Update volSizeMap to perform Parallel Resize of all the Volumes present in the cluster
+					volDetails.pvc = pvc
+					volSizeMap = append(volSizeMap, &volDetails)
+				}
+			}
+		})
+
+		for _, eachVol := range volSizeMap {
+			// Pod details after blocking IP
+			podsAfterblk, err := k8sCore.GetPodsUsingPVC(eachVol.vol.Name, eachVol.vol.Namespace)
+			log.FailOnError(err, "unable to find the node from the pod")
+			for _, eachPodAfter := range podsAfterblk {
+				log.Infof(fmt.Sprintf("Current state of the Pod [%v] is [%v]", eachPodAfter.Name, eachPodAfter.Status.Phase))
+				if eachPodAfter.Status.Phase != "Running" {
+					log.Infof(fmt.Sprintf("State of the Pod before Resize volume [%v] is [%v]", eachPodAfter.Name, eachPodAfter.Status.Phase))
+					log.FailOnError(fmt.Errorf("Pod [%v] Consuming Volume [%v] is not in Running State ",
+						eachPodAfter.Name, eachVol.vol.Name), "Pod not in Running State")
+				}
+			}
+		}
+
+		// Volume resize routine resizes specific Volume
+		log.InfoD("start Volume resize on each Volume present in the cluster")
+		ResizePvcInParallel := func(newVolumeIDs *VolumeDetails) {
+			defer GinkgoRecover()
+			volCurSize := newVolumeIDs.vol.Size / units.GiB
+			volNewSize := volCurSize + 10
+			log.Infof("Resizing Volume [%v] from size [%v]/[%v] to [%v]/[%v]",
+				newVolumeIDs.vol.Name, newVolumeIDs.vol.Size, newVolumeIDs.vol.Size/units.GB,
+				volNewSize*units.GB, volNewSize)
+
+			log.Infof("Resizing PVC [%v] to [%v]", newVolumeIDs.pvc.Name, volNewSize)
+			vol, err := Inst().S.ResizePVC(newVolumeIDs.ctx, newVolumeIDs.pvc, 10)
+			log.FailOnError(err, "Failed to resize PVC [%v]", vol.Name)
+
+			time.Sleep(30 * time.Second)
+			volReSize, err := Inst().V.InspectVolume(vol.ID)
+			log.FailOnError(err, "inspect returned error ?")
+
+			log.Infof("Verify volume size after resizing the volume [%v]", vol.Name)
+			dash.VerifyFatal(volReSize.Spec.Size > newVolumeIDs.vol.Size, true,
+				fmt.Sprintf("Resize of Volume didnot happen? current size is [%v]", volReSize.Spec.Size/units.GiB))
+
+			log.Infof(fmt.Sprintf("Volume [%v] resized from [%v] to [%v]",
+				newVolumeIDs.vol.Name, newVolumeIDs.vol.Size, volReSize.Spec.Size))
+			dash.VerifyFatal((volReSize.Spec.Size/units.GiB) == volNewSize, true,
+				fmt.Sprintf("Resize of Volume didnot happen? current size is [%v]!", volReSize.Spec.Size/units.GiB))
+
+		}
+
+		// Resize Volumes in parallel
+		ResizeVolumes := func(volId string) {
+			defer GinkgoRecover()
+			sizeBeforeResize, err := Inst().V.InspectVolume(volId)
+			log.FailOnError(err, "inspect returned error ?")
+			toResize := sizeBeforeResize.Spec.Size + (10 * units.GiB)
+			log.Infof("Resizing Volume [%v] from [%v] to [%v]",
+				volId, sizeBeforeResize.Spec.Size, toResize/units.GiB)
+
+			// Resize Volume and verify if volume resized
+			log.FailOnError(Inst().V.ResizeVolume(volId, toResize), "Failed to resize volume")
+
+			//Size after resize
+			sizeAfterResize, err := Inst().V.InspectVolume(volId)
+			log.FailOnError(err, "inspect returned error ?")
+
+			dash.VerifyFatal(sizeBeforeResize.Spec.Size < sizeAfterResize.Spec.Size, true,
+				"Volume resize did not happen")
+
+			log.Infof("Volume [%v] resized from [%v] to [%v] and expected is [%v]",
+				volId, sizeBeforeResize.Spec.Size, toResize, sizeAfterResize.Spec.Size)
+
+			dash.VerifyFatal((toResize/units.GiB) == (sizeAfterResize.Spec.Size/units.GiB), true,
+				fmt.Sprintf("Resize of Volume didnot happen? current size is [%v]!", sizeAfterResize.Spec.Size))
+
+		}
+
+		for _, eachVol := range volSizeMap {
+			Step(fmt.Sprintf("Do Resize on Volume [%v]", eachVol.vol.Name), func() {
+				go ResizePvcInParallel(eachVol)
+			})
+		}
+
+		// wait for some time before checking all the applications are Up and Running
+		time.Sleep(60 * time.Second)
+
+		for _, eachVol := range volSizeMap {
+			// Pod details after blocking IP
+			podsAfterblk, err := k8sCore.GetPodsUsingPVC(eachVol.vol.Name, eachVol.vol.Namespace)
+			log.FailOnError(err, fmt.Sprintf("failed to get details of Pods assigned to volume [%v]", eachVol.vol.Name))
+			for _, eachPodAfter := range podsAfterblk {
+				log.Infof(fmt.Sprintf("State of the pod after resize [%v] is [%v]",
+					eachPodAfter.Name, eachPodAfter.Status.Phase))
+				if eachPodAfter.Status.Phase != "Running" {
+					log.FailOnError(fmt.Errorf("Pod [%v] Consuming Volume [%v] is not in Running State ",
+						eachPodAfter.Name, eachVol.vol.Name), "Pod not in Running State")
+				}
+			}
+		}
+
+		// Destroy all apps
+		DestroyApps(contexts, nil)
+		appsDeleted = true
+
+		// Restore all the Volumes from trashcan
+		var trashcanVols []string
+		stepLog = "validate volumes in trashcan"
+		Step(stepLog, func() {
+			// wait for few seconds for pvc to get deleted and volume to get detached
+			time.Sleep(60 * time.Second)
+			node := node.GetStorageDriverNodes()[0]
+			log.InfoD(stepLog)
+			trashcanVols, err = Inst().V.GetTrashCanVolumeIds(node)
+			log.FailOnError(err, "error While getting trashcan volumes")
+			log.Infof("trashcan len: %v", trashcanVols)
+			dash.VerifyFatal(len(trashcanVols) > 0, true, "validate volumes exist in trashcan")
+
+			for _, volsInTrash := range trashcanVols {
+				if volsInTrash != "" {
+					volReSize, err := Inst().V.InspectVolume(volsInTrash)
+					log.FailOnError(err, "inspect returned error for volume [%v]?", volsInTrash)
+					if !volReSize.InTrashcan {
+						log.FailOnError(fmt.Errorf("Volume [%v] is still not in trashcan", volsInTrash),
+							"is volume in trashcan after delete ?")
+					}
+				}
+			}
+		})
+
+		log.Infof("list of volumes in trashcan [%v]", trashcanVols)
+
+		// Get List of volumes present in the cluster before Restoring volumes
+		allVols, err := Inst().V.ListAllVolumes()
+		log.FailOnError(err, "failed to get list of volumes")
+		log.Infof("List of all Volumes present in the cluster [%v]", allVols)
+
+		stepLog = "validate restore volumes from trashcan"
+		restoredVol := []string{}
+		newUUID, err := uuid.NewRandom()
+		log.FailOnError(err, "failed to get random UUID")
+
+		Step(stepLog, func() {
+			// Restore Volumes from trashcan
+			for _, eachVol := range trashcanVols {
+				if eachVol != "" {
+					err = trashcanRestore(eachVol, fmt.Sprintf("restore_%v_%v", newUUID, eachVol))
+					log.FailOnError(err, fmt.Sprintf("Failed restoring volume [%v] from trashcan", eachVol))
+					restoredVol = append(restoredVol, fmt.Sprintf("restore_%v_%v", newUUID, eachVol))
+				}
+			}
+		})
+
+		// Get List of volumes present in the cluster before Restoring volumes
+		allVolsAfterRestore, err := Inst().V.ListAllVolumes()
+		log.FailOnError(err, "failed to get list of volumes")
+		log.Infof("List of all Volumes present in the cluster after restore [%v]", allVolsAfterRestore)
+
+		for _, eachVolume := range restoredVol {
+			volReSize, err := Inst().V.InspectVolume(eachVolume)
+			log.FailOnError(err, "inspect returned error for volume [%v]?", volReSize.Id)
+			if strings.Contains(eachVolume, fmt.Sprintf("restore_%v", newUUID)) {
+				log.Infof("Resizing Volume [%v]", eachVolume)
+				// Resize Volume in parallel
+				go ResizeVolumes(eachVolume)
+			}
+		}
+
+		time.Sleep(60 * time.Second)
+		// Sleep for some time and try deleting Volumes which were restore from trashcan
+		for _, eachVolume := range restoredVol {
+			if strings.Contains(eachVolume, fmt.Sprintf("restore_%v", newUUID)) {
+				log.Infof("Deleting the volume [%v]", eachVolume)
+				// Delete Volumes which are restored / Resized
+				log.FailOnError(Inst().V.DeleteVolume(eachVolume), "failed to delete volumes")
+			}
+		}
+		stepLog = "Disable trashcan on the cluster"
+		Step(stepLog,
+			func() {
+				log.InfoD(stepLog)
+				err := EnableTrashcanOnCluster("0")
+				log.FailOnError(err, "failed to disable trashcan on the cluster")
+			})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})
+
+var _ = Describe("{VolHAIncreaseAllVolumes}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolHAIncreaseAllVolumes", "Trigger vol HA Increase on all volumes at once", nil, 0)
+	})
+
+	itLog := "VolHAIncreaseAllVolumes"
+	It(itLog, func() {
+		var contexts []*scheduler.Context
+		var wg sync.WaitGroup
+
+		stepLog = "Schedule Applications on the cluster and get details of Volumes"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volresizeallvol-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		type volMap struct {
+			ReplSet int64
+			volObj  *volume.Volume
+		}
+		volHAMap := []*volMap{}
+
+		revertReplica := func() {
+			for _, eachvol := range volHAMap {
+				getReplicaSets, err := Inst().V.GetReplicaSets(eachvol.volObj)
+				log.FailOnError(err, "Failed to get replication factor on the volume")
+				if len(getReplicaSets[0].Nodes) != int(eachvol.ReplSet) {
+					log.Infof("Reverting Replication factor on Volume [%v] with ID [%v] to [%v]",
+						eachvol.volObj.Name, eachvol.volObj.ID, eachvol.ReplSet)
+					err := Inst().V.SetReplicationFactor(eachvol.volObj, eachvol.ReplSet,
+						nil, nil, true)
+					log.FailOnError(err, "failed to set replicaiton value of Volume [%v]", eachvol.volObj.Name)
+				}
+			}
+		}
+
+		setReplOnVolumes := func(vol *volume.Volume, curReplSet int64, wait bool, wg *sync.WaitGroup) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			var setRepl int64
+			if curReplSet == 1 || curReplSet == 3 {
+				setRepl = 2
+			} else {
+				setRepl = 3
+			}
+			opts := volume.Options{
+				ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
+			}
+			log.Infof("Setting Replication factor on Volume [%v] with ID [%v] to [%v]", vol.Name, vol.ID, setRepl)
+			err = Inst().V.SetReplicationFactor(vol, setRepl, nil, nil, wait, opts)
+			log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", setRepl, vol.Name))
+
+		}
+		defer revertReplica()
+
+		// Wait for some time so that IO's will generate some data on all the volumes created so that
+		// HA Update will take some time to finish
+		time.Sleep(10 * time.Minute)
+
+		getReplFactors := func(vol *volume.Volume) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			volDet := volMap{}
+			curReplSet, err := Inst().V.GetReplicationFactor(vol)
+			log.FailOnError(err, "failed to get replication factor of the volume")
+			volDet.volObj = vol
+			volDet.ReplSet = curReplSet
+			log.Infof("Volume [%v] is with HA [%v]", volDet.volObj.Name, volDet.ReplSet)
+			volHAMap = append(volHAMap, &volDet)
+		}
+
+		for _, eachCtx := range contexts {
+			vols, err := Inst().S.GetVolumes(eachCtx)
+			log.FailOnError(err, "Failed to get list of Volumes in the cluster")
+
+			for _, eachVol := range vols {
+				wg.Add(1)
+				log.Infof("Get Repl factor for Volume [%v]", eachVol.Name)
+				go getReplFactors(eachVol)
+			}
+		}
+		wg.Wait()
+
+		// Wait for all the Volumes in Clean State
+		for _, eachVol := range volHAMap {
+			log.FailOnError(WaitForVolumeClean(eachVol.volObj), "is Volume in clean state ?")
+		}
+		log.Infof("All Volumes are in clean state, proceeding with HA Update")
+
+		// Set Repl Factor on all the volumes at ones
+		for _, eachVol := range volHAMap {
+			wg.Add(1)
+			log.Infof("Set Repl on Volume [%v] to [%v]", eachVol.volObj.Name, eachVol.ReplSet)
+			go setReplOnVolumes(eachVol.volObj, eachVol.ReplSet, false, &wg)
+		}
+		wg.Wait()
+
+		// Wait for 2 min before validating the volume
+		time.Sleep(2 * time.Minute)
+
+		log.Infof("Waiting for all volumes in clean state")
+		// Wait for all the Volumes in Clean State after starting Resync of the volume
+		for _, eachVol := range volHAMap {
+			log.FailOnError(WaitForVolumeClean(eachVol.volObj), "is Volume in clean state ?")
+		}
+
+		// Verify Repl Resync Completed after all volumes are in Clean state
+		for _, eachVol := range volHAMap {
+			curReplSet, err := Inst().V.GetReplicationFactor(eachVol.volObj)
+			log.FailOnError(err, "failed to get replication factor of the volume")
+
+			if eachVol.ReplSet == 3 || eachVol.ReplSet == 1 {
+				dash.VerifyFatal(curReplSet == 2, true, fmt.Sprintf("Verify if HA Value is 2 for Volume [%v]", eachVol.volObj.Name))
+			} else {
+				dash.VerifyFatal(curReplSet == 3, true, fmt.Sprintf("Verify if HA Value is 3 for Volume [%v]", eachVol.volObj.Name))
+			}
+		}
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
 })

@@ -146,6 +146,8 @@ const (
 	AutopilotLabelNameKey = "name"
 	AutopilotLabelValue   = "autopilot"
 	PortworxNotDeployed   = "portworx not deployed"
+	// MetadataLabel is added to node if node has to be made kvdb node or never become kvdb node according to key value
+	MetaDataLabel = "px/metadata-node"
 )
 
 const (
@@ -881,6 +883,7 @@ func (k *K8s) parseK8SNode(n corev1.Node) node.Node {
 }
 
 func isCsiApp(options scheduler.ScheduleOptions, appName string) bool {
+	log.Debugf("checking for app [%s] in [%v] for csi enabled apps", appName, options.CsiAppKeys)
 	for _, app := range options.CsiAppKeys {
 		if app == appName {
 			return true
@@ -899,6 +902,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 				return nil, err
 			}
 			if isCsiApp(options, key) {
+				log.Debugf("app [%s] is csi enabled", key)
 				appSpec.IsCSI = true
 			}
 			apps = append(apps, appSpec)
@@ -1920,8 +1924,8 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
-		if options.StorageProvisioner == "" {
-			if volume.GetStorageProvisioner() != PortworxStrict {
+		if volume.GetStorageProvisioner() != PortworxStrict {
+			if options.StorageProvisioner == string(volume.DefaultStorageProvisioner) || options.StorageProvisioner == CsiProvisioner {
 				if app.IsCSI {
 					obj.Provisioner = CsiProvisioner
 				} else {
@@ -1971,8 +1975,16 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		return sc, nil
 
 	} else if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
-		obj.Namespace = ns.Name
-		k.substituteNamespaceInPVC(obj, ns.Name)
+		clonedPVC := false
+		if source, exists := obj.Annotations["pvc.source"]; exists {
+			if source == "cloned" {
+				clonedPVC = true
+			}
+		}
+		if !clonedPVC {
+			obj.Namespace = ns.Name
+			k.substituteNamespaceInPVC(obj, ns.Name)
+		}
 
 		if pvcLabelsAnnotationValue, ok := obj.Annotations[pvcLabelsAnnotationKey]; ok {
 			pvcLabelsEnabled, _ := strconv.ParseBool(pvcLabelsAnnotationValue)
@@ -2021,6 +2033,31 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 				return pvc, nil
 			}
+		}
+		if clonedPVC {
+			endpointAnnotation, ok := pvc.Annotations[cdiPvcImportEndpointAnnotationKey]
+			if ok && endpointAnnotation != "" {
+				t := func() (interface{}, bool, error) {
+					pvc, err = k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+					messageAnnotation, ok := pvc.Annotations[cdiPvcRunningMessageAnnotationKey]
+					if ok {
+						if messageAnnotation == cdiImportComplete {
+							log.Infof("%s - [%s]", cdiPvcRunningMessageAnnotationKey, pvc.Annotations[cdiPvcRunningMessageAnnotationKey])
+							return "", false, nil
+						}
+						return "", true, fmt.Errorf("waiting for annotation [%s] in pvc [%s] in namespace [%s] to be %s, but got %s",
+							cdiPvcRunningMessageAnnotationKey, obj.Name, obj.Namespace, cdiImportComplete, pvc.Annotations[cdiPvcRunningMessageAnnotationKey])
+					} else {
+						return "", true, fmt.Errorf("annotation [%s] not found in pvc [%s] in namespace [%s]",
+							cdiPvcRunningMessageAnnotationKey, obj.Name, obj.Namespace)
+					}
+				}
+				_, err = task.DoRetryWithTimeout(t, cdiImageImportTimeout, cdiImageImportRetry)
+				if err != nil {
+					return pvc, err
+				}
+			}
+
 		}
 		if err != nil {
 			return nil, &scheduler.ErrFailedToScheduleApp{
@@ -2183,44 +2220,57 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 		encryptionFlag = true
 	}
 
-	if obj, ok := spec.(*storageapi.StorageClass); ok {
-		//secure-apps list is provided for which volumes should be encrypted
-		if len(k.secureApps) > 0 || k.secretConfigMapName != "" {
-			if k.isSecureEnabled(app.Key, k.secureApps) || k.secretConfigMapName != "" {
-				if obj.Parameters == nil {
-					obj.Parameters = make(map[string]string)
-				}
-				if encryptionFlag {
-					log.Infof("Adding encryption parameter to storage class app %s", app.Key)
-					obj.Parameters[encryptionName] = "true"
-				}
-				if app.IsCSI {
-					obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
-					obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
-					obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
-					obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
-				}
-				if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
-					if secretNameKeyFlag {
-						obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
-						obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
-						obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
-					}
-					if secretNamespaceKeyFlag {
-						obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
-						obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
-						obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
-					}
-				} else {
-					if secretNameKeyFlag {
-						obj.Parameters[secretName] = configMap.Data[secretNameKey]
-					}
-					if secretNamespaceKeyFlag {
-						obj.Parameters[secretNamespace] = configMap.Data[secretNamespaceKey]
-					}
-				}
+	setSecureParams := func(obj *storageapi.StorageClass) {
+		if encryptionFlag {
+			log.Infof("Adding encryption parameter to storage class app %s", app.Key)
+			obj.Parameters[encryptionName] = "true"
+		}
+		if app.IsCSI {
+			obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+			obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
+			obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
+			obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
+			obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
+			obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
+		}
+		if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
+			if secretNameKeyFlag {
+				obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+				obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
+				obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
+			}
+			if secretNamespaceKeyFlag {
+				obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
+				obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
+				obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
+			}
+		} else {
+			if secretNameKeyFlag {
+				obj.Parameters[secretName] = configMap.Data[secretNameKey]
+			}
+			if secretNamespaceKeyFlag {
+				obj.Parameters[secretNamespace] = configMap.Data[secretNamespaceKey]
 			}
 		}
+	}
+
+	if obj, ok := spec.(*storageapi.StorageClass); ok {
+
+		if k.secretConfigMapName != "" {
+			if obj.Parameters == nil {
+				obj.Parameters = make(map[string]string)
+			}
+
+			//if secure-apps list is provided, check if the app is in the list and set the secure parameters for only that app
+			if len(k.secureApps) > 0 && k.isSecureEnabled(app.Key, k.secureApps) {
+				setSecureParams(obj)
+			}
+			//if secure-apps list is not provided, set the secure parameters for all apps if secret config map is provided
+			if len(k.secureApps) == 0 {
+				setSecureParams(obj)
+			}
+		}
+
 	} else if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
 
 		if obj.Annotations == nil {
@@ -4262,6 +4312,14 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			if value, exists := obj.Labels["portworx.io/kubevirt"]; exists && value == "true" {
+				log.Debugf("PVC [%s] in namespace: [%s] is labeled for kubevirt, skipping...", obj.Name, obj.Namespace)
+				continue
+			}
+			if value, exists := obj.Labels["app"]; exists && value == "containerized-data-importer" {
+				log.Debugf("PVC [%s] in namespace: [%s] is a data vol template, skipping...", obj.Name, obj.Namespace)
+				continue
+			}
 			log.Debugf("Getting PVC [%s], namespace: [%s] for depolyment [%s]", obj.Name, obj.Namespace, ctx.App.Key)
 			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			log.Debugf("got pvc object [%s]", pvcObj.Name)
@@ -5406,40 +5464,93 @@ func (k *K8s) createVirtualMachineObjects(
 	ns *corev1.Namespace,
 	app *spec.AppSpec,
 ) (interface{}, error) {
+	isPVCcloned := false
 	if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
-		// Validating to make sure the desired images are imported by CDI and volumes are ready to be used by Kubevirt VM
-		virtualMachineVolumes := obj.Spec.Template.Spec.Volumes
-		if len(virtualMachineVolumes) > 0 {
-			for _, v := range virtualMachineVolumes {
-				err := k.WaitForImageImportForVM(obj.Name, ns.Name, v)
+		if source, exists := obj.Annotations["pvc.source"]; exists {
+			if source == "cloned" {
+				isPVCcloned = true
+			}
+		}
+		if !isPVCcloned {
+			// Validating to make sure the desired images are imported by CDI and volumes are ready to be used by Kubevirt VM
+			virtualMachineVolumes := obj.Spec.Template.Spec.Volumes
+			if len(virtualMachineVolumes) > 0 {
+				for _, v := range virtualMachineVolumes {
+					err := k.WaitForImageImportForVM(obj.Name, ns.Name, v)
+					if err != nil {
+						return nil, err
+					}
+				}
+			}
+			// Create VirtualMachine Spec
+			if obj.Namespace != "kube-system" {
+				obj.Namespace = ns.Name
+			}
+			vm, err := k8sKubevirt.CreateVirtualMachine(obj)
+			if k8serrors.IsAlreadyExists(err) {
+				if vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace); err == nil {
+					log.Infof("[%v] Found existing VirtualMachine: %v", app.Key, obj.Name)
+					return vm, nil
+				}
+			}
+
+			if err != nil {
+				return nil, &scheduler.ErrFailedToScheduleApp{
+					App:   app,
+					Cause: fmt.Sprintf("Failed to create VirtualMachine: %v, Err: %v", obj.Name, err),
+				}
+			}
+			log.Infof("[%v] Created VirtualMachine: %v", app.Key, obj.Name)
+			return vm, nil
+		} else {
+			// Create VirtualMachine Spec
+			if obj.Namespace != "kube-system" {
+				obj.Namespace = ns.Name
+			}
+			vm, err := k8sKubevirt.CreateVirtualMachine(obj)
+			if k8serrors.IsAlreadyExists(err) {
+				if vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace); err == nil {
+					log.Infof("[%v] Found existing VirtualMachine: %v", app.Key, obj.Name)
+					return vm, nil
+				}
+			}
+			// After VM creation, wait for all associated DataVolumes to be ready.
+			for _, dvt := range obj.Spec.DataVolumeTemplates {
+				err = k.WaitForCloneToSucceed(ns.Name, dvt.Name)
 				if err != nil {
 					return nil, err
 				}
 			}
-		}
-		// Create VirtualMachine Spec
-		if obj.Namespace != "kube-system" {
-			obj.Namespace = ns.Name
-		}
-		vm, err := k8sKubevirt.CreateVirtualMachine(obj)
-		if k8serrors.IsAlreadyExists(err) {
-			if vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace); err == nil {
-				log.Infof("[%v] Found existing VirtualMachine: %v", app.Key, obj.Name)
-				return vm, nil
+			log.Infof("Sleeping for 30 seconds to let data volume settle")
+			time.Sleep(30 * time.Second)
+			vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, fmt.Errorf("failed to retrieve VM after creating/waiting for DataVolumes: %v", err)
 			}
-		}
-
-		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create VirtualMachine: %v, Err: %v", obj.Name, err),
+			// Check if the VM is in 'Running' phase.
+			if !vm.Status.Ready {
+				return nil, fmt.Errorf("VM is not in the expected 'Running' state")
 			}
+			return vm, nil
 		}
-		log.Infof("[%v] Created VirtualMachine: %v", app.Key, obj.Name)
-		return vm, nil
 	}
-
 	return nil, nil
+}
+
+func (k *K8s) WaitForCloneToSucceed(namespace, pvcName string) error {
+	t := func() (interface{}, bool, error) {
+		pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+		if err != nil {
+			return nil, true, err
+		}
+		if clonePhase, ok := pvc.Annotations["cdi.kubevirt.io/storage.condition.source.running.message"]; ok && clonePhase == "Clone Complete" {
+			log.Infof("Clone operation succeeded for PVC: %s", pvcName)
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("waiting for clone operation to succeed for PVC [%s] in namespace [%s], current phase: %s", pvcName, namespace, pvc.Annotations["cdi.kubevirt.io/clonePhase"])
+	}
+	_, err := task.DoRetryWithTimeout(t, cdiImageImportTimeout, cdiImageImportRetry)
+	return err
 }
 
 // createTektonObjects creates the Tektoncd objects
@@ -7017,6 +7128,15 @@ func (k *K8s) UpgradeScheduler(version string) error {
 	}
 }
 
+// DeleteNode deletes the given in the cluster
+func (k *K8s) DeleteNode(node node.Node) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteNode()",
+	}
+}
+
 // DeleteSecret deletes secret with given name in given namespace
 func (k *K8s) DeleteSecret(namespace, name string) error {
 	return k8sCore.DeleteSecret(name, namespace)
@@ -7049,21 +7169,36 @@ func (k *K8s) CreateSecret(namespace, name, dataField, secretDataString string) 
 	return err
 }
 
-// RecycleNode method not supported for K8s scheduler
-func (k *K8s) RecycleNode(n node.Node) error {
-	// Recycle is not supported
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "RecycleNode()",
-	}
-}
-
 // ScaleCluster scale the cluster to the given replicas
 func (k *K8s) ScaleCluster(replicas int) error {
 	// ScaleCluster is not supported
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ScaleCluster()",
+	}
+}
+
+func (k *K8s) GetZones() ([]string, error) {
+	// TODO: Add implementation
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetZones()",
+	}
+}
+
+func (k *K8s) GetASGClusterSize() (int64, error) {
+	// TODO: Add implementation
+	return 0, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetASGClusterSize()",
+	}
+}
+
+func (k *K8s) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetASGClusterSize()",
 	}
 }
 
@@ -7923,6 +8058,40 @@ func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string)
 	}
 
 	log.Infof("Creating volume snapshot class: %v", snapClassName)
+	if volumeSnapClass, err = k8sExternalsnap.CreateSnapshotClass(&snapClass); err != nil {
+		return nil, &scheduler.ErrFailedToCreateSnapshotClass{
+			Name:  snapClassName,
+			Cause: err,
+		}
+	}
+	return volumeSnapClass, nil
+}
+
+// CreateVolumeSnapshotClasses creates a volume snapshot class
+func (k *K8s) CreateVolumeSnapshotClasses(snapClassName string, provisioner string, isDefault bool, deletePolicy string) (*volsnapv1.VolumeSnapshotClass, error) {
+	var err error
+	var annotation = make(map[string]string)
+	var volumeSnapClass *volsnapv1.VolumeSnapshotClass
+	if isDefault {
+		annotation["snapshot.storage.kubernetes.io/is-default-class"] = "true"
+	} else {
+		annotation = make(map[string]string)
+	}
+
+	v1obj := metav1.ObjectMeta{
+		Name:        snapClassName,
+		Annotations: annotation,
+	}
+	if len(deletePolicy) == 0 {
+		deletePolicy = "Delete"
+	}
+	snapClass := volsnapv1.VolumeSnapshotClass{
+		ObjectMeta:     v1obj,
+		Driver:         provisioner,
+		DeletionPolicy: volsnapv1.DeletionPolicy(deletePolicy),
+	}
+
+	log.Infof("Creating volume snapshot class: %v with provisioner %v", snapClassName, provisioner)
 	if volumeSnapClass, err = k8sExternalsnap.CreateSnapshotClass(&snapClass); err != nil {
 		return nil, &scheduler.ErrFailedToCreateSnapshotClass{
 			Name:  snapClassName,

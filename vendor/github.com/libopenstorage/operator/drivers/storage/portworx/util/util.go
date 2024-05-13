@@ -260,7 +260,8 @@ const (
 	ClusterOperatorVersion              = "config.openshift.io/v1"
 	ClusterOperatorKind                 = "ClusterOperator"
 	OpenshiftAPIServer                  = "openshift-apiserver"
-	OpenshiftPrometheusSupportedVersion = "4.14"
+	OpenshiftPrometheusSupportedVersion = "4.12"
+	Openshift_4_15_Version              = "4.15"
 	// OpenshiftMonitoringRouteName name of OCP user-workload route
 	OpenshiftMonitoringRouteName = "thanos-querier"
 	// OpenshiftMonitoringRouteName namespace of OCP user-workload route
@@ -865,7 +866,7 @@ func GetPortworxConn(sdkConn *grpc.ClientConn, k8sClient client.Client, namespac
 	}
 
 	// note, using symbolic name for the `endpoint`, as SSL certificates won't have K8s service IP
-	endpoint := PortworxServiceName + "." + namespace + ".svc.cluster.local"
+	endpoint := PortworxServiceName + "." + namespace
 	sdkPort := defaultSDKPort
 
 	// Get the ports from service
@@ -1402,30 +1403,12 @@ func CountStorageNodes(
 		return -1, fmt.Errorf("failed to enumerate nodes: %v", err)
 	}
 
-	k8sNodeList := &v1.NodeList{}
-	err = k8sClient.List(context.TODO(), k8sNodeList)
-	if err != nil {
-		return -1, err
-	}
-	k8sNodesStoragePodCouldRun := make(map[string]bool)
-	for _, node := range k8sNodeList.Items {
-		shouldRun, shouldContinueRunning, err := k8sutil.CheckPredicatesForStoragePod(&node, cluster, nil)
-		if err != nil {
-			return -1, err
-		}
-		if shouldRun || shouldContinueRunning {
-			k8sNodesStoragePodCouldRun[node.Name] = true
-		}
-	}
-
 	// Use the quorum member flag from the node enumerate response if all the nodes are upgraded to the
 	// newer version. The Enumerate response could be coming from any node and we want to make sure that
 	// we are not talking to an old node when enumerating.
 	useQuorumFlag := true
 	for _, node := range nodeEnumerateResponse.Nodes {
-		if node.Status == api.Status_STATUS_DECOMMISSION {
-			continue
-		}
+
 		v := node.NodeLabels[NodeLabelPortworxVersion]
 		nodeVersion, err := version.NewVersion(v)
 		if err != nil {
@@ -1440,18 +1423,19 @@ func CountStorageNodes(
 		}
 	}
 
+	// get cluster domain of current node to fetch storage nodes count for current k8s node
+	// for Metro DR cluster, we need to calculate PDB for current k8s cluster and not Portworx cluster
+	inspectCurrentResponse, err := nodeClient.InspectCurrent(ctx, &api.SdkNodeInspectCurrentRequest{})
+	if err != nil {
+		logrus.Errorf("error while inspecting current node.")
+	}
+	currentClusterDomain := inspectCurrentResponse.Node.ClusterDomain
+
 	storageNodesCount := 0
 	for _, node := range nodeEnumerateResponse.Nodes {
-		if node.SchedulerNodeName == "" {
-			k8sNode, err := coreops.Instance().SearchNodeByAddresses(
-				[]string{node.DataIp, node.MgmtIp, node.Hostname},
-			)
-			if err != nil {
-				// In Metro-DR setup, this could be expected.
-				logrus.Infof("Unable to find kubernetes node name for nodeID %v: %v", node.Id, err)
-				continue
-			}
-			node.SchedulerNodeName = k8sNode.Name
+		// skip decomissioned node to be calculated as part of storage node
+		if node.Status == api.Status_STATUS_DECOMMISSION {
+			continue
 		}
 
 		var isQuorumMember bool
@@ -1471,19 +1455,18 @@ func CountStorageNodes(
 			if !isDRSetup {
 				storageNodesCount++
 			} else {
-				if _, ok := k8sNodesStoragePodCouldRun[node.SchedulerNodeName]; ok {
+				if node.ClusterDomain == currentClusterDomain {
 					storageNodesCount++
 				} else {
-					logrus.Debugf("node %s should not run portworx", node.SchedulerNodeName)
+					logrus.Debugf("node %s is not part of cluster domain %s ", node.SchedulerNodeName, currentClusterDomain)
 				}
 			}
-
 		} else {
 			logrus.Debugf("node %s is not a quorum member, node: %+v", node.Id, node)
 		}
 	}
 
-	logrus.Debugf("storageNodesCount: %d, k8sNodesStoragePodCouldRun: %d", storageNodesCount, len(k8sNodesStoragePodCouldRun))
+	logrus.Debugf("storageNodesCount: %d", storageNodesCount)
 	return storageNodesCount, nil
 }
 
@@ -1870,5 +1853,5 @@ func isVersionSupported(current, target string) bool {
 		return false
 	}
 
-	return currentVersion.GreaterThanOrEqual(targetVersion)
+	return currentVersion.Core().GreaterThanOrEqual(targetVersion)
 }

@@ -108,24 +108,8 @@ var _ = Describe("{UpgradeCluster}", func() {
 					time.Sleep(30 * time.Minute)
 				}
 
-				PrintK8sCluterInfo()
+				PrintK8sClusterInfo()
 			})
-
-			Step("validate storage components", func() {
-				urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
-				u, err := url.Parse(urlToParse)
-				log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
-				err = Inst().V.ValidateDriver(u.String(), true)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
-
-				// Printing cluster node info after the upgrade
-				PrintK8sCluterInfo()
-			})
-
-			// TODO: This currently doesn't work for most distros and commenting out this change, see PTX-22409
-			/*if Inst().S.String() != aks.SchedName {
-				dash.VerifyFatal(mError, nil, "validate no parallel upgrade of nodes")
-			}*/
 
 			Step("update node drive endpoints", func() {
 				// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
@@ -139,6 +123,25 @@ var _ = Describe("{UpgradeCluster}", func() {
 				// Printing pxctl status after the upgrade
 				PrintPxctlStatus()
 			})
+
+			Step("validate storage components", func() {
+				urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
+				u, err := url.Parse(urlToParse)
+				log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
+				err = Inst().V.ValidateDriver(u.String(), true)
+				if err != nil {
+					PrintPxctlStatus()
+				}
+				// Printing cluster node info after the upgrade
+				PrintK8sClusterInfo()
+				dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
+
+			})
+
+			// TODO: This currently doesn't work for most distros and commenting out this change, see PTX-22409
+			/*if Inst().S.String() != aks.SchedName {
+				dash.VerifyFatal(mError, nil, "validate no parallel upgrade of nodes")
+			}*/
 
 			Step("validate all apps after upgrade", func() {
 				ValidateApplications(contexts)
