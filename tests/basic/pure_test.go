@@ -3696,12 +3696,6 @@ var _ = Describe("{FBDATopologyCreateTest}", func() {
 	})
 	itLog := "FBDATopologyCreateTest"
 	It(itLog, func() {
-		/*
-			var contexts []*scheduler.Context
-			k8sCore = core.Instance()
-			contexts = make([]*scheduler.Context, 0)
-			contexts = append(contexts, ScheuleApplications(fmt.Sprintf("fbdatoplogytest"))...)
-		*/
 		scName := "fbda-top-1"
 		log.InfoD("Creating storage class %s", scName)
 		createSC := func(scName string) error {
@@ -3720,13 +3714,13 @@ var _ = Describe("{FBDATopologyCreateTest}", func() {
 			var zoneList []string
 			zoneList = append(zoneList, "zone-0")
 			var regionList []string
-			regionList = append(zoneList, "region-0")
+			regionList = append(regionList, "region-0")
 			var list []v1.TopologySelectorLabelRequirement
 			var req v1.TopologySelectorLabelRequirement
-			req.Key = "toplogy.portworx.io/zone"
+			req.Key = "topology.portworx.io/zone"
 			req.Values = zoneList
 			var req1 v1.TopologySelectorLabelRequirement
-			req1.Key = "toplogy.portworx.io/region"
+			req1.Key = "topology.portworx.io/region"
 			req1.Values = regionList
 			list = append(list, req)
 			list = append(list, req1)
