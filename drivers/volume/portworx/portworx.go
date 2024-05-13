@@ -1668,6 +1668,23 @@ func (d *portworx) UpdateStickyFlag(volumeName, stickyOption string) error {
 	return nil
 }
 
+func (d *portworx) UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) error {
+	panic("have not yet set FBDA NFS endpoint command")
+	nodes := node.GetStorageDriverNodes()
+	cmd := fmt.Sprintf("%s %s %s", pxctlVolumeUpdate, volumeName, newEndpoint)
+	_, err := d.nodeDriver.RunCommandWithNoRetry(
+		nodes[0],
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("failed setting FBDA NFS endpoint for volume '%s' to '%s', Err: %v", volumeName, newEndpoint, err)
+	}
+	return nil
+}
+
 func (d *portworx) ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error {
 	cmd := fmt.Sprintf(mountGrepVolume, volumeName)
 	out, err := d.nodeDriver.RunCommandWithNoRetry(
@@ -1902,6 +1919,8 @@ func (d *portworx) ValidateVolumeInPxctlList(volumeName string) error {
 	}
 	return nil
 }
+
+// TODO: ValidateVolumeNFSEndpointMatches(volumeName string, expectedEndpoint string) error {}
 
 func (d *portworx) ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) error {
 	var token string
@@ -2207,6 +2226,13 @@ func (d *portworx) ValidatePureLocalVolumePaths() error {
 		return nil, false, nil
 	}, time.Minute*2, defaultRetryInterval)
 	return err
+}
+
+func (d *portworx) ValidatePureFBDAMountSource(nodes []node.Node, vols []*torpedovolume.Volume, expectedIP string) error {
+	// For each node
+	//   Run `mount` on node
+	//   Search through lines for our volume names, check that all contain right IP
+	return fmt.Errorf("not implemented (ValidatePureFBDAMountSource)")
 }
 
 func (d *portworx) SetIoBandwidth(vol *torpedovolume.Volume, readBandwidthMBps uint32, writeBandwidthMBps uint32) error {

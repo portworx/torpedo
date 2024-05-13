@@ -1289,7 +1289,202 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 			}
 		})
 
+		Step(fmt.Sprintf("validate changing FB NFS endpoint for %s app's volumes", ctx.App.Key), func() {
+			if ctx.SkipVolumeValidation {
+				return
+			}
+
+			// TODO: get the new NFS endpoint from env variables. If empty, skip this test.
+
+			// TODO: fail if px-pure-secret has multiple FBs
+
+			vols, err := Inst().S.GetVolumes(ctx)
+			processError(err, errChan...)
+
+			fbVols := []*torpedovolume.Volume{}
+
+			// Check if this app has any FB volumes. If it doesn't, just skip this test
+			for _, v := range vols {
+				vCopy := v
+				if backendType, ok := v.Labels[k8s.PureDAVolumeLabel]; ok && backendType != k8s.PureDAVolumeLabelValueFB {
+					fbVols = append(fbVols, vCopy)
+				}
+			}
+
+			if len(fbVols) == 0 {
+				return
+			}
+
+			const originalEndpoint = "" // TODO: parse from px-pure-secret
+			const newEndpoint = ""
+
+			// Attempt to change the endpoint while the app is running: this should fail
+			for _, v := range vols {
+				if backendType, ok := v.Labels[k8s.PureDAVolumeLabel]; !ok || backendType != k8s.PureDAVolumeLabelValueFB {
+					continue
+				}
+				expectedErr := Inst().V.UpdateFBDANFSEndpoint(v.ID, newEndpoint)
+				// Expect an error here
+				if expectedErr == nil {
+					processError(fmt.Errorf("expected updating FBDA NFS endpoint on an attached volume to fail, no error reported"), errChan...)
+				}
+			}
+
+			err = validateFBDANFSEndpoint(ctx, fbVols, originalEndpoint)
+			processError(err, errChan...)
+
+			scaleDown_UpdateEndpoint_ScaleUp(ctx, fbVols, newEndpoint)
+
+			waitForRunningLog := fmt.Sprintf("wait for %s app to start running", ctx.App.Key)
+			Step(waitForRunningLog, func() {
+				log.InfoD(waitForRunningLog)
+				err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+				if err != nil {
+					PrintDescribeContext(ctx)
+					processError(err, errChan...)
+					return
+				}
+			})
+
+			err = validateFBDANFSEndpoint(ctx, fbVols, newEndpoint)
+			processError(err, errChan...)
+
+			scaleDown_UpdateEndpoint_ScaleUp(ctx, fbVols, originalEndpoint)
+
+			Step(waitForRunningLog, func() {
+				log.InfoD(waitForRunningLog)
+				err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+				if err != nil {
+					PrintDescribeContext(ctx)
+					processError(err, errChan...)
+					return
+				}
+			})
+
+			err = validateFBDANFSEndpoint(ctx, fbVols, newEndpoint)
+			processError(err, errChan...)
+		})
+
 	})
+}
+
+func scaleAppToZero(ctx *scheduler.Context) error {
+	var mError error
+	log.InfoD(fmt.Sprintf("scale down app %s to 0", ctx.App.Key))
+	applicationScaleMap, err := Inst().S.GetScaleFactorMap(ctx)
+	if err != nil {
+		mError = multierr.Append(mError, err)
+		return mError
+	}
+
+	applicationScaleDownMap := make(map[string]int32, len(ctx.App.SpecList))
+
+	for name := range applicationScaleMap {
+		applicationScaleDownMap[name] = 0
+	}
+
+	err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
+	if err != nil {
+		mError = multierr.Append(mError, err)
+		if tempErr := revertAppScale(ctx); tempErr != nil {
+			mError = multierr.Append(mError, tempErr)
+		}
+		return mError
+	}
+
+	return nil
+}
+
+func scaleDown_UpdateEndpoint_ScaleUp(ctx *scheduler.Context, vols []*torpedovolume.Volume, newEndpoint string) error {
+	var mError error
+
+	if err := scaleAppToZero(ctx); err != nil {
+		mError = multierr.Append(mError, err)
+		return mError
+	}
+
+	// Change the endpoints
+	for _, v := range vols {
+		if backendType, ok := v.Labels[k8s.PureDAVolumeLabel]; !ok || backendType != k8s.PureDAVolumeLabelValueFB {
+			continue
+		}
+		err := Inst().V.UpdateFBDANFSEndpoint(v.ID, newEndpoint)
+		if err != nil {
+			mError = multierr.Append(mError, err)
+			// Try the rest, because this will still fail at the end, and we still want to revert the app scale
+		}
+	}
+
+	err := revertAppScale(ctx)
+	if err != nil {
+		mError = multierr.Append(mError, err)
+		return mError
+	}
+
+	return mError
+}
+
+func validateFBDANFSEndpoint(ctx *scheduler.Context, vols []*torpedovolume.Volume, endpoint string) error {
+	fbdaVols := []*torpedovolume.Volume{}
+	fbdaVolNames := map[string]bool{}
+
+	for _, v := range vols {
+		if backendType, ok := v.Labels[k8s.PureDAVolumeLabel]; ok && backendType == k8s.PureDAVolumeLabelValueFB {
+			fbdaVols = append(fbdaVols, v)
+		}
+	}
+
+	for _, v := range fbdaVols {
+		// Check that the endpoint is correct in pxctl v i
+		inspectResult, err := Inst().V.InspectVolume(v.ID)
+		if err != nil {
+			return fmt.Errorf("failed to inspect volume '%s': %v", v.ID, err)
+		}
+
+		if inspectResult.AttachedOn != endpoint {
+			return fmt.Errorf("expected endpoint %s, got %s", endpoint, inspectResult.AttachedOn)
+		}
+
+		fbdaVolNames[v.Name] = true
+	}
+
+	appNodes, err := Inst().S.GetNodesForApp(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get nodes for app: %v", err)
+	}
+
+	// "For each node this app is running on, get the mount table. Then check for all FBDA volumes and validate they use the correct mount source."
+	for _, n := range appNodes {
+		mountOutput, err := Inst().N.RunCommand(n, "mount", node.ConnectionOpts{})
+		if err != nil {
+			return fmt.Errorf("failed to get mounts on node '%s': %v", n.Name, err)
+		}
+
+		for _, line := range strings.Split(mountOutput, "\n") {
+			if !strings.Contains(line, "nfs") { // Only consider NFS volumes
+				continue
+			}
+
+			foundVol := ""
+			for volName := range fbdaVolNames {
+				if strings.Contains(line, volName) {
+					foundVol = volName
+					break
+				}
+			}
+
+			if foundVol == "" { // Only consider volumes that are in our list of volume names
+				continue
+			}
+
+			// Check that we are using the correct address
+			if !strings.Contains(line, endpoint) {
+				return fmt.Errorf("found mount for volume '%s' on node '%s' with incorrect endpoint: mount string '%s'", foundVol, n.Name, line)
+			}
+		}
+	}
+
+	return nil
 }
 
 // ValidateVolumes is the ginkgo spec for validating volumes of a context
