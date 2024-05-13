@@ -223,17 +223,42 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	// TODO: Need to add platform cleanup here
-	log.InfoD("Purging all templates")
-	err := WorkflowPDSTemplate.Purge(true)
-	log.FailOnError(err, "some error occurred while purging data service templates")
-
-	log.InfoD("Purging all backup locations")
-	err = WorkflowbkpLoc.Purge()
-	log.FailOnError(err, "some error occurred while purging backup locations")
 
 	defer Inst().Dash.TestSetEnd()
 	defer EndTorpedoTest()
+
+	var allErrors []error
+
+	// TODO: Need to add platform cleanup here
+	log.InfoD("Purging all templates")
+	err := WorkflowPDSTemplate.Purge(true)
+	if err != nil {
+		log.Errorf("some error occurred while purging data service templates - [%s]", err.Error())
+		allErrors = append(allErrors, err)
+	}
+
+	log.InfoD("Purging all backup locations")
+	err = WorkflowbkpLoc.Purge()
+	if err != nil {
+		log.Errorf("some error occurred while purging backup locations - [%s]", err.Error())
+		allErrors = append(allErrors, err)
+	}
+
+	log.InfoD("Purging all cloud credentials")
+	err = WorkflowCc.Purge()
+	if err != nil {
+		log.Errorf("some error occurred while purging cloud credentials - [%s]", err.Error())
+		allErrors = append(allErrors, err)
+	}
+
+	if len(allErrors) > 0 {
+		var allErrorStrings []string
+		for _, err := range allErrors {
+			allErrorStrings = append(allErrorStrings, err.Error())
+		}
+		log.FailOnError(fmt.Errorf("[%s]", strings.Join(allErrorStrings, "\n\n")), "errors occurred while cleanup")
+	}
+
 })
 
 func TestDataService(t *testing.T) {
