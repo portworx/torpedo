@@ -1123,8 +1123,8 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 	/*
 		https://purestorage.atlassian.net/browse/PTX-23985
-		1. Deploy an app which uses FADA volume and an app which uses
-		2. Parallely resize the pvc of FADA deployed app and also resize the base volume
+		1. Deploy an app which uses FADA volume and an app which uses base volume
+		2. Parallely resize the pvc of FADA deployed app and also resize the base app pvc
 		3. Validate the volume resize
 	*/
 	JustBeforeEach(func() {
