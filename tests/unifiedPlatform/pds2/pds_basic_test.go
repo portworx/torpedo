@@ -227,6 +227,11 @@ var _ = AfterSuite(func() {
 	log.InfoD("Purging all templates")
 	err := WorkflowPDSTemplate.Purge(true)
 	log.FailOnError(err, "some error occurred while purging data service templates")
+
+	log.InfoD("Purging all backup locations")
+	err = WorkflowbkpLoc.Purge()
+	log.FailOnError(err, "some error occurred while purging backup locations")
+
 	defer Inst().Dash.TestSetEnd()
 	defer EndTorpedoTest()
 })

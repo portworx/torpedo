@@ -2,6 +2,8 @@ package pds
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
+	"slices"
 	"strings"
 
 	"time"
@@ -240,7 +242,10 @@ func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId strin
 }
 
 func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(deploymentId string, params *parameters.NewPDSParams) (string, error) {
-
+	if slices.Contains(stworkflows.SKIPDATASERVICEFROMWORKFLOAD, strings.ToLower(wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)) {
+		log.Warnf("Workload is not enabled for this - [%s] - data service", wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)
+		return "", nil
+	}
 	//Initializing the parameters required for workload generation
 	wkloadParams := dslibs.LoadGenParams{
 		LoadGenDepName: params.LoadGen.LoadGenDepName,

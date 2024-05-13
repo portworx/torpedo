@@ -10,6 +10,10 @@ const (
 	FAILED    = "FAILED"
 )
 
+var SKIPDATASERVICEFROMWORKFLOAD = []string{
+	"sqlserver",
+}
+
 const (
 	envPlatformAccountName = "PLATFORM_ACCOUNT_NAME"
 	envAccountDisplayName  = "PLATFORM_ACCOUNT_DISPLAY_NAME"
