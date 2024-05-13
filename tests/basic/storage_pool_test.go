@@ -146,9 +146,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 
 			if IsPoolAddDiskSupported() {
 				err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
-				if err != nil {
-					log.FailOnError(err, "is Pool Expand using Add disk successful ?")
-				}
+				log.FailOnError(err, "is Pool Expand using Add disk successful ?")
 				resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
 				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
 			}
