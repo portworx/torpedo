@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 
@@ -824,6 +825,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 							return
 						}
 						log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+						time.Sleep(30 * time.Second)
 					})
 
 					Step("Deploy dataservice", func() {
@@ -867,13 +869,15 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 						if err != nil {
 							log.Errorf("Some error occurred while creating backup [%s], Error - [%s]", pdsBackupConfigName, err.Error())
 							allErrors = append(allErrors, err)
+						} else {
+							log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
 						}
-						log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
 					}(deployment)
 				}
 			}
 
 			wg.Wait()
+
 			dash.VerifyFatal(len(allErrors), 0, "Verifying multiple backup creation")
 			log.InfoD("Simultaneous backup config creation succeeded")
 		})

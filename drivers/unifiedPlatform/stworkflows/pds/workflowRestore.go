@@ -19,6 +19,7 @@ type WorkflowPDSRestore struct {
 	RestoredDeployments                 *WorkflowDataService
 	SourceDeploymentConfigBeforeUpgrade *automationModels.DeploymentTopology
 	SkipValidation                      map[string]bool
+	WorkflowBackup                      *WorkflowPDSBackup
 }
 
 const (
@@ -103,7 +104,7 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 			log.Infof("Skipping data validation for the restore [%s]", name)
 		}
 	} else {
-		err := restore.ValidateDataAfterRestore(createRestore.Create.Config.DestinationReferences.DeploymentId, sourceDeploymentId)
+		err := restore.ValidateDataAfterRestore(createRestore.Create.Config.DestinationReferences.DeploymentId, backupUid)
 		if err != nil {
 			return nil, fmt.Errorf("data validation failed. Error - [%s]", err.Error())
 		}
@@ -112,15 +113,18 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 	return createRestore, nil
 }
 
-func (restore WorkflowPDSRestore) ValidateDataAfterRestore(destinationDeploymentId string, sourceDeploymentId string) error {
+func (restore WorkflowPDSRestore) ValidateDataAfterRestore(destinationDeploymentId string, backupId string) error {
 
 	err := restore.RestoredDeployments.ReadAndUpdateDataServiceDataHash(destinationDeploymentId)
 	if err != nil {
 		return fmt.Errorf("unable to read data from restored database. Error - [%s]", err.Error())
 	}
 
-	sourceCheckSum := restore.Source.DataServiceDeployment[sourceDeploymentId].SourceMd5Checksum
+	sourceCheckSum := restore.WorkflowBackup.Backups[backupId].Md5Hash
 	destinationCheckSum := restore.RestoredDeployments.DataServiceDeployment[destinationDeploymentId].SourceMd5Checksum
+
+	log.Infof("Source Md5 Hash - [%s]", sourceCheckSum)
+	log.Infof("Restore Md5 Hash - [%s]", destinationCheckSum)
 
 	if sourceCheckSum != destinationCheckSum {
 		return fmt.Errorf("Data validation failed for restore. Expected - [%s], Found - [%s]", sourceCheckSum, destinationCheckSum)

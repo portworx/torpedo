@@ -169,15 +169,17 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		log.Infof("Creating backup config struct")
 		WorkflowPDSBackupConfig.WorkflowBackupLocation = WorkflowbkpLoc
 		WorkflowPDSBackupConfig.WorkflowDataService = &WorkflowDataService
-		WorkflowPDSBackupConfig.Backups = make(map[string]automationModels.V1BackupConfig)
+		WorkflowPDSBackupConfig.BackupConfigs = make(map[string]*pds.BackupConfigDetails)
 		WorkflowPDSBackupConfig.SkipValidatation = make(map[string]bool)
 
 		log.Infof("Creating Backup struct")
 		WorkflowPDSBackup.WorkflowDataService = &WorkflowDataService
-		WorkflowPDSBackup.AllBackups = make(map[string]string)
+		WorkflowPDSBackup.Backups = make(map[string]*pds.BackupDetails)
+		WorkflowPDSBackup.WorkflowBackupConfig = &WorkflowPDSBackupConfig
 
 		log.Infof("Creating restore object for same cluster and same project")
 		WorkflowPDSRestore.Source = &WorkflowDataService
+		WorkflowPDSRestore.WorkflowBackup = &WorkflowPDSBackup
 		WorkflowPDSRestore.Restores = make(map[string]automationModels.PDSRestore)
 		WorkflowPDSRestore.Destination = &WorkflowNamespace
 		WorkflowPDSRestore.RestoredDeployments = &pds.WorkflowDataService{
