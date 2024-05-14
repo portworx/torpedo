@@ -1179,10 +1179,11 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 
 					}
 					for _, pvc := range pvcs {
-						pvcSizeObj := pvc.Spec.Resources.Requests[v1.ResourceStorage]
-						pvcSize, _ := pvcSizeObj.AsInt64()
-						log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSize, pvc.UID)
-						resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSize))
+						pvcSize := pvc.Spec.Resources.Requests.Storage().String()
+						pvcSize = strings.TrimSuffix(pvcSize, "Gi")
+						pvcSizeInt, err := strconv.Atoi(pvcSize)
+						log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
+						resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSizeInt))
 						log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
 						log.InfoD("Vol uid %v", resizedVol.ID)
 					}
@@ -1205,13 +1206,13 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 
 				}
 				for _, pvc := range pvcs {
-					pvcSizeObj := pvc.Spec.Resources.Requests[v1.ResourceStorage]
-					pvcSize, _ := pvcSizeObj.AsInt64()
-					log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSize, pvc.UID)
-					resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSize))
+					pvcSize := pvc.Spec.Resources.Requests.Storage().String()
+					pvcSize = strings.TrimSuffix(pvcSize, "Gi")
+					pvcSizeInt, err := strconv.Atoi(pvcSize)
+					log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
+					resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSizeInt))
 					log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
 					log.InfoD("Vol uid %v", resizedVol.ID)
-					time.Sleep(10 * time.Second)
 				}
 			}
 		})
@@ -1226,16 +1227,14 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 				log.FailOnError(err, "Failed to get volumes from context")
 
 				for _, vol := range appVolumes {
-					volReSize, err := Inst().V.InspectVolume(vol.ID)
-					log.FailOnError(err, "inspect returned error ?")
-					log.Infof("Verify volume size after resizing the volume [%v]", vol.Name)
-					dash.VerifyFatal(volReSize.Spec.Size > vol.Size, true,
-						fmt.Sprintf("Resize of Volume didnot happen? current size is [%v]", volReSize.Spec.Size/units.GiB))
-
-					log.Infof(fmt.Sprintf("Volume [%v] resized from [%v] to [%v]",
-						vol.Name, vol.Size, volReSize.Spec.Size))
-					dash.VerifyFatal((volReSize.Spec.Size/units.GiB) >= vol.Size, true,
-						fmt.Sprintf("Resize of Volume didnot happen? current size is [%v]!", volReSize.Spec.Size/units.GiB))
+					// Need to pass token before validating volume
+					params := make(map[string]string)
+					if Inst().ConfigMap != "" {
+						params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+						log.FailOnError(err, "didn't get auth token")
+					}
+					err := Inst().V.ValidateUpdateVolume(vol, params)
+					log.FailOnError(err, "Could not validate volume resize %v", vol.Name)
 
 				}
 			}
