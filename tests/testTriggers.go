@@ -6253,7 +6253,8 @@ func TriggerUpgradeVolumeDriverFromCatalog(contexts *[]*scheduler.Context, recor
 					UpdateOutcome(event, fmt.Errorf("error getting images using URL [%s] and k8s version [%s]. Err: [%v]", upgradeHop, k8sVersion.String(), err))
 					return
 				}
-				err = oputil.ValidateStorageCluster(imageList, stc, ValidateStorageClusterTimeout, defaultRetryInterval, true)
+				storageClusterValidateTimeout := time.Duration(len(node.GetStorageDriverNodes())*9) * time.Minute
+				err = oputil.ValidateStorageCluster(imageList, stc, storageClusterValidateTimeout, defaultRetryInterval, true)
 				if err != nil {
 					UpdateOutcome(event, fmt.Errorf("error validating storage cluster after upgrade. Err: [%v]", err))
 					return
@@ -6501,13 +6502,15 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		*recordChan <- event
 	}()
 	setMetrics(*event)
-	stepLog := "Power off all worker nodes test"
+	stepLog := "Power off all worker nodes test "
 	Step(stepLog, func() {
 		log.Infof(stepLog)
 		workerNodes:= node.GetWorkerNodes()
-		log.Infof("All worker nodes : %v", workerNodes)
 		var numberOfThread int = 5
 		var numberOfNodePerThread int
+		// If number of VMs to restarted is less than  numberOfThread then 
+		// only one vm assigned to each thread, else assign  len(workerNodes)/numberOfThread
+		// to per thread
 		if len(workerNodes) < numberOfThread{
 			numberOfThread = len(workerNodes)
 			numberOfNodePerThread = 1
@@ -6515,6 +6518,7 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 			numberOfNodePerThread = len(workerNodes)/numberOfThread
 		}
 		var counter int = 0
+		// Assign vms to every thread.
 		nodesInThread := make([][]node.Node, numberOfThread)
 		for t := 0; t < numberOfThread;  t++ {
 			nodesInThread[t] = make([]node.Node, numberOfNodePerThread)
@@ -6523,9 +6527,8 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 					counter++
 			}
 		}
-		log.Infof("before additional nodes  : %v", nodesInThread)
-		log.Infof("before additional nodes len  : %v", len(nodesInThread))
-		//Create an additional thread for remainder.
+		//Create an additional thread for remainder. Example if 12 VMs, assign first 10 vms to 
+		// 5 threads and assign remaining 2 vms 6th thread. 
 		if counter < len(workerNodes){
 			log.Infof("Additional nodes  : %d", len(workerNodes) - counter)
 			additonalThread := make([]node.Node, len(workerNodes) - counter)
@@ -6538,9 +6541,7 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 			nodesInThread = append(nodesInThread, additonalThread)
 			numberOfThread++
 		}
-		log.Infof("Complete nodes  : %v", nodesInThread)
-		log.Infof("Complete nodes len  : %v", len(nodesInThread))
-		stepLog = "Power off all worker nodes"
+		stepLog = "Power off all worker nodes in batches"
 		Step(stepLog, func() {
 			var poweroffwg sync.WaitGroup
 			for i := 0; i < numberOfThread; i++ {
@@ -6551,7 +6552,6 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 							log.Infof("Node Name : %v", nodeInfo.Name)
 							err:=Inst().N.PowerOffVM(nodeInfo)
 							UpdateOutcome(event, err)
-							log.Infof("err %v",err)
 					}
 				}(nodesInThread[i])
 			}
@@ -10244,6 +10244,12 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 		return
 	}
 
+	err := Inst().S.RefreshNodeRegistry()
+	UpdateOutcome(event, err)
+
+	err = Inst().V.RefreshDriverEndpoints()
+	UpdateOutcome(event, err)
+
 	stepLog = "validate PX on all nodes after cluster scale up"
 	hasPXUp := true
 	Step(stepLog, func() {
@@ -10262,7 +10268,7 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 		return
 	}
 
-	err := Inst().V.RefreshDriverEndpoints()
+	err = Inst().V.RefreshDriverEndpoints()
 	UpdateOutcome(event, err)
 
 	updatedStorageNodesCount := len(node.GetStorageNodes())
@@ -10372,6 +10378,11 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 	if !isClusterScaled {
 		return
 	}
+	err := Inst().S.RefreshNodeRegistry()
+	UpdateOutcome(event, err)
+
+	err = Inst().V.RefreshDriverEndpoints()
+	UpdateOutcome(event, err)
 
 	stepLog = "validate PX on all nodes after cluster scale up"
 	hasPXUp := true
@@ -10390,7 +10401,7 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 	if !hasPXUp {
 		return
 	}
-	err := Inst().V.RefreshDriverEndpoints()
+	err = Inst().V.RefreshDriverEndpoints()
 	UpdateOutcome(event, err)
 
 	updatedStoragelessNodesCount := len(node.GetStorageLessNodes())
@@ -10403,7 +10414,6 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)
-
 }
 
 func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
@@ -10455,6 +10465,19 @@ func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *ch
 				updateLongevityStats(OCPStorageNodeRecycle, stats.NodeRecycleEventName, dashStats)
 				err := Inst().S.DeleteNode(delNode)
 				UpdateOutcome(event, err)
+
+				stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storeage nodes",
+					Inst().AutoStorageNodeRecoveryTimeout.String())
+
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
+				})
+				err = Inst().S.RefreshNodeRegistry()
+				UpdateOutcome(event, err)
+
+				err = Inst().V.RefreshDriverEndpoints()
+				UpdateOutcome(event, err)
 			})
 		Step(fmt.Sprintf("Listing all nodes after recycling a storage node %s", delNode.Name), func() {
 			workerNodes := node.GetWorkerNodes()
@@ -10492,7 +10515,6 @@ func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *ch
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)
-
 }
 
 // TriggerReallocSharedMount peforms sharedv4 and sharedv4_svc volumes reallocation

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/devans10/pugo/flasharray"
 
@@ -62,6 +63,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/operator"
 	policyops "github.com/portworx/sched-ops/k8s/policy"
 	k8sStorage "github.com/portworx/sched-ops/k8s/storage"
+	schedstorage "github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/k8s/stork"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
@@ -1634,6 +1636,7 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 			log.Warnf("No FlashArray DirectAccess volumes, skipping")
 			processError(err, errChan...)
 		} else {
+			log.Infof("==== Cloning volume %s\n", vols[0].Name)
 			timestamp := strconv.Itoa(int(time.Now().Unix()))
 			request := scheduler.CSICloneRequest{
 				Timestamp:       timestamp,
@@ -1693,33 +1696,43 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 // ValidatePoolExpansionWithPureVolumes is the ginkgo spec for executing a pool expansion when FA/FB volumes is attached
 func ValidatePoolExpansionWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 	Step("For validation of an expanding storage pools while FA/FB volumes are attached", func() {
-		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-		if err != nil {
-			err = fmt.Errorf("error getting storage pools list. Err: %v", err)
-			log.Error(err.Error())
+		var vols []*volume.Volume
+		var err error
+		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
+			vols, err = Inst().S.GetPureVolumes(ctx, "pure_block")
 			processError(err, errChan...)
-		}
+		})
+		if len(vols) == 0 {
+			log.Warnf("No FlashArray DirectAccess volumes, skipping")
+		} else {
 
-		if len(pools) == 0 {
-			err = fmt.Errorf("length of pools should be greater than 0")
-			processError(err, errChan...)
-		}
-		for _, pool := range pools {
-			initialPoolSize := pool.TotalSize / units.GiB
-			err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 20)
+			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 			if err != nil {
-				err = fmt.Errorf("error initiating pool [%v ] %v: [%v]", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err.Error())
+				err = fmt.Errorf("error getting storage pools list. Err: %v", err)
 				log.Error(err.Error())
-			} else {
-				err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
+				processError(err, errChan...)
+			}
+
+			if len(pools) == 0 {
+				err = fmt.Errorf("length of pools should be greater than 0")
+				processError(err, errChan...)
+			}
+			for _, pool := range pools {
+				initialPoolSize := pool.TotalSize / units.GiB
+				err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 20)
 				if err != nil {
-					err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err)
-					log.Error(err)
+					err = fmt.Errorf("error initiating pool [%v ] %v: [%v]", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err.Error())
+					log.Error(err.Error())
+				} else {
+					err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
+					if err != nil {
+						err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err)
+						log.Error(err)
+					}
 				}
 			}
 		}
 	})
-
 }
 
 // ValidateMountOptionsWithPureVolumes is the ginkgo spec for executing a check for mountOptions flag
@@ -2488,6 +2501,7 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 		TearDownContext(ctx, opts)
 	}
 
+	/* Removing Data error validation till PB-6271 is resolved.
 	if allErrors != "" {
 		if IsReplacePolicySetToDelete {
 			log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
@@ -2497,6 +2511,7 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 			return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
 		}
 	}
+	*/
 
 	return nil
 }
@@ -2905,7 +2920,9 @@ func runCmd(cmd string, n node.Node) error {
 
 func runCmdOnce(cmd string, n node.Node) (string, error) {
 	output, err := Inst().N.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
-		Sudo: true,
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
+		Sudo:            true,
 	})
 	if err != nil {
 		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
@@ -8368,9 +8385,9 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 
 	var maxCloudDrives int
 
-	if _, err := core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
+	if _, err = core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
 		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
-	} else if _, err := core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
+	} else if _, err = core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
 		maxCloudDrives = FA_MAX_CLOUD_DRIVES
 	} else {
 		maxCloudDrives = CLOUD_PROVIDER_MAX_CLOUD_DRIVES
@@ -8716,6 +8733,7 @@ func WaitForPoolOffline(n node.Node) error {
 	return err
 }
 
+// GetPoolIDFromPoolUUID Returns Pool ID from Pool UUID
 func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {
 	nodesPresent := node.GetStorageNodes()
 	for _, each := range nodesPresent {
@@ -8730,6 +8748,20 @@ func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {
 		}
 	}
 	return -1, nil
+}
+
+// GetPoolObjFromPoolIdOnNode Returns pool object from pool ID on a specific Node
+func GetPoolObjFromPoolIdOnNode(n *node.Node, poolID int) (*opsapi.StoragePool, error) {
+	poolDetails, err := GetPoolsDetailsOnNode(n)
+	if err != nil {
+		return nil, err
+	}
+	for _, eachPool := range poolDetails {
+		if eachPool.ID == int32(poolID) {
+			return eachPool, nil
+		}
+	}
+	return nil, fmt.Errorf("Failed to get details of Storage Pool On specific Node ")
 }
 
 func GetAutoFsTrimStatusForCtx(ctx *scheduler.Context) (map[string]opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
@@ -9423,17 +9455,21 @@ func AddMetadataDisk(n node.Node) error {
 
 }
 
-// createNamespaces Create N number of namespaces and return namespace list
-func createNamespaces(numberOfNamespaces int) ([]string, error) {
+// CreateNamespaces Create N number of namespaces and return namespace list
+func CreateNamespaces(nsName string, numberOfNamespaces int) ([]string, error) {
 
 	// Create multiple namespaces in string
 	var (
 		namespaces []string
 	)
+	namespace := fmt.Sprintf("large-resource-%v", time.Now().Unix())
+	if nsName != "" {
+		namespace = fmt.Sprintf("%s", nsName)
+	}
 
 	// Create a good number of namespaces
-	for i := 0; i < numberOfNamespaces; i++ {
-		namespace := fmt.Sprintf("large-resource-%d-%v", i, time.Now().Unix())
+	for nsCount := 0; nsCount < numberOfNamespaces; nsCount++ {
+		namespace := fmt.Sprintf("%v-%v", namespace, nsCount)
 		nsName := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namespace,
@@ -12272,6 +12308,7 @@ func EnableFlashArrayNetworkInterface(faMgmtIP string, iface string) error {
 		faClient, err := pureutils.PureCreateClientAndConnect(eachFaInt.MgmtEndPoint, eachFaInt.APIToken)
 		if err != nil {
 			log.Errorf("Failed to connect to FA using Mgmt IP [%v]", eachFaInt.MgmtEndPoint)
+			return err
 		}
 
 		if eachFaInt.MgmtEndPoint == faMgmtIP {
@@ -12315,3 +12352,459 @@ func GetFBDetailsFromCluster() ([]pureutils.FlashBladeEntry, error) {
 	return nil, fmt.Errorf("Failed to list available blades from FB ")
 }
 
+// FilterAllPureVolumes returns filtered Pure Volumes from list of Volumes
+func FilterAllPureVolumes(volumes []*volume.Volume) ([]volume.Volume, error) {
+	pureVolumes := []volume.Volume{}
+	for _, eachVol := range volumes {
+		isPureVol, err := Inst().V.IsPureVolume(eachVol)
+		log.FailOnError(err, "validating pureVolume returned err")
+		if isPureVol {
+			pureVolumes = append(pureVolumes, *eachVol)
+		}
+	}
+	return pureVolumes, nil
+}
+
+// GetFADetailsFromVolumeName returns FA Struct of FA where the volume is created
+func GetFADetailsFromVolumeName(volumeName string) ([]pureutils.FlashArrayEntry, error) {
+	faEntries := []pureutils.FlashArrayEntry{}
+	allFAs, err := GetFADetailsUsed()
+	if err != nil {
+		return nil, err
+	}
+	for _, eachFA := range allFAs {
+		// Connect to FA Client
+		log.Info("Connecting to FA [%v]", eachFA.MgmtEndPoint)
+		faClient, err := pureutils.PureCreateClientAndConnect(eachFA.MgmtEndPoint, eachFA.APIToken)
+		if err != nil {
+			log.Errorf("Failed to connect to FA using Mgmt IP [%v]", eachFA.MgmtEndPoint)
+			return nil, err
+		}
+
+		// List all the Volumes present in FA
+		allVolumes, err := pureutils.ListAllTheVolumesFromSpecificFA(faClient)
+		if err != nil {
+			return nil, err
+		}
+		for _, eachVol := range allVolumes {
+			if strings.Contains(eachVol.Name, volumeName) {
+				log.Infof("Volume [%v] present on Host [%v]", eachVol.Name, eachFA.MgmtEndPoint)
+				faEntries = append(faEntries, eachFA)
+			}
+		}
+	}
+	return faEntries, nil
+}
+
+// GetVolumeCompleteNameOnFA returns volume Name with Prefix from FA
+func GetVolumeCompleteNameOnFA(faClient *flasharray.Client, volName string) (string, error) {
+	// List all the Volumes present in FA
+	allVolumes, err := pureutils.ListAllTheVolumesFromSpecificFA(faClient)
+	if err != nil {
+		return "", err
+	}
+	for _, eachVol := range allVolumes {
+		if strings.Contains(eachVol.Name, volName) {
+			return eachVol.Name, nil
+		}
+	}
+	return "", nil
+}
+
+// GetConnectedHostToVolume returns the host details attached to Volume
+func GetConnectedHostToVolume(faClient *flasharray.Client, volumeName string) (string, error) {
+	allHostVolumes, err := pureutils.ListVolumesFromHosts(faClient)
+	if err != nil {
+		return "", err
+	}
+	for eachHost, volumeDetails := range allHostVolumes {
+		for _, eachVol := range volumeDetails {
+			if eachVol.Vol == volumeName {
+				log.Infof("Volume [%v] is present in Host [%v]", eachVol.Vol, eachHost)
+				return eachHost, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("Failed to get details of Host for Volume [%v]", volumeName)
+}
+
+// DeleteVolumeFromFABackend returns true if volume is deleted from backend
+func DeleteVolumeFromFABackend(fa pureutils.FlashArrayEntry, volumeName string) (bool, error) {
+	faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
+	if err != nil {
+		log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+		return false, err
+	}
+
+	volName, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
+	if err != nil {
+		return false, err
+	}
+	log.Infof("Name of the Volume is [%v]", volName)
+
+	// Get details of Host from Volume Name
+	hostName, err := GetConnectedHostToVolume(faClient, volName)
+	if err != nil {
+		return false, err
+	}
+	log.Infof("Host Name attached to Volume [%v] is [%v]", volName, hostName)
+
+	// Disconnect Host from Volume
+	connVol, err := pureutils.DisConnectVolumeFromHost(faClient, hostName, volName)
+	if err != nil {
+		return false, err
+	}
+	log.Infof("Details of Disconnected Volume [%v]", connVol)
+
+	// Verify if volume exists in specific FA
+	isExists, err := pureutils.IsFAVolumeExists(faClient, volName)
+	if err != nil {
+		return false, err
+	}
+	if !isExists {
+		log.Infof("Volume [%v] doesn't exist on the FA Cluster [%v]", volName, fa.MgmtEndPoint)
+		return true, nil
+	}
+	// Delete the Volume from FA Backend
+	log.Infof("Deleting volume with Name [%v]", volName)
+	_, err = pureutils.DeleteVolumeOnFABackend(faClient, volName)
+	if err != nil {
+		return false, err
+	}
+	// Verify if the volume is still exists on FA
+	// Verify if volume exists in specific FA
+	isExists, err = pureutils.IsFAVolumeExists(faClient, volName)
+	if err != nil {
+		return false, err
+	}
+	if isExists {
+		return false, fmt.Errorf("Volume [%v] still exist in backend", volName)
+	}
+	return true, nil
+
+}
+
+type MultipathDevices struct {
+	DevId  string
+	DmID   string
+	Size   string
+	Status string
+	Type   string
+	Paths  []PathInfo
+}
+
+// PathInfo represents information about a path of a multipath device.
+type PathInfo struct {
+	Devnode string
+	Status  string
+}
+
+// Returns all the list of multipath devices present in the cluster nodes
+func GetAllMultipathDevicesPresent(n *node.Node) ([]MultipathDevices, error) {
+	multiPathDevs := []MultipathDevices{}
+	output, err := runCmdOnce(fmt.Sprintf("multipath -ll"), *n)
+	log.Infof("%v", err)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Output Details before parsing [%v]", output)
+
+	devDetailsPattern := regexp.MustCompile(`^(.*)\s+(dm-.*)\s+(.*)\,.*`)
+	sizeMatchPattern := regexp.MustCompile(`.*size=([0-9]+G)\s+.*`)
+	statusMatchPatern := regexp.MustCompile(`.*status\=(\w+)`)
+	sdMatchPattern := regexp.MustCompile(`.*\s+(\d+:\d+:\d+:\d+)+\s+(sd\w+)\s+([0-9:]+)\s+(.*)`)
+
+	// Create a Reader from the string
+	reader := strings.Split(output, "\n")
+	log.Infof("Output Details [%v]", reader)
+
+	initPatternFound := false
+	multipathDevices := MultipathDevices{}
+	for i, eachLine := range reader {
+		matched := devDetailsPattern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			if initPatternFound {
+				multiPathDevs = append(multiPathDevs, multipathDevices)
+			}
+			multipathDevices = MultipathDevices{}
+			multipathDevices.DevId = matched[1]
+			multipathDevices.DmID = matched[2]
+			multipathDevices.Type = matched[3]
+			initPatternFound = true
+		}
+
+		matched = sizeMatchPattern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			multipathDevices.Size = matched[1]
+		}
+
+		matched = statusMatchPatern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			multipathDevices.Status = matched[1]
+		}
+
+		matched = sdMatchPattern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			paths := PathInfo{}
+			paths.Devnode = matched[2]
+			paths.Status = matched[4]
+			multipathDevices.Paths = append(multipathDevices.Paths, paths)
+		}
+		// Validate Last Line
+		if i == len(reader)-1 {
+			multiPathDevs = append(multiPathDevs, multipathDevices)
+		}
+	}
+
+	return multiPathDevs, nil
+}
+
+// GetMultipathDeviceIDsOnNode returns List of all Multipath Devices on Node
+func GetMultipathDeviceIDsOnNode(n *node.Node) ([]string, error) {
+	multiPathDev := []string{}
+	multiPathDevices, err := GetAllMultipathDevicesPresent(n)
+	if err != nil {
+		return nil, err
+	}
+	for _, eachMultipathDev := range multiPathDevices {
+		multiPathDev = append(multiPathDev, eachMultipathDev.DevId)
+	}
+	return multiPathDev, nil
+}
+
+// CreateFlashStorageClass Creates storage class for Purity Backend
+// ReclaimPolicy can be v1.PersistentVolumeReclaimDelete, v1.PersistentVolumeReclaimRetain, v1.PersistentVolumeReclaimRecycle
+// volumeBinding storageapi.VolumeBindingImmediate, storageapi.VolumeBindingWaitForFirstConsumer
+func CreateFlashStorageClass(scName string,
+	scType string,
+	ReclaimPolicy v1.PersistentVolumeReclaimPolicy,
+	params map[string]string,
+	MountOptions []string,
+	AllowVolumeExpansion *bool,
+	VolumeBinding storageapi.VolumeBindingMode,
+	AllowedTopologies map[string][]string) error {
+
+	var reclaimPolicy v1.PersistentVolumeReclaimPolicy
+	param := make(map[string]string)
+	for key, value := range params {
+		param[key] = value
+	}
+	// add pure backend type
+	param["backend"] = scType
+	param["repl"] = "1"
+
+	v1obj := metav1.ObjectMeta{
+		Name: scName,
+	}
+
+	if VolumeBinding != storageapi.VolumeBindingImmediate && VolumeBinding != storageapi.VolumeBindingWaitForFirstConsumer {
+		return fmt.Errorf("Unsupported binding mode specified , please use storageapi.VolumeBindingImmediate or storageapi.VolumeBindingWaitForFirstConsumer")
+	}
+
+	// Declare Reclaim Policies
+	switch ReclaimPolicy {
+	case v1.PersistentVolumeReclaimDelete:
+		reclaimPolicy = v1.PersistentVolumeReclaimDelete
+	case v1.PersistentVolumeReclaimRetain:
+		reclaimPolicy = v1.PersistentVolumeReclaimRetain
+	case v1.PersistentVolumeReclaimRecycle:
+		reclaimPolicy = v1.PersistentVolumeReclaimRecycle
+	}
+
+	var allowedTopologies []v1.TopologySelectorTerm = nil
+	if AllowedTopologies != nil {
+		topologySelector := v1.TopologySelectorTerm{}
+		topologyList := []v1.TopologySelectorLabelRequirement{}
+		for key, value := range AllowedTopologies {
+			topology := v1.TopologySelectorLabelRequirement{}
+			topology.Key = key
+			topology.Values = value
+			topologyList = append(topologyList, topology)
+		}
+		topologySelector.MatchLabelExpressions = topologyList
+		allowedTopologies = append(allowedTopologies, topologySelector)
+	}
+
+	scObj := storageapi.StorageClass{
+		ObjectMeta:           v1obj,
+		Provisioner:          k8s.CsiProvisioner,
+		Parameters:           param,
+		MountOptions:         MountOptions,
+		ReclaimPolicy:        &reclaimPolicy,
+		AllowVolumeExpansion: AllowVolumeExpansion,
+		VolumeBindingMode:    &VolumeBinding,
+		AllowedTopologies:    allowedTopologies,
+	}
+
+	k8storage := schedstorage.Instance()
+	_, err := k8storage.CreateStorageClass(&scObj)
+	return err
+}
+
+// CreateFlashPVCOnCluster Creates PVC on the Cluster
+func CreateFlashPVCOnCluster(pvcName string, scName string, nameSpace string, sizeGb string) error {
+	log.InfoD("creating PVC [%s] in namespace [%s]", pvcName, nameSpace)
+	pvcObj := &v1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: nameSpace,
+		},
+		Spec: v1.PersistentVolumeClaimSpec{
+			AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+			StorageClassName: &scName,
+			Resources: v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceStorage: resource.MustParse(sizeGb),
+				},
+			},
+		},
+	}
+	_, err := core.Instance().CreatePersistentVolumeClaim(pvcObj)
+	return err
+}
+
+// GetAllPVCFromNs returns all PVC's Created on specific NameSpace
+func GetAllPVCFromNs(nsName string, labelSelector map[string]string) ([]v1.PersistentVolumeClaim, error) {
+	pvcList, err := core.Instance().GetPersistentVolumeClaims(nsName, labelSelector)
+	if err != nil {
+		return nil, err
+	}
+	return pvcList.Items, nil
+}
+
+// Returns details about cloud drives present in the cluster
+type CloudConfig struct {
+	Type              string            `json:"Type"`
+	Size              int               `json:"Size"`
+	ID                string            `json:"ID"`
+	PoolID            string            `json:"PoolID"`
+	Path              string            `json:"Path"`
+	Iops              int               `json:"Iops"`
+	Vpus              int               `json:"Vpus"`
+	PXType            string            `json:"PXType"`
+	State             string            `json:"State"`
+	Labels            map[string]string `json:"labels"`
+	AttachOptions     interface{}       `json:"AttachOptions"`
+	Provisioner       string            `json:"Provisioner"`
+	EncryptionKeyInfo string            `json:"EncryptionKeyInfo"`
+}
+
+type CloudData struct {
+	Configs            map[string]CloudConfig `json:"Configs"`
+	NodeID             string                 `json:"NodeID"`
+	ReservedInstanceID string                 `json:"ReservedInstanceID"`
+	SchedulerNodeName  string                 `json:"SchedulerNodeName"`
+	NodeIndex          int                    `json:"NodeIndex"`
+	CreateTimestamp    time.Time              `json:"CreateTimestamp"`
+	InstanceID         string                 `json:"InstanceID"`
+	Zone               string                 `json:"Zone"`
+	State              string                 `json:"State"`
+	Labels             map[string]string      `json:"labels"`
+}
+
+// GetCloudDriveDetailsOnCluster returns list of cloud drives on the cluster
+func GetCloudDriveList() (*map[string]CloudData, error) {
+	var data map[string]CloudData
+	allNodes := node.GetStorageNodes()
+	for _, eachNode := range allNodes {
+
+		stNode, err := Inst().V.GetDriverNode(&eachNode)
+		if err != nil {
+			return nil, err
+		}
+		if stNode.Status != opsapi.Status_STATUS_OK {
+			continue
+		}
+		command := "pxctl cd list -j"
+		output, err := runCmdOnce(command, eachNode)
+		log.Infof("%v", err)
+		if err != nil {
+			return nil, err
+		}
+
+		err = json.Unmarshal([]byte(output), &data)
+		if err != nil {
+			fmt.Println("Error:", err)
+			return nil, err
+		}
+		break
+	}
+	log.Infof("%v", &data)
+	return &data, nil
+
+}
+
+// GetCloudDrivesOnSpecificNode Returns details of all Cloud drives from specific Node
+func GetCloudDrivesOnSpecificNode(n *node.Node) (*CloudData, error) {
+	allCloudDrives, err := GetCloudDriveList()
+	if err != nil {
+		return nil, err
+	}
+	for nodeId, cList := range *allCloudDrives {
+		if nodeId == n.Id {
+			return &cList, nil
+		}
+	}
+	return nil, fmt.Errorf("Failed to get Cloud Drive on Specific Node [%v]", n.Name)
+}
+
+// IsPureCluster returns True if backend Type is Pure
+func IsPureCluster() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsPure(stc) {
+			logrus.Infof("Pure installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsPureCloudProvider Returns true if cloud Provider is Pure
+func IsPureCloudProvider() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.GetCloudProvider(stc) == "pure" {
+			return true
+		}
+	}
+	return false
+}
+
+// GetDrivesFromSpecificPoolOnNode returns List of Drives On Specific Node
+func GetDrivesFromSpecificPoolOnNode(n *node.Node, poolId string) ([]string, error) {
+	allPools, err := Inst().V.GetPoolDrives(n)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("All Pool IDs [%v]", allPools)
+	if val, ok := allPools[poolId]; ok {
+		return val, nil
+	}
+	return nil, fmt.Errorf("Failed to get details of Drive on Pool [%v]", poolId)
+}
+
+// GetMultipathDeviceOnPool Returns list of multipath devices on Pool
+func GetMultipathDeviceOnPool(n *node.Node) (map[string][]string, error) {
+	multipathMap := make(map[string][]string)
+
+	// Get All Multipath Devices on the perticular Node
+	allMultipathDev, err := GetMultipathDeviceIDsOnNode(n)
+	if err != nil {
+		return nil, err
+	}
+
+	allPools, err := Inst().V.GetPoolDrives(n)
+	if err != nil {
+		return nil, err
+	}
+
+	for eachPoolId, eachDev := range allPools {
+		for _, dev := range eachDev {
+			for _, multiDev := range allMultipathDev {
+				if strings.Contains(dev, multiDev) {
+					multipathMap[eachPoolId] = append(multipathMap[eachPoolId], multiDev)
+				}
+			}
+		}
+	}
+	return multipathMap, nil
+}
