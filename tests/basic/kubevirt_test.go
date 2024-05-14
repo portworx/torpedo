@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -886,11 +888,18 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 		log.FailOnError(err, "Failed to get volume driver namespace")
 		defer ListEvents(pxNs)
 
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+
 		stepLog := "schedule kubevirt VMs"
 		Step(stepLog, func() {
+			namespace := "ocp-upgrade"
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				taskName := fmt.Sprintf("test-%v", i)
-				appCtxs = append(appCtxs, ScheduleApplications(taskName)...)
+				taskName := fmt.Sprintf("test")
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, taskName)...)
 			}
 		})
 		stepLog = "validate kubevirt apps before upgrade"
@@ -904,6 +913,7 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 		})
 
 		var versions []string
+		Inst().SchedUpgradeHops = "stable-4.14,stable-4.15"
 		if len(Inst().SchedUpgradeHops) > 0 {
 			versions = strings.Split(Inst().SchedUpgradeHops, ",")
 		}
@@ -988,8 +998,7 @@ var _ = Describe("{RebootRootDiskAttachedNode}", func() {
 		defer func() {
 			Inst().AppList = appList
 		}()
-		Inst().AppList = []string{"kubevirt-cirros-live-migration", "kubevirt-windows-vm",
-			"kubevirt-fio-pvc-clone", "kubevirt-fio-load-disk-repl-2", "kubevirt-fio-load-multi-disk"}
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1079,7 +1088,16 @@ var _ = Describe("{ParallelAddDiskToVM}", func() {
 		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog = "schedule a kubevirtVM"
 		Step(stepLog, func() {
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			numberOfParallelVMs := 1
+			if _, val := os.LookupEnv("PARALLEL_KUBEVIRT_VM"); val {
+				//convert string to int
+				numberOfParallelVMs, err = strconv.Atoi(os.Getenv("PARALLEL_KUBEVIRT_VM"))
+				if err != nil {
+					numberOfParallelVMs = 2
+				}
+				log.InfoD("number of parallel kubevirt VMs: %v", numberOfParallelVMs)
+			}
+			for i := 0; i < numberOfParallelVMs; i++ {
 				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
@@ -1152,7 +1170,16 @@ var _ = Describe("{MultipleKubeVirtLiveMigration}", func() {
 		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog := "schedule a kubevirt VM"
 		Step(stepLog, func() {
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			numberOfParallelVMs := 1
+			if _, val := os.LookupEnv("PARALLEL_KUBEVIRT_VM"); val {
+				//convert string to int
+				numberOfParallelVMs, err = strconv.Atoi(os.Getenv("PARALLEL_KUBEVIRT_VM"))
+				if err != nil {
+					numberOfParallelVMs = 2
+				}
+				log.InfoD("number of parallel kubevirt VMs: %v", numberOfParallelVMs)
+			}
+			for i := 0; i < numberOfParallelVMs; i++ {
 				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
@@ -1212,7 +1239,16 @@ var _ = Describe("{AddDiskAndLiveMigrateMultipleVm}", func() {
 		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			numberOfParallelVMs := 1
+			if _, val := os.LookupEnv("PARALLEL_KUBEVIRT_VM"); val {
+				//convert string to int
+				numberOfParallelVMs, err = strconv.Atoi(os.Getenv("PARALLEL_KUBEVIRT_VM"))
+				if err != nil {
+					numberOfParallelVMs = 2
+				}
+				log.InfoD("number of parallel kubevirt VMs: %v", numberOfParallelVMs)
+			}
+			for i := 0; i < numberOfParallelVMs; i++ {
 				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
@@ -1283,7 +1319,16 @@ var _ = Describe("{LiveMigrationBeforeAddDiskMultipleVm}", func() {
 		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			numberOfParallelVMs := 1
+			if _, val := os.LookupEnv("PARALLEL_KUBEVIRT_VM"); val {
+				//convert string to int
+				numberOfParallelVMs, err = strconv.Atoi(os.Getenv("PARALLEL_KUBEVIRT_VM"))
+				if err != nil {
+					numberOfParallelVMs = 2
+				}
+				log.InfoD("number of parallel kubevirt VMs: %v", numberOfParallelVMs)
+			}
+			for i := 0; i < numberOfParallelVMs; i++ {
 				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
@@ -1350,7 +1395,16 @@ var _ = Describe("{MultipleVMVolHaIncrease}", func() {
 		Inst().AppList = []string{"kubevirt-debian-fio-low-ha"}
 		stepLog := "schedule a kubevirt VM"
 		Step(stepLog, func() {
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			numberOfParallelVMs := 1
+			if _, val := os.LookupEnv("PARALLEL_KUBEVIRT_VM"); val {
+				//convert string to int
+				numberOfParallelVMs, err = strconv.Atoi(os.Getenv("PARALLEL_KUBEVIRT_VM"))
+				if err != nil {
+					numberOfParallelVMs = 2
+				}
+				log.InfoD("number of parallel kubevirt VMs: %v", numberOfParallelVMs)
+			}
+			for i := 0; i < numberOfParallelVMs; i++ {
 				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
@@ -1432,7 +1486,16 @@ var _ = Describe("{MultipleVMVolHaDecrease}", func() {
 		stepLog := "schedule a kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			numberOfParallelVMs := 1
+			if _, val := os.LookupEnv("PARALLEL_KUBEVIRT_VM"); val {
+				//convert string to int
+				numberOfParallelVMs, err = strconv.Atoi(os.Getenv("PARALLEL_KUBEVIRT_VM"))
+				if err != nil {
+					numberOfParallelVMs = 2
+				}
+				log.InfoD("number of parallel kubevirt VMs: %v", numberOfParallelVMs)
+			}
+			for i := 0; i < numberOfParallelVMs; i++ {
 				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}

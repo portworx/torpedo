@@ -794,6 +794,8 @@ spec:
       value: "${IKS_CLUSTER_REGION}"
     - name: LONGEVITY_UPGRADE_EXECUTION_THRESHOLD
       value: "${LONGEVITY_UPGRADE_EXECUTION_THRESHOLD}"
+    - name: PARALLEL_KUBEVIRT_VM
+      value: "${PARALLEL_KUBEVIRT_VM}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
