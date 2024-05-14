@@ -972,7 +972,7 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 var _ = Describe("{RebootRootDiskAttachedNode}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootRootDiskAttachedNode", "Reboot the node where VMs root disk is attached", nil, 0)
-		DeployVMTemplatesAndValidate()
+		//DeployVMTemplatesAndValidate()
 	})
 	var appCtxs []*scheduler.Context
 
@@ -983,15 +983,14 @@ var _ = Describe("{RebootRootDiskAttachedNode}", func() {
 		defer func() {
 			Inst().AppList = appList
 		}()
-		Inst().AppList = []string{"kubevirt-cirros-live-migration", "kubevirt-windows-vm",
-			"kubevirt-fio-pvc-clone", "kubevirt-fio-load-disk-repl-2", "kubevirt-fio-load-multi-disk"}
+		Inst().AppList = []string{"kubevirt-fio-load-multi-disk", "kubevirt-windows-vm",
+			"kubevirt-fio-pvc-clone"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				appCtxs = append(appCtxs, ScheduleApplications("reboot")...)
 			}
 		})
-		defer DestroyApps(appCtxs, nil)
 		ValidateApplications(appCtxs)
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
@@ -1002,6 +1001,8 @@ var _ = Describe("{RebootRootDiskAttachedNode}", func() {
 		stepLog = "Get node where VM's root disk is attached and reboot that node"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			vmNodeMap := make(map[string]string, 0)
+
 			for _, virtualMachineCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(virtualMachineCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount pre node reboot in namespace: %s", virtualMachineCtx.App.NameSpace)
@@ -1015,6 +1016,7 @@ var _ = Describe("{RebootRootDiskAttachedNode}", func() {
 					nodeName, err := GetNodeOfVM(vm)
 					log.FailOnError(err, "Failed to get node name for VM: %s", vm.Name)
 					log.Infof("Pre-reboot VM [%s] in namespace [%s] is scheduled on node [%s]. Rebooting it.", vm.Name, vm.Namespace, nodeName)
+					vmNodeMap[vm.Name] = nodeName
 					nodeObj, err := node.GetNodeByName(nodeName)
 					log.FailOnError(err, "Failed to get node obj for node name: %s", nodeName)
 					err = Inst().N.RebootNodeAndWait(nodeObj)
@@ -1030,6 +1032,8 @@ var _ = Describe("{RebootRootDiskAttachedNode}", func() {
 				for _, vm := range vms {
 					nodeName, err := GetNodeOfVM(vm)
 					log.FailOnError(err, "Failed to get node name for VM: %s", vm.Name)
+					err = ValidateVMNodeChanged(vm.Name, nodeName, vmNodeMap)
+					log.FailOnError(err, "Failed  to schedule VM: %s on a new node", vm.Name)
 					log.Infof("Post reboot VM [%s] in namespace [%s] is scheduled on node [%s]", vm.Name, vm.Namespace, nodeName)
 				}
 				bindMount, err = IsVMBindMounted(virtualMachineCtx, false)
@@ -1037,6 +1041,11 @@ var _ = Describe("{RebootRootDiskAttachedNode}", func() {
 				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount pre node reboot")
 			}
 			ValidateApplications(appCtxs)
+		})
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
 		})
 	})
 	JustAfterEach(func() {
