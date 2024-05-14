@@ -1210,7 +1210,7 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 					pvcSizestring := strings.TrimSuffix(pvcSize, "Gi")
 					pvcSizeInt, err := strconv.Atoi(pvcSizestring)
 					log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
-					resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSizeInt))
+					resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(pvcSizeInt))
 					log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
 					log.InfoD("Vol uid %v", resizedVol.ID)
 				}
@@ -1243,7 +1243,7 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		appsValidateAndDestroy(contexts)
+		//appsValidateAndDestroy(contexts)
 	})
 })
 

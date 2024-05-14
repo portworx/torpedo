@@ -1506,10 +1506,10 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
 			}
 			/* Ignore shared setting.
-			case api.SpecShared:
-				if requestedSpec.Shared != vol.Spec.Shared {
-					return errFailedToInspectVolume(volumeName, k, requestedSpec.Shared, vol.Spec.Shared)
-				}
+			   case api.SpecShared:
+			   	if requestedSpec.Shared != vol.Spec.Shared {
+			   		return errFailedToInspectVolume(volumeName, k, requestedSpec.Shared, vol.Spec.Shared)
+			   	}
 			*/
 		case api.SpecSticky:
 			if requestedSpec.Sticky != vol.Spec.Sticky {
@@ -1945,23 +1945,23 @@ func GetSerialFromWWID(wwid string) (string, error) {
 
 func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 	/* Parses output like this
-	[root@akrpan-pxone-1 ~]# lsblk --inverse --ascii --noheadings -o NAME,SIZE -b
-	sdd                               137438953472
-	sdb                                34359738368
-	3624a9370ea876434795b4b54000a4128   6442450944
-	|-sdf                               6442450944
-	|-sdi                               6442450944
-	|-sdg                               6442450944
-	`-sdh                               6442450944
-	sde2                              134217728000
-	`-sde                             137438953472
-	sde1                                3219128320
-	`-sde                             137438953472
-	sdc                               137438953472
-	sda2                              133438636032
-	`-sda                             137438953472
-	sda1                                3999268864
-	`-sda                             137438953472
+	   [root@akrpan-pxone-1 ~]# lsblk --inverse --ascii --noheadings -o NAME,SIZE -b
+	   sdd                               137438953472
+	   sdb                                34359738368
+	   3624a9370ea876434795b4b54000a4128   6442450944
+	   |-sdf                               6442450944
+	   |-sdi                               6442450944
+	   |-sdg                               6442450944
+	   `-sdh                               6442450944
+	   sde2                              134217728000
+	   `-sde                             137438953472
+	   sde1                                3219128320
+	   `-sde                             137438953472
+	   sdc                               137438953472
+	   sda2                              133438636032
+	   `-sda                             137438953472
+	   sda1                                3999268864
+	   `-sda                             137438953472
 	*/
 
 	foundDevices := map[string]pureLocalPathEntry{}
@@ -2289,6 +2289,9 @@ func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[st
 		respVol := volumeInspectResponse.Volume
 
 		// Size Update
+		log.Infof("VOLUME %+v", vol)
+		log.Infof("RESPONSE VOLUME %+v", respVol.Spec)
+
 		if respVol.Spec.Size != vol.RequestedSize {
 			return nil, true, &ErrFailedToInspectVolume{
 				ID: volumeName,
@@ -6058,9 +6061,9 @@ func (d *portworx) DeleteSnapshotsForVolumes(volumeNames []string, clusterProvid
 // GetPoolLabelValue returns values of labels
 func (d *portworx) GetPoolLabelValue(poolUUID string, label string) (string, error) {
 	/* e.x
-	1) d.GetPoolLabelValue(poolUUID, "iopriority")
-	2) d.GetPoolLabelValue(poolUUID, "beta.kubernetes.io/arch")
-	3) d.GetPoolLabelValue(poolUUID, "medium")
+	   1) d.GetPoolLabelValue(poolUUID, "iopriority")
+	   2) d.GetPoolLabelValue(poolUUID, "beta.kubernetes.io/arch")
+	   3) d.GetPoolLabelValue(poolUUID, "medium")
 	*/
 	var PropertyMatch string
 	PropertyMatch = ""
