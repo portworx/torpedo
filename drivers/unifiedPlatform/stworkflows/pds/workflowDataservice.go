@@ -46,6 +46,8 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	stConfigId := wfDataService.PDSTemplates.StorageTemplateId
 	log.Infof("targetClusterId [%s]", targetClusterId)
 
+	log.InfoD("Deploying DataService [%s]", ds.Name)
+
 	imageId, err := dslibs.GetDataServiceImageId(ds.Name, image, version)
 	if err != nil {
 		return nil, err
@@ -134,6 +136,10 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 			return nil, err
 		}
 	}
+
+	log.Infof("Sleeping for 1 minutes to make sure deployment gets healthy")
+	time.Sleep(1 * time.Minute)
+
 	return deployment, nil
 }
 
@@ -147,7 +153,7 @@ func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(depl
 	}
 
 	// Validate if the dns endpoint is reachable
-	err = wfDataService.ValidateDNSEndpoint(deploymentId)
+	err = wfDataService.ValidateDNSEndpoint(deploymentId, ds.Name)
 	if err != nil {
 		return err
 	}
@@ -219,16 +225,16 @@ func (wfDataService *WorkflowDataService) DeleteDeployment(deploymentId string) 
 	return nil
 }
 
-func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId string) error {
+func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId, dataServiceName string) error {
 	deployment, _, err := dslibs.GetDeployment(deploymentId)
 	if err != nil {
 		return err
 	}
 	log.Infof("Deployment Response [+%v]", *deployment)
-	log.Infof("ConnectionInfo Response [+%v]", deployment.Get.Status.ConnectionInfo["clusterDetails"])
+	log.Infof("ConnectionInfo Response [+%v]", deployment.Get.Status.ConnectionInfo["connectionDetails"])
 
-	clusterDetails := deployment.Get.Status.ConnectionInfo["clusterDetails"]
-	dnsEndPoint, err := utils.ParseInterfaceAndGetDetails(clusterDetails)
+	connectionDetails := deployment.Get.Status.ConnectionInfo["connectionDetails"]
+	dnsEndPoint, err := dslibs.ParseInterfaceAndGetDetails(connectionDetails, dataServiceName)
 	if err != nil {
 		return err
 	}
@@ -325,16 +331,16 @@ func (wfDataService *WorkflowDataService) ValidateDeploymentResources(resourceTe
 	log.Debugf("volume group %v ", storageOp.VolumeGroup)
 	log.Debugf("resource template values cpu req [%s]", resourceTemp.Resources.Requests.CPU)
 
-	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Requests.CPU, config.Spec.Topologies[0].Resources.Requests.CPU, "Validating CPU Request")
-	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Requests.Memory, config.Spec.Topologies[0].Resources.Requests.Memory, "Validating Memory Request")
-	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Requests.Storage, config.Spec.Topologies[0].Resources.Requests.Storage, "Validating storage Request")
-	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Limits.CPU, config.Spec.Topologies[0].Resources.Limits.CPU, "Validating CPU Limits")
-	wfDataService.Dash.VerifyFatal(resourceTemp.Resources.Limits.Memory, config.Spec.Topologies[0].Resources.Limits.Memory, "Validating Memory Limits")
-	wfDataService.Dash.VerifyFatal(storageOp.Replicas, config.Spec.Topologies[0].StorageOptions.Replicas, "Validating storage replicas")
-	wfDataService.Dash.VerifyFatal(storageOp.Filesystem, config.Spec.Topologies[0].StorageOptions.Filesystem, "Validating filesystems")
-	wfDataService.Dash.VerifyFatal(storageOp.Secure, config.Spec.Topologies[0].StorageOptions.Secure, "Validating Secure Storage Option")
-	wfDataService.Dash.VerifyFatal(replicas, config.Spec.Topologies[0].Nodes, "Validating ds node replicas")
-	wfDataService.Dash.VerifyFatal(dataServiceVersionBuild, config.Spec.Version, "Validating ds version")
+	wfDataService.Dash.VerifyFatal(config.Spec.Topologies[0].Resources.Requests.CPU, resourceTemp.Resources.Requests.CPU, "Validating CPU Request")
+	wfDataService.Dash.VerifyFatal(config.Spec.Topologies[0].Resources.Requests.Memory, resourceTemp.Resources.Requests.Memory, "Validating Memory Request")
+	wfDataService.Dash.VerifyFatal(config.Spec.Topologies[0].Resources.Requests.Storage, resourceTemp.Resources.Requests.Storage, "Validating storage Request")
+	wfDataService.Dash.VerifyFatal(config.Spec.Topologies[0].Resources.Limits.CPU, resourceTemp.Resources.Limits.CPU, "Validating CPU Limits")
+	wfDataService.Dash.VerifyFatal(config.Spec.Topologies[0].Resources.Limits.Memory, resourceTemp.Resources.Limits.Memory, "Validating Memory Limits")
+	wfDataService.Dash.VerifyFatal(config.Spec.Topologies[0].StorageOptions.Replicas, storageOp.Replicas, "Validating storage replicas")
+	wfDataService.Dash.VerifyFatal(config.Spec.Topologies[0].StorageOptions.Filesystem, storageOp.Filesystem, "Validating filesystems")
+	wfDataService.Dash.VerifyFatal(config.Spec.Topologies[0].StorageOptions.Secure, storageOp.Secure, "Validating Secure Storage Option")
+	wfDataService.Dash.VerifyFatal(config.Spec.Topologies[0].Nodes, replicas, "Validating ds node replicas")
+	wfDataService.Dash.VerifyFatal(config.Spec.Version, dataServiceVersionBuild, "Validating ds version")
 }
 
 func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string, deploymentName string, sizeInGb uint64) error {
