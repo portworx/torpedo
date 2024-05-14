@@ -1212,6 +1212,12 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 					fmt.Println("storage size", storage.Value())
 					pvcSize1 := pvc.Spec.Resources.Requests.Storage().String()
 					fmt.Println("pvc size1", pvcSize1)
+					fmt.Println("pvc size int ", uint64(pvcSize))
+					fmt.Println("storage size int ", uint64(storage.Value()))
+					pvcSizestring := strings.TrimSuffix(pvcSize1, "Gi")
+					pvcSizeInt, err := strconv.Atoi(pvcSizestring)
+					fmt.Println("pvc size int ", pvcSizeInt)
+					fmt.Println(err)
 
 					//log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSize, pvc.UID)
 					//resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSize))
