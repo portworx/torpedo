@@ -4135,36 +4135,34 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 
 var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 	/*
-				https://purestorage.atlassian.net/browse/PTX-24002
-			    1.Deploy a FADA app
-		        2.Take the corresponding pxctl volume of the pvc and try to clone it
-		        3.Check the corresponding volume clone is available in FA backend
-		        4.Delete the FADA app
+		https://purestorage.atlassian.net/browse/PTX-24002
+		1.Deploy a FADA app
+		2.Take the corresponding pxctl volume of the pvc and try to clone it
+		3.Check the corresponding volume clone is available in FA backend
+		4.Delete the FADA app
 
 	*/
 	JustBeforeEach(func() {
-		log.Infof("Starting Torpedo tests ")
-		StartTorpedoTest("CreateCloneOfTheFADAVolume",
-			"Create Clone of the FADA Volume and verify the status",
-			nil, 0)
+		StartTorpedoTest("CreateCloneOfTheFADAVolume", "Create Clone of the FADA Volume and verify the status", nil, 0)
 	})
-	itLog := "Px Volume Resize in parallel to FADA/FBDA Volume Resize ( PVC Resize )"
+	itLog := "Create Clone of the FADA Volume and verify the status and check creation of cloned volume in FA backend"
 	It(itLog, func() {
+		log.InfoD(itLog)
 		var contexts []*scheduler.Context
 		var volumeName string
 		var cloneVolumeId string
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details used")
-		log.InfoD(itLog)
 		stepLog := "Deploy FADA app"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			context, err := Inst().S.Schedule("deploy-fada", scheduler.ScheduleOptions{
+			taskName := "deploy-fada"
+			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 				AppKeys:            []string{"fio-fa-davol"},
 				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
 				PvcSize:            6 * units.GiB,
 			})
-			log.FailOnError(err, "Failed to schedule application of %v namespace", "deploy-fada-volume")
+			log.FailOnError(err, "Failed to schedule application of namespace [%v]", taskName)
 			contexts = append(contexts, context...)
 
 		})
@@ -4175,18 +4173,19 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 			log.InfoD(stepLog)
 			for _, context := range contexts {
 				appsvols, err := Inst().S.GetVolumes(context)
-				log.FailOnError(err, "Failed to get volumes for the context")
+				log.FailOnError(err, "Failed to get volumes for app %s", context.App.Key)
+				log.InfoD("Starting the Clone of the Volume")
 				for _, vol := range appsvols[:1] {
 					cloneVolumeId, err := Inst().V.CloneVolume(vol.ID)
 					log.FailOnError(err, "Failed to clone volume [%v]", vol.ID)
-					log.InfoD("Clone Volume ID [%v]", cloneVolumeId)
+					log.InfoD("Clone Volume ID [%v] for parent volume [%v]", cloneVolumeId, vol.ID)
 
 				}
 			}
 			log.InfoD("Get the corresponding volume name for the volId")
 			for _, context := range contexts {
 				appsvols, err := Inst().S.GetVolumes(context)
-				log.FailOnError(err, "Failed to get volumes for the context")
+				log.FailOnError(err, "Failed to get volumes for app %s", context.App.Key)
 				for _, vol := range appsvols {
 					if vol.ID == cloneVolumeId {
 						volumeName = vol.Name
@@ -4198,22 +4197,14 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 			cloneVolFound := false
 			for _, fa := range flashArrays {
 				faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
-				if err != nil {
-					log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
-					continue
-				}
+				log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
 				volName, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
-				if err != nil {
-					log.Errorf("Failed to get complete volume name: %v", err)
-					continue
-				}
+				log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v]", volumeName))
 				log.Infof("Name of the Volume is [%v]", volName)
 
 				isExists, err := pureutils.IsFAVolumeExists(faClient, volName)
-				if err != nil {
-					log.Errorf("Failed to check if volume exists on FA: %v", err)
-					continue
-				}
+				log.FailOnError(err, fmt.Sprintf("Failed to check if volume exists on FA: %v", err))
+
 				if isExists {
 					cloneVolFound = true
 					break
