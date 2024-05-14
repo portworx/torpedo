@@ -40,7 +40,7 @@ var (
 	importerPodCompletionTimeout     = 30 * time.Minute
 	importerPodRetryInterval         = 20 * time.Second
 	defaultMigrationTimeout          = 30 * time.Minute
-	defaultMigrationRetryInterval    = 2 * time.Second
+	defaultMigrationRetryInterval    = 30 * time.Second
 )
 
 // AddDisksToKubevirtVM is a function which takes number of disks to add and adds them to the kubevirt VMs passed (Please provide size in Gi)
@@ -774,12 +774,17 @@ func GetReplicaNodesOfVM(virtualMachineCtx *scheduler.Context) ([]string, error)
 	}
 	// Get replica nodes where the volumes are present
 	replicaNodes, err := getReplicaNodes(vols[0])
-
-	for _, node := range replicaNodes {
-		log.Infof("Replica node: %s", node)
+	if err != nil {
+		return nil, err
+	}
+	replicaNodesName := []string{}
+	for _, replicaNode := range replicaNodes {
+		id, err := node.GetNodeDetailsByNodeID(replicaNode)
+		log.FailOnError(err, "Failed to get node details by node id")
+		replicaNodesName = append(replicaNodesName, id.Name)
 	}
 
-	return replicaNodes, nil
+	return replicaNodesName, nil
 }
 
 func GetNonReplicaNodesOfVM(virtualMachineCtx *scheduler.Context) ([]string, error) {
@@ -800,7 +805,6 @@ func GetNonReplicaNodesOfVM(virtualMachineCtx *scheduler.Context) ([]string, err
 	for _, replicaNode := range replicaNodes {
 		id, err := node.GetNodeDetailsByNodeID(replicaNode)
 		log.FailOnError(err, "Failed to get node details by node id")
-		log.InfoD("Node name: %s", id.Name)
 		replicaNodesName = append(replicaNodesName, id.Name)
 	}
 

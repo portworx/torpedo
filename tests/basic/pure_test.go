@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
 
@@ -2826,26 +2825,12 @@ var _ = Describe("{FBDAMultiTenancyBasicTest}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("FBDAMultiTenancyBasicTest", "Validate FBDA vols get consumed over IP mentioned in `pure_nfs_endpoint` parameter of storageClass", nil, 0)
 		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
-
-		log.Infof("Using CustomAppConfig: %+v", Inst().CustomAppConfig)
-		// Skip the test if we don't find any of our apps
-		for appNameFromCustomAppConfig := range Inst().CustomAppConfig {
-			found := false
-			for _, appName := range Inst().AppList {
-				if appName == appNameFromCustomAppConfig {
-					found = true
-					customConfigAppName = appNameFromCustomAppConfig
-					break
-				}
-			}
-			if !found {
-				log.Warnf("App %v not found in %d contexts, skipping test", appNameFromCustomAppConfig, len(contexts))
-				Skip(fmt.Sprintf("app %v not found", appNameFromCustomAppConfig))
-			}
-		}
+		customConfigAppName = skipTestIfNoRequiredCustomAppConfigFound()
 		contexts = ScheduleApplications(testName)
+		for i := 0; i < len(contexts); i++ {
+			contexts[i].SkipVolumeValidation = true
+		}
 		ValidateApplicationsPureSDK(contexts)
-
 	})
 
 	When("pure_nfs_endpoint parameter specified in storageClass", func() {
@@ -2853,8 +2838,8 @@ var _ = Describe("{FBDAMultiTenancyBasicTest}", func() {
 			ctx := findContext(contexts, customConfigAppName)
 
 			vols, err := Inst().S.GetVolumes(ctx)
-			dash.VerifyNotNilFatal(err, "Failed to get list of volumes")
-			dash.VerifyFatal(len(vols) != 0, true, "Failed to get volumes")
+			dash.VerifyFatal(err, nil, "Failed to get list of volumes")
+			dash.VerifyFatal(len(vols) > 0, true, "Failed to get volumes")
 
 			expectedPureNfsEndpoint := Inst().CustomAppConfig[customConfigAppName].StorageClassPureNfsEndpoint
 
@@ -2879,6 +2864,204 @@ var _ = Describe("{FBDAMultiTenancyBasicTest}", func() {
 		})
 	})
 })
+
+var _ = Describe("{FBDAMultiTenancyUpdatePureNFSEnpoint}", func() {
+	var contexts []*scheduler.Context
+	var customConfigAppName, originalNFSEndpoint string
+	var origCustomAppConfigs map[string]scheduler.AppConfig
+
+	testName := "fbda-mt-update-endp"
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("FBDAMultiTenancyUpdatePureNFSEnpoint", "Validate Pure NFS endpoint can be changed using pxctl", nil, 0)
+		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
+		customConfigAppName = skipTestIfNoRequiredCustomAppConfigFound()
+
+		// save the original custom app configs
+		origCustomAppConfigs = make(map[string]scheduler.AppConfig)
+		for appName, customAppConfig := range Inst().CustomAppConfig {
+			origCustomAppConfigs[appName] = customAppConfig
+		}
+
+		// update the custom app config with empty string for Pure NFS endpoint
+		// So that app uses NFS endpoint from pure.json secret.
+		Inst().CustomAppConfig[customConfigAppName] = scheduler.AppConfig{
+			StorageClassPureNfsEndpoint: "",
+		}
+
+		log.Infof("JustBeforeEach using Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
+
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		log.FailOnError(err, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
+
+		contexts = ScheduleApplications(testName)
+		for i := 0; i < len(contexts); i++ {
+			contexts[i].SkipVolumeValidation = true
+		}
+		ValidateApplicationsPureSDK(contexts)
+	})
+
+	When("pure_nfs_endpoint is updated through pxctl", func() {
+		It("should use newer pure_nfs_endpoint during next FBDA volume mount", func() {
+			ctx := findContext(contexts, customConfigAppName)
+			vols, err := Inst().S.GetVolumes(ctx)
+			dash.VerifyFatal(err, nil, "Failed to get list of volumes")
+			dash.VerifyFatal(len(vols) > 0, true, "Failed to get volumes")
+
+			newNFSEndpoint := origCustomAppConfigs[customConfigAppName].StorageClassPureNfsEndpoint
+			fbdaVolNames := []string{}
+
+			for _, vol := range vols {
+				if backendType, ok := vol.Labels[k8s.PureDAVolumeLabel]; !ok ||
+					backendType != k8s.PureDAVolumeLabelValueFB {
+					continue
+				}
+				fbdaVolNames = append(fbdaVolNames, vol.Name)
+
+				apiVol, err := Inst().V.InspectVolume(vol.ID)
+				log.FailOnError(err, fmt.Sprintf("Failed to inspect volume [%s]", apiVol.GetId()))
+
+				if apiVol.Spec != nil && apiVol.Spec.ProxySpec != nil {
+					if apiVol.Spec.ProxySpec.PureFileSpec != nil && apiVol.Spec.ProxySpec.PureFileSpec.NfsEndpoint != "" {
+						originalNFSEndpoint = apiVol.Spec.ProxySpec.PureFileSpec.NfsEndpoint
+					} else {
+						originalNFSEndpoint = apiVol.Spec.ProxySpec.Endpoint
+					}
+				}
+				dash.VerifyFatal(originalNFSEndpoint != newNFSEndpoint, true,
+					fmt.Sprintf("Verify new NFS endpoint [%s] is not same as old [%s].", newNFSEndpoint, originalNFSEndpoint))
+
+				err = Inst().V.UpdateFBDANFSEndpoint(apiVol.GetId(), newNFSEndpoint)
+				dash.VerifyFatal(err, nil,
+					fmt.Sprintf("Verify NFS endpoint is updated to [%s] through pxctl for volume [%s]", newNFSEndpoint, apiVol.GetId()))
+			}
+
+			// Remount FBDA volumes by,
+			// scaling down app to 0 and then back to origial replica count.
+			originalAppScaleMap, err := scaleAppToZero(ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify app [%s] is scaled down successfully. ", ctx.App.Key))
+
+			err = Inst().S.ScaleApplication(ctx, originalAppScaleMap)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify app [%s] is scaled up successfully.", ctx.App.Key))
+
+			for _, vol := range vols {
+				apiVol, err := Inst().V.InspectVolume(vol.ID)
+				log.FailOnError(err, fmt.Sprintf("Failed to inspect volume [%s]", apiVol.GetId()))
+				dash.VerifyFatal(apiVol.Spec.ProxySpec.PureFileSpec.NfsEndpoint, newNFSEndpoint,
+					"FBDA volume is using NFS endpoint set using pxctl.")
+			}
+			validateMountOnHost(ctx, newNFSEndpoint, fbdaVolNames)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+
+		// restore the original custom app configs
+		for appName, customAppConfig := range origCustomAppConfigs {
+			Inst().CustomAppConfig[appName] = customAppConfig
+		}
+		// remove any keys that are not present in the orig map
+		for appName := range Inst().CustomAppConfig {
+			if _, ok := origCustomAppConfigs[appName]; !ok {
+				delete(Inst().CustomAppConfig, appName)
+			}
+		}
+		log.Infof("JustAfterEach restoring Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		Expect(err).NotTo(HaveOccurred(), "Failed to rescan specs from %s", Inst().SpecDir)
+		Step("delete credential used for cloudsnap", deleteCloudsnapCredential)
+		AfterEachTest(contexts)
+	})
+})
+
+func validateMountOnHost(ctx *scheduler.Context, newNFSEndpoint string, fbdaVolNames []string) {
+	// For each node this app is running on, get the mount table.
+	// Then check for all FBDA volumes and validate they use the correct mount source.
+	appNodes, err := Inst().S.GetNodesForApp(ctx)
+	log.FailOnError(err, fmt.Sprintf("failed to get nodes for app: %v", ctx.App.Key))
+
+	for _, n := range appNodes {
+		mountOutput, err := Inst().N.RunCommand(n, "mount", node.ConnectionOpts{
+			Timeout:         k8s.DefaultTimeout,
+			TimeBeforeRetry: k8s.DefaultRetryInterval,
+			Sudo:            true})
+		log.FailOnError(err, fmt.Sprintf("failed to get mounts on node '%s': %v", n.Name, err))
+
+		for _, line := range strings.Split(mountOutput, "\n") {
+			if !strings.Contains(line, "nfs") { // Only consider NFS volumes
+				continue
+			}
+
+			foundVol := ""
+			for _, volName := range fbdaVolNames {
+				if strings.Contains(line, volName) {
+					foundVol = volName
+					break
+				}
+			}
+
+			if foundVol == "" { // Only consider volumes that are in our list of volume names
+				continue
+			}
+
+			// Check that we are using the correct address
+			dash.VerifyFatal(strings.Contains(line, newNFSEndpoint), true,
+				fmt.Sprintf("Verify mount line for volume [%s] contains new NFS endpoint '%s'", foundVol, n.Name))
+		}
+	}
+}
+
+func scaleAppToZero(ctx *scheduler.Context) (map[string]int32, error) {
+	log.InfoD(fmt.Sprintf("scale down app %s to 0", ctx.App.Key))
+	originalAppScaleMap := make(map[string]int32)
+	originalAppScaleMap, err := Inst().S.GetScaleFactorMap(ctx)
+	if err != nil {
+		return originalAppScaleMap, err
+	}
+
+	applicationScaleDownMap := make(map[string]int32, len(ctx.App.SpecList))
+	for name := range originalAppScaleMap {
+		applicationScaleDownMap[name] = 0
+	}
+
+	err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
+	if err != nil {
+		return originalAppScaleMap, err
+	}
+	return originalAppScaleMap, nil
+}
+
+func skipTestIfNoRequiredCustomAppConfigFound() string {
+	var customConfigAppName string
+	if Inst().CustomAppConfig == nil {
+		log.Warnf("No CustomAppConfig found, skipping test")
+		Skip("No CustomAppConfig found")
+	}
+
+	log.Infof("Using CustomAppConfig: %+v", Inst().CustomAppConfig)
+	// Skip the test if we don't find any of our apps
+	for appNameFromCustomAppConfig := range Inst().CustomAppConfig {
+		found := false
+		for _, appName := range Inst().AppList {
+			if appName == appNameFromCustomAppConfig {
+				found = true
+				customConfigAppName = appNameFromCustomAppConfig
+				break
+			}
+		}
+		if !found {
+			log.Warnf("App %v not found in %d contexts, skipping test", appNameFromCustomAppConfig, len(contexts))
+			Skip(fmt.Sprintf("app %v not found", appNameFromCustomAppConfig))
+		}
+	}
+	return customConfigAppName
+}
 
 var _ = Describe("{FADAPodRecoveryDisableDataPortsOnFA}", func() {
 
@@ -3591,6 +3774,366 @@ var _ = Describe("{DeleteFADAVolumeFromBackend}", func() {
 				log.FailOnError(fmt.Errorf("Pod [%v] still in Running state even after backend volumes are deleted", eachPodAfter.Name), "is Pod still running ?")
 			}
 		}
+	})
+
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})
+
+var _ = Describe("{ExpandMultiplePoolsWhenFADAVolumeCreationInProgress}", func() {
+
+	/*
+			https://purestorage.atlassian.net/browse/PTX-23977
+		Expand multiple pools in parallel , when lots of FADA Volumes are being created
+
+	*/
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("CreateNewPoolWhenFADAVolumeCreationInProgress",
+			"Automate Scenario Create new pools when lots of Create / Delete FADA Volumes are in progress",
+			nil, 0)
+	})
+
+	itLog := "ExpandMultiplePoolsWhenFADAVolumeCreationInProgress"
+	It(itLog, func() {
+
+		// Create Namespace on the cluster
+		nsuuid := uuid.New()
+		nsName := fmt.Sprintf("fada-ns-%s", nsuuid.String())
+
+		log.Infof("Create Namespace with Name [%v]", nsName)
+		namespace, err := CreateNamespaces(nsName, 1)
+		log.FailOnError(err, "Failed to create Namespace")
+
+		deleteNamespaces := func() {
+			log.Infof("Deleting Namespaces created during test [%v]", namespace)
+			err := DeleteNamespaces(namespace)
+			log.FailOnError(err, fmt.Sprintf("Failed to Delete namespaces [%v]", namespace))
+		}
+		defer deleteNamespaces()
+
+		// Create Storage Class
+		scName := fmt.Sprintf("fada-sc-%s", nsuuid.String())
+		log.Infof("Create Storage class with Name [%v]", scName)
+		var allowVolExpansion bool = true
+		err = CreateFlashStorageClass(scName,
+			"pure_block",
+			v1.PersistentVolumeReclaimDelete,
+			nil, nil, &allowVolExpansion,
+			storageApi.VolumeBindingImmediate,
+			nil)
+		log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", scName))
+
+		var wgfada sync.WaitGroup
+		wgfada.Add(1)
+		createFADAVolumes := func(wg *sync.WaitGroup) {
+			defer GinkgoRecover()
+			wg.Done()
+			for _, eachNs := range namespace {
+				// Create 100 PVCs on the Namespace
+				for i := 0; i < 100; i++ {
+					pvcName := fmt.Sprintf("fada-pvc-%d-%s", i, nsuuid.String())
+					log.FailOnError(CreateFlashPVCOnCluster(pvcName, scName, eachNs, "100"),
+						"Failed to create PVC on the cluster")
+
+					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs),
+						"Errored occured while checking if PVC Bounded")
+
+				}
+			}
+		}
+
+		// Expand Pools on all available Nodes while Volume Creation in Progress
+		poolIdsToExpand := []string{}
+		for _, eachNodes := range node.GetStorageNodes() {
+			pools, err := GetPoolsDetailsOnNode(&eachNodes)
+			// Get random Pool
+			randomIndex := rand.Intn(len(pools))
+			pickPool := pools[randomIndex]
+			if err == nil {
+				poolIdsToExpand = append(poolIdsToExpand, pickPool.Uuid)
+			} else {
+				log.InfoD("Errored while getting Pool IDs , ignoring for now ...")
+			}
+		}
+		dash.VerifyFatal(len(poolIdsToExpand) > 0, true,
+			fmt.Sprintf("No pools with IO present ?"))
+
+		go createFADAVolumes(&wgfada)
+
+		expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_ADD_DISK}
+		if !IsPoolAddDiskSupported() {
+			expandType = []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+		}
+		wg, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
+		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
+
+		wg.Wait()
+		wgfada.Wait()
+
+		// Get List of all PVCs created on the Namespace
+		pvcs, err := GetAllPVCFromNs(namespace[0], nil)
+		log.FailOnError(err, "Failed to get list of all PVCs on Specific Namespace")
+		dash.VerifyFatal(len(pvcs) == 100, true, fmt.Sprintf("did all PVC's created, length of PVCs created [%v]?", len(pvcs)))
+
+	})
+
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})
+
+var _ = Describe("{ExpandMultiplePoolsWhenFBDAVolumeCreationInProgress}", func() {
+
+	/*
+			https://purestorage.atlassian.net/browse/PTX-24081
+		Expand multiple pools in parallel , when lots of FBDA Volumes are being created
+
+	*/
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("ExpandMultiplePoolsWhenFBDAVolumeCreationInProgress",
+			"Automate Scenario Create new pools when lots of Create / Delete FBDA Volumes are in progress",
+			nil, 0)
+	})
+
+	itLog := "ExpandMultiplePoolsWhenFBDAVolumeCreationInProgress"
+	It(itLog, func() {
+
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+		pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+		log.FailOnError(err, "failed to get secret [%s]  in namespace [%s]", PureSecretName, volDriverNamespace)
+		listFB := pxPureSecret.Blades
+
+		if len(listFB) == 0 {
+			log.FailOnError(fmt.Errorf("No FB Configurations is provided"), "is fb configured?")
+		}
+
+		// Create Namespace on the cluster
+		nsuuid := uuid.New()
+		nsName := fmt.Sprintf("fbda-ns-%s", nsuuid.String())
+
+		log.Infof("Create Namespace with Name [%v]", nsName)
+		namespace, err := CreateNamespaces(nsName, 1)
+		log.FailOnError(err, "Failed to create Namespace")
+
+		deleteNamespaces := func() {
+			log.Infof("Deleting Namespaces created during test [%v]", namespace)
+			err := DeleteNamespaces(namespace)
+			log.FailOnError(err, fmt.Sprintf("Failed to Delete namespaces [%v]", namespace))
+		}
+		defer deleteNamespaces()
+
+		// Create Storage Class
+		scName := fmt.Sprintf("fbda-sc-%s", nsuuid.String())
+		log.Infof("Create Storage class with Name [%v]", scName)
+
+		params := make(map[string]string)
+		params["pure_export_rules"] = "*(rw)"
+
+		mountOptions := []string{"nfsvers=4.1", "tcp"}
+		var allowVolExpansion bool = true
+		err = CreateFlashStorageClass(scName,
+			"pure_file",
+			v1.PersistentVolumeReclaimDelete,
+			nil, mountOptions, &allowVolExpansion,
+			storageApi.VolumeBindingImmediate,
+			nil)
+		log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", scName))
+
+		var wgfada sync.WaitGroup
+		wgfada.Add(1)
+		createFADAVolumes := func(wg *sync.WaitGroup) {
+			defer GinkgoRecover()
+			wg.Done()
+			for _, eachNs := range namespace {
+				// Create 100 PVCs on the Namespace
+				for i := 0; i < 100; i++ {
+					pvcName := fmt.Sprintf("fbda-pvc-%d-%s", i, nsuuid.String())
+					log.FailOnError(CreateFlashPVCOnCluster(pvcName, scName, eachNs, "100"),
+						"Failed to create PVC on the cluster")
+
+					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs),
+						"Errored occured while checking if PVC Bounded")
+				}
+			}
+		}
+
+		// Expand Pools on all available Nodes while Volume Creation in Progress
+		poolIdsToExpand := []string{}
+		for _, eachNodes := range node.GetStorageNodes() {
+			pools, err := GetPoolsDetailsOnNode(&eachNodes)
+			// Get random Pool
+			randomIndex := rand.Intn(len(pools))
+			pickPool := pools[randomIndex]
+			if err == nil {
+				poolIdsToExpand = append(poolIdsToExpand, pickPool.Uuid)
+			} else {
+				log.InfoD("Errored while getting Pool IDs , ignoring for now ...")
+			}
+		}
+		dash.VerifyFatal(len(poolIdsToExpand) > 0, true,
+			fmt.Sprintf("No pools with IO present ?"))
+
+		go createFADAVolumes(&wgfada)
+
+		expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_ADD_DISK}
+		if !IsPoolAddDiskSupported() {
+			expandType = []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+		}
+		wg, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
+		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
+
+		wg.Wait()
+		wgfada.Wait()
+
+	})
+
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})
+
+var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() {
+
+	/*
+			https://purestorage.atlassian.net/browse/PTX-23974
+		Expand multiple pools in parallel , when lots of FADA and FBDA Volumes are being created
+
+	*/
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress",
+			"Automate Scenario Create new pools when new Pools when lots of FADA / FBDA Volumes are getting Created",
+			nil, 0)
+	})
+
+	itLog := "CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress"
+	It(itLog, func() {
+
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+		pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+		log.FailOnError(err, "failed to get secret [%s]  in namespace [%s]", PureSecretName, volDriverNamespace)
+		listFB := pxPureSecret.Blades
+
+		// Create Namespace on the cluster
+		nsuuid := uuid.New()
+		nsName := fmt.Sprintf("fbda-ns-%s", nsuuid.String())
+
+		log.Infof("Create Namespace with Name [%v]", nsName)
+		namespace, err := CreateNamespaces(nsName, 1)
+		log.FailOnError(err, "Failed to create Namespace")
+
+		deleteNamespaces := func() {
+			log.Infof("Deleting Namespaces created during test [%v]", namespace)
+			err := DeleteNamespaces(namespace)
+			log.FailOnError(err, fmt.Sprintf("Failed to Delete namespaces [%v]", namespace))
+		}
+		defer deleteNamespaces()
+
+		var nodesToUse []node.Node
+		for _, each := range node.GetStorageNodes() {
+			sPools, err := GetPoolsDetailsOnNode(&each)
+			if err != nil {
+				fmt.Printf("[%v]", err)
+			}
+			if len(sPools) < 8 {
+				nodesToUse = append(nodesToUse, each)
+			}
+		}
+
+		// Create Storage Class for FA
+		scNameFA := fmt.Sprintf("fada-sc-%s", nsuuid.String())
+		log.Infof("Create Storage class with Name [%v]", scNameFA)
+		var allowVolExpansionFA bool = true
+		err = CreateFlashStorageClass(scNameFA,
+			"pure_block",
+			v1.PersistentVolumeReclaimDelete,
+			nil, nil, &allowVolExpansionFA,
+			storageApi.VolumeBindingImmediate,
+			nil)
+		log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", scNameFA))
+
+		if len(listFB) > 1 {
+			// Create Storage Class FB
+			scNameFB := fmt.Sprintf("fbda-sc-%s", nsuuid.String())
+			log.Infof("Create Storage class with Name [%v]", scNameFB)
+
+			params := make(map[string]string)
+			params["pure_export_rules"] = "*(rw)"
+
+			mountOptions := []string{"nfsvers=4.1", "tcp"}
+			var allowVolExpansion bool = true
+			err = CreateFlashStorageClass(scNameFB,
+				"pure_file",
+				v1.PersistentVolumeReclaimDelete,
+				nil, mountOptions, &allowVolExpansion,
+				storageApi.VolumeBindingImmediate,
+				nil)
+			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", scNameFB))
+		}
+
+		// Create Continuous FADA Volumes on the cluster
+		var wgfada sync.WaitGroup
+		wgfada.Add(1)
+		createFADAVolumes := func(wg *sync.WaitGroup) {
+			defer GinkgoRecover()
+			wg.Done()
+			for _, eachNs := range namespace {
+				// Create 100 PVCs on the Namespace
+				for i := 0; i < 100; i++ {
+					pvcName := fmt.Sprintf("fada-pvc-%d-%s", i, nsuuid.String())
+					log.FailOnError(CreateFlashPVCOnCluster(pvcName, scNameFA, eachNs, "100"),
+						"Failed to create PVC on the cluster")
+
+					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs),
+						"Errored occured while checking if PVC Bounded")
+				}
+			}
+		}
+
+		var wgfbda sync.WaitGroup
+		createFBDAVolumes := func(wg *sync.WaitGroup) {
+			defer GinkgoRecover()
+			wg.Done()
+			for _, eachNs := range namespace {
+				// Create 100 PVCs on the Namespace
+				for i := 0; i < 100; i++ {
+					pvcName := fmt.Sprintf("fbda-pvc-%d-%s", i, nsuuid.String())
+					log.FailOnError(CreateFlashPVCOnCluster(pvcName, scNameFA, eachNs, "100"),
+						"Failed to create PVC on the cluster")
+					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs),
+						"Errored occured while checking if PVC Bounded")
+				}
+			}
+		}
+
+		go createFADAVolumes(&wgfada)
+		if len(listFB) > 1 {
+			// Create Continuous FADA Volumes on the cluster
+			wgfbda.Add(1)
+			go createFBDAVolumes(&wgfbda)
+		}
+
+		log.Infof("Create new pools on multiple Nodes in Parallel")
+		log.FailOnError(CreateNewPoolsOnMultipleNodesInParallel(nodesToUse), "Failed to Create New Pools")
+		wgfada.Wait()
+		if len(listFB) > 1 {
+			wgfbda.Wait()
+		}
+
 	})
 
 	JustAfterEach(func() {

@@ -988,7 +988,8 @@ var _ = Describe("{RebootRootDiskAttachedNode}", func() {
 		defer func() {
 			Inst().AppList = appList
 		}()
-		Inst().AppList = []string{"kubevirt-debian-fio-minimal", "kubevirt-windows-vm", "kubevirt-fio-load-multi-disk"}
+		Inst().AppList = []string{"kubevirt-cirros-live-migration", "kubevirt-windows-vm",
+			"kubevirt-fio-pvc-clone", "kubevirt-fio-load-disk-repl-2", "kubevirt-fio-load-multi-disk"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1537,7 +1538,7 @@ var _ = Describe("{LiveMigrateWhileNodeInMaintenance}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for _, appCtx := range appCtxs {
-				nonReplicaNodes, err := GetNonReplicaNodesOfVM(appCtx)
+				ReplicaNodes, err := GetReplicaNodesOfVM(appCtx)
 				log.FailOnError(err, "Failed to get non replica nodes of VM")
 
 				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
@@ -1547,8 +1548,8 @@ var _ = Describe("{LiveMigrateWhileNodeInMaintenance}", func() {
 					log.InfoD("Node VM provisioned on: %s", nodeVMProvisionedOn)
 					defer func() {
 						var wg sync.WaitGroup
-						for _, nonReplicaNode := range nonReplicaNodes {
-							if nodeVMProvisionedOn == nonReplicaNode {
+						for _, ReplicaNode := range ReplicaNodes {
+							if nodeVMProvisionedOn != ReplicaNode {
 								wg.Add(1)
 								go func(nonReplicaNode string) {
 									defer wg.Done()
@@ -1556,14 +1557,14 @@ var _ = Describe("{LiveMigrateWhileNodeInMaintenance}", func() {
 									err = Inst().V.ExitMaintenance(n)
 									log.FailOnError(err, "Failed to exit node: %s from maintenance mode", nonReplicaNode)
 									log.Infof("Succesfully exited node: %s from maintenance mode", nonReplicaNode)
-								}(nonReplicaNode)
+								}(ReplicaNode)
 							}
 						}
 						wg.Wait()
 					}()
 
-					for _, nonReplicaNode := range nonReplicaNodes {
-						if nodeVMProvisionedOn == nonReplicaNode {
+					for _, ReplicaNode := range ReplicaNodes {
+						if nodeVMProvisionedOn != ReplicaNode {
 							wg.Add(1)
 							go func(nonReplicaNode string) {
 								defer wg.Done()
@@ -1571,7 +1572,7 @@ var _ = Describe("{LiveMigrateWhileNodeInMaintenance}", func() {
 								err = Inst().V.EnterMaintenance(n)
 								log.FailOnError(err, "Failed to put node: %s in maintenance mode", nonReplicaNode)
 								log.Infof("Succesfully put node: %s in maintenance mode", nonReplicaNode)
-							}(nonReplicaNode)
+							}(ReplicaNode)
 						}
 					}
 					wg.Wait()
@@ -1599,11 +1600,11 @@ var _ = Describe("{LiveMigrateCordonNonReplicaNode}", func() {
 	/*
 		                1. Schedule a kubevirt VM
 				2. Cordon the non replica nodes
-				3. Put the node on maintenance mode where VM is provisioned
+				3. Put the replica nodes on maintenance mode
 			        4. initiate Live Migration of VM
 			        5. Verify VM is migrated to different node
-			        6. Exit maintenance mode of the node
-				7. Put the node on maintenance mode and again initiate live migration of VM
+			        6. Exit maintenance mode
+				7. Put the replica node on maintenance mode and again initiate live migration of VM
 				8. Verify VM is migrated to different node
 				9. Uncordon the nodes
 
@@ -1614,10 +1615,7 @@ var _ = Describe("{LiveMigrateCordonNonReplicaNode}", func() {
 	})
 
 	var appCtxs []*scheduler.Context
-
-	JustBeforeEach(func() {
-		StartTorpedoTest("LiveMigrateCordonNonReplicaNode", "Live Migrate VM while node is in maintenance mode", nil, 0)
-	})
+	var wg sync.WaitGroup
 
 	itLog := "Live Migrate VM while node is in maintenance mode"
 	It(itLog, func() {
@@ -1668,53 +1666,86 @@ var _ = Describe("{LiveMigrateCordonNonReplicaNode}", func() {
 			dash.VerifyFatal(len(vms) > 0, true, "Failed to get VMs from scheduled contexts")
 
 			for _, vm := range vms {
-				n, err := GetNodeOfVM(vm)
-				log.FailOnError(err, "Failed to get node name for VM: %s", vm.Name)
-
-				selectedNode, err := node.GetNodeByName(n)
-				log.FailOnError(err, "Failed to get node obj for node name: %s", n)
-
 				//Put the node on maintenance mode where VM is provisioned
-				stepLog = "Put the node on maintenance mode where VM is provisioned and live migrate the VM"
+				stepLog = "Put the replica nodes on maintenance mode and live migrate the VM"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
+					nodeVMProvisionedOn, err := GetNodeOfVM(vm)
+					log.InfoD("Node VM provisioned on: %s", nodeVMProvisionedOn)
 					defer func() {
-						err = Inst().V.ExitMaintenance(selectedNode)
-						log.FailOnError(err, "Failed to exit maintenance mode of the node: %s", selectedNode.Name)
-						log.Infof("Succesfully exited maintenance mode of the node: %s", selectedNode.Name)
+						var wg sync.WaitGroup
+						for _, nonReplicaNode := range nonReplicaNodes {
+							if nodeVMProvisionedOn != nonReplicaNode {
+								wg.Add(1)
+								go func(nonReplicaNode string) {
+									defer wg.Done()
+									n, err := node.GetNodeByName(nonReplicaNode)
+									err = Inst().V.ExitMaintenance(n)
+									log.FailOnError(err, "Failed to exit node: %s from maintenance mode", nonReplicaNode)
+									log.Infof("Succesfully exited node: %s from maintenance mode", nonReplicaNode)
+								}(nonReplicaNode)
+							}
+						}
+						wg.Wait()
 					}()
-					err = Inst().V.EnterMaintenance(selectedNode)
-					log.FailOnError(err, "Failed to put node: %s in maintenance mode", selectedNode.Name)
-					log.Infof("Succesfully put node: %s in maintenance mode", selectedNode.Name)
 
+					for _, nonReplicaNode := range nonReplicaNodes {
+						if nodeVMProvisionedOn != nonReplicaNode {
+							wg.Add(1)
+							go func(nonReplicaNode string) {
+								defer wg.Done()
+								n, err := node.GetNodeByName(nonReplicaNode)
+								err = Inst().V.EnterMaintenance(n)
+								log.FailOnError(err, "Failed to put node: %s in maintenance mode", nonReplicaNode)
+								log.Infof("Succesfully put node: %s in maintenance mode", nonReplicaNode)
+							}(nonReplicaNode)
+						}
+					}
+					wg.Wait()
 					err = StartAndWaitForVMIMigration(appCtx, context1.TODO())
 					log.FailOnError(err, "Failed to live migrate kubevirt VM")
 				})
 
 				//Put the node on maintenance mode and again initiate live migration of VM
-				stepLog = "Put the node on maintenance mode and again initiate live migration of VM"
+				stepLog = "Put the replica nodes on maintenance mode and again initiate live migration of VM"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					migratedNode, err := GetNodeOfVM(vm)
-					log.FailOnError(err, "Failed to get node name for VM: %s", vm.Name)
-					migratedNodeObj, err := node.GetNodeByName(migratedNode)
-					log.FailOnError(err, "Failed to get node obj for node name: %s", migratedNode)
-
+					nodeVMProvisionedOn, err := GetNodeOfVM(vm)
+					log.InfoD("Node VM provisioned on: %s", nodeVMProvisionedOn)
 					defer func() {
-						err = Inst().V.ExitMaintenance(migratedNodeObj)
-						log.FailOnError(err, "Failed to exit maintenance mode of the node: %s", migratedNodeObj.Name)
-						log.Infof("Succesfully exited maintenance mode of the node: %s", migratedNodeObj.Name)
+						var wg sync.WaitGroup
+						for _, nonReplicaNode := range nonReplicaNodes {
+							if nodeVMProvisionedOn != nonReplicaNode {
+								wg.Add(1)
+								go func(nonReplicaNode string) {
+									defer wg.Done()
+									n, err := node.GetNodeByName(nonReplicaNode)
+									err = Inst().V.ExitMaintenance(n)
+									log.FailOnError(err, "Failed to exit node: %s from maintenance mode", nonReplicaNode)
+									log.Infof("Succesfully exited node: %s from maintenance mode", nonReplicaNode)
+								}(nonReplicaNode)
+							}
+						}
+						wg.Wait()
 					}()
-					err = Inst().V.EnterMaintenance(migratedNodeObj)
-					log.FailOnError(err, "Failed to put node: %s in maintenance mode", selectedNode.Name)
-					log.Infof("Succesfully put node: %s in maintenance mode", selectedNode.Name)
 
+					for _, nonReplicaNode := range nonReplicaNodes {
+						if nodeVMProvisionedOn != nonReplicaNode {
+							wg.Add(1)
+							go func(nonReplicaNode string) {
+								defer wg.Done()
+								n, err := node.GetNodeByName(nonReplicaNode)
+								err = Inst().V.EnterMaintenance(n)
+								log.FailOnError(err, "Failed to put node: %s in maintenance mode", nonReplicaNode)
+								log.Infof("Succesfully put node: %s in maintenance mode", nonReplicaNode)
+							}(nonReplicaNode)
+						}
+					}
+					wg.Wait()
 					err = StartAndWaitForVMIMigration(appCtx, context1.TODO())
 					log.FailOnError(err, "Failed to live migrate kubevirt VM")
 				})
-
 			}
-			ValidateApplications([]*scheduler.Context{appCtx})
 		}
 	})
 
