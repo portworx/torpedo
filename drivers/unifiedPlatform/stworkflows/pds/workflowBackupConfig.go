@@ -20,6 +20,7 @@ type WorkflowPDSBackupConfig struct {
 
 const (
 	ValidatePdsBackupConfig = "VALIDATE_PDS_BACKUP"
+	RunDataBeforeBackup     = "RUNDATABEFORBACKUP"
 )
 
 // CreateBackupConfig creates a backup config
@@ -32,6 +33,17 @@ func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, depl
 	log.Infof("Delplyment UID - [%s]", deploymentId)
 	log.Infof("Project Id - [%s]", backupConfig.WorkflowDataService.Namespace.TargetCluster.Project.ProjectId)
 	log.Infof("Backup Location Id - [%s]", backupConfig.WorkflowBackupLocation.BkpLocation.BkpLocationId)
+
+	if value, ok := backupConfig.SkipValidatation[RunDataBeforeBackup]; ok {
+		if value == true {
+			log.Infof("Skipping data insertion before backup")
+		}
+	} else {
+		_, err := backupConfig.WorkflowDataService.RunDataServiceWorkloads(deploymentId)
+		if err != nil {
+			return nil, fmt.Errorf("unable to run workfload on data service. Error - [%s]", err.Error())
+		}
+	}
 
 	createBackup, err := pdslibs.CreateBackupConfig(name,
 		deploymentId,

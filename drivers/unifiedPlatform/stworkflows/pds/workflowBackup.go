@@ -14,6 +14,7 @@ import (
 type WorkflowPDSBackup struct {
 	WorkflowDataService *WorkflowDataService
 	AllBackups          map[string]string
+	Md5HashesForBackusp map[string]string
 }
 
 const (

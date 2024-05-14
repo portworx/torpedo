@@ -115,7 +115,7 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		}()
 
 		Step("Perform Restore and validate", func() {
-			workflowRestore.Source = &WorkflowNamespace
+			workflowRestore.Source = &WorkflowDataService
 			backupUid := *bkpConfigResponse.Create.Meta.Uid
 			deploymentName := *deployment.Create.Meta.Name
 			cloudSnapId := ""
