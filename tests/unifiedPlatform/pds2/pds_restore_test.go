@@ -66,7 +66,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 					log.FailOnError(err, "failed to switch context to source cluster")
 				}()
 				CheckforClusterSwitch()
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, PDS_DEFAULT_NAMESPACE)
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
 				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
@@ -125,7 +125,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 			Step("Create Restore from the latest backup Id", func() {
 				WorkflowPDSRestore.Destination = &WorkflowNamespaceDestination
 				CheckforClusterSwitch()
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, PDS_DEFAULT_NAMESPACE)
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Restore Failed")
 
 				log.Infof("Restore created successfully with ID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
@@ -207,7 +207,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 			Step("Create Restore from the latest backup Id", func() {
 				WorkflowPDSRestore.Destination = &WorkflowNamespaceDestination
 				CheckforClusterSwitch()
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, PDS_DEFAULT_NAMESPACE)
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
 			})
@@ -312,7 +312,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 					log.Infof("Backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
 					err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
 					log.FailOnError(err, "Error occured while waiting for backup to complete")
-					allBackupIds[WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace] = append(allBackupIds[WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace], *backupResponse.Meta.Uid)
+					allBackupIds[*deployment.Create.Meta.Uid] = append(allBackupIds[WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace], *backupResponse.Meta.Uid)
 				}
 			}
 
@@ -322,24 +322,24 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 		Step("Creating Simultaneous restores from the dataservices", func() {
 			var wg sync.WaitGroup
 
-			for ns, backupIds := range allBackupIds {
+			for depId, backupIds := range allBackupIds {
 
 				for _, backupId := range backupIds {
 					wg.Add(1)
 
-					go func(namespace string, backup string) {
+					go func(deploymentId string, backup string) {
 						defer wg.Done()
 						defer GinkgoRecover()
 
 						restoreName := "restore-" + RandomString(5)
-						_, err := WorkflowPDSRestore.CreateRestore(restoreName, backup, restoreName, namespace)
+						_, err := WorkflowPDSRestore.CreateRestore(restoreName, backup, restoreName, deploymentId)
 						if err != nil {
 							log.Errorf("Error occurred while creating [%s], Error - [%s]", restoreName, err.Error())
 						} else {
 							log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
 							restoreNames = append(restoreNames, restoreName)
 						}
-					}(ns, backupId)
+					}(depId, backupId)
 				}
 
 			}
@@ -445,7 +445,7 @@ var _ = Describe("{UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore}", func(
 				CheckforClusterSwitch()
 				WorkflowPDSRestore.Validatation = make(map[string]bool)
 				WorkflowPDSRestore.Validatation["VALIDATE_RESTORE_AFTER_SRC_DEPLOYMENT_UPGRADE"] = true
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupIdBeforeUpgrade, restoreNamespace, PDS_DEFAULT_NAMESPACE)
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, backupIdBeforeUpgrade, restoreNamespace, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
 				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
@@ -460,7 +460,7 @@ var _ = Describe("{UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore}", func(
 				}()
 				restoreName = "restr-latest-bkp-" + RandomString(5)
 				CheckforClusterSwitch()
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, PDS_DEFAULT_NAMESPACE)
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
 				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
@@ -887,7 +887,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 					log.Infof("Backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
 					err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
 					log.FailOnError(err, "Error occured while waiting for backup to complete")
-					allBackupIds[WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace] = append(allBackupIds[WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace], *backupResponse.Meta.Uid)
+					allBackupIds[*deployment.Create.Meta.Uid] = append(allBackupIds[WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace], *backupResponse.Meta.Uid)
 				}
 			}
 
@@ -895,29 +895,32 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 		})
 
 		Step("Creating Simultaneous restores from the dataservices and triggering parallel backup", func() {
+			defer func() {
+				delete(WorkflowPDSBackupConfig.SkipValidatation, pds.RunDataBeforeBackup)
+			}()
 
 			log.InfoD("Creating parallel restores")
 
 			// Creating parallel restores
-			for ns, backupIds := range allBackupIds {
+			for depId, backupIds := range allBackupIds {
 
 				for _, backupId := range backupIds {
 
 					for i := 0; i < restoreCount; i++ {
 						wg.Add(1)
-						go func(namespace string, backup string) {
+						go func(deploymentId string, backup string) {
 							defer wg.Done()
 							defer GinkgoRecover()
 
 							restoreName := "restore-" + RandomString(5)
-							_, err := WorkflowPDSRestore.CreateRestore(restoreName, backup, restoreName, namespace)
+							_, err := WorkflowPDSRestore.CreateRestore(restoreName, backup, restoreName, deploymentId)
 							if err != nil {
 								log.Errorf("Error occurred while creating [%s], Error - [%s]", restoreName, err.Error())
 							} else {
 								log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
 								restoreNames = append(restoreNames, restoreName)
 							}
-						}(ns, backupId)
+						}(depId, backupId)
 					}
 				}
 
@@ -925,6 +928,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 
 			log.InfoD("Creating backups parallel with restores")
 
+			WorkflowPDSBackupConfig.SkipValidatation[pds.RunDataBeforeBackup] = true
 			// Creating parallel backups
 			for _, deployment := range deployments {
 				for i := 0; i < backupsPerDeployment; i++ {

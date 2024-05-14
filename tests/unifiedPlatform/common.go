@@ -170,6 +170,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowPDSBackupConfig.WorkflowBackupLocation = WorkflowbkpLoc
 		WorkflowPDSBackupConfig.WorkflowDataService = &WorkflowDataService
 		WorkflowPDSBackupConfig.Backups = make(map[string]automationModels.V1BackupConfig)
+		WorkflowPDSBackupConfig.SkipValidatation = make(map[string]bool)
 
 		log.Infof("Creating Backup struct")
 		WorkflowPDSBackup.WorkflowDataService = &WorkflowDataService

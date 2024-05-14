@@ -197,7 +197,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 					defer GinkgoRecover()
 					WorkflowPDSRestore.Destination = &WorkflowNamespaceDestination
 					CheckforClusterSwitch()
-					_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, PDS_DEFAULT_NAMESPACE)
+					_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, *deployment.Create.Meta.Uid)
 					if err != nil {
 						allErrors = append(allErrors, err.Error())
 					}

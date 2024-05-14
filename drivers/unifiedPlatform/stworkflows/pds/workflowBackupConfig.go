@@ -20,7 +20,7 @@ type WorkflowPDSBackupConfig struct {
 
 const (
 	ValidatePdsBackupConfig = "VALIDATE_PDS_BACKUP"
-	RunDataBeforeBackup     = "RUNDATABEFORBACKUP"
+	RunDataBeforeBackup     = "RUN_DATA_BEFORE_BACKUP"
 )
 
 // CreateBackupConfig creates a backup config
