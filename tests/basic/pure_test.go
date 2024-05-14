@@ -1150,7 +1150,7 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			context, err := Inst().S.Schedule("test-fada-volume", scheduler.ScheduleOptions{
-				AppKeys:            []string{"fio-fa-cloud-drives"},
+				AppKeys:            []string{"fio-fa-davol"},
 				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
 				PvcSize:            6 * units.GiB,
 			})
