@@ -1134,6 +1134,7 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 	itLog := "Px Volume Resize in parallel to FADA/FBDA Volume Resize ( PVC Resize )"
 	It(itLog, func() {
 		log.InfoD(itLog)
+		var resizedVols []*volume.Volume
 
 		stepLog := "Deploy applications"
 		Step(stepLog, func() {
@@ -1186,6 +1187,7 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 						resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(pvcSizeInt))
 						log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
 						log.InfoD("Vol uid %v", resizedVol.ID)
+						resizedVols = append(resizedVols, resizedVol)
 					}
 
 				}
@@ -1213,6 +1215,7 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 					resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(pvcSizeInt))
 					log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
 					log.InfoD("Vol uid %v", resizedVol.ID)
+					resizedVols = append(resizedVols, resizedVol)
 				}
 			}
 		})
@@ -1220,24 +1223,20 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 		stepLog = "Validate volume resize on both base volume and FADA volume"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			for _, ctx := range contexts {
-				var appVolumes []*volume.Volume
-				var err error
-				appVolumes, err = Inst().S.GetVolumes(ctx)
-				log.FailOnError(err, "Failed to get volumes from context")
-
-				for _, vol := range appVolumes {
-					// Need to pass token before validating volume
-					params := make(map[string]string)
-					if Inst().ConfigMap != "" {
-						params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-						log.FailOnError(err, "didn't get auth token")
-					}
-					err := Inst().V.ValidateUpdateVolume(vol, params)
-					log.FailOnError(err, "Could not validate volume resize %v", vol.Name)
-
+			var err error
+			log.FailOnError(err, "Failed to get volumes from context")
+			for _, vol := range resizedVols {
+				// Need to pass token before validating volume
+				params := make(map[string]string)
+				if Inst().ConfigMap != "" {
+					params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+					log.FailOnError(err, "didn't get auth token")
 				}
+				err := Inst().V.ValidateUpdateVolume(vol, params)
+				log.FailOnError(err, "Could not validate volume resize %v", vol.Name)
+
 			}
+
 		})
 
 	})
