@@ -867,7 +867,7 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 		// Get Random Volume with IO running on the cluster
 		var randomVol *volume.Volume
 		for _, eachVol := range allVolumes {
-			log.InfoD("Trying volume [%s]", eachVol)
+			log.InfoD("Trying volume [%v]", eachVol)
 			if strings.Contains(eachVol.Name, "vdbench-pvc-enc-sv4-svc") {
 				randomVol = eachVol
 				break
@@ -919,8 +919,8 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 				randomNumber := rand.Intn(3) + 1
 
 				/*  Kill random nodes in parallel where 1 node killed will always be Co-ordinator Node.
-					doing this to make devices present on all the nodes,
-				    Upon restart all device present in the nodes should be removed.
+				    	doing this to make devices present on all the nodes,
+				        Upon restart all device present in the nodes should be removed.
 				*/
 
 				if (previousNode == randomNumber) && (randomNumber != 1) {

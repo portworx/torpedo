@@ -245,7 +245,7 @@ var _ = Describe("{VolumeIOThrottle}", func() {
 					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
 					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
 				})
-				log.InfoD("Volumes to be updated %s", appVolumes)
+				log.InfoD("Volumes to be updated %v", appVolumes)
 				for _, v := range appVolumes {
 					err := Inst().V.SetIoBandwidth(v, bandwidthMBps, bandwidthMBps)
 					log.FailOnError(err, "Failed to set IO bandwidth")
@@ -730,10 +730,10 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 	var testrailID = 0
 	/*  Try Volume resize to 5 GB every time
-	    Try HA Refactor of the volume
-	    Try one HA node Reboot
+	        Try HA Refactor of the volume
+	        Try one HA node Reboot
 
-		all the above 3 operations are done in parallel
+	    	all the above 3 operations are done in parallel
 	*/
 	// JIRA ID :https://portworx.atlassian.net/browse/PWX-27123
 	var runID int

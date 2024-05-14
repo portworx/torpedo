@@ -2005,7 +2005,7 @@ var _ = Describe("{StickyVolumeTest}", func() {
 			log.InfoD("trying to delete the volumes with sticky=off")
 			for _, ctx := range contexts {
 				vols := DeleteVolumes(ctx, nil)
-				dash.VerifyFatal(len(vols), 0, fmt.Sprintf("Validate Volume(s) Deleted %s", vols))
+				dash.VerifyFatal(len(vols), 0, fmt.Sprintf("Validate Volume(s) Deleted %v", vols))
 			}
 		})
 
