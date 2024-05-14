@@ -589,6 +589,6 @@ func GetVolumeProvisioners() []string {
 	return volumeProvisioners
 }
 
-func (v *Volume) String() string {
-	return v.Name
-}
+//func (v *Volume) String() string {
+//	return v.Name
+//}
