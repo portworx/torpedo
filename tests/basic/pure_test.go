@@ -4132,3 +4132,112 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 	})
 
 })
+
+var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
+	/*
+				https://purestorage.atlassian.net/browse/PTX-24002
+			    1.Deploy a FADA app
+		        2.Take the corresponding pxctl volume of the pvc and try to clone it
+		        3.Check the corresponding volume clone is available in FA backend
+		        4.Delete the FADA app
+
+	*/
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("CreateCloneOfTheFADAVolume",
+			"Create Clone of the FADA Volume and verify the status",
+			nil, 0)
+	})
+	var contexts []*scheduler.Context
+	var volumeName string
+	var cloneVolumeId string
+	flashArrays, err := GetFADetailsUsed()
+	log.FailOnError(err, "Failed to get FA details used")
+
+	itLog := "Px Volume Resize in parallel to FADA/FBDA Volume Resize ( PVC Resize )"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		stepLog := "Deploy FADA app"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			context, err := Inst().S.Schedule("deploy-fada", scheduler.ScheduleOptions{
+				AppKeys:            []string{"fio-fa-davol"},
+				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
+				PvcSize:            6 * units.GiB,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", "deploy-fada-volume")
+			contexts = append(contexts, context...)
+
+		})
+		ValidateApplications(contexts)
+
+		stepLog = "Get the corresponding Px volume for the PVC and clone the volume "
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, context := range contexts {
+				appsvols, err := Inst().S.GetVolumes(context)
+				log.FailOnError(err, "Failed to get volumes for the context")
+				for _, vol := range appsvols[:1] {
+					cloneVolumeId, err := Inst().V.CloneVolume(vol.ID)
+					log.FailOnError(err, "Failed to clone volume [%v]", vol.ID)
+					log.InfoD("Clone Volume ID [%v]", cloneVolumeId)
+
+				}
+			}
+			log.InfoD("Get the corresponding volume name for the volId")
+			for _, context := range contexts {
+				appsvols, err := Inst().S.GetVolumes(context)
+				log.FailOnError(err, "Failed to get volumes for the context")
+				for _, vol := range appsvols {
+					if vol.ID == cloneVolumeId {
+						volumeName = vol.Name
+					}
+				}
+			}
+		})
+		checkVolumeExistsInFlashArrays := func(volumeName string, flashArrays []pureutils.FlashArrayEntry) error {
+			cloneVolFound := false
+			for _, fa := range flashArrays {
+				faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
+				if err != nil {
+					log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+					continue
+				}
+				volName, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
+				if err != nil {
+					log.Errorf("Failed to get complete volume name: %v", err)
+					continue
+				}
+				log.Infof("Name of the Volume is [%v]", volName)
+
+				isExists, err := pureutils.IsFAVolumeExists(faClient, volName)
+				if err != nil {
+					log.Errorf("Failed to check if volume exists on FA: %v", err)
+					continue
+				}
+				if isExists {
+					cloneVolFound = true
+					break
+				} else {
+					log.Infof("Volume [%v] doesn't exist on the FA Cluster [%v]", volName, fa.MgmtEndPoint)
+				}
+			}
+			if !cloneVolFound {
+				return fmt.Errorf("volume %s does not exist in any of the FlashArrays", volumeName)
+			}
+			return nil
+		}
+		stepLog = "Check the corresponding volume clone is available in FA backend"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := checkVolumeExistsInFlashArrays(volumeName, flashArrays)
+			log.FailOnError(err, "Failed to check if volume exists in FA backend")
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		appsValidateAndDestroy(contexts)
+	})
+})
