@@ -180,7 +180,12 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowPDSRestore.Source = &WorkflowDataService
 		WorkflowPDSRestore.Restores = make(map[string]automationModels.PDSRestore)
 		WorkflowPDSRestore.Destination = &WorkflowNamespace
-		WorkflowPDSRestore.RestoredDeployments = &pds.WorkflowDataService{}
+		WorkflowPDSRestore.RestoredDeployments = &pds.WorkflowDataService{
+			PDSParams:    NewPdsParams,
+			Namespace:    &WorkflowNamespace,
+			Dash:         Inst().Dash,
+			PDSTemplates: WorkflowPDSTemplate,
+		}
 		WorkflowPDSRestore.RestoredDeployments.DataServiceDeployment = make(map[string]*dslibs.DataServiceDetails)
 
 		log.Infof("Creating Platform object for Template Workflow")
@@ -237,7 +242,7 @@ func PurgePDS() []error {
 	}
 
 	log.InfoD("Purging all restore source namespaces")
-	err = WorkflowPDSRestore.Source.Purge()
+	err = WorkflowPDSRestore.Source.Namespace.Purge()
 	if err != nil {
 		log.Errorf("error while purging restored namespaces - [%s]", err.Error())
 		allErrors = append(allErrors, err)

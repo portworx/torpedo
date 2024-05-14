@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
+	"slices"
 	"time"
 )
 
@@ -91,10 +93,12 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 		Namespace:         namespace,
 		NamespaceId:       restore.Destination.Namespaces[namespace],
 		SourceMd5Checksum: "",
+		DSParams:          restore.Source.DataServiceDeployment[sourceDeploymentId].DSParams,
 	}
 
 	log.Infof("Validating data after restore")
-	if value, ok := restore.SkipValidation[CheckDataAfterRestore]; ok {
+	if value, ok := restore.SkipValidation[CheckDataAfterRestore]; ok ||
+		slices.Contains(stworkflows.SKIPDATASERVICEFROMWORKLOAD, restore.RestoredDeployments.DataServiceDeployment[createRestore.Create.Config.DestinationReferences.DeploymentId].DSParams.Name) {
 		if value == true {
 			log.Infof("Skipping data validation for the restore [%s]", name)
 		}
@@ -116,7 +120,7 @@ func (restore WorkflowPDSRestore) ValidateDataAfterRestore(destinationDeployment
 	}
 
 	sourceCheckSum := restore.Source.DataServiceDeployment[sourceDeploymentId].SourceMd5Checksum
-	destinationCheckSum := restore.RestoredDeployments.DataServiceDeployment[sourceDeploymentId].SourceMd5Checksum
+	destinationCheckSum := restore.RestoredDeployments.DataServiceDeployment[destinationDeploymentId].SourceMd5Checksum
 
 	if sourceCheckSum != destinationCheckSum {
 		return fmt.Errorf("Data validation failed for restore. Expected - [%s], Found - [%s]", sourceCheckSum, destinationCheckSum)

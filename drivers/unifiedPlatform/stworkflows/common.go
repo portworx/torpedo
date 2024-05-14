@@ -10,7 +10,7 @@ const (
 	FAILED    = "FAILED"
 )
 
-var SKIPDATASERVICEFROMWORKFLOAD = []string{
+var SKIPDATASERVICEFROMWORKLOAD = []string{
 	"sqlserver",
 }
 

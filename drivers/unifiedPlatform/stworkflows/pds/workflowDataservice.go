@@ -246,7 +246,7 @@ func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId strin
 }
 
 func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(deploymentId string) (string, error) {
-	if slices.Contains(stworkflows.SKIPDATASERVICEFROMWORKFLOAD, strings.ToLower(wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)) {
+	if slices.Contains(stworkflows.SKIPDATASERVICEFROMWORKLOAD, strings.ToLower(wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)) {
 		log.Warnf("Workload is not enabled for this - [%s] - data service", wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)
 		return "", nil
 	}
@@ -275,7 +275,10 @@ func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(deploymentId s
 
 // Reads and update the md5 hash for the data service
 func (wfDataService *WorkflowDataService) ReadAndUpdateDataServiceDataHash(deploymentId string) error {
-
+	if slices.Contains(stworkflows.SKIPDATASERVICEFROMWORKLOAD, strings.ToLower(wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)) {
+		log.Warnf("Workload is not enabled for this - [%s] - data service", wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)
+		return nil
+	}
 	wkloadParams := dslibs.LoadGenParams{
 		LoadGenDepName: wfDataService.PDSParams.LoadGen.LoadGenDepName,
 		Namespace:      wfDataService.DataServiceDeployment[deploymentId].Namespace,
