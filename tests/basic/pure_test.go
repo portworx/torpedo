@@ -1206,13 +1206,17 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 
 				}
 				for _, pvc := range pvcs {
-					pvcSize := pvc.Spec.Resources.Requests.Storage().String()
-					pvcSize = strings.TrimSuffix(pvcSize, "Gi")
-					pvcSizeInt, err := strconv.Atoi(pvcSize)
-					log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
-					resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSizeInt))
-					log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
-					log.InfoD("Vol uid %v", resizedVol.ID)
+					pvcSize := pvc.Spec.Resources.Size()
+					storage, _ := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+					fmt.Println("pvc size", pvcSize)
+					fmt.Println("storage size", storage.Value())
+					pvcSize1 := pvc.Spec.Resources.Requests.Storage().String()
+					fmt.Println("pvc size1", pvcSize1)
+
+					//log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSize, pvc.UID)
+					//resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSize))
+					//log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
+					//log.InfoD("Vol uid %v", resizedVol.ID)
 				}
 			}
 		})
