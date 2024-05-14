@@ -3694,7 +3694,7 @@ var _ = Describe("{ExpandMultiplePoolsWhenFADAVolumeCreationInProgress}", func()
 		// Get List of all PVCs created on the Namespace
 		pvcs, err := GetAllPVCFromNs(namespace[0], nil)
 		log.FailOnError(err, "Failed to get list of all PVCs on Specific Namespace")
-		dash.VerifyFatal(len(pvcs) == 100, true, "did all PVC's created?")
+		dash.VerifyFatal(len(pvcs) == 100, true, fmt.Sprintf("did all PVC's created, length of PVCs created [%v]?", len(pvcs)))
 
 	})
 

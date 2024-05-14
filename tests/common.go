@@ -12627,7 +12627,7 @@ func CreateFlashStorageClass(scName string,
 	scObj := storageapi.StorageClass{
 		ObjectMeta:           v1obj,
 		Provisioner:          k8s.CsiProvisioner,
-		Parameters:           params,
+		Parameters:           param,
 		MountOptions:         MountOptions,
 		ReclaimPolicy:        &reclaimPolicy,
 		AllowVolumeExpansion: AllowVolumeExpansion,
