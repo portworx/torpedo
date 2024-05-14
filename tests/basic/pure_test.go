@@ -4148,14 +4148,13 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 			"Create Clone of the FADA Volume and verify the status",
 			nil, 0)
 	})
-	var contexts []*scheduler.Context
-	var volumeName string
-	var cloneVolumeId string
-	flashArrays, err := GetFADetailsUsed()
-	log.FailOnError(err, "Failed to get FA details used")
-
 	itLog := "Px Volume Resize in parallel to FADA/FBDA Volume Resize ( PVC Resize )"
 	It(itLog, func() {
+		var contexts []*scheduler.Context
+		var volumeName string
+		var cloneVolumeId string
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "Failed to get FA details used")
 		log.InfoD(itLog)
 		stepLog := "Deploy FADA app"
 		Step(stepLog, func() {
