@@ -1162,6 +1162,7 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 		stepLog = "Do parallel resize of base apps volume and FADA volume"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+
 			go func() {
 				for _, ctx := range contexts[:1] {
 					var appVolumes []*volume.Volume
@@ -1178,7 +1179,6 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 
 					}
 					for _, pvc := range pvcs {
-						log.InfoD("debug statement %v", pvc)
 						pvcSizeObj := pvc.Spec.Resources.Requests[v1.ResourceStorage]
 						pvcSize, _ := pvcSizeObj.AsInt64()
 						log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSize, pvc.UID)
@@ -1186,6 +1186,7 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 						log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
 						log.InfoD("Vol uid %v", resizedVol.ID)
 					}
+
 				}
 
 			}()
@@ -1204,16 +1205,17 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 
 				}
 				for _, pvc := range pvcs {
-					log.InfoD("debug statement %v", pvc)
 					pvcSizeObj := pvc.Spec.Resources.Requests[v1.ResourceStorage]
 					pvcSize, _ := pvcSizeObj.AsInt64()
 					log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSize, pvc.UID)
 					resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSize))
 					log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
 					log.InfoD("Vol uid %v", resizedVol.ID)
+					time.Sleep(10 * time.Second)
 				}
 			}
 		})
+
 		stepLog = "Validate volume resize on both base volume and FADA volume"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -1222,9 +1224,19 @@ var _ = Describe("{TestParallelPxAndFadaVolumeResize}", func() {
 				var err error
 				appVolumes, err = Inst().S.GetVolumes(ctx)
 				log.FailOnError(err, "Failed to get volumes from context")
-				for _, v := range appVolumes {
-					err := Inst().V.ValidateUpdateVolume(v, nil)
-					log.FailOnError(err, "Could not validate volume resize %v", v.Name)
+
+				for _, vol := range appVolumes {
+					volReSize, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "inspect returned error ?")
+					log.Infof("Verify volume size after resizing the volume [%v]", vol.Name)
+					dash.VerifyFatal(volReSize.Spec.Size > vol.Size, true,
+						fmt.Sprintf("Resize of Volume didnot happen? current size is [%v]", volReSize.Spec.Size/units.GiB))
+
+					log.Infof(fmt.Sprintf("Volume [%v] resized from [%v] to [%v]",
+						vol.Name, vol.Size, volReSize.Spec.Size))
+					dash.VerifyFatal((volReSize.Spec.Size/units.GiB) >= vol.Size, true,
+						fmt.Sprintf("Resize of Volume didnot happen? current size is [%v]!", volReSize.Spec.Size/units.GiB))
+
 				}
 			}
 		})
