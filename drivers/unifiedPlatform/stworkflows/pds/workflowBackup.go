@@ -12,8 +12,16 @@ import (
 )
 
 type WorkflowPDSBackup struct {
-	WorkflowDataService *WorkflowDataService
-	AllBackups          map[string]string
+	WorkflowDataService  *WorkflowDataService
+	Backups              map[string]*BackupDetails
+	Md5HashesForBackusp  map[string]string
+	WorkflowBackupConfig *WorkflowPDSBackupConfig
+}
+
+type BackupDetails struct {
+	Backup         *automationModels.V1Backup
+	BackupConfigId string
+	Md5Hash        string
 }
 
 const (
@@ -56,7 +64,11 @@ func (backup WorkflowPDSBackup) WaitForBackupToComplete(backupId string) error {
 		} else {
 			log.Infof("Backup completed successfully - [%s]", *backupModel.Get.Meta.Name)
 			log.Infof("Backup Status - [%s]", *backupModel.Get.Status.CloudSnapId)
-			backup.AllBackups[*backupModel.Get.Meta.Name] = backupId
+			backup.Backups[*backupModel.Get.Meta.Uid] = &BackupDetails{
+				Backup:         &backupModel.Get,
+				BackupConfigId: *backupModel.Get.Meta.ParentReference.Uid,
+				Md5Hash:        backup.WorkflowBackupConfig.BackupConfigs[*backupModel.Get.Meta.ParentReference.Uid].Md5,
+			}
 			return nil, false, nil
 		}
 	}
@@ -106,10 +118,10 @@ func (backup WorkflowPDSBackup) ValidateBackupDeletion(id string) error {
 // Purge deletes all backups for a given deployment
 func (backup WorkflowPDSBackup) Purge() error {
 
-	log.Infof("Total number of backups found - [%d]", len(backup.AllBackups))
+	log.Infof("Total number of backups found - [%d]", len(backup.Backups))
 
-	for _, eachBackup := range backup.AllBackups {
-		log.InfoD("Deleting [%s]", eachBackup)
+	for eachBackup, backupDetails := range backup.Backups {
+		log.InfoD("Deleting [%s]", *backupDetails.Backup.Meta.Name)
 		err := backup.DeleteBackup(eachBackup)
 		if err != nil {
 			return err

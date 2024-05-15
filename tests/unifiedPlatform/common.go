@@ -159,26 +159,36 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowNamespaceDestination.Namespaces = make(map[string]string)
 
 		log.Infof("Creating data service struct")
+
 		WorkflowDataService.Namespace = &WorkflowNamespace
-		WorkflowDataService.DataServiceDeployment = make(map[string]dslibs.DataServiceDetails)
+		WorkflowDataService.DataServiceDeployment = make(map[string]*dslibs.DataServiceDetails)
 		WorkflowDataService.Dash = Inst().Dash
 		WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
+		WorkflowDataService.PDSParams = NewPdsParams
 
 		log.Infof("Creating backup config struct")
 		WorkflowPDSBackupConfig.WorkflowBackupLocation = WorkflowbkpLoc
 		WorkflowPDSBackupConfig.WorkflowDataService = &WorkflowDataService
-		WorkflowPDSBackupConfig.Backups = make(map[string]automationModels.V1BackupConfig)
+		WorkflowPDSBackupConfig.BackupConfigs = make(map[string]*pds.BackupConfigDetails)
+		WorkflowPDSBackupConfig.SkipValidatation = make(map[string]bool)
 
 		log.Infof("Creating Backup struct")
 		WorkflowPDSBackup.WorkflowDataService = &WorkflowDataService
-		WorkflowPDSBackup.AllBackups = make(map[string]string)
+		WorkflowPDSBackup.Backups = make(map[string]*pds.BackupDetails)
+		WorkflowPDSBackup.WorkflowBackupConfig = &WorkflowPDSBackupConfig
 
 		log.Infof("Creating restore object for same cluster and same project")
-		WorkflowPDSRestore.Source = &WorkflowNamespace
+		WorkflowPDSRestore.Source = &WorkflowDataService
+		WorkflowPDSRestore.WorkflowBackup = &WorkflowPDSBackup
 		WorkflowPDSRestore.Restores = make(map[string]automationModels.PDSRestore)
 		WorkflowPDSRestore.Destination = &WorkflowNamespace
-		WorkflowPDSRestore.RestoredDeployments = pds.WorkflowDataService{}
-		WorkflowPDSRestore.RestoredDeployments.DataServiceDeployment = make(map[string]dslibs.DataServiceDetails)
+		WorkflowPDSRestore.RestoredDeployments = &pds.WorkflowDataService{
+			PDSParams:    NewPdsParams,
+			Namespace:    &WorkflowNamespace,
+			Dash:         Inst().Dash,
+			PDSTemplates: WorkflowPDSTemplate,
+		}
+		WorkflowPDSRestore.RestoredDeployments.DataServiceDeployment = make(map[string]*dslibs.DataServiceDetails)
 
 		log.Infof("Creating Platform object for Template Workflow")
 		WorkflowPDSTemplate.Platform = WorkflowPlatform
@@ -196,7 +206,7 @@ func PurgePDS() []error {
 
 	var allErrors []error
 
-	if WorkflowPDSRestore.Source.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
+	if WorkflowPDSRestore.Source.Namespace.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
 		err := SetDestinationKubeConfig()
 		log.FailOnError(err, "Unable to switch cluster kubeconfig")
 	} else {
@@ -210,7 +220,7 @@ func PurgePDS() []error {
 		allErrors = append(allErrors, err)
 	}
 
-	if WorkflowPDSRestore.Source.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
+	if WorkflowPDSRestore.Source.Namespace.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
 		log.InfoD("Purging all restore destination namespaces")
 		err = WorkflowPDSRestore.Destination.Purge()
 		if err != nil {
@@ -219,7 +229,7 @@ func PurgePDS() []error {
 		}
 	}
 
-	if WorkflowPDSRestore.Source.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
+	if WorkflowPDSRestore.Source.Namespace.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Unable to switch cluster kubeconfig")
 	} else {
@@ -234,7 +244,7 @@ func PurgePDS() []error {
 	}
 
 	log.InfoD("Purging all restore source namespaces")
-	err = WorkflowPDSRestore.Source.Purge()
+	err = WorkflowPDSRestore.Source.Namespace.Purge()
 	if err != nil {
 		log.Errorf("error while purging restored namespaces - [%s]", err.Error())
 		allErrors = append(allErrors, err)
@@ -268,7 +278,7 @@ func PurgePDS() []error {
 
 // CheckforClusterSwitch checks if restore needs to be created on source or dest
 func CheckforClusterSwitch() {
-	if WorkflowPDSRestore.Source.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
+	if WorkflowPDSRestore.Source.Namespace.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
 		err := SetDestinationKubeConfig()
 		log.FailOnError(err, "failed to switch context to source cluster")
 	} else {
