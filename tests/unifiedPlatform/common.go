@@ -257,6 +257,13 @@ func PurgePDS() []error {
 		allErrors = append(allErrors, err)
 	}
 
+	log.InfoD("Purging all destination namespace objects")
+	err = WorkflowNamespaceDestination.Purge()
+	if err != nil {
+		log.Errorf("error while purging all namespaces - [%s]", err.Error())
+		allErrors = append(allErrors, err)
+	}
+
 	//log.InfoD("Purging all backup objects")
 	//err = WorkflowPDSBackup.Purge()
 	//// TODO: Uncomment once https://purestorage.atlassian.net/browse/DS-9546 is fixed
