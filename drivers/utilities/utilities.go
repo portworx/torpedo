@@ -477,47 +477,121 @@ func DeleteElementFromSlice(slice []string, element string) ([]string, error) {
 	return append(slice[:index], slice[index+1:]...), nil
 }
 
-// ParseInterfaceAndGetDetails takes interface as input and checks for the particular type and extracts the host and port information
-// Returns the host and port as dnsEndpoints
-func ParseInterfaceAndGetDetails(clusterDetails interface{}) (string, error) {
-	var (
-		host        string
-		port        string
-		dnsEndPoint string
-		err         error
-	)
-	if detailsMap, ok := clusterDetails.(map[string]interface{}); ok {
-		log.Info("ClusterDetails")
-		for key, value := range detailsMap {
-			switch key {
-			case "host":
-				host, err = ConvertInterfacetoString(value)
-				if err != nil {
-					return "", err
-				}
-				log.Infof("%s: %v\n", key, value)
-			case "port":
-				port, err = ConvertInterfacetoString(value)
-				if err != nil {
-					return "", err
-				}
-				log.Infof("%s: %v\n", key, value)
-			}
-		}
-		dnsEndPoint = host + ":" + port
-		log.Debugf("DataService endpoint is: [%s]", dnsEndPoint)
-	} else {
-		return "", fmt.Errorf("ClusterDetails is of not expected type")
-	}
-	return dnsEndPoint, nil
-}
-
 func GetBasePodName(podName string) string {
 	parts := strings.Split(podName, "-")
 	if len(parts) > 1 {
 		return strings.Join(parts[:len(parts)-1], "-")
 	}
 	return podName
+}
+
+// ParseInterfaceAndGetDetails takes interface as input and checks for the particular type and extracts the host and port information
+// Returns the host and port as dnsEndpoints
+func ParseInterfaceAndGetDetails(connectionDetails interface{}, dataServiceName string) (string, error) {
+	var (
+		defaultPort string
+		dsNode      string
+	)
+
+	connDetailsMap, ok := connectionDetails.(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("Error: connectionDetails is not of type map[string]interface{}")
+	}
+
+	nodesInterface, ok := connDetailsMap["nodes"]
+	if !ok {
+		return "", fmt.Errorf("Error: nodes not found in connectionDetails")
+	}
+	nodes, ok := nodesInterface.([]interface{})
+	if !ok {
+		return "", fmt.Errorf("Error: nodes is not of type []interface{}")
+	}
+
+	log.Debugf("Available nodes")
+	for _, nodeInterface := range nodes {
+		node, err := ConvertInterfacetoString(nodeInterface)
+		if err != nil {
+			return "", err
+		}
+		log.Debugf("[%s]", node)
+		if strings.Contains(node, "vip") {
+			dsNode = node
+		}
+	}
+
+	// Extract ports from the map
+	portsInterface, ok := connDetailsMap["ports"]
+	if !ok {
+		return "", fmt.Errorf("Error: ports not found in connectionDetails")
+	}
+	ports, ok := portsInterface.(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("Error: ports is not of type map[string]interface{}")
+	}
+
+	log.Debugf("Available ports")
+	for portName, portInterface := range ports {
+		port, err := ConvertInterfacetoString(portInterface)
+		if err != nil {
+			return "", err
+		}
+		log.Debugf("[%s]:[%s]", portName, port)
+		switch strings.ToLower(dataServiceName) {
+		case "postgresql":
+			if portName == "postgresql" {
+				defaultPort = port
+			}
+		case "cassandra":
+			if portName == "cql" {
+				defaultPort = port
+			}
+		case "couchbase":
+			if portName == "Rest" {
+				defaultPort = port
+			}
+		case "redis":
+			if portName == "client" {
+				defaultPort = port
+			}
+		case "rabbitmq":
+			if portName == "amqp" {
+				defaultPort = port
+			}
+		case "kafka":
+			if portName == "client" {
+				defaultPort = port
+			}
+		case "elasticsearch":
+			if portName == "Rest" {
+				defaultPort = port
+			}
+		case "mongodb":
+			if portName == "Mongos" {
+				defaultPort = port
+			}
+		case "consul":
+			if portName == "Http" {
+				defaultPort = port
+			}
+		case "mysql":
+			if portName == "Mysql-Router" {
+				defaultPort = port
+			}
+		case "sqlserver":
+			if portName == "Client" {
+				defaultPort = port
+			}
+		}
+	}
+
+	dnsEndPoint := dsNode + ":" + defaultPort
+	log.Debugf("DNS Endpoint [%s]", dnsEndPoint)
+
+	if dsNode == "" || string(defaultPort) == "" {
+		return "", fmt.Errorf("Node or Port value is empty..\n")
+	}
+
+	return dnsEndPoint, nil
 }
 
 func ConvertInterfacetoString(value interface{}) (string, error) {

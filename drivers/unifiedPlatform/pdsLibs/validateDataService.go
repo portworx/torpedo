@@ -10,11 +10,11 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
-	"google.golang.org/grpc"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"net"
 	"strings"
 	"time"
 )
@@ -446,7 +446,7 @@ func GetDataServiceImageId(dsName, dsImageTag, dsVersionBuild string) (string, e
 func ValidateDNSEndPoint(dnsEndPoint string) error {
 	//log.Debugf("sleeping for 5 min, before validating dns endpoint")
 	//time.Sleep(5 * time.Minute)
-	conn, err := grpc.Dial(dnsEndPoint, grpc.WithInsecure())
+	conn, err := net.Dial("tcp", dnsEndPoint)
 	if err != nil {
 		return fmt.Errorf("Failed to connect to the dns endpoint with err: %v", err)
 	} else {

@@ -26,7 +26,6 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	It("Deploy,Validate and ScaleUp DataService", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			Step("Deploy DataService", func() {
-				log.Debugf("Deploying DataService [%s]", ds.Name)
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
@@ -71,7 +70,6 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 	It("Deploy, Validate and Upgrade Data service Image", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			Step("Deploy DataService", func() {
-				log.Debugf("Deploying DataService [%s]", ds.Name)
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.OldImage, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
@@ -109,7 +107,6 @@ var _ = Describe("{ScaleUpCpuMemLimitsandStorageOfDS}", func() {
 	It("Deploy,Validate and ScaleUp DataService", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			Step("Deploy DataService", func() {
-				log.Debugf("Deploying DataService [%s]", ds.Name)
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
@@ -269,7 +266,6 @@ var _ = Describe("{DeletePDSPods}", func() {
 	It("Delete pds pods and validate if its coming back online and dataserices are not affected", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			Step("Deploy DataService", func() {
-				log.Debugf("Deploying DataService [%s]", ds.Name)
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)

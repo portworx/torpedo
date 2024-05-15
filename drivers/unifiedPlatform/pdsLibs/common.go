@@ -40,7 +40,7 @@ const (
 	validateDeploymentTimeInterval = 60 * time.Second
 	timeInterval                   = 10 * time.Second
 	timeOut                        = 30 * time.Minute
-	maxtimeInterval                = 10 * time.Second
+	maxtimeInterval                = 30 * time.Second
 	bkpTimeInterval                = 60 * time.Second
 	bkpMaxtimeInterval             = 10 * time.Minute
 	restoreTimeInterval            = 20 * time.Second
