@@ -903,6 +903,11 @@ function terminate_pod_then_exit {
     # Fetch the PID of the Ginkgo test process
     local test_pid
     test_pid=$(kubectl exec torpedo -- pgrep -f 'torpedo/bin')
+	echo "The PID of the process is: $test_pid"
+
+	echo "Listing all running processes in the torpedo pod:"
+	kubectl exec torpedo -- ps aux
+
     if [ "$test_pid" ]; then
         # Using SIGKILL instead of SIGTERM to immediately stop the process.
         # SIGTERM would allow Ginkgo to run AfterSuite and generate reports,
