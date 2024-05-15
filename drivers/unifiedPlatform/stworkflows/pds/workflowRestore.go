@@ -4,35 +4,40 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
+	"slices"
 	"time"
 )
 
 type WorkflowPDSRestore struct {
-	Source              *platform.WorkflowNamespace
-	Destination         *platform.WorkflowNamespace
-	Validatation    map[string]bool
-	Restores            map[string]automationModels.PDSRestore
-	RestoredDeployments WorkflowDataService
+	Source                              *WorkflowDataService
+	Destination                         *platform.WorkflowNamespace
+	Validatation                        map[string]bool
+	Restores                            map[string]automationModels.PDSRestore
+	RestoredDeployments                 *WorkflowDataService
 	SourceDeploymentConfigBeforeUpgrade *automationModels.DeploymentTopology
+	SkipValidation                      map[string]bool
+	WorkflowBackup                      *WorkflowPDSBackup
 }
 
 const (
 	ValidatePdsRestore                          = "VALIDATE_PDS_RESTORE"
 	ValidateRestoreAfterSourceDeploymentUpgrade = "VALIDATE_RESTORE_AFTER_SRC_DEPLOYMENT_UPGRADE"
+	CheckDataAfterRestore                       = "CHECKDATAAFTERRESTORE"
 )
 
-func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, namespace string, sourceNamespace string) (*automationModels.PDSRestoreResponse, error) {
+func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, namespace string, sourceDeploymentId string) (*automationModels.PDSRestoreResponse, error) {
 
 	log.Infof("Restore [%s] started at [%s]", name, time.Now().Format("2006-01-02 15:04:05"))
 
 	log.Infof("Name of restore - [%s]", name)
 	log.Infof("Backup UUID - [%s]", backupUid)
 	log.Infof("Destination Cluster Id - [%s]", restore.Destination.TargetCluster.ClusterUID)
-	log.Infof("Source project Id - [%s]", restore.Source.TargetCluster.Project.ProjectId)
+	log.Infof("Source project Id - [%s]", restore.Source.Namespace.TargetCluster.Project.ProjectId)
 	log.Infof("Destination project Id - [%s]", restore.Destination.TargetCluster.Project.ProjectId)
-	err := restore.CreateAndAssociateRestoreNamespace(namespace, sourceNamespace)
+	err := restore.CreateAndAssociateRestoreNamespace(namespace, restore.Source.DataServiceDeployment[sourceDeploymentId].Namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +49,7 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 		name,
 		backupUid, restore.Destination.TargetCluster.ClusterUID,
 		restore.Destination.Namespaces[namespace],
-		restore.Source.TargetCluster.Project.ProjectId,
+		restore.Source.Namespace.TargetCluster.Project.ProjectId,
 		restore.Destination.TargetCluster.Project.ProjectId,
 	)
 
@@ -54,7 +59,7 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 		return nil, err
 	}
 
-	if value, ok := restore.Validatation[ValidatePdsRestore]; ok {
+	if value, ok := restore.SkipValidation[ValidatePdsRestore]; ok {
 		if value == true {
 			log.Infof("Skipping Restore Validation")
 		}
@@ -84,14 +89,48 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 	}
 
 	// TODO: The Get MD5Hash needs to be run here to get the Md5CheckSum
-	restore.RestoredDeployments.DataServiceDeployment[createRestore.Create.Config.DestinationReferences.DeploymentId] = pdslibs.DataServiceDetails{
+	restore.RestoredDeployments.DataServiceDeployment[createRestore.Create.Config.DestinationReferences.DeploymentId] = &pdslibs.DataServiceDetails{
 		Deployment:        deployment.Get,
 		Namespace:         namespace,
 		NamespaceId:       restore.Destination.Namespaces[namespace],
 		SourceMd5Checksum: "",
+		DSParams:          restore.Source.DataServiceDeployment[sourceDeploymentId].DSParams,
+	}
+
+	log.Infof("Validating data after restore")
+	if value, ok := restore.SkipValidation[CheckDataAfterRestore]; ok ||
+		slices.Contains(stworkflows.SKIPDATASERVICEFROMWORKLOAD, restore.RestoredDeployments.DataServiceDeployment[createRestore.Create.Config.DestinationReferences.DeploymentId].DSParams.Name) {
+		if value == true {
+			log.Infof("Skipping data validation for the restore [%s]", name)
+		}
+	} else {
+		err := restore.ValidateDataAfterRestore(createRestore.Create.Config.DestinationReferences.DeploymentId, backupUid)
+		if err != nil {
+			return nil, fmt.Errorf("data validation failed. Error - [%s]", err.Error())
+		}
 	}
 
 	return createRestore, nil
+}
+
+func (restore WorkflowPDSRestore) ValidateDataAfterRestore(destinationDeploymentId string, backupId string) error {
+
+	err := restore.RestoredDeployments.ReadAndUpdateDataServiceDataHash(destinationDeploymentId)
+	if err != nil {
+		return fmt.Errorf("unable to read data from restored database. Error - [%s]", err.Error())
+	}
+
+	sourceCheckSum := restore.WorkflowBackup.Backups[backupId].Md5Hash
+	destinationCheckSum := restore.RestoredDeployments.DataServiceDeployment[destinationDeploymentId].SourceMd5Checksum
+
+	log.Infof("Source Md5 Hash - [%s]", sourceCheckSum)
+	log.Infof("Restore Md5 Hash - [%s]", destinationCheckSum)
+
+	if sourceCheckSum != destinationCheckSum {
+		return fmt.Errorf("Data validation failed for restore. Expected - [%s], Found - [%s]", sourceCheckSum, destinationCheckSum)
+	}
+
+	return nil
 }
 
 // Get Restore fetches the first given restore id

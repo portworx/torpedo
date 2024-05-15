@@ -22,9 +22,10 @@ type WorkflowDataService struct {
 	Namespace    *platform.WorkflowNamespace
 	PDSTemplates WorkflowPDSTemplates
 	// TODO: NamespaceName should be taken as a parameter in the method
-	DataServiceDeployment   map[string]dslibs.DataServiceDetails
+	DataServiceDeployment   map[string]*dslibs.DataServiceDetails
 	SkipValidatation        map[string]bool
 	Dash                    *aetosutil.Dashboard
+	PDSParams               *parameters.NewPDSParams
 	ValidateStorageIncrease dslibs.ValidateStorageIncrease
 }
 
@@ -57,23 +58,15 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		return nil, err
 	}
 
-	// TODO: This needs to be done along with a switch so that we have an option to run or skip this validation
-	//chkSum, err := wfDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid, &parameters.NewPDSParams{})
-	//
-	//if err != nil {
-	//	return nil, fmt.Errorf("unable to run workloads. error - [%s]", err.Error())
-	//}
-
-	wfDataService.DataServiceDeployment[*deployment.Create.Meta.Uid] = dslibs.DataServiceDetails{
-		Deployment:  deployment.Create,
-		Namespace:   namespaceName,
-		NamespaceId: namespaceId,
-		//SourceMd5Checksum: chkSum,
+	wfDataService.DataServiceDeployment[*deployment.Create.Meta.Uid] = &dslibs.DataServiceDetails{
+		Deployment:        deployment.Create,
+		Namespace:         namespaceName,
+		NamespaceId:       namespaceId,
 		SourceMd5Checksum: "",
 		DSParams:          ds,
 	}
 
-	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
+	if value, ok := wfDataService.SkipValidatation[ValidatePdsWorkloads]; ok {
 		if value == true {
 			log.Infof("Skipping DataService Deployment  Validation")
 		}
@@ -90,6 +83,17 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	// https://purestorage.atlassian.net/issues/DS-9305
 	log.Infof("Sleeping for 1 minutes to make sure deployment gets healthy")
 	time.Sleep(1 * time.Minute)
+
+	if value, ok := wfDataService.SkipValidatation[ValidatePdsWorkloads]; ok {
+		if value == true {
+			log.Infof("Data validation is skipped for this")
+		}
+	} else {
+		_, err := wfDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+		if err != nil {
+			return deployment, fmt.Errorf("unable to run workfload on the data service. Error - [%s]", err.Error())
+		}
+	}
 
 	return deployment, nil
 }
@@ -241,29 +245,64 @@ func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId strin
 	return nil
 }
 
-func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(deploymentId string, params *parameters.NewPDSParams) (string, error) {
-	if slices.Contains(stworkflows.SKIPDATASERVICEFROMWORKFLOAD, strings.ToLower(wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)) {
+func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(deploymentId string) (string, error) {
+	if slices.Contains(stworkflows.SKIPDATASERVICEFROMWORKLOAD, strings.ToLower(wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)) {
 		log.Warnf("Workload is not enabled for this - [%s] - data service", wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)
 		return "", nil
 	}
 	//Initializing the parameters required for workload generation
 	wkloadParams := dslibs.LoadGenParams{
-		LoadGenDepName: params.LoadGen.LoadGenDepName,
+		LoadGenDepName: wfDataService.PDSParams.LoadGen.LoadGenDepName,
 		Namespace:      wfDataService.DataServiceDeployment[deploymentId].Namespace,
-		NumOfRows:      params.LoadGen.NumOfRows,
-		Timeout:        params.LoadGen.Timeout,
-		Replicas:       params.LoadGen.Replicas,
-		TableName:      params.LoadGen.TableName,
-		Iterations:     params.LoadGen.Iterations,
-		FailOnError:    params.LoadGen.FailOnError,
+		NumOfRows:      wfDataService.PDSParams.LoadGen.NumOfRows,
+		Timeout:        wfDataService.PDSParams.LoadGen.Timeout,
+		Replicas:       wfDataService.PDSParams.LoadGen.Replicas,
+		TableName:      wfDataService.PDSParams.LoadGen.TableName,
+		Iterations:     wfDataService.PDSParams.LoadGen.Iterations,
+		FailOnError:    wfDataService.PDSParams.LoadGen.FailOnError,
 	}
 
-	chkSum, wlDep, err := dslibs.InsertDataAndReturnChecksum(wfDataService.DataServiceDeployment[deploymentId], wkloadParams)
+	chkSum, wlDep, err := dslibs.InsertDataAndReturnChecksum(*wfDataService.DataServiceDeployment[deploymentId], wkloadParams)
 	if err != nil {
 		return "", err
 	}
 
+	// Updating the data hash for the deployment
+	wfDataService.DataServiceDeployment[deploymentId].SourceMd5Checksum = chkSum
+
 	return chkSum, dslibs.DeleteWorkloadDeployments(wlDep)
+}
+
+// Reads and update the md5 hash for the data service
+func (wfDataService *WorkflowDataService) ReadAndUpdateDataServiceDataHash(deploymentId string) error {
+	if slices.Contains(stworkflows.SKIPDATASERVICEFROMWORKLOAD, strings.ToLower(wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)) {
+		log.Warnf("Workload is not enabled for this - [%s] - data service", wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)
+		return nil
+	}
+	wkloadParams := dslibs.LoadGenParams{
+		LoadGenDepName: wfDataService.PDSParams.LoadGen.LoadGenDepName,
+		Namespace:      wfDataService.DataServiceDeployment[deploymentId].Namespace,
+		NumOfRows:      wfDataService.PDSParams.LoadGen.NumOfRows,
+		Timeout:        wfDataService.PDSParams.LoadGen.Timeout,
+		Replicas:       wfDataService.PDSParams.LoadGen.Replicas,
+		TableName:      wfDataService.PDSParams.LoadGen.TableName,
+		Iterations:     wfDataService.PDSParams.LoadGen.Iterations,
+		FailOnError:    wfDataService.PDSParams.LoadGen.FailOnError,
+	}
+
+	chkSum, _, err := dslibs.ReadDataAndReturnChecksum(
+		*wfDataService.DataServiceDeployment[deploymentId],
+		wfDataService.DataServiceDeployment[deploymentId].DSParams.Name,
+		wkloadParams,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	wfDataService.DataServiceDeployment[deploymentId].SourceMd5Checksum = chkSum
+
+	return nil
 }
 
 // TODO: Commenting this methods out, this needs to be refatcored as per current design
