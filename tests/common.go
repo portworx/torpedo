@@ -5340,6 +5340,11 @@ func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred str
 func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, validate bool) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
+	azureRegion := os.Getenv("AZURE_REGION")
+	environmentType := api.S3Config_AzureEnvironmentType_AZURE_GLOBAL // Default value
+	if azureRegion == "CHINA" {
+		environmentType = api.S3Config_AzureEnvironmentType_AZURE_CHINA
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -5355,6 +5360,13 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 				Uid:  cloudCredUID,
 			},
 			Type: api.BackupLocationInfo_Azure,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					AzureEnvironment: &api.S3Config_AzureEnvironmentType{
+						Type: environmentType,
+					},
+				},
+			},
 		},
 	}
 	ctx, err := backup.GetAdminCtxFromSecret()
@@ -5371,6 +5383,11 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 // CreateAzureBackupLocationWithContext creates backup location for Azure using the given context
 func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context, validate bool) error {
 	backupDriver := Inst().Backup
+	azureRegion := os.Getenv("AZURE_REGION")
+	environmentType := api.S3Config_AzureEnvironmentType_AZURE_GLOBAL // Default value
+	if azureRegion == "CHINA" {
+		environmentType = api.S3Config_AzureEnvironmentType_AZURE_CHINA
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -5386,6 +5403,13 @@ func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred str
 				Uid:  cloudCredUID,
 			},
 			Type: api.BackupLocationInfo_Azure,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					AzureEnvironment: &api.S3Config_AzureEnvironmentType{
+						Type: environmentType,
+					},
+				},
+			},
 		},
 	}
 	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
@@ -5944,8 +5968,11 @@ func DeleteGcpBucket(bucketName string) {
 func DeleteAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
-
-	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName)
+	azureRegion := os.Getenv("AZURE_REGION")
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName) // Default value
+	if azureRegion == "CHINA" {
+		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, bucketName)
+	}
 	log.Infof("Delete container url %s", urlStr)
 	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
 	u, _ := url.Parse(urlStr)
@@ -6712,8 +6739,11 @@ func RemoveS3BucketPolicy(bucketName string) error {
 func CreateAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
-
-	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName)
+	azureRegion := os.Getenv("AZURE_REGION")
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName) // Default value
+	if azureRegion == "CHINA" {
+		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, bucketName)
+	}
 	log.Infof("Create container url %s", urlStr)
 	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
 	u, _ := url.Parse(urlStr)
