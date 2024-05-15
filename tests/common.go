@@ -2188,7 +2188,7 @@ func ScheduleApplicationsWithScheduleOptions(testname string, appSpec string, pr
 }
 
 // ScheduleApplicationsWithSecurityContext schedules *the* applications taking scheduleOptions as input and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
-func ScheduleApplicationsWithSecurityContext(testname string, SecurityContext *corev1.SecurityContext, errChan ...*chan error) []*scheduler.Context {
+func ScheduleApplicationsWithSecurityContext(testname string, namespace string, SecurityContext *corev1.SecurityContext, errChan ...*chan error) []*scheduler.Context {
 	defer func() {
 		if len(errChan) > 0 {
 			close(*errChan[0])
@@ -2198,9 +2198,13 @@ func ScheduleApplicationsWithSecurityContext(testname string, SecurityContext *c
 	var taskName string
 	var err error
 	options := scheduler.ScheduleOptions{
-		SecurityContext: SecurityContext,
+		AppKeys:            Inst().AppList,
+		CsiAppKeys:         Inst().CsiAppList,
+		StorageProvisioner: Inst().Provisioner,
+		Namespace:          namespace,
+		SecurityContext:    SecurityContext,
 	}
-	taskName = fmt.Sprintf("%s", testname)
+	taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
 	contexts, err = Inst().S.Schedule(taskName, options)
 	// Need to check err != nil before calling processError
 	if err != nil {
