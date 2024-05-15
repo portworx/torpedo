@@ -2431,6 +2431,10 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if len(options.Nodes) > 0 && len(options.Labels) > 0 {
 			obj.Spec.Template.Spec.NodeSelector = options.Labels
 		}
+		if options.SecurityContext != nil {
+			obj.Spec.Template.Spec.Containers[0].SecurityContext = options.SecurityContext
+		}
+
 		dep, err := k8sApps.CreateDeployment(obj, metav1.CreateOptions{})
 		if k8serrors.IsAlreadyExists(err) {
 			if dep, err = k8sApps.GetDeployment(obj.Name, obj.Namespace); err == nil {

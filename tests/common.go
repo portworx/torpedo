@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/devans10/pugo/flasharray"
@@ -2172,6 +2173,32 @@ func ScheduleApplicationsWithScheduleOptions(testname string, appSpec string, pr
 	options := scheduler.ScheduleOptions{
 		AppKeys:            []string{appSpec},
 		StorageProvisioner: provisioner,
+	}
+	taskName = fmt.Sprintf("%s", testname)
+	contexts, err = Inst().S.Schedule(taskName, options)
+	// Need to check err != nil before calling processError
+	if err != nil {
+		processError(err, errChan...)
+	}
+	if len(contexts) == 0 {
+		processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
+	}
+
+	return contexts
+}
+
+// ScheduleApplicationsWithSecurityContext schedules *the* applications taking scheduleOptions as input and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
+func ScheduleApplicationsWithSecurityContext(testname string, SecurityContext *corev1.SecurityContext, errChan ...*chan error) []*scheduler.Context {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	var contexts []*scheduler.Context
+	var taskName string
+	var err error
+	options := scheduler.ScheduleOptions{
+		SecurityContext: SecurityContext,
 	}
 	taskName = fmt.Sprintf("%s", testname)
 	contexts, err = Inst().S.Schedule(taskName, options)
@@ -8095,25 +8122,27 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	if currentSpecReport.Failed() {
 		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 	}
-	// Cleanup all the namespaces created by the testcase
-	err := DeleteAllNamespacesCreatedByTestCase()
-	if err != nil {
-		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
-	}
+	/*
+		// Cleanup all the namespaces created by the testcase
+		err := DeleteAllNamespacesCreatedByTestCase()
+		if err != nil {
+			log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+		}
 
-	err = SetDestinationKubeConfig()
-	if err != nil {
-		log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
-		return
-	}
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
+			return
+		}
 
-	err = DeleteAllNamespacesCreatedByTestCase()
-	if err != nil {
-		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
-	}
+		err = DeleteAllNamespacesCreatedByTestCase()
+		if err != nil {
+			log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+		}
 
-	err = SetSourceKubeConfig()
-	log.FailOnError(err, "failed to switch context to source cluster")
+		err = SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	*/
 
 	masterNodes := node.GetMasterNodes()
 	// TODO: enable the log collection for charmed k8s once we get the way to ssh into worker node from juju
