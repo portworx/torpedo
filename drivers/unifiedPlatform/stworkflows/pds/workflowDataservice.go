@@ -141,9 +141,6 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 		}
 	}
 
-	log.Infof("Sleeping for 1 minutes to make sure deployment gets healthy")
-	time.Sleep(1 * time.Minute)
-
 	return deployment, nil
 }
 
@@ -157,7 +154,7 @@ func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(depl
 	}
 
 	// Validate if the dns endpoint is reachable
-	err = wfDataService.ValidateDNSEndpoint(deploymentId, ds.Name)
+	err = wfDataService.ValidateDNSEndpoint(deploymentId)
 	if err != nil {
 		return err
 	}
@@ -229,7 +226,7 @@ func (wfDataService *WorkflowDataService) DeleteDeployment(deploymentId string) 
 	return nil
 }
 
-func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId, dataServiceName string) error {
+func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId string) error {
 	deployment, _, err := dslibs.GetDeployment(deploymentId)
 	if err != nil {
 		return err
@@ -238,7 +235,7 @@ func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId, data
 	log.Infof("ConnectionInfo Response [+%v]", deployment.Get.Status.ConnectionInfo["connectionDetails"])
 
 	connectionDetails := deployment.Get.Status.ConnectionInfo["connectionDetails"]
-	dnsEndPoint, err := dslibs.ParseInterfaceAndGetDetails(connectionDetails, dataServiceName)
+	dnsEndPoint, err := utils.ParseInterfaceAndGetDetails(connectionDetails, wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)
 	if err != nil {
 		return err
 	}

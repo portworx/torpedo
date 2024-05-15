@@ -403,17 +403,17 @@ var _ = Describe("{UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore}", func(
 				log.FailOnError(err, "Error occured while waiting for backup to complete")
 			})
 
-			//Step("Create Restore from the latest backup Id", func() {
-			//	defer func() {
-			//		err := SetSourceKubeConfig()
-			//		log.FailOnError(err, "failed to switch context to source cluster")
-			//	}()
-			//	CheckforClusterSwitch()
-			//	_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, PDS_DEFAULT_NAMESPACE)
-			//	log.FailOnError(err, "Restore Failed")
-			//	log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
-			//	log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
-			//})
+			Step("Create Restore from the latest backup Id", func() {
+				defer func() {
+					err := SetSourceKubeConfig()
+					log.FailOnError(err, "failed to switch context to source cluster")
+				}()
+				CheckforClusterSwitch()
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Restore Failed")
+				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
+				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+			})
 
 			Step("Upgrade DataService Image", func() {
 				_, err := WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)

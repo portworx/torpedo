@@ -52,7 +52,7 @@ var _ = Describe("{ValidateDnsEndPoint}", func() {
 	It("ValidateDnsEndPoint", func() {
 		Step("validate dns endpoint", func() {
 			depId := "dep:3a13954f-ae45-4223-8896-82029c90bca9"
-			err = workflowDataservice.ValidateDNSEndpoint(depId, "Cassandra")
+			err = workflowDataservice.ValidateDNSEndpoint(depId)
 			log.FailOnError(err, "Error occurred while validating dns endpoint")
 		})
 	})
