@@ -410,7 +410,7 @@ func (wfDataService *WorkflowDataService) KillDBMasterNodeToValidateHA(dsName st
 	return nil
 }
 
-func (wfDataService *WorkflowDataService) DeletePDSPods() error {
+func (wfDataService *WorkflowDataService) DeletePDSPods(podNames []string) error {
 	pdsPods := make([]corev1.Pod, 0)
 
 	podList, err := utils.GetPods(PlatformNamespace)
@@ -419,11 +419,22 @@ func (wfDataService *WorkflowDataService) DeletePDSPods() error {
 	}
 	log.Infof("PDS System Pods")
 	for _, pod := range podList.Items {
-		if strings.Contains(strings.ToLower(pod.Name), "pds-backups") || strings.Contains(strings.ToLower(pod.Name), "pds-target") {
-			log.Infof("%v", pod.Name)
-			pdsPods = append(pdsPods, pod)
+		for _, name := range podNames {
+			if strings.Contains(strings.ToLower(pod.Name), strings.ToLower(name)) {
+				log.Infof("%v", pod.Name)
+				pdsPods = append(pdsPods, pod)
+				break // Once found, break out of the inner loop
+			}
 		}
 	}
+
+	//for _, pod := range podList.Items {
+	//	if strings.Contains(strings.ToLower(pod.Name), "pds-backups") || strings.Contains(strings.ToLower(pod.Name), "pds-target") {
+	//		log.Infof("%v", pod.Name)
+	//		pdsPods = append(pdsPods, pod)
+	//	}
+	//}
+
 	log.InfoD("Deleting PDS System Pods")
 	err = utils.DeletePods(pdsPods)
 	if err != nil {
