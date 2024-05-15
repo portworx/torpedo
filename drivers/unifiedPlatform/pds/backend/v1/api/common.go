@@ -29,7 +29,7 @@ func (backupConf *PDS_API_V1) getBackupConfigClient() (context.Context, *backupC
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	backupConf.BackupV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, backupConf.AccountID)
+	backupConf.BackupConfigV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, backupConf.AccountID)
 	client := backupConf.BackupConfigV1APIClient.BackupConfigServiceAPI
 
 	return ctx, client, nil
@@ -55,7 +55,7 @@ func (restore *PDS_API_V1) getRestoreClient() (context.Context, *restoreV1.Resto
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	restore.BackupV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, restore.AccountID)
+	restore.RestoreV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, restore.AccountID)
 	client := restore.RestoreV1APIClient.RestoreServiceAPI
 
 	return ctx, client, nil
@@ -67,7 +67,7 @@ func (ds *PDS_API_V1) getDeploymentClient() (context.Context, *deploymentV1.Depl
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	ds.BackupV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, ds.AccountID)
+	ds.DeploymentV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, ds.AccountID)
 	client := ds.DeploymentV1APIClient.DeploymentServiceAPI
 
 	return ctx, client, nil
@@ -79,7 +79,7 @@ func (ds *PDS_API_V1) getDeploymentConfigClient() (context.Context, *deployments
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	ds.BackupV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, ds.AccountID)
+	ds.DeploymentsConfigUpdateV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, ds.AccountID)
 	client := ds.DeploymentsConfigUpdateV1APIClient.DeploymentConfigUpdateServiceAPI
 
 	return ctx, client, nil
@@ -90,7 +90,7 @@ func (ds *PDS_API_V1) getTemplateDefinitionClient() (context.Context, *catalogV1
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	ds.BackupV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, ds.AccountID)
+	ds.CatalogV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, ds.AccountID)
 	client := ds.CatalogV1APIClient.TemplateDefinitionServiceAPI
 
 	return ctx, client, nil
@@ -101,7 +101,7 @@ func (ds *PDS_API_V1) getCatalogClient() (context.Context, *catalogV1.DataServic
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	ds.BackupV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, ds.AccountID)
+	ds.CatalogV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, ds.AccountID)
 
 	client := ds.CatalogV1APIClient.DataServicesServiceAPI
 	return ctx, client, nil
@@ -113,7 +113,7 @@ func (ds *PDS_API_V1) getDSVersionsClient() (context.Context, *catalogV1.DataSer
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
 
-	ds.BackupV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, ds.AccountID)
+	ds.CatalogV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, ds.AccountID)
 
 	client := ds.CatalogV1APIClient.DataServiceVersionServiceAPI
 	return ctx, client, nil
@@ -125,7 +125,7 @@ func (ds *PDS_API_V1) getDSImagesClient() (context.Context, *catalogV1.ImageServ
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
 
-	ds.BackupV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, ds.AccountID)
+	ds.CatalogV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, ds.AccountID)
 
 	client := ds.CatalogV1APIClient.ImageServiceAPI
 	return ctx, client, nil
