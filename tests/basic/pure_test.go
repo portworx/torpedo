@@ -4255,7 +4255,9 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 	})
 	itLog := "CreateAndValidatePVCWithIopsAndBandwidth"
 	It(itLog, func() {
+		log.InfoD(itLog)
 		numberOfPvc := 10
+		var k8sCore = core.Instance()
 		baseScName := "base-portworx-volume-sc"
 		fadaScName := "fada-volume-sc"
 		fbdaScName := "fbda-volume-sc"
