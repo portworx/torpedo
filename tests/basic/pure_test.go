@@ -4360,6 +4360,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			}
 		})
 
+		time.Sleep(2 * time.Second)
+
 		checkPvcBound := func(listofPvc []string, namespace string) {
 			for _, pvcName := range listofPvc {
 				_, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
@@ -4403,9 +4405,9 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		stepLog = "Validate if PVC are created and bounded"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			checkPvcBound(listofBasePvcNames, "fada-app-namespace")
+			checkPvcBound(listofBasePvcNames, "base-app-namespace")
 			//checkPvcBound(listofFbdaPvc, "fbda-app-namespace")
-			checkPvcBound(listofFadaPvcNames, "base-app-namespace")
+			checkPvcBound(listofFadaPvcNames, "fada-app-namespace")
 
 		})
 		checkVolumesExistinFA := func(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, pvcFadaMap map[string]bool, NoVolume bool) error {
