@@ -546,7 +546,7 @@ func ParseInterfaceAndGetDetails(connectionDetails interface{}, dataServiceName 
 				defaultPort = port
 			}
 		case "couchbase":
-			if portName == "Rest" {
+			if portName == "rest" {
 				defaultPort = port
 			}
 		case "redis":
@@ -562,23 +562,23 @@ func ParseInterfaceAndGetDetails(connectionDetails interface{}, dataServiceName 
 				defaultPort = port
 			}
 		case "elasticsearch":
-			if portName == "Rest" {
+			if portName == "rest" {
 				defaultPort = port
 			}
 		case "mongodb":
-			if portName == "Mongos" {
+			if portName == "mongos" {
 				defaultPort = port
 			}
 		case "consul":
-			if portName == "Http" {
+			if portName == "http" {
 				defaultPort = port
 			}
 		case "mysql":
-			if portName == "Mysql-Router" {
+			if portName == "mysql-router" {
 				defaultPort = port
 			}
 		case "sqlserver":
-			if portName == "Client" {
+			if portName == "client" {
 				defaultPort = port
 			}
 		}
