@@ -147,8 +147,14 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 // ValidatePdsDataServiceDeployments validates the pds deployments resource, storage, deployment configurations and endpoints
 func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(deploymentId string, ds dslibs.PDSDataService, replicas int, resConfigId, stConfigId, namespace, version, image string) error {
 
+	//Validate Statefulset health
+	err := dslibs.ValidateStatefulSetHealth(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Status.CustomResourceName, wfDataService.DataServiceDeployment[deploymentId].Namespace)
+	if err != nil {
+		return err
+	}
+
 	// Validate the sts object and health of the pds deployment
-	err := dslibs.ValidateDataServiceDeploymentHealth(deploymentId, PDS_DEPLOYMENT_AVAILABLE)
+	err = dslibs.ValidateDataServiceDeploymentHealth(deploymentId, PDS_DEPLOYMENT_AVAILABLE)
 	if err != nil {
 		return err
 	}
@@ -185,7 +191,8 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deploymentId 
 		return resourceTemp, storageOp, dbConfig, err
 	}
 
-	dbConfig, err = dslibs.GetDeploymentConfigurations(wfDataService.DataServiceDeployment[deploymentId].Namespace, wfDataService.DataServiceDeployment[deploymentId].DSParams.Name, podName)
+	log.Debugf("Crd Name: [%s]", dslibs.CrdMap[strings.ToLower(wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)])
+	dbConfig, err = dslibs.GetDeploymentConfigurations(wfDataService.DataServiceDeployment[deploymentId].Namespace, dslibs.CrdMap[strings.ToLower(wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)], podName)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
@@ -296,6 +303,7 @@ func (wfDataService *WorkflowDataService) ReadAndUpdateDataServiceDataHash(deplo
 	chkSum, _, err := dslibs.ReadDataAndReturnChecksum(
 		*wfDataService.DataServiceDeployment[deploymentId],
 		wfDataService.DataServiceDeployment[deploymentId].DSParams.Name,
+		dslibs.CrdMap[strings.ToLower(wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)],
 		wkloadParams,
 	)
 
@@ -410,10 +418,10 @@ func (wfDataService *WorkflowDataService) KillDBMasterNodeToValidateHA(dsName st
 	return nil
 }
 
-func (wfDataService *WorkflowDataService) DeletePDSPods(podNames []string) error {
+func (wfDataService *WorkflowDataService) DeletePDSPods(podNames []string, namespace string) error {
 	pdsPods := make([]corev1.Pod, 0)
 
-	podList, err := utils.GetPods(PlatformNamespace)
+	podList, err := utils.GetPods(namespace)
 	if err != nil {
 		return fmt.Errorf("Error while getting pods: %v", err)
 	}
@@ -428,21 +436,14 @@ func (wfDataService *WorkflowDataService) DeletePDSPods(podNames []string) error
 		}
 	}
 
-	//for _, pod := range podList.Items {
-	//	if strings.Contains(strings.ToLower(pod.Name), "pds-backups") || strings.Contains(strings.ToLower(pod.Name), "pds-target") {
-	//		log.Infof("%v", pod.Name)
-	//		pdsPods = append(pdsPods, pod)
-	//	}
-	//}
-
 	log.InfoD("Deleting PDS System Pods")
 	err = utils.DeletePods(pdsPods)
 	if err != nil {
 		return fmt.Errorf("Error while deleting pods: %\v ", err)
 	}
-	time.Sleep(30 * time.Second)
+	time.Sleep(90 * time.Second)
 	log.InfoD("Validating PDS System Pods")
-	err = utils.ValidatePods(PlatformNamespace, "")
+	err = utils.ValidatePods(namespace, "")
 	if err != nil {
 		return fmt.Errorf("Error while validating pods: %v", err)
 	}

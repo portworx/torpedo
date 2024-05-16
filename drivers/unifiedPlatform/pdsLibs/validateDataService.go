@@ -36,15 +36,15 @@ type ValidateStorageIncrease struct {
 }
 
 // GetDeploymentConfigurations returns the deployment CRObject response
-func GetDeploymentConfigurations(namespace, dataServiceName, deploymentName string) (DeploymentConfig, error) {
+func GetDeploymentConfigurations(namespace, crdName, deploymentName string) (DeploymentConfig, error) {
 	log.Debugf("namespace [%s]", namespace)
 	log.Debugf("CRGroup [%s]", CRGroup)
 	log.Debugf("Version [%s]", Version)
-	log.Debugf("dsName [%s]", strings.ToLower(dataServiceName)+"s")
+	log.Debugf("crdName [%s]", crdName)
 
 	var dbConfig DeploymentConfig
 
-	objects, err := GetCRObject(namespace, CRGroup, Version, strings.ToLower(dataServiceName)+"s")
+	objects, err := GetCRObject(namespace, CRGroup, Version, crdName)
 	if err != nil {
 		return dbConfig, err
 	}
@@ -140,7 +140,7 @@ func ValidateDeploymentConfigUpdate(deploymentConfigUpdateId, expectedPhase stri
 			log.Errorf("Error occured while getting deployment status %v", err)
 			return false, nil
 		}
-		log.Debugf("Health status -  %v", *deploymentConfig.Update.Status.Phase)
+		log.Debugf("Deployment Config Update phase -  %v", *deploymentConfig.Update.Status.Phase)
 		if string(*deploymentConfig.Update.Status.Phase) == expectedPhase {
 			log.Infof("Deployment ConfigUpdate status: phase - %v retry-count - %v", *deploymentConfig.Update.Status.Phase, *deploymentConfig.Update.Status.RetryCount)
 			if ResiFlag {
@@ -160,6 +160,33 @@ func ValidateDeploymentConfigUpdate(deploymentConfigUpdateId, expectedPhase stri
 	return nil
 }
 
+// ValidateStatefulSetHealth validates the health of the statefulset pod
+func ValidateStatefulSetHealth(statefulsetName, namespace string) error {
+	log.Debugf("deployment name [%s] in namespace [%s]", statefulsetName, namespace)
+	var ss *v1.StatefulSet
+	err = wait.Poll(validateDeploymentTimeInterval, validateDeploymentTimeOut, func() (bool, error) {
+		ss, err = k8sApps.GetStatefulSet(statefulsetName, namespace)
+		if err != nil {
+			log.Warnf("An Error Occured while getting statefulsets %v", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		log.Errorf("An Error Occured while getting statefulsets %v", err)
+		return err
+	}
+
+	//validate the statefulset deployed in the k8s namespace
+	err = k8sApps.ValidateStatefulSet(ss, validateDeploymentTimeOut)
+	if err != nil {
+		log.Errorf("An Error Occured while validating statefulsets %v", err)
+		return err
+	}
+
+	return nil
+}
+
 // ValidateDataServiceDeploymentHealth takes the deployment map(name and id), namespace and returns error
 func ValidateDataServiceDeploymentHealth(deploymentId string, expectedHealth automationModels.V1StatusHealth) error {
 	log.Infof("DeploymentId [%s]", deploymentId)
@@ -169,7 +196,7 @@ func ValidateDataServiceDeploymentHealth(deploymentId string, expectedHealth aut
 			log.Errorf("Error occured while getting deployment status %v", err)
 			return false, nil
 		}
-		log.Debugf("Health status -  %v", *res.Get.Status.Health)
+		log.Debugf("Health status - [%v]", *res.Get.Status.Health)
 		if *res.Get.Status.Health == expectedHealth {
 			log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Replicas, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
 			if ResiFlag {
@@ -241,9 +268,11 @@ func ValidateDataMd5Hash(deploymentHash, restoredDepHash map[string]string) bool
 // InsertDataAndReturnChecksum Inserts Data into the db and returns the checksum
 func InsertDataAndReturnChecksum(dataServiceDetails DataServiceDetails, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "write"
-
+	crdName := CrdMap[strings.ToLower(dataServiceDetails.DSParams.Name)]
+	dataServiceName := strings.ToLower(dataServiceDetails.DSParams.Name)
 	deploymentName := *dataServiceDetails.Deployment.Status.CustomResourceName
-	_, dep, err := GenerateWorkload(deploymentName, dataServiceDetails.DSParams.Name, wkloadGenParams)
+
+	_, dep, err := GenerateWorkload(deploymentName, dataServiceName, crdName, wkloadGenParams)
 	if err == nil {
 		err := k8sApps.DeleteDeployment(dep.Name, dep.Namespace)
 		if err != nil {
@@ -252,16 +281,16 @@ func InsertDataAndReturnChecksum(dataServiceDetails DataServiceDetails, wkloadGe
 	} else {
 		return "", nil, err
 	}
-	ckSum, wlDep, err := ReadDataAndReturnChecksum(dataServiceDetails, dataServiceDetails.DSParams.Name, wkloadGenParams)
+	ckSum, wlDep, err := ReadDataAndReturnChecksum(dataServiceDetails, dataServiceName, crdName, wkloadGenParams)
 	return ckSum, wlDep, err
 }
 
 // ReadDataAndReturnChecksum Reads Data from the db and returns the checksum
-func ReadDataAndReturnChecksum(dataServiceDetails DataServiceDetails, dataServiceName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
+func ReadDataAndReturnChecksum(dataServiceDetails DataServiceDetails, dataServiceName, crdName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "read"
 
 	deploymentName := *dataServiceDetails.Deployment.Status.CustomResourceName
-	ckSum, wlDep, err := GenerateWorkload(deploymentName, dataServiceName, wkloadGenParams)
+	ckSum, wlDep, err := GenerateWorkload(deploymentName, dataServiceName, crdName, wkloadGenParams)
 	if err != nil {
 		return "", nil, fmt.Errorf("error while reading the workload deployment data")
 	}
@@ -269,9 +298,8 @@ func ReadDataAndReturnChecksum(dataServiceDetails DataServiceDetails, dataServic
 }
 
 // GenerateWorkload creates a deployment using the given params(perform read/write) and returns the checksum
-func GenerateWorkload(deploymentName, dataServiceName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
+func GenerateWorkload(deploymentName, dataServiceName, crdName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	var checksum string
-	dataservice := strings.ToLower(dataServiceName)
 	workloadDepName := wkloadGenParams.LoadGenDepName
 	namespace := wkloadGenParams.Namespace
 	failOnError := wkloadGenParams.FailOnError
@@ -285,9 +313,10 @@ func GenerateWorkload(deploymentName, dataServiceName string, wkloadGenParams Lo
 	clusterMode := wkloadGenParams.ClusterMode
 
 	log.Debugf("DeploymentName [%s]", deploymentName)
-	log.Debugf("dataServiceName [%s]", dataservice)
+	log.Debugf("dataServiceName [%s]", dataServiceName)
+	log.Debugf("CrdName [%s]", crdName)
 
-	serviceAccount, err := pds.CreatePolicies(namespace, dataservice)
+	serviceAccount, err := pds.CreatePolicies(namespace, crdName)
 	if err != nil {
 		return "", nil, fmt.Errorf("Error while creating policies %v\n", err)
 	}
@@ -315,7 +344,7 @@ func GenerateWorkload(deploymentName, dataServiceName string, wkloadGenParams Lo
 							Env: []corev1.EnvVar{
 								{Name: "PDS_DEPLOYMENT", Value: deploymentName},
 								{Name: "NAMESPACE", Value: namespace},
-								{Name: "DATASERVICE", Value: dataservice},
+								{Name: "DATASERVICE", Value: dataServiceName},
 								{Name: "FAIL_ON_ERROR", Value: failOnError},
 								{Name: "MODE", Value: mode},
 								{Name: "SEED", Value: seed},

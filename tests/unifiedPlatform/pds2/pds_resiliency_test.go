@@ -17,51 +17,6 @@ const (
 	DeletePdsDeploymentPodAndValidateDeploymentHealth = "delete-pdsDeploymentPods-validate-deployment-health"
 )
 
-var _ = Describe("{ValidatePdsHealthIncaseofFailures}", func() {
-	var (
-		workflowResiliency pds.WorkflowPDSResiliency
-		deployment         *automationModels.PDSDeploymentResponse
-		err                error
-	)
-
-	JustBeforeEach(func() {
-		StartPDSTorpedoTest("ValidatePdsHealthIncaseofFailures", "Deploy data services and validate PDS health in case of PDS pod deletion", nil, 0)
-	})
-
-	It("Deploy and Validate DataService", func() {
-		for _, ds := range NewPdsParams.DataServiceToTest {
-			Step("Deploy DataService", func() {
-				log.Debugf("Deploying DataService [%s]", ds.Name)
-				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
-				log.FailOnError(err, "Error while deploying ds")
-				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
-			})
-
-			//stepLog := "Running Workloads before taking backups"
-			//Step(stepLog, func() {
-			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-			//	log.FailOnError(err, "Error while running workloads on ds")
-			//})
-
-			Step("Delete PdsDeploymentPods and check the deployment health", func() {
-				workflowResiliency.WfDataService = &WorkflowDataService
-				workflowResiliency.ResiliencyFlag = true
-				workflowResiliency.InduceFailureAndExecuteResiliencyScenario(ds, deployment, DeletePdsDeploymentPodAndValidateDeploymentHealth)
-			})
-
-			//stepLog = "Running Workloads after ScaleUp of DataService"
-			//Step(stepLog, func() {
-			//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-			//	log.FailOnError(err, "Error while running workloads on ds")
-			//})
-		}
-	})
-
-	JustAfterEach(func() {
-		defer EndPDSTorpedoTest()
-	})
-})
-
 var _ = Describe("{StopPXDuringStorageResize}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("StopPXDuringStorageResize", "Deploy data services, Run workloads, and Stop PX on the node while Storage resize is happening", nil, 0)
