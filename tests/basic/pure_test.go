@@ -4444,9 +4444,12 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			for _, fa := range flashArrays {
 
 				for _, volumeName := range listofFadaPvc {
-					if pvcFadaMap[volumeName] {
-						continue
+					if !NoVolume {
+						if pvcFadaMap[volumeName] {
+							continue
+						}
 					}
+
 					faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
 					log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
 
