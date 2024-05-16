@@ -197,7 +197,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 					[]string{},
 					[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
 					[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
-					[]string{},
+					TemplateIds,
 					[]string{},
 				)
 				log.FailOnError(err, "Unable to associate Cluster to Project")

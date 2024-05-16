@@ -52,7 +52,7 @@ var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}",
 				[]string{},
 				[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
 				[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
-				[]string{},
+				TemplateIds,
 				[]string{},
 			)
 			log.FailOnError(err, "Unable to associate Templates to Project")
