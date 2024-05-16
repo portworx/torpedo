@@ -4387,6 +4387,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 
 					} else {
 						log.Infof("Volume [%v] does not exist on FA [%v]", volumeName, fa.MgmtEndPoint)
+						pvcFadaMap[volumeName] = false
+
 					}
 
 				}
@@ -4428,7 +4430,12 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			log.InfoD("Delete pvc from base-app-namespace")
 			DeletePvcGroup(listofBasePvc, "base-app-namespace")
 
-			err := checkVolumesExistinFA(flashArrays, listofFadaPvc, make(map[string]bool), true)
+			pvcFadanotExistMap := make(map[string]bool)
+			for _, volumeName := range listofFadaPvc {
+				pvcFadanotExistMap[volumeName] = true
+			}
+
+			err := checkVolumesExistinFA(flashArrays, listofFadaPvc, pvcFadanotExistMap, true)
 			log.FailOnError(err, "Failed to check if volumes which needed to be deleted still exist in FA")
 			//for _, fb := range flashBlades {
 			//	for _, volumeName := range listofFbdaPvc {
