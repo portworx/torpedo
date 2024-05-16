@@ -4271,15 +4271,16 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			BaseParams := make(map[string]string)
 			BaseParams["repl"] = "1"
 			BaseParams["max_iops"] = "1000"
-			BaseParams["bandwidth"] = "1G"
+			BaseParams["max_bandwidth"] = "1G"
 
 			_, err := CreateBaseStorageClass(baseScName, BaseParams)
 			log.FailOnError(err, "Failed to create base storage class")
+			log.InfoD("Storage class [%s] for Basic is created", baseScName)
 
 			faParams := make(map[string]string)
 			faParams["repl"] = "1"
 			faParams["max_iops"] = "1000"
-			faParams["bandwidth"] = "1G"
+			faParams["max_bandwidth"] = "1G"
 			faParams["fs"] = "ext4"
 
 			var allowVolExpansionFA bool = true
@@ -4290,6 +4291,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				storageApi.VolumeBindingImmediate,
 				nil)
 			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", fadaScName))
+			log.InfoD("Storage class [%s] for FADA is created", fadaScName)
 
 			fbParams := make(map[string]string)
 			fbParams["pure_export_rules"] = "*(rw)"
@@ -4302,6 +4304,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				storageApi.VolumeBindingImmediate,
 				nil)
 			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", fbdaScName))
+			log.InfoD("Storage class [%s] for FBDA is created", fbdaScName)
 		})
 		createPVC := func(pvcName string, scName string, pvcSize string, ns string) error {
 
@@ -4337,17 +4340,17 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		}
 
 		Step("Create Namespace and then create 10 PVC each with respective storage class parallely", func() {
-			err := createNameSpace("fadaappnamespace", map[string]string{"app": "fadaapp"})
+			err := createNameSpace("fada-app-namespace", map[string]string{"app": "fadaapp"})
 			log.FailOnError(err, "Failed to create namespace")
-			err = createNameSpace("fbdaappnamespace", map[string]string{"app": "fbdaapp"})
+			err = createNameSpace("fbda-app-namespace", map[string]string{"app": "fbdaapp"})
 			log.FailOnError(err, "Failed to create namespace")
-			err = createNameSpace("baseappnamespace", map[string]string{"app": "baseapp"})
+			err = createNameSpace("base-app-namespace", map[string]string{"app": "baseapp"})
 			log.FailOnError(err, "Failed to create namespace")
 
 			for x := 0; x < numberOfPvc; x++ {
-				go createAndAppendPVC(fadaAppName, fadaScName, "fadaappnamespace", x, &listofFadaPvc)
+				go createAndAppendPVC(fadaAppName, fadaScName, "fada-app-namespace", x, &listofFadaPvc)
 				//go createAndAppendPVC(fbdaAppName, fbdaScName, "fbdaappnamespace", x, &listofFbdaPvc)
-				go createAndAppendPVC(baseAppName, baseScName, "baseappnamespace", x, &listofBasePvc)
+				go createAndAppendPVC(baseAppName, baseScName, "base-app-namespace", x, &listofBasePvc)
 			}
 		})
 
