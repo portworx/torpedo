@@ -377,7 +377,7 @@ var _ = Describe("{PoolExpandDiskResizeWithReboot}", func() {
 		Step("Wait for expansion to start and reboot node", func() {
 			err := WaitForExpansionToStart(poolIDToResize)
 			log.FailOnError(err, "Timed out waiting for expansion to start")
-			err = RebootNodeAndWait(*storageNode)
+			err = RebootNodeAndWaitForPxUp(*storageNode)
 			log.FailOnError(err, "Failed to reboot node and wait till it is up")
 		})
 
@@ -388,7 +388,7 @@ var _ = Describe("{PoolExpandDiskResizeWithReboot}", func() {
 		})
 		log.Infof("Debug Pool %s", poolIDToResize)
 		Step("Pool has expanded. Reboot the node", func() {
-			err = RebootNodeAndWait(*storageNode)
+			err = RebootNodeAndWaitForPxUp(*storageNode)
 			log.FailOnError(err, "Failed to reboot node and wait till it is up")
 			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 		})
@@ -443,7 +443,7 @@ var _ = Describe("{PoolExpandDiskAddWithReboot}", func() {
 		})
 
 		Step("Pool has expanded. Reboot the node", func() {
-			err = RebootNodeAndWait(*storageNode)
+			err = RebootNodeAndWaitForPxUp(*storageNode)
 			log.FailOnError(err, "Failed to reboot node and wait till it is up")
 			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 		})
