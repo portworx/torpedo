@@ -4307,12 +4307,14 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			log.InfoD("Storage class [%s] for FBDA is created", fbdaScName)
 		})
 		createPVC := func(pvcName string, scName string, pvcSize string, ns string) error {
+			log.InfoD("checking if entered create pvc loop")
 
 			size, err := resource.ParseQuantity(pvcSize)
 			if err != nil {
 				return fmt.Errorf("failed to parse pvc size: %s", pvcSize)
 			}
 			pvcClaimSpec := k8s.MakePVC(size, ns, pvcName, scName)
+			fmt.Println("pvc spec:", pvcClaimSpec.Spec)
 			_, err = k8sCore.CreatePersistentVolumeClaim(pvcClaimSpec)
 			return err
 		}
@@ -4321,6 +4323,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		//listofFbdaPvc := make([]string, 0)
 
 		createAndAppendPVC := func(appName, scName, namespace string, x int, listofPvc *[]string) {
+			log.InfoD("checking if entered createandappendpvc loop")
 			pvcName := fmt.Sprintf("%s-%d", appName, x)
 			namespace = fmt.Sprintf("%s-%d", namespace, x)
 			err := createPVC(pvcName, scName, "10", namespace)
