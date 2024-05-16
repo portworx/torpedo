@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/devans10/pugo/flasharray"
@@ -2501,7 +2502,7 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 		TearDownContext(ctx, opts)
 	}
 
-	/* Removing Data error validation till PB-6271 is resolved.
+	// Removing Data error validation till PB-6271 is resolved.
 	if allErrors != "" {
 		if IsReplacePolicySetToDelete {
 			log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
@@ -2511,7 +2512,6 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 			return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
 		}
 	}
-	*/
 
 	return nil
 }
