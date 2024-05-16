@@ -4327,7 +4327,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			pvcName := fmt.Sprintf("%s-%d", appName, x)
 			pvc, err := createPVC(pvcName, scName, "10", namespace)
 			log.FailOnError(err, "Failed to create pvc")
-			fmt.Println("PVC [%s] created ", pvc.Name)
+			fmt.Println("PVC  created ", pvc.Name)
 
 		}
 
