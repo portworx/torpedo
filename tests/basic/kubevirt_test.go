@@ -681,24 +681,32 @@ var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
 	JustBeforeEach(func() {
 		testName = "kv-pvc-pool-ap"
 		tags := map[string]string{"poolChange": "true", "volumeChange": "true"}
-		StartTorpedoTest("KubeVirtPvcAndPoolExpandWithAutopilot", "Kubevirt PVC and Pool expand test with autopilot", tags, 93652)
+		StartTorpedoTest("KubeVirtPvcAndPoolExpandWithAutopilot", "Validate Kubevirt PVC and Pool Expand With Autopilot", tags, 93652)
 	})
 
-	It("has to fill up the volume completely, resize the volumes and storage pool(s), validate and teardown apps", func() {
-		pxNs, err := Inst().V.GetVolumeDriverNamespace()
-		log.FailOnError(err, "Failed to get volume driver namespace")
-		defer ListEvents(pxNs)
+	It("", func() {
+		log.InfoD("")
 
-		log.InfoD("filling up the volume completely, resizing the volumes and storage pool(s), validating and tearing down apps")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver namespace")
+		defer func() {
+			err := ListEvents(pxNs)
+			log.Errorf("failed to list events in namespace [%s]. Err: [%v]", pxNs, err)
+		}()
+
+		Step("Create an autopilot rule for PVC expand", func() {
+			log.InfoD("Creating an autopilot rule for PVC expand")
+			pvcLabelSelector = map[string]string{"autopilot": "pvc-expand"}
+			pvcAutoPilotRules = []apapi.AutopilotRule{
+				aututils.PVCRuleByUsageCapacity(5, 100, "100"),
+			}
+		})
 
 		Step("Create autopilot rules for PVC and pool expand", func() {
 			log.InfoD("Creating autopilot rules for PVC and pool expand")
 			selectedStorageNode = node.GetStorageDriverNodes()[0]
 			log.Infof("Selected storage node: %s", selectedStorageNode.Name)
-			pvcLabelSelector = map[string]string{"autopilot": "pvc-expand"}
-			pvcAutoPilotRules = []apapi.AutopilotRule{
-				aututils.PVCRuleByUsageCapacity(5, 100, "100"),
-			}
+
 			poolLabelSelector = map[string]string{"autopilot": "adddisk"}
 			poolAutoPilotRules = []apapi.AutopilotRule{
 				aututils.PoolRuleByTotalSize((getTotalPoolSize(selectedStorageNode)/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabelSelector),
