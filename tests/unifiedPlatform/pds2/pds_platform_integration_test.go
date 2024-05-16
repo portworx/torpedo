@@ -9,6 +9,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
+	"strings"
 )
 
 var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}", func() {
@@ -137,7 +138,33 @@ var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}",
 				workflowServiceAccount.SwitchToServiceAccount(destinationUser)
 			})
 
-			Step("Create Restore from the latest backup Id", func() {
+			Step("Create Restore from the latest backup Id without having access to source project", func() {
+				defer func() {
+					err := SetSourceKubeConfig()
+					log.FailOnError(err, "failed to switch context to source cluster")
+				}()
+				CheckforClusterSwitch()
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, *deployment.Create.Meta.Uid)
+				dash.VerifyFatal(strings.Contains(err.Error(), "403 Forbidden"), true, "Create restore without having access to source project - 403 Forbidden")
+			})
+
+			Step("Switch to admin user", func() {
+				workflowServiceAccount.SwitchToAdmin()
+			})
+
+			Step("Provide user access to the source project", func() {
+				workflowServiceAccount.WorkflowProject = WorkflowProject
+				_, err = workflowServiceAccount.CreateRoleBindingForUser(
+					workflowServiceAccount.UserRoles[destinationUser].UserDetails,
+					[]string{platform.ProjectWriter})
+				log.FailOnError(err, "Unable to provide access to [%s] to source project", destinationUser)
+			})
+
+			Step("Switch to destination project user", func() {
+				workflowServiceAccount.SwitchToServiceAccount(destinationUser)
+			})
+
+			Step("Create Restore from the latest backup Id with access to source project", func() {
 				defer func() {
 					err := SetSourceKubeConfig()
 					log.FailOnError(err, "failed to switch context to source cluster")
@@ -145,8 +172,7 @@ var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}",
 				CheckforClusterSwitch()
 				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Restore Failed")
-				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
-				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+				log.Infof("Restore created successfully with ID - [%s]", WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
 			})
 		}
 

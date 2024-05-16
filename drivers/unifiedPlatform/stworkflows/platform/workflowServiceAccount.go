@@ -16,8 +16,9 @@ type WorkflowServiceAccount struct {
 }
 
 type SeviceAccount struct {
-	Token    string
-	RoleName []string
+	Token       string
+	RoleName    []string
+	UserDetails automationModels.V1ServiceAccount
 }
 
 const (
@@ -40,8 +41,9 @@ func (svcUser *WorkflowServiceAccount) CreateServiceAccount(saName string, roleN
 	}
 	log.Infof("Token for [%s] is [%s]", saName, token)
 	svcUser.UserRoles[saName] = SeviceAccount{
-		Token:    token,
-		RoleName: roleName,
+		Token:       token,
+		RoleName:    roleName,
+		UserDetails: userDetails.Create,
 	}
 
 	return svcUser, nil
