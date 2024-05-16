@@ -155,7 +155,7 @@ var _ = Describe("{IncreasePVCby1gb}", func() {
 	It("Deploy and Validate DataService", func() {
 		Step("Create a PDS Namespace", func() {
 			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
-			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			WorkflowNamespace.TargetCluster = &WorkflowTargetCluster
 			workFlowTemplates.Platform = WorkflowPlatform
 			WorkflowNamespace.Namespaces = make(map[string]string)
 			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
@@ -202,7 +202,7 @@ var _ = Describe("{GetPVCFullCondition}", func() {
 	It("Deploy and Validate DataService", func() {
 		Step("Create a PDS Namespace", func() {
 			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
-			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			WorkflowNamespace.TargetCluster = &WorkflowTargetCluster
 			workFlowTemplates.Platform = WorkflowPlatform
 			WorkflowNamespace.Namespaces = make(map[string]string)
 			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)

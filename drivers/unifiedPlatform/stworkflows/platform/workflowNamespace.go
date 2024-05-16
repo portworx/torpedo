@@ -12,7 +12,7 @@ import (
 
 type WorkflowNamespace struct {
 	Namespaces    map[string]string
-	TargetCluster WorkflowTargetCluster
+	TargetCluster *WorkflowTargetCluster
 }
 
 const (

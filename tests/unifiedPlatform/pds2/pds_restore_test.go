@@ -495,7 +495,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 	It("Deploy, Validate and RunWorkloads on DataService", func() {
 		Step("Create a PDS Namespace", func() {
 			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
-			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			WorkflowNamespace.TargetCluster = &WorkflowTargetCluster
 			WorkflowNamespace.Namespaces = make(map[string]string)
 			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
 			log.FailOnError(err, "Unable to create namespace")

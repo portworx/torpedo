@@ -133,7 +133,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 	PDS_DEFAULT_NAMESPACE = "pds-namespace-" + RandomString(5)
 
 	Step("Create a namespace for PDS", func() {
-		WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+		WorkflowNamespace.TargetCluster = &WorkflowTargetCluster
 		WorkflowNamespace.Namespaces = make(map[string]string)
 		_, err := WorkflowNamespace.CreateNamespaces(PDS_DEFAULT_NAMESPACE)
 		log.FailOnError(err, "Unable to create namespace")
@@ -155,7 +155,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 
 	Step("Creating all PDS related structs", func() {
 
-		WorkflowNamespaceDestination.TargetCluster = WorkflowTargetClusterDestination
+		WorkflowNamespaceDestination.TargetCluster = &WorkflowTargetClusterDestination
 		WorkflowNamespaceDestination.Namespaces = make(map[string]string)
 
 		log.Infof("Creating data service struct")
