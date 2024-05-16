@@ -162,7 +162,7 @@ var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}",
 			})
 
 			Step("Switch to user with access to both project", func() {
-				workflowServiceAccount.SwitchToServiceAccount(bothAccess)
+				workflowServiceAccount.SwitchToAdmin()
 			})
 
 			Step("Create Restore from the latest backup Id with access to source project", func() {

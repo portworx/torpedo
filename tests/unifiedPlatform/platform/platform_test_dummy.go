@@ -303,7 +303,7 @@ var _ = Describe("{NamepsaceDummyTest}", func() {
 		})
 
 		Step("Create a PDS Namespace", func() {
-			workflowNamespace.TargetCluster = workflowTargetCluster
+			workflowNamespace.TargetCluster = &workflowTargetCluster
 			workflowNamespace.Namespaces = make(map[string]string)
 			_, err := workflowNamespace.CreateNamespaces(namespace)
 			log.FailOnError(err, "Unable to create PDS namespace")
