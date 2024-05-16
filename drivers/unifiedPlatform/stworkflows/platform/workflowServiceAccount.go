@@ -21,8 +21,9 @@ type SeviceAccount struct {
 }
 
 const (
-	ProjectAdmin = "project-admin"
-	TenantAdmin  = "tenant-admin"
+	ProjectAdmin  = "project-admin"
+	TenantAdmin   = "tenant-admin"
+	ProjectWriter = "project-writer"
 )
 
 func (svcUser *WorkflowServiceAccount) CreateServiceAccount(saName string, roleName []string) (*WorkflowServiceAccount, error) {
@@ -83,6 +84,13 @@ func (svcUser *WorkflowServiceAccount) CreateRoleBindingForUser(userDetails auto
 			if role == ProjectAdmin {
 				allRoleBindings[ProjectAdmin] = append(allRoleBindings[ProjectAdmin], automationModels.V1RoleBinding{
 					RoleName:    ProjectAdmin,
+					ResourceIds: []string{svcUser.WorkflowProject.ProjectId},
+				})
+			}
+
+			if role == ProjectWriter {
+				allRoleBindings[ProjectWriter] = append(allRoleBindings[ProjectWriter], automationModels.V1RoleBinding{
+					RoleName:    ProjectWriter,
 					ResourceIds: []string{svcUser.WorkflowProject.ProjectId},
 				})
 			}

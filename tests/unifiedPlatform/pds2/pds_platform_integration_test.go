@@ -63,7 +63,7 @@ var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}",
 
 			_, err := workflowServiceAccount.CreateServiceAccount(
 				sourceUser,
-				[]string{},
+				[]string{platform.ProjectWriter},
 			)
 			log.FailOnError(err, "Unable to create Project User")
 			log.InfoD("Project User Account Created - [%s]", sourceUser)
@@ -74,7 +74,7 @@ var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}",
 
 			_, err := workflowServiceAccount.CreateServiceAccount(
 				destinationUser,
-				[]string{},
+				[]string{platform.ProjectWriter},
 			)
 			log.FailOnError(err, "Unable to create Project User")
 			log.InfoD("Project User Account Created - [%s]", destinationUser)

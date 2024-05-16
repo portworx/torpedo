@@ -6,9 +6,9 @@ import (
 )
 
 const (
-	tenantAdminRole    = "tenant-admin"
-	projectAdminRole   = "project-admin"
-	namespaceAdminRole = "namespace-admin" // This is for future usage
+	tenantAdminRole   = "tenant-admin"
+	projectAdminRole  = "project-admin"
+	projectWriterRole = "project-writer"
 )
 
 // CreatePlatformServiceAccountIamRoles creates IAM roles for given Namespace role binding and ActorId
@@ -32,12 +32,12 @@ func CreatePlatformServiceAccountIamRoles(iamName, actorId string, nsRoleBinding
 		iamInputs.Create.V1IAM.Config.AccessPolicy.Tenant = val
 	}
 
-	if val, ok := nsRoleBindings[projectAdminRole]; ok {
+	if val, ok := nsRoleBindings[projectWriterRole]; ok {
 		iamInputs.Create.V1IAM.Config.AccessPolicy.Project = val
 	}
 
-	if val, ok := nsRoleBindings[namespaceAdminRole]; ok {
-		iamInputs.Create.V1IAM.Config.AccessPolicy.Namespace = val
+	if val, ok := nsRoleBindings[projectAdminRole]; ok {
+		iamInputs.Create.V1IAM.Config.AccessPolicy.Project = val
 	}
 
 	iamModel, err := v2Components.Platform.CreateIamRoleBinding(iamInputs)
