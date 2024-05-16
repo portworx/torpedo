@@ -1932,17 +1932,8 @@ var _ = Describe("{RestartPXAndCheckIfVmBindMount}", func() {
 				stepLog = "Restart the PX on the node where VM was provisioned"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					errchan := make(chan error)
-					StopVolDriverAndWait([]node.Node{nodeObj}, &errchan)
-					if err := <-errchan; err != nil {
-						log.Errorf("Failed to stop PX on node: %s", nodeObj.Name)
-					}
-
-					StartVolDriverAndWait([]node.Node{nodeObj}, &errchan)
-					if err := <-errchan; err != nil {
-						log.Errorf("Failed to start PX on node: %s", nodeObj.Name)
-					}
-
+					StopVolDriverAndWait([]node.Node{nodeObj})
+					StartVolDriverAndWait([]node.Node{nodeObj})
 					log.InfoD("Succesfully restarted PX on the node: %s", nodeObj.Name)
 				})
 
