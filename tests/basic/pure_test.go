@@ -4319,14 +4319,19 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		}
 		listofBasePvc := make([]string, 0)
 		listofFadaPvc := make([]string, 0)
+		listofBasePvcNames := make([]string, 0)
+		listofFadaPvcNames := make([]string, 0)
 		//listofFbdaPvc := make([]string, 0)
 
-		createAndAppendPVC := func(appName string, scName string, namespace string, x int, listofPvc *[]string) {
+		createAndAppendPVC := func(appName string, scName string, namespace string, x int, listofPvcVolumeName []string, listofPvcName []string) {
 			pvcName := fmt.Sprintf("%s-%d", appName, x)
 			pvc, err := createPVC(pvcName, scName, "10", namespace)
 			log.FailOnError(err, "Failed to create pvc")
-			*listofPvc = append(*listofPvc, pvc.Spec.VolumeName)
-			fmt.Println("lIST OF pvc", *listofPvc)
+			fmt.Println("PVC created with volume name ", pvc.Spec.VolumeName)
+			listofPvcVolumeName = append(listofPvcVolumeName, pvc.Spec.VolumeName)
+			listofPvcName = append(listofPvcName, pvcName)
+			fmt.Println("lIST OF pvcvolume name ", listofPvcVolumeName)
+			fmt.Println("lIST OF pvc name ", listofPvcName)
 
 		}
 
@@ -4353,14 +4358,14 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			log.FailOnError(err, "Failed to create namespace")
 
 			for x := 0; x < numberOfPvc; x++ {
-				go createAndAppendPVC(fadaAppName, fadaScName, "fada-app-namespace", x, &listofFadaPvc)
+				go createAndAppendPVC(fadaAppName, fadaScName, "fada-app-namespace", x, listofFadaPvc, listofFadaPvcNames)
 				//go createAndAppendPVC(fbdaAppName, fbdaScName, "fbdaappnamespace", x, &listofFbdaPvc)
-				go createAndAppendPVC(baseAppName, baseScName, "base-app-namespace", x, &listofBasePvc)
+				go createAndAppendPVC(baseAppName, baseScName, "base-app-namespace", x, listofBasePvc, listofBasePvcNames)
 			}
 		})
 
-		checkPvcBound := func(listofPvc *[]string, namespace string) {
-			for _, pvcName := range *listofPvc {
+		checkPvcBound := func(listofPvc []string, namespace string) {
+			for _, pvcName := range listofPvc {
 				_, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
 				log.FailOnError(err, "Failed to get pvc")
 				err = Inst().S.WaitForSinglePVCToBound(pvcName, namespace, 0)
@@ -4370,9 +4375,9 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		stepLog = "Validate if PVC are created and bounded"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			checkPvcBound(&listofBasePvc, "fada-app-namespace")
+			checkPvcBound(listofBasePvcNames, "fada-app-namespace")
 			//checkPvcBound(listofFbdaPvc, "fbda-app-namespace")
-			checkPvcBound(&listofFadaPvc, "base-app-namespace")
+			checkPvcBound(listofFadaPvcNames, "base-app-namespace")
 
 		})
 		checkVolumesExistinFA := func(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, pvcFadaMap map[string]bool, NoVolume bool) error {
@@ -4437,11 +4442,11 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			log.InfoD(stepLog)
 
 			log.InfoD("Delete pvc from fada-app-namespace")
-			DeletePvcGroup(listofFadaPvc, "fada-app-namespace")
+			DeletePvcGroup(listofFadaPvcNames, "fada-app-namespace")
 			//log.InfoD("Delete pvc from fbdaappnamespace")
 			//DeletePvcGroup(listofFbdaPvc, "fbdaappnamespace")
 			log.InfoD("Delete pvc from base-app-namespace")
-			DeletePvcGroup(listofBasePvc, "base-app-namespace")
+			DeletePvcGroup(listofBasePvcNames, "base-app-namespace")
 
 			pvcFadanotExistMap := make(map[string]bool)
 			for _, volumeName := range listofFadaPvc {
