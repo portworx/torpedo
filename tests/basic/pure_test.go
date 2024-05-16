@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
 
@@ -4265,6 +4264,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		fadaAppName := "fada-volume-sc"
 		//fbdaAppName := "fbda-volume-sc"
 		flashArrays, err := GetFADetailsUsed()
+		//flashBlades, err := GetFBDetailsFromCluster()
 		log.FailOnError(err, "Failed to get FA details used")
 		log.InfoD("Starting the test CreateAndValidatePVCWithIopsAndBandwidth")
 		stepLog := "Create storage class with max iops and max bandwidth for Normal Portworx Volumes , FADA and FBDA Pvc Deployment"
@@ -4309,8 +4309,6 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			log.InfoD("Storage class [%s] for FBDA is created", fbdaScName)
 		})
 		createPVC := func(pvcName string, scName string, pvcSize string, ns string) error {
-			log.InfoD("checking if entered create pvc loop")
-
 			size, err := resource.ParseQuantity(pvcSize)
 			if err != nil {
 				return fmt.Errorf("failed to parse pvc size: %s", pvcSize)
@@ -4324,10 +4322,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		listofFadaPvc := make([]string, 0)
 		//listofFbdaPvc := make([]string, 0)
 
-		createAndAppendPVC := func(appName, scName, namespace string, x int, listofPvc *[]string) {
-			log.InfoD("checking if entered createandappendpvc loop")
+		createAndAppendPVC := func(appName string, scName string, namespace string, x int, listofPvc *[]string) {
 			pvcName := fmt.Sprintf("%s-%d", appName, x)
-			namespace = fmt.Sprintf("%s-%d", namespace, x)
 			err := createPVC(pvcName, scName, "10", namespace)
 			log.FailOnError(err, "Failed to create pvc")
 			*listofPvc = append(*listofPvc, pvcName)
@@ -4434,6 +4430,17 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 
 			err := checkVolumesExistinFA(flashArrays, listofFadaPvc, make(map[string]bool), true)
 			log.FailOnError(err, "Failed to check if volumes exist in FA")
+			//for _, fb := range flashBlades {
+			//	for _, volumeName := range listofFbdaPvc {
+			//	fbClient, err := flashblade.NewClient(fb.MgmtEndPoint, "", "", fb.APIToken,
+			//		"", false, false, "", nil)
+			//
+			//	if err != nil {
+			//		return err
+			//	}
+			//	IsFileSystemExists(fbClient,volumeName )
+			//
+			//}
 		})
 
 	})

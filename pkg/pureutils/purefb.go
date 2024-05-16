@@ -19,7 +19,7 @@ func PureCreateFbClientAndConnect(fbMgmtEndpoint string, apiToken string) (*flas
 // GetFAMgmtEndPoints , Get Lists of all management Endpoints from FB Secrets
 func GetFBMgmtEndPoints(secret PXPureSecret) []string {
 	mgmtEndpoints := []string{}
-	for _, fbDetails := range secret.Arrays {
+	for _, fbDetails := range secret.Blades {
 		mgmtEndpoints = append(mgmtEndpoints, fbDetails.MgmtEndPoint)
 	}
 	return mgmtEndpoints
@@ -40,7 +40,7 @@ func GetFBClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flashblade
 
 // GetApiTokenForMgmtEndpoints Returns API token for Mgmt Endpoints
 func GetApiTokenForFbMgmtEndpoints(secret PXPureSecret, mgmtEndPoint string) string {
-	for _, faDetails := range secret.Arrays {
+	for _, faDetails := range secret.Blades {
 		if faDetails.MgmtEndPoint == mgmtEndPoint {
 			return faDetails.APIToken
 		}
