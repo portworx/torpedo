@@ -23,6 +23,7 @@ var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}",
 		pdsBackupConfigName    string
 		restoreNamespace       string
 		restoreName            string
+		bothAccess             string
 		err                    error
 	)
 
@@ -30,6 +31,7 @@ var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}",
 		StartPDSTorpedoTest("BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers", "Create backup and restore across different project using only project users", nil, 0)
 		sourceUser = "source-user-" + RandomString(5)
 		destinationUser = "destination-user-" + RandomString(5)
+		bothAccess = "both-access-" + RandomString(5)
 		workflowServiceAccount.UserRoles = make(map[string]platform.SeviceAccount)
 		WorkflowPDSRestore.Destination = &WorkflowNamespaceDestination
 	})
@@ -59,7 +61,7 @@ var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}",
 		})
 
 		Step("Create project user for source Project", func() {
-			workflowServiceAccount.WorkflowProject = WorkflowProject
+			workflowServiceAccount.WorkflowProjects = []*platform.WorkflowProject{&WorkflowProject}
 
 			_, err := workflowServiceAccount.CreateServiceAccount(
 				sourceUser,
@@ -70,10 +72,21 @@ var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}",
 		})
 
 		Step("Create project user for destination Project", func() {
-			workflowServiceAccount.WorkflowProject = destinationProject
+			workflowServiceAccount.WorkflowProjects = []*platform.WorkflowProject{&destinationProject}
 
 			_, err := workflowServiceAccount.CreateServiceAccount(
 				destinationUser,
+				[]string{platform.ProjectWriter},
+			)
+			log.FailOnError(err, "Unable to create Project User")
+			log.InfoD("Project User Account Created - [%s]", destinationUser)
+		})
+
+		Step("Create project user for destination Project", func() {
+			workflowServiceAccount.WorkflowProjects = []*platform.WorkflowProject{&destinationProject, &WorkflowProject}
+
+			_, err := workflowServiceAccount.CreateServiceAccount(
+				bothAccess,
 				[]string{platform.ProjectWriter},
 			)
 			log.FailOnError(err, "Unable to create Project User")
@@ -148,20 +161,8 @@ var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}",
 				dash.VerifyFatal(strings.Contains(err.Error(), "403 Forbidden"), true, "Create restore without having access to source project - 403 Forbidden")
 			})
 
-			Step("Switch to admin user", func() {
-				workflowServiceAccount.SwitchToAdmin()
-			})
-
-			Step("Provide user access to the source project", func() {
-				workflowServiceAccount.WorkflowProject = WorkflowProject
-				_, err = workflowServiceAccount.CreateRoleBindingForUser(
-					workflowServiceAccount.UserRoles[destinationUser].UserDetails,
-					[]string{platform.ProjectWriter})
-				log.FailOnError(err, "Unable to provide access to [%s] to source project", destinationUser)
-			})
-
-			Step("Switch to destination project user", func() {
-				workflowServiceAccount.SwitchToServiceAccount(destinationUser)
+			Step("Switch to user with access to both project", func() {
+				workflowServiceAccount.SwitchToServiceAccount(bothAccess)
 			})
 
 			Step("Create Restore from the latest backup Id with access to source project", func() {

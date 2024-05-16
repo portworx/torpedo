@@ -196,7 +196,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 
 		Step("Create project user", func() {
 			workflowServiceAccount.UserRoles = make(map[string]platform.SeviceAccount)
-			workflowServiceAccount.WorkflowProject = workflowProject
+			workflowServiceAccount.WorkflowProjects = []*platform.WorkflowProject{&workflowProject}
 
 			_, err := workflowServiceAccount.CreateServiceAccount(
 				user,

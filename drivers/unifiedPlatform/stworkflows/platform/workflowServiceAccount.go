@@ -11,8 +11,8 @@ import (
 )
 
 type WorkflowServiceAccount struct {
-	UserRoles       map[string]SeviceAccount
-	WorkflowProject WorkflowProject
+	UserRoles        map[string]SeviceAccount
+	WorkflowProjects []*WorkflowProject // Make sure all projects belong to same tenant
 }
 
 type SeviceAccount struct {
@@ -28,7 +28,7 @@ const (
 )
 
 func (svcUser *WorkflowServiceAccount) CreateServiceAccount(saName string, roleName []string) (*WorkflowServiceAccount, error) {
-	userDetails, err := platformLibs.CreateServiceAccountForRBAC(saName, svcUser.WorkflowProject.Platform.TenantId)
+	userDetails, err := platformLibs.CreateServiceAccountForRBAC(saName, svcUser.WorkflowProjects[0].Platform.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -71,29 +71,36 @@ func (svcUser *WorkflowServiceAccount) SwitchToAdmin() error {
 }
 
 func (svcUser *WorkflowServiceAccount) CreateRoleBindingForUser(userDetails automationModels.V1ServiceAccount, roleName []string) (string, error) {
+	var allProjectIds []string
+
 	actorID := *userDetails.Meta.Uid
 	log.Infof("Client ID - [%s], Client Secret [%s]", *userDetails.Config.ClientId, *userDetails.Config.ClientSecret)
+
+	for _, projectDetails := range svcUser.WorkflowProjects {
+		allProjectIds = append(allProjectIds, projectDetails.ProjectId)
+	}
+
 	if len(roleName) > 0 {
 		allRoleBindings := make(map[string][]automationModels.V1RoleBinding)
 		for _, role := range roleName {
 			if role == TenantAdmin {
 				allRoleBindings[TenantAdmin] = append(allRoleBindings[TenantAdmin], automationModels.V1RoleBinding{
 					RoleName:    TenantAdmin,
-					ResourceIds: []string{svcUser.WorkflowProject.Platform.TenantId},
+					ResourceIds: allProjectIds,
 				})
 			}
 
 			if role == ProjectAdmin {
 				allRoleBindings[ProjectAdmin] = append(allRoleBindings[ProjectAdmin], automationModels.V1RoleBinding{
 					RoleName:    ProjectAdmin,
-					ResourceIds: []string{svcUser.WorkflowProject.ProjectId},
+					ResourceIds: allProjectIds,
 				})
 			}
 
 			if role == ProjectWriter {
 				allRoleBindings[ProjectWriter] = append(allRoleBindings[ProjectWriter], automationModels.V1RoleBinding{
 					RoleName:    ProjectWriter,
-					ResourceIds: []string{svcUser.WorkflowProject.ProjectId},
+					ResourceIds: allProjectIds,
 				})
 			}
 		}
@@ -104,7 +111,7 @@ func (svcUser *WorkflowServiceAccount) CreateRoleBindingForUser(userDetails auto
 		}
 		log.Infof("created iam role with name %s", *iamRoles.Create.Meta.Name)
 	}
-	tokenRes, err := platformLibs.GenerateServiceAccountAccessToken(svcUser.WorkflowProject.Platform.TenantId, *userDetails.Config.ClientId, *userDetails.Config.ClientSecret)
+	tokenRes, err := platformLibs.GenerateServiceAccountAccessToken(svcUser.WorkflowProjects[0].Platform.TenantId, *userDetails.Config.ClientId, *userDetails.Config.ClientSecret)
 	if err != nil {
 		return "", err
 	}
