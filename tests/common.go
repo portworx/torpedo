@@ -2502,15 +2502,15 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 	}
 
 	/* Removing Data error validation till PB-6271 is resolved.
-	if allErrors != "" {
-		if IsReplacePolicySetToDelete {
-			log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
-			IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
-			return nil
-		} else {
-			return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
-		}
-	}
+	   if allErrors != "" {
+	   	if IsReplacePolicySetToDelete {
+	   		log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
+	   		IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
+	   		return nil
+	   	} else {
+	   		return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
+	   	}
+	   }
 	*/
 
 	return nil
@@ -12570,6 +12570,30 @@ func GetMultipathDeviceIDsOnNode(n *node.Node) ([]string, error) {
 		multiPathDev = append(multiPathDev, eachMultipathDev.DevId)
 	}
 	return multiPathDev, nil
+}
+func CreateBaseStorageClass(scName string, params map[string]string) (*storageapi.StorageClass, error) {
+	param := make(map[string]string)
+	for key, value := range params {
+		param[key] = value
+	}
+	v1obj := metav1.ObjectMeta{
+		Name: scName,
+	}
+	reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+	bindMode := storageapi.VolumeBindingImmediate
+	scObj := storageapi.StorageClass{
+		ObjectMeta:        v1obj,
+		Provisioner:       k8s.PortworxVolumeProvisioner,
+		Parameters:        params,
+		ReclaimPolicy:     &reclaimPolicyDelete,
+		VolumeBindingMode: &bindMode,
+	}
+	k8sStorage := schedstorage.Instance()
+	sc, err := k8sStorage.CreateStorageClass(&scObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CsiSnapshot storage class: %s.Error: %v", scName, err)
+	}
+	return sc, err
 }
 
 // CreateFlashStorageClass Creates storage class for Purity Backend

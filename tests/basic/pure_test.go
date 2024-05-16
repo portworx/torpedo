@@ -4238,3 +4238,196 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 	})
 
 })
+var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
+	/*
+				https://purestorage.atlassian.net/browse/PTX-23995
+		                1. Create storage class with max iops and max bandwidth for Normal Portworx Volumes , FADA and FBDA Pvc Deployment
+				2. Create 10 PVC each with respective storage class parallely
+				3. Validate if PVC are created and bounded
+				4. Validate if corresponding portworx volumes are created in FA backend
+				5. Validate if corresponding portworx volumes are created in FB backend
+				6. Delete the pvc and volume and check if volumes got deleted in backend as well
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateAndValidatePVCWithIopsAndBandwidth",
+			"Create PVCs with updated MaxBandwidth / Max IOPS ( update the storage class )",
+			nil, 0)
+	})
+	itLog := "CreateAndValidatePVCWithIopsAndBandwidth"
+	It(itLog, func() {
+		numberOfPvc := 10
+		baseScName := "Base-portworx-volume-sc"
+		fadaScName := "fada-volume-sc"
+		fbdaScName := "fbda-volume-sc"
+		baseAppName := "Base-portworx-volume-sc"
+		fadaAppName := "fada-volume-sc"
+		//fbdaAppName := "fbda-volume-sc"
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "Failed to get FA details used")
+		log.InfoD("Starting the test CreateAndValidatePVCWithIopsAndBandwidth")
+		stepLog := "Create storage class with max iops and max bandwidth for Normal Portworx Volumes , FADA and FBDA Pvc Deployment"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			BaseParams := make(map[string]string)
+			BaseParams["repl"] = "1"
+			BaseParams["max_iops"] = "1000"
+			BaseParams["bandwidth"] = "1G"
+
+			_, err := CreateBaseStorageClass(baseScName, BaseParams)
+			log.FailOnError(err, "Failed to create base storage class")
+
+			faParams := make(map[string]string)
+			faParams["repl"] = "1"
+			faParams["max_iops"] = "1000"
+			faParams["bandwidth"] = "1G"
+			faParams["fs"] = "ext4"
+
+			var allowVolExpansionFA bool = true
+			err = CreateFlashStorageClass(fadaScName,
+				"pure_block",
+				v1.PersistentVolumeReclaimDelete,
+				faParams, nil, &allowVolExpansionFA,
+				storageApi.VolumeBindingImmediate,
+				nil)
+			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", fadaScName))
+
+			fbParams := make(map[string]string)
+			fbParams["pure_export_rules"] = "*(rw)"
+			mountOptions := []string{"nfsvers=4.1", "tcp"}
+
+			err = CreateFlashStorageClass(fbdaScName,
+				"pure_file",
+				v1.PersistentVolumeReclaimDelete,
+				fbParams, mountOptions, &allowVolExpansionFA,
+				storageApi.VolumeBindingImmediate,
+				nil)
+			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", fbdaScName))
+		})
+		createPVC := func(pvcName string, scName string, pvcSize string, ns string) error {
+
+			size, err := resource.ParseQuantity(pvcSize)
+			if err != nil {
+				return fmt.Errorf("failed to parse pvc size: %s", pvcSize)
+			}
+			pvcClaimSpec := k8s.MakePVC(size, ns, pvcName, scName)
+			_, err = k8sCore.CreatePersistentVolumeClaim(pvcClaimSpec)
+			return err
+		}
+		listofBasePvc := make([]string, 0)
+		listofFadaPvc := make([]string, 0)
+		//listofFbdaPvc := make([]string, 0)
+
+		createAndAppendPVC := func(appName, scName, namespace string, x int, listofPvc *[]string) {
+			pvcName := fmt.Sprintf("%s-%d", appName, x)
+			namespace = fmt.Sprintf("%s-%d", namespace, x)
+			err := createPVC(pvcName, scName, "10", namespace)
+			log.FailOnError(err, "Failed to create pvc")
+			*listofPvc = append(*listofPvc, pvcName)
+		}
+
+		createNameSpace := func(namespace string, label map[string]string) error {
+			nsSpec := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   namespace,
+					Labels: label,
+				},
+			}
+			_, err := k8sCore.CreateNamespace(nsSpec)
+			return err
+		}
+
+		Step("Create Namespace and then create 10 PVC each with respective storage class parallely", func() {
+			err := createNameSpace("fadaappnamespace", map[string]string{"app": "fadaapp"})
+			log.FailOnError(err, "Failed to create namespace")
+			err = createNameSpace("fbdaappnamespace", map[string]string{"app": "fbdaapp"})
+			log.FailOnError(err, "Failed to create namespace")
+			err = createNameSpace("baseappnamespace", map[string]string{"app": "baseapp"})
+			log.FailOnError(err, "Failed to create namespace")
+
+			for x := 0; x < numberOfPvc; x++ {
+				go createAndAppendPVC(fadaAppName, fadaScName, "fadaappnamespace", x, &listofFadaPvc)
+				//go createAndAppendPVC(fbdaAppName, fbdaScName, "fbdaappnamespace", x, &listofFbdaPvc)
+				go createAndAppendPVC(baseAppName, baseScName, "baseappnamespace", x, &listofBasePvc)
+			}
+		})
+
+		checkPvcBound := func(listofPvc []string, namespace string) {
+			for _, pvcName := range listofPvc {
+				_, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+				log.FailOnError(err, "Failed to get pvc")
+				err = Inst().S.WaitForSinglePVCToBound(pvcName, namespace, 0)
+				log.FailOnError(err, "Failed to wait for pvc to bound")
+			}
+		}
+		Step("Validate if PVC are created and bounded", func() {
+			checkPvcBound(listofBasePvc, "fadaappnamespace")
+			//checkPvcBound(listofFbdaPvc, "fbdaappnamespace")
+			checkPvcBound(listofFadaPvc, "baseappnamespace")
+
+		})
+		checkVolumesExistinFA := func(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, pvcFadaMap map[string]bool, NoVolume bool) error {
+			for _, fa := range flashArrays {
+				for _, volumeName := range listofFadaPvc {
+					if pvcFadaMap[volumeName] {
+						continue
+					}
+					faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
+					if err != nil {
+						return fmt.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+					}
+					volName, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
+					if err != nil {
+						return fmt.Errorf("Failed to get volume name for volume [%v]", volumeName)
+					}
+					log.Infof("Name of the Volume is [%v]", volumeName)
+					isExists, err := pureutils.IsFAVolumeExists(faClient, volName)
+					if isExists {
+						log.Infof("Volume [%v] exists on FA [%v]", volumeName, fa.MgmtEndPoint)
+						pvcFadaMap[volumeName] = true
+					}
+				}
+			}
+			for key, value := range pvcFadaMap {
+				if NoVolume {
+					if value {
+						return fmt.Errorf("PVC %s exists", key)
+					}
+				} else {
+					if !value {
+						return fmt.Errorf("PVC %s does not exist", key)
+					}
+				}
+			}
+			return nil
+		}
+		Step("check if the FA and FB volumes are created in the backend", func() {
+			pvcFadaMap := make(map[string]bool)
+			for _, volumeName := range listofFadaPvc {
+				pvcFadaMap[volumeName] = false
+			}
+			err := checkVolumesExistinFA(flashArrays, listofFadaPvc, pvcFadaMap, false)
+			log.FailOnError(err, "Failed to check if volumes exist in FA")
+
+		})
+		DeletePvcGroup := func(pvclist []string, namespace string) {
+			for _, pvcName := range pvclist {
+				err := k8sCore.DeletePersistentVolumeClaim(pvcName, namespace)
+				log.FailOnError(err, "Failed to delete pvc")
+			}
+		}
+		Step("Delete the pvc and volume and check if volumes got deleted in backend as well", func() {
+
+			log.InfoD("Delete pvc from fadaappnamespace")
+			DeletePvcGroup(listofFadaPvc, "fadaappnamespace")
+			//log.InfoD("Delete pvc from fbdaappnamespace")
+			//DeletePvcGroup(listofFbdaPvc, "fbdaappnamespace")
+			log.InfoD("Delete pvc from baseappnamespace")
+			DeletePvcGroup(listofBasePvc, "baseappnamespace")
+
+			err := checkVolumesExistinFA(flashArrays, listofFadaPvc, make(map[string]bool), true)
+			log.FailOnError(err, "Failed to check if volumes exist in FA")
+		})
+
+	})
+
+})
