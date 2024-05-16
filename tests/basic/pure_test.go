@@ -4314,7 +4314,6 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				return fmt.Errorf("failed to parse pvc size: %s", pvcSize)
 			}
 			pvcClaimSpec := k8s.MakePVC(size, ns, pvcName, scName)
-			fmt.Println("pvc spec:", pvcClaimSpec.Spec)
 			_, err = k8sCore.CreatePersistentVolumeClaim(pvcClaimSpec)
 			return err
 		}
@@ -4355,8 +4354,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			}
 		})
 
-		checkPvcBound := func(listofPvc []string, namespace string) {
-			for _, pvcName := range listofPvc {
+		checkPvcBound := func(listofPvc *[]string, namespace string) {
+			for _, pvcName := range *listofPvc {
 				_, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
 				log.FailOnError(err, "Failed to get pvc")
 				err = Inst().S.WaitForSinglePVCToBound(pvcName, namespace, 0)
@@ -4364,9 +4363,9 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			}
 		}
 		Step("Validate if PVC are created and bounded", func() {
-			checkPvcBound(listofBasePvc, "fada-app-namespace")
+			checkPvcBound(&listofBasePvc, "fada-app-namespace")
 			//checkPvcBound(listofFbdaPvc, "fbda-app-namespace")
-			checkPvcBound(listofFadaPvc, "base-app-namespace")
+			checkPvcBound(&listofFadaPvc, "base-app-namespace")
 
 		})
 		checkVolumesExistinFA := func(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, pvcFadaMap map[string]bool, NoVolume bool) error {
