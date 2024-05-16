@@ -27,8 +27,6 @@ var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}",
 
 	JustBeforeEach(func() {
 		StartPDSTorpedoTest("BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers", "Create backup and restore across different project using only project users", nil, 0)
-		restoreNamespace = "restore-" + RandomString(5)
-		restoreName = "restore-" + RandomString(5)
 		sourceUser = "source-user-" + RandomString(5)
 		destinationUser = "destination-user-" + RandomString(5)
 		workflowServiceAccount.UserRoles = make(map[string]platform.SeviceAccount)
@@ -56,6 +54,7 @@ var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}",
 			)
 			log.FailOnError(err, "Unable to associate Templates to Project")
 			log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+			WorkflowTargetClusterDestination.Project = destinationProject
 		})
 
 		Step("Create project user for source Project", func() {
@@ -108,6 +107,30 @@ var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}",
 				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
 				err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
 				log.FailOnError(err, "Error occured while waiting for backup to complete")
+			})
+
+			Step("Create namespaces for restore", func() {
+				workflowServiceAccount.SwitchToAdmin()
+
+				restoreNamespace = "restore-" + RandomString(5)
+				restoreName = "restore-" + RandomString(5)
+
+				WorkflowNamespaceDestination.CreateNamespaces(PDS_DEFAULT_NAMESPACE)
+				WorkflowNamespaceDestination.CreateNamespaces(restoreNamespace)
+			})
+
+			Step("Associate namespaces to destination project", func() {
+				err := destinationProject.Associate(
+					[]string{},
+					[]string{WorkflowNamespaceDestination.Namespaces[restoreNamespace], WorkflowNamespaceDestination.Namespaces[PDS_DEFAULT_NAMESPACE]},
+					[]string{},
+					[]string{},
+					[]string{},
+					[]string{},
+				)
+				log.FailOnError(err, "Unable to associate Templates to Project")
+				log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+				WorkflowTargetClusterDestination.Project = destinationProject
 			})
 
 			Step("Switch to destination project user", func() {

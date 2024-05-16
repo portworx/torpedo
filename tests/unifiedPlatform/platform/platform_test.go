@@ -200,7 +200,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 
 			_, err := workflowServiceAccount.CreateServiceAccount(
 				user,
-				[]string{},
+				[]string{platform.ProjectWriter},
 			)
 			log.FailOnError(err, "Unable to create Project User")
 			log.InfoD("Project User Account Created - [%s]", user)
