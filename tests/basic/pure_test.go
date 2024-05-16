@@ -4308,14 +4308,14 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", fbdaScName))
 			log.InfoD("Storage class [%s] for FBDA is created", fbdaScName)
 		})
-		createPVC := func(pvcName string, scName string, pvcSize string, ns string) error {
+		createPVC := func(pvcName string, scName string, pvcSize string, ns string) (*v1.PersistentVolumeClaim, error) {
 			size, err := resource.ParseQuantity(pvcSize)
 			if err != nil {
-				return fmt.Errorf("failed to parse pvc size: %s", pvcSize)
+				return nil, fmt.Errorf("failed to parse pvc size: %s", pvcSize)
 			}
 			pvcClaimSpec := k8s.MakePVC(size, ns, pvcName, scName)
-			_, err = k8sCore.CreatePersistentVolumeClaim(pvcClaimSpec)
-			return err
+			pvc, err := k8sCore.CreatePersistentVolumeClaim(pvcClaimSpec)
+			return pvc, err
 		}
 		listofBasePvc := make([]string, 0)
 		listofFadaPvc := make([]string, 0)
@@ -4323,9 +4323,9 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 
 		createAndAppendPVC := func(appName string, scName string, namespace string, x int, listofPvc *[]string) {
 			pvcName := fmt.Sprintf("%s-%d", appName, x)
-			err := createPVC(pvcName, scName, "10", namespace)
+			pvc, err := createPVC(pvcName, scName, "10", namespace)
 			log.FailOnError(err, "Failed to create pvc")
-			*listofPvc = append(*listofPvc, pvcName)
+			*listofPvc = append(*listofPvc, pvc.Spec.VolumeName)
 		}
 
 		createNameSpace := func(namespace string, label map[string]string) error {
@@ -4375,29 +4375,30 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 						continue
 					}
 					faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
-					if err != nil {
-						return fmt.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
-					}
+					log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
+
 					volName, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
-					if err != nil {
-						return fmt.Errorf("Failed to get volume name for volume [%v]", volumeName)
-					}
-					log.Infof("Name of the Volume is [%v]", volumeName)
-					isExists, err := pureutils.IsFAVolumeExists(faClient, volName)
-					if isExists {
-						log.Infof("Volume [%v] exists on FA [%v]", volumeName, fa.MgmtEndPoint)
+					if volName != "" {
+						log.Infof("Volume [%v] exists on FA [%v]", volName, fa.MgmtEndPoint)
 						pvcFadaMap[volumeName] = true
+
+					} else if err != nil && volName == "" {
+						log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v] on FA [%v]", volumeName, fa.MgmtEndPoint))
+
+					} else {
+						log.Infof("Volume [%v] does not exist on FA [%v]", volumeName, fa.MgmtEndPoint)
 					}
+
 				}
 			}
-			for key, value := range pvcFadaMap {
+			for FadaVol, volStatus := range pvcFadaMap {
 				if NoVolume {
-					if value {
-						return fmt.Errorf("PVC %s exists", key)
+					if volStatus {
+						return fmt.Errorf("PVC %s exists in FA", FadaVol)
 					}
 				} else {
-					if !value {
-						return fmt.Errorf("PVC %s does not exist", key)
+					if !volStatus {
+						return fmt.Errorf("PVC %s does not exist", FadaVol)
 					}
 				}
 			}
@@ -4409,7 +4410,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				pvcFadaMap[volumeName] = false
 			}
 			err := checkVolumesExistinFA(flashArrays, listofFadaPvc, pvcFadaMap, false)
-			log.FailOnError(err, "Failed to check if volumes exist in FA")
+			log.FailOnError(err, "Failed to check if volumes created  exist in FA")
 
 		})
 		DeletePvcGroup := func(pvclist []string, namespace string) {
@@ -4428,7 +4429,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			DeletePvcGroup(listofBasePvc, "base-app-namespace")
 
 			err := checkVolumesExistinFA(flashArrays, listofFadaPvc, make(map[string]bool), true)
-			log.FailOnError(err, "Failed to check if volumes exist in FA")
+			log.FailOnError(err, "Failed to check if volumes which needed to be deleted still exist in FA")
 			//for _, fb := range flashBlades {
 			//	for _, volumeName := range listofFbdaPvc {
 			//	fbClient, err := flashblade.NewClient(fb.MgmtEndPoint, "", "", fb.APIToken,
