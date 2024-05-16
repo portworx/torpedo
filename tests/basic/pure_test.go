@@ -4378,8 +4378,6 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			if pvc.Spec.VolumeName == "" {
 				log.Errorf("volume name empty for [%v]", p)
 
-			} else {
-				listofFadaPvc = append(listofFadaPvc, pvc.Spec.VolumeName)
 			}
 			listofFadaPvc = append(listofFadaPvc, p.Spec.VolumeName)
 			listofFadaPvcNames = append(listofFadaPvcNames, p.Name)
@@ -4387,18 +4385,15 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		fmt.Println("list of fada volume name", listofFadaPvc)
 		fmt.Println("list of fada pvc names", listofFadaPvcNames)
 
-		basepvcList, err := core.Instance().GetPersistentVolumeClaims("fada-app-namespace", nil)
-		log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", "fada-app-namespace"))
+		basepvcList, err := core.Instance().GetPersistentVolumeClaims("base-app-namespace", nil)
+		log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", "base-app-namespace"))
 		log.Infof("len of pvc items: %d", len(basepvcList.Items))
 		for _, p := range basepvcList.Items {
 			//few PVCs are getting empty volume name, this is workaround for the fix
-			pvc, err := core.Instance().GetPersistentVolumeClaim(p.Name, "fada-app-namespace")
-			log.FailOnError(err, fmt.Sprintf("error getting pvc [%s] from namespace [%s]", p.Name, "fada-app-namespace"))
+			pvc, err := core.Instance().GetPersistentVolumeClaim(p.Name, "base-app-namespace")
+			log.FailOnError(err, fmt.Sprintf("error getting pvc [%s] from namespace [%s]", p.Name, "base-app-namespace"))
 			if pvc.Spec.VolumeName == "" {
 				log.Errorf("volume name empty for [%v]", p)
-
-			} else {
-				listofBasePvc = append(listofBasePvc, pvc.Spec.VolumeName)
 			}
 			listofBasePvc = append(listofBasePvc, p.Spec.VolumeName)
 			listofBasePvcNames = append(listofBasePvcNames, p.Name)
