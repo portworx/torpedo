@@ -4507,6 +4507,13 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			log.InfoD("Delete pvc from base-app-namespace")
 			DeletePvcGroup(listofBasePvcNames, "base-app-namespace")
 
+			log.InfoD("Delete namespace fada-app-namespace")
+			err = core.Instance().DeleteNamespace("fada-app-namespace")
+			log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", "fada-app-namespace"))
+			log.InfoD("Delete namespace base-app-namespace")
+			err = core.Instance().DeleteNamespace("base-app-namespace")
+			log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", "base-app-namespace"))
+
 			pvcFadanotExistMap := make(map[string]bool)
 			for _, volumeName := range listofFadaPvc {
 				pvcFadanotExistMap[volumeName] = true
