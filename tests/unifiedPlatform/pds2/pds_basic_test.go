@@ -79,18 +79,15 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "error while getting Default TenantId")
 	})
 
-	steplog = "Get Default Project"
+	steplog = "Create default project"
 	Step(steplog, func() {
 		log.InfoD(steplog)
-		var err error
-		DEFAULT_PROJECT_NAME := "pds-project-" + RandomString(5)
 		WorkflowProject.Platform = WorkflowPlatform
-		WorkflowProject.ProjectName = DEFAULT_PROJECT_NAME
-		_, err = WorkflowProject.CreateProject()
-		log.FailOnError(err, "unable to create project")
-		ProjectId, err = WorkflowProject.GetDefaultProject(DEFAULT_PROJECT_NAME)
-		log.FailOnError(err, "Unable to get current project")
-		log.Infof("Current project ID - [%s]", ProjectId)
+		WorkflowProject.ProjectName = fmt.Sprintf("project-%s", utilities.RandomString(5))
+		workflowProject, err := WorkflowProject.CreateProject()
+		log.FailOnError(err, "Unable to create project")
+		log.InfoD("Project created with ID - [%s]", workflowProject.ProjectId)
+
 	})
 
 	steplog = "Register Target Cluster and Install PDS app"
