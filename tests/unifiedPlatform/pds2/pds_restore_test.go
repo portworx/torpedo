@@ -188,7 +188,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 				_, err := destinationProject.CreateProject()
 				log.FailOnError(err, "Unable to create project")
 				log.Infof("Project created with ID - [%s]", destinationProject.ProjectId)
-				WorkflowTargetClusterDestination.Project = destinationProject
+				WorkflowTargetClusterDestination.Project = &destinationProject
 			})
 
 			Step("Associate target cluster and restore namespace to Project", func() {
@@ -201,7 +201,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 					[]string{},
 				)
 				log.FailOnError(err, "Unable to associate Cluster to Project")
-				log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+				log.Infof("Associated Resources - [%+v]", destinationProject.AssociatedResources)
 			})
 
 			Step("Create Restore from the latest backup Id", func() {

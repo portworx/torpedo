@@ -93,7 +93,7 @@ var _ = BeforeSuite(func() {
 	steplog = "Register Target Cluster and Install PDS app"
 	Step(steplog, func() {
 		log.InfoD(steplog)
-		WorkflowTargetCluster.Project = WorkflowProject
+		WorkflowTargetCluster.Project = &WorkflowProject
 		log.Infof("Tenant ID [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
 		WorkflowTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane()
 		log.FailOnError(err, "Unable to register target cluster")
@@ -116,7 +116,7 @@ var _ = BeforeSuite(func() {
 		err := SetDestinationKubeConfig()
 		log.FailOnError(err, "Failed to switched to destination cluster")
 
-		WorkflowTargetClusterDestination.Project = WorkflowProject
+		WorkflowTargetClusterDestination.Project = &WorkflowProject
 		log.Infof("Tenant ID [%s]", WorkflowTargetClusterDestination.Project.Platform.TenantId)
 		WorkflowTargetClusterDestination, err := WorkflowTargetClusterDestination.RegisterToControlPlane()
 		log.FailOnError(err, "Unable to register target cluster")

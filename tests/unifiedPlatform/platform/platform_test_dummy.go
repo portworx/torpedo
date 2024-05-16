@@ -295,7 +295,7 @@ var _ = Describe("{NamepsaceDummyTest}", func() {
 		})
 
 		Step("Register Target Cluster", func() {
-			workflowTargetCluster.Project = workflowProject
+			workflowTargetCluster.Project = &workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
 			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane()
 			log.FailOnError(err, "Unable to register target cluster")
