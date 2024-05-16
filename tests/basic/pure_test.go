@@ -4326,6 +4326,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			pvc, err := createPVC(pvcName, scName, "10", namespace)
 			log.FailOnError(err, "Failed to create pvc")
 			*listofPvc = append(*listofPvc, pvc.Spec.VolumeName)
+			fmt.Println("lIST OF pvc", *listofPvc)
+
 		}
 
 		createNameSpace := func(namespace string, label map[string]string) error {
@@ -4339,7 +4341,10 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			return err
 		}
 
-		Step("Create Namespace and then create 10 PVC each with respective storage class parallely", func() {
+		stepLog = "Create Namespace and then create 10 PVC each with respective storage class parallely"
+
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			err := createNameSpace("fada-app-namespace", map[string]string{"app": "fadaapp"})
 			log.FailOnError(err, "Failed to create namespace")
 			err = createNameSpace("fbda-app-namespace", map[string]string{"app": "fbdaapp"})
@@ -4362,7 +4367,9 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				log.FailOnError(err, "Failed to wait for pvc to bound")
 			}
 		}
-		Step("Validate if PVC are created and bounded", func() {
+		stepLog = "Validate if PVC are created and bounded"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			checkPvcBound(&listofBasePvc, "fada-app-namespace")
 			//checkPvcBound(listofFbdaPvc, "fbda-app-namespace")
 			checkPvcBound(&listofFadaPvc, "base-app-namespace")
@@ -4370,6 +4377,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		})
 		checkVolumesExistinFA := func(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, pvcFadaMap map[string]bool, NoVolume bool) error {
 			for _, fa := range flashArrays {
+				fmt.Println("check what is listoffadapvc here", listofFadaPvc)
+				fmt.Println("check what is listoffadapvc pointer here", &listofFadaPvc)
 				for _, volumeName := range listofFadaPvc {
 					if pvcFadaMap[volumeName] {
 						continue
@@ -4406,7 +4415,9 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			}
 			return nil
 		}
-		Step("check if the FA and FB volumes are created in the backend", func() {
+		stepLog = "check if the FA and FB volumes are created in the backend"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			pvcFadaMap := make(map[string]bool)
 			for _, volumeName := range listofFadaPvc {
 				pvcFadaMap[volumeName] = false
@@ -4421,7 +4432,9 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				log.FailOnError(err, "Failed to delete pvc")
 			}
 		}
-		Step("Delete the pvc and volume and check if volumes got deleted in backend as well", func() {
+		stepLog = "Delete the pvc and volume and check if volumes got deleted in backend as well"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 
 			log.InfoD("Delete pvc from fada-app-namespace")
 			DeletePvcGroup(listofFadaPvc, "fada-app-namespace")
