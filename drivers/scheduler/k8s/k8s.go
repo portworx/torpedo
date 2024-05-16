@@ -5590,7 +5590,7 @@ func (k *K8s) createVirtualMachineObjects(
 				}
 			}
 			log.Infof("Sleeping for 30 seconds to let data volume settle")
-			time.Sleep(30 * time.Second)
+			time.Sleep(90 * time.Second)
 			vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, fmt.Errorf("failed to retrieve VM after creating/waiting for DataVolumes: %v", err)
