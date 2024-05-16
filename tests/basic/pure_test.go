@@ -4256,10 +4256,10 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 	itLog := "CreateAndValidatePVCWithIopsAndBandwidth"
 	It(itLog, func() {
 		numberOfPvc := 10
-		baseScName := "Base-portworx-volume-sc"
+		baseScName := "base-portworx-volume-sc"
 		fadaScName := "fada-volume-sc"
 		fbdaScName := "fbda-volume-sc"
-		baseAppName := "Base-portworx-volume-sc"
+		baseAppName := "base-portworx-volume-sc"
 		fadaAppName := "fada-volume-sc"
 		//fbdaAppName := "fbda-volume-sc"
 		flashArrays, err := GetFADetailsUsed()
