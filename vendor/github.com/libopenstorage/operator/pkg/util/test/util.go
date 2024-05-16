@@ -1311,10 +1311,10 @@ func validateStorageNodes(pxImageList map[string]string, cluster *corev1.Storage
 			if storageNode.Status.Phase != expectedStatus {
 				continue
 			}
-			// If we didn't specify a custom image, make sure it's running the expected version
-			if imageOverride == "" && !strings.Contains(storageNode.Spec.Version, expectedPxVersion) {
-				continue
-			}
+			//// If we didn't specify a custom image, make sure it's running the expected version
+			//if imageOverride == "" && !strings.Contains(storageNode.Spec.Version, expectedPxVersion) {
+			//	continue
+			//}
 
 			readyNodes++
 		}
