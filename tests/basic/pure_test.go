@@ -4364,9 +4364,9 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			}
 		}
 		Step("Validate if PVC are created and bounded", func() {
-			checkPvcBound(listofBasePvc, "fadaappnamespace")
-			//checkPvcBound(listofFbdaPvc, "fbdaappnamespace")
-			checkPvcBound(listofFadaPvc, "baseappnamespace")
+			checkPvcBound(listofBasePvc, "fada-app-namespace")
+			//checkPvcBound(listofFbdaPvc, "fbda-app-namespace")
+			checkPvcBound(listofFadaPvc, "base-app-namespace")
 
 		})
 		checkVolumesExistinFA := func(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, pvcFadaMap map[string]bool, NoVolume bool) error {
@@ -4421,12 +4421,12 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		}
 		Step("Delete the pvc and volume and check if volumes got deleted in backend as well", func() {
 
-			log.InfoD("Delete pvc from fadaappnamespace")
-			DeletePvcGroup(listofFadaPvc, "fadaappnamespace")
+			log.InfoD("Delete pvc from fada-app-namespace")
+			DeletePvcGroup(listofFadaPvc, "fada-app-namespace")
 			//log.InfoD("Delete pvc from fbdaappnamespace")
 			//DeletePvcGroup(listofFbdaPvc, "fbdaappnamespace")
-			log.InfoD("Delete pvc from baseappnamespace")
-			DeletePvcGroup(listofBasePvc, "baseappnamespace")
+			log.InfoD("Delete pvc from base-app-namespace")
+			DeletePvcGroup(listofBasePvc, "base-app-namespace")
 
 			err := checkVolumesExistinFA(flashArrays, listofFadaPvc, make(map[string]bool), true)
 			log.FailOnError(err, "Failed to check if volumes exist in FA")
