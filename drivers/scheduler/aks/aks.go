@@ -3,9 +3,10 @@ package aks
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node"
 	"os"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/node"
 
 	"github.com/libopenstorage/cloudops"
 	"github.com/libopenstorage/cloudops/azure"

@@ -964,6 +964,7 @@ func (d *portworx) CreateSnapshot(volumeID string, snapName string) (*api.SdkVol
 }
 
 func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
+	log.Infof("adilk...inside the inspect volume ")
 	response, err := d.getVolDriver().Inspect(d.getContextWithToken(context.Background(), d.token), &api.SdkVolumeInspectRequest{VolumeId: name})
 	if err != nil {
 		return nil, err
@@ -3323,6 +3324,7 @@ func areRepSetsFinal(vol *api.Volume, replFactor int64) bool {
 
 func (d *portworx) setDriver() error {
 	if !d.skipPXSvcEndpoint {
+		log.Infof("adilk...inside the set driver skipPXSvcEndpoint ")
 		// Try portworx-service first
 		endpoint, err := d.schedOps.GetServiceEndpoint()
 		if err == nil && endpoint != "" {
@@ -3343,6 +3345,7 @@ func (d *portworx) setDriver() error {
 	d.refreshEndpoint = true
 	log.Infof("Getting new driver.")
 	for _, n := range node.GetWorkerNodes() {
+		log.Infof(fmt.Sprintf("adilk...inside the set driver GetWorkerNodes %v", node.GetWorkerNodes()))
 		for _, addr := range n.Addresses {
 			if err := d.testAndSetEndpointUsingNodeIP(addr); err != nil {
 				log.Warnf("testAndSetEndpoint failed for %v: %v", addr, err)
@@ -4236,6 +4239,7 @@ func (d *portworx) GetNodeStatus(n node.Node) (*api.Status, error) {
 
 func (d *portworx) getVolDriver() api.OpenStorageVolumeClient {
 	if d.refreshEndpoint {
+		log.Infof("adilk..inside getVolDriver")
 		d.setDriver()
 	}
 	return d.volDriver

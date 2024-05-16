@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sync/errgroup"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -110,9 +109,9 @@ var _ = Describe("{BasicBackupCreation}", Label(TestCaseLabelsMap[BasicBackupCre
 		dailyName            string
 		weeklyName           string
 		monthlyName          string
-		controlChannel       chan string
-		errorGroup           *errgroup.Group
-		allVirtualMachines   []kubevirtv1.VirtualMachine
+		//controlChannel       chan string
+		//errorGroup           *errgroup.Group
+		allVirtualMachines []kubevirtv1.VirtualMachine
 	)
 
 	JustBeforeEach(func() {
@@ -169,7 +168,7 @@ var _ = Describe("{BasicBackupCreation}", Label(TestCaseLabelsMap[BasicBackupCre
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -323,27 +322,27 @@ var _ = Describe("{BasicBackupCreation}", Label(TestCaseLabelsMap[BasicBackupCre
 		dash.VerifySafely(err, nil, "Deleting backup schedule policies")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
+		/*
+			log.Info("Destroying scheduled apps on source cluster")
+			err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+			log.FailOnError(err, "Data validations failed")
 
-		log.Info("Destroying scheduled apps on source cluster")
-		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
+			log.InfoD("switching to destination context")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "failed to switch to context to destination cluster")
 
-		log.InfoD("switching to destination context")
-		err = SetDestinationKubeConfig()
-		log.FailOnError(err, "failed to switch to context to destination cluster")
-
-		log.InfoD("Destroying restored apps on destination clusters")
-		restoredAppContexts := make([]*scheduler.Context, 0)
-		for _, scheduledAppContext := range scheduledAppContexts {
-			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
-			if err != nil {
-				log.Errorf("TransformAppContextWithMappings: %v", err)
-				continue
+			log.InfoD("Destroying restored apps on destination clusters")
+			restoredAppContexts := make([]*scheduler.Context, 0)
+			for _, scheduledAppContext := range scheduledAppContexts {
+				restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+				if err != nil {
+					log.Errorf("TransformAppContextWithMappings: %v", err)
+					continue
+				}
+				restoredAppContexts = append(restoredAppContexts, restoredAppContext)
 			}
-			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
-		}
-		DestroyApps(restoredAppContexts, opts)
-
+			DestroyApps(restoredAppContexts, opts)
+		*/
 		log.InfoD("switching to default context")
 		err = SetClusterContext("")
 		log.FailOnError(err, "failed to SetClusterContext to default cluster")

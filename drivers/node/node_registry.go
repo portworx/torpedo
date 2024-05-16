@@ -2,13 +2,16 @@ package node
 
 import (
 	"fmt"
-	"github.com/pborman/uuid"
+	"log"
 	"sync"
+
+	"github.com/pborman/uuid"
 )
 
 var (
-	nodeRegistry = make(map[string]Node)
-	lock         sync.RWMutex
+	nodeRegistry     = make(map[string]Node)
+	nodeRegistryName = make(map[string]string)
+	lock             sync.RWMutex
 )
 
 // AddNode adds a node to the node collection
@@ -20,6 +23,8 @@ func AddNode(n Node) error {
 	defer lock.Unlock()
 	n.uuid = uuid.New()
 	nodeRegistry[n.uuid] = n
+	nodeRegistryName[n.uuid] = n.Name
+	log.Printf(fmt.Sprintf("adilk...nodeRegistry [%v]", nodeRegistryName))
 	return nil
 }
 
@@ -51,7 +56,9 @@ func GetNodes() []Node {
 	for _, n := range nodeRegistry {
 		nodeList = append(nodeList, n)
 	}
+	log.Printf(fmt.Sprintf("adilk...nodeList [%v]", nodeList))
 	return nodeList
+
 }
 
 // GetWorkerNodes returns only the worker nodes/agent nodes

@@ -442,10 +442,10 @@ func (k *K8s) RefreshNodeRegistry() error {
 	if err != nil {
 		return err
 	}
-
 	node.CleanupRegistry()
 
 	for _, n := range nodes.Items {
+		log.Info(fmt.Sprintf("adilk2...node name [%v] ", n.Name))
 		if err = k.AddNewNode(n); err != nil {
 			return err
 		}
@@ -4256,11 +4256,13 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 		// If this is a Pure volume, run some extra checks to get more information.
 		// Store them as labels as they are not applicable to all volume types.
 		driver, err := volume.Get(k.VolDriverName)
+		log.Infof(fmt.Sprintf("adilk_volume driver details %v", driver))
 		if err != nil {
 			log.Errorf("error getting volume driver name")
 			return nil, err
 		}
-
+		allvolumes, _ := driver.ListAllVolumes()
+		log.Infof(fmt.Sprintf("adilk_list of all volumes %v", allvolumes))
 		inspectedVol, err := driver.InspectVolume(pvc.Spec.VolumeName)
 		if err != nil {
 			log.Warnf("error inspecting volume [%s],err: %v", pvc.Spec.VolumeName, err)
