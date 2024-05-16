@@ -278,7 +278,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 			})
 
 			Step("Delete PDSPods", func() {
-				err := WorkflowDataService.DeletePDSPods()
+				err := WorkflowDataService.DeletePDSPods([]string{"pds-backups", "pds-target"})
 				log.FailOnError(err, "Error while deleting pds pods")
 				err = WorkflowDataService.ValidatePdsDataServiceDeployments(
 					*deployment.Create.Meta.Uid,

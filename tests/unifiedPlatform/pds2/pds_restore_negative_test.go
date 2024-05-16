@@ -15,6 +15,141 @@ import (
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 )
 
+var _ = Describe("{RestartPdsAgentPodAndPerformBackupAndRestore}", func() {
+	var (
+		deployment               *automationModels.PDSDeploymentResponse
+		latestBackupUid          string
+		backUpBeforeAgentRestart string
+		pdsBackupConfigName      string
+		restoreNamespace         string
+		err                      error
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("RestartPdsAgentPodAndPerformBackupAndRestore", "Deploy data services, Delete PDS Agent Pods and perform backup and restore on the same cluster", nil, 0)
+		restoreNamespace = "restore-" + RandomString(5)
+	})
+
+	It("Deploy data services, Delete Pds Agent pods and perform backup and restore on the same cluster", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+
+			steplog := "Deploy dataservice"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
+				WorkflowPDSRestore.SourceDeploymentConfigBeforeUpgrade = &deployment.Create.Config.DeploymentTopologies[0]
+			})
+
+			steplog = "Create Adhoc backup config of the existing deployment"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
+				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error occured while creating backupConfig")
+				log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
+				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
+			})
+
+			steplog = "Get the latest backup detail for the deployment"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error occured while creating backup")
+				backUpBeforeAgentRestart = *backupResponse.Meta.Uid
+				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
+				err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
+				log.FailOnError(err, "Error occured while waiting for backup to complete")
+			})
+
+			steplog = "Restart PDS Agent Pods and Validate if it comes up"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				err := WorkflowDataService.DeletePDSPods([]string{"agent", "pds-target"})
+				log.FailOnError(err, "Error while deleting pds pods")
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(
+					*deployment.Create.Meta.Uid,
+					ds,
+					ds.Replicas,
+					WorkflowDataService.PDSTemplates.ResourceTemplateId,
+					WorkflowDataService.PDSTemplates.StorageTemplateId,
+					PDS_DEFAULT_NAMESPACE,
+					ds.Version,
+					ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice")
+			})
+
+			steplog = "ScaleUp DataService"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				updateDeployment, err := WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
+				log.FailOnError(err, "Error while updating ds")
+				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
+			})
+
+			steplog = "Create Adhoc backup config of the updated deployment"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				pdsBackupConfigName = "pds-latest-backup-" + RandomString(5)
+				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error occured while creating backupConfig")
+				log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
+				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
+			})
+
+			steplog = "Get the latest backup detail for the deployment"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error occured while creating backup")
+				latestBackupUid = *backupResponse.Meta.Uid
+				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
+				err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
+				log.FailOnError(err, "Error occured while waiting for backup to complete")
+			})
+
+			steplog = "Create Restore from the old backup Id"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				restoreName := "old-restore-" + RandomString(5)
+				defer func() {
+					err := SetSourceKubeConfig()
+					log.FailOnError(err, "failed to switch context to source cluster")
+				}()
+				CheckforClusterSwitch()
+				WorkflowPDSRestore.Validatation = make(map[string]bool)
+				WorkflowPDSRestore.Validatation["VALIDATE_RESTORE_AFTER_SRC_DEPLOYMENT_UPGRADE"] = true
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, backUpBeforeAgentRestart, restoreNamespace, *deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Restore Failed")
+				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
+				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+				WorkflowPDSRestore.Validatation["VALIDATE_RESTORE_AFTER_SRC_DEPLOYMENT_UPGRADE"] = false
+				delete(WorkflowPDSRestore.Validatation, "VALIDATE_RESTORE_AFTER_SRC_DEPLOYMENT_UPGRADE")
+			})
+
+			steplog = "Create Restore from the latest backup Id after upgrade"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				restoreName := "latest-restore-" + RandomString(5)
+				defer func() {
+					err := SetSourceKubeConfig()
+					log.FailOnError(err, "failed to switch context to source cluster")
+				}()
+				CheckforClusterSwitch()
+				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, *deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Restore Failed")
+				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
+				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+			})
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
 var _ = Describe("{PerformRestoreValidatingHA}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestoreValidatingHA", "Deploy data services, Perform restore while validating HA on the same cluster", nil, 0)
@@ -212,7 +347,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 					defer wg.Done()
 					defer GinkgoRecover()
 					log.Infof("Delete backup controller and Target Controller operator pod")
-					err := WorkflowDataService.DeletePDSPods()
+					err := WorkflowDataService.DeletePDSPods([]string{"pds-backups", "pds-target"})
 					if err != nil {
 						allErrors = append(allErrors, err.Error())
 					}
