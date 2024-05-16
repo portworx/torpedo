@@ -240,9 +240,9 @@ var _ = Describe("{BackupAndRestoreAccrossSameProjectsWithDifferentUsers}", func
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
 
-			//Step("Switch to source project user", func() {
-			//	workflowServiceAccount.SwitchToServiceAccount(deploymentUser)
-			//})
+			Step("Switch to source project user", func() {
+				workflowServiceAccount.SwitchToServiceAccount(deploymentUser)
+			})
 
 			Step("Deploy dataservice - Deployment User", func() {
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
@@ -251,9 +251,9 @@ var _ = Describe("{BackupAndRestoreAccrossSameProjectsWithDifferentUsers}", func
 
 			})
 
-			//Step("Switch to source project user", func() {
-			//	workflowServiceAccount.SwitchToServiceAccount(backupUser)
-			//})
+			Step("Switch to source project user", func() {
+				workflowServiceAccount.SwitchToServiceAccount(backupUser)
+			})
 
 			Step("Create Adhoc backup config of the existing deployment - Backup User", func() {
 				pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
@@ -282,9 +282,9 @@ var _ = Describe("{BackupAndRestoreAccrossSameProjectsWithDifferentUsers}", func
 				WorkflowNamespace.CreateNamespaces(restoreNamespace)
 			})
 
-			//Step("Switch to destination project user", func() {
-			//	workflowServiceAccount.SwitchToServiceAccount(restoreUser)
-			//})
+			Step("Switch to destination project user", func() {
+				workflowServiceAccount.SwitchToServiceAccount(restoreUser)
+			})
 
 			Step("Create Restore from the latest backup - Restore User", func() {
 				defer func() {
