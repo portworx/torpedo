@@ -967,32 +967,52 @@ func ValidatePDB(pdbValue int, allowedDisruptions int, initialNumNodes int, isCl
 			close(*errChan[0])
 		}
 	}()
-
-	currentPdbValue, _ := GetPDBValue()
+	t := func() (interface{}, bool, error) {
+		currentPdbValue, _ := GetPDBValue()
+		if currentPdbValue == -1 {
+			return -1, true, fmt.Errorf("failed to get PDB value")
+		}
+		return currentPdbValue, false, nil
+	}
+	currentPdbValue, _ := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 	if currentPdbValue == -1 {
 		err := fmt.Errorf("failed to get PDB value")
 		processError(err, errChan...)
 	}
+
 	Step("Validate PDB minAvailable for px storage", func() {
 		if currentPdbValue != pdbValue {
 			err := fmt.Errorf("PDB minAvailable value has changed. Expected: %d, Actual: %d", pdbValue, currentPdbValue)
 			processError(err, errChan...)
 		}
+
 	})
 	Step("Validate number of disruptions ", func() {
-		nodes, err := Inst().V.GetDriverNodes()
+		t := func() (interface{}, bool, error) {
+			nodes, err := Inst().V.GetDriverNodes()
+			if err != nil {
+				return nil, true, fmt.Errorf("failed to get portworx nodes due to %v. Retrying with timeout", err)
+			} else {
+				return nodes, false, nil
+			}
+		}
+		nodes, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 		if err != nil {
 			processError(err, errChan...)
+		} else {
+			currentNumNodes := len(nodes.([]*opsapi.StorageNode))
+			if allowedDisruptions < initialNumNodes-currentNumNodes {
+				err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
+				processError(err, errChan...)
+			}
+			if initialNumNodes-currentNumNodes > 1 {
+				*isClusterParallelyUpgraded = true
+
+			}
 		}
-		currentNumNodes := len(nodes)
-		if allowedDisruptions < initialNumNodes-currentNumNodes {
-			err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
-			processError(err, errChan...)
-		}
-		if initialNumNodes-currentNumNodes > 1 {
-			*isClusterParallelyUpgraded = true
-		}
+
 	})
+
 }
 
 func GetPDBValue() (int, int) {
@@ -8387,14 +8407,13 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 
 	if _, err = core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
 		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
+	}
+	if _, err = core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
+		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
 	} else if _, err = core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
 		maxCloudDrives = FA_MAX_CLOUD_DRIVES
 	} else {
 		maxCloudDrives = CLOUD_PROVIDER_MAX_CLOUD_DRIVES
-	}
-
-	if err != nil {
-		return nil, err
 	}
 
 	var currentNodeDrives int
@@ -11427,8 +11446,7 @@ func CreatePXCloudCredential() error {
 		Timeout:         defaultTimeout,
 	}, false)
 	if err != nil {
-		err = fmt.Errorf("error getting uuid for cloudsnap credential, cause: %v", err)
-		return err
+		log.Warnf("No creds found, creating new cred, Err: %v", err)
 	}
 
 	if output != "" {
@@ -11459,6 +11477,8 @@ func CreatePXCloudCredential() error {
 		credCreateCmd = fmt.Sprintf("%s --s3-disable-ssl", credCreateCmd)
 	}
 
+	log.Infof("Running command [%s]", credCreateCmd)
+
 	// Execute the command and check get rebalance status
 	output, err = Inst().V.GetPxctlCmdOutputConnectionOpts(node.GetStorageNodes()[0], credCreateCmd, node.ConnectionOpts{
 		IgnoreError:     false,
@@ -11477,24 +11497,23 @@ func CreatePXCloudCredential() error {
 
 }
 
-func DeleteCloudSnapBucket(contexts []*scheduler.Context) error {
+func GetCloudsnapBucketName(contexts []*scheduler.Context) (string, error) {
 
 	var bucketName string
 	//Stopping cloudnsnaps before bucket deletion
 	for _, ctx := range contexts {
 		if strings.Contains(ctx.App.Key, "cloudsnap") {
-
 			if bucketName == "" {
 				vols, err := Inst().S.GetVolumeParameters(ctx)
 				if err != nil {
 					err = fmt.Errorf("error getting volume params for %s, cause: %v", ctx.App.Key, err)
-					return err
+					return "", err
 				}
 				for vol, params := range vols {
 					csBksps, err := Inst().V.GetCloudsnaps(vol, params)
 					if err != nil {
 						err = fmt.Errorf("error getting cloud snaps for %s, cause: %v", vol, err)
-						return err
+						return "", err
 					}
 					for _, csBksp := range csBksps {
 						bkid := csBksp.GetId()
@@ -11506,20 +11525,24 @@ func DeleteCloudSnapBucket(contexts []*scheduler.Context) error {
 			}
 			vols, err := Inst().S.GetVolumes(ctx)
 			if err != nil {
-				return err
+				return "", err
 			}
 			for _, vol := range vols {
 				appVol, err := Inst().V.InspectVolume(vol.ID)
 				if err != nil {
-					return err
+					return "", err
 				}
 				err = suspendCloudsnapBackup(appVol.Id)
 				if err != nil {
-					return err
+					return "", err
 				}
 			}
 		}
 	}
+	return bucketName, nil
+}
+
+func DeleteCloudSnapBucket(bucketName string) error {
 
 	if bucketName != "" {
 		id, secret, endpoint, s3Region, _, err := getCreateCredParams()
@@ -11571,6 +11594,7 @@ func DeleteCloudSnapBucket(contexts []*scheduler.Context) error {
 func deleteAndValidateBucketDeletion(client *s3.S3, bucketName string) error {
 	// Delete all objects and versions in the bucket
 	log.Debugf("Deleting bucket [%s]", bucketName)
+	time.Sleep(5 * time.Minute)
 	err := client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
 		Bucket: aws.String(bucketName),
 	}, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
