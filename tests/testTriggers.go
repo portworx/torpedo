@@ -3522,8 +3522,10 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 	}()
 
 	defer func() {
-		err := DeleteCloudSnapBucket(*contexts)
-		UpdateOutcome(event, fmt.Errorf("failed to delete cloud snap bucket,Cause: %v", err))
+		bucketName, err := GetCloudsnapBucketName(*contexts)
+		UpdateOutcome(event, err)
+		err = DeleteCloudSnapBucket(bucketName)
+		UpdateOutcome(event, err)
 	}()
 
 	setMetrics(*event)
@@ -7417,11 +7419,11 @@ func getCloudSnapInterval(triggerType string) int {
 	case 7:
 		interval = 60
 	case 8:
-		interval = 30
+		interval = 45
 	case 9:
-		interval = 20
+		interval = 30
 	case 10:
-		interval = 10
+		interval = 20
 	}
 	return interval
 
@@ -7530,9 +7532,11 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 				nodeMap := node.GetNodesByVoDriverNodeID()
 				nodeContexts := make([]*scheduler.Context, 0)
+				log.Infof("KVDB node map is [%v]", kvdbNodeIDMap)
 
 				for kvdbID, nodeID := range kvdbNodeIDMap {
 					kvdbNode := nodeMap[nodeID]
+
 					appNodeContexts, err := GetContextsOnNode(contexts, &kvdbNode)
 					nodeContexts = append(nodeContexts, appNodeContexts...)
 					errorChan := make(chan error, errorChannelSize)
@@ -7640,27 +7644,30 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 }
 
 func validateKVDBMembers(event *EventRecord, kvdbMembers map[string]*volume.MetadataNode, isDestuctive bool) bool {
-	log.InfoD("Current KVDB members: %v", kvdbMembers)
 
 	allHealthy := true
 
 	if len(kvdbMembers) == 0 {
-		err := fmt.Errorf("No KVDB membes to validate")
+		err := fmt.Errorf("no KVDB membes to validate")
 		UpdateOutcome(event, err)
 		return false
 	}
+	log.InfoD("Current KVDB members are")
+	for _, m := range kvdbMembers {
+		log.InfoD(m.Name)
+	}
 
-	for id, m := range kvdbMembers {
+	for _, m := range kvdbMembers {
 
 		if !m.IsHealthy {
-			err := fmt.Errorf("kvdb member node: %v is not healthy", id)
-			allHealthy = allHealthy && false
+			err := fmt.Errorf("kvdb member node: %v is not healthy", m.Name)
+			allHealthy = false
 			log.Warn(err.Error())
 			if isDestuctive {
 				UpdateOutcome(event, err)
 			}
 		} else {
-			log.InfoD("KVDB member node %v is healthy", id)
+			log.InfoD("KVDB member node %v is healthy", m.Name)
 		}
 	}
 
