@@ -46,13 +46,3 @@ spec:
   resources:
     requests:
       storage: 1Gi
----
-##### Required for OpenShift 4.14 or newer
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: cluster-monitoring-config
-  namespace: openshift-monitoring
-data:
-  config.yaml: |
-    enableUserWorkload: true
