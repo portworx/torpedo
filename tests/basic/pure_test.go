@@ -4386,16 +4386,18 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			}
 		}
 		//GetPvcFromNamespace will collect complete list of PVC's name from a given namespace
-		GetPvcFromNamespace := func(namespace string, pvclist []string) {
+		GetPvcFromNamespace := func(namespace string, pvclist []string) []string {
 			allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
 			log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
 			for _, p := range allPvcList.Items {
 				pvclist = append(pvclist, p.Name)
 			}
+			fmt.Println("PVC name List :", pvclist)
+			return pvclist
 		}
-		GetPvcFromNamespace(FadaAppNameSpace, listofFadaPvcNames)
-		GetPvcFromNamespace(FbdaAppNameSpace, listofFbdaPvcNames)
-		GetPvcFromNamespace(BaseAppNameSpace, listofBasePvcNames)
+		listofFadaPvcNames = GetPvcFromNamespace(FadaAppNameSpace, listofFadaPvcNames)
+		listofFbdaPvcNames = GetPvcFromNamespace(FbdaAppNameSpace, listofFbdaPvcNames)
+		listofBasePvcNames = GetPvcFromNamespace(BaseAppNameSpace, listofBasePvcNames)
 
 		stepLog = "Validate if PVC are created and bounded"
 		Step(stepLog, func() {
@@ -4407,16 +4409,18 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		})
 
 		//GetVolumeNameFromPvc will collect volume name from pvc which indirect will be the px volume name and this name is suffix to the volumes created in FA backend
-		GetVolumeNameFromPvc := func(namespace string, pvclist []string) {
+		GetVolumeNameFromPvc := func(namespace string, pvclist []string) []string {
 			allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
 			log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", FadaAppNameSpace))
 			for _, p := range allPvcList.Items {
 				pvclist = append(pvclist, p.Spec.VolumeName)
 			}
+			fmt.Println("PVC List :", pvclist)
+			return pvclist
 		}
-		GetVolumeNameFromPvc(FadaAppNameSpace, listofFadaPvc)
-		GetVolumeNameFromPvc(FbdaAppNameSpace, listofFbdaPvc)
-		GetVolumeNameFromPvc(BaseAppNameSpace, listofBasePvc)
+		listofFadaPvc = GetVolumeNameFromPvc(FadaAppNameSpace, listofFadaPvc)
+		listofFbdaPvc = GetVolumeNameFromPvc(FbdaAppNameSpace, listofFbdaPvc)
+		listofBasePvc = GetVolumeNameFromPvc(BaseAppNameSpace, listofBasePvc)
 
 		/*checkVolumesExistinFA is a function which works both ways
 		  If NoVolume is true then it will check if volume exists in FA or not,we will take a map which has volume name as key and value as false , once we find volume we mark it as true and after the loop we check if all volumes are marked as true
