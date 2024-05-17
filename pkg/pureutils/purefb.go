@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/pure/flashblade"
 	"regexp"
+	"strings"
 )
 
 // PureCreateClientAndConnect Create FB Client and Connect
@@ -86,6 +87,21 @@ func GetAllPVCNames(fbClient *flashblade.Client) ([]string, error) {
 		}
 	}
 	return allPVCs, nil
+}
+
+func GetFilesystemFullName(fbClient *flashblade.Client, fsName string) (string, error) {
+	allFs, err := ListAllFileSystems(fbClient)
+	if err != nil {
+		return "", err
+	}
+	for _, eachPvc := range allFs {
+		for _, eachItem := range eachPvc.Items {
+			if strings.Contains(eachItem.Name, fsName) {
+				return eachItem.Name, nil
+			}
+		}
+	}
+	return "", nil
 }
 
 // CreateNewFileSystem Returns list of all filesystems present in FB Backend

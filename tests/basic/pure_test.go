@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
-	"github.com/portworx/torpedo/drivers/pure/flashblade"
-
 	"math/rand"
 	"sort"
 	"strconv"
@@ -4279,6 +4277,10 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		//Get The Details of Existing FA AND FB in the cluster
 		flashArrays, err := GetFADetailsUsed()
 		flashBlades, err := GetFBDetailsFromCluster()
+		for _, fb := range flashBlades {
+			fmt.Println("api token for fb", fb.APIToken)
+		}
+
 		log.FailOnError(err, "Failed to get FA details used")
 		log.InfoD("Starting the test CreateAndValidatePVCWithIopsAndBandwidth")
 
@@ -4473,12 +4475,13 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 							continue
 						}
 					}
-					fbClient, err := flashblade.NewClient(fb.MgmtEndPoint, "", "", fb.APIToken,
-						"", false, false, "", nil)
+					fbClient, err := pureutils.PureCreateFbClientAndConnect(fb.MgmtEndPoint, fb.APIToken)
 					if err != nil {
 						return err
 					}
-					isExists, err := pureutils.IsFileSystemExists(fbClient, volumeName)
+					FsFullName, nameErr := pureutils.GetFilesystemFullName(fbClient, volumeName)
+					log.FailOnError(nameErr, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
+					isExists, err := pureutils.IsFileSystemExists(fbClient, FsFullName)
 
 					if isExists && err == nil {
 						log.Infof("Volume [%v] exists on FB [%v]", volumeName, fb.MgmtEndPoint)
