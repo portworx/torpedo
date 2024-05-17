@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/torpedo/drivers/pure/flashblade"
 
 	"math/rand"
 	"sort"
@@ -4260,11 +4261,20 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		baseScName := "base-portworx-volume-sc"
 		fadaScName := "fada-volume-sc"
 		fbdaScName := "fbda-volume-sc"
-		baseAppName := "base-portworx-volume-sc"
-		fadaAppName := "fada-volume-sc"
-		//fbdaAppName := "fbda-volume-sc"
+		baseAppName := "base-app-portworx-volume"
+		fadaAppName := "fada-app-volume"
+		fbdaAppName := "fbda-app-volume"
+		BaseAppNameSpace := "base-app-namespace"
+		FadaAppNameSpace := "fada-app-namespace"
+		FbdaAppNameSpace := "fbda-app-namespace"
+		listofBasePvc := make([]string, 0)
+		listofFadaPvc := make([]string, 0)
+		listofBasePvcNames := make([]string, 0)
+		listofFadaPvcNames := make([]string, 0)
+		listofFbdaPvc := make([]string, 0)
+		listofFbdaPvcNames := make([]string, 0)
 		flashArrays, err := GetFADetailsUsed()
-		//flashBlades, err := GetFBDetailsFromCluster()
+		flashBlades, err := GetFBDetailsFromCluster()
 		log.FailOnError(err, "Failed to get FA details used")
 		log.InfoD("Starting the test CreateAndValidatePVCWithIopsAndBandwidth")
 		stepLog := "Create storage class with max iops and max bandwidth for Normal Portworx Volumes , FADA and FBDA Pvc Deployment"
@@ -4317,11 +4327,6 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			pvc, err := k8sCore.CreatePersistentVolumeClaim(pvcClaimSpec)
 			return pvc, err
 		}
-		listofBasePvc := make([]string, 0)
-		listofFadaPvc := make([]string, 0)
-		listofBasePvcNames := make([]string, 0)
-		listofFadaPvcNames := make([]string, 0)
-		//listofFbdaPvc := make([]string, 0)
 
 		createAndAppendPVC := func(appName string, scName string, namespace string, x int) {
 			pvcName := fmt.Sprintf("%s-%d", appName, x)
@@ -4346,17 +4351,17 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			err := createNameSpace("fada-app-namespace", map[string]string{"app": "fadaapp"})
-			log.FailOnError(err, "Failed to create namespace")
-			err = createNameSpace("fbda-app-namespace", map[string]string{"app": "fbdaapp"})
-			log.FailOnError(err, "Failed to create namespace")
-			err = createNameSpace("base-app-namespace", map[string]string{"app": "baseapp"})
-			log.FailOnError(err, "Failed to create namespace")
+			err := createNameSpace(FadaAppNameSpace, map[string]string{"app": "fadaapp"})
+			log.FailOnError(err, "Failed to create namespace [%s]", FadaAppNameSpace)
+			err = createNameSpace(FbdaAppNameSpace, map[string]string{"app": "fbdaapp"})
+			log.FailOnError(err, "Failed to create namespace [%s]", FadaAppNameSpace)
+			err = createNameSpace(BaseAppNameSpace, map[string]string{"app": "baseapp"})
+			log.FailOnError(err, "Failed to create namespace [%s]", BaseAppNameSpace)
 
 			for x := 0; x < numberOfPvc; x++ {
-				go createAndAppendPVC(fadaAppName, fadaScName, "fada-app-namespace", x)
-				//go createAndAppendPVC(fbdaAppName, fbdaScName, "fbdaappnamespace", x, &listofFbdaPvc)
-				go createAndAppendPVC(baseAppName, baseScName, "base-app-namespace", x)
+				go createAndAppendPVC(fadaAppName, fadaScName, FadaAppNameSpace, x)
+				go createAndAppendPVC(fbdaAppName, fbdaScName, FbdaAppNameSpace, x)
+				go createAndAppendPVC(baseAppName, baseScName, BaseAppNameSpace, x)
 			}
 		})
 
@@ -4370,76 +4375,38 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				log.FailOnError(err, "Failed to wait for pvc to bound")
 			}
 		}
-		pvcList, err := core.Instance().GetPersistentVolumeClaims("fada-app-namespace", nil)
-		log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", "fada-app-namespace"))
-		log.Infof("len of pvc items: %d", len(pvcList.Items))
-		for _, p := range pvcList.Items {
-			//few PVCs are getting empty volume name, this is workaround for the fix
-			pvc, err := core.Instance().GetPersistentVolumeClaim(p.Name, "fada-app-namespace")
-			log.FailOnError(err, fmt.Sprintf("error getting pvc [%s] from namespace [%s]", p.Name, "fada-app-namespace"))
-			if pvc.Spec.VolumeName == "" {
-				log.Errorf("volume name empty for [%v]", p)
 
+		GetPvcFromNamespace := func(namespace string, pvclist []string) {
+			allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+			log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
+			for _, p := range allPvcList.Items {
+				pvclist = append(pvclist, p.Name)
 			}
-			//listofFadaPvc = append(listofFadaPvc, p.Spec.VolumeName)
-			listofFadaPvcNames = append(listofFadaPvcNames, p.Name)
 		}
-		fmt.Println("list of fada volume name", listofFadaPvc)
-		fmt.Println("list of fada pvc names", listofFadaPvcNames)
+		GetPvcFromNamespace(FadaAppNameSpace, listofFadaPvcNames)
+		GetPvcFromNamespace(FbdaAppNameSpace, listofFbdaPvcNames)
+		GetPvcFromNamespace(BaseAppNameSpace, listofBasePvcNames)
 
-		basepvcList, err := core.Instance().GetPersistentVolumeClaims("base-app-namespace", nil)
-		log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", "base-app-namespace"))
-		log.Infof("len of pvc items: %d", len(basepvcList.Items))
-		for _, p := range basepvcList.Items {
-			//few PVCs are getting empty volume name, this is workaround for the fix
-			pvc, err := core.Instance().GetPersistentVolumeClaim(p.Name, "base-app-namespace")
-			log.FailOnError(err, fmt.Sprintf("error getting pvc [%s] from namespace [%s]", p.Name, "base-app-namespace"))
-			if pvc.Spec.VolumeName == "" {
-				log.Errorf("volume name empty for [%v]", p)
-			}
-			//listofBasePvc = append(listofBasePvc, p.Spec.VolumeName)
-			listofBasePvcNames = append(listofBasePvcNames, p.Name)
-		}
-		fmt.Println("list of base volume name", listofBasePvc)
-		fmt.Println("list of base pvc names", listofBasePvcNames)
 		stepLog = "Validate if PVC are created and bounded"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			checkPvcBound(listofBasePvcNames, "base-app-namespace")
-			//checkPvcBound(listofFbdaPvc, "fbda-app-namespace")
-			checkPvcBound(listofFadaPvcNames, "fada-app-namespace")
+			checkPvcBound(listofBasePvcNames, BaseAppNameSpace)
+			checkPvcBound(listofFbdaPvcNames, FbdaAppNameSpace)
+			checkPvcBound(listofFadaPvcNames, FadaAppNameSpace)
 
 		})
-		pvcList, err = core.Instance().GetPersistentVolumeClaims("fada-app-namespace", nil)
-		log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", "fada-app-namespace"))
-		log.Infof("len of pvc items: %d", len(pvcList.Items))
-		for _, p := range pvcList.Items {
-			//few PVCs are getting empty volume name, this is workaround for the fix
-			pvc, err := core.Instance().GetPersistentVolumeClaim(p.Name, "fada-app-namespace")
-			log.FailOnError(err, fmt.Sprintf("error getting pvc [%s] from namespace [%s]", p.Name, "fada-app-namespace"))
-			if pvc.Spec.VolumeName == "" {
-				log.Errorf("volume name empty for [%v]", p)
+		GetVolumeNameFromPvc := func(namespace string, pvclist []string) {
+			allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+			log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", FadaAppNameSpace))
+			for _, p := range allPvcList.Items {
+				pvclist = append(pvclist, p.Spec.VolumeName)
 
 			}
-			listofFadaPvc = append(listofFadaPvc, p.Spec.VolumeName)
-			//listofFadaPvcNames = append(listofFadaPvcNames, p.Name)
 		}
-		fmt.Println("list of fada volume name", listofFadaPvc)
-		fmt.Println("list of fada pvc names", listofFadaPvcNames)
+		GetVolumeNameFromPvc(FadaAppNameSpace, listofFadaPvc)
+		GetVolumeNameFromPvc(FbdaAppNameSpace, listofFbdaPvc)
+		GetVolumeNameFromPvc(BaseAppNameSpace, listofBasePvc)
 
-		basepvcList, err = core.Instance().GetPersistentVolumeClaims("base-app-namespace", nil)
-		log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", "base-app-namespace"))
-		log.Infof("len of pvc items: %d", len(basepvcList.Items))
-		for _, p := range basepvcList.Items {
-			//few PVCs are getting empty volume name, this is workaround for the fix
-			pvc, err := core.Instance().GetPersistentVolumeClaim(p.Name, "base-app-namespace")
-			log.FailOnError(err, fmt.Sprintf("error getting pvc [%s] from namespace [%s]", p.Name, "base-app-namespace"))
-			if pvc.Spec.VolumeName == "" {
-				log.Errorf("volume name empty for [%v]", p)
-			}
-			listofBasePvc = append(listofBasePvc, p.Spec.VolumeName)
-			//listofBasePvcNames = append(listofBasePvcNames, p.Name)
-		}
 		checkVolumesExistinFA := func(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, pvcFadaMap map[string]bool, NoVolume bool) error {
 			for _, fa := range flashArrays {
 
@@ -4482,15 +4449,60 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			}
 			return nil
 		}
+		checkVolumesExistinFB := func(flashBlades []pureutils.FlashBladeEntry, listofFbdaPvc []string, pvcFbdaMap map[string]bool, NoVolume bool) error {
+			for _, fb := range flashBlades {
+				for _, volumeName := range listofFbdaPvc {
+					if !NoVolume {
+						if pvcFbdaMap[volumeName] {
+							continue
+						}
+					}
+					fbClient, err := flashblade.NewClient(fb.MgmtEndPoint, "", "", fb.APIToken,
+						"", false, false, "", nil)
+
+					if err != nil {
+						return err
+					}
+					isExists, err := pureutils.IsFileSystemExists(fbClient, volumeName)
+
+					if isExists && err == nil {
+						log.Infof("Volume [%v] exists on FB [%v]", volumeName, fb.MgmtEndPoint)
+						pvcFbdaMap[volumeName] = true
+					} else if !isExists && err == nil {
+						log.Infof("Volume [%v] does not exist on FB [%v]", volumeName, fb.MgmtEndPoint)
+						pvcFbdaMap[volumeName] = false
+					}
+					log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
+				}
+			}
+			for FbdaVol, volStatus := range pvcFbdaMap {
+				if NoVolume {
+					if volStatus {
+						return fmt.Errorf("PVC %s exists in FB", FbdaVol)
+					}
+				} else {
+					if !volStatus {
+						return fmt.Errorf("PVC %s does not exist", FbdaVol)
+					}
+				}
+			}
+			return nil
+		}
 		stepLog = "check if the FA and FB volumes are created in the backend"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcFadaMap := make(map[string]bool)
+			pvcFbdaMap := make(map[string]bool)
 			for _, volumeName := range listofFadaPvc {
 				pvcFadaMap[volumeName] = false
 			}
-			err := checkVolumesExistinFA(flashArrays, listofFadaPvc, pvcFadaMap, false)
-			log.FailOnError(err, "Failed to check if volumes created  exist in FA")
+			for _, volumeName := range listofFbdaPvc {
+				pvcFbdaMap[volumeName] = false
+			}
+			faErr := checkVolumesExistinFA(flashArrays, listofFadaPvc, pvcFadaMap, false)
+			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+			fbErr := checkVolumesExistinFB(flashBlades, listofFbdaPvc, pvcFbdaMap, false)
+			log.FailOnError(fbErr, "Failed to check if volumes created  exist in FB")
 
 		})
 		DeletePvcGroup := func(pvclist []string, namespace string) {
@@ -4504,37 +4516,33 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			log.InfoD(stepLog)
 
 			log.InfoD("Delete pvc from fada-app-namespace")
-			DeletePvcGroup(listofFadaPvcNames, "fada-app-namespace")
-			//log.InfoD("Delete pvc from fbdaappnamespace")
-			//DeletePvcGroup(listofFbdaPvc, "fbdaappnamespace")
+			DeletePvcGroup(listofFadaPvcNames, FadaAppNameSpace)
+			log.InfoD("Delete pvc from fbda-app-namespace")
+			DeletePvcGroup(listofFbdaPvc, FbdaAppNameSpace)
 			log.InfoD("Delete pvc from base-app-namespace")
-			DeletePvcGroup(listofBasePvcNames, "base-app-namespace")
+			DeletePvcGroup(listofBasePvcNames, BaseAppNameSpace)
 
 			log.InfoD("Delete namespace fada-app-namespace")
-			err = core.Instance().DeleteNamespace("fada-app-namespace")
+			err = core.Instance().DeleteNamespace(FadaAppNameSpace)
 			log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", "fada-app-namespace"))
+			log.InfoD("Delete namespace fbda-app-namespace")
+			err = core.Instance().DeleteNamespace(FbdaAppNameSpace)
 			log.InfoD("Delete namespace base-app-namespace")
-			err = core.Instance().DeleteNamespace("base-app-namespace")
+			err = core.Instance().DeleteNamespace(BaseAppNameSpace)
 			log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", "base-app-namespace"))
 
 			pvcFadanotExistMap := make(map[string]bool)
 			for _, volumeName := range listofFadaPvc {
 				pvcFadanotExistMap[volumeName] = true
 			}
-
+			pvcFbdanotExistMap := make(map[string]bool)
+			for _, volumeName := range listofFbdaPvc {
+				pvcFbdanotExistMap[volumeName] = true
+			}
 			err := checkVolumesExistinFA(flashArrays, listofFadaPvc, pvcFadanotExistMap, true)
 			log.FailOnError(err, "Failed to check if volumes which needed to be deleted still exist in FA")
-			//for _, fb := range flashBlades {
-			//	for _, volumeName := range listofFbdaPvc {
-			//	fbClient, err := flashblade.NewClient(fb.MgmtEndPoint, "", "", fb.APIToken,
-			//		"", false, false, "", nil)
-			//
-			//	if err != nil {
-			//		return err
-			//	}
-			//	IsFileSystemExists(fbClient,volumeName )
-			//
-			//}
+			fbErr := checkVolumesExistinFB(flashBlades, listofFbdaPvc, pvcFbdanotExistMap, true)
+			log.FailOnError(fbErr, "Failed to check if volumes created  which needed to be deleted still exist in FB")
 
 		})
 
