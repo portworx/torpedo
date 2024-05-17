@@ -9,7 +9,7 @@ import (
 
 // PureCreateClientAndConnect Create FB Client and Connect
 func PureCreateFbClientAndConnect(fbMgmtEndpoint string, apiToken string) (*flashblade.Client, error) {
-	fbClient, err := flashblade.NewClient(fbMgmtEndpoint, "", "", apiToken,
+	fbClient, err := flashblade.NewClient(fbMgmtEndpoint, apiToken, "", "",
 		"", false, false, "", nil)
 	if err != nil {
 		return nil, err
