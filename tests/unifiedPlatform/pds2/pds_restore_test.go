@@ -191,7 +191,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 				WorkflowTargetClusterDestination.Project = &destinationProject
 			})
 
-			Step("Associate target cluster and restore namespace to Project", func() {
+			Step("Associate target cluster and resources to Project", func() {
 				err := destinationProject.Associate(
 					[]string{WorkflowTargetClusterDestination.ClusterUID},
 					[]string{},

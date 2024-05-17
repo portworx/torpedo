@@ -185,6 +185,7 @@ func (restore WorkflowPDSRestore) CreateAndAssociateRestoreNamespace(namespace s
 		if err != nil {
 			return fmt.Errorf("unable to associate restore namespace - [%s]", err.Error())
 		}
+		log.Infof("Associated Resources - [%+v]", restore.Destination.TargetCluster.Project.AssociatedResources)
 	} else {
 		log.Infof("Please create namespace and associate with Account-Admin account.")
 	}
