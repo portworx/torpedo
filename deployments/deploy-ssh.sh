@@ -600,6 +600,8 @@ spec:
       value: "${TORPEDO_SSH_PASSWORD}"
     - name: TORPEDO_SSH_KEY
       value: "${TORPEDO_SSH_KEY}"
+    - name: AZURE_REGION
+      value: "${AZURE_REGION}"
     - name: AZURE_TENANT_ID
       value: "${AZURE_TENANTID}"
     - name: VOLUME_PROVIDER
