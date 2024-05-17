@@ -282,6 +282,19 @@ var _ = Describe("{BackupAndRestoreAccrossSameProjectsWithDifferentUsers}", func
 				WorkflowNamespace.CreateNamespaces(restoreNamespace)
 			})
 
+			Step("Associate both namespaces to the project", func() {
+				err := WorkflowProject.Associate(
+					[]string{},
+					[]string{WorkflowNamespace.Namespaces[PDS_DEFAULT_NAMESPACE], WorkflowNamespace.Namespaces[restoreNamespace]},
+					[]string{},
+					[]string{},
+					[]string{},
+					[]string{},
+				)
+				log.FailOnError(err, "Unable to associate Templates to Project")
+				log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+			})
+
 			Step("Switch to destination project user", func() {
 				workflowServiceAccount.SwitchToServiceAccount(restoreUser)
 			})
