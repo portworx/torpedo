@@ -4537,7 +4537,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			log.InfoD("Delete pvc from fada-app-namespace")
 			DeletePvcGroup(listofFadaPvcNames, FadaAppNameSpace)
 			log.InfoD("Delete pvc from fbda-app-namespace")
-			DeletePvcGroup(listofFbdaPvc, FbdaAppNameSpace)
+			DeletePvcGroup(listofFbdaPvcNames, FbdaAppNameSpace)
 			log.InfoD("Delete pvc from base-app-namespace")
 			DeletePvcGroup(listofBasePvcNames, BaseAppNameSpace)
 
