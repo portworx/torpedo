@@ -4479,9 +4479,9 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 					if err != nil {
 						return err
 					}
-					FsFullName, nameErr := pureutils.GetFilesystemFullName(fbClient, volumeName)
-					log.FailOnError(nameErr, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
-					isExists, err := pureutils.IsFileSystemExists(fbClient, FsFullName)
+					//FsFullName, nameErr := pureutils.GetFilesystemFullName(fbClient, volumeName)
+					//log.FailOnError(nameErr, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
+					isExists, err := pureutils.IsFileSystemExists(fbClient, volumeName)
 
 					if isExists && err == nil {
 						log.Infof("Volume [%v] exists on FB [%v]", volumeName, fb.MgmtEndPoint)
