@@ -6,6 +6,7 @@ import (
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	"slices"
 	"time"
@@ -47,17 +48,16 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 	log.Infof("Creating restore - [%s]", name)
 	createRestore, err := pdslibs.CreateRestore(
 		name,
-		backupUid, restore.Destination.TargetCluster.ClusterUID,
-		restore.Destination.Namespaces[namespace],
-		restore.Source.Namespace.TargetCluster.Project.ProjectId,
+		backupUid,
 		restore.Destination.TargetCluster.Project.ProjectId,
+		restore.Destination.Namespaces[namespace],
 	)
-
-	log.InfoD("Restore triggered. Name - [%s], UID - [%s]", *createRestore.Create.Meta.Name, *createRestore.Create.Meta.Uid)
 
 	if err != nil {
 		return nil, err
 	}
+
+	log.InfoD("Restore triggered. Name - [%s], UID - [%s]", *createRestore.Create.Meta.Name, *createRestore.Create.Meta.Uid)
 
 	if value, ok := restore.SkipValidation[ValidatePdsRestore]; ok {
 		if value == true {
@@ -157,31 +157,36 @@ func (restore WorkflowPDSRestore) Purge() error {
 
 func (restore WorkflowPDSRestore) CreateAndAssociateRestoreNamespace(namespace string, sourceNamespace string) error {
 
-	// TODO: Remove this once https://purestorage.atlassian.net/browse/DS-9443 is resolved
-	log.InfoD("Creating restore namespace on source - [%s]", sourceNamespace)
-	_, err := restore.Destination.CreateNamespaces(sourceNamespace)
-	if err != nil {
-		return fmt.Errorf("unable to create source namespace - [%s]", err.Error())
-	}
+	if utils.RunWithRBAC.RbacFlag != true {
 
-	log.InfoD("Creating restore namespace - [%s]", namespace)
-	_, err = restore.Destination.CreateNamespaces(namespace)
-	if err != nil {
-		return fmt.Errorf("unable to create restore namespace - [%s]", err.Error())
-	}
+		// TODO: Remove this once https://purestorage.atlassian.net/browse/DS-9443 is resolved
+		log.InfoD("Creating restore namespace on source - [%s]", sourceNamespace)
+		_, err := restore.Destination.CreateNamespaces(sourceNamespace)
+		if err != nil {
+			return fmt.Errorf("unable to create source namespace - [%s]", err.Error())
+		}
 
-	log.InfoD("Associating restore namespace to destination project")
+		log.InfoD("Creating restore namespace - [%s]", namespace)
+		_, err = restore.Destination.CreateNamespaces(namespace)
+		if err != nil {
+			return fmt.Errorf("unable to create restore namespace - [%s]", err.Error())
+		}
 
-	err = restore.Destination.TargetCluster.Project.Associate(
-		[]string{},
-		[]string{restore.Destination.Namespaces[namespace], restore.Destination.Namespaces[sourceNamespace]},
-		[]string{},
-		[]string{},
-		[]string{},
-		[]string{},
-	)
-	if err != nil {
-		return fmt.Errorf("unable to associate restore namespace - [%s]", err.Error())
+		log.InfoD("Associating restore namespace to destination project")
+		err = restore.Destination.TargetCluster.Project.Associate(
+			[]string{},
+			[]string{restore.Destination.Namespaces[namespace], restore.Destination.Namespaces[sourceNamespace]},
+			[]string{},
+			[]string{},
+			[]string{},
+			[]string{},
+		)
+		if err != nil {
+			return fmt.Errorf("unable to associate restore namespace - [%s]", err.Error())
+		}
+		log.Infof("Associated Resources - [%+v]", restore.Destination.TargetCluster.Project.AssociatedResources)
+	} else {
+		log.Infof("Please create namespace and associate with Account-Admin account.")
 	}
 
 	return nil

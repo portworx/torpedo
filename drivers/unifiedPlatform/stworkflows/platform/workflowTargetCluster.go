@@ -17,7 +17,7 @@ import (
 
 type WorkflowTargetCluster struct {
 	KubeConfig string
-	Project    WorkflowProject
+	Project    *WorkflowProject
 	ClusterUID string
 }
 

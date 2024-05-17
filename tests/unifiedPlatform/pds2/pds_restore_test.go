@@ -29,8 +29,6 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 
 	JustBeforeEach(func() {
 		StartPDSTorpedoTest("PerformRestoreToSameCluster", "Deploy data services and perform backup and restore on the same cluster", nil, 0)
-		restoreNamespace = "restore-" + RandomString(5)
-		restoreName = "restore-" + RandomString(5)
 
 	})
 
@@ -67,6 +65,8 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 					log.FailOnError(err, "failed to switch context to source cluster")
 				}()
 				CheckforClusterSwitch()
+				restoreNamespace = "restore-" + RandomString(5)
+				restoreName = "restore-" + RandomString(5)
 				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Restore Failed")
 				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
@@ -92,9 +92,6 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 	)
 	JustBeforeEach(func() {
 		StartPDSTorpedoTest("PerformRestoreToDifferentClusterSameProject", "Deploy data services and perform backup and restore on a different cluster on the same project", nil, 0)
-
-		restoreNamespace = "restore-" + RandomString(5)
-		restoreName = "restore-" + RandomString(5)
 	})
 
 	It("Deploy data services and perform backup and restore on the different cluster", func() {
@@ -126,6 +123,8 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 			Step("Create Restore from the latest backup Id", func() {
 				WorkflowPDSRestore.Destination = &WorkflowNamespaceDestination
 				CheckforClusterSwitch()
+				restoreNamespace = "restore-" + RandomString(5)
+				restoreName = "restore-" + RandomString(5)
 				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Restore Failed")
 
@@ -154,9 +153,8 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 
 	JustBeforeEach(func() {
 		StartPDSTorpedoTest("PerformRestoreToDifferentClusterProject", "Deploy data services and perform backup and restore on the different cluster from different project", nil, 0)
-		restoreNamespace = "namespace-" + RandomString(5)
 		destinationProject.Platform = WorkflowPlatform
-		restoreName = "restore-" + RandomString(5)
+		WorkflowPDSRestore.Destination = &WorkflowNamespaceDestination
 	})
 
 	It("Deploy data services and perform backup and restore on the different cluster", func() {
@@ -190,23 +188,25 @@ var _ = Describe("{PerformRestoreToDifferentClusterProject}", func() {
 				_, err := destinationProject.CreateProject()
 				log.FailOnError(err, "Unable to create project")
 				log.Infof("Project created with ID - [%s]", destinationProject.ProjectId)
+				WorkflowTargetClusterDestination.Project = &destinationProject
 			})
 
-			Step("Associate target cluster and restore namespace to Project", func() {
+			Step("Associate target cluster and resources to Project", func() {
 				err := destinationProject.Associate(
 					[]string{WorkflowTargetClusterDestination.ClusterUID},
 					[]string{},
 					[]string{WorkflowCc.CloudCredentials[NewPdsParams.BackUpAndRestore.TargetLocation].ID},
 					[]string{WorkflowbkpLoc.BkpLocation.BkpLocationId},
-					[]string{},
+					TemplateIds,
 					[]string{},
 				)
 				log.FailOnError(err, "Unable to associate Cluster to Project")
-				log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+				log.Infof("Associated Resources - [%+v]", destinationProject.AssociatedResources)
 			})
 
 			Step("Create Restore from the latest backup Id", func() {
-				WorkflowPDSRestore.Destination = &WorkflowNamespaceDestination
+				restoreNamespace = "namespace-" + RandomString(5)
+				restoreName = "restore-" + RandomString(5)
 				CheckforClusterSwitch()
 				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, *deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Restore Failed")
@@ -495,7 +495,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 	It("Deploy, Validate and RunWorkloads on DataService", func() {
 		Step("Create a PDS Namespace", func() {
 			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
-			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			WorkflowNamespace.TargetCluster = &WorkflowTargetCluster
 			WorkflowNamespace.Namespaces = make(map[string]string)
 			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
 			log.FailOnError(err, "Unable to create namespace")

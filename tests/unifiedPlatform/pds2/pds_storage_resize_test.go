@@ -30,7 +30,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 	It("Perform PVC Resize and validate the updated vol in the storage config", func() {
 		Step("Create a PDS Namespace", func() {
 			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
-			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			WorkflowNamespace.TargetCluster = &WorkflowTargetCluster
 			workFlowTemplates.Platform = WorkflowPlatform
 			WorkflowNamespace.Namespaces = make(map[string]string)
 			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)

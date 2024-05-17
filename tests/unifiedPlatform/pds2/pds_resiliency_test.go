@@ -77,7 +77,7 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 	It("Deploy and Validate DataService", func() {
 		Step("Create a PDS Namespace", func() {
 			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
-			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			WorkflowNamespace.TargetCluster = &WorkflowTargetCluster
 			workFlowTemplates.Platform = WorkflowPlatform
 			WorkflowNamespace.Namespaces = make(map[string]string)
 			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)

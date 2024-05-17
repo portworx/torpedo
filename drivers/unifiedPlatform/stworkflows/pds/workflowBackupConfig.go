@@ -33,8 +33,6 @@ type BackupConfigDetails struct {
 func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, deploymentId string) (*automationModels.PDSBackupConfigResponse, error) {
 	var chkSum string
 
-	log.Infof("Backup [%s] started at [%s]", name, time.Now().Format("2006-01-02 15:04:05"))
-
 	log.Infof("Backup name - [%s]", name)
 	log.Infof("Deployment Name - [%s]", *backupConfig.WorkflowDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name)
 	log.Infof("Delplyment UID - [%s]", deploymentId)
@@ -53,6 +51,8 @@ func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, depl
 			return nil, fmt.Errorf("unable to run workfload on data service. Error - [%s]", err.Error())
 		}
 	}
+
+	log.Infof("Backup [%s] started at [%s]", name, time.Now().Format("2006-01-02 15:04:05"))
 
 	createBackup, err := pdslibs.CreateBackupConfig(name,
 		deploymentId,
