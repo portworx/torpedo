@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/portworx/sched-ops/k8s/core"
@@ -114,15 +115,14 @@ func EndPDSTorpedoTest() {
 	}()
 
 	Step("Purging all PDS related objects", func() {
-		//errors := PurgePDS()
-		//if len(errors) > 0 {
-		//	var errorStrings []string
-		//	for _, err := range errors {
-		//		errorStrings = append(errorStrings, err.Error())
-		//	}
-		//	log.FailOnError(fmt.Errorf("[%s]", strings.Join(errorStrings, "\n\n")), "errors occurred while cleanup")
-		//}
-		log.Infof("Skipping purge")
+		errors := PurgePDS()
+		if len(errors) > 0 {
+			var errorStrings []string
+			for _, err := range errors {
+				errorStrings = append(errorStrings, err.Error())
+			}
+			log.FailOnError(fmt.Errorf("[%s]", strings.Join(errorStrings, "\n\n")), "errors occurred while cleanup")
+		}
 	})
 
 }
