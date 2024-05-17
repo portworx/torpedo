@@ -4426,6 +4426,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			for _, fa := range flashArrays {
 				for _, volumeName := range listofFadaPvc {
 					if !NoVolume {
+						//This is to make sure we dont iterate through volumes which are already found in one FA
 						if pvcFadaMap[volumeName] {
 							continue
 						}
