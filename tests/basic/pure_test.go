@@ -4259,7 +4259,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		numberOfPvc := 10
 		var k8sCore = core.Instance()
 
-		//Declaring SC name, namespaces and pvc prefixes
+		//Declaring SC name, namespaces and pvc prefixes and lists which are required for collection of PVC And Volume Names
 		baseScName := "base-portworx-volume-sc"
 		fadaScName := "fada-volume-sc"
 		fbdaScName := "fbda-volume-sc"
