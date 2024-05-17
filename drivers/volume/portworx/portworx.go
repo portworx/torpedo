@@ -90,6 +90,7 @@ const (
 	pxctlVolumeListFilter                     = "pxctl volume list -l %s=%s"
 	pxctlVolumeUpdate                         = "pxctl volume update "
 	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
+	pxctlClusterOptionsUpdate                 = "pxctl cluster options update"
 	pxctlDriveAddStart                        = "%s -j service drive add %s -o start"
 	pxctlDriveAddStatus                       = "%s -j service drive add %s -o status"
 	pxctlCloudDriveInspect                    = "%s -j cd inspect --node %s"
@@ -147,6 +148,7 @@ const (
 	validateStorageClusterTimeout     = 40 * time.Minute
 	expandStoragePoolTimeout          = 2 * time.Minute
 	volumeUpdateTimeout               = 2 * time.Minute
+	skinnySnapRetryInterval           = 5 * time.Second
 )
 const (
 	telemetryNotEnabled = "15"
@@ -1256,6 +1258,7 @@ func (d *portworx) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting pool status on node [%s], Err: %v", n.Name, err)
 	}
+	log.Debugf("GetNodePoolsStatus output: %s", out)
 	outLines := strings.Split(out, "\n")
 
 	poolsData := make(map[string]string)
@@ -1898,6 +1901,29 @@ func (d *portworx) ValidateVolumeInPxctlList(volumeName string) error {
 		return fmt.Errorf("volume name [%s] is not present in PXCTL volume list", volumeName)
 	}
 	return nil
+}
+
+func (d *portworx) UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) error {
+	nodes := node.GetStorageDriverNodes()
+	cmd := fmt.Sprintf("%s --pure_nfs_endpoint %s %s", pxctlVolumeUpdate, newEndpoint, volumeName)
+	_, err := d.nodeDriver.RunCommandWithNoRetry(
+		nodes[0],
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("failed setting FBDA NFS endpoint for volume [%s] to [%s] from node [%s], Err: %v", volumeName, newEndpoint, nodes[0], err)
+	}
+	return nil
+}
+
+func (d *portworx) ValidatePureFBDAMountSource(nodes []node.Node, vols []*torpedovolume.Volume, expectedIP string) error {
+	// For each node
+	//   Run `mount` on node
+	//   Search through lines for our volume names, check that all contain right IP
+	return fmt.Errorf("not implemented (ValidatePureFBDAMountSource)")
 }
 
 func (d *portworx) ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) error {
@@ -5233,7 +5259,8 @@ func (d *portworx) ValidateDriver(endpointVersion string, autoUpdateComponents b
 		}
 
 		// Validate StorageCluster
-		if err = optest.ValidateStorageCluster(imageList, newStc, validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
+		storageClusterValidateTimeout := time.Duration(len(node.GetStorageDriverNodes())*9) * time.Minute
+		if err = optest.ValidateStorageCluster(imageList, newStc, storageClusterValidateTimeout, defaultRetryInterval, true); err != nil {
 			return err
 		}
 	}
@@ -5277,8 +5304,8 @@ func (d *portworx) updateAndValidateStorageCluster(cluster *v1.StorageCluster, f
 			}
 		}
 	}
-
-	if err = optest.ValidateStorageCluster(imageList, stc, validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
+	storageClusterValidateTimeout := time.Duration(len(node.GetStorageDriverNodes())*9) * time.Minute
+	if err = optest.ValidateStorageCluster(imageList, stc, storageClusterValidateTimeout, defaultRetryInterval, true); err != nil {
 		return nil, err
 	}
 	return stc, nil
@@ -6193,4 +6220,42 @@ func (d *portworx) GetAlertsUsingResourceTypeByTime(resourceType api.ResourceTyp
 
 func (d *portworx) IsPxReadyOnNode(n node.Node) bool {
 	return d.schedOps.IsPXReadyOnNode(n)
+}
+
+// EnableSkinnySnap Enables skinnysnap on the cluster
+func (d *portworx) EnableSkinnySnap() error {
+	for _, eachNode := range node.GetNodes() {
+		cmd := fmt.Sprintf("echo Y | %s --skinnysnap on", pxctlClusterOptionsUpdate)
+		_, err := d.nodeDriver.RunCommandWithNoRetry(
+			eachNode,
+			cmd,
+			node.ConnectionOpts{
+				Timeout:         skinnySnapRetryInterval,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+		if err != nil {
+			return fmt.Errorf("Failed to enable skinny Snap on Cluster, Err: %v", err)
+		}
+		break
+	}
+	return nil
+}
+
+// UpdateSkinnySnapReplNum update skinnysnap Repl factor
+func (d *portworx) UpdateSkinnySnapReplNum(repl string) error {
+	for _, eachNode := range node.GetNodes() {
+		cmd := fmt.Sprintf("echo Y | %s --skinnysnap-num-repls %s", pxctlClusterOptionsUpdate, repl)
+		_, err := d.nodeDriver.RunCommandWithNoRetry(
+			eachNode,
+			cmd,
+			node.ConnectionOpts{
+				Timeout:         skinnySnapRetryInterval,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+		if err != nil {
+			return fmt.Errorf("failed to Update SkinnySnap Repl Factor, Err: %v", err)
+		}
+		break
+	}
+	return nil
 }

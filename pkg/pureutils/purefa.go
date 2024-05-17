@@ -94,6 +94,20 @@ func ListAllTheVolumesFromSpecificFA(faClient *flasharray.Client) ([]flasharray.
 	return volumes, nil
 }
 
+// Verifies if Volumes
+func IsFAVolumeExists(faClient *flasharray.Client, volumeName string) (bool, error) {
+	allVolumes, err := ListAllTheVolumesFromSpecificFA(faClient)
+	if err != nil {
+		return false, err
+	}
+	for _, eachVol := range allVolumes {
+		if strings.Contains(eachVol.Name, volumeName) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // GetAllHostGroups Get all Available Host Groups from array
 func GetAllHostGroups(faClient *flasharray.Client) ([]flasharray.Hostgroup, error) {
 	hostGroup, err := faClient.Hostgroups.ListHostgroups(nil)
@@ -132,6 +146,24 @@ func CreateNewHostOnFA(faClient *flasharray.Client, hostName string) (*flasharra
 		return nil, err
 	}
 	return host, nil
+}
+
+// ListVolumesFromHosts returns list of Volumes
+func ListVolumesFromHosts(faClient *flasharray.Client) (map[string][]flasharray.ConnectedVolume, error) {
+	allHostVolumes := make(map[string][]flasharray.ConnectedVolume)
+	allHosts, err := ListAllHosts(faClient)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, eachHost := range allHosts {
+		hostVolumes, err := faClient.Hosts.ListHostConnections(eachHost.Name, nil)
+		if err != nil {
+			return nil, err
+		}
+		allHostVolumes[eachHost.Name] = hostVolumes
+	}
+	return allHostVolumes, nil
 }
 
 // ConnectVolumeToHost Connects Volume to Host
@@ -267,11 +299,15 @@ func IsNetworkInterfaceEnabled(faClient *flasharray.Client, iface string) (bool,
 
 // EnableNetworkInterface enables network interface
 func EnableNetworkInterface(faClient *flasharray.Client, iface string) (bool, error) {
-	interfaces, err := faClient.Networks.EnableNetworkInterface(iface)
+	_, err := faClient.Networks.EnableNetworkInterface(iface)
 	if err != nil {
 		return false, err
 	}
-	if interfaces.Enabled {
+	isEnabled, err := IsNetworkInterfaceEnabled(faClient, iface)
+	if err != nil {
+		return false, err
+	}
+	if isEnabled {
 		return true, nil
 	}
 	return false, fmt.Errorf("Failed to enable network interface [%v]", iface)
@@ -279,11 +315,15 @@ func EnableNetworkInterface(faClient *flasharray.Client, iface string) (bool, er
 
 // DisableNetworkInterface disabled network interface
 func DisableNetworkInterface(faClient *flasharray.Client, iface string) (bool, error) {
-	interfaces, err := faClient.Networks.DisableNetworkInterface(iface)
+	_, err := faClient.Networks.DisableNetworkInterface(iface)
 	if err != nil {
 		return false, err
 	}
-	if !interfaces.Enabled {
+	isEnabled, err := IsNetworkInterfaceEnabled(faClient, iface)
+	if err != nil {
+		return false, err
+	}
+	if !isEnabled {
 		return true, nil
 	}
 	return false, fmt.Errorf("Failed to disable network interface [%v]", iface)

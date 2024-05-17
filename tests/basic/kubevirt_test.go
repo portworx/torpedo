@@ -3,8 +3,10 @@ package tests
 import (
 	context1 "context"
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/core"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
@@ -28,8 +30,10 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 	var namespace string
 	itLog := "Add a new disk to a kubevirtVM"
 	It(itLog, func() {
-		defer ListEvents("portworx")
-		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
@@ -46,6 +50,7 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 		stepLog = "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
 		})
@@ -94,7 +99,10 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 	var namespace string
 	itLog := "Live migrate a kubevirtVM"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		log.InfoD(stepLog)
 		appList := Inst().AppList
@@ -144,7 +152,10 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 	var namespace string
 	itLog := "Kill Px then Add disk to Kubevirt VM"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -247,7 +258,10 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 
 	itLog := "Add disk to Kubevirt VM, Kill Px and then add another disk"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -358,7 +372,10 @@ var _ = Describe("{KubevirtVMVolHaIncrease}", func() {
 	var namespace string
 	itLog := "Increase the volume HA of a kubevirt VM"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -430,7 +447,10 @@ var _ = Describe("{KubevirtVMVolHaDecrease}", func() {
 	var namespace string
 	itLog := "Decrease the volume HA of a kubevirt VM"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		log.InfoD(stepLog)
 		appList := Inst().AppList
@@ -506,7 +526,10 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 	var namespace string
 	itLog := "Live Migrate a VM and then add a new disk to a kubevirtVM"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -572,7 +595,10 @@ var _ = Describe("{AddDiskAndLiveMigrate}", func() {
 	var namespace string
 	itLog := "Add a new disk to a kubevirtVM and then Live Migrate"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 		appList := Inst().AppList
 		defer func() {
@@ -659,7 +685,10 @@ var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
 	})
 
 	It("has to fill up the volume completely, resize the volumes and storage pool(s), validate and teardown apps", func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		log.InfoD("filling up the volume completely, resizing the volumes and storage pool(s), validating and tearing down apps")
 
 		Step("Create autopilot rules for PVC and pool expand", func() {
@@ -853,7 +882,10 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 
 	itLog := "Upgrade OCP cluster and validate kubevirt apps"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		stepLog := "schedule kubevirt VMs"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -948,7 +980,10 @@ var _ = Describe("{RebootRootDiskAttachedNode}", func() {
 
 	itLog := "Reboot node where Kubevirt VMs root disk is attached"
 	It(itLog, func() {
-		defer ListEvents("portworx")
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
@@ -1009,6 +1044,915 @@ var _ = Describe("{RebootRootDiskAttachedNode}", func() {
 			ValidateApplications(appCtxs)
 		})
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{ParallelAddDiskToVM}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("ParallelAddDiskToVM", "Add a new disk to multiple kubevirtVM parallely", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	var wg sync.WaitGroup
+
+	itLog := "Add a new disk to multiple kubevirtVM"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		numberOfVolumes := 1
+		Inst().AppList = []string{"kubevirt-debian-template"}
+		stepLog := "Setting up Boot PVC Template"
+		Step(stepLog, func() {
+			template := ScheduleApplications("template")
+			ValidateApplications(template)
+		})
+
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+		stepLog = "schedule a kubevirtVM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+
+		stepLog = "Add one disk to multiple kubevirt VM at the same time"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					_, err := AddDisksToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
+					log.FailOnError(err, "Failed to add disks to kubevirt VM")
+					dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
+				}(appCtx)
+			}
+		})
+		wg.Wait()
+
+		stepLog = "Verify the new disk added is also bind mounted"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				isVmBindMounted, err := IsVMBindMounted(appCtx, true)
+				log.FailOnError(err, "Failed to verify disks in kubevirt VM")
+				if !isVmBindMounted {
+					log.Errorf("The newly added disk to vm %s is not bind mounted", appCtx.App.Key)
+				}
+			}
+		})
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{MultipleKubeVirtLiveMigration}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("MultipleKubeVirtLiveMigration", "Live migrate multiple kubevirtVM's parallely", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	var wg sync.WaitGroup
+
+	itLog := "Live migrate multiple kubevirtVM's parallely"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		log.InfoD(stepLog)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+		stepLog := "schedule a kubevirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+		stepLog = "Live migrate the kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+				}(appCtx)
+			}
+		})
+		wg.Wait()
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{AddDiskAndLiveMigrateMultipleVm}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddDiskAndLiveMigrateMultipleVm", "Live Migrate multiple VM's After Adding a new disk to a kubevirtVM", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	var wg sync.WaitGroup
+
+	itLog := "Add a new disk to multiple kubevirtVM and then Live Migrate them parallely"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		numberOfVolumes := 1
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+		stepLog := "schedule a kubevirtVM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+
+		stepLog = "Add one disk to the kubevirt VM's and check if new added disk is bind mounted and live migrate the vms parallely"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+
+					success, err := AddDisksToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
+					log.FailOnError(err, "Failed to add disks to kubevirt VM")
+					dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
+
+					isVmBindMounted, err := IsVMBindMounted(appCtx, true)
+					log.FailOnError(err, "Failed to verify disks in kubevirt VM")
+					if !isVmBindMounted {
+						log.Errorf("The newly added disk to vm %s is not bind mounted", appCtx.App.Key)
+					}
+					err = StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+				}(appCtx)
+			}
+		})
+		wg.Wait()
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{LiveMigrationBeforeAddDiskMultipleVm}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("LiveMigrationBeforeAddDiskMultipleVm", "Live Migrate multiple VM's Before Adding a new disk to a kubevirtVM parallely", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	var wg sync.WaitGroup
+
+	itLog := "Live Migrate multiple VM's and then add a new disk to a kubevirtVM"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		numberOfVolumes := 1
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+		stepLog := "schedule a kubevirtVM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+		stepLog = "Live migrate the kubevirt VM's,Add one disk to the kubevirt VM and verify the new disk added is also bind mounted"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+
+					success, err := AddDisksToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
+					log.FailOnError(err, "Failed to add disks to kubevirt VM")
+					dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
+
+					isVmBindMounted, err := IsVMBindMounted(appCtx, true)
+					log.FailOnError(err, "Failed to verify disks in kubevirt VM")
+					if !isVmBindMounted {
+						log.Errorf("The newly added disk to vm %s is not bind mounted", appCtx.App.Key)
+					}
+				}(appCtx)
+			}
+		})
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{MultipleVMVolHaIncrease}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("MultipleVMVolHaIncrease", "Increase the volume HA of multiple kubevirt VM parallely", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	var wg sync.WaitGroup
+
+	itLog := "Increase the volume HA of multiple kubevirt VM parallely"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-debian-fio-low-ha"}
+		stepLog := "schedule a kubevirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+		stepLog = "Increase the volume HA of the multiple kubevirt VM Volumes and check if they are bind mounted parallely"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					vols, err := Inst().S.GetVolumes(appCtx)
+					log.FailOnError(err, "Failed to get volumes of kubevirt VM")
+					for _, vol := range vols {
+						currRep, err := Inst().V.GetReplicationFactor(vol)
+						log.FailOnError(err, "Failed to get Repl factor for vil %s", vol.Name)
+
+						if currRep < 3 {
+							opts := volume.Options{
+								ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+							}
+							err = Inst().V.SetReplicationFactor(vol, currRep+1, nil, nil, true, opts)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to %d", currRep+1))
+						} else {
+							log.Warnf("Volume %s has reached maximum replication factor", vol.Name)
+						}
+					}
+					isVmBindMounted, err := IsVMBindMounted(appCtx, true)
+					log.FailOnError(err, "Failed to run vm bind mount check")
+					if !isVmBindMounted {
+						log.Errorf("The newly added replication to vm %s is not bind mounted", appCtx.App.Key)
+					}
+				}(appCtx)
+			}
+		})
+
+		wg.Wait()
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{MultipleVMVolHaDecrease}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("MultipleVMVolHaDecrease", "Decrease the replication factor of multiple kubevirt Vms paralley", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	var wg sync.WaitGroup
+
+	itLog := "Decrease the replication factor of multiple kubevirt Vms paralley"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+		log.InfoD(stepLog)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+		stepLog := "schedule a kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+
+		stepLog = "Decrease the volume HA of the multiple kubevirt VM Volumes and check if they are bind mounted"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					vols, err := Inst().S.GetVolumes(appCtx)
+					log.FailOnError(err, "Failed to get volumes of kubevirt VM")
+					for _, vol := range vols {
+						currRep, err := Inst().V.GetReplicationFactor(vol)
+						log.FailOnError(err, "Failed to get Repl factor for vil %s", vol.Name)
+
+						if currRep > 1 {
+							opts := volume.Options{
+								ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+							}
+							err = Inst().V.SetReplicationFactor(vol, currRep-1, nil, nil, true, opts)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to %d", currRep-1))
+						} else {
+							log.Warnf("Volume %s has reached maximum replication factor", vol.Name)
+						}
+					}
+					isVmBindMounted, err := IsVMBindMounted(appCtx, true)
+					log.FailOnError(err, "Failed to run vm bind mount check")
+					if !isVmBindMounted {
+						log.Errorf("The newly added disk to vm %s is not bind mounted", appCtx.App.Key)
+					}
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{LiveMigrateWhileNodeInMaintenance}", func() {
+	/*
+		            1. Put replica nodes in maintenance mode
+			    2. Initiate Live Migration of VM
+			    3. Verify VM is migrated to different node
+			    4. Exit maintenance mode of the node
+
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("LiveMigrateWhileNodeInMaintenance", "Live Migrate VM while node is in maintenance mode", nil, 0)
+
+	})
+
+	var appCtxs []*scheduler.Context
+	var wg sync.WaitGroup
+
+	itLog := "Live Migrate VM while replica nodes are in maintenance mode"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		namespace := fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+		log.InfoD(stepLog)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+		stepLog := "schedule a kubevirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("test-%v", i)
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, taskName)...)
+			}
+			ValidateApplications(appCtxs)
+			for _, appCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			}
+		})
+
+		stepLog = "Put replica nodes in maintenance mode and Live migrate the kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				ReplicaNodes, err := GetReplicaNodesOfVM(appCtx)
+				log.FailOnError(err, "Failed to get non replica nodes of VM")
+
+				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+
+				for _, vm := range vms {
+					nodeVMProvisionedOn, err := GetNodeOfVM(vm)
+					log.InfoD("Node VM provisioned on: %s", nodeVMProvisionedOn)
+					defer func() {
+						var wg sync.WaitGroup
+						for _, ReplicaNode := range ReplicaNodes {
+							if nodeVMProvisionedOn != ReplicaNode {
+								wg.Add(1)
+								go func(nonReplicaNode string) {
+									defer wg.Done()
+									n, err := node.GetNodeByName(nonReplicaNode)
+									err = Inst().V.ExitMaintenance(n)
+									log.FailOnError(err, "Failed to exit node: %s from maintenance mode", nonReplicaNode)
+									log.Infof("Succesfully exited node: %s from maintenance mode", nonReplicaNode)
+								}(ReplicaNode)
+							}
+						}
+						wg.Wait()
+					}()
+
+					for _, ReplicaNode := range ReplicaNodes {
+						if nodeVMProvisionedOn != ReplicaNode {
+							wg.Add(1)
+							go func(nonReplicaNode string) {
+								defer wg.Done()
+								n, err := node.GetNodeByName(nonReplicaNode)
+								err = Inst().V.EnterMaintenance(n)
+								log.FailOnError(err, "Failed to put node: %s in maintenance mode", nonReplicaNode)
+								log.Infof("Succesfully put node: %s in maintenance mode", nonReplicaNode)
+							}(ReplicaNode)
+						}
+					}
+					wg.Wait()
+					err = StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+				}
+			}
+		})
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{LiveMigrateCordonNonReplicaNode}", func() {
+
+	/*
+		                1. Schedule a kubevirt VM
+				2. Cordon the non replica nodes
+				3. Put the replica nodes on maintenance mode
+			        4. initiate Live Migration of VM
+			        5. Verify VM is migrated to different node
+			        6. Exit maintenance mode
+				7. Put the replica node on maintenance mode and again initiate live migration of VM
+				8. Verify VM is migrated to different node
+				9. Uncordon the nodes
+
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("LiveMigrateCordonNonReplicaNode", "Live Migrate VM while node is in maintenance mode", nil, 0)
+	})
+
+	var appCtxs []*scheduler.Context
+	var wg sync.WaitGroup
+
+	itLog := "Live Migrate VM while node is in maintenance mode"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		namespace := fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+		log.InfoD(stepLog)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+		stepLog := "schedule a kubevirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("test-%v", i)
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, taskName)...)
+			}
+		})
+		stepLog = "Check if vm is bind mount"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			}
+		})
+
+		for _, appCtx := range appCtxs {
+			nonReplicaNodes, err := GetNonReplicaNodesOfVM(appCtx)
+			log.FailOnError(err, "Failed to get non replica nodes of VM")
+
+			defer func() {
+				//Uncordon the nodes
+				for _, nonReplicaNode := range nonReplicaNodes {
+					err = core.Instance().UnCordonNode(nonReplicaNode, defaultCommandTimeout, defaultCommandRetry)
+					log.FailOnError(err, "Failed to uncordon the node")
+				}
+			}()
+			// cordon the non replica nodes
+			for _, nonReplicaNode := range nonReplicaNodes {
+				err = core.Instance().CordonNode(nonReplicaNode, defaultCommandTimeout, defaultCommandRetry)
+				log.FailOnError(err, "Failed to cordon the node")
+			}
+
+			vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+			log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+			dash.VerifyFatal(len(vms) > 0, true, "Failed to get VMs from scheduled contexts")
+
+			for _, vm := range vms {
+				//Put the node on maintenance mode where VM is provisioned
+				stepLog = "Put the replica nodes on maintenance mode and live migrate the VM"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					nodeVMProvisionedOn, err := GetNodeOfVM(vm)
+					log.InfoD("Node VM provisioned on: %s", nodeVMProvisionedOn)
+					defer func() {
+						var wg sync.WaitGroup
+						for _, nonReplicaNode := range nonReplicaNodes {
+							if nodeVMProvisionedOn != nonReplicaNode {
+								wg.Add(1)
+								go func(nonReplicaNode string) {
+									defer wg.Done()
+									n, err := node.GetNodeByName(nonReplicaNode)
+									err = Inst().V.ExitMaintenance(n)
+									log.FailOnError(err, "Failed to exit node: %s from maintenance mode", nonReplicaNode)
+									log.Infof("Succesfully exited node: %s from maintenance mode", nonReplicaNode)
+								}(nonReplicaNode)
+							}
+						}
+						wg.Wait()
+					}()
+
+					for _, nonReplicaNode := range nonReplicaNodes {
+						if nodeVMProvisionedOn != nonReplicaNode {
+							wg.Add(1)
+							go func(nonReplicaNode string) {
+								defer wg.Done()
+								n, err := node.GetNodeByName(nonReplicaNode)
+								err = Inst().V.EnterMaintenance(n)
+								log.FailOnError(err, "Failed to put node: %s in maintenance mode", nonReplicaNode)
+								log.Infof("Succesfully put node: %s in maintenance mode", nonReplicaNode)
+							}(nonReplicaNode)
+						}
+					}
+					wg.Wait()
+					err = StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+				})
+
+				//Put the node on maintenance mode and again initiate live migration of VM
+				stepLog = "Put the replica nodes on maintenance mode and again initiate live migration of VM"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					nodeVMProvisionedOn, err := GetNodeOfVM(vm)
+					log.InfoD("Node VM provisioned on: %s", nodeVMProvisionedOn)
+					defer func() {
+						var wg sync.WaitGroup
+						for _, nonReplicaNode := range nonReplicaNodes {
+							if nodeVMProvisionedOn != nonReplicaNode {
+								wg.Add(1)
+								go func(nonReplicaNode string) {
+									defer wg.Done()
+									n, err := node.GetNodeByName(nonReplicaNode)
+									err = Inst().V.ExitMaintenance(n)
+									log.FailOnError(err, "Failed to exit node: %s from maintenance mode", nonReplicaNode)
+									log.Infof("Succesfully exited node: %s from maintenance mode", nonReplicaNode)
+								}(nonReplicaNode)
+							}
+						}
+						wg.Wait()
+					}()
+
+					for _, nonReplicaNode := range nonReplicaNodes {
+						if nodeVMProvisionedOn != nonReplicaNode {
+							wg.Add(1)
+							go func(nonReplicaNode string) {
+								defer wg.Done()
+								n, err := node.GetNodeByName(nonReplicaNode)
+								err = Inst().V.EnterMaintenance(n)
+								log.FailOnError(err, "Failed to put node: %s in maintenance mode", nonReplicaNode)
+								log.Infof("Succesfully put node: %s in maintenance mode", nonReplicaNode)
+							}(nonReplicaNode)
+						}
+					}
+					wg.Wait()
+					err = StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+				})
+			}
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+
+})
+
+var _ = Describe("{StopPxOnNodeWhereVMIsProvisioned}", func() {
+	/*
+			1. Schedule a kubevirt VM
+		`	2. Stop PX on the node where VM is provisioned for 15mins
+		        3. Start PX on the node where VM is provisioned
+		        4. Verify VM is running fine
+
+			https://portworx.testrail.net/index.php?/cases/view/296893
+
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("StopPxOnNodeWhereVMIsProvisioned", "Stop PX on node where VM is provisioned", nil, 296893)
+	})
+
+	var appCtxs []*scheduler.Context
+
+	itLog := "Stop PX on node where VM is provisioned"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+
+		stepLog := "schedule a kubevirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				test := fmt.Sprintf("test-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplications(test)...)
+			}
+			ValidateApplications(appCtxs)
+			for _, appCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			}
+		})
+
+		for _, appCtx := range appCtxs {
+			vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+			log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+			dash.VerifyFatal(len(vms) > 0, true, "Failed to get VMs from scheduled contexts")
+			for _, vm := range vms {
+				nodeName, err := GetNodeOfVM(vm)
+				log.FailOnError(err, "Failed to get node name for VM: %s", vm.Name)
+				nodeObj, err := node.GetNodeByName(nodeName)
+				log.FailOnError(err, "Failed to get node obj for node name: %s", nodeName)
+				stepLog = "Stop PX on the node where VM is provisioned for 15 mins"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					err := Inst().V.StopDriver([]node.Node{nodeObj}, false, nil)
+					log.FailOnError(err, "Failed to stop PX on the node: %s", nodeObj.Name)
+					log.Infof("Succesfully stopped PX on the node: %s", nodeObj.Name)
+					time.Sleep(15 * time.Minute)
+				})
+
+				stepLog = "Start PX on the node where VM is provisioned"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					err := Inst().V.StartDriver(nodeObj)
+					log.FailOnError(err, "Failed to start PX on the node: %s", nodeObj.Name)
+					log.Infof("Succesfully started PX on the node: %s", nodeObj.Name)
+				})
+			}
+		}
+
+		stepLog = "Validate vm after stopping and starting px"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(appCtxs)
+			for _, appCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			}
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{RestartPXAndCheckIfVmBindMount}", func() {
+
+	/*
+			1. Schedule a kubevirt VM
+			2. Cordon the non replica nodes
+		        3. initiate Live Migration of VM
+		        4. Verify VM is migrated to different node
+			5. Restart portworx on the node where VM was provisioned
+			6. The volume now should be locally attached to the node where the vm has been migrated
+			7. Uncordon the nodes
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPXAndCheckIfVmBindMount", "Restart PX and check if VM is bind mounted", nil, 0)
+
+	})
+
+	var appCtxs []*scheduler.Context
+
+	itLog := "Live migrate,Restart PX and check if VM is bind mounted"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		namespace := fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+		log.InfoD(stepLog)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+		stepLog := "schedule a kubevirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("test-%v", i)
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, taskName)...)
+			}
+		})
+		stepLog = "Check if vm is bind mount"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			}
+		})
+
+		for _, appCtx := range appCtxs {
+			nonReplicaNodes, err := GetNonReplicaNodesOfVM(appCtx)
+			log.FailOnError(err, "Failed to get non replica nodes of VM")
+
+			defer func() {
+				//Uncordon the nodes
+				for _, nonReplicaNode := range nonReplicaNodes {
+					err = core.Instance().UnCordonNode(nonReplicaNode, defaultCommandTimeout, defaultCommandRetry)
+					log.FailOnError(err, "Failed to uncordon the node")
+				}
+			}()
+			// cordon the non replica nodes
+			for _, nonReplicaNode := range nonReplicaNodes {
+				err = core.Instance().CordonNode(nonReplicaNode, defaultCommandTimeout, defaultCommandRetry)
+				log.FailOnError(err, "Failed to cordon the node")
+			}
+
+			vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+			log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+			dash.VerifyFatal(len(vms) > 0, true, "Failed to get VMs from scheduled contexts")
+
+			for _, vm := range vms {
+				nodeVMProvisionedOn, err := GetNodeOfVM(vm)
+				log.FailOnError(err, "Failed to get node name for VM: %s", vm.Name)
+				log.InfoD("Node VM provisioned on: %s", nodeVMProvisionedOn)
+
+				nodeObj, err := node.GetNodeByName(nodeVMProvisionedOn)
+				log.FailOnError(err, "Failed to get node obj for node name: %s", nodeVMProvisionedOn)
+
+				stepLog = "live migrate the VM"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					err = StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+				})
+
+				stepLog = "Restart the PX on the node where VM was provisioned"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					StopVolDriverAndWait([]node.Node{nodeObj})
+					StartVolDriverAndWait([]node.Node{nodeObj})
+					log.InfoD("Succesfully restarted PX on the node: %s", nodeObj.Name)
+				})
+
+				stepLog = "After restart of the px on previously provisioned node the volume should be locally attached to the node where the vm has been migrated"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					isVmBindMounted, err := IsVMBindMounted(appCtx, true)
+					log.FailOnError(err, "Failed to run vm bind mount check")
+					dash.VerifyFatal(isVmBindMounted, true, "Failed to verify bind mount?")
+				})
+			}
+			stepLog = "Destroy the applications"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				DestroyApps([]*scheduler.Context{appCtx}, nil)
+			})
+		}
+	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)

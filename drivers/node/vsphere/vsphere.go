@@ -69,16 +69,10 @@ type DriveSet struct {
 	// Zone defines the zone in which the node exists
 	Zone string
 	// State state of the drive set from the well defined states
-	State DriveSetState
+	State string
 	// Labels associated with this drive set
 	Labels *map[string]string `json:"labels"`
 }
-
-// DriveSetState indicates the state of the DriveSet
-type DriveSetState string
-
-// PXDriveType defines a set of drive types based on how they are used by PX
-type PXDriveType string
 
 // DriveConfig defines the configuration for a cloud drive
 type DriveConfig struct {
@@ -97,9 +91,9 @@ type DriveConfig struct {
 	// Oracle uses VPU in lieu of disk types.
 	Vpus int64
 	// PXType indicates how this drive is being used by PX
-	PXType PXDriveType
+	PXType string
 	// State state of the drive config from the well defined states
-	State DriveConfigState
+	State string
 	// Labels associated with this drive config
 	Labels map[string]string `json:"labels"`
 	// AttachOptions for cloud drives to be attached
@@ -111,9 +105,6 @@ type DriveConfig struct {
 	// UUID of VMDK
 	DiskUUID string
 }
-
-// DriveConfigState indicates the state of the DriveConfig
-type DriveConfigState string
 
 // DrivePaths stores the device paths of the disks which will be used by PX.
 type DrivePaths struct {
@@ -345,7 +336,7 @@ func (v *vsphere) DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string
 				err = v.DetachDisk(instanceId, allDiskPaths[i])
 				if err != nil {
 					//log.InfoD("Detach drives from the node failed %v", err)
-					err = fmt.Errorf("%w; %s", err, nodeName)
+					err = fmt.Errorf("Detaching disk: %s on node %s failed: %w", allDiskPaths[i], nodeName, err)
 					return err
 				}
 			}
@@ -382,11 +373,9 @@ func (v *vsphere) DetachDisk(vmUuid string, path string) error {
 	if vmMo == nil {
 		return fmt.Errorf("Virtual machine not found")
 	}
-	log.Infof("Virtual machine %v ", vmMo)
 	//Remove device and detach VM
-	var deviceList object.VirtualDeviceList
 	var selectedDevice types.BaseVirtualDevice
-	deviceList, err = vmMo.Device(v.ctx)
+	deviceList, err := vmMo.Device(v.ctx)
 	if err != nil {
 		return fmt.Errorf("Failed to get the devices for VM: %q. err: %+v", vmMo, err)
 	}
