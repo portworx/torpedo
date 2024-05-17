@@ -4520,31 +4520,31 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			log.FailOnError(fbErr, "Failed to check if volumes created  exist in FB")
 
 		})
-		DeletePvcGroup := func(pvclist []string, namespace string) {
-			for _, pvcName := range pvclist {
-				err := k8sCore.DeletePersistentVolumeClaim(pvcName, namespace)
-				log.FailOnError(err, "Failed to delete pvc")
-			}
-		}
+		//DeletePvcGroup := func(pvclist []string, namespace string) {
+		//	for _, pvcName := range pvclist {
+		//		err := k8sCore.DeletePersistentVolumeClaim(pvcName, namespace)
+		//		log.FailOnError(err, "Failed to delete pvc")
+		//	}
+		//}
 		stepLog = "Delete the pvc and volume and check if volumes got deleted in backend as well"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 
-			log.InfoD("Delete pvc from fada-app-namespace")
-			DeletePvcGroup(listofFadaPvcNames, FadaAppNameSpace)
-			log.InfoD("Delete pvc from fbda-app-namespace")
-			DeletePvcGroup(listofFbdaPvc, FbdaAppNameSpace)
-			log.InfoD("Delete pvc from base-app-namespace")
-			DeletePvcGroup(listofBasePvcNames, BaseAppNameSpace)
-
-			log.InfoD("Delete namespace fada-app-namespace")
-			err = core.Instance().DeleteNamespace(FadaAppNameSpace)
-			log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", "fada-app-namespace"))
-			log.InfoD("Delete namespace fbda-app-namespace")
-			err = core.Instance().DeleteNamespace(FbdaAppNameSpace)
-			log.InfoD("Delete namespace base-app-namespace")
-			err = core.Instance().DeleteNamespace(BaseAppNameSpace)
-			log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", "base-app-namespace"))
+			//log.InfoD("Delete pvc from fada-app-namespace")
+			//DeletePvcGroup(listofFadaPvcNames, FadaAppNameSpace)
+			//log.InfoD("Delete pvc from fbda-app-namespace")
+			//DeletePvcGroup(listofFbdaPvc, FbdaAppNameSpace)
+			//log.InfoD("Delete pvc from base-app-namespace")
+			//DeletePvcGroup(listofBasePvcNames, BaseAppNameSpace)
+			//
+			//log.InfoD("Delete namespace fada-app-namespace")
+			//err = core.Instance().DeleteNamespace(FadaAppNameSpace)
+			//log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", "fada-app-namespace"))
+			//log.InfoD("Delete namespace fbda-app-namespace")
+			//err = core.Instance().DeleteNamespace(FbdaAppNameSpace)
+			//log.InfoD("Delete namespace base-app-namespace")
+			//err = core.Instance().DeleteNamespace(BaseAppNameSpace)
+			//log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", "base-app-namespace"))
 
 			//Here we create a map with volume name as key and value as true (assuming all volumes currently exist in FA) and make them false if not present using checkVolumesExistinFA
 			pvcFadanotExistMap := make(map[string]bool)
