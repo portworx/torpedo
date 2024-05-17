@@ -221,8 +221,8 @@ func PurgePDS() []error {
 	}
 
 	if WorkflowPDSRestore.Source.Namespace.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
-		log.InfoD("Purging all restore destination namespaces")
-		err = WorkflowPDSRestore.Destination.Purge()
+		log.InfoD("Purging all destination namespaces")
+		err = WorkflowPDSRestore.Destination.Purge(true)
 		if err != nil {
 			log.Errorf("error while purging destination namespaces - [%s]", err.Error())
 			allErrors = append(allErrors, err)
@@ -243,22 +243,15 @@ func PurgePDS() []error {
 		allErrors = append(allErrors, err)
 	}
 
-	log.InfoD("Purging all restore source namespaces")
-	err = WorkflowPDSRestore.Source.Namespace.Purge()
-	if err != nil {
-		log.Errorf("error while purging restored namespaces - [%s]", err.Error())
-		allErrors = append(allErrors, err)
-	}
-
 	log.InfoD("Purging all source namespace objects")
-	err = WorkflowNamespace.Purge()
+	err = WorkflowNamespace.Purge(true)
 	if err != nil {
 		log.Errorf("error while purging all namespaces - [%s]", err.Error())
 		allErrors = append(allErrors, err)
 	}
 
 	log.InfoD("Purging all destination namespace objects")
-	err = WorkflowNamespaceDestination.Purge()
+	err = WorkflowNamespaceDestination.Purge(true)
 	if err != nil {
 		log.Errorf("error while purging all namespaces - [%s]", err.Error())
 		allErrors = append(allErrors, err)

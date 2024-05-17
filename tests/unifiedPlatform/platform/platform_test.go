@@ -136,7 +136,7 @@ var _ = Describe("{PlatformBasicTest}", func() {
 		})
 
 		Step("Cleanup all resources", func() {
-			err := workflowNamespace.Purge()
+			err := workflowNamespace.Purge(false)
 			log.FailOnError(err, "Unable to cleanup all namespaces")
 			log.InfoD("All namespaces cleaned up successfully")
 		})

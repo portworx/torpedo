@@ -7,6 +7,7 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	k8utils "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
+	"strings"
 	"time"
 )
 
@@ -157,14 +158,18 @@ func (workflowNamespace *WorkflowNamespace) ValidateNamespaceUID(namespace strin
 	return ns.(string), nil
 }
 
-func (workflowNamespace *WorkflowNamespace) Purge() error {
+func (workflowNamespace *WorkflowNamespace) Purge(ignoreError bool) error {
 
 	// Delete all namespaces from k8s cluster
 
 	for namespace, _ := range workflowNamespace.Namespaces {
 		err := k8utils.DeleteNamespace(namespace)
 		if err != nil {
-			return fmt.Errorf("Error occurred during deleting namespace from cluster. Error - [%s]", err.Error())
+			if ignoreError && strings.Contains(err.Error(), "not found") == true {
+				log.Warnf(err.Error())
+			} else {
+				return fmt.Errorf("Error occurred during deleting namespace from cluster. Error - [%s]", err.Error())
+			}
 		}
 		log.Infof("Deleted [%s] from the cluster", namespace)
 	}

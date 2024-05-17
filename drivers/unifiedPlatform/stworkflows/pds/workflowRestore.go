@@ -50,6 +50,7 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 		name,
 		backupUid,
 		restore.Destination.TargetCluster.Project.ProjectId,
+		restore.Destination.Namespaces[namespace],
 	)
 
 	if err != nil {

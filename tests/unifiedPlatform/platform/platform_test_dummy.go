@@ -326,7 +326,7 @@ var _ = Describe("{NamepsaceDummyTest}", func() {
 		})
 
 		Step("Purge All Namespaces", func() {
-			err := workflowNamespace.Purge()
+			err := workflowNamespace.Purge(false)
 			log.FailOnError(err, "Unable to cleanup all namespaces")
 			log.InfoD("All namespaces cleaned up successfully")
 		})

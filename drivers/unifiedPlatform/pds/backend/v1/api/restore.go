@@ -22,10 +22,6 @@ func (restore *PDS_API_V1) CreateRestore(createRestoreRequest *automationModels.
 
 	sourceReference := restoreV1.NewV1SourceReferences(createRestoreRequest.Create.SourceReferences.BackupId)
 
-	destinationReference := restoreV1.NewV1DestinationReferences()
-	destinationReference.TargetClusterId = &createRestoreRequest.Create.DestinationReferences.TargetClusterId
-	destinationReference.ProjectId = &createRestoreRequest.Create.DestinationReferences.ProjectId
-
 	restoreRequest := restoreClient.RestoreServiceCreateRestore(ctx, createRestoreRequest.Create.NamespaceId)
 	restoreRequest = restoreRequest.RestoreServiceCreateRestoreBody(
 		restoreV1.RestoreServiceCreateRestoreBody{
@@ -35,8 +31,7 @@ func (restore *PDS_API_V1) CreateRestore(createRestoreRequest *automationModels.
 					Name: createRestoreRequest.Create.Restore.Meta.Name,
 				},
 				Config: &restoreV1.V1Config{
-					SourceReferences:      sourceReference,
-					DestinationReferences: destinationReference,
+					SourceReferences: sourceReference,
 				},
 			},
 		},
