@@ -4160,11 +4160,10 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 				AppKeys:            []string{"fio-fa-davol"},
 				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
-				PvcSize:            6 * units.GiB,
+				Namespace:          taskName,
 			})
 			log.FailOnError(err, "Failed to schedule application of namespace [%v]", taskName)
 			contexts = append(contexts, context...)
-
 		})
 		ValidateApplications(contexts)
 
@@ -4179,7 +4178,6 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 					cloneVolumeId, err := Inst().V.CloneVolume(vol.ID)
 					log.FailOnError(err, "Failed to clone volume [%v]", vol.ID)
 					log.InfoD("Clone Volume ID [%v] for parent volume [%v]", cloneVolumeId, vol.ID)
-
 				}
 			}
 			log.InfoD("Get the corresponding volume name for the volId")
@@ -4195,6 +4193,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 		})
 		checkVolumeExistsInFlashArrays := func(volumeName string, flashArrays []pureutils.FlashArrayEntry) error {
 			cloneVolFound := false
+
 			for _, fa := range flashArrays {
 				faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
 				log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
@@ -4207,7 +4206,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 
 				if isExists {
 					cloneVolFound = true
-					break
+					return nil
 				} else {
 					log.Infof("Volume [%v] doesn't exist on the FA Cluster [%v]", volName, fa.MgmtEndPoint)
 				}
@@ -4225,7 +4224,6 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 		})
 
 	})
-
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		appsValidateAndDestroy(contexts)
