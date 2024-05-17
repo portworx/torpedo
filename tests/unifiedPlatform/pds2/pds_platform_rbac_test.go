@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}", func() {
+var _ = Describe("{BackupAndRestoreAcrossDifferentProjectsWithDifferentUsers}", func() {
 	var (
 		deployment             *automationModels.PDSDeploymentResponse
 		destinationProject     platform.WorkflowProject
@@ -186,7 +186,7 @@ var _ = Describe("{BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers}",
 	})
 })
 
-var _ = Describe("{BackupAndRestoreAccrossSameProjectsWithDifferentUsers}", func() {
+var _ = Describe("{BackupAndRestoreAcrossSameProjectsWithDifferentUsers}", func() {
 	var (
 		deployment             *automationModels.PDSDeploymentResponse
 		workflowServiceAccount platform.WorkflowServiceAccount
