@@ -5,7 +5,7 @@ import (
 )
 
 // CreateRestore creates restore for the backup
-func CreateRestore(name string, backupId string, targetClusterId string, namespaceId string, projectIdSource string, projectIdDest string) (*automationModels.PDSRestoreResponse, error) {
+func CreateRestore(name string, backupId string, projectIdDest string) (*automationModels.PDSRestoreResponse, error) {
 
 	createRestoreRequest := automationModels.PDSRestoreRequest{
 		Create: automationModels.PDSCreateRestore{
@@ -14,15 +14,12 @@ func CreateRestore(name string, backupId string, targetClusterId string, namespa
 					Name: &name,
 				},
 			},
-			ProjectId:   projectIdSource,
+			ProjectId:   projectIdDest,
 			NamespaceId: namespaceId,
 			SourceReferences: &automationModels.SourceReferences{
 				BackupId: backupId,
 			},
-			DestinationReferences: &automationModels.DestinationReferences{
-				TargetClusterId: targetClusterId,
-				ProjectId:       projectIdDest,
-			},
+			DestinationReferences: &automationModels.DestinationReferences{},
 		},
 	}
 

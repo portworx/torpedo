@@ -48,9 +48,7 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 	log.Infof("Creating restore - [%s]", name)
 	createRestore, err := pdslibs.CreateRestore(
 		name,
-		backupUid, restore.Destination.TargetCluster.ClusterUID,
-		restore.Destination.Namespaces[namespace],
-		restore.Source.Namespace.TargetCluster.Project.ProjectId,
+		backupUid,
 		restore.Destination.TargetCluster.Project.ProjectId,
 	)
 
