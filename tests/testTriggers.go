@@ -3532,25 +3532,20 @@ func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *E
 			log.Infof("Volumes : %v", vols)
 			UpdateOutcome(event, err)
 			for vol, params := range vols {
-				log.Infof("Volume Name : %s", vol)
 				inspectedVol, err:= Inst().V.InspectVolume(vol)
 				UpdateOutcome(event, err)
 				csBksps, err := Inst().V.GetCloudsnapsOfGivenVolume(vol, inspectedVol.Id, params)
 				UpdateOutcome(event, err)
 				var cloudsnapIds []string
 				for _, bk := range csBksps {
-					log.Infof("Before Backup ID : %s having status : %v, Source volume: %s", bk.Id, bk.Status, bk.SrcVolumeName)
-					log.Infof("bk.GetMetadata() : %v , Source volume: %s", bk.GetMetadata(), bk.SrcVolumeName)
 					cloudsnapIds = append(cloudsnapIds, bk.Id)
 				}
 				if len(csBksps) > 0 {
 					volCloudsnapMap[vol] = cloudsnapIds
 					err = Inst().V.DeleteAllCloudsnaps(vol,csBksps[0].SrcVolumeId, params)
-					if err != nil && strings.Contains(err.Error(), "Key already exists") {
-						log.Infof("KEY EXiST observed %v", err)
-						continue
+					if err != nil && !strings.Contains(err.Error(), "Key already exists") {
+						UpdateOutcome(event, err)
 					}
-					UpdateOutcome(event, err)
 				}
 			}
 		}
@@ -3602,8 +3597,10 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 	}()
 
 	defer func() {
-		err := DeleteCloudSnapBucket(*contexts)
-		UpdateOutcome(event, fmt.Errorf("failed to delete cloud snap bucket,Cause: %v", err))
+		bucketName, err := GetCloudsnapBucketName(*contexts)
+		UpdateOutcome(event, err)
+		err = DeleteCloudSnapBucket(bucketName)
+		UpdateOutcome(event, err)
 	}()
 
 	setMetrics(*event)
@@ -6332,7 +6329,8 @@ func TriggerUpgradeVolumeDriverFromCatalog(contexts *[]*scheduler.Context, recor
 					UpdateOutcome(event, fmt.Errorf("error getting images using URL [%s] and k8s version [%s]. Err: [%v]", upgradeHop, k8sVersion.String(), err))
 					return
 				}
-				err = oputil.ValidateStorageCluster(imageList, stc, ValidateStorageClusterTimeout, defaultRetryInterval, true)
+				storageClusterValidateTimeout := time.Duration(len(node.GetStorageDriverNodes())*9) * time.Minute
+				err = oputil.ValidateStorageCluster(imageList, stc, storageClusterValidateTimeout, defaultRetryInterval, true)
 				if err != nil {
 					UpdateOutcome(event, fmt.Errorf("error validating storage cluster after upgrade. Err: [%v]", err))
 					return
@@ -7504,11 +7502,11 @@ func getCloudSnapInterval(triggerType string) int {
 	case 7:
 		interval = 60
 	case 8:
-		interval = 30
+		interval = 45
 	case 9:
-		interval = 20
+		interval = 30
 	case 10:
-		interval = 10
+		interval = 20
 	}
 	return interval
 
@@ -7617,9 +7615,11 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 				nodeMap := node.GetNodesByVoDriverNodeID()
 				nodeContexts := make([]*scheduler.Context, 0)
+				log.Infof("KVDB node map is [%v]", kvdbNodeIDMap)
 
 				for kvdbID, nodeID := range kvdbNodeIDMap {
 					kvdbNode := nodeMap[nodeID]
+
 					appNodeContexts, err := GetContextsOnNode(contexts, &kvdbNode)
 					nodeContexts = append(nodeContexts, appNodeContexts...)
 					errorChan := make(chan error, errorChannelSize)
@@ -7727,27 +7727,30 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 }
 
 func validateKVDBMembers(event *EventRecord, kvdbMembers map[string]*volume.MetadataNode, isDestuctive bool) bool {
-	log.InfoD("Current KVDB members: %v", kvdbMembers)
 
 	allHealthy := true
 
 	if len(kvdbMembers) == 0 {
-		err := fmt.Errorf("No KVDB membes to validate")
+		err := fmt.Errorf("no KVDB membes to validate")
 		UpdateOutcome(event, err)
 		return false
 	}
+	log.InfoD("Current KVDB members are")
+	for _, m := range kvdbMembers {
+		log.InfoD(m.Name)
+	}
 
-	for id, m := range kvdbMembers {
+	for _, m := range kvdbMembers {
 
 		if !m.IsHealthy {
-			err := fmt.Errorf("kvdb member node: %v is not healthy", id)
-			allHealthy = allHealthy && false
+			err := fmt.Errorf("kvdb member node: %v is not healthy", m.Name)
+			allHealthy = false
 			log.Warn(err.Error())
 			if isDestuctive {
 				UpdateOutcome(event, err)
 			}
 		} else {
-			log.InfoD("KVDB member node %v is healthy", id)
+			log.InfoD("KVDB member node %v is healthy", m.Name)
 		}
 	}
 
@@ -10204,6 +10207,12 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 		return
 	}
 
+	err := Inst().S.RefreshNodeRegistry()
+	UpdateOutcome(event, err)
+
+	err = Inst().V.RefreshDriverEndpoints()
+	UpdateOutcome(event, err)
+
 	stepLog = "validate PX on all nodes after cluster scale up"
 	hasPXUp := true
 	Step(stepLog, func() {
@@ -10222,7 +10231,7 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 		return
 	}
 
-	err := Inst().V.RefreshDriverEndpoints()
+	err = Inst().V.RefreshDriverEndpoints()
 	UpdateOutcome(event, err)
 
 	updatedStorageNodesCount := len(node.GetStorageNodes())
@@ -10332,6 +10341,11 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 	if !isClusterScaled {
 		return
 	}
+	err := Inst().S.RefreshNodeRegistry()
+	UpdateOutcome(event, err)
+
+	err = Inst().V.RefreshDriverEndpoints()
+	UpdateOutcome(event, err)
 
 	stepLog = "validate PX on all nodes after cluster scale up"
 	hasPXUp := true
@@ -10350,7 +10364,7 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 	if !hasPXUp {
 		return
 	}
-	err := Inst().V.RefreshDriverEndpoints()
+	err = Inst().V.RefreshDriverEndpoints()
 	UpdateOutcome(event, err)
 
 	updatedStoragelessNodesCount := len(node.GetStorageLessNodes())
@@ -10363,7 +10377,6 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)
-
 }
 
 func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
@@ -10415,6 +10428,19 @@ func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *ch
 				updateLongevityStats(OCPStorageNodeRecycle, stats.NodeRecycleEventName, dashStats)
 				err := Inst().S.DeleteNode(delNode)
 				UpdateOutcome(event, err)
+
+				stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storeage nodes",
+					Inst().AutoStorageNodeRecoveryTimeout.String())
+
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
+				})
+				err = Inst().S.RefreshNodeRegistry()
+				UpdateOutcome(event, err)
+
+				err = Inst().V.RefreshDriverEndpoints()
+				UpdateOutcome(event, err)
 			})
 		Step(fmt.Sprintf("Listing all nodes after recycling a storage node %s", delNode.Name), func() {
 			workerNodes := node.GetWorkerNodes()
@@ -10452,7 +10478,6 @@ func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *ch
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)
-
 }
 
 // TriggerReallocSharedMount peforms sharedv4 and sharedv4_svc volumes reallocation

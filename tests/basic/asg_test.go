@@ -122,6 +122,112 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 	})
 })
 
+// This test performs basic test of scaling up and down the asg cluster
+var _ = Describe("{ClusterScaleUpIncreasesMaxStorageNodesPerZone}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ClusterScaleUpIncreasesMaxStorageNodesPerZone", "Validate cluster nodes and storage nodes scale up", nil, testrailID)
+
+	})
+	var contexts []*scheduler.Context
+
+	It("has to validate that storage nodes are not lost during asg scaledown", func() {
+		log.InfoD("Has to validate that storage nodes are not lost during asg scaledown")
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("asgscaleupdown-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		initialNodeCount, err := Inst().S.GetASGClusterSize()
+		log.FailOnError(err, "Failed to Get ASG cluster size")
+
+		scaleupCount := initialNodeCount + initialNodeCount/2
+
+		scaleupCount = (scaleupCount / 3) * 3
+		stepLog := fmt.Sprintf("scale up cluster from %d to %d nodes and validate",
+			initialNodeCount, scaleupCount)
+
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			Scale(scaleupCount)
+			stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storeage nodes",
+				Inst().AutoStorageNodeRecoveryTimeout.String())
+
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
+			})
+			// After scale up, get fresh list of nodes
+			// by re-initializing scheduler and volume driver
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "Verify node registry refresh")
+
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "Verify driver end points refresh")
+
+			stepLog = "validate number of storage nodes after scale up"
+			Step(fmt.Sprintf(stepLog), func() {
+				log.InfoD(stepLog)
+				ValidateClusterSize(scaleupCount)
+			})
+			PrintPxctlStatus()
+		})
+
+		stc, err := Inst().V.GetDriver()
+		log.FailOnError(err, "error getting volume driver")
+		maxStorageNodesPerZone := *stc.Spec.CloudStorage.MaxStorageNodesPerZone
+		numOfStorageNodes := len(node.GetStorageNodes())
+		log.Infof("maxStorageNodesPerZone %d", int(maxStorageNodesPerZone))
+		log.Infof("numOfStorageNodes %d", numOfStorageNodes)
+
+		actualStorageNodes := numOfStorageNodes
+		expectedStorageNodes := maxStorageNodesPerZone
+
+		// In multi-zone ASG cluster, node count is per zone
+		if Inst().S.String() != openshift.SchedName {
+			zones, err := Inst().S.GetZones()
+			dash.VerifyFatal(err, nil, "Verify Get zones")
+			expectedStorageNodes = expectedStorageNodes * uint32(len(zones))
+		}
+
+		updatedMaxStorageNodesPerZone := uint32(0)
+		if int(expectedStorageNodes) <= actualStorageNodes {
+			//increase max per zone
+			updatedMaxStorageNodesPerZone = maxStorageNodesPerZone + 1
+		}
+
+		initialStorageNodes := node.GetStorageNodes()
+
+		stepLog = "update maxStorageNodesPerZone in storage cluster spec"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			stc.Spec.CloudStorage.MaxStorageNodesPerZone = &updatedMaxStorageNodesPerZone
+			log.InfoD("updating maxStorageNodesPerZone from %d to %d", maxStorageNodesPerZone, updatedMaxStorageNodesPerZone)
+			pxOperator := operator.Instance()
+			_, err = pxOperator.UpdateStorageCluster(stc)
+			log.FailOnError(err, "error updating storage cluster")
+			log.Infof("Sleeping for %v mins for new storage nodes to created", Inst().AutoStorageNodeRecoveryTimeout)
+			time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "Verify driver end points refresh")
+			dash.VerifyFatal(len(node.GetStorageNodes()) > len(initialStorageNodes), true, "verify new storage node is added")
+			PrintPxctlStatus()
+		})
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		ValidateAndDestroy(contexts, opts)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
 // This test randomly kills one volume driver node and ensures cluster remains
 // intact by ASG
 var _ = Describe("{ASGKillRandomNodes}", func() {
@@ -324,25 +430,6 @@ func waitForIBMNodeTODeploy() error {
 	return err
 }
 
-func waitForIBMNodeToDelete(nodeToKill node.Node) error {
-	t := func() (interface{}, bool, error) {
-
-		currState, err := Inst().N.GetNodeState(nodeToKill)
-		if err != nil {
-			return "", true, err
-		}
-		if currState == ibm.DELETED {
-			return "", false, nil
-		}
-
-		return "", true, fmt.Errorf("node [%s] not deleted yet, current state : %s", nodeToKill.Hostname, currState)
-
-	}
-
-	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
-	return err
-}
-
 var _ = Describe("{AddStorageNode}", func() {
 
 	var contexts []*scheduler.Context
@@ -389,7 +476,7 @@ var _ = Describe("{AddStorageNode}", func() {
 				actualPerZoneCount := numOfStorageNodes
 
 				// In multi-zone ASG cluster, node count is per zone
-				if Inst().S.String() != aks.SchedName && Inst().S.String() != openshift.SchedName {
+				if Inst().S.String() != openshift.SchedName {
 					zones, err = Inst().S.GetZones()
 					dash.VerifyFatal(err, nil, "Verify Get zones")
 
@@ -451,9 +538,12 @@ var _ = Describe("{AddStorageNode}", func() {
 			expectedPerZone := maxStorageNodesPerZone
 			if updatedMaxStorageNodesPerZone != 0 {
 				expectedPerZone = updatedMaxStorageNodesPerZone
-
 			}
-			expectedStorageNodesCount := int(expectedPerZone) * len(zones)
+			numOfZones := 1
+			if len(zones) != 0 {
+				numOfZones = len(zones)
+			}
+			expectedStorageNodesCount := int(expectedPerZone) * numOfZones
 
 			if expectedStorageNodesCount >= len(node.GetStorageNodes()) {
 				expectedStorageNodesCount = len(node.GetStorageNodes())
@@ -579,7 +669,7 @@ var _ = Describe("{AddStoragelessNode}", func() {
 	})
 })
 
-var _ = Describe("{RecycleStorageDriverNodes}", func() {
+var _ = Describe("{RecycleStorageDriverNode}", func() {
 
 	var contexts []*scheduler.Context
 
@@ -691,6 +781,80 @@ var _ = Describe("{RecycleStorageDriverNodes}", func() {
 				PrintPxctlStatus()
 			})
 			// Validating the apps after recycling the Storage node
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{RecycleAllStorageDriverNodes}", func() {
+
+	var contexts []*scheduler.Context
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+		wantAfterSuiteSystemCheck = true
+	})
+	JustBeforeEach(func() {
+		StartTorpedoTest("RecycleAllStorageDriverNodes", "Test drives and pools after recycling a all storage driver nodes one by one", nil, 0)
+	})
+
+	It("Validating the drives and pools after recycling a node", func() {
+		Step("Get the storage and storageless nodes and delete them", func() {
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("recyclenode-%d", i))...)
+			}
+			ValidateApplications(contexts)
+
+			existingStorageDriverNodes := node.GetStorageDriverNodes()
+
+			for _, existingStorageDriverNode := range existingStorageDriverNodes {
+				stepLog := fmt.Sprintf("Recycling node: [%s]", existingStorageDriverNode.Name)
+				Step(
+					stepLog,
+					func() {
+						log.InfoD(stepLog)
+						err := Inst().S.DeleteNode(existingStorageDriverNode)
+						log.FailOnError(err, fmt.Sprintf("Failed to recycle a node [%s]. Error: [%v]", existingStorageDriverNode.Name, err))
+						waitTime := 10
+						if Inst().S.String() == oke.SchedName {
+							waitTime = 15 // OKE takes more time to replace the node
+						}
+
+						stepLog = fmt.Sprintf("Wait for %d min. to node get replaced by autoscalling group", waitTime)
+						Step(stepLog, func() {
+							log.InfoD(stepLog)
+							time.Sleep(time.Duration(waitTime) * time.Minute)
+						})
+						err = Inst().S.RefreshNodeRegistry()
+						log.FailOnError(err, "Verify node registry refresh")
+
+						err = Inst().V.RefreshDriverEndpoints()
+						log.FailOnError(err, "Verify driver end points refresh")
+						stepLog = fmt.Sprintf("Validate number of storage nodes after recycling node [%v]", existingStorageDriverNode.Name)
+						Step(stepLog, func() {
+							log.InfoD(stepLog)
+							ValidateClusterSize(int64(len(node.GetStorageDriverNodes())))
+							PrintPxctlStatus()
+						})
+						nodeIdExists := false
+						if len(existingStorageDriverNode.StorageNode.Pools) > 0 {
+							newStorageDriverNodes := node.GetStorageDriverNodes()
+							for _, newStorageDriverNode := range newStorageDriverNodes {
+								if newStorageDriverNode.VolDriverNodeID == existingStorageDriverNode.VolDriverNodeID {
+									nodeIdExists = true
+									break
+								}
+							}
+							dash.VerifyFatal(nodeIdExists, true, fmt.Sprintf("Node ID [%s] exists after deleting storage node [%v]", existingStorageDriverNode.VolDriverNodeID, existingStorageDriverNode.Name))
+						}
+
+					})
+			}
+			// Validating the apps after recycling the Storage driver node
 			ValidateApplications(contexts)
 		})
 	})
