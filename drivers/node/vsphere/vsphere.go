@@ -326,6 +326,10 @@ func (v *vsphere) connect() error {
 // DetachDisk vdisks from node.
 func (v *vsphere) DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string) error {
 	configData, err := GetCloudDriveConfigmapData(stc)
+	if err != nil {
+		err = fmt.Errorf("Failed to find configData: err %w", err)
+		return err
+	}
 	//Find out the instance VMUUID and then dettach.
 	for _, nodeConfigData := range configData {
 		if nodeName == nodeConfigData.SchedulerNodeName {
