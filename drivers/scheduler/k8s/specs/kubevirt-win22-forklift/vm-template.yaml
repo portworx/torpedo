@@ -7,7 +7,7 @@ metadata:
     "forklift.konveyor.io/disk-source": "[VCD-DEV-LINUX2-PURE-002] satdaap00886/satdaap00886_1.vmdk"
     "vmID": {{ .VmID }}
 spec:
-  storageClassName: sv4-wffc-localattach-multi-disk 
+  storageClassName: sv4-wffc-localattach-multi-disk
   accessModes:
     - ReadWriteMany
   resources:

@@ -4,6 +4,7 @@ import (
 	context1 "context"
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
+	"math/rand"
 	"net/url"
 	"strings"
 	"sync"
@@ -890,7 +891,7 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				taskName := fmt.Sprintf("test-%v", i)
-				appCtxs = append(appCtxs, ScheduleApplications(taskName)...)
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace("ocp-upgrade", taskName)...)
 			}
 		})
 		stepLog = "validate kubevirt apps before upgrade"
@@ -911,6 +912,14 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 			log.Fatalf("No versions to upgrade")
 			return
 		}
+		stopSignal := make(chan struct{})
+
+		var mError error
+		go doVmValidation(contexts, stopSignal, &mError)
+		defer func() {
+			close(stopSignal)
+		}()
+
 		for _, version := range versions {
 			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), version), func() {
 				stopSignal := make(chan struct{})
@@ -1958,3 +1967,203 @@ var _ = Describe("{RestartPXAndCheckIfVmBindMount}", func() {
 		AfterEachTest(appCtxs)
 	})
 })
+
+var _ = Describe("{UpgradePXAndValidateVM}", func() {
+	/*
+			1. Schedule kubevirt vms
+		 	2. Upgrade PX
+			3. While upgrading the VMs should be running fine and no downtime should be observed
+			4. validate VMs after upgrade
+			5. Destroy the applications
+
+			https://purestorage.atlassian.net/browse/PTX-24192
+
+	*/
+	JustBeforeEach(func() {
+		upgradeHopsList := make(map[string]string)
+		upgradeHopsList["upgradeHops"] = Inst().UpgradeStorageDriverEndpointList
+		upgradeHopsList["upgradeVolumeDriver"] = "true"
+		StartTorpedoTest("UpgradePXAndValidateVM", "Upgrade PX and validate VM", nil, 0)
+		log.InfoD("Volume driver upgrade hops list [%s]", upgradeHopsList)
+	})
+
+	itLog := "Upgrade PX and validate VM"
+	var appCtxs []*scheduler.Context
+	storageNodes := node.GetStorageNodes()
+	numOfNodes := len(node.GetStorageDriverNodes())
+
+	It(itLog, func() {
+		log.InfoD(itLog)
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal", "kubevirt-debian-fio-low-ha", "kubevirt-win22-forklift"}
+
+		var timeBeforeUpgrade time.Time
+		var timeAfterUpgrade time.Time
+
+		stepLog := "schedule a kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("test-%v", i)
+				appCtxs = append(appCtxs, ScheduleApplications(taskName)...)
+			}
+			ValidateApplications(appCtxs)
+			for _, appCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			}
+		})
+
+		stepLog = "Upgrade PX and while upgrade the VM's should be running and no downtime should be observed"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
+				log.Fatalf("Unable to perform volume driver upgrade hops, none were given")
+			}
+
+			stopSignal := make(chan struct{})
+
+			var mError error
+			go doVmValidation(contexts, stopSignal, &mError)
+			defer func() {
+				close(stopSignal)
+			}()
+
+			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
+			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+				var volName string
+				var attachedNode *node.Node
+				fioJobName := "upg_vol"
+				log.Infof(upgradeHop)
+
+				if Inst().N.IsUsingSSH() {
+					n := storageNodes[rand.Intn(len(storageNodes))]
+
+					volName = fmt.Sprintf("vol-%s", time.Now().Format("01-02-15h04m05s"))
+					volId, err := Inst().V.CreateVolume(volName, 53687091200, 3)
+					log.FailOnError(err, "error creating vol-1")
+					log.Infof("created vol %s", volId)
+					out, err := Inst().V.AttachVolume(volId)
+					log.FailOnError(err, "error attaching vol-1")
+					log.Infof("attached vol %s", out)
+					attachedNode, err = GetNodeForGivenVolumeName(volName)
+
+					log.FailOnError(err, fmt.Sprintf("error getting  attached node for volume %s", volName))
+
+					err = writeFIOData(volName, fioJobName, *attachedNode)
+					log.FailOnError(err, fmt.Sprintf("error running fio command on node %s", n.Name))
+				}
+
+				currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+				if err != nil {
+					log.Warnf("error getting driver version, Err: %v", err)
+				}
+				timeBeforeUpgrade = time.Now()
+				isDmthinBeforeUpgrade, errDmthinCheck := IsDMthin()
+				dash.VerifyFatal(errDmthinCheck, nil, "verified is setup dmthin before upgrade? ")
+
+				err = Inst().V.UpgradeDriver(upgradeHop)
+				timeAfterUpgrade = time.Now()
+				dash.VerifyFatal(err, nil, "Volume driver upgrade successful?")
+
+				durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
+				expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
+				dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Verify volume drive upgrade within expected time")
+				upgradeStatus := "PASS"
+				if durationInMins <= expectedUpgradeTime {
+					log.InfoD("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
+				} else {
+					log.Errorf("Upgrade took %d minutes to completed which is greater than expected time %d minutes", durationInMins, expectedUpgradeTime)
+					dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Upgrade took more than expected time to complete")
+					upgradeStatus = "FAIL"
+				}
+				updatedPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+				if err != nil {
+					log.Warnf("error getting driver version, Err: %v", err)
+				}
+				isDmthinAfterUpgrade, errDmthinCheck := IsDMthin()
+				dash.VerifyFatal(errDmthinCheck, nil, "verified is setup dmthin after upgrade? ")
+				dash.VerifyFatal(isDmthinBeforeUpgrade, isDmthinAfterUpgrade, "setup type remained same pre and post upgrade")
+				majorVersion := strings.Split(currPXVersion, "-")[0]
+				statsData := make(map[string]string)
+				statsData["numOfNodes"] = fmt.Sprintf("%d", numOfNodes)
+				statsData["fromVersion"] = currPXVersion
+				statsData["toVersion"] = updatedPXVersion
+				statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)
+				statsData["status"] = upgradeStatus
+				dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
+
+				if attachedNode != nil {
+					err = readFIOData(volName, fioJobName, *attachedNode)
+					log.FailOnError(err, fmt.Sprintf("error while reading fio data on node %s", attachedNode.Name))
+				}
+				if mError != nil {
+					break
+				}
+			}
+			dash.VerifyFatal(mError, nil, "validate apps during PX upgrade")
+
+		})
+
+	})
+
+})
+
+func doVmValidation(appCtxs []*scheduler.Context, stopSignal <-chan struct{}, mError *error) {
+
+	itr := 1
+	errCounter := 0
+	for {
+		log.Infof("Apps validation iteration: #%d", itr)
+		select {
+		case <-stopSignal:
+			log.Infof("Exiting app validations routine")
+			return
+		default:
+			for _, appCtx := range appCtxs {
+				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+				if err != nil {
+					log.Warnf("Failed to get VMs from scheduled contexts")
+					errCounter++
+				}
+				for _, vm := range vms {
+					status, err := GetStatusOfVM(vm)
+					if err != nil {
+						log.Warnf("Failed to get status of VM %s", vm.Name)
+						errCounter++
+					}
+					// if the status is not running then we need to collect the virtlauncher logs
+					if status != "Running" {
+						log.Warnf("VM %s is not running and is in [%s]", vm.Name, status)
+
+						//collect virtlauncher logs
+						output, err := CollectLogsFromVirtLauncherPod(appCtx)
+						if err != nil {
+							log.Errorf("Failed to collect logs from virtlauncher pod")
+							errCounter++
+						}
+						log.Infof("Logs from virtlauncher pod: %s", output)
+					}
+				}
+				if errCounter > 10 {
+					*mError = fmt.Errorf("Failed to validate VMs")
+					return
+				}
+			}
+			if *mError != nil {
+				return
+			}
+			itr++
+			time.Sleep(10 * time.Second)
+		}
+	}
+
+}

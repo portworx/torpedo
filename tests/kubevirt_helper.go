@@ -213,6 +213,33 @@ func GetNumberOfDisksInVMViaVirtLauncherPod(virtualMachineCtx *scheduler.Context
 	return d.(int), nil
 }
 
+// CollectLogsFromVirtLauncherPod collects logs from the virt-launcher pod of the VM
+func CollectLogsFromVirtLauncherPod(virtualMachineCtx *scheduler.Context) (string, error) {
+	vols, err := Inst().S.GetVolumes(virtualMachineCtx)
+	if err != nil {
+		return "", err
+	}
+
+	virtlauncherPod, err := GetVirtLauncherPodForVM(virtualMachineCtx, vols[0])
+	if err != nil {
+		return "", err
+	}
+	cmd := []string{"kubectl", "logs", "-n", virtlauncherPod.Name, virtualMachineCtx.App.NameSpace}
+
+	t := func() (interface{}, bool, error) {
+		output, err := core.Instance().RunCommandInPod(cmd, virtlauncherPod.Name, "compute", virtlauncherPod.Namespace)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to get logs from pod: %s", err)
+		}
+		return output, false, nil
+	}
+	output, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
+	if err != nil {
+		return "", err
+	}
+	return output.(string), nil
+}
+
 // GetStorageClassOfVmPVC returns the storage class of pvc attached to the VM
 func GetStorageClassOfVmPVC(vm *scheduler.Context) (string, error) {
 	// Get the PVC object from the VM
@@ -836,4 +863,14 @@ func GetNonReplicaNodesOfVM(virtualMachineCtx *scheduler.Context) ([]string, err
 	}
 
 	return nonReplicaNodes, nil
+}
+
+// GetStatusOfVM returns status of the virtual machine instance in the kubevirt
+func GetStatusOfVM(virtualMachineCtx kubevirtv1.VirtualMachine) (string, error) {
+	vmi, err := kubevirt.Instance().GetVirtualMachineInstance(context1.TODO(), virtualMachineCtx.Name, virtualMachineCtx.Namespace)
+	if err != nil {
+		return "", err
+	}
+	log.InfoD("vm: %s status: %s", virtualMachineCtx.Name, vmi.Status.Phase)
+	return string(vmi.Status.Phase), nil
 }
