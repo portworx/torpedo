@@ -2073,9 +2073,11 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		log.Infof("[%v] Created PVC: %v", app.Key, pvc.Name)
 
 		autopilotEnabled := false
+		log.Infof("Annotations %+v", pvc.Annotations)
 		if pvcAnnotationValue, ok := pvc.Annotations[autopilotEnabledAnnotationKey]; ok {
 			autopilotEnabled, _ = strconv.ParseBool(pvcAnnotationValue)
 		}
+		log.Infof("Autopilot enabled: %v", autopilotEnabled)
 		if autopilotEnabled {
 			apRule := options.AutopilotRule
 			labels := options.Labels
