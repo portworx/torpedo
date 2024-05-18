@@ -4,6 +4,7 @@ metadata:
   name: fio-boot-pvc
   labels:
     app: containerized-data-importer
+    autopilot: pvc-expand
   annotations:
     torpedo.io/autopilot-enabled: "true"
     cdi.kubevirt.io/storage.import.endpoint: http://kubevirt-disk-registry.pwx.dev.purestorage.com/more_images/fio-and-yes-workload.qcow2
