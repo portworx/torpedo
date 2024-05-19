@@ -80,7 +80,7 @@ var _ = Describe("{PlatformBasicTest}", func() {
 		})
 
 		Step("Register Target Cluster", func() {
-			workflowTargetCluster.Project = workflowProject
+			workflowTargetCluster.Project = &workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
 			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane()
 			log.FailOnError(err, "Unable to register target cluster")
@@ -88,7 +88,7 @@ var _ = Describe("{PlatformBasicTest}", func() {
 		})
 
 		Step("Create a PDS Namespace", func() {
-			workflowNamespace.TargetCluster = workflowTargetCluster
+			workflowNamespace.TargetCluster = &workflowTargetCluster
 			workflowNamespace.Namespaces = make(map[string]string)
 			_, err := workflowNamespace.CreateNamespaces(namespace)
 			log.FailOnError(err, "Unable to create PDS namespace")
@@ -136,7 +136,7 @@ var _ = Describe("{PlatformBasicTest}", func() {
 		})
 
 		Step("Cleanup all resources", func() {
-			err := workflowNamespace.Purge()
+			err := workflowNamespace.Purge(false)
 			log.FailOnError(err, "Unable to cleanup all namespaces")
 			log.InfoD("All namespaces cleaned up successfully")
 		})
@@ -187,7 +187,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 		})
 
 		Step("Register Target Cluster", func() {
-			workflowTargetCluster.Project = workflowProject
+			workflowTargetCluster.Project = &workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
 			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane()
 			log.FailOnError(err, "Unable to register target cluster")
@@ -196,11 +196,11 @@ var _ = Describe("{PlatformRBACTest}", func() {
 
 		Step("Create project user", func() {
 			workflowServiceAccount.UserRoles = make(map[string]platform.SeviceAccount)
-			workflowServiceAccount.WorkflowProject = workflowProject
+			workflowServiceAccount.WorkflowProjects = []*platform.WorkflowProject{&workflowProject}
 
 			_, err := workflowServiceAccount.CreateServiceAccount(
 				user,
-				[]string{},
+				[]string{platform.ProjectWriter},
 			)
 			log.FailOnError(err, "Unable to create Project User")
 			log.InfoD("Project User Account Created - [%s]", user)
@@ -263,7 +263,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 				workflowServiceAccount.SwitchToAdmin()
 			}()
 			workflowServiceAccount.SwitchToServiceAccount(projectAdmin)
-			workflowTargetCluster.Project = workflowProject
+			workflowTargetCluster.Project = &workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
 			_, err := workflowTargetCluster.RegisterToControlPlane()
 			dash.VerifyFatal(strings.Contains(err.Error(), "403 Forbidden"), true, "Register Target Cluster with Admin - 403 Forbidden")
@@ -274,7 +274,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 				workflowServiceAccount.SwitchToAdmin()
 			}()
 			workflowServiceAccount.SwitchToServiceAccount(tenantAdmin)
-			workflowTargetCluster.Project = workflowProject
+			workflowTargetCluster.Project = &workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
 			_, err := workflowTargetCluster.RegisterToControlPlane()
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Target cluster registered - Tenant Admin"))

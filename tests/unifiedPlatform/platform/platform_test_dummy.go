@@ -232,69 +232,6 @@ var _ = Describe("{CreateAndGetCloudCredentials}", func() {
 //	})
 //})
 
-var _ = Describe("{TestRbacForPds}", func() {
-	var (
-		pdsRbac         platform.WorkflowServiceAccount
-		workflowProject platform.WorkflowProject
-		saName          string
-	)
-	JustBeforeEach(func() {
-		log.Infof("Initialising values for tenant")
-		WorkflowPlatform.AdminAccountId = AccID
-		WorkflowPlatform.TenantInit()
-		saName = "pdsUserSA-" + RandomString(5)
-
-		StartTorpedoTest("ListAccounts", "Create and List Accounts", nil, 0)
-	})
-
-	It("Accounts", func() {
-		Step("Create a project for SVC Account", func() {
-			workflowProject.Platform = WorkflowPlatform
-			workflowProject.ProjectName = fmt.Sprintf("project-%s", utilities.RandomString(5))
-			workflowProject, err := workflowProject.CreateProject()
-			log.FailOnError(err, "Unable to create project")
-			log.Infof("Project created with ID - [%s]", workflowProject.ProjectId)
-			log.Infof("Tenant ID - [%s]", workflowProject.Platform.TenantId)
-		})
-
-		Step("Create SVC Account", func() {
-			pdsRbac.WorkflowProject = workflowProject
-			pdsRbac.UserRoles = make(map[string]platform.SeviceAccount)
-			log.Infof("Tenant ID - [%s]", pdsRbac.WorkflowProject.Platform.TenantId)
-			_, err := pdsRbac.CreateServiceAccount(saName, []string{platform.ProjectAdmin})
-			log.FailOnError(err, "Unable to create service account")
-			log.Infof("Service Account created")
-		})
-
-		Step("Switch to SVC Account", func() {
-			pdsRbac.SwitchToServiceAccount(saName)
-			log.Infof("Switched to service account")
-			list, err := workflowProject.GetProjectList()
-			if err != nil {
-				log.Infof("error - [%s]", err.Error())
-			} else {
-				log.Infof("List of projects - [%+v]", list)
-			}
-		})
-
-		Step("Switch to ADMIN", func() {
-			pdsRbac.SwitchToAdmin()
-			log.Infof("Switched to service account")
-			list, err := workflowProject.GetProjectList()
-			if err != nil {
-				log.Infof("error - [%s]", err.Error())
-			} else {
-				log.Infof("List of projects - [%+v]", list)
-			}
-		})
-
-	})
-
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-	})
-})
-
 var _ = Describe("{TestPlatformTemplates}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("TestPlatformTemplates", "create custom templates for PDS", nil, 0)
@@ -358,7 +295,7 @@ var _ = Describe("{NamepsaceDummyTest}", func() {
 		})
 
 		Step("Register Target Cluster", func() {
-			workflowTargetCluster.Project = workflowProject
+			workflowTargetCluster.Project = &workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
 			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane()
 			log.FailOnError(err, "Unable to register target cluster")
@@ -366,7 +303,7 @@ var _ = Describe("{NamepsaceDummyTest}", func() {
 		})
 
 		Step("Create a PDS Namespace", func() {
-			workflowNamespace.TargetCluster = workflowTargetCluster
+			workflowNamespace.TargetCluster = &workflowTargetCluster
 			workflowNamespace.Namespaces = make(map[string]string)
 			_, err := workflowNamespace.CreateNamespaces(namespace)
 			log.FailOnError(err, "Unable to create PDS namespace")
@@ -389,7 +326,7 @@ var _ = Describe("{NamepsaceDummyTest}", func() {
 		})
 
 		Step("Purge All Namespaces", func() {
-			err := workflowNamespace.Purge()
+			err := workflowNamespace.Purge(false)
 			log.FailOnError(err, "Unable to cleanup all namespaces")
 			log.InfoD("All namespaces cleaned up successfully")
 		})

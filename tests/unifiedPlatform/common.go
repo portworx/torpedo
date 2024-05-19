@@ -133,7 +133,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 	PDS_DEFAULT_NAMESPACE = "pds-namespace-" + RandomString(5)
 
 	Step("Create a namespace for PDS", func() {
-		WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+		WorkflowNamespace.TargetCluster = &WorkflowTargetCluster
 		WorkflowNamespace.Namespaces = make(map[string]string)
 		_, err := WorkflowNamespace.CreateNamespaces(PDS_DEFAULT_NAMESPACE)
 		log.FailOnError(err, "Unable to create namespace")
@@ -155,7 +155,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 
 	Step("Creating all PDS related structs", func() {
 
-		WorkflowNamespaceDestination.TargetCluster = WorkflowTargetClusterDestination
+		WorkflowNamespaceDestination.TargetCluster = &WorkflowTargetClusterDestination
 		WorkflowNamespaceDestination.Namespaces = make(map[string]string)
 
 		log.Infof("Creating data service struct")
@@ -221,8 +221,8 @@ func PurgePDS() []error {
 	}
 
 	if WorkflowPDSRestore.Source.Namespace.TargetCluster.ClusterUID != WorkflowPDSRestore.Destination.TargetCluster.ClusterUID {
-		log.InfoD("Purging all restore destination namespaces")
-		err = WorkflowPDSRestore.Destination.Purge()
+		log.InfoD("Purging all destination namespaces")
+		err = WorkflowPDSRestore.Destination.Purge(true)
 		if err != nil {
 			log.Errorf("error while purging destination namespaces - [%s]", err.Error())
 			allErrors = append(allErrors, err)
@@ -243,15 +243,15 @@ func PurgePDS() []error {
 		allErrors = append(allErrors, err)
 	}
 
-	log.InfoD("Purging all restore source namespaces")
-	err = WorkflowPDSRestore.Source.Namespace.Purge()
+	log.InfoD("Purging all source namespace objects")
+	err = WorkflowNamespace.Purge(true)
 	if err != nil {
-		log.Errorf("error while purging restored namespaces - [%s]", err.Error())
+		log.Errorf("error while purging all namespaces - [%s]", err.Error())
 		allErrors = append(allErrors, err)
 	}
 
-	log.InfoD("Purging all source namespace objects")
-	err = WorkflowNamespace.Purge()
+	log.InfoD("Purging all destination namespace objects")
+	err = WorkflowNamespaceDestination.Purge(true)
 	if err != nil {
 		log.Errorf("error while purging all namespaces - [%s]", err.Error())
 		allErrors = append(allErrors, err)
