@@ -66,7 +66,7 @@ var _ = Describe("{RestartPdsAgentPodAndPerformBackupAndRestore}", func() {
 			steplog = "Restart PDS Agent Pods and Validate if it comes up"
 			Step(steplog, func() {
 				log.InfoD(steplog)
-				err := WorkflowDataService.DeletePDSPods([]string{"agent", "pds-target"})
+				err := WorkflowDataService.DeletePDSPods([]string{"agent", "pds-target"}, PlatformNamespace)
 				log.FailOnError(err, "Error while deleting pds pods")
 				err = WorkflowDataService.ValidatePdsDataServiceDeployments(
 					*deployment.Create.Meta.Uid,
@@ -347,7 +347,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 					defer wg.Done()
 					defer GinkgoRecover()
 					log.Infof("Delete backup controller and Target Controller operator pod")
-					err := WorkflowDataService.DeletePDSPods([]string{"pds-backups", "pds-target"})
+					err := WorkflowDataService.DeletePDSPods([]string{"pds-backups", "pds-target"}, PlatformNamespace)
 					if err != nil {
 						allErrors = append(allErrors, err.Error())
 					}

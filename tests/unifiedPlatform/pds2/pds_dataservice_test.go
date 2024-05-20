@@ -13,6 +13,10 @@ import (
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 )
 
+const (
+	PlatformNamespace = "px-system"
+)
+
 var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	var (
 		deployment *automationModels.PDSDeploymentResponse
@@ -31,12 +35,6 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 			})
 
-			stepLog := "Running Workloads before scaling up data service"
-			Step(stepLog, func() {
-				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
-				log.FailOnError(err, "Error while running workloads on ds")
-			})
-
 			Step("ScaleUp DataService", func() {
 				log.InfoD("Scaling Up dataServices...")
 				updateDeployment, err := WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
@@ -44,7 +42,7 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
 			})
 
-			stepLog = "Running Workloads after ScaleUp of DataService"
+			stepLog := "Running Workloads after ScaleUp of DataService"
 			Step(stepLog, func() {
 				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error while running workloads on ds")
@@ -278,7 +276,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 			})
 
 			Step("Delete PDSPods", func() {
-				err := WorkflowDataService.DeletePDSPods([]string{"pds-backups", "pds-target"})
+				err := WorkflowDataService.DeletePDSPods([]string{"pds-backups", "pds-target"}, PlatformNamespace)
 				log.FailOnError(err, "Error while deleting pds pods")
 				err = WorkflowDataService.ValidatePdsDataServiceDeployments(
 					*deployment.Create.Meta.Uid,
@@ -299,6 +297,60 @@ var _ = Describe("{DeletePDSPods}", func() {
 			})
 		}
 	})
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{ValidatePdsHealthIncaseofFailures}", func() {
+	var (
+		deployment *automationModels.PDSDeploymentResponse
+		err        error
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("ValidatePdsHealthIncaseofFailures", "Deploy data services and validate PDS health in case of PDS pod deletion", nil, 0)
+	})
+
+	It("Deploy data services, Delete Pds Agent pods and perform backup and restore on the same cluster", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+
+			steplog := "Deploy dataservice"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
+				WorkflowPDSRestore.SourceDeploymentConfigBeforeUpgrade = &deployment.Create.Config.DeploymentTopologies[0]
+			})
+
+			steplog = "Restart PDS Agent Pods and Validate if it comes up"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				err := WorkflowDataService.DeletePDSPods([]string{*deployment.Create.Status.CustomResourceName}, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deleting pds pods")
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(
+					*deployment.Create.Meta.Uid,
+					ds,
+					ds.Replicas,
+					WorkflowDataService.PDSTemplates.ResourceTemplateId,
+					WorkflowDataService.PDSTemplates.StorageTemplateId,
+					PDS_DEFAULT_NAMESPACE,
+					ds.Version,
+					ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice")
+			})
+
+			steplog = "ScaleUp DataService"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				updateDeployment, err := WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
+				log.FailOnError(err, "Error while updating ds")
+				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
+			})
+		}
+	})
+
 	JustAfterEach(func() {
 		defer EndPDSTorpedoTest()
 	})

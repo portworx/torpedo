@@ -147,7 +147,7 @@ func createClusterRole(resourceName string) (*rbacv1.ClusterRole, error) {
 		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{"deployments.pds.portworx.com"},
-				Resources: []string{resourceName + "s"},
+				Resources: []string{resourceName},
 				Verbs:     []string{"get", "list"},
 			},
 		},
