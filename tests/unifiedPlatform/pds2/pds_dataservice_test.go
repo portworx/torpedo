@@ -1,23 +1,16 @@
 package tests
 
 import (
-<<<<<<< HEAD
 	"fmt"
 	"strings"
 	"time"
 
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
-=======
-	"github.com/portworx/torpedo/drivers/node"
-	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
-	"strings"
-	"time"
->>>>>>> cfef74c36 (Adding RollingRebootNodes test)
-
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers/node"
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
@@ -27,13 +20,6 @@ import (
 
 const (
 	PlatformNamespace = "px-system"
-)
-
-const (
-	defaultWaitRebootRetry       = 10 * time.Second
-	defaultCommandRetry          = 5 * time.Second
-	defaultCommandTimeout        = 1 * time.Minute
-	defaultTestConnectionTimeout = 15 * time.Minute
 )
 
 var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
@@ -436,7 +422,6 @@ var _ = Describe("{DrainAndDecommissionNode}", func() {
 		defer EndPDSTorpedoTest()
 	})
 })
-
 
 var _ = Describe("{RollingRebootNodes}", func() {
 	var (
