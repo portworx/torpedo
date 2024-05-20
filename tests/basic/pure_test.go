@@ -4383,7 +4383,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				defer GinkgoRecover()
 				for x := 0; x < numberOfPvc; x++ {
 					for storageclass, namespace := range scNamespaceMap {
-						createAndAppendPVC(storageclass, namespace, namespace, x)
+						createAndAppendPVC(namespace, storageclass, namespace, x)
 					}
 
 				}
