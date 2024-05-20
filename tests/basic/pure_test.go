@@ -4562,7 +4562,6 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				log.InfoD("Delete pvc on [%s]", namespace)
 				DeletePvcGroup(pvcList, namespace)
 			}
-			wg.Add(2)
 			for namespace, _ := range namespacePVCMap {
 				log.InfoD("Delete namespace [%s]", namespace)
 				err = core.Instance().DeleteNamespace(namespace)
