@@ -4556,6 +4556,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		stepLog = "Delete the pvc and volume and check if volumes got deleted in backend as well"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			defer wg.Done()
 			wg.Add(1)
 			for namespace, pvcList := range namespacePVCMap {
 				log.InfoD("Delete pvc on [%s]", namespace)
