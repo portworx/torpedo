@@ -4565,7 +4565,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			wg.Add(2)
 			for namespace, _ := range namespacePVCMap {
 				log.InfoD("Delete namespace [%s]", namespace)
-				err = core.Instance().DeleteNamespace(FbdaAppNameSpace)
+				err = core.Instance().DeleteNamespace(namespace)
 			}
 			wg.Wait()
 			err := checkVolumesExistinFA(flashArrays, listofFadaPvc, true)
