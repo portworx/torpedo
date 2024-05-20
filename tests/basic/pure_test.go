@@ -4556,8 +4556,6 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		stepLog = "Delete the pvc and volume and check if volumes got deleted in backend as well"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			defer wg.Done()
-			wg.Add(1)
 			for namespace, pvcList := range namespacePVCMap {
 				log.InfoD("Delete pvc on [%s]", namespace)
 				DeletePvcGroup(pvcList, namespace)
@@ -4567,7 +4565,6 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				err = core.Instance().DeleteNamespace(namespace)
 				log.FailOnError(err, fmt.Sprintf("Failed to delete namespace [%s]", namespace))
 			}
-			wg.Wait()
 			err := checkVolumesExistinFA(flashArrays, listofFadaPvc, true)
 			log.FailOnError(err, "Failed to check if volumes which needed to be deleted still exist in FA")
 			fbErr := checkVolumesExistinFB(flashBlades, listofFbdaPvc, true)
