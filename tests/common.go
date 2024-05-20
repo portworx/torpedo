@@ -5055,7 +5055,7 @@ func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, buc
 	case drivers.ProviderAws:
 		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx, validate)
+		err = CreateAzureBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx, validate)
 	case drivers.ProviderGke:
 		err = CreateGCPBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, ctx, validate)
 	case drivers.ProviderNfs:
