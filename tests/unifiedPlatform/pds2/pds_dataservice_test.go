@@ -1,8 +1,11 @@
 package tests
 
 import (
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	corev1 "k8s.io/api/core/v1"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
@@ -348,6 +351,80 @@ var _ = Describe("{ValidatePdsHealthIncaseofFailures}", func() {
 				log.FailOnError(err, "Error while updating ds")
 				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
 			})
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{ScaleDownScaleupPXCluster}", func() {
+	var (
+		deployment *automationModels.PDSDeploymentResponse
+		err        error
+		nodeList   []*corev1.Node
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("ScaleDownScaleupPXCluster", "Scales Down the PX cluster, Verify Data Services and Scales up the Px cluster", nil, 0)
+	})
+
+	It("Scales Down the PX cluster, Verify Data Services and Scales up the Px cluster", func() {
+
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+				nodes, err := pdslib.GetNodesOfSS(*deployment.Create.Status.CustomResourceName, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while getting Data Serice Nodes")
+				nodeList = append(nodeList, nodes[0])
+
+			})
+
+			Step("Scale down PX Nodes on which Data Services are running", func() {
+				// disable PX Pod on the first node of each deployed Data Service
+				err := StopPxServiceOnNodes(nodeList)
+				log.FailOnError(err, "unable to stop px service on given nodes")
+				log.InfoD("Successfully Scaled Down PX Nodes...")
+			})
+
+			log.InfoD("Sleeping 300 seconds after scale down of Px Nodes before we check the health of Data Services")
+			time.Sleep(300 * time.Second)
+
+			Step("Verify the Data Services status after scaling down the Px Nodes", func() {
+				log.InfoD("Verify the Data Services status after scaling down the Px Nodes")
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice after px nodes scale down")
+			})
+
+			stepLog := "Running Workloads after scale down of PX Nodes"
+			Step(stepLog, func() {
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+
+			Step("Scale Up PX  Nodes", func() {
+				err := StartPxServiceOnNodes(nodeList)
+				log.FailOnError(err, "unable to start px service on given nodes")
+				log.InfoD("Successfully Scaled up Px Nodes")
+			})
+			log.InfoD("Sleeping 300 seconds again after scale up of Px Nodes before we check the health of Data Services")
+			time.Sleep(300 * time.Second)
+
+			Step("Verify the Data Services status after scaling up the Px Nodes", func() {
+				log.InfoD("Verify the Data Services status after scaling up the Px Nodes")
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice after px nodes scale up")
+			})
+
+			stepLog = "Running Workloads after scale up of PX Nodes"
+			Step(stepLog, func() {
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+
 		}
 	})
 

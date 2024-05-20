@@ -3,6 +3,7 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node"
 	"io/ioutil"
 	"path/filepath"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	corev1 "k8s.io/api/core/v1"
 )
 
 var (
@@ -284,4 +286,42 @@ func CheckforClusterSwitch() {
 	} else {
 		log.Infof("Source and target cluster are same. Switch is not required")
 	}
+}
+
+// Stops px service for the given nodes
+func StopPxServiceOnNodes(nodeList []*corev1.Node) error {
+	// Getting all worker nodes
+	workerNodes := node.GetWorkerNodes()
+	for _, nodeToStop := range nodeList {
+		log.InfoD("Disabling PX on Node %v ", nodeToStop.Name)
+		for _, workerNode := range workerNodes {
+			if workerNode.Name == nodeToStop.Name {
+				err := Inst().V.StopDriver([]node.Node{workerNode}, false, nil)
+				return err
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
+// Stops px service for the given nodes
+func StartPxServiceOnNodes(nodeList []*corev1.Node) error {
+	// Getting all worker nodes
+	workerNodes := node.GetWorkerNodes()
+	for _, nodeToStart := range nodeList {
+		log.InfoD("Enabling PX on Node %v ", nodeToStart.Name)
+		for _, workerNode := range workerNodes {
+			if workerNode.Name == nodeToStart.Name {
+				err := Inst().V.StartDriver(workerNode)
+				return err
+
+				err = Inst().V.WaitDriverUpOnNode(workerNode, Inst().DriverStartTimeout)
+				return err
+				break
+			}
+		}
+	}
+	return nil
 }
