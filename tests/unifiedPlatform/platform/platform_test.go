@@ -46,17 +46,14 @@ var _ = Describe("{PlatformBasicTest}", func() {
 
 	It("Basic CRUD operations on platform", func() {
 
-		steplog := "Invoke whoami api and validate the api response "
-		It(steplog, func() {
-			log.InfoD(steplog)
-			Step("validate api response", func() {
-				res, err := workflowPlatform.WhoAmI()
-				log.FailOnError(err, "Error while fetching user details")
-				log.InfoD("User Detail \n\nId - [%s]\n\nEmail - [%s]", res.Id, res.Email)
-				for _, account := range res.Accounts {
-					log.InfoD("Account Detail \n\nId - [%s], Name - [%s], DNSName - [%s]\n\n", account.Id, account.Name, account.DnsName)
-				}
-			})
+		Step("Invoke whoami api and validate the api response", func() {
+			log.InfoD("Invoke whoami api and validate the api response")
+			res, err := workflowPlatform.WhoAmI()
+			log.FailOnError(err, "Error while fetching user details")
+			log.InfoD("User Detail \n\nId - [%s]\n\nEmail - [%s]", res.Id, res.Email)
+			for _, account := range res.Accounts {
+				log.InfoD("Account Detail \n\nId - [%s], Name - [%s], DNSName - [%s]\n\n", account.Id, account.Name, account.DnsName)
+			}
 		})
 
 		Step("Create Cloud Credentials", func() {
