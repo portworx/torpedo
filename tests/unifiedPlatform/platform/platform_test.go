@@ -45,6 +45,20 @@ var _ = Describe("{PlatformBasicTest}", func() {
 	})
 
 	It("Basic CRUD operations on platform", func() {
+
+		steplog := "Invoke whoami api and validate the api response "
+		It(steplog, func() {
+			log.InfoD(steplog)
+			Step("validate api response", func() {
+				res, err := workflowPlatform.WhoAmI()
+				log.FailOnError(err, "Error while fetching user details")
+				log.InfoD("User Detail \n\nId - [%s]\n\nEmail - [%s]", res.Id, res.Email)
+				for _, account := range res.Accounts {
+					log.InfoD("Account Detail \n\nId - [%s], Name - [%s], DNSName - [%s]\n\n", account.Id, account.Name, account.DnsName)
+				}
+			})
+		})
+
 		Step("Create Cloud Credentials", func() {
 			// TODO: This needs to be removed once API support is added for cloud creds
 			if VARIABLE_FROM_JENKINS == unifiedPlatform.GRPC {
@@ -401,30 +415,6 @@ var _ = Describe("{PlatformRBACTest}", func() {
 			log.InfoD("Project Deleted - Tenant Admin")
 		})
 
-	})
-
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-	})
-})
-
-var _ = Describe("{PingTest}", func() {
-	var (
-		workflowPlatform platform.WorkflowPlatform
-	)
-	JustBeforeEach(func() {
-		StartTorpedoTest("PingTest", "It calls the whoami api and validates the api response", nil, 0)
-		workflowPlatform.TenantInit()
-	})
-
-	steplog := "Invoke whoami api and validate the api response "
-	It(steplog, func() {
-		log.InfoD(steplog)
-		Step("validate api response", func() {
-			res, err := workflowPlatform.WhoAmI()
-			log.FailOnError(err, "Error while fetching user details")
-			log.InfoD("User Detail \n\nId - [%s]\n\nEmail - [%s] \n\nAccounts - [%v]", res.Id, res.Email, res.Accounts)
-		})
 	})
 
 	JustAfterEach(func() {
