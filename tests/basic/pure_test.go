@@ -4550,7 +4550,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		DeletePvcGroup := func(pvclist []string, namespace string) {
 			for _, pvcName := range pvclist {
 				err := k8sCore.DeletePersistentVolumeClaim(pvcName, namespace)
-				log.FailOnError(err, "Failed to delete pvc")
+				log.FailOnError(err, fmt.Sprintf("Failed to delete pvc [%s] in namespace [%s]", pvcName, namespace))
 			}
 		}
 		stepLog = "Delete the pvc and volume and check if volumes got deleted in backend as well"
@@ -4566,6 +4566,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			for namespace, _ := range namespacePVCMap {
 				log.InfoD("Delete namespace [%s]", namespace)
 				err = core.Instance().DeleteNamespace(namespace)
+				log.FailOnError(err, fmt.Sprintf("Failed to delete namespace [%s]", namespace))
 			}
 			wg.Wait()
 			err := checkVolumesExistinFA(flashArrays, listofFadaPvc, true)
