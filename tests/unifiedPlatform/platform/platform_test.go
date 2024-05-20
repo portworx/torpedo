@@ -407,3 +407,27 @@ var _ = Describe("{PlatformRBACTest}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{PingTest}", func() {
+	var (
+		workflowPlatform platform.WorkflowPlatform
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("PingTest", "It calls the whoami api and validates the api response", nil, 0)
+		workflowPlatform.TenantInit()
+	})
+
+	steplog := "Invoke whoami api and validate the api response "
+	It(steplog, func() {
+		log.InfoD(steplog)
+		Step("validate api response", func() {
+			res, err := workflowPlatform.WhoAmI()
+			log.FailOnError(err, "Error while fetching user details")
+			log.InfoD("User Detail \n\nId - [%s]\n\nEmail - [%s] \n\nAccounts - [%v]", res.Id, res.Email, res.Accounts)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})

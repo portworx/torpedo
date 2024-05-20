@@ -18,6 +18,7 @@ type Platform interface {
 	TemplatesInterface
 	Onboard
 	Project
+	WhoAmI
 }
 
 type AccountInterface interface {
@@ -110,4 +111,8 @@ type Project interface {
 	GetProject(*PlaformProjectRequest) (*PlaformProjectResponse, error)
 	AssociateToProject(*PlaformProjectRequest) (*PlaformProjectResponse, error)
 	DissociateFromProject(*PlaformProjectRequest) (*PlaformProjectResponse, error)
+}
+
+type WhoAmI interface {
+	WhoAmI() (*WhoamiResponse, error)
 }
