@@ -46,14 +46,15 @@ func (workflowProject *WorkflowProject) CreateProject() (*WorkflowProject, error
 }
 
 // GetProject will get the project details of given project id
-func (workflowProject *WorkflowProject) GetProject() (*automationModels.WorkFlowResponse, error) {
+func (workflowProject *WorkflowProject) GetProject() (*automationModels.V1Project, error) {
 	projectDetails, err := platformLibs.GetProject(workflowProject.ProjectId)
 	if err != nil {
-		return &automationModels.WorkFlowResponse{}, err
+		return &automationModels.V1Project{}, err
 	}
 
-	log.Infof("Project details [%s]", projectDetails)
-	return &automationModels.WorkFlowResponse{}, nil
+	log.Infof("Project Infra details [%v]", projectDetails.Config.InfraResources)
+	log.Infof("Project Namespace details [%v]", projectDetails.Config.InfraResources.Namespaces)
+	return projectDetails, nil
 }
 
 // DeleteProject will delete the project of given project id
