@@ -2522,15 +2522,15 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 	}
 
 	/* Removing Data error validation till PB-6271 is resolved.
-	if allErrors != "" {
-		if IsReplacePolicySetToDelete {
-			log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
-			IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
-			return nil
-		} else {
-			return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
-		}
-	}
+	   if allErrors != "" {
+	   	if IsReplacePolicySetToDelete {
+	   		log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
+	   		IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
+	   		return nil
+	   	} else {
+	   		return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
+	   	}
+	   }
 	*/
 
 	return nil
@@ -2829,16 +2829,6 @@ func ValidateClusterSize(count int64) {
 	currentNodeCount, err := Inst().S.GetASGClusterSize()
 	log.FailOnError(err, "Failed to Get ASG Cluster Size")
 
-	if Inst().S.String() == openshift.SchedName {
-		isPxOnMaster, err := IsPxRunningOnMaster()
-		log.FailOnError(err, "Failed to check if px is running on master")
-		if !isPxOnMaster {
-			node.GetMasterNodes()
-			//Removing master nodes for currentNodeCount
-			currentNodeCount = currentNodeCount - int64(len(node.GetMasterNodes()))
-		}
-	}
-
 	dash.VerifyFatal(currentNodeCount, count, "ASG cluster size is as expected?")
 
 	// Validate storage node count
@@ -2850,29 +2840,6 @@ func ValidateClusterSize(count int64) {
 	}
 	storageNodes := node.GetStorageNodes()
 	dash.VerifyFatal(len(storageNodes), expectedStoragesNodes, "Storage nodes matches the expected number?")
-}
-
-func IsPxRunningOnMaster() (bool, error) {
-
-	var namespace string
-	var err error
-	if namespace, err = Inst().S.GetPortworxNamespace(); err != nil {
-		log.Errorf("Failed to get portworx namespace. Error : %v", err)
-		return false, nil
-	}
-	var isPXOnControlplane = false
-	pxOperator := operator.Instance()
-	stcList, err := pxOperator.ListStorageClusters(namespace)
-	if err == nil {
-		stc, err := pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
-		if err != nil {
-			return false, fmt.Errorf("failed to get StorageCluster [%s] from namespace [%s], Err: %v", stcList.Items[0].Name, stcList.Items[0].Namespace, err.Error())
-		}
-		isPXOnControlplane, _ = strconv.ParseBool(stc.Annotations["portworx.io/run-on-master"])
-	}
-
-	return isPXOnControlplane, nil
-
 }
 
 // GetStorageNodes get storage nodes in the cluster
@@ -11272,11 +11239,10 @@ func installGrafana(namespace string) {
 }
 
 func SetupProxyServer(n node.Node) error {
+
 	createDirCommand := "mkdir -p /exports/testnfsexportdir"
 	output, err := Inst().N.RunCommandWithNoRetry(n, createDirCommand, node.ConnectionOpts{
-		Sudo:            true,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
+		Sudo: true,
 	})
 	if err != nil {
 		return err
@@ -11285,9 +11251,7 @@ func SetupProxyServer(n node.Node) error {
 
 	addVersionCmd := "echo -e \"MOUNTD_NFS_V4=\"yes\"\nRPCNFSDARGS=\"-N 2 -N 4\"\" >> /etc/sysconfig/nfs"
 	output, err = Inst().N.RunCommandWithNoRetry(n, addVersionCmd, node.ConnectionOpts{
-		Sudo:            true,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
+		Sudo: true,
 	})
 	if err != nil {
 		return err
@@ -11296,65 +11260,15 @@ func SetupProxyServer(n node.Node) error {
 
 	updateExportsCmd := "echo \"/exports/testnfsexportdir *(rw,sync,no_root_squash)\" > /etc/exports"
 	output, err = Inst().N.RunCommandWithNoRetry(n, updateExportsCmd, node.ConnectionOpts{
-		Sudo:            true,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
+		Sudo: true,
 	})
 	if err != nil {
 		return err
 	}
 	log.Infof(output)
-
-	checkExportfsCmd := "which exportfs"
-	output, err = Inst().N.RunCommandWithNoRetry(n, checkExportfsCmd, node.ConnectionOpts{
-		Sudo:            true,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
-	})
-	if err != nil || output == "" {
-		log.Warnf("The command exportfs not found")
-
-		var installNfsUtilsCmd string
-		checkDistroCmd := "source /etc/os-release && echo $ID"
-		output, err = Inst().N.RunCommandWithNoRetry(n, checkDistroCmd, node.ConnectionOpts{
-			Sudo:            true,
-			TimeBeforeRetry: defaultRetryInterval,
-			Timeout:         defaultTimeout,
-		})
-		if err != nil {
-			return err
-		}
-		log.Infof("The Linux distribution is %s", output)
-
-		switch strings.TrimSpace(output) {
-		case "ubuntu", "debian":
-			log.Infof("Installing nfs-common")
-			installNfsUtilsCmd = "apt-get update && apt-get install -y nfs-common"
-		case "centos", "rhel", "fedora":
-			log.Infof("Installing nfs-utils")
-			installNfsUtilsCmd = "yum install -y nfs-utils"
-		default:
-			return fmt.Errorf("unsupported Linux distribution")
-		}
-
-		output, err = Inst().N.RunCommandWithNoRetry(n, installNfsUtilsCmd, node.ConnectionOpts{
-			Sudo:            true,
-			TimeBeforeRetry: defaultRetryInterval,
-			Timeout:         defaultTimeout,
-		})
-		if err != nil {
-			return err
-		}
-		log.Infof(output)
-	} else {
-		log.Infof(output)
-	}
-
 	exportCmd := "exportfs -a"
 	output, err = Inst().N.RunCommandWithNoRetry(n, exportCmd, node.ConnectionOpts{
-		Sudo:            true,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
+		Sudo: true,
 	})
 	if err != nil {
 		return err
@@ -11363,9 +11277,7 @@ func SetupProxyServer(n node.Node) error {
 
 	enableNfsServerCmd := "systemctl enable nfs-server"
 	output, err = Inst().N.RunCommandWithNoRetry(n, enableNfsServerCmd, node.ConnectionOpts{
-		Sudo:            true,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
+		Sudo: true,
 	})
 	if err != nil {
 		return err
@@ -11374,9 +11286,7 @@ func SetupProxyServer(n node.Node) error {
 
 	startNfsServerCmd := "systemctl restart nfs-server"
 	output, err = Inst().N.RunCommandWithNoRetry(n, startNfsServerCmd, node.ConnectionOpts{
-		Sudo:            true,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
+		Sudo: true,
 	})
 	if err != nil {
 		return err
@@ -12511,18 +12421,18 @@ func GetFADetailsFromVolumeName(volumeName string) ([]pureutils.FlashArrayEntry,
 }
 
 // GetVolumeCompleteNameOnFA returns volume Name with Prefix from FA
-func GetVolumeCompleteNameOnFA(faClient *flasharray.Client, volName string) (string, error) {
+func GetVolumeCompleteNameOnFA(faClient *flasharray.Client, volName string) (string, flasharray.Volume, error) {
 	// List all the Volumes present in FA
 	allVolumes, err := pureutils.ListAllTheVolumesFromSpecificFA(faClient)
 	if err != nil {
-		return "", err
+		return "", flasharray.Volume{}, err
 	}
 	for _, eachVol := range allVolumes {
 		if strings.Contains(eachVol.Name, volName) {
-			return eachVol.Name, nil
+			return eachVol.Name, eachVol, nil
 		}
 	}
-	return "", nil
+	return "", flasharray.Volume{}, nil
 }
 
 // GetConnectedHostToVolume returns the host details attached to Volume
@@ -12550,7 +12460,7 @@ func DeleteVolumeFromFABackend(fa pureutils.FlashArrayEntry, volumeName string) 
 		return false, err
 	}
 
-	volName, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
+	volName, _, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
 	if err != nil {
 		return false, err
 	}
@@ -12921,4 +12831,141 @@ func GetMultipathDeviceOnPool(n *node.Node) (map[string][]string, error) {
 		}
 	}
 	return multipathMap, nil
+}
+func CreatePortworxStorageClass(scName string, ReclaimPolicy v1.PersistentVolumeReclaimPolicy, VolumeBinding storageapi.VolumeBindingMode, params map[string]string) (*storageapi.StorageClass, error) {
+	v1obj := metav1.ObjectMeta{
+		Name: scName,
+	}
+	scObj := storageapi.StorageClass{
+		ObjectMeta:        v1obj,
+		Provisioner:       k8s.PortworxVolumeProvisioner,
+		Parameters:        params,
+		ReclaimPolicy:     &ReclaimPolicy,
+		VolumeBindingMode: &VolumeBinding,
+	}
+	k8sStorage := schedstorage.Instance()
+	sc, err := k8sStorage.CreateStorageClass(&scObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CsiSnapshot storage class: %s.Error: %v", scName, err)
+	}
+	return sc, err
+}
+
+// Checks if list of volumes are present in group of flash arrays declared in pure.json and vice versa
+func CheckVolumesExistinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, NoVolumeExists bool) error {
+	/*
+		pvcFadaMap is a map which has volume name as key and value will NoVolume boolean value , once we find volume we mark it as true and after the loop
+		we check if all volumes are marked as true and vice versa once we try to check deleted volumes
+	*/
+	/*
+		NoVolumeExists is a boolean value which is used to check if we are checking for volume existence or deleted volume existence
+		NoVolumeExists -- false , means all volume names initially marked false and if we find volume in FA mark it as true
+		NoVolumeExists -- true , means all volume names initially marked true and if we don't find volume in FA mark it as false
+	*/
+	pvcFadaMap := make(map[string]bool)
+	for _, volumeName := range listofFadaPvc {
+		pvcFadaMap[volumeName] = NoVolumeExists
+	}
+	for _, fa := range flashArrays {
+		for _, volumeName := range listofFadaPvc {
+			if !NoVolumeExists {
+				//This is to make sure we dont iterate through volumes which are already found in one FA,which means the value for that volume name is already true
+				if pvcFadaMap[volumeName] {
+					continue
+				}
+			}
+			faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
+			log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
+			volName, vol, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
+			if volName != "" {
+				fmt.Println("volume name :", volumeName)
+				fmt.Println("volName :", volName)
+				fmt.Println("vol input iops", vol.InputPerSec)
+				fmt.Println("vol output iops", vol.OutputPerSec)
+				fmt.Println("vol iops total", int64(*vol.InputPerSec+*vol.OutputPerSec))
+				fmt.Println("vol shared space ", vol.SharedSpace)
+				fmt.Println("vol total space ", vol.Size)
+
+				// As we found the volume we mark corresponding volume as true
+				log.Infof("Volume [%v] exists on FA [%v]", volName, fa.MgmtEndPoint)
+				pvcFadaMap[volumeName] = true
+
+			} else if err != nil && volName == "" {
+				log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v] on FA [%v]", volumeName, fa.MgmtEndPoint))
+
+			} else {
+				log.Infof("Volume [%v] does not exist on FA [%v]", volumeName, fa.MgmtEndPoint)
+				pvcFadaMap[volumeName] = false
+			}
+		}
+	}
+	// Loop through the map to check the volume status
+	for FadaVol, volStatus := range pvcFadaMap {
+		if NoVolumeExists {
+			// when NoVolumeExists is true, we dont want any volume to be present in FA
+			if volStatus {
+				return fmt.Errorf("PVC %s exists in FA", FadaVol)
+			}
+		} else {
+			// when Novolume is false, we want all volumes to be present in FA
+			if !volStatus {
+				return fmt.Errorf("PVC %s does not exist", FadaVol)
+			}
+		}
+	}
+	return nil
+}
+
+// Checks if list of volumes are present in group of flash blades declared in pure.json and vice versa
+func CheckVolumesExistinFB(flashBlades []pureutils.FlashBladeEntry, listofFbdaPvc []string, NoVolumeExists bool) error {
+	/*
+		pvcFbdaMap is a map which has volume name as key and value will NoVolume boolean value , once we find volume we mark it as true and after the loop
+		we check if all volumes are marked as true and vice versa once we try to check deleted volumes
+	*/
+	/*
+		NoVolumeExists is a boolean value which is used to check if we are checking for volume existence or deleted volume existence
+		NoVolumeExists -- false , means all volume names initially marked false and if we find volume in FA mark it as true
+		NoVolumeExists -- true , means all volume names initially marked true and if we don't find volume in FA mark it as false
+	*/
+	pvcFbdaMap := make(map[string]bool)
+	for _, volumeName := range listofFbdaPvc {
+		pvcFbdaMap[volumeName] = NoVolumeExists
+	}
+	for _, fb := range flashBlades {
+		for _, volumeName := range listofFbdaPvc {
+			if !NoVolumeExists {
+				if pvcFbdaMap[volumeName] {
+					continue
+				}
+			}
+			fbClient, err := pureutils.PureCreateFbClientAndConnect(fb.MgmtEndPoint, fb.APIToken)
+			if err != nil {
+				return err
+			}
+			FsFullName, nameErr := pureutils.GetFilesystemFullName(fbClient, volumeName)
+			log.FailOnError(nameErr, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
+			isExists, err := pureutils.IsFileSystemExists(fbClient, FsFullName)
+
+			if isExists && err == nil {
+				log.Infof("Volume [%v] exists on FB [%v]", volumeName, fb.MgmtEndPoint)
+				pvcFbdaMap[volumeName] = true
+			} else if !isExists && err == nil {
+				log.Infof("Volume [%v] does not exist on FB [%v]", volumeName, fb.MgmtEndPoint)
+				pvcFbdaMap[volumeName] = false
+			}
+			log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
+		}
+	}
+	for FbdaVol, volStatus := range pvcFbdaMap {
+		if NoVolumeExists {
+			if volStatus {
+				return fmt.Errorf("PVC %s exists in FB", FbdaVol)
+			}
+		} else {
+			if !volStatus {
+				return fmt.Errorf("PVC %s does not exist", FbdaVol)
+			}
+		}
+	}
+	return nil
 }
