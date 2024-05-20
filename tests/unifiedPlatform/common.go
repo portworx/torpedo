@@ -257,12 +257,12 @@ func PurgePDS() []error {
 		allErrors = append(allErrors, err)
 	}
 
-	log.InfoD("Purging all backup objects")
-	err = WorkflowPDSBackup.Purge()
-	if err != nil {
-		log.Errorf("Error while deleting backup objects - Error - [%s]", err.Error())
-		allErrors = append(allErrors, err)
-	}
+	//log.InfoD("Purging all backup objects")
+	//err = WorkflowPDSBackup.Purge()
+	//if err != nil {
+	//	log.Errorf("Error while deleting backup objects - Error - [%s]", err.Error())
+	//	allErrors = append(allErrors, err)
+	//}
 
 	//log.InfoD("Purging all backup config objects")
 	//err = WorkflowPDSBackupConfig.Purge(true)
