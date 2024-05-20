@@ -12572,10 +12572,6 @@ func GetMultipathDeviceIDsOnNode(n *node.Node) ([]string, error) {
 	return multiPathDev, nil
 }
 func CreateBaseStorageClass(scName string, params map[string]string) (*storageapi.StorageClass, error) {
-	param := make(map[string]string)
-	for key, value := range params {
-		param[key] = value
-	}
 	v1obj := metav1.ObjectMeta{
 		Name: scName,
 	}

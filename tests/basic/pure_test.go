@@ -4256,23 +4256,34 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		log.InfoD(itLog)
 		numberOfPvc := 10
 		var k8sCore = core.Instance()
+		var wg sync.WaitGroup
 
 		//Declaring SC name, namespaces and pvc prefixes and lists which are required for collection of PVC And Volume Names
 		baseScName := "base-portworx-volume-sc"
 		fadaScName := "fada-volume-sc"
 		fbdaScName := "fbda-volume-sc"
-		baseAppName := "base-app-portworx-volume"
-		fadaAppName := "fada-app-volume"
-		fbdaAppName := "fbda-app-volume"
 		BaseAppNameSpace := "base-app-namespace"
 		FadaAppNameSpace := "fada-app-namespace"
 		FbdaAppNameSpace := "fbda-app-namespace"
-		listofBasePvc := make([]string, 0)
 		listofFadaPvc := make([]string, 0)
-		listofBasePvcNames := make([]string, 0)
-		listofFadaPvcNames := make([]string, 0)
 		listofFbdaPvc := make([]string, 0)
-		listofFbdaPvcNames := make([]string, 0)
+
+		namespaces := []string{FadaAppNameSpace, FbdaAppNameSpace, BaseAppNameSpace}
+		namespaceVolumeNameMap := make(map[string][]string)
+		for _, ns := range namespaces {
+			namespaceVolumeNameMap[ns] = []string{}
+		}
+
+		namespacePVCMap := make(map[string][]string)
+		for _, ns := range namespaces {
+			namespacePVCMap[ns] = []string{}
+		}
+
+		scNamespaceMap := map[string]string{
+			baseScName: BaseAppNameSpace,
+			fadaScName: FadaAppNameSpace,
+			fbdaScName: FbdaAppNameSpace,
+		}
 
 		//Get The Details of Existing FA AND FB in the cluster
 		flashArrays, err := GetFADetailsUsed()
@@ -4343,15 +4354,14 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			pvcName := fmt.Sprintf("%s-%d", appName, x)
 			pvc, err := createPVC(pvcName, scName, "10", namespace)
 			log.FailOnError(err, "Failed to create pvc")
-			fmt.Println("PVC  created ", pvc.Name)
+			log.InfoD("PVC [%s] created in namespace [%s]", pvc.Name, namespace)
 
 		}
 		//createNameSpace will create a namespace with given name and label
-		createNameSpace := func(namespace string, label map[string]string) error {
+		createNameSpace := func(namespace string) error {
 			nsSpec := &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:   namespace,
-					Labels: label,
+					Name: namespace,
 				},
 			}
 			_, err := k8sCore.CreateNamespace(nsSpec)
@@ -4362,19 +4372,23 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			//calling createNameSpace to create namespace for base, fada and fbda
-			err := createNameSpace(FadaAppNameSpace, map[string]string{"app": "fadaapp"})
-			log.FailOnError(err, "Failed to create namespace [%s]", FadaAppNameSpace)
-			err = createNameSpace(FbdaAppNameSpace, map[string]string{"app": "fbdaapp"})
-			log.FailOnError(err, "Failed to create namespace [%s]", FadaAppNameSpace)
-			err = createNameSpace(BaseAppNameSpace, map[string]string{"app": "baseapp"})
-			log.FailOnError(err, "Failed to create namespace [%s]", BaseAppNameSpace)
-			// This will make sure that we create 10 PVC's each  using different storage classes that we have created at the start of the function
-			for x := 0; x < numberOfPvc; x++ {
-				go createAndAppendPVC(fadaAppName, fadaScName, FadaAppNameSpace, x)
-				go createAndAppendPVC(fbdaAppName, fbdaScName, FbdaAppNameSpace, x)
-				go createAndAppendPVC(baseAppName, baseScName, BaseAppNameSpace, x)
+
+			for ns, _ := range namespacePVCMap {
+				err := createNameSpace(ns)
+				log.FailOnError(err, "Failed to create namespace [%s]", ns)
 			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				for x := 0; x < numberOfPvc; x++ {
+					for storageclass, namespace := range scNamespaceMap {
+						createAndAppendPVC(storageclass, namespace, namespace, x)
+					}
+
+				}
+			}()
+			wg.Wait()
 		})
 
 		time.Sleep(5 * time.Second)
@@ -4397,16 +4411,24 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			fmt.Println("PVC name List :", pvclist)
 			return pvclist
 		}
-		listofFadaPvcNames = GetPvcFromNamespace(FadaAppNameSpace, listofFadaPvcNames)
-		listofFbdaPvcNames = GetPvcFromNamespace(FbdaAppNameSpace, listofFbdaPvcNames)
-		listofBasePvcNames = GetPvcFromNamespace(BaseAppNameSpace, listofBasePvcNames)
+		for ns, pvclist := range namespacePVCMap {
+			pvclist = GetPvcFromNamespace(ns, pvclist)
+			namespacePVCMap[ns] = pvclist
+		}
+
+		//listofFadaPvcNames = GetPvcFromNamespace(FadaAppNameSpace, listofFadaPvcNames)
+		//listofFbdaPvcNames = GetPvcFromNamespace(FbdaAppNameSpace, listofFbdaPvcNames)
+		//listofBasePvcNames = GetPvcFromNamespace(BaseAppNameSpace, listofBasePvcNames)
 
 		stepLog = "Validate if PVC are created and bounded"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			checkPvcBound(listofBasePvcNames, BaseAppNameSpace)
-			checkPvcBound(listofFbdaPvcNames, FbdaAppNameSpace)
-			checkPvcBound(listofFadaPvcNames, FadaAppNameSpace)
+			for ns, pvclist := range namespacePVCMap {
+				pvclist = GetPvcFromNamespace(ns, pvclist)
+			}
+			for ns, pvclist := range namespacePVCMap {
+				checkPvcBound(pvclist, ns)
+			}
 
 		})
 
@@ -4420,15 +4442,19 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			fmt.Println("PVC List :", pvclist)
 			return pvclist
 		}
+
 		listofFadaPvc = GetVolumeNameFromPvc(FadaAppNameSpace, listofFadaPvc)
 		listofFbdaPvc = GetVolumeNameFromPvc(FbdaAppNameSpace, listofFbdaPvc)
-		listofBasePvc = GetVolumeNameFromPvc(BaseAppNameSpace, listofBasePvc)
 
 		/*checkVolumesExistinFA is a function which works both ways
 		  If NoVolume is true then it will check if volume exists in FA or not,we will take a map which has volume name as key and value as false , once we find volume we mark it as true and after the loop we check if all volumes are marked as true
 		  If NoVolume is false then it will check if volume does not exist in FA, we will take a map which has volume name as key and value as true , once we havent find volume we mark it as false and after the loop we check if all volumes are marked as false
 		*/
-		checkVolumesExistinFA := func(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, pvcFadaMap map[string]bool, NoVolume bool) error {
+		checkVolumesExistinFA := func(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, NoVolume bool) error {
+			pvcFadaMap := make(map[string]bool)
+			for _, volumeName := range listofFadaPvc {
+				pvcFadaMap[volumeName] = NoVolume
+			}
 			for _, fa := range flashArrays {
 				for _, volumeName := range listofFadaPvc {
 					if !NoVolume {
@@ -4467,7 +4493,11 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			}
 			return nil
 		}
-		checkVolumesExistinFB := func(flashBlades []pureutils.FlashBladeEntry, listofFbdaPvc []string, pvcFbdaMap map[string]bool, NoVolume bool) error {
+		checkVolumesExistinFB := func(flashBlades []pureutils.FlashBladeEntry, listofFbdaPvc []string, NoVolume bool) error {
+			pvcFbdaMap := make(map[string]bool)
+			for _, volumeName := range listofFbdaPvc {
+				pvcFbdaMap[volumeName] = NoVolume
+			}
 			for _, fb := range flashBlades {
 				for _, volumeName := range listofFbdaPvc {
 					if !NoVolume {
@@ -4510,17 +4540,10 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		stepLog = "check if the FA and FB volumes are created in the backend"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			pvcFadaMap := make(map[string]bool)
-			pvcFbdaMap := make(map[string]bool)
-			for _, volumeName := range listofFadaPvc {
-				pvcFadaMap[volumeName] = false
-			}
-			for _, volumeName := range listofFbdaPvc {
-				pvcFbdaMap[volumeName] = false
-			}
-			faErr := checkVolumesExistinFA(flashArrays, listofFadaPvc, pvcFadaMap, false)
+
+			faErr := checkVolumesExistinFA(flashArrays, listofFadaPvc, false)
 			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
-			fbErr := checkVolumesExistinFB(flashBlades, listofFbdaPvc, pvcFbdaMap, false)
+			fbErr := checkVolumesExistinFB(flashBlades, listofFbdaPvc, false)
 			log.FailOnError(fbErr, "Failed to check if volumes created  exist in FB")
 
 		})
@@ -4533,39 +4556,22 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		stepLog = "Delete the pvc and volume and check if volumes got deleted in backend as well"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-
-			log.InfoD("Delete pvc from fada-app-namespace")
-			DeletePvcGroup(listofFadaPvcNames, FadaAppNameSpace)
-			log.InfoD("Delete pvc from fbda-app-namespace")
-			DeletePvcGroup(listofFbdaPvcNames, FbdaAppNameSpace)
-			log.InfoD("Delete pvc from base-app-namespace")
-			DeletePvcGroup(listofBasePvcNames, BaseAppNameSpace)
-
-			log.InfoD("Delete namespace fada-app-namespace")
-			err = core.Instance().DeleteNamespace(FadaAppNameSpace)
-			log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", "fada-app-namespace"))
-			log.InfoD("Delete namespace fbda-app-namespace")
-			err = core.Instance().DeleteNamespace(FbdaAppNameSpace)
-			log.InfoD("Delete namespace base-app-namespace")
-			err = core.Instance().DeleteNamespace(BaseAppNameSpace)
-			log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", "base-app-namespace"))
-
-			//Here we create a map with volume name as key and value as true (assuming all volumes currently exist in FA) and make them false if not present using checkVolumesExistinFA
-			pvcFadanotExistMap := make(map[string]bool)
-			for _, volumeName := range listofFadaPvc {
-				pvcFadanotExistMap[volumeName] = true
+			wg.Add(1)
+			for namespace, pvcList := range namespacePVCMap {
+				log.InfoD("Delete pvc on [%s]", namespace)
+				DeletePvcGroup(pvcList, namespace)
 			}
-			pvcFbdanotExistMap := make(map[string]bool)
-			for _, volumeName := range listofFbdaPvc {
-				pvcFbdanotExistMap[volumeName] = true
+			wg.Add(2)
+			for namespace, _ := range namespacePVCMap {
+				log.InfoD("Delete namespace [%s]", namespace)
+				err = core.Instance().DeleteNamespace(FbdaAppNameSpace)
 			}
-			err := checkVolumesExistinFA(flashArrays, listofFadaPvc, pvcFadanotExistMap, true)
+			wg.Wait()
+			err := checkVolumesExistinFA(flashArrays, listofFadaPvc, true)
 			log.FailOnError(err, "Failed to check if volumes which needed to be deleted still exist in FA")
-			fbErr := checkVolumesExistinFB(flashBlades, listofFbdaPvc, pvcFbdanotExistMap, true)
+			fbErr := checkVolumesExistinFB(flashBlades, listofFbdaPvc, true)
 			log.FailOnError(fbErr, "Failed to check if volumes created  which needed to be deleted still exist in FB")
 
 		})
-
 	})
-
 })
