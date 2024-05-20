@@ -47,13 +47,19 @@ var _ = Describe("{PlatformBasicTest}", func() {
 	It("Basic CRUD operations on platform", func() {
 
 		Step("Invoke whoami api and validate the api response", func() {
+			var isAccountPresent bool
 			log.InfoD("Invoke whoami api and validate the api response")
 			res, err := workflowPlatform.WhoAmI()
 			log.FailOnError(err, "Error while fetching user details")
 			log.InfoD("User Detail \n\nId - [%s]\n\nEmail - [%s]", res.Id, res.Email)
+			isAccountPresent = false
 			for _, account := range res.Accounts {
-				log.InfoD("Account Detail \n\nId - [%s], Name - [%s], DNSName - [%s]\n\n", account.Id, account.Name, account.DnsName)
+				if account.Id == AccID {
+					isAccountPresent = true
+				}
+				log.Infof("Account Detail \n\nId - [%s], Name - [%s], DNSName - [%s]\n\n", account.Id, account.Name, account.DnsName)
 			}
+			dash.VerifyFatal(isAccountPresent, true, "Account ID not present in the response")
 		})
 
 		Step("Create Cloud Credentials", func() {
