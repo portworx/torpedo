@@ -17,6 +17,10 @@ import (
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 )
 
+const (
+	numSSIEIterations = 100
+)
+
 var _ = Describe("{PerformRestoreToSameCluster}", func() {
 	var (
 		deployment          *automationModels.PDSDeploymentResponse
@@ -973,6 +977,85 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 
 			log.InfoD("Simultaneous backup/restores succeeded")
 		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{SSIEDeployBackupRestoreAndDeleteDS}", func() {
+	var (
+		deployment          *automationModels.PDSDeploymentResponse
+		latestBackupUid     string
+		pdsBackupConfigName string
+		restoreNamespace    string
+		restoreName         string
+		err                 error
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("SSIEDeployBackupRestoreAndDeleteDS", "100 times: Deploy data services and perform backup and restore on the same cluster", nil, 0)
+
+	})
+
+	It("Repeatedly Deploy data services and perform backup and restore on the same cluster", func() {
+		for index := 0; index < numSSIEIterations; index++ {
+			log.Infof("================Iteration: %d================", index)
+			for _, ds := range NewPdsParams.DataServiceToTest {
+
+				Step("Deploy dataservice", func() {
+					deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+					log.FailOnError(err, "Error while deploying ds")
+					log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
+
+				})
+
+				Step("Create Adhoc backup config of the existing deployment", func() {
+					pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
+					bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
+					log.FailOnError(err, "Error occured while creating backupConfig")
+					log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
+					log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
+				})
+
+				Step("Get the latest backup detail for the deployment", func() {
+					backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Uid)
+					log.FailOnError(err, "Error occured while creating backup")
+					latestBackupUid = *backupResponse.Meta.Uid
+					log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
+					err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
+					log.FailOnError(err, "Error occured while waiting for backup to complete")
+				})
+
+				Step("Create Restore from the latest backup Id", func() {
+					defer func() {
+						err := SetSourceKubeConfig()
+						log.FailOnError(err, "failed to switch context to source cluster")
+					}()
+					CheckforClusterSwitch()
+					restoreNamespace = "restore-" + RandomString(5)
+					restoreName = "restore-" + RandomString(5)
+					createRestore, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUid, restoreNamespace, *deployment.Create.Meta.Uid)
+					log.FailOnError(err, "Restore Failed")
+					log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
+					log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+					err = WorkflowDataService.DeleteDeployment(createRestore.Create.Config.DestinationReferences.DeploymentId)
+					if err != nil {
+						log.FailOnError(err, "Delete Restore Failed")
+					}
+				})
+
+				Step("Purging all Data Services", func() {
+					log.InfoD("Purging all dataservice objects")
+					err = WorkflowDataService.Purge()
+					if err != nil {
+						log.FailOnError(err, "error while purging dataservices\n")
+
+					}
+				})
+			}
+		}
 	})
 
 	JustAfterEach(func() {
