@@ -717,6 +717,10 @@ var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
 		Step("Create an autopilot rule for pool expand and schedule applications", func() {
 			log.InfoD("Creating an autopilot rule for pool expand and scheduling applications")
 			selectedStorageNode := node.GetStorageDriverNodes()[0]
+			log.Infof("First selected storage node for pool expand: [%s]", selectedStorageNode.Name)
+			if selectedStorageNode.Name == "pwx-ocp-208-165-4d8gz-worker-0-mb8wj" {
+				selectedStorageNode = node.GetStorageDriverNodes()[1]
+			}
 			log.Infof("Selected storage node for pool expand: [%s]", selectedStorageNode.Name)
 			log.Infof("Sleeping for 5 minutes before adding disk to the pool")
 			time.Sleep(5 * time.Minute)
