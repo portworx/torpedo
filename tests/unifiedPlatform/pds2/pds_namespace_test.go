@@ -379,12 +379,16 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 
 var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 	var (
-		deployment *automationModels.PDSDeploymentResponse
-		err        error
+		deployment     *automationModels.PDSDeploymentResponse
+		err            error
+		nsLablesRemove map[string]string
 	)
 
 	JustBeforeEach(func() {
 		StartPDSTorpedoTest("DeletePDSEnabledNamespace", "Create a namespace, deploy dataservices, delete the namespace and validate", nil, 0)
+		nsLablesRemove = map[string]string{
+			portorxLabel: "false",
+		}
 	})
 
 	It("Create a namespace, deploy dataservices, delete the namespace and validate", func() {
@@ -393,6 +397,37 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+			})
+
+			Step("Removing the label from the namespace", func() {
+				log.InfoD("Removing the label from the namespace")
+				_, err := utils.UpdatePDSNamespce(PDS_DEFAULT_NAMESPACE, nsLablesRemove)
+				log.FailOnError(err, "Error while removing namespace label")
+				log.Infof("Namespace [%s] label removed successfully", PDS_DEFAULT_NAMESPACE)
+			})
+
+			Step("Validating namespace state from control plane - Disabled Namespace", func() {
+				log.InfoD("Validating namespace state from control plane - Disabled Namespace")
+				log.Infof("Sleeping for 1 minute for ns changes to be updated on control plane")
+				time.Sleep(1 * time.Minute)
+				nsModel, err := WorkflowNamespace.GetNamespace(PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while fetching namsepace details from control plane")
+				log.Infof("Namespace [%s] is in [%s] state", PDS_DEFAULT_NAMESPACE, *nsModel.Status.Phase)
+				dash.VerifyFatal(strings.ToLower(string(*nsModel.Status.Phase)), strings.ToLower(UNAVAILABLE), "Verifying namespace state from control plane")
+			})
+
+			Step("Validating dataservice state from control plane", func() {
+				log.InfoD("Validating dataservice state from control plane")
+				currDepState, err := WorkflowDataService.GetDeployment(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while fetching deployment details from control plane")
+				log.InfoD("Deployment [%s] is in [%s] state", *deployment.Create.Meta.Uid, *currDepState.Status.Health)
+				//TODO: DataService state checks needs to be added here
+			})
+
+			Step("Running Workloads after disabling the namespace", func() {
+				log.InfoD("Running Workloads after disabling the namespace")
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
 			})
 
 			Step("Delete Namespace", func() {
@@ -424,6 +459,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 				currDepState, err := WorkflowDataService.GetDeployment(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error while fetching deployment details from control plane")
 				log.InfoD("Deployment [%s] is in [%s] state", *deployment.Create.Meta.Uid, *currDepState.Status.Phase)
+				dash.VerifyFatal(strings.ToLower(string(*currDepState.Status.Phase)), strings.ToLower("DELETED_FROM_CLUSTER"), "Verifying namespace state from control plane")
 			})
 
 		}

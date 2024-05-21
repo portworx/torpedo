@@ -153,14 +153,14 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 // ValidatePdsDataServiceDeployments validates the pds deployments resource, storage, deployment configurations and endpoints
 func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(deploymentId string, ds dslibs.PDSDataService, replicas int, resConfigId, stConfigId, namespace, version, image string) error {
 
-	//Validate Statefulset health
-	err := dslibs.ValidateStatefulSetHealth(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Status.CustomResourceName, wfDataService.DataServiceDeployment[deploymentId].Namespace)
+	// Validate the sts object and health of the pds deployment
+	err := dslibs.ValidateDataServiceDeploymentHealth(deploymentId, PDS_DEPLOYMENT_AVAILABLE)
 	if err != nil {
 		return err
 	}
 
-	// Validate the sts object and health of the pds deployment
-	err = dslibs.ValidateDataServiceDeploymentHealth(deploymentId, PDS_DEPLOYMENT_AVAILABLE)
+	//Validate Statefulset health
+	err = dslibs.ValidateStatefulSetHealth(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Status.CustomResourceName, wfDataService.DataServiceDeployment[deploymentId].Namespace)
 	if err != nil {
 		return err
 	}
