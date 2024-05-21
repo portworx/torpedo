@@ -392,16 +392,6 @@ var _ = Describe("{DeployDsOnMultipleNSAndProjects}", func() {
 		steplog := "Create Project1 and Associate Namespace to the projects"
 		Step(steplog, func() {
 			log.InfoD(steplog)
-			//project1.Platform = WorkflowPlatform
-			//PROJECT_NAME := "rbac-project-" + RandomString(5) + "-1"
-			//project1.ProjectName = PROJECT_NAME
-			//_, err := project1.CreateProject()
-			//log.FailOnError(err, "unable to create project")
-			//ProjectId, err = project1.GetDefaultProject(PROJECT_NAME)
-			//log.FailOnError(err, "Unable to get current project")
-			//log.Infof("Current project ID - [%s]", ProjectId)
-			//projects = append(projects, ProjectId)
-
 			log.Debugf("namespace-[%s], namespaceId-[%s]", namespaces[0], namespaceNameAndId[namespaces[0]])
 			log.Debugf("namespace-[%s], namespaceId-[%s]", namespaces[1], namespaceNameAndId[namespaces[1]])
 			log.Debugf("namespace-[%s], namespaceId-[%s]", namespaces[2], namespaceNameAndId[namespaces[2]])

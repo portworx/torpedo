@@ -63,6 +63,20 @@ const (
 	consul        = "Consul"
 )
 
+var CrdMap = map[string]string{
+	"postgresql":    "postgresqls",
+	"elasticsearch": "elasticsearches",
+	"couchbase":     "couchbases",
+	"cassandra":     "cassandras",
+	"rabbitmq":      "rabbitmqs",
+	"mysql":         "mysqls",
+	"redis":         "redis",
+	"mongodb":       "mongodbs",
+	"sqlserver":     "sqlservers",
+	"kafka":         "kafkas",
+	"consul":        "consuls",
+}
+
 type PDSDataService struct {
 	DeploymentName        string "json:\"DeploymentName\""
 	Name                  string "json:\"Name\""
