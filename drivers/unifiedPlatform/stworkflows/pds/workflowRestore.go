@@ -147,7 +147,7 @@ func (restore WorkflowPDSRestore) GetRestore(id string) (*automationModels.PDSRe
 // Purge Deletes all created restores
 func (restore WorkflowPDSRestore) Purge() error {
 
-	err := restore.RestoredDeployments.Purge()
+	err := restore.RestoredDeployments.Purge(false)
 	if err != nil {
 		return err
 	}

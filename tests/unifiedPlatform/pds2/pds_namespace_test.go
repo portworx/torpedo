@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +18,7 @@ import (
 
 const AVAILABLE = "AVAILABLE"
 const UNAVAILABLE = "UNAVAILABLE"
+const TOMBSTONED = "TOMBSTONED"
 const portorxLabel = "platform.portworx.io/pds"
 
 var _ = Describe("{EnableandDisableNamespace}", func() {
@@ -371,5 +374,63 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 
 	JustAfterEach(func() {
 		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{DeletePDSEnabledNamespace}", func() {
+	var (
+		deployment *automationModels.PDSDeploymentResponse
+		err        error
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("DeletePDSEnabledNamespace", "Create a namespace, deploy dataservices, delete the namespace and validate", nil, 0)
+	})
+
+	It("Create a namespace, deploy dataservices, delete the namespace and validate", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+			})
+
+			Step("Delete Namespace", func() {
+				log.InfoD("Deleting namespace")
+				err := core.Instance().DeleteNamespace(PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deleting namespace")
+				log.Infof("Namespace [%s] deletion started successfully", PDS_DEFAULT_NAMESPACE)
+			})
+
+			Step("Printing current phase of namespace", func() {
+				log.InfoD("Printing current state of namespace")
+				ns, err := core.Instance().GetNamespace(PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deleting namespace")
+				log.Infof("Namespace [%s] is in [%s] state", PDS_DEFAULT_NAMESPACE, ns.Status.Phase)
+			})
+
+			Step("Validating namespace state from control plane", func() {
+				log.InfoD("Validating namespace state from control plane")
+				log.Infof("Sleeping for 1 minute for ns changes to be updated on control plane")
+				time.Sleep(1 * time.Minute)
+				nsModel, err := WorkflowNamespace.GetNamespace(PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while fetching namsepace details from control plane")
+				log.Infof("Namespace [%s] is in [%s] state", PDS_DEFAULT_NAMESPACE, *nsModel.Status.Phase)
+				dash.VerifyFatal(strings.ToLower(string(*nsModel.Status.Phase)), strings.ToLower(TOMBSTONED), "Verifying namespace state from control plane")
+			})
+
+			Step("Validating dataservice state from control plane", func() {
+				log.InfoD("Validating dataservice state from control plane")
+				currDepState, err := WorkflowDataService.GetDeployment(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while fetching deployment details from control plane")
+				log.InfoD("Deployment [%s] is in [%s] state", *deployment.Create.Meta.Uid, *currDepState.Status.Phase)
+			})
+
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+		WorkflowDataService.Purge(true)
 	})
 })
