@@ -4210,11 +4210,11 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 				log.FailOnError(err, fmt.Sprintf("Failed to check if volume exists on FA: %v", err))
 
 				if isExists {
-					cloneVolFound = true
+					log.InfoD("Volume [%v] exists on the FA Cluster [%v]", volName, fa.MgmtEndPoint)
 					return nil
-				} else {
-					log.Infof("Volume [%v] doesn't exist on the FA Cluster [%v]", volName, fa.MgmtEndPoint)
 				}
+				log.Infof("Volume [%v] doesn't exist on the FA Cluster [%v]", volName, fa.MgmtEndPoint)
+
 			}
 			if !cloneVolFound {
 				return fmt.Errorf("volume %s does not exist in any of the FlashArrays", volumeName)
