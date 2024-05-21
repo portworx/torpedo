@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/devans10/pugo/flasharray"
@@ -982,6 +983,7 @@ func ValidatePDB(pdbValue int, allowedDisruptions int, initialNumNodes int, isCl
 
 	Step("Validate PDB minAvailable for px storage", func() {
 		if currentPdbValue != pdbValue {
+			log.Warnf("Current PDB minAvailable has changed to %d", currentPdbValue)
 			err := fmt.Errorf("PDB minAvailable value has changed. Expected: %d, Actual: %d", pdbValue, currentPdbValue)
 			processError(err, errChan...)
 		}
@@ -1002,6 +1004,13 @@ func ValidatePDB(pdbValue int, allowedDisruptions int, initialNumNodes int, isCl
 		} else {
 			currentNumNodes := len(nodes.([]*opsapi.StorageNode))
 			if allowedDisruptions < initialNumNodes-currentNumNodes {
+				log.Warnf("Number of nodes down is more than allowed disruptions [ %d ], total storage nodes : [ %d ] and current count of storage nodes are: [ %d ]", allowedDisruptions, initialNumNodes, currentNumNodes)
+				var currNodesName []string
+				for _, node := range nodes.([]*opsapi.StorageNode) {
+					currNodesName = append(currNodesName, node.SchedulerNodeName)
+				}
+				currNodesStr := strings.Join(currNodesName, ",")
+				log.Debugf("Current storage nodes in cluster are %s", currNodesStr)
 				err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
 				processError(err, errChan...)
 			}
