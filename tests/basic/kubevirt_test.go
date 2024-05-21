@@ -4,6 +4,7 @@ import (
 	context1 "context"
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/pkg/units"
 	"net/url"
 	"strings"
 	"sync"
@@ -690,14 +691,43 @@ var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
 			log.Errorf("failed to list events in namespace [%s]. Err: [%v]", pxNs, err)
 		}()
 
-		Step("Create an autopilot rule for PVC expand and schedule applications", func() {
-			log.InfoD("Creating an autopilot rule for PVC expand and scheduling applications")
-			pvcLabelSelector := map[string]string{"autopilot": "pvc-expand"}
-			pvcAutoPilotRules := []apapi.AutopilotRule{
-				aututils.PVCRuleByUsageCapacity(5, 100, "100"),
+		//Step("Create an autopilot rule for PVC expand and schedule applications", func() {
+		//	log.InfoD("Creating an autopilot rule for PVC expand and scheduling applications")
+		//	pvcLabelSelector := map[string]string{"autopilot": "pvc-expand"}
+		//	pvcAutoPilotRules := []apapi.AutopilotRule{
+		//		aututils.PVCRuleByUsageCapacity(5, 100, "100"),
+		//	}
+		//	for i := 0; i < Inst().GlobalScaleFactor; i++ {
+		//		for id, apRule := range pvcAutoPilotRules {
+		//			apRule.Name = fmt.Sprintf("%s-%d", apRule.Name, i)
+		//			apRule.Spec.ActionsCoolDownPeriod = int64(60)
+		//			taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
+		//			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+		//				AppKeys:            Inst().AppList,
+		//				StorageProvisioner: Inst().Provisioner,
+		//				AutopilotRule:      apRule,
+		//				Labels:             pvcLabelSelector,
+		//			})
+		//			log.FailOnError(err, "failed to schedule app [%s] with autopilot rule [%s]", taskName, apRule.Name)
+		//			contexts = append(contexts, context...)
+		//		}
+		//	}
+		//})
+
+		Step("Create an autopilot rule for pool expand and schedule applications", func() {
+			log.InfoD("Creating an autopilot rule for pool expand and scheduling applications")
+			selectedStorageNode := node.GetStorageDriverNodes()[0]
+			log.Infof("Selected storage node for pool expand: [%s]", selectedStorageNode.Name)
+			log.Infof("Sleeping for 5 minutes before adding disk to the pool")
+			time.Sleep(5 * time.Minute)
+			poolLabelSelector := map[string]string{"autopilot": "adddisk"}
+			poolAutoPilotRules := []apapi.AutopilotRule{
+				aututils.PoolRuleByTotalSize((getTotalPoolSize(selectedStorageNode)/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabelSelector),
 			}
+			err := AddLabelsOnNode(selectedStorageNode, poolLabelSelector)
+			log.FailOnError(err, "failed to add label [%s] on node: [%s]", poolLabelSelector, selectedStorageNode.Name)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				for id, apRule := range pvcAutoPilotRules {
+				for id, apRule := range poolAutoPilotRules {
 					apRule.Name = fmt.Sprintf("%s-%d", apRule.Name, i)
 					apRule.Spec.ActionsCoolDownPeriod = int64(60)
 					taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
@@ -705,10 +735,11 @@ var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
 						AppKeys:            Inst().AppList,
 						StorageProvisioner: Inst().Provisioner,
 						AutopilotRule:      apRule,
-						Labels:             pvcLabelSelector,
+						Labels:             poolLabelSelector,
 					})
 					log.FailOnError(err, "failed to schedule app [%s] with autopilot rule [%s]", taskName, apRule.Name)
 					contexts = append(contexts, context...)
+					ValidateApplications(contexts)
 				}
 			}
 		})
@@ -718,10 +749,6 @@ var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
 		//	selectedStorageNode = node.GetStorageDriverNodes()[0]
 		//	log.Infof("Selected storage node: %s", selectedStorageNode.Name)
 		//
-		//	poolLabelSelector = map[string]string{"autopilot": "adddisk"}
-		//	poolAutoPilotRules = []apapi.AutopilotRule{
-		//		aututils.PoolRuleByTotalSize((getTotalPoolSize(selectedStorageNode)/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabelSelector),
-		//	}
 		//
 		//})
 		//
