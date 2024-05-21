@@ -4572,4 +4572,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 
 		})
 	})
+	AfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
 })
