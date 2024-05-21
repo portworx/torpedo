@@ -1196,7 +1196,7 @@ var _ = Describe("{AddDriveWithPXRestart}", func() {
 			}
 			finalPoolCount = len(pools)
 			dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
-			dash.VerifyFatal(initialPoolCount+1 == finalPoolCount, true, fmt.Sprintf("Total pool count after cloud drive add with PX restart Expected:[%d] Got:[%d]", initialPoolCount, finalPoolCount))
+			dash.VerifyFatal(initialPoolCount+1 == finalPoolCount, true, fmt.Sprintf("Total pool count after cloud drive add with PX restart Expected:[%d] Got:[%d]", initialPoolCount+1, finalPoolCount))
 		})
 
 	})
@@ -6327,7 +6327,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("changedioprioritypoolexpand-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("chgpriopoolex-%d", i))...)
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)

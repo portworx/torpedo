@@ -2724,7 +2724,13 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		case api.Status_STATUS_OFFLINE:
 			// in case node is offline and it is a storageless node, the id might have changed so update it
 			if len(pxNode.Pools) == 0 {
-				d.updateNodeID(&n, d.getNodeManager())
+				_, err = d.updateNodeID(&n, d.getNodeManager())
+				if err != nil {
+					return "", true, &ErrFailedToWaitForPx{
+						Node:  n,
+						Cause: fmt.Sprintf("failed to update node id [%s/%s], Err: %v", n.Name, n.VolDriverNodeID, err),
+					}
+				}
 			}
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
@@ -2732,6 +2738,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 					n.Name, n.VolDriverNodeID, api.Status_STATUS_OK, pxNode.Status),
 			}
 		default:
+			log.Infof("Status PX available %s", pxNode.Status.String())
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
 				Cause: fmt.Sprintf("PX cluster is usable but node [%s/%s] status is not ok. Expected: %v Actual: %v",
@@ -4391,9 +4398,9 @@ func (d *portworx) updateNodeID(n *node.Node, nManager ...api.OpenStorageNodeCli
 		return n, err
 	}
 	if err = d.updateNode(n, nodes); err != nil {
-		return &node.Node{}, fmt.Errorf("failed to update node ID for node [%s], Err: %v", n.Name, err)
+		return &node.Node{}, fmt.Errorf("failed to update node ID for node [%s] with ID [%s] in the cluster, Err: %v", n.Name, n.Id, err)
 	}
-	return n, fmt.Errorf("failed to find node [%s] with ID [%s] in the cluster", n.Name, n.Id)
+	return n, nil
 }
 
 func getGroupMatches(groupRegex *regexp.Regexp, str string) map[string]string {

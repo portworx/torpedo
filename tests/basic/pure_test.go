@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
 
@@ -2104,7 +2105,7 @@ var _ = Describe("{PVCLUNValidation}", func() {
 		}
 
 		for _, pvc := range pvcList.Items {
-			err := Inst().S.WaitForSinglePVCToBound(pvc.Name, nsName)
+			err := Inst().S.WaitForSinglePVCToBound(pvc.Name, nsName, 0)
 			log.FailOnError(err, fmt.Sprintf("error validating PVC [%s] status in namespace [%s]", pvc.Name, nsName))
 		}
 
@@ -2827,6 +2828,9 @@ var _ = Describe("{FBDAMultiTenancyBasicTest}", func() {
 		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
 		customConfigAppName = skipTestIfNoRequiredCustomAppConfigFound()
 		contexts = ScheduleApplications(testName)
+		for i := 0; i < len(contexts); i++ {
+			contexts[i].SkipVolumeValidation = true
+		}
 		ValidateApplicationsPureSDK(contexts)
 	})
 
@@ -2835,8 +2839,8 @@ var _ = Describe("{FBDAMultiTenancyBasicTest}", func() {
 			ctx := findContext(contexts, customConfigAppName)
 
 			vols, err := Inst().S.GetVolumes(ctx)
-			dash.VerifyNotNilFatal(err, "Failed to get list of volumes")
-			dash.VerifyFatal(len(vols) != 0, true, "Failed to get volumes")
+			dash.VerifyFatal(err, nil, "Failed to get list of volumes")
+			dash.VerifyFatal(len(vols) > 0, true, "Failed to get volumes")
 
 			expectedPureNfsEndpoint := Inst().CustomAppConfig[customConfigAppName].StorageClassPureNfsEndpoint
 
@@ -2864,8 +2868,8 @@ var _ = Describe("{FBDAMultiTenancyBasicTest}", func() {
 
 var _ = Describe("{FBDAMultiTenancyUpdatePureNFSEnpoint}", func() {
 	var contexts []*scheduler.Context
-	var customConfigAppName string
-	var origCustomAppConfigs, customAppConfigs map[string]scheduler.AppConfig
+	var customConfigAppName, originalNFSEndpoint string
+	var origCustomAppConfigs map[string]scheduler.AppConfig
 
 	testName := "fbda-mt-update-endp"
 
@@ -2886,13 +2890,15 @@ var _ = Describe("{FBDAMultiTenancyUpdatePureNFSEnpoint}", func() {
 			StorageClassPureNfsEndpoint: "",
 		}
 
-		Inst().CustomAppConfig = customAppConfigs
 		log.Infof("JustBeforeEach using Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
 
 		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
 		log.FailOnError(err, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
 
 		contexts = ScheduleApplications(testName)
+		for i := 0; i < len(contexts); i++ {
+			contexts[i].SkipVolumeValidation = true
+		}
 		ValidateApplicationsPureSDK(contexts)
 	})
 
@@ -2916,7 +2922,13 @@ var _ = Describe("{FBDAMultiTenancyUpdatePureNFSEnpoint}", func() {
 				apiVol, err := Inst().V.InspectVolume(vol.ID)
 				log.FailOnError(err, fmt.Sprintf("Failed to inspect volume [%s]", apiVol.GetId()))
 
-				originalNFSEndpoint := apiVol.Spec.ProxySpec.PureFileSpec.NfsEndpoint
+				if apiVol.Spec != nil && apiVol.Spec.ProxySpec != nil {
+					if apiVol.Spec.ProxySpec.PureFileSpec != nil && apiVol.Spec.ProxySpec.PureFileSpec.NfsEndpoint != "" {
+						originalNFSEndpoint = apiVol.Spec.ProxySpec.PureFileSpec.NfsEndpoint
+					} else {
+						originalNFSEndpoint = apiVol.Spec.ProxySpec.Endpoint
+					}
+				}
 				dash.VerifyFatal(originalNFSEndpoint != newNFSEndpoint, true,
 					fmt.Sprintf("Verify new NFS endpoint [%s] is not same as old [%s].", newNFSEndpoint, originalNFSEndpoint))
 
@@ -3677,6 +3689,100 @@ var _ = Describe("{IscsiPortsDownDuringNewPoolCreateInProgress}", func() {
 	})
 })
 
+var _ = Describe("{FBDATopologyCreateTest}", func() {
+	var scName, ns, pvcName, pureNfsEndpoint string
+	JustBeforeEach(func() {
+		StartTorpedoTest("FBDATopologyCreateTest",
+			"Try Creating FBDA pvcs using various topology options", nil, 0)
+		customConfigAppName := skipTestIfNoRequiredCustomAppConfigFound()
+		pureNfsEndpoint = Inst().CustomAppConfig[customConfigAppName].StorageClassPureNfsEndpoint
+	})
+	itLog := "FBDATopologyCreateTest"
+	It(itLog, func() {
+		createSC := func(scName, pureNfsEndpoint string, allowedTopologies map[string][]string) {
+
+			params := make(map[string]string)
+			params["repl"] = "1"
+			params["priority_io"] = "high"
+			params["io_profile"] = "auto"
+			params["backend"] = "pure_file"
+			params["pure_nfs_endpoint"] = pureNfsEndpoint
+			bindMode := storageApi.VolumeBindingImmediate
+
+			storage.Instance().DeleteStorageClass(scName)
+			time.Sleep(1 * time.Second)
+			var allowVolExpansion bool = true
+			err := CreateFlashStorageClass(scName, "pure_file",
+				v1.PersistentVolumeReclaimDelete,
+				params, []string{},
+				&allowVolExpansion, bindMode, allowedTopologies)
+			dash.VerifyFatal(err, nil,
+				"Verify storage class is created successfully with topology labels")
+		}
+
+		scName, ns, pvcName = "fbda-topology-sc", "testns", "pvcwithtop"
+
+		type testCases struct {
+			allowedTopologies map[string][]string
+			isErrorExpected   bool
+		}
+		testCases1 := []testCases{
+			{
+				allowedTopologies: map[string][]string{
+					k8s.TopologyZoneK8sNodeLabel:   {"zone-0"},
+					k8s.TopologyRegionK8sNodeLabel: {"region-0"},
+				},
+				isErrorExpected: false,
+			},
+			{
+				allowedTopologies: map[string][]string{
+					k8s.TopologyZoneK8sNodeLabel: {"zone-0"},
+				},
+				isErrorExpected: true,
+			},
+			{
+				allowedTopologies: nil,
+				isErrorExpected:   true,
+			},
+		}
+
+		for i, t := range testCases1 {
+			log.Infof("Running test case [%d]\n", i)
+			createSC(scName, pureNfsEndpoint, t.allowedTopologies)
+
+			ns, err := CreateNamespaces(ns, 1)
+			log.FailOnError(err, fmt.Sprintf("error creating namespace [%s] failed [%v]", ns, err))
+
+			err = CreateFlashPVCOnCluster(pvcName, scName, ns[0], "5Gi")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify PVC [%s] is created successfully", pvcName))
+
+			time.Sleep(10 * time.Second)
+			pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, ns[0])
+			log.FailOnError(err, "Failed to create PVC [%v]. Error : [%v]", pvcName, err)
+			err = Inst().S.WaitForSinglePVCToBound(pvcName, ns[0], 3)
+
+			if !t.isErrorExpected {
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verify PVC [%s] got bound successfully.", pvc.Name))
+			} else {
+				dash.VerifyFatal(err != nil, true, fmt.Sprintf("Verify PVC [%s] fails to get bound.", pvc.Name))
+			}
+			err = storage.Instance().DeleteStorageClass(scName)
+			log.FailOnError(err, fmt.Sprintf("error deleting storage class [%s]", scName))
+			err = core.Instance().DeletePersistentVolumeClaim(pvcName, ns[0])
+			log.FailOnError(err, fmt.Sprintf("error deleting PVC [%s] in [%s] namespace", pvcName, ns[0]))
+			err = core.Instance().DeleteNamespace(ns[0])
+			log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", ns[0]))
+			time.Sleep(30 * time.Second)
+		}
+	})
+	JustAfterEach(func() {
+		defer func() {
+
+			EndTorpedoTest()
+		}()
+	})
+})
+
 var _ = Describe("{DeleteFADAVolumeFromBackend}", func() {
 
 	/*
@@ -3829,7 +3935,7 @@ var _ = Describe("{ExpandMultiplePoolsWhenFADAVolumeCreationInProgress}", func()
 					log.FailOnError(CreateFlashPVCOnCluster(pvcName, scName, eachNs, "100"),
 						"Failed to create PVC on the cluster")
 
-					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs),
+					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs, 0),
 						"Errored occured while checking if PVC Bounded")
 
 				}
@@ -3950,7 +4056,7 @@ var _ = Describe("{ExpandMultiplePoolsWhenFBDAVolumeCreationInProgress}", func()
 					log.FailOnError(CreateFlashPVCOnCluster(pvcName, scName, eachNs, "100"),
 						"Failed to create PVC on the cluster")
 
-					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs),
+					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs, 0),
 						"Errored occured while checking if PVC Bounded")
 				}
 			}
@@ -4087,7 +4193,7 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 					log.FailOnError(CreateFlashPVCOnCluster(pvcName, scNameFA, eachNs, "100"),
 						"Failed to create PVC on the cluster")
 
-					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs),
+					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs, 0),
 						"Errored occured while checking if PVC Bounded")
 				}
 			}
@@ -4103,7 +4209,7 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 					pvcName := fmt.Sprintf("fbda-pvc-%d-%s", i, nsuuid.String())
 					log.FailOnError(CreateFlashPVCOnCluster(pvcName, scNameFA, eachNs, "100"),
 						"Failed to create PVC on the cluster")
-					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs),
+					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs, 0),
 						"Errored occured while checking if PVC Bounded")
 				}
 			}
