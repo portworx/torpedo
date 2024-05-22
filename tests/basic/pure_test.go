@@ -4688,3 +4688,108 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", func() {
+	/*
+	           	https://purestorage.atlassian.net/browse/PTX-23996
+	           	1.Label Nodes with topology labels
+	           	2.Create a storage class with allowedTopologies
+	   		3. Deploy Apps and make sure that apps pvc are deploying on the nodes with the topology labels
+	   		4. Reboot the Node while FADA Volume Creation in Progress
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootingNodesWhileFADAvolumeCreationInProgressUsingZones",
+			"Rebooting Nodes while FADA Volume Creation in Progress using Zones",
+			nil, 0)
+	})
+	itLog := "RebootingNodesWhileFADAvolumeCreationInProgressUsingZones"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var contexts []*scheduler.Context
+		var wg sync.WaitGroup
+		stNodes := node.GetStorageNodes()
+		SelectedNodesForTopology := stNodes[:3]
+		selectedNode := stNodes[rand.Intn(len(stNodes))]
+
+		applist := Inst().AppList
+		defer appsValidateAndDestroy(contexts)
+		defer func() {
+			Inst().AppList = applist
+			for _, stNode := range SelectedNodesForTopology {
+				err := Inst().S.RemoveLabelOnNode(stNode, k8s.TopologyZoneK8sNodeLabel)
+				log.FailOnError(err, fmt.Sprintf("Failed remove label on node %s", stNode.Name))
+				err = Inst().S.RemoveLabelOnNode(stNode, k8s.TopologyRegionK8sNodeLabel)
+				log.FailOnError(err, fmt.Sprintf("Failed remove label on node %s", stNode.Name))
+			}
+		}()
+
+		Inst().AppList = []string{"fio-zones"}
+		toplogyZonelabel := "zone-0"
+		toplogyRegionLabel := "region-0"
+		stepLog := "Label few Nodes with topology and region"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for _, stNode := range SelectedNodesForTopology {
+				err = Inst().S.AddLabelOnNode(stNode, k8s.TopologyZoneK8sNodeLabel, toplogyZonelabel)
+				log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", stNode.Name))
+				err = Inst().S.AddLabelOnNode(stNode, k8s.TopologyRegionK8sNodeLabel, toplogyRegionLabel)
+				log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", stNode.Name))
+			}
+		})
+		stepLog = "Schedule application on the labelled nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				appNamespace := fmt.Sprintf("rebootNodeWhileVolumeCreationWithZones-%s", Inst().InstanceID)
+				for i := 0; i < Inst().GlobalScaleFactor; i++ {
+					contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, "rebootNodeWhileVolumeCreationWithZones")...)
+				}
+			}()
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				stepLog := "Pick a random storage node and reboot"
+				Step(stepLog, func() {
+					log.Infof("Stopping node %s", selectedNode.Name)
+					err := Inst().N.RebootNode(selectedNode,
+						node.RebootNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         defaultCommandTimeout,
+								TimeBeforeRetry: defaultCommandRetry,
+							},
+						})
+					log.FailOnError(err, "Failed to reboot node %v", selectedNode.Name)
+				})
+			}()
+			wg.Wait()
+			log.Infof("wait for node: %s to be back up", selectedNode.Name)
+			nodeReadyStatus := func() (interface{}, bool, error) {
+				err := Inst().S.IsNodeReady(selectedNode)
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+			_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
+			log.FailOnError(err, "Failed to reboot node")
+		})
+		stepLog = "Validate the application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
