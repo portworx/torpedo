@@ -4258,11 +4258,12 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 		var contexts []*scheduler.Context
 		var wg sync.WaitGroup
 		stNodes := node.GetStorageNodes()
-		SelectedNodesForTopology := stNodes[:3]
+		selectedNodesForTopology := stNodes[:3]
+		selectedNodesForReboot := stNodes[3:]
 		applist := Inst().AppList
 		defer func() {
 			Inst().AppList = applist
-			for _, stNode := range SelectedNodesForTopology {
+			for _, stNode := range selectedNodesForTopology {
 				err := Inst().S.RemoveLabelOnNode(stNode, k8s.TopologyZoneK8sNodeLabel)
 				log.FailOnError(err, fmt.Sprintf("Failed to remove label on node %s", stNode.Name))
 				err = Inst().S.RemoveLabelOnNode(stNode, k8s.TopologyRegionK8sNodeLabel)
@@ -4276,7 +4277,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 		stepLog := "Label few Nodes with topology and region"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			for _, stNode := range SelectedNodesForTopology {
+			for _, stNode := range selectedNodesForTopology {
 				err = Inst().S.AddLabelOnNode(stNode, k8s.TopologyZoneK8sNodeLabel, toplogyZonelabel)
 				log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", stNode.Name))
 				err = Inst().S.AddLabelOnNode(stNode, k8s.TopologyRegionK8sNodeLabel, toplogyRegionLabel)
@@ -4299,8 +4300,8 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 			go func() {
 				defer wg.Done()
 				defer GinkgoRecover()
-				log.InfoD("Rebooting the labelled nodes one by one where FADA volume creation is in progress")
-				for _, selectedNode := range SelectedNodesForTopology {
+				log.InfoD("Rebooting the non-labelled nodes one by one while FADA volume creation is in progress in labelled nodes")
+				for _, selectedNode := range selectedNodesForReboot {
 					log.InfoD("Stopping node %s", selectedNode.Name)
 					err := Inst().N.RebootNode(selectedNode,
 						node.RebootNodeOpts{
@@ -4314,7 +4315,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 				}
 			}()
 			wg.Wait()
-			for _, selectedNode := range SelectedNodesForTopology {
+			for _, selectedNode := range selectedNodesForReboot {
 				log.InfoD("wait for node: %s to be back up", selectedNode.Name)
 				nodeReadyStatus := func() (interface{}, bool, error) {
 					err := Inst().S.IsNodeReady(selectedNode)
