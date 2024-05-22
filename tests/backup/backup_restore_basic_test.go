@@ -3366,16 +3366,16 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", Label(TestCaseLabelsMap[Delet
 	})
 })
 
-// AlternateBackupBetweenNfsAndS3 Validates the type of backups(Full/Incremental) when alternate backups are taken between two different backup locations of NFS and S3
-var _ = Describe("{AlternateBackupBetweenNfsAndS3}", Label(TestCaseLabelsMap[AlternateBackupBetweenNfsAndS3]...), func() {
+// AlternateBackupBetweenNfsAndObjectStore Validates the type of backups(Full/Incremental) when alternate backups are taken between two different backup locations of NFS and S3
+var _ = Describe("{AlternateBackupBetweenNfsAndObjectStore}", Label(TestCaseLabelsMap[AlternateBackupBetweenNfsAndObjectStore]...), func() {
 	var (
 		scheduledAppContexts     []*scheduler.Context
 		sourceClusterUid         string
 		backupLocationMap        map[string]string
-		s3CloudCredName          string
-		s3BackupLocationName     string
-		s3CloudCredUID           string
-		s3BackupLocationUID      string
+		osCloudCredName          string
+		osBackupLocationName     string
+		osCloudCredUID           string
+		osBackupLocationUID      string
 		nfsBackupLocationName    string
 		nfsBackupLocationUID     string
 		bkpNamespaces            []string
@@ -3387,7 +3387,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", Label(TestCaseLabelsMap[Alt
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("AlternateBackupBetweenNfsAndS3", "To perform alternate backups between NFS and S3, and then perform the restore", nil, 86088, Sabrarhussaini, Q3FY24)
+		StartPxBackupTorpedoTest("AlternateBackupBetweenNfsAndObjectStore", "To perform alternate backups between NFS and a Object Store(S3 /Azure Blob), and then perform the restore", nil, 86088, Sabrarhussaini, Q3FY24)
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
 		log.InfoD("scheduling applications")
@@ -3405,38 +3405,41 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", Label(TestCaseLabelsMap[Alt
 		providers = GetBackupProviders()
 	})
 
-	It("To validate alternate backups between Nfs And S3", func() {
+	It("To validate alternate backups between Nfs And Object Store", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
 			ValidateApplications(scheduledAppContexts)
 		})
 
-		Step("Creating cloud setting for aws and backup locations for S3 and NFS", func() {
-			log.InfoD("Creating cloud setting for aws and backup locations for S3 and NFS")
+		Step("Creating cloud setting for aws and backup locations for Object Store and NFS", func() {
+			log.InfoD("Creating cloud setting for aws and backup locations for Object Store and NFS")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
+				log.Infof("The provider is %v", provider)
 				log.InfoD("Creating NFS backup location")
 				nfsBackupLocationName = fmt.Sprintf("%s-%s-%v", "nfs", getGlobalBucketName(drivers.ProviderNfs), RandomString(6))
 				nfsBackupLocationUID = uuid.New()
 				backupLocationMap[nfsBackupLocationUID] = nfsBackupLocationName
 				err = CreateNFSBackupLocation(nfsBackupLocationName, nfsBackupLocationUID, BackupOrgID, " ", getGlobalBucketName(provider), true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of NFS backup location [%s]", nfsBackupLocationName))
-				log.InfoD("Creating AWS cred and S3 backup location")
-				s3CloudCredName = fmt.Sprintf("%s-%s-%v", "cred", "s3", RandomString(4))
-				s3BackupLocationName = fmt.Sprintf("%s-%s-%v", "s3", getGlobalBucketName(provider), RandomString(4))
-				s3CloudCredUID = uuid.New()
-				s3BackupLocationUID = uuid.New()
-				backupLocationMap[s3BackupLocationUID] = s3BackupLocationName
-				if provider == drivers.ProviderNfs {
-					err = CreateCloudCredential("aws", s3CloudCredName, s3CloudCredUID, BackupOrgID, ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", s3CloudCredName, BackupOrgID, "AWS"))
+				log.InfoD("Creating AWS cred and Object Store backup location")
+				osCloudCredName = fmt.Sprintf("%s-%s-%v", "cred", "objectstore", RandomString(4))
+				osBackupLocationName = fmt.Sprintf("%s-%s-%v", "os", getGlobalBucketName(provider), RandomString(4))
+				osCloudCredUID = uuid.New()
+				osBackupLocationUID = uuid.New()
+				backupLocationMap[osBackupLocationUID] = osBackupLocationName
+				if provider == drivers.ProviderAzure {
+					err = CreateCloudCredential(provider, osCloudCredName, osCloudCredUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", osCloudCredName, BackupOrgID, provider))
+					err = CreateAzureBackupLocation(osBackupLocationName, osBackupLocationUID, osCloudCredName, osCloudCredUID, getGlobalBucketName(provider), BackupOrgID, true)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of azure blob backup location [%s]", osBackupLocationName))
 				} else {
-					err = CreateCloudCredential(provider, s3CloudCredName, s3CloudCredUID, BackupOrgID, ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", s3CloudCredName, BackupOrgID, "AWS"))
+					err = CreateCloudCredential("aws", osCloudCredName, osCloudCredUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", osCloudCredName, BackupOrgID, "aws"))
+					err = CreateS3BackupLocation(osBackupLocationName, osBackupLocationUID, osCloudCredName, osCloudCredUID, getGlobalBucketName("aws"), BackupOrgID, "", true)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of S3 backup location [%s]", osBackupLocationName))
 				}
-				err = CreateS3BackupLocation(s3BackupLocationName, s3BackupLocationUID, s3CloudCredName, s3CloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of S3 backup location [%s]", s3BackupLocationName))
 			}
 		})
 
@@ -3457,8 +3460,8 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", Label(TestCaseLabelsMap[Alt
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
 		})
 
-		Step("Taking alternate backups of application from source cluster to both S3 and NFS backup locations", func() {
-			log.InfoD("Taking alternate backups of application from source cluster to both S3 and NFS backup locations")
+		Step("Taking alternate backups of application from source cluster to both Object Store and NFS backup locations", func() {
+			log.InfoD("Taking alternate backups of application from source cluster to both Object Store and NFS backup locations")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
@@ -3507,7 +3510,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", Label(TestCaseLabelsMap[Alt
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
 		log.InfoD("Deleting the px-backup objects")
-		CleanupCloudSettingsAndClusters(backupLocationMap, s3CloudCredName, s3CloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, osCloudCredName, osCloudCredUID, ctx)
 		log.InfoD("Switching context to destination cluster for clean up")
 		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "Unable to switch context to destination cluster [%s]", DestinationClusterName)
