@@ -80,7 +80,7 @@ spec:
           {{ if .VolumeSize }}
             storage: {{ .VolumeSize }}
           {{ else }}
-            storage: 200Gi{{ end }}
+            storage: 100Gi{{ end }}
     - metadata:
         name: fio-log
       spec:
