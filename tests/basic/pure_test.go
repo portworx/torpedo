@@ -4710,7 +4710,6 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 		stNodes := node.GetStorageNodes()
 		SelectedNodesForTopology := stNodes[:3]
 		applist := Inst().AppList
-		defer appsValidateAndDestroy(contexts)
 		defer func() {
 			Inst().AppList = applist
 			for _, stNode := range SelectedNodesForTopology {
@@ -4789,6 +4788,6 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		AfterEachTest(contexts)
+		appsValidateAndDestroy(contexts)
 	})
 })
