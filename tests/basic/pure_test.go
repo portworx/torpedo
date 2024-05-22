@@ -4294,9 +4294,9 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 			go func() {
 				defer wg.Done()
 				defer GinkgoRecover()
-				appNamespace := fmt.Sprintf("rebootNodeWhileVolumeCreationWithZones-%s", Inst().InstanceID)
+				appNamespace := fmt.Sprintf("rebootnodevolumecreationzones-%s", Inst().InstanceID)
 				for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, "rebootNodeWhileVolumeCreationWithZones")...)
+					contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, "rebootnodevolumecreationzone")...)
 				}
 			}()
 			wg.Add(2)
