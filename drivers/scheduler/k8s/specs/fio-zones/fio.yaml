@@ -72,7 +72,7 @@ spec:
     - metadata:
         name: fio-data
       spec:
-        storageClassName: fio-sc
+        storageClassName: fio-topology-sc
         accessModes:
           - ReadWriteOnce
         resources:
@@ -84,7 +84,7 @@ spec:
     - metadata:
         name: fio-log
       spec:
-        storageClassName: fio-log
+        storageClassName: fio-log-topology-sc
         accessModes:
           - ReadWriteOnce
         resources:
