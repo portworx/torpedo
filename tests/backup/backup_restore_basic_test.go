@@ -3366,7 +3366,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", Label(TestCaseLabelsMap[Delet
 	})
 })
 
-// AlternateBackupBetweenNfsAndObjectStore Validates the type of backups(Full/Incremental) when alternate backups are taken between two different backup locations of NFS and S3
+// AlternateBackupBetweenNfsAndObjectStore Validates the type of backups(Full/Incremental) when alternate backups are taken between two different backup locations of NFS and an object storage
 var _ = Describe("{AlternateBackupBetweenNfsAndObjectStore}", Label(TestCaseLabelsMap[AlternateBackupBetweenNfsAndObjectStore]...), func() {
 	var (
 		scheduledAppContexts     []*scheduler.Context
@@ -3417,29 +3417,30 @@ var _ = Describe("{AlternateBackupBetweenNfsAndObjectStore}", Label(TestCaseLabe
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				log.Infof("The provider is %v", provider)
+				// Always create NFS backup location
 				log.InfoD("Creating NFS backup location")
 				nfsBackupLocationName = fmt.Sprintf("%s-%s-%v", "nfs", getGlobalBucketName(drivers.ProviderNfs), RandomString(6))
 				nfsBackupLocationUID = uuid.New()
 				backupLocationMap[nfsBackupLocationUID] = nfsBackupLocationName
-				err = CreateNFSBackupLocation(nfsBackupLocationName, nfsBackupLocationUID, BackupOrgID, " ", getGlobalBucketName(provider), true)
+				err := CreateNFSBackupLocation(nfsBackupLocationName, nfsBackupLocationUID, BackupOrgID, " ", getGlobalBucketName(drivers.ProviderNfs), true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of NFS backup location [%s]", nfsBackupLocationName))
-				log.InfoD("Creating AWS cred and Object Store backup location")
+				// Create cloud credentials and Object Store backup location based on provider
+				log.InfoD("Creating cloud credentials and Object Store backup location")
 				osCloudCredName = fmt.Sprintf("%s-%s-%v", "cred", "objectstore", RandomString(4))
 				osBackupLocationName = fmt.Sprintf("%s-%s-%v", "os", getGlobalBucketName(provider), RandomString(4))
 				osCloudCredUID = uuid.New()
 				osBackupLocationUID = uuid.New()
 				backupLocationMap[osBackupLocationUID] = osBackupLocationName
-				if provider == drivers.ProviderAzure {
-					err = CreateCloudCredential(provider, osCloudCredName, osCloudCredUID, BackupOrgID, ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", osCloudCredName, BackupOrgID, provider))
-					err = CreateAzureBackupLocation(osBackupLocationName, osBackupLocationUID, osCloudCredName, osCloudCredUID, getGlobalBucketName(provider), BackupOrgID, true)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of azure blob backup location [%s]", osBackupLocationName))
-				} else {
+				if provider == drivers.ProviderNfs {
 					err = CreateCloudCredential("aws", osCloudCredName, osCloudCredUID, BackupOrgID, ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", osCloudCredName, BackupOrgID, "aws"))
-					err = CreateS3BackupLocation(osBackupLocationName, osBackupLocationUID, osCloudCredName, osCloudCredUID, getGlobalBucketName("aws"), BackupOrgID, "", true)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of S3 backup location [%s]", osBackupLocationName))
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", osCloudCredName, BackupOrgID, "AWS"))
+					err = CreateS3BackupLocation(osBackupLocationName, osBackupLocationUID, osCloudCredName, osCloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				} else {
+					err := CreateCloudCredential(provider, osCloudCredName, osCloudCredUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", osCloudCredName, BackupOrgID, provider))
+					err = CreateBackupLocation(provider, osBackupLocationName, osBackupLocationUID, osCloudCredName, osCloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
 				}
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location [%s]", osBackupLocationName))
 			}
 		})
 
