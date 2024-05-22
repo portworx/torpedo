@@ -1,7 +1,7 @@
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: fio-fa-da-sc
+  name: fio-topology-sc
 provisioner: pxd.portworx.com
 parameters:
   backend: "pure_block"
@@ -23,7 +23,7 @@ allowedTopologies:
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: fio-log-fa-da-sc
+  name: fio-log-topology-sc
 provisioner: pxd.portworx.com
 parameters:
   backend: "pure_block"
