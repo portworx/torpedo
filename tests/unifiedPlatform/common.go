@@ -3,6 +3,7 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node"
 	"io/ioutil"
 	"path/filepath"
 	"strconv"
@@ -38,6 +39,13 @@ const (
 	defaultParams          = "../drivers/pds/parameters/pds_default_parameters.json"
 	pdsParamsConfigmap     = "pds-params"
 	configmapNamespace     = "default"
+)
+
+const (
+	defaultWaitRebootRetry       = 10 * time.Second
+	defaultCommandRetry          = 5 * time.Second
+	defaultCommandTimeout        = 1 * time.Minute
+	defaultTestConnectionTimeout = 15 * time.Minute
 )
 
 var (
@@ -259,11 +267,12 @@ func PurgePDS() []error {
 
 	//log.InfoD("Purging all backup objects")
 	//err = WorkflowPDSBackup.Purge()
+	//// TODO: Uncomment once https://purestorage.atlassian.net/browse/DS-9546 is fixed
+	//// log.FailOnError(err, "some error occurred while purging backup config objects")
 	//if err != nil {
-	//	log.Errorf("Error while deleting backup objects - Error - [%s]", err.Error())
-	//	allErrors = append(allErrors, err)
+	//	log.Infof("Error while deleting backup objects - Error - [%s]", err.Error())
 	//}
-
+	//
 	//log.InfoD("Purging all backup config objects")
 	//err = WorkflowPDSBackupConfig.Purge(true)
 	//// TODO: Uncomment once https://purestorage.atlassian.net/browse/DS-9554 is fixed
@@ -283,4 +292,33 @@ func CheckforClusterSwitch() {
 	} else {
 		log.Infof("Source and target cluster are same. Switch is not required")
 	}
+}
+
+// RebootNodes will reboot the nodes in the given list
+func RebootNodes(nodeList []node.Node) error {
+
+	for _, n := range nodeList {
+		log.InfoD("reboot node: %s", n.Name)
+		err := Inst().N.RebootNode(n, node.RebootNodeOpts{
+			Force: true,
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         defaultCommandTimeout,
+				TimeBeforeRetry: defaultCommandRetry,
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		log.Infof("wait for node: %s to be back up", n.Name)
+		err = Inst().N.TestConnection(n, node.ConnectionOpts{
+			Timeout:         defaultTestConnectionTimeout,
+			TimeBeforeRetry: defaultWaitRebootRetry,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

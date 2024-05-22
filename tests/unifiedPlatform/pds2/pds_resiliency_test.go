@@ -1,15 +1,16 @@
 package tests
 
 import (
-	"strings"
-
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
+	"strings"
+	"sync"
 )
 
 const (
@@ -66,5 +67,78 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{RebootAllWorkerNodesDuringDeployment}", func() {
+	var (
+		deployment *automationModels.PDSDeploymentResponse
+		wg         sync.WaitGroup
+		err        error
+		allError   []error
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("RebootAllWorkerNodesDuringDeployment", "Reboots all worker nodes while a data service pod is coming up", nil, 0)
+	})
+
+	It("Reboots all worker nodes while a data service pod is coming up", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+				log.InfoD("Deploying DataService")
+				wg.Add(1)
+				go func() {
+
+					defer wg.Done()
+					defer GinkgoRecover()
+
+					deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+					if err != nil {
+						log.Errorf("Error while deploying dataservice: [%s]", err.Error())
+						allError = append(allError, err)
+					}
+					log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+				}()
+			})
+
+			Step("Reboot all worker nodes", func() {
+				log.InfoD("Rebooting all worker nodes")
+				wg.Add(1)
+				go func() {
+
+					defer wg.Done()
+					defer GinkgoRecover()
+
+					nodesToReboot := node.GetWorkerNodes()
+					log.Infof("Rebooting all worker nodes: %v", len(nodesToReboot))
+					err := RebootNodes(nodesToReboot)
+					if err != nil {
+						log.Errorf("Error while getting worker nodes: [%s]", err.Error())
+						allError = append(allError, err)
+					}
+				}()
+				log.Infof("Waiting for node reboot and deployment to complete")
+				wg.Wait()
+				dash.VerifyFatal(len(allError), 0, "Error while deploying dataservice or rebooting nodes")
+
+			})
+
+			Step("Validate Data Service after node reboot", func() {
+				log.InfoD("Validate Data Service after node reboot")
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice after node reboot node")
+			})
+
+			Step("Running Workloads after node reboot", func() {
+				log.InfoD("Running Workloads after node reboot")
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
 	})
 })
