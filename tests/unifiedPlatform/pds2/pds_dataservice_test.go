@@ -216,7 +216,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 		StartPDSTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataServices are not affected", nil, 0)
 	})
 
-	It("Delete pds pods and validate if its coming back online and dataserices are not affected", func() {
+	It("Delete pds pods and validate if its coming back online and dataservices are not affected", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			Step("Deploy DataService", func() {
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)

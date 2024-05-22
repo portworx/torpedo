@@ -2,6 +2,7 @@ package tests
 
 import (
 	"strings"
+	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
@@ -66,5 +67,75 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{KillAgentDuringDeployment}", func() {
+	var (
+		deployment *automationModels.PDSDeploymentResponse
+		err        error
+		allError   []error
+		wg         sync.WaitGroup
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("KillAgentDuringDeployment", "Kill Px Agent Pod when a DS Deployment is happening", nil, 0)
+	})
+
+	It("Kill Px Agent Pod when a DS Deployment is happening", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+
+			Step("Deploy DataService", func() {
+				wg.Add(1)
+				go func() {
+
+					defer wg.Done()
+					defer GinkgoRecover()
+
+					deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+					if err != nil {
+						log.Errorf("Error while deploying ds: [%s]", err.Error())
+						allError = append(allError, err)
+					}
+					log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+				}()
+			})
+
+			Step("Delete PDSPods", func() {
+
+				wg.Add(1)
+
+				go func() {
+
+					defer wg.Done()
+					defer GinkgoRecover()
+
+					err := WorkflowDataService.DeletePDSPods([]string{"px-agent"}, PlatformNamespace)
+					if err != nil {
+						log.Errorf("Error while deleting px-agent pods: [%s]", err.Error())
+						allError = append(allError, err)
+					}
+				}()
+
+				wg.Wait()
+				dash.VerifyFatal(len(allError), 0, "Error while deploying ds or rebooting agent")
+			})
+
+			Step("Validate Data Service to after px-agent reboot", func() {
+				log.InfoD("Validate Data Service to after px-agent reboot")
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice after px-agent reboot")
+			})
+
+			stepLog := "Running Workloads after px-agent reboot"
+			Step(stepLog, func() {
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
 	})
 })
