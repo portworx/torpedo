@@ -78,9 +78,9 @@ spec:
         resources:
           requests:
           {{ if .VolumeSize }}
-          storage: {{ .VolumeSize }}
+            storage: {{ .VolumeSize }}
           {{ else }}
-          storage: 200Gi{{ end }}
+            storage: 200Gi{{ end }}
     - metadata:
         name: fio-log
       spec:
