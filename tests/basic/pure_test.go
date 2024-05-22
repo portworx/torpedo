@@ -4746,7 +4746,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 					contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, "rebootnodevolumecreationzone")...)
 				}
 			}()
-			wg.Add(2)
+			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				defer GinkgoRecover()
