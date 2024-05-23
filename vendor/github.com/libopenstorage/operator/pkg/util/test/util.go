@@ -116,8 +116,8 @@ const (
 	// PxOperatorMasterVersion is a tag for PX Operator master version
 	PxOperatorMasterVersion = "99.9.9"
 
-	// AksPVCControllerSecurePort is the PVC controller secure port.
-	AksPVCControllerSecurePort = "10261"
+	// CustomPVCControllerSecurePort is the PVC controller secure port.
+	CustomPVCControllerSecurePort = "10261"
 
 	pxAnnotationPrefix = "portworx.io"
 
@@ -240,6 +240,12 @@ var (
 // MockDriver creates a mock storage driver
 func MockDriver(mockCtrl *gomock.Controller) *mock.MockDriver {
 	return mock.NewMockDriver(mockCtrl)
+}
+
+func NoopKubevirtManager(mockCtrl *gomock.Controller) *mock.MockKubevirtManager {
+	kubevirtMock := mock.NewMockKubevirtManager(mockCtrl)
+	kubevirtMock.EXPECT().ClusterHasVMPods().Return(false, nil).AnyTimes()
+	return kubevirtMock
 }
 
 // FakeK8sClient creates a fake controller-runtime Kubernetes client. Also
@@ -3149,8 +3155,8 @@ func validatePvcControllerPorts(cluster *corev1.StorageCluster, pvcControllerDep
 						for _, containerCommand := range container.Command {
 							if strings.Contains(containerCommand, "--secure-port") {
 								if len(pvcSecurePort) == 0 {
-									if isAKS(cluster) {
-										if strings.Split(containerCommand, "=")[1] != AksPVCControllerSecurePort {
+									if isAKS(cluster) || IsK3sCluster() {
+										if strings.Split(containerCommand, "=")[1] != CustomPVCControllerSecurePort {
 											return nil, true, fmt.Errorf("failed to validate secure-port, secure-port is missing in the PVC Controler pod %s", pod.Name)
 										}
 									} else {
