@@ -3660,7 +3660,6 @@ var _ = Describe("{ValidateVolumeResizeInParallel}", func() {
 				resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(pvcSizeInt))
 				log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
 				log.InfoD("Vol uid %v", resizedVol.ID)
-				log.InfoD("Resized volume requested size %v", resizedVol.RequestedSize)
 				resizedVols = append(resizedVols, resizedVol)
 			}
 		}
@@ -3675,7 +3674,6 @@ var _ = Describe("{ValidateVolumeResizeInParallel}", func() {
 					resizeVolumes(ctx)
 				}(ctx)
 			}
-
 			wg.Wait()
 		})
 		stepLog = "Validate volume resize on both base volume and FADA volume"
