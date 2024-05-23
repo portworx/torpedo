@@ -5,12 +5,12 @@ import (
 	"strings"
 	"time"
 
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
-
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers/node"
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
@@ -413,6 +413,54 @@ var _ = Describe("{DrainAndDecommissionNode}", func() {
 				err = k8sCore.UnCordonNode(nodeName, timeOut, maxtimeInterval)
 				log.FailOnError(err, fmt.Sprintf("UnCordoning the node %s Failed", nodeName))
 				log.InfoD("Node %s successfully UnCordoned", nodeName)
+			})
+
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{RollingRebootNodes}", func() {
+	var (
+		deployment *automationModels.PDSDeploymentResponse
+		err        error
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("RollingRebootNodes", "Reboot node(s) while the data services will be running", nil, 0)
+	})
+
+	It("Reboot node(s) while the data services will be running", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+			})
+
+			steplog := "Reboot nodes"
+			Step(steplog, func() {
+				log.InfoD("Reboot nodes")
+				nodesToReboot := node.GetWorkerNodes()
+				err = RebootNodes(nodesToReboot)
+				log.FailOnError(err, "Error while rebooting nodes")
+			})
+
+			steplog = "Validate Data Service to see if Pods have rescheduled on another node"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice after node reboot node")
+			})
+
+			steplog = "Running Workloads after node reoot"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
 			})
 
 		}

@@ -3,6 +3,7 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node"
 	"io/ioutil"
 	"path/filepath"
 	"strconv"
@@ -38,6 +39,13 @@ const (
 	defaultParams          = "../drivers/pds/parameters/pds_default_parameters.json"
 	pdsParamsConfigmap     = "pds-params"
 	configmapNamespace     = "default"
+)
+
+const (
+	defaultWaitRebootRetry       = 10 * time.Second
+	defaultCommandRetry          = 5 * time.Second
+	defaultCommandTimeout        = 1 * time.Minute
+	defaultTestConnectionTimeout = 15 * time.Minute
 )
 
 var (
@@ -283,4 +291,33 @@ func CheckforClusterSwitch() {
 	} else {
 		log.Infof("Source and target cluster are same. Switch is not required")
 	}
+}
+
+// RebootNodes will reboot the nodes in the given list
+func RebootNodes(nodeList []node.Node) error {
+
+	for _, n := range nodeList {
+		log.InfoD("reboot node: %s", n.Name)
+		err := Inst().N.RebootNode(n, node.RebootNodeOpts{
+			Force: true,
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         defaultCommandTimeout,
+				TimeBeforeRetry: defaultCommandRetry,
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		log.Infof("wait for node: %s to be back up", n.Name)
+		err = Inst().N.TestConnection(n, node.ConnectionOpts{
+			Timeout:         defaultTestConnectionTimeout,
+			TimeBeforeRetry: defaultWaitRebootRetry,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
