@@ -138,6 +138,17 @@ func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deploy
 		}
 		ExecuteInParallel(func1, func2)
 
+	case RebootNodesDuringDeployment:
+		checkTillReplica = CheckTillReplica
+		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will reboot the node it is hosted upon.", checkTillReplica)
+		func1 := func() {
+			GetPdsSs(*deployment.Status.CustomResourceName, namespace, checkTillReplica)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+
 	}
 
 	var aggregatedError error

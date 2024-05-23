@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	pdsResLib "github.com/portworx/torpedo/drivers/unifiedPlatform/resiliency"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
@@ -77,7 +78,7 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPDSTorpedoTest("KillAgentDuringDeployment", "Kill Px Agent Pod when a DS Deployment is happening", nil, 0)
+		StartPDSTorpedoTest("KillAgentDuringDeployment", "Kill PDS Agent Pod when a DS Deployment is happening", nil, 0)
 		WorkflowDataService.SkipValidatation[pds.ValidatePdsDeployment] = true
 		WorkflowDataService.SkipValidatation[pds.ValidatePdsWorkloads] = true
 	})
@@ -100,7 +101,7 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 				failuretype := pdsResLib.TypeOfFailure{
 					Type: pdsResLib.KillAgentPodDuringDeployment,
 					Method: func() error {
-						return WorkflowDataService.DeletePDSPods([]string{"pds-backups", "pds-target"}, PlatformNamespace)
+						return WorkflowDataService.DeletePDSPods([]string{"pds-deployments", "pds-target"}, PlatformNamespace)
 					},
 				}
 
@@ -110,7 +111,72 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 			})
 
 			Step("Validate Data Service to after px-agent reboot", func() {
-				log.InfoD("Validate Data Service to after px-agent reboot")
+				log.InfoD("Validate Data Service to after pds-agent reboot")
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice after px-agent reboot")
+			})
+
+			stepLog := "Running Workloads after px-agent reboot"
+			Step(stepLog, func() {
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+		defer func() {
+			delete(WorkflowDataService.SkipValidatation, pds.ValidatePdsDeployment)
+			delete(WorkflowDataService.SkipValidatation, pds.ValidatePdsWorkloads)
+		}()
+	})
+})
+
+var _ = Describe("{RebootAllWorkerNodesDuringDeployment}", func() {
+	var (
+		deployment *automationModels.PDSDeploymentResponse
+		err        error
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("RebootAllWorkerNodesDuringDeployment", "Reboots all worker nodes while a data service pod is coming up", nil, 0)
+		WorkflowDataService.SkipValidatation[pds.ValidatePdsDeployment] = true
+		WorkflowDataService.SkipValidatation[pds.ValidatePdsWorkloads] = true
+	})
+
+	It("Reboots all worker nodes while a data service pod is coming up", func() {
+
+		nodesToReboot := node.GetWorkerNodes()
+
+		for _, ds := range NewPdsParams.DataServiceToTest {
+
+			Step("Deploy DataService", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Deployment failed")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+
+			})
+
+			Step("Delete PDSPods while deployment", func() {
+				log.InfoD("Delete PDSPods while deployment")
+				// Global Resiliency TC marker
+				pdsResLib.MarkResiliencyTC(true)
+				// Type of failure that this TC needs to cover
+				failuretype := pdsResLib.TypeOfFailure{
+					Type: pdsResLib.RebootNodesDuringDeployment,
+					Method: func() error {
+						return RebootNodes(nodesToReboot)
+					},
+				}
+
+				pdsResLib.DefineFailureType(failuretype)
+				err = pdsResLib.InduceFailureAfterWaitingForCondition(&deployment.Create, PDS_DEFAULT_NAMESPACE, 1)
+				log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot Nodes during deployment test for data service %v", *deployment.Create.Status.CustomResourceName))
+			})
+
+			Step("Validate Data Service to after px-agent reboot", func() {
+				log.InfoD("Validate Data Service to after pds-agent reboot")
 				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
 				log.FailOnError(err, "Error while Validating dataservice after px-agent reboot")
 			})
