@@ -3145,6 +3145,7 @@ func validatePvcControllerPorts(cluster *corev1.StorageCluster, pvcControllerDep
 			return nil, true, fmt.Errorf("failed to get %s deployment pods, Err: %v", pvcControllerDeployment.Name, err)
 		}
 
+		opVersion, err := GetPxOperatorVersion()
 		numberOfPods := 0
 		// Go through every PVC Controller pod and look for --port and --secure-port commands in portworx-pvc-controller-manager pods and match it to the pvc-controller-port and pvc-controller-secure-port passed in StorageCluster annotations
 		for _, pod := range pods {
@@ -3155,7 +3156,7 @@ func validatePvcControllerPorts(cluster *corev1.StorageCluster, pvcControllerDep
 						for _, containerCommand := range container.Command {
 							if strings.Contains(containerCommand, "--secure-port") {
 								if len(pvcSecurePort) == 0 {
-									if isAKS(cluster) || IsK3sOrRke2Cluster() {
+									if isAKS(cluster) || (err == nil && opVersion.GreaterThanOrEqual(opVer24_1_0) && IsK3sOrRke2Cluster()) {
 										if strings.Split(containerCommand, "=")[1] != CustomPVCControllerSecurePort {
 											return nil, true, fmt.Errorf("failed to validate secure-port, secure-port is missing in the PVC Controler pod %s", pod.Name)
 										}
