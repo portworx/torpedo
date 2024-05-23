@@ -6,6 +6,7 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
+	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	"strings"
 	"time"
@@ -46,6 +47,7 @@ func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, depl
 		}
 	} else {
 		var err error
+		backupConfig.WorkflowDataService.WorkloadGenParams.TableName = "wltesting" + utilities.RandomString(3)
 		chkSum, err = backupConfig.WorkflowDataService.RunDataServiceWorkloads(deploymentId)
 		if err != nil {
 			return nil, fmt.Errorf("unable to run workfload on data service. Error - [%s]", err.Error())

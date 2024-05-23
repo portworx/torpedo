@@ -28,6 +28,7 @@ type WorkflowDataService struct {
 	PDSParams                 *parameters.NewPDSParams
 	ValidateStorageIncrease   dslibs.ValidateStorageIncrease
 	UpdateDeploymentTemplates bool
+	WorkloadGenParams         dslibs.LoadGenParams
 }
 
 const (
@@ -268,18 +269,18 @@ func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(deploymentId s
 		return "", nil
 	}
 	//Initializing the parameters required for workload generation
-	wkloadParams := dslibs.LoadGenParams{
+	wfDataService.WorkloadGenParams = dslibs.LoadGenParams{
 		LoadGenDepName: wfDataService.PDSParams.LoadGen.LoadGenDepName,
 		Namespace:      wfDataService.DataServiceDeployment[deploymentId].Namespace,
 		NumOfRows:      wfDataService.PDSParams.LoadGen.NumOfRows,
 		Timeout:        wfDataService.PDSParams.LoadGen.Timeout,
 		Replicas:       wfDataService.PDSParams.LoadGen.Replicas,
-		TableName:      wfDataService.PDSParams.LoadGen.TableName,
+		TableName:      wfDataService.PDSParams.LoadGen.TableName + utils.RandomString(3),
 		Iterations:     wfDataService.PDSParams.LoadGen.Iterations,
 		FailOnError:    wfDataService.PDSParams.LoadGen.FailOnError,
 	}
 
-	chkSum, wlDep, err := dslibs.InsertDataAndReturnChecksum(*wfDataService.DataServiceDeployment[deploymentId], wkloadParams)
+	chkSum, wlDep, err := dslibs.InsertDataAndReturnChecksum(*wfDataService.DataServiceDeployment[deploymentId], wfDataService.WorkloadGenParams)
 	if err != nil {
 		return "", err
 	}
@@ -296,22 +297,22 @@ func (wfDataService *WorkflowDataService) ReadAndUpdateDataServiceDataHash(deplo
 		log.Warnf("Workload is not enabled for this - [%s] - data service", wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)
 		return nil
 	}
-	wkloadParams := dslibs.LoadGenParams{
-		LoadGenDepName: wfDataService.PDSParams.LoadGen.LoadGenDepName,
-		Namespace:      wfDataService.DataServiceDeployment[deploymentId].Namespace,
-		NumOfRows:      wfDataService.PDSParams.LoadGen.NumOfRows,
-		Timeout:        wfDataService.PDSParams.LoadGen.Timeout,
-		Replicas:       wfDataService.PDSParams.LoadGen.Replicas,
-		TableName:      wfDataService.PDSParams.LoadGen.TableName,
-		Iterations:     wfDataService.PDSParams.LoadGen.Iterations,
-		FailOnError:    wfDataService.PDSParams.LoadGen.FailOnError,
-	}
+	//WorkloadGenParams := dslibs.LoadGenParams{
+	//	LoadGenDepName: wfDataService.PDSParams.LoadGen.LoadGenDepName,
+	//	Namespace:      wfDataService.DataServiceDeployment[deploymentId].Namespace,
+	//	NumOfRows:      wfDataService.PDSParams.LoadGen.NumOfRows,
+	//	Timeout:        wfDataService.PDSParams.LoadGen.Timeout,
+	//	Replicas:       wfDataService.PDSParams.LoadGen.Replicas,
+	//	TableName:      wfDataService.PDSParams.LoadGen.TableName,
+	//	Iterations:     wfDataService.PDSParams.LoadGen.Iterations,
+	//	FailOnError:    wfDataService.PDSParams.LoadGen.FailOnError,
+	//}
 
 	chkSum, _, err := dslibs.ReadDataAndReturnChecksum(
 		*wfDataService.DataServiceDeployment[deploymentId],
 		wfDataService.DataServiceDeployment[deploymentId].DSParams.Name,
 		dslibs.CrdMap[strings.ToLower(wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)],
-		wkloadParams,
+		wfDataService.WorkloadGenParams,
 	)
 
 	if err != nil {
