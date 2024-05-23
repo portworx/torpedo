@@ -2,9 +2,10 @@ package pds
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"slices"
 	"strings"
+
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 
 	"time"
 
@@ -152,14 +153,14 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 // ValidatePdsDataServiceDeployments validates the pds deployments resource, storage, deployment configurations and endpoints
 func (wfDataService *WorkflowDataService) ValidatePdsDataServiceDeployments(deploymentId string, ds dslibs.PDSDataService, replicas int, resConfigId, stConfigId, namespace, version, image string) error {
 
-	//Validate Statefulset health
-	err := dslibs.ValidateStatefulSetHealth(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Status.CustomResourceName, wfDataService.DataServiceDeployment[deploymentId].Namespace)
+	// Validate the sts object and health of the pds deployment
+	err := dslibs.ValidateDataServiceDeploymentHealth(deploymentId, PDS_DEPLOYMENT_AVAILABLE)
 	if err != nil {
 		return err
 	}
 
-	// Validate the sts object and health of the pds deployment
-	err = dslibs.ValidateDataServiceDeploymentHealth(deploymentId, PDS_DEPLOYMENT_AVAILABLE)
+	//Validate Statefulset health
+	err = dslibs.ValidateStatefulSetHealth(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Status.CustomResourceName, wfDataService.DataServiceDeployment[deploymentId].Namespace)
 	if err != nil {
 		return err
 	}
@@ -356,6 +357,14 @@ func (wfDataService *WorkflowDataService) ReadAndUpdateDataServiceDataHash(deplo
 //	return dslibs.DeleteWorkloadDeployments(wlDep)
 //}
 
+func (wfDataService *WorkflowDataService) GetDeployment(deploymentId string) (automationModels.V1Deployment, error) {
+	dep, _, err := dslibs.GetDeployment(deploymentId)
+	if err != nil {
+		return dep.Get, err
+	}
+	return dep.Get, nil
+}
+
 func (wfDataService *WorkflowDataService) ValidateDeploymentResources(resourceTemp dslibs.ResourceSettingTemplate, storageOp dslibs.StorageOps, config dslibs.DeploymentConfig, replicas int, dataServiceVersionBuild string) {
 	log.Debugf("filesystem used %v ", config.Spec.Topologies[0].StorageOptions.Filesystem)
 	log.Debugf("storage replicas used %v ", config.Spec.Topologies[0].StorageOptions.Replicas)
@@ -492,7 +501,7 @@ func (wfDataService *WorkflowDataService) ValidateDepConfigPostStorageIncrease(d
 }
 
 // Purge will delete all dataservice and associated PVCs from the cluster
-func (wfDataService *WorkflowDataService) Purge() error {
+func (wfDataService *WorkflowDataService) Purge(ignoreError bool) error {
 
 	var errors []string
 
@@ -506,14 +515,18 @@ func (wfDataService *WorkflowDataService) Purge() error {
 		deploymentDetails, _, err := dslibs.GetDeployment(dsId)
 		if err != nil {
 			log.Warnf("Unable to fetch details for [%s]. Error - [%s]", dsName, err.Error())
-			errors = append(errors, err.Error())
+			if !ignoreError {
+				errors = append(errors, err.Error())
+			}
 			continue
 		}
 
 		err = wfDataService.DeleteDeployment(*deploymentDetails.Get.Meta.Uid)
 		if err != nil {
 			log.Warnf("Unable to delete [%s]. Error - [%s]", dsName, err.Error())
-			errors = append(errors, err.Error())
+			if !ignoreError {
+				errors = append(errors, err.Error())
+			}
 			continue
 		} else {
 			log.Infof("[%s] deleted successfully", dsName)
@@ -523,7 +536,9 @@ func (wfDataService *WorkflowDataService) Purge() error {
 
 		if err != nil {
 			log.Warnf("Unable to delete PVs for [%s]. Error - [%s]", dsName, err.Error())
-			errors = append(errors, err.Error())
+			if !ignoreError {
+				errors = append(errors, err.Error())
+			}
 			continue
 		} else {
 			log.Infof("All PVs associated with [%s] deleted successfully", dsName)
@@ -532,7 +547,9 @@ func (wfDataService *WorkflowDataService) Purge() error {
 		err = utils.RemoveFinalizersFromAllResources(dsDetails.Namespace)
 		if err != nil {
 			log.Warnf("Unable to remove finalizers. Error - [%s]", err.Error())
-			errors = append(errors, err.Error())
+			if !ignoreError {
+				errors = append(errors, err.Error())
+			}
 		}
 
 	}

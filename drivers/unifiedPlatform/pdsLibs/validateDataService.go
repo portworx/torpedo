@@ -8,6 +8,7 @@ import (
 	pds "github.com/portworx/torpedo/drivers/pds/dataservice"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	v1 "k8s.io/api/apps/v1"
@@ -195,6 +196,9 @@ func ValidateDataServiceDeploymentHealth(deploymentId string, expectedHealth aut
 		if err != nil {
 			log.Errorf("Error occured while getting deployment status %v", err)
 			return false, nil
+		}
+		if *res.Get.Status.Phase == stworkflows.FAILED {
+			return true, fmt.Errorf("Deployment [%s] is [%s]", *res.Get.Meta.Name, *res.Get.Status.Phase)
 		}
 		log.Debugf("Health status - [%v]", *res.Get.Status.Health)
 		if *res.Get.Status.Health == expectedHealth {

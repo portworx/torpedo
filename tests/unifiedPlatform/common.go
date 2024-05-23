@@ -245,7 +245,7 @@ func PurgePDS() []error {
 	}
 
 	log.InfoD("Purging all dataservice objects")
-	err = WorkflowDataService.Purge()
+	err = WorkflowDataService.Purge(false)
 	if err != nil {
 		log.Errorf("error while purging dataservices - [%s]", err.Error())
 		allErrors = append(allErrors, err)
