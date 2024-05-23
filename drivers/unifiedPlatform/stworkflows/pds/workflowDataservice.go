@@ -19,14 +19,14 @@ import (
 )
 
 type WorkflowDataService struct {
-	Namespace    *platform.WorkflowNamespace
-	PDSTemplates WorkflowPDSTemplates
-	// TODO: NamespaceName should be taken as a parameter in the method
-	DataServiceDeployment   map[string]*dslibs.DataServiceDetails
-	SkipValidatation        map[string]bool
-	Dash                    *aetosutil.Dashboard
-	PDSParams               *parameters.NewPDSParams
-	ValidateStorageIncrease dslibs.ValidateStorageIncrease
+	Namespace                 *platform.WorkflowNamespace
+	PDSTemplates              WorkflowPDSTemplates
+	DataServiceDeployment     map[string]*dslibs.DataServiceDetails
+	SkipValidatation          map[string]bool
+	Dash                      *aetosutil.Dashboard
+	PDSParams                 *parameters.NewPDSParams
+	ValidateStorageIncrease   dslibs.ValidateStorageIncrease
+	UpdateDeploymentTemplates bool
 }
 
 const (
@@ -101,6 +101,8 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 }
 
 func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataService, deploymentId, image, version string) (*automationModels.PDSDeploymentResponse, error) {
+	var deployment *automationModels.PDSDeploymentResponse
+
 	namespaceId := wfDataService.DataServiceDeployment[deploymentId].NamespaceId
 	namespaceName := wfDataService.DataServiceDeployment[deploymentId].Namespace
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
@@ -108,6 +110,7 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateIds[ds.Name]
 	resConfigId := wfDataService.PDSTemplates.ResourceTemplateId
 	stConfigId := wfDataService.PDSTemplates.StorageTemplateId
+	newResConfigId := wfDataService.PDSTemplates.UpdateResourceTemplateId
 	log.Infof("targetClusterId [%s]", targetClusterId)
 
 	imageId, err := dslibs.GetDataServiceImageId(ds.Name, image, version)
@@ -115,15 +118,17 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 		return nil, err
 	}
 
-	if resConfigId == "" {
-		resConfigId = wfDataService.PDSTemplates.UpdateTemplateNameAndId[ds.Name]
+	if wfDataService.UpdateDeploymentTemplates {
+		log.Debugf("newResConfigId [%s]", newResConfigId)
+		ds.ScaleReplicas = ds.Replicas
+		deployment, err = dslibs.UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, newResConfigId, stConfigId)
+	} else {
+		deployment, err = dslibs.UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, resConfigId, stConfigId)
 	}
-
-	deployment, err := dslibs.UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, resConfigId, stConfigId)
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("Updated Deployment [%v]", deployment)
+	log.Debugf("Updated Deployment [%+v]", deployment)
 	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
 		if value == true {
 			log.Infof("Skipping Validation")
@@ -186,7 +191,7 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deploymentId 
 		err          error
 	)
 
-	_, podName, err := dslibs.GetDeployment(deploymentId)
+	deployment, podName, err := dslibs.GetDeployment(deploymentId)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
@@ -197,12 +202,13 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deploymentId 
 		return resourceTemp, storageOp, dbConfig, err
 	}
 
-	resourceTemp, err = dslibs.GetResourceTemplateConfigs(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Config.DeploymentTopologies[0].ResourceSettings.Id)
+	log.Debugf("Resource Template Id After Update [%s]", *deployment.Get.Config.DeploymentTopologies[0].ResourceSettings.Id)
+	resourceTemp, err = dslibs.GetResourceTemplateConfigs(*deployment.Get.Config.DeploymentTopologies[0].ResourceSettings.Id)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
 
-	storageOp, err = dslibs.GetStorageTemplateConfigs(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Config.DeploymentTopologies[0].StorageOptions.Id)
+	storageOp, err = dslibs.GetStorageTemplateConfigs(*deployment.Get.Config.DeploymentTopologies[0].StorageOptions.Id)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
@@ -350,21 +356,6 @@ func (wfDataService *WorkflowDataService) ReadAndUpdateDataServiceDataHash(deplo
 //	return dslibs.DeleteWorkloadDeployments(wlDep)
 //}
 
-func GetDeploymentNameAndId(deployment map[string]string) (string, string) {
-	var (
-		deploymentName string
-		deploymentId   string
-	)
-
-	for key, value := range deployment {
-		deploymentName = key
-		deploymentId = value
-	}
-
-	return deploymentName, deploymentId
-
-}
-
 func (wfDataService *WorkflowDataService) ValidateDeploymentResources(resourceTemp dslibs.ResourceSettingTemplate, storageOp dslibs.StorageOps, config dslibs.DeploymentConfig, replicas int, dataServiceVersionBuild string) {
 	log.Debugf("filesystem used %v ", config.Spec.Topologies[0].StorageOptions.Filesystem)
 	log.Debugf("storage replicas used %v ", config.Spec.Topologies[0].StorageOptions.Replicas)
@@ -459,8 +450,11 @@ func (wfDataService *WorkflowDataService) GetVolumeCapacityInGBForDeployment(nam
 	return capacity, nil
 }
 
-func (wfDataService *WorkflowDataService) GetPodAgeForDeployment(deploymentName string, namespace string) (float64, error) {
-	age, err := utils.GetPodAge(deploymentName, namespace)
+func (wfDataService *WorkflowDataService) GetPodAgeForDeployment(deploymentId string) (float64, error) {
+	age, err := utils.GetPodAge(
+		*wfDataService.DataServiceDeployment[deploymentId].Deployment.Status.CustomResourceName,
+		wfDataService.DataServiceDeployment[deploymentId].Namespace,
+	)
 	if err != nil {
 		return 0, err
 	}

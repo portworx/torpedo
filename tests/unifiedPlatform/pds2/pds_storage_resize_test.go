@@ -51,7 +51,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				log.FailOnError(err, "Error while fetching pvc size for the ds")
 				log.InfoD("Initial volume storage size is : %v", initialCapacity)
 
-				beforeResizePodAge, _ = workflowDataservice.GetPodAgeForDeployment(*deployment.Create.Status.CustomResourceName, workflowDataservice.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace)
+				beforeResizePodAge, _ = workflowDataservice.GetPodAgeForDeployment(*deployment.Create.Status.CustomResourceName)
 				//log.FailOnError(err, "unable to get pods AGE before Storage resize")
 				log.InfoD("Pods Age before storage resize is- [%v]Min", beforeResizePodAge)
 
@@ -95,7 +95,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 				err = workflowDataservice.ValidateDepConfigPostStorageIncrease(*deployment.Create.Meta.Uid, &stIncrease)
 				log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 
-				beforeResizePodAge2, err := workflowDataservice.GetPodAgeForDeployment(*deployment.Create.Status.CustomResourceName, workflowDataservice.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace)
+				beforeResizePodAge2, err := workflowDataservice.GetPodAgeForDeployment(*deployment.Create.Status.CustomResourceName)
 
 				log.InfoD("Increase the storage size again after Scale-UP")
 				resConfigIdUpdatedScaled, err := workFlowTemplates.CreateResourceTemplateWithCustomValue(NewPdsParams)
