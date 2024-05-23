@@ -4258,10 +4258,15 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 		var contexts []*scheduler.Context
 		var wg sync.WaitGroup
 		stNodes := node.GetStorageNodes()
-		selectedNodesForTopology := stNodes[:3]
-		selectedNodesForReboot := stNodes[3:]
+		selectedNodesForTopology := stNodes[:len(stNodes)/2]
+		rand.Seed(time.Now().Unix())
+		selectedNodesForReboot := make([]node.Node, 2)
+		for i := range selectedNodesForReboot {
+			index := rand.Intn(len(stNodes))
+			selectedNodesForReboot[i] = stNodes[index]
+			stNodes = append(stNodes[:index], stNodes[index+1:]...)
+		}
 		applist := Inst().AppList
-
 		defer func() {
 			Inst().AppList = applist
 			for _, stNode := range selectedNodesForTopology {
@@ -4271,7 +4276,6 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 				log.FailOnError(err, fmt.Sprintf("Failed to remove label on node %s", stNode.Name))
 			}
 		}()
-
 		Inst().AppList = []string{"fio-zones"}
 		toplogyZonelabel := "zone-0"
 		toplogyRegionLabel := "region-0"
@@ -4332,7 +4336,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 				log.FailOnError(err, "Failed to reboot node")
 			}
 		})
-		stepLog = "Validate the application"
+		stepLog = "Validate the application deployed and destroy the application once validation is completed successfully"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			ValidateApplications(contexts)
