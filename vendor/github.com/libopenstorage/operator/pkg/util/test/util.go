@@ -1810,7 +1810,7 @@ func GetExpectedPxNodeList(cluster *corev1.StorageCluster) ([]v1.Node, error) {
 			NodeAffinity: cluster.Spec.Placement.NodeAffinity.DeepCopy(),
 		}
 	} else {
-		if IsK3sCluster() || IsPxDeployedOnMaster(cluster) {
+		if IsK3sOrRke2Cluster() || IsPxDeployedOnMaster(cluster) {
 			runOnMaster = true
 		}
 
@@ -1889,8 +1889,8 @@ func GetFullVersion() (*version.Version, string, error) {
 	return ver, "", err
 }
 
-// IsK3sCluster returns true or false, based on this kubernetes cluster is k3s or not
-func IsK3sCluster() bool {
+// IsK3sOrRke2Cluster returns true or false, based on this kubernetes cluster is k3s or rke2 or not
+func IsK3sOrRke2Cluster() bool {
 	// Get k8s version ext
 	_, ext, _ := GetFullVersion()
 
@@ -3155,7 +3155,7 @@ func validatePvcControllerPorts(cluster *corev1.StorageCluster, pvcControllerDep
 						for _, containerCommand := range container.Command {
 							if strings.Contains(containerCommand, "--secure-port") {
 								if len(pvcSecurePort) == 0 {
-									if isAKS(cluster) || IsK3sCluster() {
+									if isAKS(cluster) || IsK3sOrRke2Cluster() {
 										if strings.Split(containerCommand, "=")[1] != CustomPVCControllerSecurePort {
 											return nil, true, fmt.Errorf("failed to validate secure-port, secure-port is missing in the PVC Controler pod %s", pod.Name)
 										}
