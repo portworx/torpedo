@@ -169,6 +169,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		log.Infof("Creating data service struct")
 
 		WorkflowDataService.Namespace = &WorkflowNamespace
+		WorkflowDataService.SkipValidatation = make(map[string]bool)
 		WorkflowDataService.DataServiceDeployment = make(map[string]*dslibs.DataServiceDetails)
 		WorkflowDataService.Dash = Inst().Dash
 		WorkflowDataService.PDSTemplates = WorkflowPDSTemplate

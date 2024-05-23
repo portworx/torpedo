@@ -1,16 +1,16 @@
 package tests
 
 import (
-	"strings"
-	"sync"
-
+	"fmt"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	pdsResLib "github.com/portworx/torpedo/drivers/unifiedPlatform/resiliency"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
+	"strings"
 )
 
 const (
@@ -74,51 +74,39 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 	var (
 		deployment *automationModels.PDSDeploymentResponse
 		err        error
-		allError   []error
-		wg         sync.WaitGroup
 	)
 
 	JustBeforeEach(func() {
 		StartPDSTorpedoTest("KillAgentDuringDeployment", "Kill Px Agent Pod when a DS Deployment is happening", nil, 0)
+		WorkflowDataService.SkipValidatation[pds.ValidatePdsDeployment] = true
+		WorkflowDataService.SkipValidatation[pds.ValidatePdsWorkloads] = true
 	})
 
 	It("Kill Px Agent Pod when a DS Deployment is happening", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 
 			Step("Deploy DataService", func() {
-				wg.Add(1)
-				go func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Deployment failed")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 
-					defer wg.Done()
-					defer GinkgoRecover()
-
-					deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
-					if err != nil {
-						log.Errorf("Error while deploying ds: [%s]", err.Error())
-						allError = append(allError, err)
-					}
-					log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
-				}()
 			})
 
-			Step("Delete PDSPods", func() {
+			Step("Delete PDSPods while deployment", func() {
+				log.InfoD("Delete PDSPods while deployment")
+				// Global Resiliency TC marker
+				pdsResLib.MarkResiliencyTC(true)
+				// Type of failure that this TC needs to cover
+				failuretype := pdsResLib.TypeOfFailure{
+					Type: pdsResLib.KillAgentPodDuringDeployment,
+					Method: func() error {
+						return WorkflowDataService.DeletePDSPods([]string{"pds-backups", "pds-target"}, PlatformNamespace)
+					},
+				}
 
-				wg.Add(1)
-
-				go func() {
-
-					defer wg.Done()
-					defer GinkgoRecover()
-
-					err := WorkflowDataService.DeletePDSPods([]string{"px-agent"}, PlatformNamespace)
-					if err != nil {
-						log.Errorf("Error while deleting px-agent pods: [%s]", err.Error())
-						allError = append(allError, err)
-					}
-				}()
-
-				wg.Wait()
-				dash.VerifyFatal(len(allError), 0, "Error while deploying ds or rebooting agent")
+				pdsResLib.DefineFailureType(failuretype)
+				err = pdsResLib.InduceFailureAfterWaitingForCondition(&deployment.Create, PDS_DEFAULT_NAMESPACE, 1)
+				log.FailOnError(err, fmt.Sprintf("Error happened while executing Kill Agent Pod test for data service %v", *deployment.Create.Status.CustomResourceName))
 			})
 
 			Step("Validate Data Service to after px-agent reboot", func() {
@@ -137,5 +125,9 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 
 	JustAfterEach(func() {
 		defer EndPDSTorpedoTest()
+		defer func() {
+			delete(WorkflowDataService.SkipValidatation, pds.ValidatePdsDeployment)
+			delete(WorkflowDataService.SkipValidatation, pds.ValidatePdsWorkloads)
+		}()
 	})
 })
