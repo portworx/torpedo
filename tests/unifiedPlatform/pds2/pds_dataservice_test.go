@@ -1,10 +1,15 @@
 package tests
 
 import (
-	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	"fmt"
 	"strings"
+	"time"
+
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/drivers/utilities"
@@ -298,6 +303,118 @@ var _ = Describe("{ValidatePdsHealthIncaseofFailures}", func() {
 				log.FailOnError(err, "Error while updating ds")
 				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
 			})
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{DrainAndDecommissionNode}", func() {
+	var (
+		deployment          *automationModels.PDSDeploymentResponse
+		err                 error
+		nodeName            string
+		k8sCore             core.Ops
+		timeOut             time.Duration
+		maxtimeInterval     time.Duration
+		deploymentNamespace string
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("DrainAndDecommissionNode", "Deploys a data service, drains one selected node, decommissions that node", nil, 0)
+		k8sCore = core.Instance()
+		timeOut = 30 * time.Minute
+		maxtimeInterval = 30 * time.Second
+	})
+
+	It("Deploys a data service, drains one selected node, decommissions that node", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+				nodes, err := pdslib.GetNodesOfSS(*deployment.Create.Status.CustomResourceName, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Cannot fetch nodes of the running Data Service")
+				nodeName = nodes[0].Name // Selecting the 1st node in the list to cordon
+			})
+
+			steplog := "Drain Pods from a node"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				podsList, err := pdslib.GetPodsOfSsByNode(*deployment.Create.Status.CustomResourceName, nodeName, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, fmt.Sprintf("Pod not found on this Node : %s", nodeName))
+				log.InfoD("Pods found on %v node. Trying to Drain pods from this node now.", nodeName)
+				err = k8sCore.DrainPodsFromNode(nodeName, podsList, timeOut, maxtimeInterval)
+				log.FailOnError(err, fmt.Sprintf("Draining pod from the node %s failed", nodeName))
+				log.InfoD("Pods successfully drained from the node %s", nodeName)
+			})
+
+			steplog = "Validate Data Service to see if Pods have rescheduled on another node"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice after cordoned node")
+			})
+
+			steplog = "Validate no pods are on the cordoned node anymore"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				nodes, err := pdslib.GetNodesOfSS(*deployment.Create.Status.CustomResourceName, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, fmt.Sprintf("Cannot fetch nodes of the running Data Service %v", *deployment.Create.Status.CustomResourceName))
+				for _, nodeObj := range nodes {
+					if nodeObj.Name == nodeName {
+						log.FailOnError(fmt.Errorf("New Pod came up on the node that was cordoned."), "Unexpected error")
+					}
+				}
+				log.InfoD("The pods of the Stateful Set %v are not on the cordoned node. Moving ahead now.", *deployment.Create.Status.CustomResourceName)
+			})
+
+			steplog = "Create a namespace for PDS"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				deploymentNamespace = fmt.Sprintf("%s-%s", strings.ToLower(ds.Name), RandomString(5))
+				_, err := WorkflowNamespace.CreateNamespaces(deploymentNamespace)
+				log.FailOnError(err, "Error while creating namespace for New Deployment")
+				log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
+			})
+
+			steplog = "Associate namespace to the project"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				err := WorkflowProject.Associate(
+					[]string{},
+					[]string{WorkflowNamespace.Namespaces[deploymentNamespace]},
+					[]string{},
+					[]string{},
+					[]string{},
+					[]string{},
+				)
+				log.FailOnError(err, "Error while associating namespace to the project")
+			})
+
+			Step("Deploy DataService", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, deploymentNamespace)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+				nodes, err := pdslib.GetNodesOfSS(*deployment.Create.Status.CustomResourceName, deploymentNamespace)
+				log.FailOnError(err, "Cannot fetch nodes of the running Data Service")
+				for _, nodeObj := range nodes {
+					if nodeObj.Name == nodeName {
+						log.FailOnError(fmt.Errorf("New Pod came up on the node that was cordoned."), "Unexpected error")
+					}
+				}
+			})
+
+			steplog = "UnCordon Selected Node"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				err = k8sCore.UnCordonNode(nodeName, timeOut, maxtimeInterval)
+				log.FailOnError(err, fmt.Sprintf("UnCordoning the node %s Failed", nodeName))
+				log.InfoD("Node %s successfully UnCordoned", nodeName)
+			})
+
 		}
 	})
 
