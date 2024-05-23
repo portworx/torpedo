@@ -4339,8 +4339,8 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 		stepLog = "Validate the application deployed and destroy the application once validation is completed successfully"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			ValidateApplications(contexts)
-			DestroyApps(contexts, nil)
+			appsValidateAndDestroy(contexts)
+
 		})
 	})
 	JustAfterEach(func() {
