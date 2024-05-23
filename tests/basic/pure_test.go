@@ -3626,7 +3626,7 @@ var _ = Describe("{ValidateVolumeResizeInParallel}", func() {
 			Inst().AppList = []string{"fio-cloudsnap"}
 			appNamespace := fmt.Sprintf("volumeresizeparallel-%s", Inst().InstanceID)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, "volumeresizeparallel")...)
+				contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, "fio-volumeresizeparallel")...)
 			}
 		})
 		stepLog = "Deploy a app which uses FADA volume and validate"
@@ -3667,43 +3667,29 @@ var _ = Describe("{ValidateVolumeResizeInParallel}", func() {
 		stepLog = "Do parallel resize of base apps volume and FADA volume"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			go func() {
-				for _, ctx := range contexts {
-					wg.Add(1)
-					go func(ctx *scheduler.Context) {
-						defer wg.Done()
-						defer GinkgoRecover()
-						resizeVolumes(ctx)
-					}(ctx)
-				}
-			}()
+			for _, ctx := range contexts {
+				wg.Add(1)
+				go func(ctx *scheduler.Context) {
+					defer wg.Done()
+					defer GinkgoRecover()
+					resizeVolumes(ctx)
+				}(ctx)
+			}
+
 			wg.Wait()
 		})
 		stepLog = "Validate volume resize on both base volume and FADA volume"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			//for _, vol := range resizedVols {
-			//	// Need to pass token before validating volume
-			//	params := make(map[string]string)
-			//	if Inst().ConfigMap != "" {
-			//		params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-			//		log.FailOnError(err, "didn't get auth token")
-			//	}
-			//	err := Inst().V.ValidateUpdateVolume(vol, params)
-			//	log.FailOnError(err, "Could not validate volume resize %v", vol.Name)
-			//}
-			for _, ctx := range contexts {
-				appVolumes, err := Inst().S.GetVolumes(ctx)
-				for _, vol := range appVolumes {
-					// Need to pass token before validating volume
-					params := make(map[string]string)
-					if Inst().ConfigMap != "" {
-						params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-						log.FailOnError(err, "didn't get auth token")
-					}
-					err := Inst().V.ValidateUpdateVolume(vol, params)
-					log.FailOnError(err, "Could not validate volume resize %v", vol.Name)
+			for _, vol := range resizedVols {
+				// Need to pass token before validating volume
+				params := make(map[string]string)
+				if Inst().ConfigMap != "" {
+					params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+					log.FailOnError(err, "didn't get auth token")
 				}
+				err := Inst().V.ValidateUpdateVolume(vol, params)
+				log.FailOnError(err, "Could not validate volume resize %v", vol.Name)
 			}
 
 		})
