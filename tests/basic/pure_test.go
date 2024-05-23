@@ -4711,7 +4711,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 		selectedNodesForTopology := stNodes[:3]
 		selectedNodesForReboot := stNodes[3:]
 		applist := Inst().AppList
-		defer DestroyApps(contexts, nil)
+
 		defer func() {
 			Inst().AppList = applist
 			for _, stNode := range selectedNodesForTopology {
@@ -4786,6 +4786,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			ValidateApplications(contexts)
+			DestroyApps(contexts, nil)
 		})
 	})
 	JustAfterEach(func() {
