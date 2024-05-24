@@ -8,6 +8,7 @@ parameters:
   max_iops: "1000"
   max_bandwidth: "1G"
   fs: "ext4"
+  repl: "2"
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 allowedTopologies:

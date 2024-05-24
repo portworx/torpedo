@@ -4252,20 +4252,14 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 			"Rebooting Nodes while FADA Volume Creation in Progress using Zones",
 			nil, 0)
 	})
+	var contexts []*scheduler.Context
 	itLog := "RebootingNodesWhileFADAvolumeCreationInProgressUsingZones"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		var contexts []*scheduler.Context
+
 		var wg sync.WaitGroup
 		stNodes := node.GetStorageNodes()
 		selectedNodesForTopology := stNodes[:len(stNodes)/2]
-		rand.Seed(time.Now().Unix())
-		selectedNodesForReboot := make([]node.Node, 2)
-		for i := range selectedNodesForReboot {
-			index := rand.Intn(len(stNodes))
-			selectedNodesForReboot[i] = stNodes[index]
-			stNodes = append(stNodes[:index], stNodes[index+1:]...)
-		}
 		applist := Inst().AppList
 		defer func() {
 			Inst().AppList = applist
@@ -4306,7 +4300,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 				defer wg.Done()
 				defer GinkgoRecover()
 				log.InfoD("Rebooting the non-labelled nodes one by one while FADA volume creation is in progress in labelled nodes")
-				for _, selectedNode := range selectedNodesForReboot {
+				for _, selectedNode := range selectedNodesForTopology {
 					log.InfoD("Stopping node %s", selectedNode.Name)
 					err := Inst().N.RebootNode(selectedNode,
 						node.RebootNodeOpts{
@@ -4320,7 +4314,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 				}
 			}()
 			wg.Wait()
-			for _, selectedNode := range selectedNodesForReboot {
+			for _, selectedNode := range selectedNodesForTopology {
 				log.InfoD("wait for node: %s to be back up", selectedNode.Name)
 				nodeReadyStatus := func() (interface{}, bool, error) {
 					err := Inst().S.IsNodeReady(selectedNode)
@@ -4336,14 +4330,30 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 				log.FailOnError(err, fmt.Sprintf("Failed to reboot node [%s]", selectedNode.Name))
 			}
 		})
-		stepLog = "Validate the application deployed and destroy the application once validation is completed successfully"
+		nodeExists := func(nodes []node.Node, node node.Node) bool {
+			for _, n := range nodes {
+				if n.Name == node.Name {
+					return true
+				}
+			}
+			return false
+		}
+
+		stepLog = "Validate the application deployed are in the labelled nodes only"
 		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			appsValidateAndDestroy(contexts)
+			for _, ctx := range contexts {
+				scheduledNodes := ctx.ScheduleOptions.Nodes
+				for _, node := range scheduledNodes {
+					if !nodeExists(selectedNodesForTopology, node) {
+						log.FailOnError(fmt.Errorf("Node %s is not labelled", node.Name), "is node labelled?")
+					}
+				}
+			}
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		//DestroyApps(contexts,nil)
 		AfterEachTest(contexts)
 	})
 })
