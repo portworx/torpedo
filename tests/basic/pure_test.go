@@ -4248,13 +4248,13 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 		4.Delete the FADA app
 
 	*/
+	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateCloneOfTheFADAVolume", "Create Clone of the FADA Volume and verify the status", nil, 0)
 	})
 	itLog := "Create Clone of the FADA Volume and verify the status and check creation of cloned volume in FA backend"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		var contexts []*scheduler.Context
 		var volumeName string
 		var cloneVolumeId string
 		flashArrays, err := GetFADetailsUsed()
