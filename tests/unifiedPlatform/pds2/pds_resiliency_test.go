@@ -83,7 +83,7 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 		WorkflowDataService.SkipValidatation[pds.ValidatePdsWorkloads] = true
 	})
 
-	It("Kill Px Agent Pod when a DS Deployment is happening", func() {
+	It("Kill PDS Agent Pod when a DS Deployment is happening", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 
 			Step("Deploy DataService", func() {
@@ -207,16 +207,16 @@ var _ = Describe("{KillPdsAgentPodDuringAppScaleUp}", func() {
 
 	JustBeforeEach(func() {
 		StartPDSTorpedoTest("KillPdsAgentPodDuringAppScaleUp", "Kill PDS-Agent Pod during application is scaled up", nil, 0)
-		WorkflowDataService.SkipValidatation[pds.ValidatePdsDeployment] = true
-		WorkflowDataService.SkipValidatation[pds.ValidatePdsWorkloads] = true
 	})
 
 	It("Kill PDS-Agent Pod during application is scaled up", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			Step("Deploy DataService", func() {
-				deployment, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+				WorkflowDataService.SkipValidatation[pds.ValidatePdsDeployment] = true
+				WorkflowDataService.SkipValidatation[pds.ValidatePdsWorkloads] = true
 			})
 
 			Step("ScaleUp DataService", func() {
@@ -224,7 +224,7 @@ var _ = Describe("{KillPdsAgentPodDuringAppScaleUp}", func() {
 				updateDeployment, err := WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while updating ds")
 				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
-				deploymentAfterUpdate, err = WorkflowDataService.GetDeployment(*updateDeployment.Update.Meta.Uid)
+				deploymentAfterUpdate, err = WorkflowDataService.GetDeployment(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error while fetching the deployment")
 			})
 
@@ -247,7 +247,7 @@ var _ = Describe("{KillPdsAgentPodDuringAppScaleUp}", func() {
 
 			Step("Validate Data Service to after Scale Up", func() {
 				log.InfoD("Validate Data Service to after Scale Up")
-				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.ScaleReplicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
 				log.FailOnError(err, "Error while Validating dataservice after scale up")
 			})
 
