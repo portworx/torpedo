@@ -83,7 +83,7 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 	}
 
 	restore.Restores[name] = createRestore.Create
-	deployment, _, err := pdslibs.GetDeployment(createRestore.Create.Config.DestinationReferences.DeploymentId)
+	deployment, err := pdslibs.GetDeployment(createRestore.Create.Config.DestinationReferences.DeploymentId)
 	if err != nil {
 		return nil, err
 	}
