@@ -2829,6 +2829,16 @@ func ValidateClusterSize(count int64) {
 	currentNodeCount, err := Inst().S.GetASGClusterSize()
 	log.FailOnError(err, "Failed to Get ASG Cluster Size")
 
+	if Inst().S.String() == openshift.SchedName {
+		isPxOnMaster, err := IsPxRunningOnMaster()
+		log.FailOnError(err, "Failed to check if px is running on master")
+		if !isPxOnMaster {
+			node.GetMasterNodes()
+			//Removing master nodes for currentNodeCount
+			currentNodeCount = currentNodeCount - int64(len(node.GetMasterNodes()))
+		}
+	}
+
 	dash.VerifyFatal(currentNodeCount, count, "ASG cluster size is as expected?")
 
 	// Validate storage node count
@@ -2840,6 +2850,29 @@ func ValidateClusterSize(count int64) {
 	}
 	storageNodes := node.GetStorageNodes()
 	dash.VerifyFatal(len(storageNodes), expectedStoragesNodes, "Storage nodes matches the expected number?")
+}
+
+func IsPxRunningOnMaster() (bool, error) {
+
+	var namespace string
+	var err error
+	if namespace, err = Inst().S.GetPortworxNamespace(); err != nil {
+		log.Errorf("Failed to get portworx namespace. Error : %v", err)
+		return false, nil
+	}
+	var isPXOnControlplane = false
+	pxOperator := operator.Instance()
+	stcList, err := pxOperator.ListStorageClusters(namespace)
+	if err == nil {
+		stc, err := pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
+		if err != nil {
+			return false, fmt.Errorf("failed to get StorageCluster [%s] from namespace [%s], Err: %v", stcList.Items[0].Name, stcList.Items[0].Namespace, err.Error())
+		}
+		isPXOnControlplane, _ = strconv.ParseBool(stc.Annotations["portworx.io/run-on-master"])
+	}
+
+	return isPXOnControlplane, nil
+
 }
 
 // GetStorageNodes get storage nodes in the cluster
@@ -11239,10 +11272,11 @@ func installGrafana(namespace string) {
 }
 
 func SetupProxyServer(n node.Node) error {
-
 	createDirCommand := "mkdir -p /exports/testnfsexportdir"
 	output, err := Inst().N.RunCommandWithNoRetry(n, createDirCommand, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -11251,7 +11285,9 @@ func SetupProxyServer(n node.Node) error {
 
 	addVersionCmd := "echo -e \"MOUNTD_NFS_V4=\"yes\"\nRPCNFSDARGS=\"-N 2 -N 4\"\" >> /etc/sysconfig/nfs"
 	output, err = Inst().N.RunCommandWithNoRetry(n, addVersionCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -11260,15 +11296,65 @@ func SetupProxyServer(n node.Node) error {
 
 	updateExportsCmd := "echo \"/exports/testnfsexportdir *(rw,sync,no_root_squash)\" > /etc/exports"
 	output, err = Inst().N.RunCommandWithNoRetry(n, updateExportsCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
 	}
 	log.Infof(output)
+
+	checkExportfsCmd := "which exportfs"
+	output, err = Inst().N.RunCommandWithNoRetry(n, checkExportfsCmd, node.ConnectionOpts{
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	})
+	if err != nil || output == "" {
+		log.Warnf("The command exportfs not found")
+
+		var installNfsUtilsCmd string
+		checkDistroCmd := "source /etc/os-release && echo $ID"
+		output, err = Inst().N.RunCommandWithNoRetry(n, checkDistroCmd, node.ConnectionOpts{
+			Sudo:            true,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		})
+		if err != nil {
+			return err
+		}
+		log.Infof("The Linux distribution is %s", output)
+
+		switch strings.TrimSpace(output) {
+		case "ubuntu", "debian":
+			log.Infof("Installing nfs-common")
+			installNfsUtilsCmd = "apt-get update && apt-get install -y nfs-common"
+		case "centos", "rhel", "fedora":
+			log.Infof("Installing nfs-utils")
+			installNfsUtilsCmd = "yum install -y nfs-utils"
+		default:
+			return fmt.Errorf("unsupported Linux distribution")
+		}
+
+		output, err = Inst().N.RunCommandWithNoRetry(n, installNfsUtilsCmd, node.ConnectionOpts{
+			Sudo:            true,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		})
+		if err != nil {
+			return err
+		}
+		log.Infof(output)
+	} else {
+		log.Infof(output)
+	}
+
 	exportCmd := "exportfs -a"
 	output, err = Inst().N.RunCommandWithNoRetry(n, exportCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -11277,7 +11363,9 @@ func SetupProxyServer(n node.Node) error {
 
 	enableNfsServerCmd := "systemctl enable nfs-server"
 	output, err = Inst().N.RunCommandWithNoRetry(n, enableNfsServerCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -11286,7 +11374,9 @@ func SetupProxyServer(n node.Node) error {
 
 	startNfsServerCmd := "systemctl restart nfs-server"
 	output, err = Inst().N.RunCommandWithNoRetry(n, startNfsServerCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
