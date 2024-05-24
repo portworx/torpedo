@@ -3,6 +3,7 @@ package portworx
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -489,6 +490,16 @@ func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 
 func (d *portworx) RefreshDriverEndpoints() error {
 
+	secretConfigMap := flag.Lookup("config-map").Value.(flag.Getter).Get().(string)
+	if secretConfigMap != "" {
+		log.Infof("Fetching token from configmap: %s", secretConfigMap)
+		token, err := d.schedOps.GetTokenFromConfigMap(secretConfigMap)
+		if err != nil {
+			return err
+		}
+		d.token = token
+	}
+
 	// getting namespace again (refreshing it) as namespace of portworx in switched context might have changed
 	namespace, err := d.GetVolumeDriverNamespace()
 	if err != nil {
@@ -651,16 +662,9 @@ func (d *portworx) comparePoolsAndDisks(srcNode *api.StorageNode,
 	srcDisks := srcNode.Disks
 	dstDisks := dstNode.Disks
 
-	for disk, value := range srcDisks {
-		if !srcDisks[disk].Metadata && !dstDisks[disk].Metadata {
-			if value.Id != dstDisks[disk].Id {
-				return false
-			}
-		} else if srcDisks[disk].Metadata && dstDisks[disk].Metadata {
-			if value.Id != dstDisks[disk].Id {
-				return false
-			}
-		}
+	if len(srcDisks) != len(dstDisks) {
+		log.Errorf("Source disks: [%v] not macthing with Destination disks: [%v]", srcDisks, dstDisks)
+		return false
 	}
 	return true
 }
@@ -1800,7 +1804,7 @@ func constructSnapshotName(volumeName string) string {
 	return volumeName + "-snapshot"
 }
 
-// GetCloudsnaps returns all the cloud snaps of the given volume
+// GetCloudsnaps returns all the cloud snaps of all volumes
 func (d *portworx) GetCloudsnaps(volumeName string, params map[string]string) ([]*api.SdkCloudBackupInfo, error) {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
@@ -1816,6 +1820,21 @@ func (d *portworx) GetCloudsnaps(volumeName string, params map[string]string) ([
 	}
 	return cloudSnapResponse.GetBackups(), nil
 
+}
+
+// GetCloudsnaps returns all the cloud snaps of the given volume
+func (d *portworx) GetCloudsnapsOfGivenVolume(volumeName string, sourceVolumeID string, params map[string]string) ([]*api.SdkCloudBackupInfo, error) {
+	var token string
+	token = d.getTokenForVolume(volumeName, params)
+	if val, hasKey := params[refreshEndpointParam]; hasKey {
+		refreshEndpoint, _ := strconv.ParseBool(val)
+		d.refreshEndpoint = refreshEndpoint
+	}
+	cloudSnapResponse, err := d.csbackupManager.EnumerateWithFilters(d.getContextWithToken(context.Background(), token), &api.SdkCloudBackupEnumerateWithFiltersRequest{SrcVolumeId: sourceVolumeID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cloudsnap, Err: %v", err)
+	}
+	return cloudSnapResponse.GetBackups(), nil
 }
 
 // DeleteAllCloudsnaps delete all cloud snaps for a given volume
@@ -2876,7 +2895,7 @@ func (d *portworx) ValidateRebalanceJobs() error {
 }
 
 func (d *portworx) ResizeStoragePoolByPercentage(poolUUID string, e api.SdkStoragePool_ResizeOperationType, percentage uint64) error {
-	log.InfoD("Initiating pool %v resize by %v with operationtype %v", poolUUID, percentage, e.String())
+	log.InfoD("Initiating pool %v resize by %v with operation-type %v", poolUUID, percentage, e.String())
 
 	// Start a task to check if pool  resize is done
 	t := func() (interface{}, bool, error) {

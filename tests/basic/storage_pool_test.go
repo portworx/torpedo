@@ -5043,7 +5043,7 @@ var _ = Describe("{ResizeKvdbNoQuorum}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stoageDriverNodes := node.GetStorageDriverNodes()
+		stoageDriverNodes := node.GetStorageNodes()
 
 		nonKvdbNodes := make([]node.Node, 0)
 		kvdbNodes := make([]node.Node, 0)
@@ -5063,6 +5063,10 @@ var _ = Describe("{ResizeKvdbNoQuorum}", func() {
 			} else {
 				nonKvdbNodes = append(nonKvdbNodes, n)
 			}
+		}
+
+		if len(nonKvdbNodes) == 0 {
+			log.FailOnError(fmt.Errorf("No non kvdb nodes found"), "non kvdb nodes doesnt not exist in the cluster")
 		}
 
 		selPool := nonKvdbNodes[0].Pools[0]
@@ -9922,8 +9926,15 @@ func triggerPoolExpansion(poolIDToResize string, targetSizeGiB uint64, expandTyp
 	stepLog := "Trigger pool expansion"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
+		isDMthin, _ := IsDMthin()
 		err := Inst().V.ExpandPool(poolIDToResize, expandType, targetSizeGiB, true)
-		dash.VerifyFatal(err, nil, "pool expansion requested successfully")
+		if isDMthin && expandType == api.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+			dash.VerifyFatal(err != nil, true,
+				"Pool expansion request of add-disk type should be rejected with dmthin")
+			dash.VerifyFatal(strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2"), true, fmt.Sprintf("check error message: %v", err.Error()))
+		} else {
+			dash.VerifyFatal(err, nil, "pool expansion requested successfully")
+		}
 	})
 }
 func waitForOngoingPoolExpansionToComplete(poolIDToResize string) error {
