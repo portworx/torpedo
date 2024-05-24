@@ -4333,14 +4333,13 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
 				err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
-				log.FailOnError(err, "Failed to reboot node")
+				log.FailOnError(err, fmt.Sprintf("Failed to reboot node [%s]", selectedNode.Name))
 			}
 		})
 		stepLog = "Validate the application deployed and destroy the application once validation is completed successfully"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			appsValidateAndDestroy(contexts)
-
 		})
 	})
 	JustAfterEach(func() {
