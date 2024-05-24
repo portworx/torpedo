@@ -197,3 +197,69 @@ var _ = Describe("{RebootAllWorkerNodesDuringDeployment}", func() {
 		}()
 	})
 })
+
+var _ = Describe("{KillPdsAgentPodDuringAppScaleUp}", func() {
+	var (
+		deploymentAfterUpdate automationModels.V1Deployment
+		deployment            *automationModels.PDSDeploymentResponse
+		err                   error
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("KillPdsAgentPodDuringAppScaleUp", "Kill PDS-Agent Pod during application is scaled up", nil, 0)
+		WorkflowDataService.SkipValidatation[pds.ValidatePdsDeployment] = true
+		WorkflowDataService.SkipValidatation[pds.ValidatePdsWorkloads] = true
+	})
+
+	It("Kill PDS-Agent Pod during application is scaled up", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+				deployment, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+			})
+
+			Step("ScaleUp DataService", func() {
+				log.InfoD("Scaling Up dataServices...")
+				updateDeployment, err := WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
+				log.FailOnError(err, "Error while updating ds")
+				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
+				deploymentAfterUpdate, err = WorkflowDataService.GetDeployment(*updateDeployment.Update.Meta.Uid)
+				log.FailOnError(err, "Error while fetching the deployment")
+			})
+
+			Step("Delete PDSPods while scaling up the data service", func() {
+				log.InfoD("Delete PDSPods while deployment")
+				// Global Resiliency TC marker
+				pdsResLib.MarkResiliencyTC(true)
+				// Type of failure that this TC needs to cover
+				failuretype := pdsResLib.TypeOfFailure{
+					Type: pdsResLib.KillPdsAgentPodDuringAppScaleUp,
+					Method: func() error {
+						return WorkflowDataService.DeletePDSPods([]string{"pds-deployments", "pds-target"}, PlatformNamespace)
+					},
+				}
+
+				pdsResLib.DefineFailureType(failuretype)
+				err = pdsResLib.InduceFailureAfterWaitingForCondition(&deploymentAfterUpdate, PDS_DEFAULT_NAMESPACE, int32(ds.ScaleReplicas))
+				log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot Nodes during deployment test for data service %v", *deployment.Create.Status.CustomResourceName))
+			})
+
+			Step("Validate Data Service to after Scale Up", func() {
+				log.InfoD("Validate Data Service to after Scale Up")
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice after scale up")
+			})
+
+			stepLog := "Running Workloads after ScaleUp of DataService"
+			Step(stepLog, func() {
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
