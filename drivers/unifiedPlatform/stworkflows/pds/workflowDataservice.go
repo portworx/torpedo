@@ -193,7 +193,7 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deploymentId 
 		err          error
 	)
 
-	deployment, podName, err := dslibs.GetDeployment(deploymentId)
+	deployment, podName, err := dslibs.GetDeploymentAndPodDetails(deploymentId)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
@@ -242,7 +242,7 @@ func (wfDataService *WorkflowDataService) DeleteDeployment(deploymentId string) 
 }
 
 func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId string) error {
-	deployment, _, err := dslibs.GetDeployment(deploymentId)
+	deployment, err := dslibs.GetDeployment(deploymentId)
 	if err != nil {
 		return err
 	}
@@ -359,7 +359,7 @@ func (wfDataService *WorkflowDataService) ReadAndUpdateDataServiceDataHash(deplo
 //}
 
 func (wfDataService *WorkflowDataService) GetDeployment(deploymentId string) (automationModels.V1Deployment, error) {
-	dep, _, err := dslibs.GetDeployment(deploymentId)
+	dep, err := dslibs.GetDeployment(deploymentId)
 	if err != nil {
 		return dep.Get, err
 	}
@@ -513,7 +513,7 @@ func (wfDataService *WorkflowDataService) Purge(ignoreError bool) error {
 		dsName := *wfDataService.DataServiceDeployment[dsId].Deployment.Meta.Name
 		log.Infof("Deleting [%s] with id [%s] from [%s]-[%s] namespace ", dsName, dsId, dsDetails.Namespace, dsDetails.NamespaceId)
 
-		deploymentDetails, _, err := dslibs.GetDeployment(dsId)
+		deploymentDetails, err := dslibs.GetDeployment(dsId)
 		if err != nil {
 			log.Warnf("Unable to fetch details for [%s]. Error - [%s]", dsName, err.Error())
 			if !ignoreError {

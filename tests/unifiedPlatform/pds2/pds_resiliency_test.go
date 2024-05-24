@@ -207,16 +207,16 @@ var _ = Describe("{KillPdsAgentPodDuringAppScaleUp}", func() {
 
 	JustBeforeEach(func() {
 		StartPDSTorpedoTest("KillPdsAgentPodDuringAppScaleUp", "Kill PDS-Agent Pod during application is scaled up", nil, 0)
-		WorkflowDataService.SkipValidatation[pds.ValidatePdsDeployment] = true
-		WorkflowDataService.SkipValidatation[pds.ValidatePdsWorkloads] = true
 	})
 
 	It("Kill PDS-Agent Pod during application is scaled up", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			Step("Deploy DataService", func() {
-				deployment, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+				WorkflowDataService.SkipValidatation[pds.ValidatePdsDeployment] = true
+				WorkflowDataService.SkipValidatation[pds.ValidatePdsWorkloads] = true
 			})
 
 			Step("ScaleUp DataService", func() {

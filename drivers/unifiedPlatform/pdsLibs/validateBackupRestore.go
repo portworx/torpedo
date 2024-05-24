@@ -62,12 +62,12 @@ func ValidateRestoreDeployment(restoreId, namespace string) error {
 		return fmt.Errorf("error while validating restored deployment readiness")
 	}
 
-	sourceDeployment, _, err := GetDeployment(restore.Get.Config.SourceReferences.DeploymentId)
+	sourceDeployment, err := GetDeployment(restore.Get.Config.SourceReferences.DeploymentId)
 	if err != nil {
 		return fmt.Errorf("error while fetching source deployment object")
 	}
 
-	destinationDeployment, _, err := GetDeployment(restore.Get.Config.DestinationReferences.DeploymentId)
+	destinationDeployment, err := GetDeployment(restore.Get.Config.DestinationReferences.DeploymentId)
 	if err != nil {
 		return fmt.Errorf("error while fetching destination deployment object")
 	}
@@ -92,7 +92,7 @@ func ValidateRestoreAfterSourceDeploymentUpgrade(restoreId string, sourceDeploym
 		return fmt.Errorf("error while validating restored deployment readiness")
 	}
 
-	destinationDeployment, _, err := GetDeployment(restore.Get.Config.DestinationReferences.DeploymentId)
+	destinationDeployment, err := GetDeployment(restore.Get.Config.DestinationReferences.DeploymentId)
 	if err != nil {
 		return fmt.Errorf("error while fetching destination deployment object")
 	}
