@@ -12,6 +12,7 @@ const (
 
 var SKIPDATASERVICEFROMWORKLOAD = []string{
 	"sqlserver",
+	"mongodb",
 }
 
 const (
