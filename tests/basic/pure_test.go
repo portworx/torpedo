@@ -4442,30 +4442,30 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 				log.FailOnError(err, "Failed to validate the snapshots")
 			}
 		})
-		//stepLog = "Delete the snapshots created for all apps in the context"
-		//Step(stepLog, func() {
-		//	log.InfoD(stepLog)
-		//	for _, ctx := range contexts {
-		//		err := Inst().S.DeleteCsiSnapshotsFromNamespace(ctx, ctx.App.NameSpace)
-		//		log.FailOnError(err, "Failed to delete the snapshots")
-		//	}
-		//})
-		//stepLog = "Validate all snapshots are deleted "
-		//Step(stepLog, func() {
-		//	log.InfoD(stepLog)
-		//	for _, ctx := range contexts {
-		//		for _, snapshot := range volumeSnapshotMap {
-		//			isSnapshotExists, err := Inst().S.IsCsiSnapshotExists(ctx, snapshot.Name, snapshot.Namespace)
-		//			log.FailOnError(err, "Failed to check if snapshot exists")
-		//			if !isSnapshotExists {
-		//				log.InfoD("Successfully deleted snapshot %v", snapshot.Name)
-		//			} else {
-		//				log.FailOnError(fmt.Errorf("Snapshot %v is not deleted", snapshot.Name), "is snapshot deleted?")
-		//			}
-		//
-		//		}
-		//	}
-		//})
+		stepLog = "Delete the snapshots created for all apps in the context"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				err := Inst().S.DeleteCsiSnapshotsFromNamespace(ctx, ctx.App.NameSpace)
+				log.FailOnError(err, "Failed to delete the snapshots")
+			}
+		})
+		stepLog = "Validate all snapshots are deleted "
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				for _, snapshot := range volumeSnapshotMap {
+					isSnapshotExists, err := Inst().S.IsCsiSnapshotExists(ctx, snapshot.Name, snapshot.Namespace)
+					log.FailOnError(err, "Failed to check if snapshot exists")
+					if !isSnapshotExists {
+						log.InfoD("Successfully deleted snapshot %v", snapshot.Name)
+					} else {
+						log.FailOnError(fmt.Errorf("Snapshot %v is not deleted", snapshot.Name), "is snapshot deleted?")
+					}
+
+				}
+			}
+		})
 
 	})
 	JustAfterEach(func() {
