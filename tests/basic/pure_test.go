@@ -4365,11 +4365,25 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 					}
 					log.InfoD("Pod [%v] is running on node [%v] which is labelled", pod.Name, node)
 				}
-
 			}
-			// get all pods from a namepsace
-
 		})
+		//stepLog="check volumes are also in same labelled nodes"
+		//Step(stepLog, func() {
+		//	log.InfoD(stepLog)
+		//	for _, ctx := range contexts {
+		//		volumes, err := Inst().S.GetVolumes(ctx)
+		//		log.FailOnError(err, "Failed to get list of all volumes")
+		//		for _, volume := range volumes {
+		//			node := volume.Node
+		//			log.FailOnError(err, "Failed to get node of the volume")
+		//			if !nodeExists(selectedNodesForTopology, node) {
+		//				log.FailOnError(fmt.Errorf("Volume [%v] is running on node [%v] which is not labelled", volume.Name, node), "is volume running on labelled node?")
+		//			}
+		//			log.InfoD("Volume [%v] is running on node [%v] which is labelled", volume.Name, node)
+		//		}
+		//	}
+		//
+		//})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
