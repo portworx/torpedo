@@ -141,6 +141,20 @@ func (d *dcos) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace
 		Operation: "DeleteSnapShot()",
 	}
 }
+func (d *dcos) DeleteCsiSnapshotsFromNamespace(ctx *scheduler.Context, snapshotNameSpace string) error {
+
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteCsiSnapshotsFromNamespace()",
+	}
+}
+func (d *dcos) IsCsiSnapshotExists(ctx *scheduler.Context, snapshotName string, namespace string) (bool, error) {
+
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsCsiSnapshotExists()",
+	}
+}
 
 func (d *dcos) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, error) {
 	fileList := []string{}
