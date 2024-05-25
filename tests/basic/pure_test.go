@@ -4290,10 +4290,16 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 			go func() {
 				defer wg.Done()
 				defer GinkgoRecover()
-				appNamespace := fmt.Sprintf("rebootnodevolumecreationzones-%s", Inst().InstanceID)
-				for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, "rebootnodevolumecreationzone")...)
-				}
+				taskName := "rebootnodewhilefadacreationusingzones"
+				Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Provisioner,
+					PvcSize:            6 * units.GiB,
+					Namespace:          taskName,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
 			}()
 			wg.Add(1)
 			go func() {
@@ -4357,3 +4363,33 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 		AfterEachTest(contexts)
 	})
 })
+
+//var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
+//        var contexts []*scheduler.Context
+//        JustBeforeEach(func() {
+//                StartTorpedoTest("CreateCsiSnapshotsforFADAandDelete",
+//                        "Create CSI snapshots for FADA volumes and delete them", nil, 0)
+//        })
+//        itLog := "CreateCsiSnapshotsforFADAandDelete"
+//        It(itLog, func() {
+//                log.InfoD(itLog)
+//                var wg sync.WaitGroup
+//                applist := Inst().AppList
+//                defer func() {
+//                        Inst().AppList = applist
+//                }()
+//                stepLog := "Deploy application"
+//                Step(stepLog, func() {
+//                        appNamespace := "fada-csi-snapshot-create"
+//                        for i := 0; i < Inst().GlobalScaleFactor; i++ {
+//                                contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, "fadacsisnapshotcreate")...)
+//                        }
+//                })
+//                ValidateApplications(contexts)
+//                stepLog = "Create csi snapshot class and csi snapshots for the application"
+//                Step(stepLog, func() {
+//                        log.InfoD(stepLog)
+//                })
+//
+//        }
+//}
