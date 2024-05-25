@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
+
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
 
@@ -4402,8 +4404,8 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 	itLog := "CreateCsiSnapshotsforFADAandDelete"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		//var volSnapshotClass *volsnapv1.VolumeSnapshotClass
-		//var volumeSnapshotMap map[string]*volsnapv1.VolumeSnapshot
+		var volSnapshotClass *volsnapv1.VolumeSnapshotClass
+		var volumeSnapshotMap map[string]*volsnapv1.VolumeSnapshot
 		applist := Inst().AppList
 		//defer DestroyApps(contexts, nil)
 		defer func() {
@@ -4428,29 +4430,17 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			snapShotClassName := PureSnapShotClass
-			volSnapshotClass, err := Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete")
+			volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete")
 			log.FailOnError(err, "Failed to create volume snapshot class")
 			log.InfoD("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
 		})
 		stepLog = "Creating snapshots for all apps in the context and validate them"
 		Step(stepLog, func() {
 			for _, ctx := range contexts {
-				vols, err := Inst().S.GetPureVolumes(ctx, "pure_block")
-				log.FailOnError(err, "Failed to get list of pure volumes")
-				for _, vol := range vols {
-					timestamp := strconv.Itoa(int(time.Now().Unix()))
-					request := scheduler.CSISnapshotRequest{
-						Namespace:         vol.Namespace,
-						Timestamp:         timestamp,
-						OriginalPVCName:   vol.Name,
-						SnapName:          "fada-csi-snapshot" + timestamp,
-						RestoredPVCName:   "fada-csi-snapshot" + timestamp,
-						SnapshotclassName: PureSnapShotClass,
-					}
-					err = Inst().S.CSISnapshotAndRestoreMany(ctx, request)
-					log.FailOnError(err, "Failed to create the snapshots")
-				}
-
+				volumeSnapshotMap, err = Inst().S.CreateCsiSnapsForVolumes(ctx, PureSnapShotClass)
+				log.FailOnError(err, "Failed to create the snapshots")
+				err = Inst().S.ValidateCsiSnapshots(ctx, volumeSnapshotMap)
+				log.FailOnError(err, "Failed to validate the snapshots")
 			}
 		})
 		//stepLog = "Delete the snapshots created for all apps in the context"
