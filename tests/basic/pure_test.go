@@ -4405,7 +4405,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var volSnapshotClass *volsnapv1.VolumeSnapshotClass
-		var volumeSnapshotMap map[string]*volsnapv1.VolumeSnapshot
+		//var volumeSnapshotMap map[string]*volsnapv1.VolumeSnapshot
 		applist := Inst().AppList
 		//defer DestroyApps(contexts, nil)
 		defer func() {
@@ -4437,10 +4437,22 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 		stepLog = "Creating snapshots for all apps in the context and validate them"
 		Step(stepLog, func() {
 			for _, ctx := range contexts {
-				volumeSnapshotMap, err = Inst().S.CreateCsiSnapsForVolumes(ctx, volSnapshotClass.Name)
-				log.FailOnError(err, "Failed to create the snapshots")
-				err = Inst().S.ValidateCsiSnapshots(ctx, volumeSnapshotMap)
-				log.FailOnError(err, "Failed to validate the snapshots")
+				vols, err := Inst().S.GetPureVolumes(ctx, "pure_block")
+				log.FailOnError(err, "Failed to get list of pure volumes")
+				for _, vol := range vols {
+					timestamp := strconv.Itoa(int(time.Now().Unix()))
+					request := scheduler.CSISnapshotRequest{
+						Namespace:         vol.Namespace,
+						Timestamp:         timestamp,
+						OriginalPVCName:   vol.Name,
+						SnapName:          "fada-csi-snapshot" + timestamp,
+						RestoredPVCName:   "fada-csi-snapshot" + timestamp,
+						SnapshotclassName: volSnapshotClass.Name,
+					}
+					err = Inst().S.CSISnapshotAndRestoreMany(ctx, request)
+					log.FailOnError(err, "Failed to create the snapshots")
+				}
+
 			}
 		})
 		//stepLog = "Delete the snapshots created for all apps in the context"
