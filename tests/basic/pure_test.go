@@ -4336,9 +4336,9 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 				log.FailOnError(err, fmt.Sprintf("Failed to reboot node [%s]", selectedNode.Name))
 			}
 		})
-		nodeExists := func(nodes []node.Node, node node.Node) bool {
+		nodeExists := func(nodes []node.Node, node string) bool {
 			for _, n := range nodes {
-				if n.Name == node.Name {
+				if n.Name == node {
 					return true
 				}
 			}
@@ -4353,15 +4353,22 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 
 		stepLog = "Validate the application deployed are in the labelled nodes only"
 		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			for _, ctx := range contexts {
-				scheduledNodes := ctx.ScheduleOptions.Nodes
-				for _, node := range scheduledNodes {
-					log.InfoD("Node %s is labelled", node.Name)
+				var k8sCore = core.Instance()
+				pods, err := k8sCore.GetPods(ctx.App.NameSpace, nil)
+				for _, pod := range pods.Items {
+					node := pod.Spec.NodeName
+					log.FailOnError(err, "unable to find the node from the pod")
 					if !nodeExists(selectedNodesForTopology, node) {
-						log.FailOnError(fmt.Errorf("Node %s is not labelled", node.Name), "is node labelled?")
+						log.FailOnError(fmt.Errorf("Pod [%v] is running on node [%v] which is not labelled", pod.Name, node), "is Pod running on labelled node?")
 					}
+					log.InfoD("Pod [%v] is running on node [%v] which is labelled", pod.Name, node)
 				}
+
 			}
+			// get all pods from a namepsace
+
 		})
 	})
 	JustAfterEach(func() {
