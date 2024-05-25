@@ -4368,23 +4368,25 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 				}
 			}
 		})
-		//stepLog="check volumes are also in same labelled nodes"
-		//Step(stepLog, func() {
-		//	log.InfoD(stepLog)
-		//	for _, ctx := range contexts {
-		//		volumes, err := Inst().S.GetVolumes(ctx)
-		//		log.FailOnError(err, "Failed to get list of all volumes")
-		//		for _, volume := range volumes {
-		//			node := volume.Node
-		//			log.FailOnError(err, "Failed to get node of the volume")
-		//			if !nodeExists(selectedNodesForTopology, node) {
-		//				log.FailOnError(fmt.Errorf("Volume [%v] is running on node [%v] which is not labelled", volume.Name, node), "is volume running on labelled node?")
-		//			}
-		//			log.InfoD("Volume [%v] is running on node [%v] which is labelled", volume.Name, node)
-		//		}
-		//	}
-		//
-		//})
+		stepLog = "check volumes are also in same labelled nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				volumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get list of all volumes")
+				for _, volume := range volumes {
+					appVol, err := Inst().V.InspectVolume(volume.ID)
+					log.FailOnError(err, "Failed to inspect volume details")
+					node := appVol.VolumeConsumers[0].NodeId
+					log.FailOnError(err, "Failed to get node of the volume")
+					if !nodeExists(selectedNodesForTopology, node) {
+						log.FailOnError(fmt.Errorf("Volume [%v] is running on node [%v] which is not labelled", volume.Name, node), "is volume running on labelled node?")
+					}
+					log.InfoD("Volume [%v] is running on node [%v] which is labelled", volume.Name, node)
+				}
+			}
+
+		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -4409,12 +4411,19 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 		defer func() {
 			Inst().AppList = applist
 		}()
+		Inst().AppList = []string{"fio-fa-davol"}
 		stepLog := "Deploy application"
 		Step(stepLog, func() {
 			appNamespace := "fada-csi-snapshot-create"
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, "fadacsisnapshotcreate")...)
-			}
+			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+			context, err := Inst().S.Schedule(appNamespace, scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				StorageProvisioner: Provisioner,
+				PvcSize:            6 * units.GiB,
+				Namespace:          appNamespace,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", appNamespace)
+			contexts = append(contexts, context...)
 		})
 		ValidateApplications(contexts)
 		stepLog = "Create csi snapshot class and csi snapshots for the application"
@@ -4429,6 +4438,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 		Step(stepLog, func() {
 			for _, ctx := range contexts {
 				volumeSnapshotMap, err = Inst().S.CreateCsiSnapsForVolumes(ctx, volSnapshotClass.Name)
+				log.FailOnError(err, "Failed to create the snapshots")
 				err = Inst().S.ValidateCsiSnapshots(ctx, volumeSnapshotMap)
 				log.FailOnError(err, "Failed to validate the snapshots")
 			}
