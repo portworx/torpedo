@@ -4448,6 +4448,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 			for _, ctx := range contexts {
 				err := Inst().S.DeleteCsiSnapshotsFromNamespace(ctx, ctx.App.NameSpace)
 				log.FailOnError(err, "Failed to delete the snapshots")
+				log.InfoD("Deleted the snapshots successfully")
 			}
 		})
 		stepLog = "Validate all snapshots are deleted "
