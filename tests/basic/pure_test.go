@@ -4350,6 +4350,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 			for _, ctx := range contexts {
 				scheduledNodes := ctx.ScheduleOptions.Nodes
 				for _, node := range scheduledNodes {
+					log.InfoD("Node %s is labelled", node.Name)
 					if !nodeExists(selectedNodesForTopology, node) {
 						log.FailOnError(fmt.Errorf("Node %s is not labelled", node.Name), "is node labelled?")
 					}
