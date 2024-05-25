@@ -2,8 +2,6 @@ package tests
 
 import (
 	"fmt"
-	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
 
@@ -4404,7 +4402,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 	itLog := "CreateCsiSnapshotsforFADAandDelete"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		var volSnapshotClass *volsnapv1.VolumeSnapshotClass
+		//var volSnapshotClass *volsnapv1.VolumeSnapshotClass
 		//var volumeSnapshotMap map[string]*volsnapv1.VolumeSnapshot
 		applist := Inst().AppList
 		//defer DestroyApps(contexts, nil)
@@ -4447,7 +4445,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 						OriginalPVCName:   vol.Name,
 						SnapName:          "fada-csi-snapshot" + timestamp,
 						RestoredPVCName:   "fada-csi-snapshot" + timestamp,
-						SnapshotclassName: volSnapshotClass.Name,
+						SnapshotclassName: PureSnapShotClass,
 					}
 					err = Inst().S.CSISnapshotAndRestoreMany(ctx, request)
 					log.FailOnError(err, "Failed to create the snapshots")
