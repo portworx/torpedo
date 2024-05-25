@@ -4345,6 +4345,12 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 			return false
 		}
 
+		stepLog = "Validate the applications are up and running"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
+
 		stepLog = "Validate the application deployed are in the labelled nodes only"
 		Step(stepLog, func() {
 			for _, ctx := range contexts {
