@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
@@ -4392,32 +4393,74 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 	})
 })
 
-//var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
-//        var contexts []*scheduler.Context
-//        JustBeforeEach(func() {
-//                StartTorpedoTest("CreateCsiSnapshotsforFADAandDelete",
-//                        "Create CSI snapshots for FADA volumes and delete them", nil, 0)
-//        })
-//        itLog := "CreateCsiSnapshotsforFADAandDelete"
-//        It(itLog, func() {
-//                log.InfoD(itLog)
-//                var wg sync.WaitGroup
-//                applist := Inst().AppList
-//                defer func() {
-//                        Inst().AppList = applist
-//                }()
-//                stepLog := "Deploy application"
-//                Step(stepLog, func() {
-//                        appNamespace := "fada-csi-snapshot-create"
-//                        for i := 0; i < Inst().GlobalScaleFactor; i++ {
-//                                contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, "fadacsisnapshotcreate")...)
-//                        }
-//                })
-//                ValidateApplications(contexts)
-//                stepLog = "Create csi snapshot class and csi snapshots for the application"
-//                Step(stepLog, func() {
-//                        log.InfoD(stepLog)
-//                })
-//
-//        }
-//}
+var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateCsiSnapshotsforFADAandDelete",
+			"Create CSI snapshots for FADA volumes and delete them", nil, 0)
+	})
+	itLog := "CreateCsiSnapshotsforFADAandDelete"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var volSnapshotClass *volsnapv1.VolumeSnapshotClass
+		var volumeSnapshotMap map[string]*volsnapv1.VolumeSnapshot
+		applist := Inst().AppList
+		//defer DestroyApps(contexts, nil)
+		defer func() {
+			Inst().AppList = applist
+		}()
+		stepLog := "Deploy application"
+		Step(stepLog, func() {
+			appNamespace := "fada-csi-snapshot-create"
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, "fadacsisnapshotcreate")...)
+			}
+		})
+		ValidateApplications(contexts)
+		stepLog = "Create csi snapshot class and csi snapshots for the application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName := PureSnapShotClass
+			volSnapshotClass, err := Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete")
+			log.FailOnError(err, "Failed to create volume snapshot class")
+			log.InfoD("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
+		})
+		stepLog = "Creating snapshots for all apps in the context and validate them"
+		Step(stepLog, func() {
+			for _, ctx := range contexts {
+				volumeSnapshotMap, err = Inst().S.CreateCsiSnapsForVolumes(ctx, volSnapshotClass.Name)
+				err = Inst().S.ValidateCsiSnapshots(ctx, volumeSnapshotMap)
+				log.FailOnError(err, "Failed to validate the snapshots")
+			}
+		})
+		//stepLog = "Delete the snapshots created for all apps in the context"
+		//Step(stepLog, func() {
+		//	log.InfoD(stepLog)
+		//	for _, ctx := range contexts {
+		//		err := Inst().S.DeleteCsiSnapshotsFromNamespace(ctx, ctx.App.NameSpace)
+		//		log.FailOnError(err, "Failed to delete the snapshots")
+		//	}
+		//})
+		//stepLog = "Validate all snapshots are deleted "
+		//Step(stepLog, func() {
+		//	log.InfoD(stepLog)
+		//	for _, ctx := range contexts {
+		//		for _, snapshot := range volumeSnapshotMap {
+		//			isSnapshotExists, err := Inst().S.IsCsiSnapshotExists(ctx, snapshot.Name, snapshot.Namespace)
+		//			log.FailOnError(err, "Failed to check if snapshot exists")
+		//			if !isSnapshotExists {
+		//				log.InfoD("Successfully deleted snapshot %v", snapshot.Name)
+		//			} else {
+		//				log.FailOnError(fmt.Errorf("Snapshot %v is not deleted", snapshot.Name), "is snapshot deleted?")
+		//			}
+		//
+		//		}
+		//	}
+		//})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})

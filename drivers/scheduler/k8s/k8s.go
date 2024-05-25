@@ -7879,6 +7879,33 @@ func (k *K8s) DeleteCsiSnapsForVolumes(ctx *scheduler.Context, retainCount int) 
 	return nil
 }
 
+func (k *K8s) IsCsiSnapshotExists(ctx *scheduler.Context, snapshotName string, namespace string) (bool, error) {
+	snaplist, err := k.GetSnapshotsInNameSpace(ctx, namespace)
+	log.FailOnError(err, "Failed to get Snapshots in namespace [%v]", namespace)
+	if len(snaplist.Items) == 0 {
+		log.InfoD("No Snapshots found ")
+		return false, nil
+	}
+	for _, snap := range snaplist.Items {
+		if snap.Metadata.Name == snapshotName {
+			log.InfoD("Snapshot [%v] exists in namespace [%v]", snapshotName, namespace)
+			return true, nil
+		}
+	}
+	return false, nil
+
+}
+func (k *K8s) DeleteCsiSnapshotsFromNamespace(ctx *scheduler.Context, namespace string) error {
+	snaplist, err := k.GetSnapshotsInNameSpace(ctx, namespace)
+	log.FailOnError(err, "Failed to get Snapshots in namespace [%v]", namespace)
+	for _, snap := range snaplist.Items {
+		err = k.DeleteCsiSnapshot(ctx, snap.Metadata.Name, namespace)
+		log.FailOnError(err, "Failed to delete snapshot [%v] in namespace [%v]", snap.Metadata.Name, namespace)
+	}
+	return nil
+
+}
+
 func (k *K8s) restoreAndValidate(
 	ctx *scheduler.Context, pvc *v1.PersistentVolumeClaim,
 	namespace string, sc *storageapi.StorageClass,

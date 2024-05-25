@@ -82,7 +82,7 @@ type AppConfig struct {
 	IoProfile                   string   `yaml:"io_profile"`
 	Journal                     string   `yaml:"journal"`
 	DataSize                    string   `yaml:"data_size"`
-  VmID                        string   `yaml:"vm_id"`
+	VmID                        string   `yaml:"vm_id"`
 }
 
 // InitOptions initialization options
@@ -425,6 +425,10 @@ type Driver interface {
 
 	// DeleteCsiSnapshot delete a snapshots from namespace
 	DeleteCsiSnapshot(ctx *Context, snapshotName string, snapshotNameSpace string) error
+
+	DeleteCsiSnapshotsFromNamespace(ctx *Context, namespace string) error
+
+	IsCsiSnapshotExists(ctx *Context, snapshotName string, namespace string) (bool, error)
 
 	// GetAllSnapshotClasses returns the list of all volume snapshot classes present in the cluster
 	GetAllSnapshotClasses() (*volsnapv1.VolumeSnapshotClassList, error)
