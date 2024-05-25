@@ -4419,7 +4419,6 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 			context, err := Inst().S.Schedule(appNamespace, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
 				StorageProvisioner: Provisioner,
-				PvcSize:            6 * units.GiB,
 				Namespace:          appNamespace,
 			})
 			log.FailOnError(err, "Failed to schedule application of %v namespace", appNamespace)
