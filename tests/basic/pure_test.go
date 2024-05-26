@@ -2,9 +2,8 @@ package tests
 
 import (
 	"fmt"
-	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-
 	"github.com/devans10/pugo/flasharray"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	"github.com/portworx/sched-ops/k8s/storage"
 
 	"math/rand"
@@ -4407,7 +4406,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 		var volSnapshotClass *volsnapv1.VolumeSnapshotClass
 		var volumeSnapshotMap map[string]*volsnapv1.VolumeSnapshot
 		applist := Inst().AppList
-		//defer DestroyApps(contexts, nil)
+		defer DestroyApps(contexts, nil)
 		defer func() {
 			Inst().AppList = applist
 		}()
