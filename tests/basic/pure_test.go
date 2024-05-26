@@ -4377,6 +4377,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 					appVol, err := Inst().V.InspectVolume(volume.ID)
 					log.FailOnError(err, "Failed to inspect volume details")
 					node := appVol.VolumeConsumers[0].NodeId
+					log.InfoD("Node of the volume [%v] is [%v]", volume.Name, node)
 					log.FailOnError(err, "Failed to get node of the volume")
 					if !nodeExists(selectedNodesForTopology, node) {
 						log.FailOnError(fmt.Errorf("Volume [%v] is running on node [%v] which is not labelled", volume.Name, node), "is volume running on labelled node?")
