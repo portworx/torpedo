@@ -4374,8 +4374,8 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 				volumes, err := Inst().S.GetVolumes(ctx)
 				log.FailOnError(err, "Failed to get list of all volumes")
 				for _, volume := range volumes {
-					log.InfoD("checking volume [%v] is running on labelled node or not", volume.Name)
-					appVol, err := Inst().V.InspectVolume(volume.Name)
+					log.InfoD("checking volume [%v] is running on labelled node or not", volume.ID)
+					appVol, err := Inst().V.InspectVolume(volume.ID)
 					log.FailOnError(err, "Failed to inspect volume details")
 					node := appVol.VolumeConsumers[0].NodeId
 					log.InfoD("Node of the volume [%v] is [%v]", volume.Name, node)
