@@ -82,7 +82,7 @@ type AppConfig struct {
 	IoProfile                   string   `yaml:"io_profile"`
 	Journal                     string   `yaml:"journal"`
 	DataSize                    string   `yaml:"data_size"`
-  VmID                        string   `yaml:"vm_id"`
+	VmID                        string   `yaml:"vm_id"`
 }
 
 // InitOptions initialization options
