@@ -4625,7 +4625,12 @@ var _ = Describe("{DeployFADAAndFBDAAppsAndStopPortworx}", func() {
 				defer wg.Done()
 				defer GinkgoRecover()
 				for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, "fio-fada-facd-namespace")...)
+					context, err := Inst().S.Schedule(appNamespace, scheduler.ScheduleOptions{
+						AppKeys:            Inst().AppList,
+						StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
+					})
+					log.FailOnError(err, "Failed to schedule application of %v namespace", appNamespace)
+					contexts = append(contexts, context...)
 				}
 			}()
 			wg.Add(1)
