@@ -59,7 +59,7 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 
 				nsName := namespacePrefix + RandomString(5) + "-" + strconv.Itoa(i)
 
-				go func() {
+				go func(nsName string) {
 
 					defer wg.Done()
 					defer GinkgoRecover()
@@ -69,7 +69,7 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 						allError = append(allError, err.Error())
 					}
 
-				}()
+				}(nsName)
 
 				if i%2 == 0 {
 					evenNamespaces = append(evenNamespaces, nsName)
@@ -85,6 +85,20 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 			dash.VerifyFatal(len(allError), 0, "Verifying namespaces creation")
 		})
 
+		Step(fmt.Sprintf("Associating [%s] to [%s] for deployment", evenNamespaces[0], WorkflowProject.ProjectName), func() {
+			log.InfoD("Associating [%s] to [%s] for deployment", evenNamespaces[0], WorkflowProject.ProjectName)
+			err := WorkflowProject.Associate(
+				[]string{},
+				[]string{WorkflowNamespace.Namespaces[evenNamespaces[0]]},
+				[]string{},
+				[]string{},
+				[]string{},
+				[]string{},
+			)
+			log.FailOnError(err, "Unable to associate Cluster to Project")
+			log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+		})
+
 		for i := 0; i < TotalToggles; i++ {
 			Step("Removing labels from all odd namespaces", func() {
 				var wg sync.WaitGroup
@@ -94,16 +108,16 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 
 				for _, namespace := range oddNamespaces {
 					wg.Add(1)
-					go func() {
+					go func(ns string) {
 
 						defer wg.Done()
 						defer GinkgoRecover()
 
-						_, err := utils.UpdatePDSNamespce(namespace, nsLablesRemove)
+						_, err := utils.UpdatePDSNamespce(ns, nsLablesRemove)
 						if err != nil {
 							allError = append(allError, err.Error())
 						}
-					}()
+					}(namespace)
 				}
 
 				wg.Wait()
@@ -121,40 +135,40 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 				log.InfoD("Validating all current namespaces")
 				for _, namespace := range oddNamespaces {
 					wg.Add(1)
-					go func() {
+					go func(nsName string) {
 
 						defer wg.Done()
 						defer GinkgoRecover()
 
-						ns, err := WorkflowNamespace.GetNamespace(namespace)
+						ns, err := WorkflowNamespace.GetNamespace(nsName)
 						if err != nil {
 							allError = append(allError, fmt.Sprintf("Some error occurred while listing namespace. Error - [%s]", err.Error()))
 						} else {
 							if *ns.Status.Phase != UNAVAILABLE {
-								allError = append(allError, fmt.Sprintf("[%s] is in [%s] state. Expected - [%s]", namespace, *ns.Status.Phase, UNAVAILABLE))
+								allError = append(allError, fmt.Sprintf("[%s] is in [%s] state. Expected - [%s]", nsName, *ns.Status.Phase, UNAVAILABLE))
 							}
 						}
-						log.Infof("[%s] - [%s]", namespace, *ns.Status.Phase)
-					}()
+						log.Infof("[%s] - [%s]", nsName, *ns.Status.Phase)
+					}(namespace)
 				}
 
 				for _, namespace := range evenNamespaces {
 					wg.Add(1)
-					go func() {
+					go func(nsName string) {
 
 						defer wg.Done()
 						defer GinkgoRecover()
 
-						ns, err := WorkflowNamespace.GetNamespace(namespace)
+						ns, err := WorkflowNamespace.GetNamespace(nsName)
 						if err != nil {
 							allError = append(allError, fmt.Sprintf("Some error occurred while listing namespace. Error - [%s]", err.Error()))
 						} else {
 							if *ns.Status.Phase != AVAILABLE {
-								allError = append(allError, fmt.Sprintf("[%s] is in [%s] state. Expected - [%s]", namespace, *ns.Status.Phase, AVAILABLE))
+								allError = append(allError, fmt.Sprintf("[%s] is in [%s] state. Expected - [%s]", nsName, *ns.Status.Phase, AVAILABLE))
 							}
 						}
-						log.Infof("[%s] - [%s]", namespace, *ns.Status.Phase)
-					}()
+						log.Infof("[%s] - [%s]", nsName, *ns.Status.Phase)
+					}(namespace)
 				}
 
 				wg.Wait()
@@ -171,31 +185,31 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 
 				for _, namespace := range oddNamespaces {
 					wg.Add(1)
-					go func() {
+					go func(nsName string) {
 
 						defer wg.Done()
 						defer GinkgoRecover()
 
-						_, err := utils.UpdatePDSNamespce(namespace, nsLablesApply)
+						_, err := utils.UpdatePDSNamespce(nsName, nsLablesApply)
 						if err != nil {
 							allError = append(allError, err.Error())
 						}
-					}()
+					}(namespace)
 				}
 
 				log.InfoD("Removing labels from even namespaces")
 				for _, namespace := range evenNamespaces {
 					wg.Add(1)
-					go func() {
+					go func(nsName string) {
 
 						defer wg.Done()
 						defer GinkgoRecover()
 
-						_, err := utils.UpdatePDSNamespce(namespace, nsLablesRemove)
+						_, err := utils.UpdatePDSNamespce(nsName, nsLablesRemove)
 						if err != nil {
 							allError = append(allError, err.Error())
 						}
-					}()
+					}(namespace)
 				}
 
 				wg.Wait()
@@ -214,40 +228,40 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 
 				for _, namespace := range evenNamespaces {
 					wg.Add(1)
-					go func() {
+					go func(nsName string) {
 
 						defer wg.Done()
 						defer GinkgoRecover()
 
-						ns, err := WorkflowNamespace.GetNamespace(namespace)
+						ns, err := WorkflowNamespace.GetNamespace(nsName)
 						if err != nil {
 							allError = append(allError, fmt.Sprintf("Some error occurred while listing namespace. Error - [%s]", err.Error()))
 						} else {
 							if *ns.Status.Phase != UNAVAILABLE {
-								allError = append(allError, fmt.Sprintf("[%s] is in [%s] state. Expected - [%s]", namespace, *ns.Status.Phase, UNAVAILABLE))
+								allError = append(allError, fmt.Sprintf("[%s] is in [%s] state. Expected - [%s]", nsName, *ns.Status.Phase, UNAVAILABLE))
 							}
 						}
-						log.Infof("[%s] - [%s]", namespace, *ns.Status.Phase)
-					}()
+						log.Infof("[%s] - [%s]", nsName, *ns.Status.Phase)
+					}(namespace)
 				}
 
 				for _, namespace := range oddNamespaces {
 					wg.Add(1)
-					go func() {
+					go func(nsName string) {
 
 						defer wg.Done()
 						defer GinkgoRecover()
 
-						ns, err := WorkflowNamespace.GetNamespace(namespace)
+						ns, err := WorkflowNamespace.GetNamespace(nsName)
 						if err != nil {
 							allError = append(allError, fmt.Sprintf("Some error occurred while listing namespace. Error - [%s]", err.Error()))
 						} else {
 							if *ns.Status.Phase != AVAILABLE {
-								allError = append(allError, fmt.Sprintf("[%s] is in [%s] state. Expected - [%s]", namespace, *ns.Status.Phase, AVAILABLE))
+								allError = append(allError, fmt.Sprintf("[%s] is in [%s] state. Expected - [%s]", nsName, *ns.Status.Phase, AVAILABLE))
 							}
 						}
-						log.Infof("[%s] - [%s]", namespace, *ns.Status.Phase)
-					}()
+						log.Infof("[%s] - [%s]", nsName, *ns.Status.Phase)
+					}(namespace)
 				}
 
 				wg.Wait()
@@ -264,30 +278,30 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 
 				for _, namespace := range oddNamespaces {
 					wg.Add(1)
-					go func() {
+					go func(nsName string) {
 
 						defer wg.Done()
 						defer GinkgoRecover()
 
-						_, err := utils.UpdatePDSNamespce(namespace, nsLablesApply)
+						_, err := utils.UpdatePDSNamespce(nsName, nsLablesApply)
 						if err != nil {
 							allError = append(allError, err.Error())
 						}
-					}()
+					}(namespace)
 				}
 
 				for _, namespace := range evenNamespaces {
 					wg.Add(1)
-					go func() {
+					go func(nsName string) {
 
 						defer wg.Done()
 						defer GinkgoRecover()
 
-						_, err := utils.UpdatePDSNamespce(namespace, nsLablesApply)
+						_, err := utils.UpdatePDSNamespce(nsName, nsLablesApply)
 						if err != nil {
 							allError = append(allError, err.Error())
 						}
-					}()
+					}(namespace)
 				}
 
 				wg.Wait()
@@ -308,16 +322,16 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 
 			for _, namespace := range evenNamespaces {
 				wg.Add(1)
-				go func() {
+				go func(nsName string) {
 
 					defer wg.Done()
 					defer GinkgoRecover()
 
-					_, err := utils.UpdatePDSNamespce(namespace, nsLablesRemove)
+					_, err := utils.UpdatePDSNamespce(nsName, nsLablesRemove)
 					if err != nil {
 						allError = append(allError, err.Error())
 					}
-				}()
+				}(namespace)
 			}
 
 			wg.Wait()
@@ -335,21 +349,21 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 			log.InfoD("Validating all current namespaces")
 			for _, namespace := range evenNamespaces {
 				wg.Add(1)
-				go func() {
+				go func(nsName string) {
 
 					defer wg.Done()
 					defer GinkgoRecover()
 
-					ns, err := WorkflowNamespace.GetNamespace(namespace)
+					ns, err := WorkflowNamespace.GetNamespace(nsName)
 					if err != nil {
 						allError = append(allError, fmt.Sprintf("Some error occurred while listing namespace. Error - [%s]", err.Error()))
 					} else {
 						if *ns.Status.Phase != UNAVAILABLE {
-							allError = append(allError, fmt.Sprintf("[%s] is in [%s] state. Expected - [%s]", namespace, *ns.Status.Phase, UNAVAILABLE))
+							allError = append(allError, fmt.Sprintf("[%s] is in [%s] state. Expected - [%s]", nsName, *ns.Status.Phase, UNAVAILABLE))
 						}
 					}
-					log.Infof("[%s] - [%s]", namespace, *ns.Status.Phase)
-				}()
+					log.Infof("[%s] - [%s]", nsName, *ns.Status.Phase)
+				}(namespace)
 			}
 
 			wg.Wait()
