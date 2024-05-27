@@ -4480,10 +4480,8 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 				_, err = Inst().S.RestoreCsiSnapAndValidate(ctx, pureStorageClassMap)
 				if err != nil {
 					log.Errorf("Restoring snapshot failed with error: [%v]", err)
-
 				}
 			}
-
 		})
 		stepLog = "Delete the snapshots created for all apps in the context"
 		Step(stepLog, func() {
