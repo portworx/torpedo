@@ -13,8 +13,7 @@ type WorkflowPDSTemplates struct {
 	ResourceTemplateId       string
 	StorageTemplateId        string
 	ServiceConfigTemplateIds map[string]string
-	//AppTempIdAndDsName        map[string]string
-	UpdateTemplateNameAndId map[string]string
+	UpdateResourceTemplateId string
 }
 
 func (cusTemp *WorkflowPDSTemplates) CreateAppTemplate(params *parameters.NewPDSParams) map[string]string {
@@ -34,7 +33,7 @@ func (cusTemp *WorkflowPDSTemplates) CreateAppTemplate(params *parameters.NewPDS
 }
 
 func (cusTemp *WorkflowPDSTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *parameters.NewPDSParams) (map[string]string, string, string, error) {
-	cusTemp.UpdateTemplateNameAndId = make(map[string]string)
+	//cusTemp.UpdateTemplateNameAndId = make(map[string]string)
 	stConfigParams := pdslibs.StorageConfiguration{
 		FS:          templates.StorageConfiguration.FS,
 		Repl:        templates.StorageConfiguration.Repl,
@@ -53,12 +52,18 @@ func (cusTemp *WorkflowPDSTemplates) CreatePdsCustomTemplatesAndFetchIds(templat
 	appTemplateNameAndId := cusTemp.CreateAppTemplate(templates)
 	cusTemp.ServiceConfigTemplateIds = appTemplateNameAndId
 
-	stConfig, _ := pdslibs.CreateStorageConfigTemplate(cusTemp.Platform.TenantId, stConfigParams)
+	stConfig, err := pdslibs.CreateStorageConfigTemplate(cusTemp.Platform.TenantId, stConfigParams)
+	if err != nil {
+		return nil, "", "", err
+	}
 	log.InfoD("stConfig ID-  %v", *stConfig.Create.Meta.Uid)
 	stConfigId := stConfig.Create.Meta.Uid
 	cusTemp.StorageTemplateId = *stConfigId
 
-	resConfig, _ := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, resConfigParams)
+	resConfig, err := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, resConfigParams)
+	if err != nil {
+		return nil, "", "", err
+	}
 	log.InfoD("resConfig ID-  %v", *resConfig.Create.Meta.Uid)
 	resourceConfigId := resConfig.Create.Meta.Uid
 	cusTemp.ResourceTemplateId = *resourceConfigId
@@ -76,8 +81,6 @@ func (cusTemp *WorkflowPDSTemplates) DeleteCreatedCustomPdsTemplates(tempList []
 }
 
 func (cusTemp *WorkflowPDSTemplates) CreateResourceTemplateWithCustomValue(templates *parameters.NewPDSParams) (string, error) {
-	cusTemp.UpdateTemplateNameAndId = make(map[string]string)
-
 	resConfigParams := pdslibs.ResourceConfiguration{
 		Cpu_Limit:       templates.ResourceConfiguration.New_Cpu_Limit,
 		Cpu_Request:     templates.ResourceConfiguration.New_Cpu_Request,
@@ -86,11 +89,15 @@ func (cusTemp *WorkflowPDSTemplates) CreateResourceTemplateWithCustomValue(templ
 		Storage_Request: templates.ResourceConfiguration.New_Storage_Request,
 	}
 
-	resConfig, _ := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, resConfigParams)
-	log.InfoD("resConfig ID-  %v", *resConfig.Create.Meta.Uid)
-	resourceConfigId := resConfig.Create.Meta.Uid
-	cusTemp.UpdateTemplateNameAndId[*resConfig.Create.Meta.Name] = *resourceConfigId
-	return *resourceConfigId, nil
+	resConfig, err := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, resConfigParams)
+	if err != nil {
+		return "", err
+	}
+	resNewConfigId := resConfig.Create.Meta.Uid
+	cusTemp.UpdateResourceTemplateId = *resNewConfigId
+	log.InfoD("resNewConfigId ID-  %v", cusTemp.UpdateResourceTemplateId)
+
+	return *resNewConfigId, nil
 }
 
 func (cusTemp *WorkflowPDSTemplates) Purge(ignoreError bool) error {
@@ -119,10 +126,9 @@ func (cusTemp *WorkflowPDSTemplates) Purge(ignoreError bool) error {
 		}
 	}
 
-	log.Debugf("length of UpdateTemplateNameAndId [%d]", len(cusTemp.UpdateTemplateNameAndId))
-	for _, template := range cusTemp.UpdateTemplateNameAndId {
-		log.Infof("Deleting ResourceConfigTemplate - [%s]", template)
-		err := cusTemp.DeleteCreatedCustomPdsTemplates([]string{template})
+	if cusTemp.UpdateResourceTemplateId != "" {
+		log.Infof("Deleting ResourceConfigTemplate - [%s]", cusTemp.UpdateResourceTemplateId)
+		err := cusTemp.DeleteCreatedCustomPdsTemplates([]string{cusTemp.UpdateResourceTemplateId})
 		if err != nil {
 			if ignoreError && !strings.Contains(err.Error(), "404 Not Found") {
 				return err

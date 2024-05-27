@@ -48,3 +48,7 @@ func (platform *WorkflowPlatform) TenantInit() (*WorkflowPlatform, error) {
 	log.InfoD("TenantID is- %v", platform.TenantId)
 	return platform, nil
 }
+
+func (platform *WorkflowPlatform) WhoAmI() (*automationModels.WhoamiResponse, error) {
+	return platformLibs.Whoami()
+}

@@ -9,7 +9,10 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
+	"reflect"
+	"strconv"
 	"strings"
+	"sync"
 )
 
 var _ = Describe("{BackupAndRestoreAcrossDifferentProjectsWithDifferentUsers}", func() {
@@ -201,7 +204,7 @@ var _ = Describe("{BackupAndRestoreAcrossSameProjectsWithDifferentUsers}", func(
 	)
 
 	JustBeforeEach(func() {
-		StartPDSTorpedoTest("BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers", "Create backup and restore across different project using only project users", nil, 0)
+		StartPDSTorpedoTest("BackupAndRestoreAcrossSameProjectsWithDifferentUsers", "Create backup and restore on same project with different users", nil, 0)
 		deploymentUser = "deployment-" + RandomString(5)
 		backupUser = "backup-" + RandomString(5)
 		restoreUser = "restore-" + RandomString(5)
@@ -209,7 +212,7 @@ var _ = Describe("{BackupAndRestoreAcrossSameProjectsWithDifferentUsers}", func(
 		workflowServiceAccount.WorkflowProjects = []*platform.WorkflowProject{&WorkflowProject}
 	})
 
-	It("Create backup and restore across different project using only project users", func() {
+	It("Create backup and restore on same project with different users", func() {
 
 		Step("Create project user - Deployment User", func() {
 			_, err := workflowServiceAccount.CreateServiceAccount(
@@ -317,5 +320,240 @@ var _ = Describe("{BackupAndRestoreAcrossSameProjectsWithDifferentUsers}", func(
 		defer EndPDSTorpedoTest()
 		log.InfoD("Switching back to admin account")
 		workflowServiceAccount.SwitchToAdmin()
+	})
+})
+
+var _ = Describe("{DeployDsOnMultipleNSAndProjects}", func() {
+	var (
+		numberOfNamespacesTobeCreated int
+		namespacePrefix               string
+		allError                      []string
+		namespaces                    []string
+		projects                      []string
+		project2                      platform.WorkflowProject
+		project3                      platform.WorkflowProject
+		namespaceNameAndId            map[string]string
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("DeployDsOnMultipleNSAndProjects", "Create Multiple Namespaces, Projects and Associates Namespaces to projects then validates cross projects rbac", nil, 0)
+		numberOfNamespacesTobeCreated = 3 // Number of namespaces to be created by the testcase
+		namespacePrefix = "rbac-ns-"
+	})
+
+	It("Create Multiple Namespaces, Projects and Associates Namespaces to projects then validates cross projects rbac", func() {
+		namespaceNameAndId = make(map[string]string)
+		Step(fmt.Sprintf("Creating [%d] namespaces with labels", numberOfNamespacesTobeCreated), func() {
+			var wg sync.WaitGroup
+
+			log.InfoD("Creating [%d] namespaces with PDS labels present", numberOfNamespacesTobeCreated)
+			for i := 0; i < numberOfNamespacesTobeCreated; i++ {
+				wg.Add(1)
+				nsName := namespacePrefix + RandomString(5) + "-" + strconv.Itoa(i)
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+
+					_, err := WorkflowNamespace.CreateNamespaces(nsName)
+					if err != nil {
+						allError = append(allError, err.Error())
+					}
+				}()
+				namespaces = append(namespaces, nsName)
+			}
+			wg.Wait()
+			if allError != nil {
+				log.Errorf(strings.Join(allError, "\n"))
+			}
+			dash.VerifyFatal(len(allError), 0, "Verifying namespaces creation")
+		})
+
+		Step("Validating all current namespaces", func() {
+			log.InfoD("Validating all current namespaces")
+			for _, namespace := range namespaces {
+				ns, err := WorkflowNamespace.GetNamespace(namespace)
+				if err != nil {
+					allError = append(allError, fmt.Sprintf("Some error occurred while listing namespace. Error - [%s]", err.Error()))
+				} else {
+					if *ns.Status.Phase != AVAILABLE {
+						allError = append(allError, fmt.Sprintf("[%s] is in [%s] state. Expected - [%s]", namespace, *ns.Status.Phase, AVAILABLE))
+					}
+				}
+				log.Infof("[%s] - [%s]", namespace, *ns.Status.Phase)
+				namespaceNameAndId[*ns.Meta.Name] = *ns.Meta.Uid
+			}
+
+			if allError != nil {
+				log.Errorf(strings.Join(allError, "\n"))
+			}
+			dash.VerifyFatal(len(allError), 0, "Verifying namespaces on control plane")
+		})
+
+		steplog := "Create Project1 and Associate Namespace to the projects"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			log.Debugf("namespace-[%s], namespaceId-[%s]", namespaces[0], namespaceNameAndId[namespaces[0]])
+			log.Debugf("namespace-[%s], namespaceId-[%s]", namespaces[1], namespaceNameAndId[namespaces[1]])
+			log.Debugf("namespace-[%s], namespaceId-[%s]", namespaces[2], namespaceNameAndId[namespaces[2]])
+
+			//Associate namespace to the project
+			log.InfoD("Associate namespace to the Project1")
+			err := WorkflowProject.Associate(
+				[]string{},
+				[]string{namespaceNameAndId[namespaces[0]], namespaceNameAndId[namespaces[1]]},
+				[]string{},
+				[]string{},
+				[]string{},
+				[]string{},
+			)
+			log.FailOnError(err, "Unable to associate Templates to Project")
+			log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+		})
+
+		steplog = "Create Project2 and Associate Namespace to the projects"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			project2.Platform = WorkflowPlatform
+			PROJECT_NAME := "rbac-project-" + RandomString(5) + "-2"
+			project2.ProjectName = PROJECT_NAME
+			_, err := project2.CreateProject()
+			log.FailOnError(err, "unable to create project")
+			ProjectId, err = project2.GetDefaultProject(PROJECT_NAME)
+			log.FailOnError(err, "Unable to get current project")
+			log.Infof("Current project ID - [%s]", ProjectId)
+			projects = append(projects, ProjectId)
+
+			//Associate namespace to the project
+			log.InfoD("Associate namespace to the Project2")
+			err = project2.Associate(
+				[]string{},
+				[]string{namespaceNameAndId[namespaces[1]], namespaceNameAndId[namespaces[2]]},
+				[]string{},
+				[]string{},
+				[]string{},
+				[]string{},
+			)
+			log.FailOnError(err, "Unable to associate Templates to Project")
+			log.Infof("Associated Resources - [%+v]", project2.AssociatedResources)
+		})
+
+		steplog = "Create Project3 and Associate Namespace to the projects"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			project3.Platform = WorkflowPlatform
+			PROJECT_NAME := "rbac-project-" + RandomString(5) + "-3"
+			project3.ProjectName = PROJECT_NAME
+			_, err := project3.CreateProject()
+			log.FailOnError(err, "unable to create project")
+			ProjectId, err = project3.GetDefaultProject(PROJECT_NAME)
+			log.FailOnError(err, "Unable to get current project")
+			log.Infof("Current project ID - [%s]", ProjectId)
+			projects = append(projects, ProjectId)
+
+			//Associate namespace to the project
+			log.InfoD("Associate namespace to the Project3")
+			err = project3.Associate(
+				[]string{},
+				[]string{namespaceNameAndId[namespaces[2]], namespaceNameAndId[namespaces[0]]},
+				[]string{},
+				[]string{},
+				[]string{},
+				[]string{},
+			)
+			log.FailOnError(err, "Unable to associate Templates to Project")
+			log.Infof("Associated Resources - [%+v]", project3.AssociatedResources)
+		})
+
+		steplog = "Validate the Namespaces are not accessible from the projects to which it is not associated"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+
+			//project1
+			prj1, err := WorkflowProject.GetProject()
+			log.FailOnError(err, "Error while getting project")
+			namespaceFetchedFromApi := prj1.Config.InfraResources.Namespaces
+			associatedNamespaces := WorkflowProject.AssociatedResources.Namespaces
+			dash.VerifyFatal(reflect.DeepEqual(namespaceFetchedFromApi, associatedNamespaces), true, "validating the associated namespaces in project1")
+
+			//project2
+			prj2, err := project2.GetProject()
+			log.FailOnError(err, "Error while getting project")
+			namespaceFetchedFromApi2 := prj2.Config.InfraResources.Namespaces
+			associatedNamespaces2 := project2.AssociatedResources.Namespaces
+			dash.VerifyFatal(reflect.DeepEqual(namespaceFetchedFromApi2, associatedNamespaces2), true, "validating the associated namespaces in project2")
+
+			//project3
+			prj3, err := project3.GetProject()
+			log.FailOnError(err, "Error while getting project")
+			namespaceFetchedFromApi3 := prj3.Config.InfraResources.Namespaces
+			associatedNamespaces3 := project3.AssociatedResources.Namespaces
+			dash.VerifyFatal(reflect.DeepEqual(namespaceFetchedFromApi3, associatedNamespaces3), true, "validating the associated namespaces in project3")
+		})
+
+		//Templates are already associated to project1 in pds_basic_test.go file
+
+		steplog = "Validate the Templates are not accessible from the projects to which it is not associated"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			//project1
+			wfProject, err := WorkflowProject.GetProject()
+			log.FailOnError(err, "Error while getting project")
+			templatesFetchedFromApi := wfProject.Config.InfraResources.Templates
+			associatedTemplates := WorkflowProject.AssociatedResources.Templates
+			dash.VerifyFatal(reflect.DeepEqual(templatesFetchedFromApi, associatedTemplates), true, "validating the associated templates in project1")
+
+			//project2
+			prj2, err := project2.GetProject()
+			log.FailOnError(err, "Error while getting project")
+			templatesFetchedFromApi2 := prj2.Config.InfraResources.Templates
+			//associatedTemplates2 := project2.AssociatedResources.Templates
+			dash.VerifyFatal(reflect.DeepEqual(templatesFetchedFromApi2, associatedTemplates), false, "validating the associated templates in project1")
+
+			//project3
+			prj3, err := project3.GetProject()
+			log.FailOnError(err, "Error while getting project")
+			namespaceFetchedFromApi3 := prj3.Config.InfraResources.Namespaces
+			//associatedNamespaces3 := project3.AssociatedResources.Namespaces
+			dash.VerifyFatal(reflect.DeepEqual(namespaceFetchedFromApi3, associatedTemplates), false, "validating the associated namespaces in project3")
+
+		})
+
+		steplog = "Deploy DataService on the above created projects"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+
+			//Deployment expected to fail
+			WorkflowDataService.Namespace.TargetCluster.Project = &project3
+			for _, ds := range NewPdsParams.DataServiceToTest {
+				_, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, namespaces[0])
+				if strings.Contains(err.Error(), "403 Forbidden") {
+					log.Errorf(err.Error(), "Error while deploying ds")
+				}
+				break // running for only one dataService
+			}
+
+			//Deployment expected to fail
+			WorkflowDataService.Namespace.TargetCluster.Project = &project2
+			for _, ds := range NewPdsParams.DataServiceToTest {
+				_, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, namespaces[0])
+				if strings.Contains(err.Error(), "403 Forbidden") {
+					log.Errorf(err.Error(), "Error while deploying ds")
+				}
+				break // running for only one dataService
+			}
+
+			//working deployment with all associations
+			WorkflowDataService.Namespace.TargetCluster.Project = &WorkflowProject
+			for _, ds := range NewPdsParams.DataServiceToTest {
+				deployment, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, namespaces[0])
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+				break // running for only one dataService
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
 	})
 })

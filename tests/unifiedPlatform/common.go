@@ -3,12 +3,13 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node"
 	"io/ioutil"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/node"
 
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
@@ -40,6 +41,13 @@ const (
 	defaultParams          = "../drivers/pds/parameters/pds_default_parameters.json"
 	pdsParamsConfigmap     = "pds-params"
 	configmapNamespace     = "default"
+)
+
+const (
+	defaultWaitRebootRetry       = 10 * time.Second
+	defaultCommandRetry          = 5 * time.Second
+	defaultCommandTimeout        = 1 * time.Minute
+	defaultTestConnectionTimeout = 15 * time.Minute
 )
 
 var (
@@ -163,6 +171,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		log.Infof("Creating data service struct")
 
 		WorkflowDataService.Namespace = &WorkflowNamespace
+		WorkflowDataService.SkipValidatation = make(map[string]bool)
 		WorkflowDataService.DataServiceDeployment = make(map[string]*dslibs.DataServiceDetails)
 		WorkflowDataService.Dash = Inst().Dash
 		WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
@@ -239,7 +248,7 @@ func PurgePDS() []error {
 	}
 
 	log.InfoD("Purging all dataservice objects")
-	err = WorkflowDataService.Purge()
+	err = WorkflowDataService.Purge(false)
 	if err != nil {
 		log.Errorf("error while purging dataservices - [%s]", err.Error())
 		allErrors = append(allErrors, err)
@@ -297,12 +306,40 @@ func StopPxServiceOnNodes(nodeList []*corev1.Node) error {
 		for _, workerNode := range workerNodes {
 			if workerNode.Name == nodeToStop.Name {
 				err := Inst().V.StopDriver([]node.Node{workerNode}, false, nil)
-				return err
+				if err != nil {
+					return err
+				}
 				break
 			}
 		}
 	}
+	return nil
+}
 
+// RebootNodes will reboot the nodes in the given list
+func RebootNodes(nodeList []node.Node) error {
+	for _, n := range nodeList {
+		log.InfoD("reboot node: %s", n.Name)
+		err := Inst().N.RebootNode(n, node.RebootNodeOpts{
+			Force: true,
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         defaultCommandTimeout,
+				TimeBeforeRetry: defaultCommandRetry,
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		log.Infof("wait for node: %s to be back up", n.Name)
+		err = Inst().N.TestConnection(n, node.ConnectionOpts{
+			Timeout:         defaultTestConnectionTimeout,
+			TimeBeforeRetry: defaultWaitRebootRetry,
+		})
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -315,10 +352,14 @@ func StartPxServiceOnNodes(nodeList []*corev1.Node) error {
 		for _, workerNode := range workerNodes {
 			if workerNode.Name == nodeToStart.Name {
 				err := Inst().V.StartDriver(workerNode)
-				return err
+				if err != nil {
+					return err
+				}
 
 				err = Inst().V.WaitDriverUpOnNode(workerNode, Inst().DriverStartTimeout)
-				return err
+				if err != nil {
+					return err
+				}
 				break
 			}
 		}

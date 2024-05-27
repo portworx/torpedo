@@ -83,7 +83,7 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 	}
 
 	restore.Restores[name] = createRestore.Create
-	deployment, _, err := pdslibs.GetDeployment(createRestore.Create.Config.DestinationReferences.DeploymentId)
+	deployment, err := pdslibs.GetDeployment(createRestore.Create.Config.DestinationReferences.DeploymentId)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func (restore WorkflowPDSRestore) GetRestore(id string) (*automationModels.PDSRe
 // Purge Deletes all created restores
 func (restore WorkflowPDSRestore) Purge() error {
 
-	err := restore.RestoredDeployments.Purge()
+	err := restore.RestoredDeployments.Purge(false)
 	if err != nil {
 		return err
 	}
