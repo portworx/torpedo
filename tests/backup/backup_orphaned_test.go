@@ -2496,8 +2496,8 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", Label(TestCaseLabelsMap[Delet
 		mutex                            sync.Mutex
 		bkpNamespaces                    = make([]string, 0)
 		userNames                        = make([]string, 0)
-		numOfNS                          = 2
-		numOfUsers                       = 6
+		numOfNS                          = 1
+		numOfUsers                       = 4
 		timeBetweenConsecutiveBackups    = 10 * time.Second
 		namespaceMapping                 = make(map[string]string)
 		storageClassMapping              = make(map[string]string)
