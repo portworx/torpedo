@@ -4702,20 +4702,14 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 			"Rebooting Nodes while FADA Volume Creation in Progress using Zones",
 			nil, 0)
 	})
+	var contexts []*scheduler.Context
 	itLog := "RebootingNodesWhileFADAvolumeCreationInProgressUsingZones"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		var contexts []*scheduler.Context
+
 		var wg sync.WaitGroup
 		stNodes := node.GetStorageNodes()
 		selectedNodesForTopology := stNodes[:len(stNodes)/2]
-		rand.Seed(time.Now().Unix())
-		selectedNodesForReboot := make([]node.Node, 2)
-		for i := range selectedNodesForReboot {
-			index := rand.Intn(len(stNodes))
-			selectedNodesForReboot[i] = stNodes[index]
-			stNodes = append(stNodes[:index], stNodes[index+1:]...)
-		}
 		applist := Inst().AppList
 		defer func() {
 			Inst().AppList = applist
@@ -4746,17 +4740,23 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 			go func() {
 				defer wg.Done()
 				defer GinkgoRecover()
-				appNamespace := fmt.Sprintf("rebootnodevolumecreationzones-%s", Inst().InstanceID)
-				for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, "rebootnodevolumecreationzone")...)
-				}
+				taskName := "rebootnodewhilefadacreationusingzones"
+				Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Provisioner,
+					PvcSize:            6 * units.GiB,
+					Namespace:          taskName,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
 			}()
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				defer GinkgoRecover()
 				log.InfoD("Rebooting the non-labelled nodes one by one while FADA volume creation is in progress in labelled nodes")
-				for _, selectedNode := range selectedNodesForReboot {
+				for _, selectedNode := range selectedNodesForTopology {
 					log.InfoD("Stopping node %s", selectedNode.Name)
 					err := Inst().N.RebootNode(selectedNode,
 						node.RebootNodeOpts{
@@ -4770,7 +4770,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 				}
 			}()
 			wg.Wait()
-			for _, selectedNode := range selectedNodesForReboot {
+			for _, selectedNode := range selectedNodesForTopology {
 				log.InfoD("wait for node: %s to be back up", selectedNode.Name)
 				nodeReadyStatus := func() (interface{}, bool, error) {
 					err := Inst().S.IsNodeReady(selectedNode)
@@ -4783,18 +4783,63 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
 				err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
-				log.FailOnError(err, fmt.Sprintf("Failed to reboot node %s", selectedNode.Name))
+				log.FailOnError(err, fmt.Sprintf("Failed to reboot node [%s]", selectedNode.Name))
 			}
 		})
-		stepLog = "Validate the application deployed and destroy the application once validation is completed successfully"
+		nodeExists := func(nodes []node.Node, node string) bool {
+			for _, n := range nodes {
+				if n.Name == node {
+					return true
+				}
+			}
+			return false
+		}
+
+		stepLog = "Validate the applications are up and running"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			appsValidateAndDestroy(contexts)
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Validate the application deployed are in the labelled nodes only"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				var k8sCore = core.Instance()
+				pods, err := k8sCore.GetPods(ctx.App.NameSpace, nil)
+				for _, pod := range pods.Items {
+					node := pod.Spec.NodeName
+					log.FailOnError(err, "unable to find the node from the pod")
+					if !nodeExists(selectedNodesForTopology, node) {
+						log.FailOnError(fmt.Errorf("Pod [%v] is running on node [%v] which is not labelled", pod.Name, node), "is Pod running on labelled node?")
+					}
+					log.InfoD("Pod [%v] is running on node [%v] which is labelled", pod.Name, node)
+				}
+			}
+		})
+		stepLog = "check volumes are also in same labelled nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				volumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get list of all volumes")
+				for _, volume := range volumes {
+					log.InfoD("checking volume [%v] is running on labelled node or not", volume.ID)
+					node, err := Inst().V.GetNodeForVolume(volume, cmdTimeout, cmdRetry)
+					log.InfoD("Node of the volume [%v] is [%v]", volume.Name, node.Name)
+					log.FailOnError(err, "Failed to get node of the volume")
+					if !nodeExists(selectedNodesForTopology, node.Name) {
+						log.FailOnError(fmt.Errorf("Volume [%v] is running on node [%v] which is not labelled", volume.Name, node), "is volume running on labelled node?")
+					}
+					log.InfoD("Volume [%v] is running on node [%v] which is labelled", volume.Name, node)
+				}
+			}
 
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		DestroyApps(contexts, nil)
 		AfterEachTest(contexts)
 	})
 })
