@@ -174,6 +174,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowDataService.SkipValidatation = make(map[string]bool)
 		WorkflowDataService.DataServiceDeployment = make(map[string]*dslibs.DataServiceDetails)
 		WorkflowDataService.Dash = Inst().Dash
+		WorkflowDataService.UpdateDeploymentTemplates = false
 		WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 		WorkflowDataService.PDSParams = NewPdsParams
 

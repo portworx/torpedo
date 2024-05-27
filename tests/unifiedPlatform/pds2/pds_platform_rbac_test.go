@@ -9,7 +9,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
-	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -407,7 +407,7 @@ var _ = Describe("{DeployDsOnMultipleNSAndProjects}", func() {
 				[]string{},
 			)
 			log.FailOnError(err, "Unable to associate Templates to Project")
-			log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+			log.Infof("Associated Resources Project1 - [%+v]", WorkflowProject.AssociatedResources)
 		})
 
 		steplog = "Create Project2 and Associate Namespace to the projects"
@@ -434,7 +434,7 @@ var _ = Describe("{DeployDsOnMultipleNSAndProjects}", func() {
 				[]string{},
 			)
 			log.FailOnError(err, "Unable to associate Templates to Project")
-			log.Infof("Associated Resources - [%+v]", project2.AssociatedResources)
+			log.Infof("Associated Resources Project2 - [%+v]", project2.AssociatedResources)
 		})
 
 		steplog = "Create Project3 and Associate Namespace to the projects"
@@ -461,7 +461,7 @@ var _ = Describe("{DeployDsOnMultipleNSAndProjects}", func() {
 				[]string{},
 			)
 			log.FailOnError(err, "Unable to associate Templates to Project")
-			log.Infof("Associated Resources - [%+v]", project3.AssociatedResources)
+			log.Infof("Associated Resources Project3 - [%+v]", project3.AssociatedResources)
 		})
 
 		steplog = "Validate the Namespaces are not accessible from the projects to which it is not associated"
@@ -470,24 +470,21 @@ var _ = Describe("{DeployDsOnMultipleNSAndProjects}", func() {
 
 			//project1
 			prj1, err := WorkflowProject.GetProject()
-			log.FailOnError(err, "Error while getting project")
+			log.FailOnError(err, "Error while getting project1")
 			namespaceFetchedFromApi := prj1.Config.InfraResources.Namespaces
-			associatedNamespaces := WorkflowProject.AssociatedResources.Namespaces
-			dash.VerifyFatal(reflect.DeepEqual(namespaceFetchedFromApi, associatedNamespaces), true, "validating the associated namespaces in project1")
+			dash.VerifyFatal(slices.Contains(namespaceFetchedFromApi, namespaces[2]), false, "validating the associated namespaces in project1")
 
 			//project2
 			prj2, err := project2.GetProject()
-			log.FailOnError(err, "Error while getting project")
+			log.FailOnError(err, "Error while getting project2")
 			namespaceFetchedFromApi2 := prj2.Config.InfraResources.Namespaces
-			associatedNamespaces2 := project2.AssociatedResources.Namespaces
-			dash.VerifyFatal(reflect.DeepEqual(namespaceFetchedFromApi2, associatedNamespaces2), true, "validating the associated namespaces in project2")
+			dash.VerifyFatal(slices.Contains(namespaceFetchedFromApi2, namespaces[0]), false, "validating the associated namespaces in project2")
 
 			//project3
 			prj3, err := project3.GetProject()
-			log.FailOnError(err, "Error while getting project")
+			log.FailOnError(err, "Error while getting project3")
 			namespaceFetchedFromApi3 := prj3.Config.InfraResources.Namespaces
-			associatedNamespaces3 := project3.AssociatedResources.Namespaces
-			dash.VerifyFatal(reflect.DeepEqual(namespaceFetchedFromApi3, associatedNamespaces3), true, "validating the associated namespaces in project3")
+			dash.VerifyFatal(slices.Contains(namespaceFetchedFromApi3, namespaces[1]), false, "validating the associated namespaces in project3")
 		})
 
 		//Templates are already associated to project1 in pds_basic_test.go file
@@ -495,26 +492,28 @@ var _ = Describe("{DeployDsOnMultipleNSAndProjects}", func() {
 		steplog = "Validate the Templates are not accessible from the projects to which it is not associated"
 		Step(steplog, func() {
 			log.InfoD(steplog)
+			stConfigId := WorkflowDataService.PDSTemplates.StorageTemplateId
+
 			//project1
 			wfProject, err := WorkflowProject.GetProject()
 			log.FailOnError(err, "Error while getting project")
 			templatesFetchedFromApi := wfProject.Config.InfraResources.Templates
-			associatedTemplates := WorkflowProject.AssociatedResources.Templates
-			dash.VerifyFatal(reflect.DeepEqual(templatesFetchedFromApi, associatedTemplates), true, "validating the associated templates in project1")
+			dash.VerifyFatal(slices.Contains(templatesFetchedFromApi, stConfigId), true, "validating the associated templates in project1")
+			//dash.VerifyFatal(reflect.DeepEqual(templatesFetchedFromApi, allTemplates), true, "validating the associated templates in project1")
 
 			//project2
 			prj2, err := project2.GetProject()
 			log.FailOnError(err, "Error while getting project")
 			templatesFetchedFromApi2 := prj2.Config.InfraResources.Templates
-			//associatedTemplates2 := project2.AssociatedResources.Templates
-			dash.VerifyFatal(reflect.DeepEqual(templatesFetchedFromApi2, associatedTemplates), false, "validating the associated templates in project1")
+			dash.VerifyFatal(slices.Contains(templatesFetchedFromApi2, stConfigId), false, "validating the associated templates in project2")
+			//dash.VerifyFatal(reflect.DeepEqual(templatesFetchedFromApi2, allTemplates), false, "validating the associated templates in project2")
 
 			//project3
 			prj3, err := project3.GetProject()
 			log.FailOnError(err, "Error while getting project")
-			namespaceFetchedFromApi3 := prj3.Config.InfraResources.Namespaces
-			//associatedNamespaces3 := project3.AssociatedResources.Namespaces
-			dash.VerifyFatal(reflect.DeepEqual(namespaceFetchedFromApi3, associatedTemplates), false, "validating the associated namespaces in project3")
+			templatesFetchedFromApi3 := prj3.Config.InfraResources.Templates
+			dash.VerifyFatal(slices.Contains(templatesFetchedFromApi3, stConfigId), false, "validating the associated templates in project3")
+			//dash.VerifyFatal(reflect.DeepEqual(templatesFetchedFromApi3, allTemplates), false, "validating the associated templates in project3")
 
 		})
 

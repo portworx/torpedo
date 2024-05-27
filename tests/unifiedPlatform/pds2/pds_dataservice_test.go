@@ -148,8 +148,6 @@ var _ = Describe("{ScaleUpCpuMemLimitsandStorageOfDS}", func() {
 
 	JustAfterEach(func() {
 		defer EndPDSTorpedoTest()
-		WorkflowDataService.UpdateDeploymentTemplates = false
-		WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 	})
 })
 

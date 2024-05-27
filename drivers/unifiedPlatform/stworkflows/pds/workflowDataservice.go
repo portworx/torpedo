@@ -193,6 +193,8 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deploymentId 
 		err          error
 	)
 
+	time.Sleep(30 * time.Second)
+
 	deployment, podName, err := dslibs.GetDeploymentAndPodDetails(deploymentId)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
