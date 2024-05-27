@@ -4260,16 +4260,16 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 		var wg sync.WaitGroup
 		stNodes := node.GetStorageNodes()
 		selectedNodesForTopology := stNodes[:len(stNodes)/2]
-		//applist := Inst().AppList
-		//defer func() {
-		//	Inst().AppList = applist
-		//	for _, stNode := range selectedNodesForTopology {
-		//		err := Inst().S.RemoveLabelOnNode(stNode, k8s.TopologyZoneK8sNodeLabel)
-		//		log.FailOnError(err, fmt.Sprintf("Failed to remove label on node %s", stNode.Name))
-		//		err = Inst().S.RemoveLabelOnNode(stNode, k8s.TopologyRegionK8sNodeLabel)
-		//		log.FailOnError(err, fmt.Sprintf("Failed to remove label on node %s", stNode.Name))
-		//	}
-		//}()
+		applist := Inst().AppList
+		defer func() {
+			Inst().AppList = applist
+			for _, stNode := range selectedNodesForTopology {
+				err := Inst().S.RemoveLabelOnNode(stNode, k8s.TopologyZoneK8sNodeLabel)
+				log.FailOnError(err, fmt.Sprintf("Failed to remove label on node %s", stNode.Name))
+				err = Inst().S.RemoveLabelOnNode(stNode, k8s.TopologyRegionK8sNodeLabel)
+				log.FailOnError(err, fmt.Sprintf("Failed to remove label on node %s", stNode.Name))
+			}
+		}()
 		Inst().AppList = []string{"fio-zones"}
 		toplogyZonelabel := "zone-0"
 		toplogyRegionLabel := "region-0"
