@@ -4757,6 +4757,33 @@ func (k *K8s) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace 
 	return snapshotList, nil
 }
 
+func (k *K8s) isCsiSnapshotExists(ctx *scheduler.Context, snapshotName string, namespace string) (bool, error) {
+	snaplist, err := k.GetSnapshotsInNameSpace(ctx, namespace)
+	log.FailOnError(err, "Failed to get Snapshots in namespace [%v]", namespace)
+	if len(snaplist.Items) == 0 {
+		log.InfoD("No Snapshots found ")
+		return false, nil
+	}
+	for _, snap := range snaplist.Items {
+		if snap.Metadata.Name == snapshotName {
+			log.InfoD("Snapshot [%v] exists in namespace [%v]", snapshotName, namespace)
+			return true, nil
+		}
+	}
+	return false, nil
+
+}
+func (k *K8s) deleteCsiSnapshotsFromNamespace(ctx *scheduler.Context, snapshotName string, namespace string) error {
+	snaplist, err := k.GetSnapshotsInNameSpace(ctx, namespace)
+	log.FailOnError(err, "Failed to get Snapshots in namespace [%v]", namespace)
+	for _, snap := range snaplist.Items {
+		err = k.DeleteCsiSnapshot(ctx, snap.Metadata.Name, namespace)
+		log.FailOnError(err, "Failed to delete snapshot [%v] in namespace [%v]", snap.Metadata.Name, namespace)
+	}
+	return nil
+
+}
+
 // GetNodesForApp get the node for the app
 func (k *K8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	t := func() (interface{}, bool, error) {
