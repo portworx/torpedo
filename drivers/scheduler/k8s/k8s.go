@@ -4749,7 +4749,8 @@ func (k *K8s) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace 
 	time.Sleep(10 * time.Second)
 	snapshotList, err := k8sExternalStorage.ListSnapshots(snapshotNameSpace)
 	for _, snap := range snapshotList.Items {
-		log.Infof("Snapshot Name: %v", snap.Metadata.Name)
+		log.InfoD("snapshot name debugging:", snap.Metadata.Name)
+		log.InfoD("snapshot namespace debugging:", snap.Metadata.Namespace)
 	}
 
 	if err != nil {
