@@ -119,8 +119,20 @@ var _ = Describe("{ScaleUpCpuMemLimitsandStorageOfDS}", func() {
 			resConfigIdUpdated, err := WorkflowPDSTemplate.CreateResourceTemplateWithCustomValue(NewPdsParams)
 			log.FailOnError(err, "Unable to create Custom Templates for PDS")
 			log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdated)
+			log.Infof("Associate newly created template to the project")
+			err = WorkflowProject.Associate(
+				[]string{},
+				[]string{},
+				[]string{},
+				[]string{},
+				[]string{resConfigIdUpdated},
+				[]string{},
+			)
+			log.FailOnError(err, "Unable to associate Templates to Project")
+			log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
 
 			WorkflowDataService.UpdateDeploymentTemplates = true
+			WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 			_, err = WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
 			log.FailOnError(err, "Error while updating ds")
 
@@ -134,6 +146,8 @@ var _ = Describe("{ScaleUpCpuMemLimitsandStorageOfDS}", func() {
 
 	JustAfterEach(func() {
 		defer EndPDSTorpedoTest()
+		WorkflowDataService.UpdateDeploymentTemplates = false
+		WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 	})
 })
 
