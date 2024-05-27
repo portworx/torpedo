@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -121,10 +122,10 @@ func (c *Client) login() error {
 }
 
 func (c *Client) Do(req *http.Request, v interface{}, reestablishSession bool) (*http.Response, error) {
-	fmt.Printf("\nRequest [%v]\n", req)
+	log.Infof("\nRequest [%v]\n", req)
 	resp, err := c.client.Do(req)
 	if err != nil {
-		fmt.Println("Do request failed")
+		log.Infof("Do request failed")
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -138,7 +139,6 @@ func (c *Client) Do(req *http.Request, v interface{}, reestablishSession bool) (
 
 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
 	bodyString := string(bodyBytes)
-	//fmt.Printf("[%v]", bodyString)
 	err = json.Unmarshal([]byte(fmt.Sprintf("[%v]", bodyString)), v)
 	if err != nil {
 		return nil, err
@@ -165,13 +165,13 @@ func (c *Client) NewRequest(method string, path string, params map[string]string
 	if params != nil {
 		ps := url.Values{}
 		for k, v := range params {
-			log.Printf("[DEBUG] key: %s, value: %s \n", k, v)
+			log.Infof("[DEBUG] key: %s, value: %s \n", k, v)
 			ps.Set(k, v)
 		}
 		baseURL.RawQuery = ps.Encode()
 	}
 
-	fmt.Printf("Base URL [%v]", baseURL.String())
+	log.Infof("Base URL [%v]", baseURL.String())
 
 	req, err := http.NewRequest(method, baseURL.String(), bodyReader)
 	if err != nil {
@@ -188,7 +188,7 @@ func (c *Client) NewRequest(method string, path string, params map[string]string
 		}
 	}
 
-	fmt.Printf("Adding auth token [%v]", c.AuthToken)
+	log.Infof("Adding auth token [%v]", c.AuthToken)
 	req.Header.Add("x-auth-token", fmt.Sprintf("%v", c.AuthToken))
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Accept", "application/json")
@@ -214,7 +214,7 @@ func (c *Client) getAuthToken() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	fmt.Printf("Auth URL [%v]", authURL.String())
+	log.Infof("Auth URL [%v]", authURL.String())
 
 	bodyReader := bytes.NewReader([]byte{})
 	request, err := http.NewRequest("POST", authURL.String(), bodyReader)
@@ -222,7 +222,7 @@ func (c *Client) getAuthToken() (string, error) {
 		return "", err
 	}
 
-	fmt.Printf("API Token [%v]", c.ApiToken)
+	log.Infof("API Token [%v]", c.ApiToken)
 
 	request.Header.Add("Content-Type", "application/json")
 	request.Header.Add("api-token", c.ApiToken)
@@ -252,7 +252,7 @@ func (c *Client) getAuthToken() (string, error) {
 	}
 
 	authToken := httpResponse.Header.Get("x-auth-token")
-	fmt.Printf("Login Success!")
+	log.Infof("Login Success!")
 	return authToken, nil
 
 }
@@ -266,7 +266,7 @@ func (c *Client) formatPath(path string, ignoreRestVersion bool) string {
 	} else {
 		formatPath = fmt.Sprintf("https://%s/api/%s/%s", c.MgmtIp, c.RestVersion, path)
 	}
-	fmt.Println(formatPath)
+	log.Infof(formatPath)
 	return formatPath
 }
 
@@ -338,7 +338,7 @@ func getRestVersion(restVersion string, target string) (string, error) {
 		}
 		restVersion = r
 	}
-	fmt.Printf("Selected rest Version is [%v]", restVersion)
+	log.Infof("Selected rest Version is [%v]", restVersion)
 	return restVersion, nil
 }
 
@@ -346,7 +346,7 @@ func getRestVersion(restVersion string, target string) (string, error) {
 func checkRestVersion(version string, target string) error {
 	// Construct the URL for checking supported API versions
 	checkURL := fmt.Sprintf("https://%s/api/api_version", target)
-	fmt.Println(checkURL)
+	log.Infof(fmt.Sprintf("URL is [%v]", checkURL))
 	// Retrieve supported API versions from the FlashArray
 	supported := &supported{}
 	err := getJSON(checkURL, supported)
