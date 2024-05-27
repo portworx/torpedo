@@ -4471,7 +4471,6 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 				sc, err := k8sStorage.CreateStorageClass(&scObj)
 				return sc, err
 			}
-
 			blkScName := PureBlockStorageClass
 			blockSc, err := createSC(blkScName)
 			pureStorageClassMap[k8s.PureBlock] = blockSc
@@ -4487,6 +4486,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for _, ctx := range contexts {
+				log.InfoD("Deleting the snapshots for %s app in namespace %s", ctx.App.Key, ctx.App.NameSpace)
 				err := Inst().S.DeleteCsiSnapshotsFromNamespace(ctx, ctx.App.NameSpace)
 				log.FailOnError(err, "Failed to delete the snapshots")
 				log.InfoD("Deleted the snapshots successfully")

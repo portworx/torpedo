@@ -4748,6 +4748,9 @@ func (k *K8s) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace 
 
 	time.Sleep(10 * time.Second)
 	snapshotList, err := k8sExternalStorage.ListSnapshots(snapshotNameSpace)
+	for _, snap := range snapshotList.Items {
+		log.Infof("Snapshot Name: %v", snap.Metadata.Name)
+	}
 
 	if err != nil {
 		log.Infof("Snapshotsnot for app [%v] not found in namespace: %v", ctx.App.Key, snapshotNameSpace)
