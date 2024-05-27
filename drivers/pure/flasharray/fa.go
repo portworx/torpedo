@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
