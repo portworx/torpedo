@@ -342,19 +342,19 @@ func getRestVersion(restVersion string, target string) (string, error) {
 	return restVersion, nil
 }
 
-// checkRestVersion checks if the specified REST API version is supported by the flashblade and the library.
+// checkRestVersion checks if the specified REST API version is supported by the FlashArray and the library.
 func checkRestVersion(version string, target string) error {
 	// Construct the URL for checking supported API versions
 	checkURL := fmt.Sprintf("https://%s/api/api_version", target)
 	fmt.Println(checkURL)
-	// Retrieve supported API versions from the flashblade
+	// Retrieve supported API versions from the FlashArray
 	supported := &supported{}
 	err := getJSON(checkURL, supported)
 	if err != nil {
 		return err
 	}
 
-	// Check if the specified version is supported by the flashblade
+	// Check if the specified version is supported by the FlashArray
 	arraySupported := false
 	for _, v := range supported.Versions {
 		if version == v {
@@ -381,12 +381,12 @@ func checkRestVersion(version string, target string) error {
 	return nil
 }
 
-// chooseRestVersion negotiates the highest REST API version supported by the library and the flashblade.
+// chooseRestVersion negotiates the highest REST API version supported by the library and the FlashArray.
 func chooseRestVersion(target string) (string, error) {
 	// Construct the URL for checking supported API versions
 	checkURL := fmt.Sprintf("https://%s/api/api_version", target)
 
-	// Retrieve supported API versions from the flashblade
+	// Retrieve supported API versions from the FlashArray
 	supported := &supported{}
 	err := getJSON(checkURL, supported)
 	if err != nil {
