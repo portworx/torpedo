@@ -134,7 +134,7 @@ func (d *dcos) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotName
 }
 
 // GetSnapshotsInNameSpace get the snapshots list for the namespace
-func (d *dcos) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error) {
+func (d *dcos) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*volsnapv1.VolumeSnapshotList, error) {
 
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",

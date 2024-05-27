@@ -225,7 +225,7 @@ type Driver interface {
 	DeleteSnapShot(ctx *Context, snapshotName, snapshotNameSpace string) error
 
 	// GetSnapshotsInNameSpace get the snapshots list for the namespace
-	GetSnapshotsInNameSpace(ctx *Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error)
+	GetSnapshotsInNameSpace(ctx *Context, snapshotNameSpace string) (*volsnapv1.VolumeSnapshotList, error)
 
 	// DeleteVolumes will delete all storage volumes for the given context
 	DeleteVolumes(*Context, *VolumeOptions) ([]*volume.Volume, error)

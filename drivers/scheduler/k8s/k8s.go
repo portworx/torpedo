@@ -4744,13 +4744,13 @@ func (k *K8s) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName, snapshotNa
 }
 
 // GetSnapshotsInNameSpace get the snapshots list for the namespace
-func (k *K8s) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error) {
+func (k *K8s) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*volsnapv1.VolumeSnapshotList, error) {
 
 	time.Sleep(10 * time.Second)
-	snapshotList, err := k8sExternalStorage.ListSnapshots(snapshotNameSpace)
+	snapshotList, err := k8sExternalsnap.ListSnapshots(snapshotNameSpace)
 	for _, snap := range snapshotList.Items {
-		log.InfoD("snapshot name debugging:", snap.Metadata.Name)
-		log.InfoD("snapshot namespace debugging:", snap.Metadata.Namespace)
+		log.InfoD("snapshot name debugging:", snap.ObjectMeta.Name)
+		log.InfoD("snapshot namespace debugging:", snap.ObjectMeta.Namespace)
 	}
 
 	if err != nil {
@@ -7826,7 +7826,7 @@ func (k *K8s) DeleteCsiSnapsForVolumes(ctx *scheduler.Context, retainCount int) 
 
 				}
 				log.Infof("Current [%v] snapshot exist for [%v] pvc", len(snaplistForDelete), pvc.Name)
-				if len(snaplistForDelete) > retainCount {
+				for len(snaplistForDelete) > retainCount {
 					resVolIndex := random.Intn(len(snaplistForDelete))
 					log.Infof("Deleting snapshot: [%v] for pvc: [%v]", snaplistForDelete[resVolIndex].Name, pvc.Name)
 					err = k.DeleteCsiSnapshot(ctx, snaplistForDelete[resVolIndex].Name, obj.Namespace)
@@ -7891,7 +7891,7 @@ func (k *K8s) IsCsiSnapshotExists(ctx *scheduler.Context, snapshotName string, n
 		return false, nil
 	}
 	for _, snap := range snaplist.Items {
-		if snap.Metadata.Name == snapshotName {
+		if snap.ObjectMeta.Name == snapshotName {
 			log.InfoD("Snapshot [%v] exists in namespace [%v]", snapshotName, namespace)
 			return true, nil
 		}
@@ -7903,8 +7903,8 @@ func (k *K8s) DeleteCsiSnapshotsFromNamespace(ctx *scheduler.Context, namespace 
 	snaplist, err := k.GetSnapshotsInNameSpace(ctx, namespace)
 	log.FailOnError(err, "Failed to get Snapshots in namespace [%v]", namespace)
 	for _, snap := range snaplist.Items {
-		err = k.DeleteCsiSnapshot(ctx, snap.Metadata.Name, namespace)
-		log.FailOnError(err, "Failed to delete snapshot [%v] in namespace [%v]", snap.Metadata.Name, namespace)
+		err = k.DeleteCsiSnapshot(ctx, snap.ObjectMeta.Name, namespace)
+		log.FailOnError(err, "Failed to delete snapshot [%v] in namespace [%v]", snap.ObjectMeta.Name, namespace)
 	}
 	return nil
 
