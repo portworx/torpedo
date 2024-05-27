@@ -1,4 +1,4 @@
-package flashblade
+package flasharray
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ import (
 )
 
 // supportedRestVersions is used to negotiate the API version to use
-var supportedRestVersions = [...]string{"2.0", "2.1", "2.2", "2.3", "2.4"}
+var supportedRestVersions = [...]string{"2.26"}
 
 type Client struct {
 	MgmtIp      string
@@ -29,13 +29,8 @@ type Client struct {
 	Kwargs      map[string]string
 
 	// Client object defined here
-	client *http.Client
-
-	// All services supported updated here
-	Blades           *BladesService
-	Alerts           *AlertService
-	FileSystem       *FileSystemService
-	NetworkInterface *NetworkInterfaceService
+	client  *http.Client
+	Volumes *VolumeServices
 }
 
 // Type supported is used for retrieving the support API versions from the Flash Array
@@ -296,10 +291,7 @@ func getJSON(uri string, target interface{}) error {
 func (c *Client) InitializeServices() *Client {
 
 	// Initialize all services created here
-	c.Blades = &BladesService{client: c}
-	c.Alerts = &AlertService{client: c}
-	c.FileSystem = &FileSystemService{client: c}
-	c.NetworkInterface = &NetworkInterfaceService{client: c}
+	c.Volumes = &VolumeServices{client: c}
 	return c
 }
 
