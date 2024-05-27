@@ -4476,6 +4476,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 			blockSc, err := createSC(blkScName)
 			pureStorageClassMap[k8s.PureBlock] = blockSc
 			for _, ctx := range contexts {
+				log.InfoD("Restore and validate snapshot for %s app", ctx.App.Key)
 				_, err = Inst().S.RestoreCsiSnapAndValidate(ctx, pureStorageClassMap)
 				if err != nil {
 					log.Errorf("Restoring snapshot failed with error: [%v]", err)
