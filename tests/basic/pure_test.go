@@ -4706,7 +4706,6 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 	itLog := "RebootingNodesWhileFADAvolumeCreationInProgressUsingZones"
 	It(itLog, func() {
 		log.InfoD(itLog)
-
 		var wg sync.WaitGroup
 		stNodes := node.GetStorageNodes()
 		selectedNodesForTopology := stNodes[:len(stNodes)/2]
@@ -4755,7 +4754,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 			go func() {
 				defer wg.Done()
 				defer GinkgoRecover()
-				log.InfoD("Rebooting the non-labelled nodes one by one while FADA volume creation is in progress in labelled nodes")
+				log.InfoD("Rebooting the labelled nodes one by one while FADA volume creation is in progress in labelled nodes")
 				for _, selectedNode := range selectedNodesForTopology {
 					log.InfoD("Stopping node %s", selectedNode.Name)
 					err := Inst().N.RebootNode(selectedNode,
