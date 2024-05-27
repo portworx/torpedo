@@ -4443,6 +4443,47 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 				log.FailOnError(err, "Failed to validate the snapshots")
 			}
 		})
+		stepLog = "Create Restore for the snapshots and validate "
+		Step(stepLog, func() {
+			var blockSc *storageApi.StorageClass
+			pureStorageClassMap := make(map[string]*storageApi.StorageClass)
+			createSC := func(scName string) (*storageApi.StorageClass, error) {
+				params := make(map[string]string)
+				params["repl"] = "1"
+				params["priority_io"] = "high"
+				params["io_profile"] = "auto"
+				params["backend"] = "pure_block"
+
+				v1obj := metav1.ObjectMeta{
+					Name: scName,
+				}
+				reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+				bindMode := storageApi.VolumeBindingImmediate
+				scObj := storageApi.StorageClass{
+					ObjectMeta:        v1obj,
+					Provisioner:       k8s.CsiProvisioner,
+					Parameters:        params,
+					ReclaimPolicy:     &reclaimPolicyDelete,
+					VolumeBindingMode: &bindMode,
+				}
+
+				k8sStorage := storage.Instance()
+				sc, err := k8sStorage.CreateStorageClass(&scObj)
+				return sc, err
+			}
+
+			blkScName := PureBlockStorageClass
+			blockSc, err := createSC(blkScName)
+			pureStorageClassMap[k8s.PureBlock] = blockSc
+			for _, ctx := range contexts {
+				_, err = Inst().S.RestoreCsiSnapAndValidate(ctx, pureStorageClassMap)
+				if err != nil {
+					log.Errorf("Restoring snapshot failed with error: [%v]", err)
+
+				}
+			}
+
+		})
 		stepLog = "Delete the snapshots created for all apps in the context"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
