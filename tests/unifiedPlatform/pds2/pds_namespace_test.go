@@ -85,6 +85,20 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 			dash.VerifyFatal(len(allError), 0, "Verifying namespaces creation")
 		})
 
+		Step(fmt.Sprintf("Associating [%s] to [%s] for deployment", evenNamespaces[0], WorkflowProject.ProjectName), func() {
+			log.InfoD("Associating [%s] to [%s] for deployment", evenNamespaces[0], WorkflowProject.ProjectName)
+			err := WorkflowProject.Associate(
+				[]string{},
+				[]string{WorkflowNamespace.Namespaces[evenNamespaces[0]]},
+				[]string{},
+				[]string{},
+				[]string{},
+				[]string{},
+			)
+			log.FailOnError(err, "Unable to associate Cluster to Project")
+			log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+		})
+
 		for i := 0; i < TotalToggles; i++ {
 			Step("Removing labels from all odd namespaces", func() {
 				var wg sync.WaitGroup
