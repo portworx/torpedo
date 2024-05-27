@@ -4597,6 +4597,78 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 	})
 })
 
+var _ = Describe("{DeployFADAAndFBDAAppsAndStopPortworx}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeployFADAAndFBDAAppsAndStopPortworx",
+			"Deploy FADA and FBDA apps and parallely stop portworx for 10 mins and after 10 min make it up and check if the pods are running",
+			nil, 0)
+	})
+	itLog := "DeployFADAAndFBDAAppsAndStopPortworx"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var contexts []*scheduler.Context
+		var wg sync.WaitGroup
+		var nodeToReboot []node.Node
+		stNodes := node.GetStorageNodes()
+		nodeToReboot = append(nodeToReboot, stNodes[rand.Intn(len(stNodes))])
+		appList := Inst().AppList
+		defer DestroyApps(contexts, nil)
+		defer func() {
+			Inst().AppList = appList
+		}()
+		stepLog := "Schedule FACD and FADA apps on the cluster"
+		Step(stepLog, func() {
+			Inst().AppList = []string{"fio-fa-cloud-drives", "fio-fa-davol"}
+			appNamespace := fmt.Sprintf("fio-fada-facd-namespace-%s", Inst().InstanceID)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				for i := 0; i < Inst().GlobalScaleFactor; i++ {
+					contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, "fio-fada-facd-namespace")...)
+				}
+			}()
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				log.InfoD("Stopping Portworx Service on Node [%v]", nodeToReboot[0].Name)
+				err := Inst().V.StopDriver(nodeToReboot, false, nil)
+				log.FailOnError(err, "Failed to stop portworx on node [%v]", nodeToReboot[0].Name)
+			}()
+			wg.Wait()
+		})
+		stepLog = "Wait for 10 mins and then start portworx"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			time.Sleep(10 * time.Minute)
+			err := Inst().V.StartDriver(nodeToReboot[0])
+			log.FailOnError(err, "Failed to start portworx on node [%v]", nodeToReboot[0].Name)
+			log.InfoD("wait for node: %s to be back up", nodeToReboot[0].Name)
+			nodeReadyStatus := func() (interface{}, bool, error) {
+				err := Inst().S.IsNodeReady(nodeToReboot[0])
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", nodeToReboot[0].Name))
+			err = Inst().V.WaitDriverUpOnNode(nodeToReboot[0], Inst().DriverStartTimeout)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", nodeToReboot[0].Name))
+			log.FailOnError(err, fmt.Sprintf("Failed to reboot node %s", nodeToReboot[0].Name))
+		})
+		stepLog = "Validate the applications are in running state"
+		Step(stepLog, func() {
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
 var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 	/*
 		https://purestorage.atlassian.net/browse/PWX-37370
