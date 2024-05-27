@@ -32,7 +32,7 @@ func (wkflwResi *WorkflowPDSResiliency) InduceFailureAndExecuteResiliencyScenari
 	version := ds.Version
 	imageId, err := resiLibs.GetDataServiceImageId(ds.Name, image, version)
 
-	_, dsPodName, err := resiLibs.GetDeployment(deploymentId)
+	_, dsPodName, err := resiLibs.GetDeploymentAndPodDetails(deploymentId)
 	if err != nil {
 		return err
 	}

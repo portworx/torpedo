@@ -204,7 +204,7 @@ var _ = Describe("{BackupAndRestoreAcrossSameProjectsWithDifferentUsers}", func(
 	)
 
 	JustBeforeEach(func() {
-		StartPDSTorpedoTest("BackupAndRestoreAccrossDifferentProjectsWithDifferentUsers", "Create backup and restore across different project using only project users", nil, 0)
+		StartPDSTorpedoTest("BackupAndRestoreAcrossSameProjectsWithDifferentUsers", "Create backup and restore on same project with different users", nil, 0)
 		deploymentUser = "deployment-" + RandomString(5)
 		backupUser = "backup-" + RandomString(5)
 		restoreUser = "restore-" + RandomString(5)
@@ -212,7 +212,7 @@ var _ = Describe("{BackupAndRestoreAcrossSameProjectsWithDifferentUsers}", func(
 		workflowServiceAccount.WorkflowProjects = []*platform.WorkflowProject{&WorkflowProject}
 	})
 
-	It("Create backup and restore across different project using only project users", func() {
+	It("Create backup and restore on same project with different users", func() {
 
 		Step("Create project user - Deployment User", func() {
 			_, err := workflowServiceAccount.CreateServiceAccount(
@@ -341,7 +341,7 @@ var _ = Describe("{DeployDsOnMultipleNSAndProjects}", func() {
 		namespacePrefix = "rbac-ns-"
 	})
 
-	It("Enables and Disables pds on a namespace multiple times", func() {
+	It("Create Multiple Namespaces, Projects and Associates Namespaces to projects then validates cross projects rbac", func() {
 		namespaceNameAndId = make(map[string]string)
 		Step(fmt.Sprintf("Creating [%d] namespaces with labels", numberOfNamespacesTobeCreated), func() {
 			var wg sync.WaitGroup

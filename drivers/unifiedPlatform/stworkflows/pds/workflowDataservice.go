@@ -81,18 +81,19 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		}
 	}
 
-	// TODO: This needs to be removed once below bugs are fixed:
-	// https://purestorage.atlassian.net/issues/DS-9591
-	// https://purestorage.atlassian.net/issues/DS-9546
-	// https://purestorage.atlassian.net/issues/DS-9305
-	log.Infof("Sleeping for 1 minutes to make sure deployment gets healthy")
-	time.Sleep(1 * time.Minute)
-
 	if value, ok := wfDataService.SkipValidatation[ValidatePdsWorkloads]; ok {
 		if value == true {
 			log.Infof("Data validation is skipped for this")
 		}
 	} else {
+
+		// TODO: This needs to be removed once below bugs are fixed:
+		// https://purestorage.atlassian.net/issues/DS-9591
+		// https://purestorage.atlassian.net/issues/DS-9546
+		// https://purestorage.atlassian.net/issues/DS-9305
+		log.Infof("Sleeping for 1 minutes to make sure deployment gets healthy")
+		time.Sleep(1 * time.Minute)
+
 		_, err := wfDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
 		if err != nil {
 			return deployment, fmt.Errorf("unable to run workfload on the data service. Error - [%s]", err.Error())
@@ -193,7 +194,7 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deploymentId 
 		err          error
 	)
 
-	deployment, podName, err := dslibs.GetDeployment(deploymentId)
+	deployment, podName, err := dslibs.GetDeploymentAndPodDetails(deploymentId)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
@@ -242,7 +243,7 @@ func (wfDataService *WorkflowDataService) DeleteDeployment(deploymentId string) 
 }
 
 func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId string) error {
-	deployment, _, err := dslibs.GetDeployment(deploymentId)
+	deployment, err := dslibs.GetDeployment(deploymentId)
 	if err != nil {
 		return err
 	}
@@ -359,9 +360,9 @@ func (wfDataService *WorkflowDataService) ReadAndUpdateDataServiceDataHash(deplo
 //}
 
 func (wfDataService *WorkflowDataService) GetDeployment(deploymentId string) (automationModels.V1Deployment, error) {
-	dep, _, err := dslibs.GetDeployment(deploymentId)
+	dep, err := dslibs.GetDeployment(deploymentId)
 	if err != nil {
-		return dep.Get, err
+		return automationModels.V1Deployment{}, err
 	}
 	return dep.Get, nil
 }
@@ -513,7 +514,7 @@ func (wfDataService *WorkflowDataService) Purge(ignoreError bool) error {
 		dsName := *wfDataService.DataServiceDeployment[dsId].Deployment.Meta.Name
 		log.Infof("Deleting [%s] with id [%s] from [%s]-[%s] namespace ", dsName, dsId, dsDetails.Namespace, dsDetails.NamespaceId)
 
-		deploymentDetails, _, err := dslibs.GetDeployment(dsId)
+		deploymentDetails, err := dslibs.GetDeployment(dsId)
 		if err != nil {
 			log.Warnf("Unable to fetch details for [%s]. Error - [%s]", dsName, err.Error())
 			if !ignoreError {

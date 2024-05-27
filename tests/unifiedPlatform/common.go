@@ -169,6 +169,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		log.Infof("Creating data service struct")
 
 		WorkflowDataService.Namespace = &WorkflowNamespace
+		WorkflowDataService.SkipValidatation = make(map[string]bool)
 		WorkflowDataService.DataServiceDeployment = make(map[string]*dslibs.DataServiceDetails)
 		WorkflowDataService.Dash = Inst().Dash
 		WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
@@ -267,11 +268,12 @@ func PurgePDS() []error {
 
 	//log.InfoD("Purging all backup objects")
 	//err = WorkflowPDSBackup.Purge()
+	//// TODO: Uncomment once https://purestorage.atlassian.net/browse/DS-9546 is fixed
+	//// log.FailOnError(err, "some error occurred while purging backup config objects")
 	//if err != nil {
-	//	log.Errorf("Error while deleting backup objects - Error - [%s]", err.Error())
-	//	allErrors = append(allErrors, err)
+	//	log.Infof("Error while deleting backup objects - Error - [%s]", err.Error())
 	//}
-
+	//
 	//log.InfoD("Purging all backup config objects")
 	//err = WorkflowPDSBackupConfig.Purge(true)
 	//// TODO: Uncomment once https://purestorage.atlassian.net/browse/DS-9554 is fixed

@@ -92,7 +92,15 @@ func DeleteDeployment(deploymentId string) error {
 	return v2Components.PDS.DeleteDeployment(deploymentId)
 }
 
-func GetDeployment(deploymentId string) (*automationModels.PDSDeploymentResponse, string, error) {
+func GetDeployment(deploymentId string) (*automationModels.PDSDeploymentResponse, error) {
+	deployment, err := v2Components.PDS.GetDeployment(deploymentId)
+	if err != nil {
+		return nil, err
+	}
+	return deployment, nil
+}
+
+func GetDeploymentAndPodDetails(deploymentId string) (*automationModels.PDSDeploymentResponse, string, error) {
 	deployment, err := v2Components.PDS.GetDeployment(deploymentId)
 	if err != nil {
 		return nil, "", err
