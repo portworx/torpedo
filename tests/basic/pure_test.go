@@ -4356,6 +4356,17 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 })
 
 var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
+	/*
+		https://purestorage.atlassian.net/browse/PWX-37370
+		1.Deploy a FADA app
+		2.Create CSI snapshots for the volumes
+		3.Create csi snap restore from the snapshots and verify the pvc are created
+		4.Delete the snapshots created in the namespace
+		5.Check if snapshot still exists in the namespace
+		6. Delete the FADA app
+
+	*/
+
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateCsiSnapshotsforFADAandDelete",
@@ -4426,7 +4437,6 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 				}
 			}
 		})
-
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
