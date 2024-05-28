@@ -193,6 +193,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowPDSRestore.WorkflowBackup = &WorkflowPDSBackup
 		WorkflowPDSRestore.Restores = make(map[string]automationModels.PDSRestore)
 		WorkflowPDSRestore.Destination = &WorkflowNamespace
+		WorkflowPDSRestore.Validatation = make(map[string]bool)
 		WorkflowPDSRestore.RestoredDeployments = &pds.WorkflowDataService{
 			PDSParams:    NewPdsParams,
 			Namespace:    &WorkflowNamespace,
