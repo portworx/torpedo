@@ -4458,15 +4458,23 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		stepLog = "check iops and bandwidth is update in backend"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			pvcFadaMap := make(map[string]bool)
+			for _, volumeName := range listofFadaPvc {
+				pvcFadaMap[volumeName] = false
+			}
 			for _, fa := range flashArrays {
 				faClient, err := pureutils.PureCreateClientAndConnectRest226(fa.MgmtEndPoint, fa.APIToken)
 				log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
 				volumes, err := pureutils.ListAllVolumesFromFA(faClient)
 				log.FailOnError(err, "Failed to list all volumes from FA")
 				for _, volname := range listofFadaPvc {
+					if pvcFadaMap[volname] {
+						continue
+					}
 					for _, volume := range volumes {
 						for _, volItem := range volume.Volumes {
 							if strings.Contains(volItem.Name, volname) {
+								pvcFadaMap[volname] = true
 								bandwidth := volItem.Qos.BandwidthLimit
 								bandwidth = bandwidth / units.GiB
 								log.InfoD("bandwidth is [%v]", bandwidth)
@@ -4476,14 +4484,11 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 								if bandwidth >= 1 || iops >= 1000 {
 									log.FailOnError(fmt.Errorf("Bandwidth or IOPS is not updated in backend"), "Bandwidth or IOPS is not updated in backend")
 								}
-
 							}
 						}
 					}
 				}
-
 			}
-
 		})
 		stepLog = "Delete the storageclass, pvc and volume and check if volumes got deleted in backend as well"
 		Step(stepLog, func() {
