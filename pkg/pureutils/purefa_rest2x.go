@@ -33,7 +33,7 @@ func ListAllVolumesFromFA(faClient *flasharray.Client) ([]flasharray.VolResponse
 func ListAllDestroyedVolumesFromFA(faClient *flasharray.Client) ([]flasharray.VolResponse, error) {
 	params := make(map[string]string)
 	params["destroyed"] = "true"
-	volumes, err := faClient.Volumes.ListAllAvailableVolumes(nil, nil)
+	volumes, err := faClient.Volumes.ListAllAvailableVolumes(params, nil)
 	if err != nil {
 		return nil, err
 	}
