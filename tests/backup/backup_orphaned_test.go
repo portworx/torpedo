@@ -2496,8 +2496,8 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", Label(TestCaseLabelsMap[Delet
 		mutex                            sync.Mutex
 		bkpNamespaces                    = make([]string, 0)
 		userNames                        = make([]string, 0)
-		numOfNS                          = 1
-		numOfUsers                       = 4
+		numOfNS                          = 2
+		numOfUsers                       = 6
 		timeBetweenConsecutiveBackups    = 10 * time.Second
 		namespaceMapping                 = make(map[string]string)
 		storageClassMapping              = make(map[string]string)
@@ -2916,7 +2916,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", Label(TestCaseLabelsMap[Delet
 		log.InfoD("Deletion of all backups,restores,schedules,clusters of users when user is deleted from keycloak ")
 		Step(fmt.Sprintf("Verifying deletion of non-admin user from keycloak"), func() {
 			log.InfoD("Verifying deletion of non-admin user from keycloak")
-			for _, nonAdminUserName := range userNames[3:4] {
+			for _, nonAdminUserName := range userNames[3:6] {
 				log.InfoD(fmt.Sprintf("Verifying deletion of user  [%s] from keycloak", nonAdminUserName))
 				log.Infof(fmt.Sprintf("Fetching user [%s] backup schedules and restore before user deletion ", nonAdminUserName))
 				userBackupSchedules, err := GetAllBackupSchedulesForUser(nonAdminUserName, CommonPassword)
@@ -2935,7 +2935,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", Label(TestCaseLabelsMap[Delet
 			log.InfoD("Listing and deletion of backup of deleted non-admin user from px-admin user")
 			adminCtx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-admin ctx")
-			for _, nonAdminUserName := range userNames[3:4] {
+			for _, nonAdminUserName := range userNames[3:6] {
 				log.InfoD(fmt.Sprintf("Verifying listing backups of non-admin user [%s] from px-admin user", nonAdminUserName))
 				userBackupNames, err := GetAllBackupNamesByOwnerID(userIdMap[nonAdminUserName], BackupOrgID, adminCtx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of fetching backups [%v] of user [%s] from px-admin user", userBackupNames, nonAdminUserName))
@@ -2948,7 +2948,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", Label(TestCaseLabelsMap[Delet
 					}
 				}
 			}
-			for _, nonAdminUserName := range userNames[3:4] {
+			for _, nonAdminUserName := range userNames[3:6] {
 				wg.Add(1)
 				go func(nonAdminUserName string) {
 					defer GinkgoRecover()
@@ -2974,7 +2974,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", Label(TestCaseLabelsMap[Delet
 			log.InfoD("Verifying  deletion of backup schedule of deleted non-admin user from px-admin user")
 			adminCtx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-admin ctx")
-			for _, nonAdminUserName := range userNames[3:4] {
+			for _, nonAdminUserName := range userNames[3:6] {
 				wg.Add(1)
 				go func(nonAdminUserName string) {
 					defer GinkgoRecover()
@@ -2994,7 +2994,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", Label(TestCaseLabelsMap[Delet
 			log.InfoD("Verifying  deletion of restore of deleted non-admin user from px-admin user")
 			adminCtx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-admin ctx")
-			for _, nonAdminUserName := range userNames[3:4] {
+			for _, nonAdminUserName := range userNames[3:6] {
 				wg.Add(1)
 				go func(nonAdminUserName string) {
 					defer GinkgoRecover()
@@ -3013,7 +3013,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", Label(TestCaseLabelsMap[Delet
 			log.InfoD("Verifying  deletion of clusters of deleted non-admin user from px-admin user")
 			adminCtx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-admin ctx")
-			for _, nonAdminUserName := range userNames[3:4] {
+			for _, nonAdminUserName := range userNames[3:6] {
 				wg.Add(1)
 				go func(nonAdminUserName string) {
 					defer GinkgoRecover()
