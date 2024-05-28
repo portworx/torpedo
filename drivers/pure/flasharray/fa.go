@@ -143,7 +143,6 @@ func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("%v", resp)
 	return resp, nil
 
 }
@@ -156,7 +155,6 @@ func (c *Client) NewRequest(method string, path string, params map[string]string
 	} else {
 		fpath = c.formatPath(path, false)
 	}
-	fmt.Printf("%v", fpath)
 	bodyReader := bytes.NewReader([]byte{})
 	baseURL, err := url.Parse(fpath)
 	if err != nil {
