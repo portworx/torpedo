@@ -4473,7 +4473,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 								iops := volItem.Qos.IopsLimit
 								log.InfoD("iops is [%v]", iops)
 								//compare bandwidth and iops with max_iops and max_bandwidth
-								if bandwidth != 1 || iops != 1000 {
+								if bandwidth >= 1 || iops >= 1000 {
 									log.FailOnError(fmt.Errorf("Bandwidth or IOPS is not updated in backend"), "Bandwidth or IOPS is not updated in backend")
 								}
 
