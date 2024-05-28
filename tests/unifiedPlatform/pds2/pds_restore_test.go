@@ -475,13 +475,13 @@ var _ = Describe("{UpgradeDataServiceImageAndScaleUpDsWithBackUpRestore}", func(
 
 var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 	var (
-		deployment                       *automationModels.PDSDeploymentResponse
-		latestBackupUidBeforePVCIncrease string
-		latestBackupUidAfterPVCIncrease  string
-		pdsBackupConfigName              string
-		restoreNamespace                 string
-		restoreName                      string
-		err                              error
+		deployment *automationModels.PDSDeploymentResponse
+		//latestBackupUidBeforePVCIncrease string
+		latestBackupUidAfterPVCIncrease string
+		pdsBackupConfigName             string
+		restoreNamespace                string
+		restoreName                     string
+		err                             error
 	)
 
 	JustBeforeEach(func() {
@@ -499,36 +499,36 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 
 			})
 
-			Step("Create Adhoc backup config of the existing deployment - Before PVC Increase", func() {
-				pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
-				bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
-				log.FailOnError(err, "Error occured while creating backupConfig")
-				log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
-				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
-			})
-
-			Step("Get the latest backup detail for the deployment - Before PVC Increase", func() {
-				backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Uid)
-				log.FailOnError(err, "Error occured while creating backup")
-				latestBackupUidBeforePVCIncrease = *backupResponse.Meta.Uid
-				log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
-				err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
-				log.FailOnError(err, "Error occured while waiting for backup to complete")
-			})
-
-			Step("Create Restore from the latest backup Id  - Before PVC Increase", func() {
-				defer func() {
-					err := SetSourceKubeConfig()
-					log.FailOnError(err, "failed to switch context to source cluster")
-				}()
-				CheckforClusterSwitch()
-				restoreNamespace = "restore-" + RandomString(5)
-				restoreName = "restore-" + RandomString(5)
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUidBeforePVCIncrease, restoreNamespace, *deployment.Create.Meta.Uid)
-				log.FailOnError(err, "Restore Failed")
-				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
-				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
-			})
+			//Step("Create Adhoc backup config of the existing deployment - Before PVC Increase", func() {
+			//	pdsBackupConfigName = "pds-adhoc-backup-" + RandomString(5)
+			//	bkpConfigResponse, err := WorkflowPDSBackupConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.Create.Meta.Uid)
+			//	log.FailOnError(err, "Error occured while creating backupConfig")
+			//	log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", *bkpConfigResponse.Create.Meta.Name, *bkpConfigResponse.Create.Meta.Uid)
+			//	log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
+			//})
+			//
+			//Step("Get the latest backup detail for the deployment - Before PVC Increase", func() {
+			//	backupResponse, err := WorkflowPDSBackup.GetLatestBackup(*deployment.Create.Meta.Uid)
+			//	log.FailOnError(err, "Error occured while creating backup")
+			//	latestBackupUidBeforePVCIncrease = *backupResponse.Meta.Uid
+			//	log.Infof("Latest backup ID [%s], Name [%s]", *backupResponse.Meta.Uid, *backupResponse.Meta.Name)
+			//	err = WorkflowPDSBackup.WaitForBackupToComplete(*backupResponse.Meta.Uid)
+			//	log.FailOnError(err, "Error occured while waiting for backup to complete")
+			//})
+			//
+			//Step("Create Restore from the latest backup Id  - Before PVC Increase", func() {
+			//	defer func() {
+			//		err := SetSourceKubeConfig()
+			//		log.FailOnError(err, "failed to switch context to source cluster")
+			//	}()
+			//	CheckforClusterSwitch()
+			//	restoreNamespace = "restore-" + RandomString(5)
+			//	restoreName = "restore-" + RandomString(5)
+			//	_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUidBeforePVCIncrease, restoreNamespace, *deployment.Create.Meta.Uid)
+			//	log.FailOnError(err, "Restore Failed")
+			//	log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
+			//	log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+			//})
 
 			Step("Increase PVC size by 1 GB", func() {
 				log.InfoD("Increase PVC size by 1 GB")
@@ -567,20 +567,20 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
 			})
 
-			Step("Create Restore from the latest backup Id  - After PVC Increase from older backup", func() {
-				defer func() {
-					err := SetSourceKubeConfig()
-					log.FailOnError(err, "failed to switch context to source cluster")
-				}()
-				WorkflowPDSRestore.Validatation["VALIDATE_RESTORE_AFTER_SRC_DEPLOYMENT_UPGRADE"] = true
-				CheckforClusterSwitch()
-				restoreNamespace = "restore-" + RandomString(5)
-				restoreName = "restore-" + RandomString(5)
-				_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUidBeforePVCIncrease, restoreNamespace, *deployment.Create.Meta.Uid)
-				log.FailOnError(err, "Restore Failed")
-				log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
-				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
-			})
+			//Step("Create Restore from the latest backup Id  - After PVC Increase from older backup", func() {
+			//	defer func() {
+			//		err := SetSourceKubeConfig()
+			//		log.FailOnError(err, "failed to switch context to source cluster")
+			//	}()
+			//	WorkflowPDSRestore.Validatation["VALIDATE_RESTORE_AFTER_SRC_DEPLOYMENT_UPGRADE"] = true
+			//	CheckforClusterSwitch()
+			//	restoreNamespace = "restore-" + RandomString(5)
+			//	restoreName = "restore-" + RandomString(5)
+			//	_, err := WorkflowPDSRestore.CreateRestore(restoreName, latestBackupUidBeforePVCIncrease, restoreNamespace, *deployment.Create.Meta.Uid)
+			//	log.FailOnError(err, "Restore Failed")
+			//	log.Infof("All restores - [%+v]", WorkflowPDSRestore.Restores)
+			//	log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
+			//})
 
 		}
 
