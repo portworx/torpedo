@@ -75,8 +75,8 @@ func NewClient(mgmtIp string, apiToken string, userName string, password string,
 	//if err != nil {
 	//	return nil, err
 	//}
-	//c.AuthToken = authToken
-	// Create Client Instance
+	c.AuthToken = apiToken
+	//Create Client Instance
 	c.CreateClientInstance()
 
 	// Authenticate to the API and store the session
