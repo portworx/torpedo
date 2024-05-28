@@ -224,7 +224,7 @@ func (c *Client) getAuthToken(restVersion string) (string, error) {
 	request.Header.Add("Content-Type", "application/json")
 	request.Header.Add("api-token", c.ApiToken)
 
-	fmt.Println(fmt.Sprintf("API Token [%v]", c.ApiToken))
+	log.Infof(fmt.Sprintf("API Token [%v]", c.ApiToken))
 
 	tempClient := &http.Client{
 		// http.Client doesn't set the default Timeout,
