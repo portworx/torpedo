@@ -19,18 +19,15 @@ import (
 var supportedRestVersions = [...]string{"2.26"}
 
 type Client struct {
-	MgmtIp      string
-	ApiToken    string
-	UserName    string
-	Password    string
-	RestVersion string
-	UserAgent   string
-	AuthToken   string
-	Kwargs      map[string]string
-
-	// Client object defined here
-	client  *http.Client
-	Volumes *VolumeServices
+	Target        string
+	Username      string
+	Password      string
+	APIToken      string
+	RestVersion   string
+	UserAgent     string
+	RequestKwargs map[string]string
+	client        *http.Client
+	Volumes       *VolumeServices
 }
 
 // Type supported is used for retrieving the support API versions from the Flash Array
@@ -52,32 +49,50 @@ func (c *Client) CreateClientInstance() {
 	c.client = &http.Client{Transport: transport, Jar: cookieJar}
 }
 
-func NewClient(mgmtIp string, apiToken string, userName string, password string,
+func NewClient(target string, username string, password string, apiToken string,
 	restVersion string, verifyHTTPS bool, sslCert bool,
-	userAgent string, kwargs map[string]string) (*Client, error) {
+	userAgent string, requestKwargs map[string]string) (*Client, error) {
 
-	err := checkAuth(apiToken, userName, password)
+	// Check proper authentication is provided
+	err := checkAuth(apiToken, username, password)
 	if err != nil {
 		return nil, err
 	}
 
-	c := &Client{MgmtIp: mgmtIp,
-		ApiToken:    apiToken,
-		UserName:    userName,
-		Password:    password,
-		RestVersion: restVersion,
-		UserAgent:   userAgent}
-
-	requestKwargs := setDefaultRequestKwargs(kwargs, verifyHTTPS, sslCert)
-	c.Kwargs = requestKwargs
-
-	authToken, err := c.getAuthToken()
-	if err != nil {
-		return nil, err
+	if requestKwargs == nil {
+		requestKwargs = make(map[string]string)
 	}
-	c.AuthToken = authToken
-	// Create Client Instance
-	c.CreateClientInstance()
+
+	_, ok := requestKwargs["verify"]
+	if !ok {
+		if sslCert && verifyHTTPS {
+			requestKwargs["verify"] = "false"
+		} else {
+			requestKwargs["verify"] = "true"
+		}
+	}
+
+	// Get the REST API version to use
+	if restVersion != "" {
+		err := checkRestVersion(restVersion, target)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		r, err := chooseRestVersion(target)
+		if err != nil {
+			return nil, err
+		}
+		restVersion = r
+	}
+
+	// Create a new Client instance
+	cookieJar, _ := cookiejar.New(nil)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	c := &Client{Target: target, Username: username, Password: password, APIToken: apiToken, UserAgent: userAgent, RestVersion: restVersion, RequestKwargs: requestKwargs}
+	c.client = &http.Client{Transport: tr, Jar: cookieJar}
 
 	// Authenticate to the API and store the session
 	err = c.login()
@@ -85,8 +100,7 @@ func NewClient(mgmtIp string, apiToken string, userName string, password string,
 		return nil, err
 	}
 
-	// Initialize services
-	c.InitializeServices()
+	c.Volumes = &VolumeServices{client: c}
 
 	return c, err
 
@@ -111,7 +125,7 @@ func checkAuth(apiToken string, username string, password string) error {
 // Authenticate to the API and store the session
 func (c *Client) login() error {
 	authURL := c.formatPath("auth/session", true)
-	data := map[string]string{"api_token": c.ApiToken}
+	data := map[string]string{"api_token": c.APIToken}
 	jsonValue, _ := json.Marshal(data)
 	_, err := c.client.Post(authURL, "application/json", bytes.NewBuffer(jsonValue))
 	if err != nil {
@@ -187,8 +201,8 @@ func (c *Client) NewRequest(method string, path string, params map[string]string
 		}
 	}
 
-	log.Infof("Adding auth token [%v]", c.AuthToken)
-	req.Header.Add("x-auth-token", fmt.Sprintf("%v", c.AuthToken))
+	log.Infof("Adding auth token [%v]", c.APIToken)
+	req.Header.Add("x-auth-token", fmt.Sprintf("%v", c.APIToken))
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Accept", "application/json")
 	if c.UserAgent != "" {
@@ -221,10 +235,10 @@ func (c *Client) getAuthToken() (string, error) {
 		return "", err
 	}
 
-	log.Infof("API Token [%v]", c.ApiToken)
+	log.Infof("API Token [%v]", c.APIToken)
 
 	request.Header.Add("Content-Type", "application/json")
-	request.Header.Add("api-token", c.ApiToken)
+	request.Header.Add("api-token", c.APIToken)
 
 	tempClient := &http.Client{
 		// http.Client doesn't set the default Timeout,
@@ -261,9 +275,9 @@ func (c *Client) getAuthToken() (string, error) {
 func (c *Client) formatPath(path string, ignoreRestVersion bool) string {
 	formatPath := ""
 	if ignoreRestVersion {
-		formatPath = fmt.Sprintf("https://%s/%s", c.MgmtIp, path)
+		formatPath = fmt.Sprintf("https://%s/%s", c.Target, path)
 	} else {
-		formatPath = fmt.Sprintf("https://%s/api/%s/%s", c.MgmtIp, c.RestVersion, path)
+		formatPath = fmt.Sprintf("https://%s/api/%s/%s", c.Target, c.RestVersion, path)
 	}
 	log.Infof(formatPath)
 	return formatPath
