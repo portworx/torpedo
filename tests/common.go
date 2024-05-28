@@ -12421,18 +12421,18 @@ func GetFADetailsFromVolumeName(volumeName string) ([]pureutils.FlashArrayEntry,
 }
 
 // GetVolumeCompleteNameOnFA returns volume Name with Prefix from FA
-func GetVolumeCompleteNameOnFA(faClient *flasharray.Client, volName string) (string, flasharray.Volume, error) {
+func GetVolumeCompleteNameOnFA(faClient *flasharray.Client, volName string) (string, error) {
 	// List all the Volumes present in FA
 	allVolumes, err := pureutils.ListAllTheVolumesFromSpecificFA(faClient)
 	if err != nil {
-		return "", flasharray.Volume{}, err
+		return "", err
 	}
 	for _, eachVol := range allVolumes {
 		if strings.Contains(eachVol.Name, volName) {
-			return eachVol.Name, eachVol, nil
+			return eachVol.Name, nil
 		}
 	}
-	return "", flasharray.Volume{}, nil
+	return "", nil
 }
 
 // GetConnectedHostToVolume returns the host details attached to Volume
@@ -12460,7 +12460,7 @@ func DeleteVolumeFromFABackend(fa pureutils.FlashArrayEntry, volumeName string) 
 		return false, err
 	}
 
-	volName, _, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
+	volName, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
 	if err != nil {
 		return false, err
 	}
@@ -12876,16 +12876,8 @@ func CheckVolumesExistinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPv
 			}
 			faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
 			log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
-			volName, vol, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
+			volName, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
 			if volName != "" {
-				fmt.Println("volume name :", volumeName)
-				fmt.Println("volName :", volName)
-				fmt.Println("vol input iops", vol.InputPerSec)
-				fmt.Println("vol output iops", vol.OutputPerSec)
-				fmt.Println("vol iops total", int64(*vol.InputPerSec+*vol.OutputPerSec))
-				fmt.Println("vol shared space ", vol.SharedSpace)
-				fmt.Println("vol total space ", vol.Size)
-
 				// As we found the volume we mark corresponding volume as true
 				log.Infof("Volume [%v] exists on FA [%v]", volName, fa.MgmtEndPoint)
 				pvcFadaMap[volumeName] = true

@@ -4267,6 +4267,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		BaseAppNameSpace := "base-app-namespace"
 		FadaAppNameSpace := "fada-app-namespace"
 		FbdaAppNameSpace := "fbda-app-namespace"
+		max_iops := "1000"
+		max_bandwidth := "1G"
 		//Creating Two lists to collect the volume names of both FA and FB created volumes
 		listofFadaPvc := make([]string, 0)
 		listofFbdaPvc := make([]string, 0)
@@ -4294,8 +4296,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			log.InfoD(stepLog)
 			BaseParams := make(map[string]string)
 			BaseParams["repl"] = "1"
-			BaseParams["max_iops"] = "1000"
-			BaseParams["max_bandwidth"] = "1G"
+			BaseParams["max_iops"] = max_iops
+			BaseParams["max_bandwidth"] = max_bandwidth
 			reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
 			bindMode := storageApi.VolumeBindingImmediate
 			// create storage class for base volumes
@@ -4453,6 +4455,36 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				log.FailOnError(err, fmt.Sprintf("Failed to delete pvc [%s] in namespace [%s]", pvcName, namespace))
 			}
 		}
+		stepLog = "check iops and bandwidth is update in backend"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, fa := range flashArrays {
+				faClient, err := pureutils.PureCreateClientAndConnectRest226(fa.MgmtEndPoint, fa.APIToken)
+				log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
+				volumes, err := pureutils.ListAllVolumesFromFA(faClient)
+				log.FailOnError(err, "Failed to list all volumes from FA")
+				for _, volname := range listofFadaPvc {
+					for _, volume := range volumes {
+						for _, volItem := range volume.Volumes {
+							if strings.Contains(volItem.Name, volname) {
+								bandwidth := volItem.Qos.BandwidthLimit
+								bandwidth = bandwidth / units.GiB
+								log.InfoD("bandwidth is [%v]", bandwidth)
+								iops := volItem.Qos.IopsLimit
+								log.InfoD("iops is [%v]", iops)
+								//compare bandwidth and iops with max_iops and max_bandwidth
+								if bandwidth != 1 || iops != 1000 {
+									log.FailOnError(fmt.Errorf("Bandwidth or IOPS is not updated in backend"), "Bandwidth or IOPS is not updated in backend")
+								}
+
+							}
+						}
+					}
+				}
+
+			}
+
+		})
 		stepLog = "Delete the storageclass, pvc and volume and check if volumes got deleted in backend as well"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)

@@ -66,5 +66,5 @@ type VolItems struct {
 }
 
 type Volumes struct {
-	Volumes []Volumes `json:"total"`
+	Volumes []VolItems `json:"total"`
 }

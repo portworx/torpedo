@@ -1,7 +1,6 @@
 package pureutils
 
 import (
-	"github.com/devans10/pugo/flasharray"
 	fa "github.com/portworx/torpedo/drivers/pure/flasharray"
 )
 
@@ -10,8 +9,8 @@ const (
 )
 
 // PureCreateClientAndConnect Create FA Client and Connect
-func PureCreateClientAndConnectRest226(faMgmtEndpoint string, apiToken string) (*flasharray.Client, error) {
-	faClient, err := flasharray.NewClient(faMgmtEndpoint, "", "", apiToken,
+func PureCreateClientAndConnectRest226(faMgmtEndpoint string, apiToken string) (*fa.Client, error) {
+	faClient, err := fa.NewClient(faMgmtEndpoint, "", "", apiToken,
 		RestAPI, false, false, "", nil)
 	if err != nil {
 		return nil, err
