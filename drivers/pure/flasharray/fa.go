@@ -16,7 +16,7 @@ import (
 )
 
 // supportedRestVersions is used to negotiate the API version to use
-var supportedRestVersions = [...]string{"2.26"}
+var supportedRestVersions = [...]string{"2.2"}
 
 type Client struct {
 	MgmtIp      string
@@ -71,11 +71,11 @@ func NewClient(mgmtIp string, apiToken string, userName string, password string,
 	requestKwargs := setDefaultRequestKwargs(kwargs, verifyHTTPS, sslCert)
 	c.Kwargs = requestKwargs
 
-	//authToken, err := c.getAuthToken()
-	//if err != nil {
-	//	return nil, err
-	//}
-	c.AuthToken = apiToken
+	authToken, err := c.getAuthToken()
+	if err != nil {
+		return nil, err
+	}
+	c.AuthToken = authToken
 	//Create Client Instance
 	c.CreateClientInstance()
 
