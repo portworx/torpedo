@@ -35,10 +35,10 @@ github.com/AdaLogics/go-fuzz-headers
 # github.com/Azure/azure-pipeline-go v0.2.3
 ## explicit; go 1.14
 github.com/Azure/azure-pipeline-go/pipeline
-# github.com/Azure/azure-sdk-for-go v68.0.0+incompatible => github.com/Azure/azure-sdk-for-go v43.0.0+incompatible
+# github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 ## explicit
-github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-12-01/compute
-github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2019-02-01/containerservice
+github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-08-01/compute
+github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2022-07-01/containerservice
 github.com/Azure/azure-sdk-for-go/version
 # github.com/Azure/azure-sdk-for-go/sdk/azcore v1.9.1
 ## explicit; go 1.18
@@ -393,9 +393,6 @@ github.com/bytedance/sonic/loader
 github.com/bytedance/sonic/option
 github.com/bytedance/sonic/unquote
 github.com/bytedance/sonic/utf8
-# github.com/cenkalti/backoff v2.2.1+incompatible
-## explicit
-github.com/cenkalti/backoff
 # github.com/cenkalti/backoff/v3 v3.2.2
 ## explicit; go 1.12
 github.com/cenkalti/backoff/v3
@@ -1042,8 +1039,8 @@ github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/scheme
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/typed/autopilot/v1alpha1
-# github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
-## explicit; go 1.13
+# github.com/libopenstorage/cloudops v0.0.0-20240528100711-6310e05a2c40
+## explicit; go 1.17
 github.com/libopenstorage/cloudops
 github.com/libopenstorage/cloudops/azure
 github.com/libopenstorage/cloudops/backoff
@@ -1065,7 +1062,6 @@ github.com/libopenstorage/openstorage/cluster
 github.com/libopenstorage/openstorage/objectstore
 github.com/libopenstorage/openstorage/osdconfig
 github.com/libopenstorage/openstorage/pkg/auth
-github.com/libopenstorage/openstorage/pkg/chattr
 github.com/libopenstorage/openstorage/pkg/clusterdomain
 github.com/libopenstorage/openstorage/pkg/correlation
 github.com/libopenstorage/openstorage/pkg/dbg
@@ -1075,10 +1071,7 @@ github.com/libopenstorage/openstorage/pkg/diags
 github.com/libopenstorage/openstorage/pkg/grpcserver
 github.com/libopenstorage/openstorage/pkg/grpcutil
 github.com/libopenstorage/openstorage/pkg/job
-github.com/libopenstorage/openstorage/pkg/keylock
-github.com/libopenstorage/openstorage/pkg/mount
 github.com/libopenstorage/openstorage/pkg/nodedrain
-github.com/libopenstorage/openstorage/pkg/options
 github.com/libopenstorage/openstorage/pkg/parser
 github.com/libopenstorage/openstorage/pkg/sched
 github.com/libopenstorage/openstorage/pkg/schedule
@@ -1086,7 +1079,6 @@ github.com/libopenstorage/openstorage/pkg/storagepool
 github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
-github.com/libopenstorage/openstorage/volume
 # github.com/libopenstorage/operator v0.0.0-20240311222049-36e102b2df5e
 ## explicit; go 1.21
 github.com/libopenstorage/operator/api/px
@@ -1196,9 +1188,6 @@ github.com/moby/locker
 ## explicit; go 1.13
 github.com/moby/spdystream
 github.com/moby/spdystream/spdy
-# github.com/moby/sys/mountinfo v0.6.2
-## explicit; go 1.16
-github.com/moby/sys/mountinfo
 # github.com/moby/term v0.0.0-20221205130635-1aeaba878587
 ## explicit; go 1.18
 github.com/moby/term
@@ -1322,8 +1311,8 @@ github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 ## explicit
 github.com/pmezard/go-difflib/difflib
-# github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b
-## explicit
+# github.com/portworx/kvdb v0.0.0-20230405233801-87666830d3fd
+## explicit; go 1.17
 github.com/portworx/kvdb
 github.com/portworx/kvdb/api/bootstrap
 github.com/portworx/kvdb/common
@@ -2768,7 +2757,6 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
-# github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v43.0.0+incompatible
 # github.com/Azure/azure-storage-blob-go => github.com/Azure/azure-storage-blob-go v0.9.0
 # github.com/Azure/go-autorest => github.com/Azure/go-autorest v14.2.0+incompatible
 # github.com/docker/distribution => github.com/docker/distribution v0.0.0-20191216044856-a8371794149d
