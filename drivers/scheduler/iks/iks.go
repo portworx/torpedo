@@ -15,6 +15,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strings"
@@ -264,6 +265,29 @@ func (i *IKS) WaitForWorkerPoolToUpgrade(workerPoolName string, version string) 
 
 // UpgradeScheduler upgrades the IKS cluster to the specified version
 func (i *IKS) UpgradeScheduler(version string) error {
+	if os.Getenv("CLUSTER_PROVIDER") == "openshift" {
+		if err := openshift.DownloadOCP4Client(version); err != nil {
+			return err
+		}
+		clientVersion, err := openshift.GetClientVersion()
+		if err != nil {
+			return err
+		}
+		upgradeVersion := version
+		if openshift.VersionReg.MatchString(version) {
+			upgradeVersion = clientVersion
+		}
+		openshiftSched := openshift.Openshift{}
+		if err := openshiftSched.SetOcpPrometheusPrereq(upgradeVersion); err != nil {
+			return err
+		}
+		if err := openshift.SelectChannel(version); err != nil {
+			return err
+		}
+		if err := openshift.AckAPIRemoval(upgradeVersion); err != nil {
+			return err
+		}
+	}
 
 	err := i.configureIKSClient()
 	if err != nil {
