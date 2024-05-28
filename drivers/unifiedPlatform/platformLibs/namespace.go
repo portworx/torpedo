@@ -62,6 +62,21 @@ func ValidateLabel(namespace string) error {
 	return nil
 }
 
+func GetNamespace(tenantId, namespaceName string) (automationModels.V1Namespace, error) {
+	allNamespaces, err := ListNamespaces(tenantId, "", "CREATED_AT", "DESC")
+	if err != nil {
+		return automationModels.V1Namespace{}, err
+	}
+
+	for _, eachNamespace := range allNamespaces.List.Namespaces {
+		log.Infof("Namespace - [%s]", *eachNamespace.Meta.Name)
+		if *eachNamespace.Meta.Name == namespaceName {
+			return eachNamespace, nil
+		}
+	}
+	return automationModels.V1Namespace{}, fmt.Errorf("Namespace [%s] not found in the list of namespaces", namespaceName)
+}
+
 func ListNamespaces(tenantId string, label string, sortBy string, sortOrder string) (*automationModels.PlatformNamespaceResponse, error) {
 	request := &automationModels.PlatformNamespace{
 		List: automationModels.PlatformListNamespace{
