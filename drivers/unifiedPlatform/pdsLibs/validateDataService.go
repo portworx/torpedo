@@ -194,6 +194,7 @@ func ValidateDataServiceDeploymentHealth(deploymentId string, expectedHealth aut
 			return false, nil
 		}
 		if *res.Get.Status.Phase == stworkflows.FAILED {
+			log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Replicas, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
 			return true, fmt.Errorf("Deployment [%s] is [%s]", *res.Get.Meta.Name, *res.Get.Status.Phase)
 		}
 		log.Debugf("Health status - [%v]", *res.Get.Status.Health)

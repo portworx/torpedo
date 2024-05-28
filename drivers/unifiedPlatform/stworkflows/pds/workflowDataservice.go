@@ -69,9 +69,9 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		DSParams:          ds,
 	}
 
-	if value, ok := wfDataService.SkipValidatation[ValidatePdsWorkloads]; ok {
+	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
 		if value == true {
-			log.Infof("Skipping DataService Deployment  Validation")
+			log.Infof("Skipping DataService Deployment Validation")
 		}
 	} else {
 		err = wfDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, resConfigId, stConfigId, namespaceName, version, image)
@@ -192,6 +192,8 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deploymentId 
 		dbConfig     dslibs.DeploymentConfig
 		err          error
 	)
+
+	time.Sleep(30 * time.Second)
 
 	deployment, podName, err := dslibs.GetDeploymentAndPodDetails(deploymentId)
 	if err != nil {
