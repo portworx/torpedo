@@ -4598,6 +4598,12 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 })
 
 var _ = Describe("{DeployFADAAndFBDAAppsAndStopPortworx}", func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-37401
+		1.Deploy FADA and FACD apps and parallely and stop portworx for 10 mins
+		2.After 10 mins make it up and check if the pods are running
+		3.Destroy the apps
+	*/
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeployFADAAndFBDAAppsAndStopPortworx",
 			"Deploy FADA and FBDA apps and parallely stop portworx for 10 mins and after 10 min make it up and check if the pods are running",
