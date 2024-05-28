@@ -388,15 +388,6 @@ func (wfDataService *WorkflowDataService) ValidateDeploymentResources(resourceTe
 	wfDataService.Dash.VerifyFatal(config.Spec.Version, dataServiceVersionBuild, "Validating ds version")
 }
 
-func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(deploymentId string, sizeInGB uint64) error {
-	_, err := utils.IncreasePVCby1Gig(
-		wfDataService.DataServiceDeployment[deploymentId].Namespace,
-		*wfDataService.DataServiceDeployment[deploymentId].Deployment.Status.CustomResourceName,
-		sizeInGB)
-
-	return err
-}
-
 func (wfDataService *WorkflowDataService) KillDBMasterNodeToValidateHA(dsName string, deploymentId string) error {
 	dbMaster, isNativelyDistributed := utils.GetDbMasterNode(wfDataService.DataServiceDeployment[deploymentId].Namespace, dsName, *wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name, wfDataService.Namespace.TargetCluster.KubeConfig)
 	if isNativelyDistributed {
@@ -453,15 +444,6 @@ func (wfDataService *WorkflowDataService) DeletePDSPods(podNames []string, names
 		return fmt.Errorf("Error while validating pods: %v", err)
 	}
 	return nil
-}
-
-// GetVolumeCapacityInGBForDeployment Get volume capacity
-func (wfDataService *WorkflowDataService) GetVolumeCapacityInGBForDeployment(namespace string, deploymentName string) (uint64, error) {
-	capacity, err := utils.GetVolumeCapacityInGB(namespace, deploymentName)
-	if err != nil {
-		return 0, err
-	}
-	return capacity, nil
 }
 
 func (wfDataService *WorkflowDataService) GetPodAgeForDeployment(deploymentId string) (float64, error) {

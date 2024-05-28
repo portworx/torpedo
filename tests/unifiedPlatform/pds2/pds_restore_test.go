@@ -532,7 +532,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 
 			Step("Increase PVC size by 1 GB", func() {
 				log.InfoD("Increase PVC size by 1 GB")
-				err := WorkflowDataService.IncreasePvcSizeBy1gb(*deployment.Create.Meta.Uid, 1)
+				_, err := IncreasePVCize(WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace, *deployment.Create.Status.CustomResourceName, 1)
 				log.FailOnError(err, "Unable to increase size of PVC")
 			})
 
