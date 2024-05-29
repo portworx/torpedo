@@ -3,6 +3,8 @@ package resiliency
 import (
 	"errors"
 	"fmt"
+	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"sync"
 	"time"
 
@@ -25,7 +27,6 @@ const (
 	RebootNodesDuringDeployment         = "reboot-multiple-nodes-during-deployment"
 	KillAgentPodDuringDeployment        = "kill-agent-pod-during-deployment"
 	RestartAppDuringResourceUpdate      = "restart-app-during-resource-update"
-	UpdateTemplate                      = "Medium"
 	RebootNodeDuringAppVersionUpdate    = "reboot-node-during-app-version-update"
 	KillTeleportPodDuringDeployment     = "kill-teleport-pod-during-deployment"
 	KillPdsAgentPodDuringAppScaleUp     = "kill-pds-agent-pod-during-app-scale-up"
@@ -52,6 +53,7 @@ var (
 	dsEntity                  restoreBkp.DSEntity
 	DynamicDeployments        []*pds.ModelsDeployment
 	RestoredDeployments       []*pds.ModelsDeployment
+	UpdateTemplate            string
 )
 
 // Struct Definition for kind of Failure the framework needs to trigger
@@ -94,7 +96,7 @@ func InduceFailure(failure string, ns string) {
 	return
 }
 
-func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deployment, namespace string, CheckTillReplica int32) error {
+func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deployment, namespace string, CheckTillReplica int32, ds dslibs.PDSDataService) error {
 	switch FailureType.Type {
 	// Case when we want to reboot a node onto which a deployment pod is coming up
 	case ActiveNodeRebootDuringDeployment:
@@ -135,6 +137,26 @@ func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deploy
 		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will reboot the node it is hosted upon.", checkTillReplica)
 		func1 := func() {
 			GetPdsSs(*deployment.Status.CustomResourceName, namespace, checkTillReplica)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+
+	case StopPXDuringStorageResize:
+		log.InfoD("Entering to resize of the Data service Volume, while PX on volume node is stopped")
+		tenantID, err := platformLibs.GetDefaultTenantId(AccountID)
+		if err != nil {
+			return err
+		}
+
+		nameSpace, err := platformLibs.GetNamespace(tenantID, namespace)
+		if err != nil {
+			return err
+		}
+
+		func1 := func() {
+			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, UpdateTemplate)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)

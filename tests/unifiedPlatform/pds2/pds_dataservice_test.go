@@ -506,7 +506,6 @@ var _ = Describe("{ScaleDownScaleupPXCluster}", func() {
 				nodes, err := pdslib.GetNodesOfSS(*deployment.Create.Status.CustomResourceName, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while getting Data Serice Nodes")
 				nodeList = append(nodeList, nodes[0])
-
 			})
 
 			Step("Scale down PX Nodes on which Data Services are running", func() {

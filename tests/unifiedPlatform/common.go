@@ -325,6 +325,46 @@ func StopPxServiceOnNodes(nodeList []*corev1.Node) error {
 	return nil
 }
 
+// GetVolumeNodesOnWhichPxIsRunning fetches the lit of Volnodes on which PX is running
+func GetVolumeNodesOnWhichPxIsRunning() []node.Node {
+	var (
+		nodesToStopPx []node.Node
+		stopPxNode    []node.Node
+		err           error
+	)
+	stopPxNode = node.GetStorageNodes()
+	if err != nil {
+		log.FailOnError(err, "Error while getting PX Node to Restart")
+	}
+	log.InfoD("PX the node with vol running found is-  %v ", stopPxNode)
+	nodesToStopPx = append(nodesToStopPx, stopPxNode[0])
+	return nodesToStopPx
+}
+
+// StopPxOnReplicaVolumeNode is used to STOP PX on the given list of nodes
+func StopPxOnReplicaVolumeNode(nodesToStopPx []node.Node) error {
+	err := Inst().V.StopDriver(nodesToStopPx, true, nil)
+	if err != nil {
+		log.FailOnError(err, "Error while trying to STOP PX on the volNode- [%v]", nodesToStopPx)
+	}
+	log.InfoD("PX stopped successfully on node %v", nodesToStopPx)
+	return nil
+}
+
+// StartPxOnReplicaVolumeNode is used to START PX on the given list of nodes
+func StartPxOnReplicaVolumeNode(nodesToStartPx []node.Node) error {
+	for _, nodeName := range nodesToStartPx {
+		log.InfoD("Going ahead and re-starting PX the node %v as there is an ", nodeName)
+		err := Inst().V.StartDriver(nodeName)
+		if err != nil {
+			log.FailOnError(err, "Error while trying to Start PX on the volNode- [%v]", nodeName)
+			return err
+		}
+		log.InfoD("PX ReStarted successfully on node %v", nodeName)
+	}
+	return nil
+}
+
 // RebootNodes will reboot the nodes in the given list
 func RebootNodes(nodeList []node.Node) error {
 	for _, n := range nodeList {
