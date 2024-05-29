@@ -581,6 +581,24 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 				log.Infof("Restore Created Name - [%s], UID - [%s]", *WorkflowPDSRestore.Restores[restoreName].Meta.Name, *WorkflowPDSRestore.Restores[restoreName].Meta.Uid)
 			})
 
+			Step("Reboot all deployment pods - After PVC Resize", func() {
+				log.InfoD("Reboot all deployment pods - After PVC Resize")
+				delploymentName := *deployment.Create.Status.CustomResourceName
+				err = WorkflowDataService.DeletePDSPods([]string{delploymentName}, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Deployment pod reboot failed")
+			})
+
+			Step("Validate Data Service to after PVC resize", func() {
+				log.InfoD("Validate Data Service to after failover")
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice after scale up")
+			})
+
+			Step("Run data load on the deployment", func() {
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+
 		}
 
 	})
