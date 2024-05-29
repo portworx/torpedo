@@ -149,7 +149,6 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 		},
 	}
 
-	log.Infof("deployment name  [%s]", *depInputs.Create.V1Deployment.Meta.Name)
 	log.Infof("app template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations.Id)
 	log.Infof("resource template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings.Id)
 	log.Infof("storage template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].StorageOptions.Id)
