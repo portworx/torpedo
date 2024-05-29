@@ -4458,7 +4458,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		stepLog = "check iops and bandwidth is update in backend"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			err := CheckIopsandBandwidthinFA(flashArrays, listofFadaPvc, max_iops, max_bandwidth)
+			err := CheckIopsandBandwidthinFA(flashArrays, listofFadaPvc, max_bandwidth, max_iops)
 			log.FailOnError(err, "Failed to check if iops and bandwidth is updated in FA")
 		})
 		stepLog = "Delete the storageclass, pvc and volume and check if volumes got deleted in backend as well"

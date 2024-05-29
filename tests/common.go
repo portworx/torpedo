@@ -12924,7 +12924,6 @@ func CheckIopsandBandwidthinFA(flashArrays []pureutils.FlashArrayEntry, listofFa
 			for _, volume := range volumes {
 				for _, volItem := range volume.Items {
 					if strings.Contains(volItem.Name, volname) {
-						pvcFadaMap[volname] = true
 						bandwidth := volItem.QoS.BandwidthLimit
 						bandwidth = bandwidth / units.GiB
 						log.InfoD("bandwidth for volume [%v] is [%v]", volname, bandwidth)
@@ -12934,8 +12933,9 @@ func CheckIopsandBandwidthinFA(flashArrays []pureutils.FlashArrayEntry, listofFa
 						//compare bandwidth and iops with max_iops and max_bandwidth
 						if bandwidth < reqBandwidth || iops < reqIops {
 							pvcFadaMap[volname] = false
+						} else {
+							pvcFadaMap[volname] = true
 						}
-						pvcFadaMap[volname] = true
 					}
 				}
 			}
