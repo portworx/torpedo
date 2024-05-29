@@ -667,6 +667,7 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 	// Get the initial capacity of the DataService
 	initialCapacity := resourceTemp.Resources.Requests.Storage
 	log.Debugf("Initial Capacity of the dataservice is [%s]", initialCapacity)
+	log.Debugf("newResConfigId [%s]", newResConfigId)
 
 	newDeployment, err := dslibs.UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, newResConfigId, stConfigId)
 	if err != nil {
