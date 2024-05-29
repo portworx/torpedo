@@ -146,25 +146,19 @@ func CheckStorageFullCondition(namespace string, deploymentName string, threshol
 	return err
 }
 
-func GetDbMasterNode(namespace string, dsName string, deployment string, kubeconfigPath string) (string, bool) {
+func GetDbMasterNode(namespace string, dsName string, deploymentName string, kubeConfig string) (string, bool) {
 	var command, dbMaster string
-	switch dsName {
-	case "deployment.Postgresql":
+	log.Debugf("DS Name - [%s]", dsName)
+	log.Debugf("KubeConfig - [%s]", kubeConfig)
+	log.Debugf("Deployment Name - [%s]", deploymentName)
+	log.Debugf("Namespace - [%s]", namespace)
+	switch strings.ToLower(dsName) {
+	case "postgresql":
+		log.Infof("DSName - [%s]", dsName)
 		command = fmt.Sprintf("patronictl list | grep -i leader | awk '{print $2}'")
-		dbMaster, _ = ExecuteCommandInStatefulSetPod("deployment.GetClusterResourceName()", namespace, command)
-		//log.FailOnError(err, "Failed while fetching db master pods=.")
-		//log.Infof("Deployment %v of type %v have the master "+
-		//"running at %v pod.", deployment.GetClusterResourceName(), dsName, dbMaster)
-	case "deployment.Mysql":
-		//_, connectionDetails, err := pdslib.ApiComponents.DataServiceDeployment.GetConnectionDetails("deployment.GetId()")
-		//log.FailOnError(err, "Failed while fetching connection details.")
-		//cred, err := pdslib.ApiComponents.DataServiceDeployment.GetDeploymentCredentials("deployment.GetId()")
-		//log.FailOnError(err, "Failed while fetching credentials.")
-		//command = fmt.Sprintf("mysqlsh --host=%v --port %v --user=innodb-config "+
-		//" --password=%v -- cluster status", connectionDetails["host"], connectionDetails["port"], cred.GetPassword())
-		dbMaster, _ = ExecuteCommandInStatefulSetPod("deployment.GetClusterResourceName()", namespace, command)
-		//log.Infof("Deployment %v of type %v have the master "+
-		//"running at %v pod.", deployment.GetClusterResourceName(), dsName, dbMaster)
+		dbMaster, _ = ExecuteCommandInStatefulSetPod(deploymentName, namespace, command, kubeConfig)
+	// TODO : Add this support for MySql
+
 	default:
 		return "", false
 	}
@@ -172,13 +166,13 @@ func GetDbMasterNode(namespace string, dsName string, deployment string, kubecon
 }
 
 // ExecuteCommandInStatefulSetPod executes the provided command inside a pod within the specified StatefulSet.
-func ExecuteCommandInStatefulSetPod(statefulsetName, namespace, command string) (string, error) {
+func ExecuteCommandInStatefulSetPod(statefulsetName, namespace, command string, kubeConfig string) (string, error) {
 	podName, err := GetAnyPodName(statefulsetName, namespace)
 	if err != nil {
 		return "", err
 	}
 
-	return ExecCommandInPod(podName, namespace, command)
+	return ExecCommandInPod(podName, namespace, command, kubeConfig)
 }
 
 func GetAnyPodName(statefulName, namespace string) (string, error) {
@@ -195,8 +189,8 @@ func GetAnyPodName(statefulName, namespace string) (string, error) {
 	return randomElement.GetName(), nil
 }
 
-func ExecCommandInPod(podName, namespace, command string) (string, error) {
-	cmd := fmt.Sprintf("kubectl --kubeconfig %v -n %v exec -it %v -- %v", "targetCluster.kubeconfig", namespace, podName, command)
+func ExecCommandInPod(podName, namespace, command string, kubeConfig string) (string, error) {
+	cmd := fmt.Sprintf("kubectl --kubeconfig %s -n %s exec -it %s -- %s", kubeConfig, namespace, podName, command)
 	log.Infof("Command: ", cmd)
 	output, _, err := osutils.ExecShell(cmd)
 	if err != nil {

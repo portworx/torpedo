@@ -616,3 +616,9 @@ func Contains(slice []string, str string) bool {
 	}
 	return false
 }
+
+// GetAndExpectStringEnvVar parses a string from env variable.
+func GetAndExpectStringEnvVar(varName string) string {
+	varValue := os.Getenv(varName)
+	return varValue
+}

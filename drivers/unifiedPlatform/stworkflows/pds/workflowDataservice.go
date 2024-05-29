@@ -70,9 +70,9 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		DSParams:          ds,
 	}
 
-	if value, ok := wfDataService.SkipValidatation[ValidatePdsWorkloads]; ok {
+	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
 		if value == true {
-			log.Infof("Skipping DataService Deployment  Validation")
+			log.Infof("Skipping DataService Deployment Validation")
 		}
 	} else {
 		err = wfDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, resConfigId, stConfigId, namespaceName, version, image)
@@ -193,6 +193,8 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deploymentId 
 		dbConfig     dslibs.DeploymentConfig
 		err          error
 	)
+
+	time.Sleep(30 * time.Second)
 
 	deployment, podName, err := dslibs.GetDeploymentAndPodDetails(deploymentId)
 	if err != nil {
@@ -394,20 +396,20 @@ func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string,
 	return err
 }
 
-func (wfDataService *WorkflowDataService) KillDBMasterNodeToValidateHA(dsName string, deploymentId string) error {
-	dbMaster, isNativelyDistributed := utils.GetDbMasterNode(wfDataService.DataServiceDeployment[deploymentId].Namespace, dsName, *wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name, wfDataService.Namespace.TargetCluster.KubeConfig)
+func (wfDataService *WorkflowDataService) KillDBMasterNodeToValidateHA(deploymentId string) error {
+	dbMaster, isNativelyDistributed := utils.GetDbMasterNode(
+		wfDataService.DataServiceDeployment[deploymentId].Namespace,
+		wfDataService.DataServiceDeployment[deploymentId].DSParams.Name,
+		*wfDataService.DataServiceDeployment[deploymentId].Deployment.Status.CustomResourceName,
+		wfDataService.Namespace.TargetCluster.KubeConfig)
+
 	if isNativelyDistributed {
 		err := utils.DeleteK8sPods(dbMaster, wfDataService.DataServiceDeployment[deploymentId].Namespace, wfDataService.Namespace.TargetCluster.KubeConfig)
 		if err != nil {
 			return err
 		}
-		//validate DataService Deployment here
-		newDbMaster, _ := utils.GetDbMasterNode(wfDataService.DataServiceDeployment[deploymentId].Namespace, dsName, *wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name, wfDataService.Namespace.TargetCluster.KubeConfig)
-		if dbMaster == newDbMaster {
-			log.FailOnError(fmt.Errorf("leader node is not reassigned"), fmt.Sprintf("Leader pod %v", dbMaster))
-		}
 	} else {
-		podName, err := utils.GetAnyPodName(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name, wfDataService.DataServiceDeployment[deploymentId].Namespace)
+		podName, err := utils.GetAnyPodName(*wfDataService.DataServiceDeployment[deploymentId].Deployment.Status.CustomResourceName, wfDataService.DataServiceDeployment[deploymentId].Namespace)
 		if err != nil {
 			return fmt.Errorf("failed while fetching pod for stateful set %v ", *wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name)
 		}
@@ -415,9 +417,17 @@ func (wfDataService *WorkflowDataService) KillDBMasterNodeToValidateHA(dsName st
 		if err != nil {
 			return fmt.Errorf("failed while deleting pod %v ", *wfDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name)
 		}
-		//validate DataService Deployment here
 	}
 	return nil
+}
+
+func (wfDataService *WorkflowDataService) GetDbMasterNode(deploymentId string) (string, bool) {
+	dbMaster, isNativelyDistributed := utils.GetDbMasterNode(
+		wfDataService.DataServiceDeployment[deploymentId].Namespace,
+		wfDataService.DataServiceDeployment[deploymentId].DSParams.Name,
+		*wfDataService.DataServiceDeployment[deploymentId].Deployment.Status.CustomResourceName,
+		wfDataService.Namespace.TargetCluster.KubeConfig)
+	return dbMaster, isNativelyDistributed
 }
 
 func (wfDataService *WorkflowDataService) DeletePDSPods(podNames []string, namespace string) error {

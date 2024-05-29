@@ -3,12 +3,13 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node"
 	"io/ioutil"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/node"
 
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
@@ -18,6 +19,7 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	corev1 "k8s.io/api/core/v1"
 )
 
 var (
@@ -172,6 +174,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowDataService.SkipValidatation = make(map[string]bool)
 		WorkflowDataService.DataServiceDeployment = make(map[string]*dslibs.DataServiceDetails)
 		WorkflowDataService.Dash = Inst().Dash
+		WorkflowDataService.UpdateDeploymentTemplates = false
 		WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 		WorkflowDataService.PDSParams = NewPdsParams
 
@@ -295,9 +298,27 @@ func CheckforClusterSwitch() {
 	}
 }
 
+// Stops px service for the given nodes
+func StopPxServiceOnNodes(nodeList []*corev1.Node) error {
+	// Getting all worker nodes
+	workerNodes := node.GetWorkerNodes()
+	for _, nodeToStop := range nodeList {
+		log.InfoD("Disabling PX on Node %v ", nodeToStop.Name)
+		for _, workerNode := range workerNodes {
+			if workerNode.Name == nodeToStop.Name {
+				err := Inst().V.StopDriver([]node.Node{workerNode}, false, nil)
+				if err != nil {
+					return err
+				}
+				break
+			}
+		}
+	}
+	return nil
+}
+
 // RebootNodes will reboot the nodes in the given list
 func RebootNodes(nodeList []node.Node) error {
-
 	for _, n := range nodeList {
 		log.InfoD("reboot node: %s", n.Name)
 		err := Inst().N.RebootNode(n, node.RebootNodeOpts{
@@ -320,6 +341,29 @@ func RebootNodes(nodeList []node.Node) error {
 			return err
 		}
 	}
+	return nil
+}
 
+// Stops px service for the given nodes
+func StartPxServiceOnNodes(nodeList []*corev1.Node) error {
+	// Getting all worker nodes
+	workerNodes := node.GetWorkerNodes()
+	for _, nodeToStart := range nodeList {
+		log.InfoD("Enabling PX on Node %v ", nodeToStart.Name)
+		for _, workerNode := range workerNodes {
+			if workerNode.Name == nodeToStart.Name {
+				err := Inst().V.StartDriver(workerNode)
+				if err != nil {
+					return err
+				}
+
+				err = Inst().V.WaitDriverUpOnNode(workerNode, Inst().DriverStartTimeout)
+				if err != nil {
+					return err
+				}
+				break
+			}
+		}
+	}
 	return nil
 }
