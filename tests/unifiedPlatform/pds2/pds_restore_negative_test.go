@@ -168,8 +168,8 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 	It("Deploy data services, Perform restore while validating HA on the same cluster", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			if ds.Replicas == 1 {
-				log.InfoD("Changing replica count to 3 for this data service")
-				ds.Replicas = 3
+				log.InfoD("Changing replica count to 2 for this data service")
+				ds.Replicas = 2
 			}
 			Step("Deploy dataservice", func() {
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)

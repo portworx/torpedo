@@ -3,7 +3,10 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/units"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -28,6 +31,10 @@ var (
 	WorkflowPDSBackup       pds.WorkflowPDSBackup
 	WorkflowPDSRestore      pds.WorkflowPDSRestore
 	WorkflowPDSTemplate     pds.WorkflowPDSTemplates
+)
+
+var (
+	k8sCore = core.Instance()
 )
 
 const (
@@ -194,6 +201,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowPDSRestore.WorkflowBackup = &WorkflowPDSBackup
 		WorkflowPDSRestore.Restores = make(map[string]automationModels.PDSRestore)
 		WorkflowPDSRestore.Destination = &WorkflowNamespace
+		WorkflowPDSRestore.Validatation = make(map[string]bool)
 		WorkflowPDSRestore.RestoredDeployments = &pds.WorkflowDataService{
 			PDSParams:    NewPdsParams,
 			Namespace:    &WorkflowNamespace,
@@ -366,4 +374,88 @@ func StartPxServiceOnNodes(nodeList []*corev1.Node) error {
 		}
 	}
 	return nil
+}
+
+// Increase PVC by 1 gb
+func IncreasePVCize(namespace string, deploymentName string, sizeInGb uint64) (*volume.Volume, error) {
+	log.Info("Resizing of the PVC begins")
+	var vol *volume.Volume
+	pvcList, _ := GetPvsAndPVCsfromDeployment(namespace, deploymentName)
+	initialCapacity, err := GetVolumeCapacityInGB(namespace, deploymentName)
+	log.Debugf("Initial volume storage size is : %v", initialCapacity)
+	if err != nil {
+		return nil, err
+	}
+	for _, pvc := range pvcList.Items {
+		k8sOps := k8sCore
+		storageSize := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+		extraAmount, _ := resource.ParseQuantity(fmt.Sprintf("%dGi", sizeInGb))
+		storageSize.Add(extraAmount)
+		pvc.Spec.Resources.Requests[corev1.ResourceStorage] = storageSize
+		_, err := k8sOps.UpdatePersistentVolumeClaim(&pvc)
+		if err != nil {
+			return nil, err
+		}
+		sizeInt64, _ := storageSize.AsInt64()
+		vol = &volume.Volume{
+			Name:          pvc.Name,
+			RequestedSize: uint64(sizeInt64),
+		}
+	}
+
+	// wait for the resize to take effect
+	time.Sleep(30 * time.Second)
+	newcapacity, err := GetVolumeCapacityInGB(namespace, deploymentName)
+	log.Infof("Resized volume storage size is : %v", newcapacity)
+	if err != nil {
+		return nil, err
+	}
+
+	if newcapacity > initialCapacity {
+		log.InfoD("Successfully resized the pvc by 1gb")
+		return vol, nil
+	} else {
+		return vol, err
+	}
+}
+
+func GetPvsAndPVCsfromDeployment(namespace string, deploymentName string) (*corev1.PersistentVolumeClaimList, []*volume.Volume) {
+	log.Infof("Get PVC List based on namespace and deployment")
+	var vols []*volume.Volume
+	labelSelector := make(map[string]string)
+	labelSelector["name"] = deploymentName
+	pvcList, _ := k8sCore.GetPersistentVolumeClaims(namespace, labelSelector)
+	for _, pvc := range pvcList.Items {
+		vols = append(vols, &volume.Volume{
+			ID: pvc.Spec.VolumeName,
+		})
+	}
+	return pvcList, vols
+}
+
+func GetVolumeCapacityInGB(namespace string, deploymentName string) (uint64, error) {
+	var pvcCapacity uint64
+	_, vols := GetPvsAndPVCsfromDeployment(namespace, deploymentName)
+	for _, vol := range vols {
+		appVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return 0, err
+		}
+		pvcCapacity = appVol.Spec.Size / units.GiB
+	}
+	return pvcCapacity, nil
+}
+
+func GetVolumeUsage(namespace string, deploymentName string) (float64, error) {
+	var pvcUsage float64
+	_, vols := GetPvsAndPVCsfromDeployment(namespace, deploymentName)
+	for _, vol := range vols {
+		appVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return 0, err
+		}
+		pvcUsage = float64(appVol.GetUsage())
+	}
+	log.InfoD("Amount of PVC consumed is- [%v]", pvcUsage)
+	return pvcUsage, nil
 }
