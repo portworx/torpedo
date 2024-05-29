@@ -54,6 +54,7 @@ func (workflowProject *WorkflowProject) GetProject() (*automationModels.V1Projec
 
 	log.Infof("Project Infra details [%v]", projectDetails.Config.InfraResources)
 	log.Infof("Project Namespace details [%v]", projectDetails.Config.InfraResources.Namespaces)
+	log.Infof("Project Templates details [%v]", projectDetails.Config.InfraResources.Templates)
 	return projectDetails, nil
 }
 

@@ -103,7 +103,7 @@ func (cusTemp *WorkflowPDSTemplates) CreateResourceTemplateWithCustomValue(templ
 func (cusTemp *WorkflowPDSTemplates) Purge(ignoreError bool) error {
 
 	if cusTemp.ResourceTemplateId != "" {
-		log.Infof("Deleting ResourceTemplate - [%s]", cusTemp.ResourceTemplateId)
+		log.Infof("Deleting ResourceConfigTemplate - [%s]", cusTemp.ResourceTemplateId)
 		err := cusTemp.DeleteCreatedCustomPdsTemplates([]string{cusTemp.ResourceTemplateId})
 		if err != nil {
 			return err
@@ -127,7 +127,7 @@ func (cusTemp *WorkflowPDSTemplates) Purge(ignoreError bool) error {
 	}
 
 	if cusTemp.UpdateResourceTemplateId != "" {
-		log.Infof("Deleting ResourceConfigTemplate - [%s]", cusTemp.UpdateResourceTemplateId)
+		log.Infof("Deleting Newly Created ResourceConfigTemplate - [%s]", cusTemp.UpdateResourceTemplateId)
 		err := cusTemp.DeleteCreatedCustomPdsTemplates([]string{cusTemp.UpdateResourceTemplateId})
 		if err != nil {
 			if ignoreError && !strings.Contains(err.Error(), "404 Not Found") {

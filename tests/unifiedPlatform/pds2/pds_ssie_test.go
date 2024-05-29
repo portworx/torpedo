@@ -7,6 +7,7 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 	"strconv"
+	"time"
 )
 
 var _ = Describe("{PerformStorageResizeBy1GbnTimes}", func() {
@@ -17,7 +18,7 @@ var _ = Describe("{PerformStorageResizeBy1GbnTimes}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPDSTorpedoTest("PerformStorageResizeBy1Gb100TimesAllDs", "Perform PVC Resize by 1GB for 100 times in a loop and validate the updated vol in the storage config.", nil, 0)
+		StartPDSTorpedoTest("PerformStorageResizeBy1GbnTimes", "Perform PVC Resize by 1GB for n times in a loop and validate the updated vol in the storage config.", nil, 0)
 	})
 
 	It("Deploy,Validate and ScaleUp DataService", func() {
@@ -56,6 +57,9 @@ var _ = Describe("{PerformStorageResizeBy1GbnTimes}", func() {
 				log.FailOnError(err, "unable to get pods AGE before Storage resize")
 				log.InfoD("Pods Age before storage resize is- [%v]Min", beforeResizePodAge)
 
+				//sleeping 30sec before the next update
+				time.Sleep(30 * time.Second)
+
 				WorkflowDataService.UpdateDeploymentTemplates = true
 				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 				_, err = WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
@@ -80,6 +84,6 @@ var _ = Describe("{PerformStorageResizeBy1GbnTimes}", func() {
 		defer EndPDSTorpedoTest()
 		//TODO: Remove this once https://purestorage.atlassian.net/browse/DS-9648 this is fixed
 		//err = WorkflowDataService.PDSTemplates.DeleteCreatedCustomPdsTemplates(templatesToBeDeleted)
-		log.FailOnError(err, "Error while deleting the templates")
+		//log.FailOnError(err, "Error while deleting the templates")
 	})
 })
