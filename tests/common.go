@@ -12907,6 +12907,47 @@ func CheckVolumesExistinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPv
 	}
 	return nil
 }
+func CheckIopsandBandwidth(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, reqBandwidth int, reqIops int) error {
+	pvcFadaMap := make(map[string]bool)
+	for _, volumeName := range listofFadaPvc {
+		pvcFadaMap[volumeName] = false
+	}
+	for _, fa := range flashArrays {
+		faClient, err := pureutils.PureCreateClientAndConnectRest226(fa.MgmtEndPoint, fa.APIToken)
+		log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
+		volumes, err := pureutils.ListAllVolumesFromFA(faClient)
+		log.FailOnError(err, "Failed to list all volumes from FA")
+		for _, volname := range listofFadaPvc {
+			if pvcFadaMap[volname] {
+				continue
+			}
+			for _, volume := range volumes {
+				for _, volItem := range volume.Items {
+					if strings.Contains(volItem.Name, volname) {
+						pvcFadaMap[volname] = true
+						bandwidth := volItem.QoS.BandwidthLimit
+						bandwidth = bandwidth / units.GiB
+						log.InfoD("bandwidth for volume [%v] is [%v]", volname, bandwidth)
+						iops := volItem.QoS.IopsLimit
+						log.FailOnError(err, "Failed to convert iops to int")
+						log.InfoD("iops for volume [%v] is [%v]", volname, iops)
+						//compare bandwidth and iops with max_iops and max_bandwidth
+						if bandwidth < reqBandwidth || iops < reqIops {
+							pvcFadaMap[volname] = false
+						}
+						pvcFadaMap[volname] = true
+					}
+				}
+			}
+		}
+	}
+	for FadaVol, volStatus := range pvcFadaMap {
+		if !volStatus {
+			return fmt.Errorf("PVC %s does not have required iops and bandwidth", FadaVol)
+		}
+	}
+	return nil
+}
 
 // Checks if list of volumes are present in group of flash blades declared in pure.json and vice versa
 func CheckVolumesExistinFB(flashBlades []pureutils.FlashBladeEntry, listofFbdaPvc []string, NoVolumeExists bool) error {
