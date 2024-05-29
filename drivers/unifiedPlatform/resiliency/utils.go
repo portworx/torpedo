@@ -1,6 +1,9 @@
 package resiliency
 
 import (
+	"fmt"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -592,7 +595,7 @@ var (
 	versionID                             string
 	imageID                               string
 	serviceAccId                          string
-	accountID                             string
+	AccountID                             string
 	projectID                             string
 	tenantID                              string
 	istargetclusterAvailable              bool
@@ -639,4 +642,91 @@ func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 		}
 	}
 	return conditionError
+}
+
+func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dslibs.PDSDataService, namespaceId, newResConfigId string) (bool, error) {
+	log.Debugf("Starting to resize the storage and UpdateDeploymentResourceConfig")
+
+	//Get required Id's
+	stConfigId := *deployment.Config.DeploymentTopologies[0].StorageOptions.Id
+	appConfigId := *deployment.Config.DeploymentTopologies[0].ServiceConfigurations.Id
+	oldResConfigId := *deployment.Config.DeploymentTopologies[0].ResourceSettings.Id
+	projectId := *deployment.Config.References.ProjectId
+	imageId := *deployment.Config.References.ImageId
+	deploymentId := *deployment.Meta.Uid
+
+	resourceTemp, err := dslibs.GetResourceTemplateConfigs(oldResConfigId)
+	if err != nil {
+		if ResiliencyFlag {
+			ResiliencyCondition <- false
+			CapturedErrors <- err
+		}
+		return false, err
+	}
+
+	// Get the initial capacity of the DataService
+	initialCapacity := resourceTemp.Resources.Requests.Storage
+	log.Debugf("Initial Capacity of the dataservice is [%s]", initialCapacity)
+	log.Debugf("newResConfigId [%s]", newResConfigId)
+
+	newDeployment, err := dslibs.UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, newResConfigId, stConfigId)
+	if err != nil {
+		if ResiliencyFlag {
+			ResiliencyCondition <- false
+			CapturedErrors <- err
+		}
+		return false, err
+	}
+
+	if ResiliencyFlag {
+		ResiliencyCondition <- true
+	}
+	log.InfoD("Resiliency Condition is met, now proceeding to validate if storage size is increased.")
+	err = dslibs.ValidateDeploymentConfigUpdate(*newDeployment.Update.Meta.Uid, "COMPLETED")
+	if err != nil {
+		if ResiliencyFlag {
+			ResiliencyCondition <- false
+			CapturedErrors <- err
+		}
+		return false, err
+	}
+
+	err = dslibs.ValidateDataServiceDeploymentHealth(deploymentId, "AVAILABLE")
+	if err != nil {
+		if ResiliencyFlag {
+			ResiliencyCondition <- false
+			CapturedErrors <- err
+		}
+		return false, err
+	}
+
+	UpdatedDeployment, _, err := dslibs.GetDeploymentAndPodDetails(deploymentId)
+	if err != nil {
+		if ResiliencyFlag {
+			ResiliencyCondition <- false
+			CapturedErrors <- err
+		}
+		return false, err
+	}
+
+	newResourceTemp, err := dslibs.GetResourceTemplateConfigs(*UpdatedDeployment.Get.Config.DeploymentTopologies[0].ResourceSettings.Id)
+	if err != nil {
+		if ResiliencyFlag {
+			ResiliencyCondition <- false
+			CapturedErrors <- err
+		}
+		return false, err
+	}
+
+	// Get the updated capacity of the DataService
+	updatedCapacity := newResourceTemp.Resources.Requests.Storage
+	log.Debugf("Updated Capacity of the dataservice is [%s]", updatedCapacity)
+
+	if updatedCapacity > initialCapacity {
+		log.InfoD("Initial PVC Capacity is- %v and Updated PVC Capacity is- %v", initialCapacity, updatedCapacity)
+		log.InfoD("Storage is Successfully increased to  [%v]", updatedCapacity)
+	} else {
+		log.FailOnError(fmt.Errorf("Failed to verify Storage Resize at PV/PVC level \n"), "updatedCapacity should be higher than the initial capacity")
+	}
+	return true, nil
 }

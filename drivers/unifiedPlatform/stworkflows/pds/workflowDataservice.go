@@ -391,14 +391,9 @@ func (wfDataService *WorkflowDataService) ValidateDeploymentResources(resourceTe
 	wfDataService.Dash.VerifyFatal(config.Spec.Version, dataServiceVersionBuild, "Validating ds version")
 }
 
-func (wfDataService *WorkflowDataService) IncreasePvcSizeBy1gb(namespace string, deploymentName string, sizeInGb uint64) error {
-	_, err := utils.IncreasePVCby1Gig(namespace, deploymentName, sizeInGb)
-	return err
-}
-
 func (wfDataService *WorkflowDataService) KillDBMasterNodeToValidateHA(deploymentId string) error {
-	dbMaster, isNativelyDistributed := utils.GetDbMasterNode(
-		wfDataService.DataServiceDeployment[deploymentId].Namespace,
+
+	dbMaster, isNativelyDistributed := utils.GetDbMasterNode(wfDataService.DataServiceDeployment[deploymentId].Namespace,
 		wfDataService.DataServiceDeployment[deploymentId].DSParams.Name,
 		*wfDataService.DataServiceDeployment[deploymentId].Deployment.Status.CustomResourceName,
 		wfDataService.Namespace.TargetCluster.KubeConfig)
@@ -462,15 +457,6 @@ func (wfDataService *WorkflowDataService) DeletePDSPods(podNames []string, names
 	return nil
 }
 
-// GetVolumeCapacityInGBForDeployment Get volume capacity
-func (wfDataService *WorkflowDataService) GetVolumeCapacityInGBForDeployment(namespace string, deploymentName string) (uint64, error) {
-	capacity, err := utils.GetVolumeCapacityInGB(namespace, deploymentName)
-	if err != nil {
-		return 0, err
-	}
-	return capacity, nil
-}
-
 func (wfDataService *WorkflowDataService) GetPodAgeForDeployment(deploymentId string) (float64, error) {
 	age, err := utils.GetPodAge(
 		*wfDataService.DataServiceDeployment[deploymentId].Deployment.Status.CustomResourceName,
@@ -480,14 +466,6 @@ func (wfDataService *WorkflowDataService) GetPodAgeForDeployment(deploymentId st
 		return 0, err
 	}
 	return age, nil
-}
-
-func (wfDataService *WorkflowDataService) CheckPVCStorageFullCondition(namespace string, deploymentName string, thresholdPercentage float64) error {
-	err := utils.CheckStorageFullCondition(namespace, deploymentName, thresholdPercentage)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (wfDataService *WorkflowDataService) ValidateDepConfigPostStorageIncrease(deploymentId string, stIncrease *dslibs.ValidateStorageIncrease) error {
