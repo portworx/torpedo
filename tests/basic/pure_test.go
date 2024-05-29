@@ -4475,17 +4475,14 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 						for _, volItem := range volume.Items {
 							if strings.Contains(volItem.Name, volname) {
 								pvcFadaMap[volname] = true
-								bandwidthStr := volItem.QoS.BandwidthLimit
-								bandwidth, err := strconv.Atoi(*bandwidthStr)
-								log.FailOnError(err, "Failed to convert bandwidth to int")
+								bandwidth := volItem.QoS.BandwidthLimit
 								bandwidth = bandwidth / units.GiB
 								log.InfoD("bandwidth is [%v]", bandwidth)
 								iops := volItem.QoS.IopsLimit
-								iopsInt, err := strconv.Atoi(*iops)
 								log.FailOnError(err, "Failed to convert iops to int")
-								log.InfoD("iops is [%v]", iopsInt)
+								log.InfoD("iops is [%v]", iops)
 								//compare bandwidth and iops with max_iops and max_bandwidth
-								if bandwidth >= 1 || iopsInt >= 1000 {
+								if bandwidth >= 1 || iops >= 1000 {
 									log.FailOnError(fmt.Errorf("Bandwidth or IOPS is not updated in backend"), "Bandwidth or IOPS is not updated in backend")
 								}
 							}

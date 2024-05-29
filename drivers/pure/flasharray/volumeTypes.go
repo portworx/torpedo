@@ -24,8 +24,8 @@ type Pod struct {
 }
 
 type QoS struct {
-	BandwidthLimit *string `json:"bandwidth_limit"`
-	IopsLimit      *string `json:"iops_limit"`
+	BandwidthLimit int `json:"bandwidth_limit"`
+	IopsLimit      int `json:"iops_limit"`
 }
 
 type VolumeGroup struct {
