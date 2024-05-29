@@ -12907,7 +12907,7 @@ func CheckVolumesExistinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPv
 	}
 	return nil
 }
-func CheckIopsandBandwidth(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, reqBandwidth int, reqIops int) error {
+func CheckIopsandBandwidthinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, reqBandwidth int, reqIops int) error {
 	pvcFadaMap := make(map[string]bool)
 	for _, volumeName := range listofFadaPvc {
 		pvcFadaMap[volumeName] = false
