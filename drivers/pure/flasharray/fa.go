@@ -16,7 +16,7 @@ import (
 )
 
 // supportedRestVersions is used to negotiate the API version to use
-var supportedRestVersions = [...]string{"2.26"}
+var supportedRestVersions = [...]string{"2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8"}
 
 type Client struct {
 	MgmtIp      string
