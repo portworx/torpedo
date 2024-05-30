@@ -4724,12 +4724,14 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 					}
 				}
 			}
+			fmt.Println("CloudDriveListMap", CloudDriveListMap)
 			stepLog = "Check if all cloud drives are not in single FA"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
 				for _, fa := range CloudDriveListMap {
 					faEndPoints[fa]++
 				}
+				fmt.Println("faendpoint", faEndPoints)
 				log.InfoD("Check if the cloud drives are distributed across different FA from pure.json file")
 				for endpoint, count := range faEndPoints {
 					if count == 0 {
