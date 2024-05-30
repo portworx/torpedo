@@ -859,6 +859,10 @@ spec:
       value: "${IKS_CLUSTER_REGION}"
     - name: LONGEVITY_UPGRADE_EXECUTION_THRESHOLD
       value: "${LONGEVITY_UPGRADE_EXECUTION_THRESHOLD}"
+    - name: GKE_UPGRADE_STRATEGY
+      value: "${GKE_UPGRADE_STRATEGY}"
+    - name: GKE_SURGE_VALUE
+      value: "${GKE_SURGE_VALUE}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
