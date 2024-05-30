@@ -473,6 +473,7 @@ func (r *Rancher) CreateCustomPodSecurityAdmissionConfigurationTemplate(psaTempl
 	log.InfoD("Create custom PSA template: %v with template defaults %v and template exemptions %v", psaTemplateName, psaTemplateDefaults, psaTemplateExemptions)
 	_, err := r.client.PodSecurityAdmissionConfigurationTemplate.Create(PSAInterface)
 	return err
+
 }
 
 // GetRKEClusterList returns the list of RKE clusters added to Rancher
@@ -498,7 +499,11 @@ func (r *Rancher) GetCurrentClusterWidePSA(clusterName string) (error, string) {
 	for _, cluster := range clusterCollection.Data {
 		if cluster.Name == clusterName {
 			log.InfoD("The cluster wide PSA for cluster %v is %v", clusterName, cluster.DefaultPodSecurityAdmissionConfigurationTemplateName)
+			log.InfoD("The cluster wide PSA for cluster %v is %v", clusterName, cluster.AppliedPodSecurityPolicyTemplateName)
+			log.InfoD("The cluster wide PSA for cluster %v is %v", clusterName, cluster.AppliedSpec.DefaultPodSecurityAdmissionConfigurationTemplateName)
+
 			return nil, cluster.DefaultPodSecurityAdmissionConfigurationTemplateName
+
 		}
 	}
 	return fmt.Errorf("cluster with cluster name %s is not present", clusterName), ""
@@ -513,17 +518,19 @@ func (r *Rancher) GetPodSecurityAdmissionConfigurationTemplateList() (error, *ra
 }
 
 // UpdateClusterWidePSA add the cluster wide PSA to the given cluster
-func (r *Rancher) UpdateClusterWidePSA(clusterName string, psaName string) error {
+func (r *Rancher) UpdateClusterWidePSA(clusterName string, psaName string, uid string) error {
 	clusterCollection, err := r.client.Cluster.List(nil)
 	if err != nil {
 		return err
 	}
-	log.InfoD("Updating cluster wide PSA %v for cluster %v", psaName, clusterName)
+
+	log.InfoD("Updating cluster wide PSA %v for cluster %v with psa uid %v", psaName, clusterName, uid)
 	for _, cluster := range clusterCollection.Data {
 		if cluster.Name == clusterName {
 			clusterInterface := &rancherClient.Cluster{
 				Name: cluster.Name,
 				DefaultPodSecurityAdmissionConfigurationTemplateName: psaName,
+				DefaultPodSecurityPolicyTemplateID:                   uid,
 			}
 			_, err = r.client.Cluster.Update(&cluster, clusterInterface)
 			return err

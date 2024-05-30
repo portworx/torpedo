@@ -1226,7 +1226,7 @@ var _ = Describe("{DummyPSATestcase}", Label(TestCaseLabelsMap[DummyPSATestcase]
 			}
 			err = Inst().S.(*rke.Rancher).CreateCustomPodSecurityAdmissionConfigurationTemplate("custom-restricted-psa3", "Added custom PSA with restricted mode", psaTemplateDefaults, psaTemplateExemptions)
 			log.FailOnError(err, "Creating new PSA template with restricted mode")
-			Inst().S.(*rke.Rancher).UpdateClusterWidePSA(clusterList[0], "custom-restricted-psa3")
+			Inst().S.(*rke.Rancher).UpdateClusterWidePSA(clusterList[0], "custom-restricted-psa3", "")
 			log.FailOnError(err, "Adding custom PSA with restricted mode")
 
 			log.InfoD("Verifying if custom PSA is applied to the cluster")
@@ -1238,5 +1238,146 @@ var _ = Describe("{DummyPSATestcase}", Label(TestCaseLabelsMap[DummyPSATestcase]
 
 	JustAfterEach(func() {
 		log.InfoD("Nothing to be deleted")
+	})
+})
+
+// This testcase creates cluster wide PSA and takes backup & restore
+var _ = Describe("{RancherClusterWidePSABackupAndRestore}", Label(TestCaseLabelsMap[RancherClusterWidePSABackupAndRestore]...), func() {
+
+	var (
+		credName                 string
+		credUid                  string
+		customBackupLocationName string
+		backupLocationUID        string
+		appNamespaces            []string
+
+		contexts                          []*scheduler.Context
+		appContexts                       []*scheduler.Context
+		scheduledAppContexts              []*scheduler.Context
+		defaultExemptListForRestrictedPSA []string
+		clusterList                       []string
+		currentPSA                        string
+		psaUid                            string
+	)
+	backupLocationMap := make(map[string]string)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("RancherClusterWidePSABackupAndRestore",
+			"Take backup and restore by setting cluster wide PSA", nil, 84872, Sagrawal, Q2FY24)
+
+		log.InfoD("Getting the list of namespaces exempted by default PSA rancher-restricted")
+		err, psaList := Inst().S.(*rke.Rancher).GetPodSecurityAdmissionConfigurationTemplateList()
+		log.FailOnError(err, "Getting default PSA list")
+		log.InfoD("Default PSA Template list is %v", psaList)
+		for _, psa := range psaList.Data {
+			if psa.Name == "rancher-restricted" {
+				defaultExemptListForRestrictedPSA = psa.Configuration.Exemptions.Namespaces
+				break
+			}
+		}
+		log.InfoD("The list of exempted namespace for  rancher-restricted is %v", defaultExemptListForRestrictedPSA)
+
+		log.InfoD("Getting the list of all the RKE clusters added to rancher")
+		err, clusterList = Inst().S.(*rke.Rancher).GetRKEClusterList()
+		log.FailOnError(err, "Getting RKE cluster list")
+		log.InfoD("The RKE cluster list is %v", clusterList)
+		err = RemoveElementByValue(&clusterList, RancherActiveCluster)
+		log.InfoD("The RKE cluster list is %v", clusterList)
+
+		log.InfoD("Getting previous PSA")
+		err, currentPSA = Inst().S.(*rke.Rancher).GetCurrentClusterWidePSA(clusterList[0])
+		log.FailOnError(err, "Fetching cluster wide PSA setting for cluster %v", clusterList[0])
+		log.InfoD("Default Cluster wide PSA for cluster %v is %v", clusterList[0], currentPSA)
+
+		err, currentPSA = Inst().S.(*rke.Rancher).GetCurrentClusterWidePSA(RancherActiveCluster)
+		log.FailOnError(err, "Fetching cluster wide PSA setting for cluster %v", RancherActiveCluster)
+		log.InfoD("Default Cluster wide PSA for cluster %v is %v", RancherActiveCluster, currentPSA)
+
+		log.InfoD("Creating a custom PSA template with restricted mode")
+		psaTemplateDefaults := &rancherClient.PodSecurityAdmissionConfigurationTemplateDefaults{
+			Enforce: "restricted",
+		}
+		pxBackupNS, err := backup.GetPxBackupNamespace()
+		log.FailOnError(err, "Getting backup namespace")
+		portworxNamespace, err := Inst().S.GetPortworxNamespace()
+		log.FailOnError(err, "Getting portworx namespace")
+		nsExemptList := []string{"default", pxBackupNS, portworxNamespace}
+		newList := AppendList(nsExemptList, defaultExemptListForRestrictedPSA)
+		psaTemplateExemptions := &rancherClient.PodSecurityAdmissionConfigurationTemplateExemptions{
+			Namespaces: newList,
+		}
+		err = Inst().S.(*rke.Rancher).CreateCustomPodSecurityAdmissionConfigurationTemplate(CustomRestrictedPSATemplateName, "Added custom PSA with restricted mode", psaTemplateDefaults, psaTemplateExemptions)
+		log.FailOnError(err, "Creating new PSA template with restricted mode")
+
+		err, psaList = Inst().S.(*rke.Rancher).GetPodSecurityAdmissionConfigurationTemplateList()
+		log.FailOnError(err, "Getting default PSA list")
+		for _, psa := range psaList.Data {
+			if psa.Name == CustomRestrictedPSATemplateName {
+				psaUid = psa.UUID
+				break
+			}
+		}
+		log.InfoD("The list of exempted namespace for rancher-restricted is %v", defaultExemptListForRestrictedPSA)
+		log.InfoD("The PSA UID is %v", psaUid)
+		err = Inst().S.(*rke.Rancher).UpdateClusterWidePSA(clusterList[0], CustomRestrictedPSATemplateName, psaUid)
+		log.FailOnError(err, "Adding custom PSA with restricted mode")
+		time.Sleep(3 * time.Minute)
+
+		log.InfoD("Verifying if custom PSA is applied to the cluster")
+		err, currentPSA = Inst().S.(*rke.Rancher).GetCurrentClusterWidePSA(clusterList[0])
+		log.FailOnError(err, "Fetching cluster wide PSA setting for cluster %v", clusterList[0])
+		log.InfoD("Cluster wide PSA for cluster %v is %v", clusterList[0], currentPSA)
+
+		log.InfoD("Deploying applications required for the testcase")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < 3; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = AppReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+	})
+
+	It("Take backup and restore by setting cluster wide PSA", func() {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		Step("Validate applications", func() {
+			log.InfoD("Validate applications")
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			backupLocationProviders := GetBackupProviders()
+			for _, provider := range backupLocationProviders {
+				credName = fmt.Sprintf("%s-cred-%v", provider, RandomString(10))
+				credUid = uuid.New()
+				err := CreateCloudCredential(provider, credName, credUid, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s]  as provider %s", credName, BackupOrgID, provider))
+				customBackupLocationName = fmt.Sprintf("%s-backup-location-%v", provider, RandomString(10))
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = customBackupLocationName
+				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, credUid, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", customBackupLocationName))
+			}
+		})
+
+		Step("Registering application clusters for backup", func() {
+			log.InfoD("Registering application clusters for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+		})
+
+	})
+
+	JustAfterEach(func() {
 	})
 })

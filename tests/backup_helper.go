@@ -175,6 +175,7 @@ const (
 	storkControllerConfigMapRetry             = 30 * time.Second
 	BackupLocationValidationTimeout           = 10 * time.Minute
 	BackupLocationValidationRetryTime         = 30 * time.Second
+	CustomRestrictedPSATemplateName           = "custom-restricted6"
 )
 
 var (
