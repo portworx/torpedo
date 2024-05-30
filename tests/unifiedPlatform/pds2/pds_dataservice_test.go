@@ -208,7 +208,7 @@ var _ = Describe("{GetPVCFullCondition}", func() {
 			//log.FailOnError(err, "Error while checking for pvc full condition")
 
 			log.InfoD("Once pvc has reached threshold, increase the ovc by 1gb")
-			_, err = IncreasePVCize(WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace, *deployment.Create.Status.CustomResourceName, 1)
+			_, err = IncreasePVCSize(WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace, *deployment.Create.Status.CustomResourceName, 1)
 			log.FailOnError(err, "Failing while Increasing the PVC name...")
 
 			//log.InfoD("Validate deployment after PVC increase")

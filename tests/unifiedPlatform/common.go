@@ -417,7 +417,7 @@ func StartPxServiceOnNodes(nodeList []*corev1.Node) error {
 }
 
 // Increase PVC by 1 gb
-func IncreasePVCize(namespace string, deploymentName string, sizeInGb uint64) (*volume.Volume, error) {
+func IncreasePVCSize(namespace string, deploymentName string, sizeInGb uint64) (*volume.Volume, error) {
 	log.Info("Resizing of the PVC begins")
 	var vol *volume.Volume
 	pvcList, _ := GetPvsAndPVCsfromDeployment(namespace, deploymentName)
