@@ -3,8 +3,13 @@ package resiliency
 import (
 	"errors"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
+	"github.com/portworx/torpedo/tests"
+	v1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"sync"
 	"time"
 
@@ -176,4 +181,64 @@ func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deploy
 	}
 
 	return nil
+}
+
+func RestartPXDuringDSScaleUp(ns string, deploymentName string) error {
+	// Get StatefulSet Object
+	var ss *v1.StatefulSet
+	var testError error
+
+	//Waiting till pod have a node assigned
+	var pods []corev1.Pod
+	var nodeToRestartPX node.Node
+	var nodeName string
+	var podName string
+	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+		ss, testError = k8sApps.GetStatefulSet(deploymentName, ns)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Get Pods of this StatefulSet
+		pods, testError = k8sApps.GetStatefulSetPods(ss)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Check if the new Pod have a node assigned or it's in a window where it's just coming up
+		podCount := 0
+		for _, pod := range pods {
+			log.Infof("Nodename of pod %v is :%v:", pod.Name, pod.Spec.NodeName)
+			if pod.Spec.NodeName == "" || pod.Spec.NodeName == " " {
+				log.Infof("Pod %v still does not have a node assigned. Retrying in 5 seconds", pod.Name)
+				return false, nil
+			} else {
+				podCount += 1
+				log.Debugf("No of pods that has node assigned: %d", podCount)
+			}
+			if int32(podCount) == *ss.Spec.Replicas {
+				log.Debugf("Expected pod %v has node %v assigned", pod.Name, pod.Spec.NodeName)
+				nodeName = pod.Spec.NodeName
+				podName = pod.Name
+				return true, nil
+			}
+		}
+		return true, nil
+	})
+	nodeToRestartPX, testError = node.GetNodeByName(nodeName)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+
+	log.InfoD("Going ahead and restarting PX the node %v as there is an "+
+		"application pod %v that's coming up on this node", nodeName, podName)
+	testError = tests.Inst().V.RestartDriver(nodeToRestartPX, nil)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+
+	log.InfoD("PX restarted successfully on node %v", podName)
+	return testError
 }
