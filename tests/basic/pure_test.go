@@ -4665,3 +4665,73 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 		appsValidateAndDestroy(contexts)
 	})
 })
+
+var _ = Describe("{CheckCloudDrivesinFA}", func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-23972
+		1.Collect FA endpoints details from pure.json
+		2.Collect all cloud drives from the nodes
+		3.Collect the Drive ID from drive set configuration from each node
+		4.check in which FA the cloud drive is present and note down in a map
+		5.Check if the cloud drives are distributed across different FA from pure.json file
+	*/
+	BeforeEach(func() {
+		StartTorpedoTest("CheckCloudDrivesinFA", "Check if the cloud drives are present in FA", nil, 0)
+	})
+	itLog := "Check Cloud Drives are present in FA"
+	It(itLog, func() {
+		var clouddrives []string
+		faEndPoints := make(map[string]int)
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "Failed to get FA details used")
+		for _, fa := range flashArrays {
+			faEndPoints[fa.MgmtEndPoint] = 0
+		}
+		stepLog := "Collect all cloud Drives from the nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			cloudData, err := GetCloudDriveList()
+			log.FailOnError(err, "Failed to get cloud drives")
+			log.InfoD("Collect the Drive ID from drive set configuration from each node")
+			for _, cloudDrive := range *cloudData {
+				for i, _ := range cloudDrive.Configs {
+					clouddrives = append(clouddrives, cloudDrive.Configs[i].ID)
+				}
+			}
+		})
+		CloudDriveListMap := make(map[string]string)
+		stepLog = "Check if the cloud drives are present in FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, fa := range flashArrays {
+				faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
+				log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
+				for _, cloudDrive := range clouddrives {
+					cloudDrivefullName, err := GetVolumeCompleteNameOnFA(faClient, cloudDrive)
+					log.FailOnError(err, fmt.Sprintf("Failed to get volume name for cloud drive id [%v]", cloudDrive))
+					isExists, err := pureutils.IsFAVolumeExists(faClient, cloudDrivefullName)
+					log.FailOnError(err, fmt.Sprintf("Failed to check if volume exists on FA: %v", err))
+					if isExists {
+						CloudDriveListMap[cloudDrive] = fa.MgmtEndPoint
+						log.InfoD("Cloud Drive [%v] exists on the FA Cluster [%v]", cloudDrive, fa.MgmtEndPoint)
+					} else {
+						log.InfoD("Cloud Drive[%v] doesn't exist on the FA Cluster [%v]", cloudDrive, fa.MgmtEndPoint)
+					}
+				}
+			}
+			stepLog = "Check if all cloud drives are not in single FA"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, fa := range CloudDriveListMap {
+					faEndPoints[fa]++
+				}
+				log.InfoD("Check if the cloud drives are distributed across different FA from pure.json file")
+				for endpoint, count := range faEndPoints {
+					if count == 0 {
+						log.Error("Cloud Drives are not present in FA [%v]", endpoint)
+					}
+				}
+			})
+		})
+	})
+})
