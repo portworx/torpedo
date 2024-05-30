@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/tests"
@@ -13,10 +14,7 @@ import (
 	"sync"
 	"time"
 
-	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -54,10 +52,6 @@ var (
 	CapturedErrors            = make(chan error, 10)
 	checkTillReplica          int32
 	ResiliencyCondition       = make(chan bool)
-	restoredDeployment        *pds.ModelsDeployment
-	dsEntity                  restoreBkp.DSEntity
-	DynamicDeployments        []*pds.ModelsDeployment
-	RestoredDeployments       []*pds.ModelsDeployment
 	UpdateTemplate            string
 )
 
@@ -168,6 +162,46 @@ func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deploy
 		}
 		ExecuteInParallel(func1, func2)
 
+	case RestartPxDuringDSScaleUp:
+		log.InfoD("Entering to resize of the Data service resources, while px is restarted")
+		tenantID, err := platformLibs.GetDefaultTenantId(AccountID)
+		if err != nil {
+			return err
+		}
+
+		nameSpace, err := platformLibs.GetNamespace(tenantID, namespace)
+		if err != nil {
+			return err
+		}
+
+		func1 := func() {
+			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, UpdateTemplate)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+
+	case RebootNodeDuringAppResourceUpdate:
+		log.InfoD("Entering to resize of the Data service Volume, while nodes are rebooted")
+		tenantID, err := platformLibs.GetDefaultTenantId(AccountID)
+		if err != nil {
+			return err
+		}
+
+		nameSpace, err := platformLibs.GetNamespace(tenantID, namespace)
+		if err != nil {
+			return err
+		}
+
+		func1 := func() {
+			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, UpdateTemplate)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+
 	}
 
 	var aggregatedError error
@@ -240,5 +274,98 @@ func RestartPXDuringDSScaleUp(ns string, deploymentName string) error {
 	}
 
 	log.InfoD("PX restarted successfully on node %v", podName)
+	return testError
+}
+
+// Reboot the Active Node onto which the application pod is coming up
+func RebootActiveNodeDuringDeployment(ns string, deploymentName string, num_reboots int) error {
+	// Get StatefulSet Object
+	var ss *v1.StatefulSet
+	var testError error
+
+	// Waiting till atleast first pod have a node assigned
+	var pods []corev1.Pod
+	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+		ss, testError = k8sApps.GetStatefulSet(deploymentName, ns)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Get Pods of this StatefulSet
+		pods, testError = k8sApps.GetStatefulSetPods(ss)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Check if Pods have a node assigned or it's in a window where it's just coming up
+		for _, pod := range pods {
+			log.Infof("Nodename of pod %v is :%v:", pod.Name, pod.Spec.NodeName)
+			if pod.Spec.NodeName == "" || pod.Spec.NodeName == " " {
+				log.Infof("Pod %v still does not have a node assigned. Retrying in 5 seconds", pod.Name)
+				return false, nil
+			} else {
+				return true, nil
+			}
+		}
+		return true, nil
+	})
+
+	// Check which Pod is still not up. Try to reboot the node on which this Pod is hosted.
+	for _, pod := range pods {
+		log.Infof("Checking Pod %v running on Node: %v", pod.Name, pod.Spec.NodeName)
+		if k8sCore.IsPodReady(pod) {
+			log.InfoD("This Pod running on Node %v is Ready so skipping this pod......", pod.Spec.NodeName)
+			continue
+		} else {
+			var nodeToReboot node.Node
+			nodeToReboot, testError := node.GetNodeByName(pod.Spec.NodeName)
+			if testError != nil {
+				CapturedErrors <- testError
+				return testError
+			}
+			if nodeToReboot.Name == "" {
+				testError = errors.New("Something happened and node is coming out to be empty from Node registry")
+				CapturedErrors <- testError
+				return testError
+			}
+			log.Infof("Going ahead and rebooting the node %v as there is an application pod thats coming up on this node", pod.Spec.NodeName)
+			testError = tests.Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
+				Force: true,
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         defaultCommandTimeout,
+					TimeBeforeRetry: defaultCommandRetry,
+				},
+			})
+			if testError != nil {
+				CapturedErrors <- testError
+				return testError
+			}
+			if num_reboots > 1 {
+				for index := 1; index <= num_reboots; index++ {
+					log.Infof("wait for node: %s to be back up", nodeToReboot.Name)
+					err = tests.Inst().N.TestConnection(nodeToReboot, node.ConnectionOpts{
+						Timeout:         defaultTestConnectionTimeout,
+						TimeBeforeRetry: defaultWaitRebootRetry,
+					})
+					if err != nil {
+						CapturedErrors <- err
+						return err
+					}
+					testError = tests.Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
+						Force: true,
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         defaultCommandTimeout,
+							TimeBeforeRetry: defaultCommandRetry,
+						},
+					})
+					if testError != nil {
+						CapturedErrors <- testError
+						return testError
+					}
+				}
+			}
+			log.Infof("Node %v rebooted successfully", pod.Spec.NodeName)
+		}
+	}
 	return testError
 }
