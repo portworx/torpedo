@@ -4685,6 +4685,7 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details used")
 		for _, fa := range flashArrays {
+			log.InfoD("FA EndPoint [%v]", fa.MgmtEndPoint)
 			faEndPoints[fa.MgmtEndPoint] = 0
 		}
 		stepLog := "Collect all cloud Drives from the nodes"
