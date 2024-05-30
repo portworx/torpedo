@@ -4729,7 +4729,7 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 				log.InfoD("Check if the cloud drives are distributed across different FA from pure.json file")
 				for endpoint, count := range faEndPoints {
 					if count == 0 {
-						log.Error("Cloud Drives are not present in FA [%v]", endpoint)
+						log.Errorf("Cloud Drives are not present in FA [%v]", endpoint)
 					}
 				}
 			})
