@@ -7275,62 +7275,42 @@ func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) 
 	log.Infof("SSH Command - %s", sshCmd)
 
 	// If the cluster provider is openshift then we are creating ssh pod and running the command in it
-	if os.Getenv("CLUSTER_PROVIDER") == "openshift" {
-		log.Infof("Cluster is openshift hence creating the SSH Pod")
-		err = initSSHPod(sshPodNamespace)
-		if err != nil {
-			return "", err
-		}
-
-		testCmdArgs := getSSHCommandArgs(username, password, ipAddress, "hostname")
-		cmdArgs := getSSHCommandArgs(username, password, ipAddress, cmd)
-
-		// To check if the ssh server is up and running
-		t := func() (interface{}, bool, error) {
-			output, err := k8sCore.RunCommandInPod(testCmdArgs, sshPodName, "ssh-container", sshPodNamespace)
-			if err != nil {
-				log.Infof("Error encountered")
-				if isConnectionError(err.Error()) {
-					log.Infof("Test connection output - \n%s", output)
-					return "", true, err
-				} else {
-					return "", false, err
-				}
-			}
-			log.Infof("Test connection success output - \n%s", output)
-			return "", false, nil
-		}
-		_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
-		if err != nil {
-			return "", err
-		}
-
-		// Executing the actual command
-		output, err := k8sCore.RunCommandInPod(cmdArgs, sshPodName, "ssh-container", sshPodNamespace)
-		if err != nil {
-			return output, err
-		}
-		log.Infof("Output of cmd %s - \n%s", cmd, output)
-		return output, nil
-	} else {
-		workerNode := node.GetWorkerNodes()[0]
-		t := func() (interface{}, bool, error) {
-			output, err := runCmdGetOutput(sshCmd, workerNode)
-			if err != nil {
-				log.Infof("Error encountered")
-				if isConnectionError(err.Error()) {
-					log.Infof("Output of cmd %s - \n%s", cmd, output)
-					return "", true, err
-				} else {
-					return output, false, err
-				}
-			}
-			log.Infof("Output of cmd %s - \n%s", cmd, output)
-			return output, false, nil
-		}
-		commandOutput, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
-		return commandOutput.(string), err
+	log.Infof("Cluster is openshift hence creating the SSH Pod")
+	err = initSSHPod(sshPodNamespace)
+	if err != nil {
+		return "", err
 	}
+
+	testCmdArgs := getSSHCommandArgs(username, password, ipAddress, "hostname")
+	cmdArgs := getSSHCommandArgs(username, password, ipAddress, cmd)
+
+	// To check if the ssh server is up and running
+	t = func() (interface{}, bool, error) {
+		output, err := k8sCore.RunCommandInPod(testCmdArgs, sshPodName, "ssh-container", sshPodNamespace)
+		if err != nil {
+			log.Infof("Error encountered")
+			if isConnectionError(err.Error()) {
+				log.Infof("Test connection output - \n%s", output)
+				return "", true, err
+			} else {
+				return "", false, err
+			}
+		}
+		log.Infof("Test connection success output - \n%s", output)
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		return "", err
+	}
+
+	// Executing the actual command
+	output, err := k8sCore.RunCommandInPod(cmdArgs, sshPodName, "ssh-container", sshPodNamespace)
+	if err != nil {
+		return output, err
+	}
+	log.Infof("Output of cmd %s - \n%s", cmd, output)
+	return output, nil
 }
 
 // initSSHPod creates a pod with ssh server installed and running along with sshpass utility
