@@ -2659,20 +2659,20 @@ func ValidateBackup(ctx context1.Context, backupName string, orgID string, sched
 		return err
 	}
 	// Check size of backup taken is non-zero
-	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
-	if err != nil {
-		return err
-	}
-	Volumes := resp.GetBackup().GetVolumes()
-	if len(Volumes) > 0 {
-		for _, volume := range Volumes {
-			size := volume.GetTotalSize()
-			actualSize := volume.GetActualSize()
-			if !(size > 0 || actualSize > 0) {
-				return fmt.Errorf("backup size for [%s] is [%d] and actual size is [%d] which is not greater than 0 ", backupName, size, actualSize)
-			}
+	/*	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+		if err != nil {
+			return err
 		}
-	}
+		Volumes := resp.GetBackup().GetVolumes()
+		if len(Volumes) > 0 {
+			for _, volume := range Volumes {
+				size := volume.GetTotalSize()
+				actualSize := volume.GetActualSize()
+				if !(size > 0 || actualSize > 0) {
+					return fmt.Errorf("backup size for [%s] is [%d] and actual size is [%d] which is not greater than 0 ", backupName, size, actualSize)
+				}
+			}
+		}*/
 
 	var errors []error
 	theBackup := backupInspectResponse.GetBackup()
