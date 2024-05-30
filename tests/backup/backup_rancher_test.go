@@ -1192,12 +1192,12 @@ var _ = Describe("{DummyPSATestcase}", Label(TestCaseLabelsMap[DummyPSATestcase]
 			err1, clusterList = Inst().S.(*rke.Rancher).GetRKEClusterList()
 			log.FailOnError(err1, "Getting RKE cluster list")
 			log.InfoD("The RKE cluster list is %v", clusterList)
-			err := RemoveElementByValue(&clusterList, RancherActiveCluster)
+			//err := RemoveElementByValue(&clusterList, RancherActiveCluster)
 
 			log.InfoD("Getting the cluster wide PSA setting at the beginning of the testcase")
-			err, currentPSA := Inst().S.(*rke.Rancher).GetCurrentClusterWidePSA(clusterList[0])
-			log.FailOnError(err, "Fetching cluster wide PSA setting for cluster %v", clusterList[0])
-			log.InfoD("Cluster wide PSA for cluster %v is %v", clusterList[0], currentPSA)
+			err, currentPSA := Inst().S.(*rke.Rancher).GetCurrentClusterWidePSA(RancherActiveCluster)
+			log.FailOnError(err, "Fetching cluster wide PSA setting for cluster %v", RancherActiveCluster)
+			log.InfoD("Cluster wide PSA for cluster %v is %v", RancherActiveCluster, currentPSA)
 
 			log.InfoD("Getting the list of default PSA templates present in the Rancher")
 			err, psaList := Inst().S.(*rke.Rancher).GetPodSecurityAdmissionConfigurationTemplateList()
@@ -1226,13 +1226,13 @@ var _ = Describe("{DummyPSATestcase}", Label(TestCaseLabelsMap[DummyPSATestcase]
 			}
 			err = Inst().S.(*rke.Rancher).CreateCustomPodSecurityAdmissionConfigurationTemplate("custom-restricted-psa3", "Added custom PSA with restricted mode", psaTemplateDefaults, psaTemplateExemptions)
 			log.FailOnError(err, "Creating new PSA template with restricted mode")
-			Inst().S.(*rke.Rancher).UpdateClusterWidePSA(clusterList[0], "custom-restricted-psa3")
+			Inst().S.(*rke.Rancher).UpdateClusterWidePSA(RancherActiveCluster, "custom-restricted-psa3")
 			log.FailOnError(err, "Adding custom PSA with restricted mode")
 
 			log.InfoD("Verifying if custom PSA is applied to the cluster")
 			err, currentPSA = Inst().S.(*rke.Rancher).GetCurrentClusterWidePSA(clusterList[0])
-			log.FailOnError(err, "Fetching cluster wide PSA setting for cluster %v", clusterList[0])
-			log.InfoD("Cluster wide PSA for cluster %v is %v", clusterList[0], currentPSA)
+			log.FailOnError(err, "Fetching cluster wide PSA setting for cluster %v", RancherActiveCluster)
+			log.InfoD("Cluster wide PSA for cluster %v is %v", RancherActiveCluster, currentPSA)
 		})
 	})
 
