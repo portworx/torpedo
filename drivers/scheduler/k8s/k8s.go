@@ -4759,7 +4759,10 @@ func (k *K8s) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace 
 // IsCsiSnapshotExists checks if snapshot exists in namespace
 func (k *K8s) IsCsiSnapshotExists(ctx *scheduler.Context, snapshotName string, namespace string) (bool, error) {
 	snaplist, err := k.GetSnapshotsInNameSpace(ctx, namespace)
-	log.FailOnError(err, "Failed to get Snapshots in namespace [%v]", namespace)
+	if err != nil {
+		log.InfoD("Failed to get Snapshots in namespace [%v]", namespace)
+		return false, err
+	}
 	if len(snaplist.Items) == 0 {
 		log.InfoD("No Snapshots found ")
 		return false, nil
@@ -4777,10 +4780,16 @@ func (k *K8s) IsCsiSnapshotExists(ctx *scheduler.Context, snapshotName string, n
 // DeleteCsiSnapshotsFromNamespace delete the snapshots from the namespace
 func (k *K8s) DeleteCsiSnapshotsFromNamespace(ctx *scheduler.Context, namespace string) error {
 	snaplist, err := k.GetSnapshotsInNameSpace(ctx, namespace)
-	log.FailOnError(err, "Failed to get Snapshots in namespace [%v]", namespace)
+	if err != nil {
+		log.InfoD("Failed to get Snapshots in namespace [%v]", namespace)
+		return err
+	}
 	for _, snap := range snaplist.Items {
 		err = k.DeleteCsiSnapshot(ctx, snap.ObjectMeta.Name, namespace)
-		log.FailOnError(err, "Failed to delete snapshot [%v] in namespace [%v]", snap.ObjectMeta.Name, namespace)
+		if err != nil {
+			log.InfoD("Failed to delete snapshot [%v] in namespace [%v]", snap.ObjectMeta.Name, namespace)
+			return err
+		}
 	}
 	return nil
 
