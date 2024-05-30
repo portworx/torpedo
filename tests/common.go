@@ -5428,7 +5428,7 @@ func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred str
 func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, validate bool) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
-	azureRegion := os.Getenv("AZURE_REGION")
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
 	environmentType := api.S3Config_AzureEnvironmentType_AZURE_GLOBAL // Default value
 	if azureRegion == "CHINA" {
 		environmentType = api.S3Config_AzureEnvironmentType_AZURE_CHINA
@@ -5471,7 +5471,7 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 // CreateAzureBackupLocationWithContext creates backup location for Azure using the given context
 func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context, validate bool) error {
 	backupDriver := Inst().Backup
-	azureRegion := os.Getenv("AZURE_REGION")
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
 	environmentType := api.S3Config_AzureEnvironmentType_AZURE_GLOBAL // Default value
 	if azureRegion == "CHINA" {
 		environmentType = api.S3Config_AzureEnvironmentType_AZURE_CHINA
@@ -6056,7 +6056,7 @@ func DeleteGcpBucket(bucketName string) {
 func DeleteAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
-	azureRegion := os.Getenv("AZURE_REGION")
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
 	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName) // Default value
 	if azureRegion == "CHINA" {
 		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, bucketName)
@@ -6827,7 +6827,7 @@ func RemoveS3BucketPolicy(bucketName string) error {
 func CreateAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
-	azureRegion := os.Getenv("AZURE_REGION")
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
 	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName) // Default value
 	if azureRegion == "CHINA" {
 		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, bucketName)
