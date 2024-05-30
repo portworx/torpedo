@@ -202,6 +202,26 @@ func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deploy
 		}
 		ExecuteInParallel(func1, func2)
 
+	case RestartAppDuringResourceUpdate:
+		log.InfoD("Entering to resize of the Data service Volume, while app is restarted")
+		tenantID, err := platformLibs.GetDefaultTenantId(AccountID)
+		if err != nil {
+			return err
+		}
+
+		nameSpace, err := platformLibs.GetNamespace(tenantID, namespace)
+		if err != nil {
+			return err
+		}
+
+		func1 := func() {
+			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, UpdateTemplate)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+
 	}
 
 	var aggregatedError error

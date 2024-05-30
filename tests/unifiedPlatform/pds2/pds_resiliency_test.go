@@ -67,10 +67,6 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 
 	JustAfterEach(func() {
 		defer EndPDSTorpedoTest()
-		defer func() {
-			delete(WorkflowDataService.SkipValidatation, pds.ValidatePdsDeployment)
-			delete(WorkflowDataService.SkipValidatation, pds.ValidatePdsWorkloads)
-		}()
 	})
 })
 
@@ -132,10 +128,6 @@ var _ = Describe("{RebootAllWorkerNodesDuringDeployment}", func() {
 
 	JustAfterEach(func() {
 		defer EndPDSTorpedoTest()
-		defer func() {
-			delete(WorkflowDataService.SkipValidatation, pds.ValidatePdsDeployment)
-			delete(WorkflowDataService.SkipValidatation, pds.ValidatePdsWorkloads)
-		}()
 	})
 })
 
@@ -305,8 +297,6 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
-				WorkflowDataService.SkipValidatation[pds.ValidatePdsDeployment] = true
-				WorkflowDataService.SkipValidatation[pds.ValidatePdsWorkloads] = true
 			})
 
 			Step("ScaleUp DataService", func() {
@@ -391,7 +381,7 @@ var _ = Describe("{RebootNodeDuringAppResourceUpdate}", func() {
 			})
 
 			Step("Reboot nodes while app resource are updated", func() {
-				log.InfoD("Reboot nodes while app resource are changed")
+				log.InfoD("Reboot nodes while app resource are updated")
 				// Global Resiliency TC marker
 				pdsResLib.MarkResiliencyTC(true)
 				// Type of failure that this TC needs to cover
@@ -399,6 +389,79 @@ var _ = Describe("{RebootNodeDuringAppResourceUpdate}", func() {
 					Type: pdsResLib.RebootNodeDuringAppResourceUpdate,
 					Method: func() error {
 						return pdsResLib.RebootActiveNodeDuringDeployment(PDS_DEFAULT_NAMESPACE, *deployment.Create.Status.CustomResourceName, 1)
+					},
+				}
+
+				pdsResLib.DefineFailureType(failuretype)
+				pdsResLib.AccountID = AccID
+				err = pdsResLib.InduceFailureAfterWaitingForCondition(&deployment.Create, PDS_DEFAULT_NAMESPACE, 1, ds)
+				log.FailOnError(err, fmt.Sprintf("Error happened while executing node reboot %v", *deployment.Create.Status.CustomResourceName))
+			})
+
+			Step("Validate Data Service to after node reboot", func() {
+				log.InfoD("Validate Data Service to after node reboot")
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.ScaleReplicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice after px-agent reboot")
+			})
+
+			stepLog := "Running Workloads after node reboot"
+			Step(stepLog, func() {
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{RestartAppDuringResourceUpdate}", func() {
+	var (
+		deployment *automationModels.PDSDeploymentResponse
+		err        error
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("RestartAppDuringResourceUpdate", "Restart application pod during resource update", nil, 0)
+	})
+
+	It("Restart application pod during resource update", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+
+			Step("Deploy DataService", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Deployment failed")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+
+				//Update Ds With New Values of Resource Templates
+				resConfigIdUpdated, err := WorkflowPDSTemplate.CreateResourceTemplateWithCustomValue(NewPdsParams)
+				log.FailOnError(err, "Unable to create Custom Templates for PDS")
+				log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdated)
+				log.Infof("Associate newly created template to the project")
+				err = WorkflowProject.Associate(
+					[]string{},
+					[]string{},
+					[]string{},
+					[]string{},
+					[]string{resConfigIdUpdated},
+					[]string{},
+				)
+				log.FailOnError(err, "Unable to associate Templates to Project")
+				log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+				pdsResLib.UpdateTemplate = resConfigIdUpdated
+			})
+
+			Step("Restart applications during resource update", func() {
+				log.InfoD("Restart applications during resource update")
+				// Global Resiliency TC marker
+				pdsResLib.MarkResiliencyTC(true)
+				// Type of failure that this TC needs to cover
+				failuretype := pdsResLib.TypeOfFailure{
+					Type: pdsResLib.RestartAppDuringResourceUpdate,
+					Method: func() error {
+						return pdsResLib.RestartApplicationDuringResourceUpdate(PDS_DEFAULT_NAMESPACE, *deployment.Create.Status.CustomResourceName)
 					},
 				}
 
@@ -452,7 +515,7 @@ var _ = Describe("{RebootActiveNodeMultipleTimesDuringDeployment}", func() {
 			})
 
 			Step("Reboot nodes while app resource are updated", func() {
-				log.InfoD("Reboot nodes while app resource are changed")
+				log.InfoD("Reboot nodes while app resource are updated")
 				// Global Resiliency TC marker
 				pdsResLib.MarkResiliencyTC(true)
 				// Type of failure that this TC needs to cover
@@ -485,9 +548,5 @@ var _ = Describe("{RebootActiveNodeMultipleTimesDuringDeployment}", func() {
 
 	JustAfterEach(func() {
 		defer EndPDSTorpedoTest()
-		defer func() {
-			delete(WorkflowDataService.SkipValidatation, pds.ValidatePdsDeployment)
-			delete(WorkflowDataService.SkipValidatation, pds.ValidatePdsWorkloads)
-		}()
 	})
 })

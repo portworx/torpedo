@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
+	"math/rand"
 	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -726,13 +727,41 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 		log.InfoD("Initial PVC Capacity is- %v and Updated PVC Capacity is- %v", initialCapacity, updatedCapacity)
 		log.InfoD("Storage is Successfully increased to  [%v]", updatedCapacity)
 	} else {
-		if err != nil {
-			if ResiliencyFlag {
-				ResiliencyCondition <- false
-				CapturedErrors <- fmt.Errorf("Failed to verify Storage Resize at PV/PVC level \n", "updatedCapacity should be higher than the initial capacity")
-			}
-			return false, err
+		if ResiliencyFlag {
+			ResiliencyCondition <- false
+			CapturedErrors <- fmt.Errorf("Failed to verify Storage Resize at PV/PVC level \n", "updatedCapacity should be higher than the initial capacity")
 		}
+		return false, err
 	}
 	return true, nil
+}
+
+func RestartApplicationDuringResourceUpdate(ns string, deploymentName string) error {
+	var ss *v1.StatefulSet
+	ss, testError := k8sApps.GetStatefulSet(deploymentName, ns)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	// Get Pods of this StatefulSet
+	pods, testError := k8sApps.GetStatefulSetPods(ss)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	rand.Seed(time.Now().Unix())
+	pod := pods[rand.Intn(len(pods))]
+	// Delete the deployment Pods during update.
+	testError = DeleteK8sPods(pod.Name, ns)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	return testError
+}
+
+// DeleteK8sPods deletes the pods in given namespace
+func DeleteK8sPods(pod string, namespace string) error {
+	err := k8sCore.DeletePod(pod, namespace, true)
+	return err
 }
