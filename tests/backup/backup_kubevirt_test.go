@@ -1385,6 +1385,7 @@ var _ = Describe("{KubevirtVMWithFreezeUnfreeze}", Label(TestCaseLabelsMap[Kubev
 			log.InfoD("SSH into the kubevirt VM to check pre-backup VM health")
 			for _, vm := range allVMs {
 				log.Infof("Running command for VM [%s]", vm.Name)
+				time.Sleep(300)
 				output, err := RunCmdInVM(vm, "uname -a", context1.TODO())
 				log.InfoD("Output of command in step - [%s]", output)
 				log.FailOnError(err, "Failed to run command in VM")
