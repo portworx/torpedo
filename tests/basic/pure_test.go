@@ -4616,13 +4616,11 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 				appsvols, err := Inst().S.GetVolumes(context)
 				log.FailOnError(err, "Failed to get volumes for app %s", context.App.Key)
 				for _, vol := range appsvols {
+					fmt.Println("Volume name :", vol.Name)
 					if vol.ID == cloneVolumeId {
-						if vol.Name != "" {
-							volumeName = vol.Name
-							log.InfoD("Volume Name for the Clone Volume is [%v]", volumeName)
-						}
+						volumeName = vol.Name
+						log.InfoD("Volume Name for the Clone Volume is [%v]", volumeName)
 						break
-
 					}
 				}
 			}
