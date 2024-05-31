@@ -4611,7 +4611,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 					log.FailOnError(err, "Failed to inspect volume [%v]", cloneVolumeId)
 					log.InfoD("Get the corresponding volume name for the volId")
 					ClonevolumeName = clonevol.Locator.Name
-					log.InfoD("Clone Volume ID [%v] for parent volume [%v]", cloneVolumeId, vol.ID)
+					log.InfoD("Clone Volume Name [%v] for parent volume [%v]", ClonevolumeName, vol.ID)
 				}
 			}
 		})
