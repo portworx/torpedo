@@ -10,13 +10,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"k8s.io/apimachinery/pkg/api/resource"
-
-	"github.com/devans10/pugo/flasharray"
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
-
+	"github.com/devans10/pugo/flasharray"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -106,6 +104,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"github.com/portworx/torpedo/drivers/pds"
+	"github.com/portworx/torpedo/drivers/scheduler/anthos"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	appUtils "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -320,6 +319,11 @@ const (
 	skipSystemCheckCliFlag           = "torpedo-skip-system-checks"
 	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
 	faSecretCliFlag                  = "fa-secret"
+
+	// PSA Specific
+	kubeApiServerConfigFilePath     = "/etc/kubernetes/manifests/kube-apiserver.yaml"
+	kubeApiServerConfigFilePathBkp  = "/etc/kubernetes/kube-apiserver.yaml.bkp"
+	KubeAdmissionControllerFilePath = "/etc/kubernetes/admission/admissioncontroller.yaml"
 )
 
 // Dashboard params
@@ -388,17 +392,19 @@ const (
 )
 
 const (
-	waitResourceCleanup       = 2 * time.Minute
-	defaultTimeout            = 5 * time.Minute
-	defaultVolScaleTimeout    = 4 * time.Minute
-	defaultIbmVolScaleTimeout = 8 * time.Minute
-	defaultRetryInterval      = 10 * time.Second
-	defaultCmdTimeout         = 20 * time.Second
-	defaultCmdRetryInterval   = 5 * time.Second
-	defaultDriverStartTimeout = 10 * time.Minute
-	defaultKvdbRetryInterval  = 5 * time.Minute
-	addDriveUpTimeOut         = 15 * time.Minute
-	podDestroyTimeout         = 5 * time.Minute
+	waitResourceCleanup         = 2 * time.Minute
+	defaultTimeout              = 5 * time.Minute
+	defaultVolScaleTimeout      = 4 * time.Minute
+	defaultIbmVolScaleTimeout   = 8 * time.Minute
+	defaultRetryInterval        = 10 * time.Second
+	defaultCmdTimeout           = 20 * time.Second
+	defaultCmdRetryInterval     = 5 * time.Second
+	defaultDriverStartTimeout   = 10 * time.Minute
+	defaultKvdbRetryInterval    = 5 * time.Minute
+	addDriveUpTimeOut           = 15 * time.Minute
+	podDestroyTimeout           = 5 * time.Minute
+	kubeApiServerBringUpTimeout = 20 * time.Minute
+	KubeApiServerWait           = 2 * time.Minute
 )
 
 const (
@@ -1385,6 +1391,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 	Step("For validation of an app's volumes", func() {
 		var err error
+		var snapshotVolNames []string
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, nil)
@@ -1410,7 +1417,7 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 				processError(err, errChan...)
 			})
 			Step(fmt.Sprintf("get %s app's volume: %s then create local snapshot", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateSnapshot(vol, params)
+				snapshotVolName, err := Inst().V.ValidateCreateSnapshot(vol, params)
 				if params["backend"] == k8s.PureBlock {
 					expect(err).To(beNil(), "unexpected error creating pure_block snapshot")
 				} else if params["backend"] == k8s.PureFile {
@@ -1419,6 +1426,7 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 						expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()), "incorrect error received creating pure_file snapshot")
 					}
 				}
+				snapshotVolNames = append(snapshotVolNames, snapshotVolName)
 			})
 			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateCloudsnap(vol, params)
@@ -1432,6 +1440,11 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 		Step("validate Pure local volume paths", func() {
 			err = Inst().V.ValidatePureLocalVolumePaths()
 			processError(err, errChan...)
+		})
+		Step("Delete the snapshot that is created ", func() {
+			for _, vol := range snapshotVolNames {
+				err = Inst().V.DeleteVolume(vol)
+			}
 		})
 	})
 }
@@ -1463,6 +1476,7 @@ func ValidatePureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
 
 // ValidatePureSnapshotsPXCTL is the ginkgo spec for validating FADA volume snapshots using PXCTL for a context
 func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
+	var SnapshotVolumes []string
 	Step("For validation of an app's volumes", func() {
 		var (
 			err  error
@@ -1475,7 +1489,7 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 
 		for vol, params := range vols {
 			Step(fmt.Sprintf("get %s app's volume: %s then create snapshot using pxctl", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateSnapshotUsingPxctl(vol)
+				snapshotVolName, err := Inst().V.ValidateCreateSnapshotUsingPxctl(vol)
 				if params["backend"] == k8s.PureBlock {
 					expect(err).To(beNil(), "unexpected error creating pure_block snapshot")
 				} else if params["backend"] == k8s.PureFile {
@@ -1484,6 +1498,7 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 						expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()), "incorrect error received creating pure_file snapshot")
 					}
 				}
+				SnapshotVolumes = append(SnapshotVolumes, snapshotVolName)
 			})
 			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap using pxctl", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateCloudsnapUsingPxctl(vol)
@@ -1498,6 +1513,11 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 			expect(err).NotTo(beNil(), "error expected but no error received while creating Pure groupsnap")
 			if err != nil {
 				expect(err.Error()).To(contain(errPureGroupsnapNotSupported.Error()), "incorrect error received creating Pure groupsnap")
+			}
+		})
+		Step("Delete the cloudsnaps created ", func() {
+			for _, vol := range SnapshotVolumes {
+				err = Inst().V.DeleteVolume(vol)
 			}
 		})
 	})
@@ -2522,15 +2542,15 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 	}
 
 	/* Removing Data error validation till PB-6271 is resolved.
-	if allErrors != "" {
-		if IsReplacePolicySetToDelete {
-			log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
-			IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
-			return nil
-		} else {
-			return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
-		}
-	}
+	   if allErrors != "" {
+	   	if IsReplacePolicySetToDelete {
+	   		log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
+	   		IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
+	   		return nil
+	   	} else {
+	   		return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
+	   	}
+	   }
 	*/
 
 	return nil
@@ -2829,7 +2849,7 @@ func ValidateClusterSize(count int64) {
 	currentNodeCount, err := Inst().S.GetASGClusterSize()
 	log.FailOnError(err, "Failed to Get ASG Cluster Size")
 
-	if Inst().S.String() == openshift.SchedName {
+	if Inst().S.String() == openshift.SchedName || Inst().S.String() == anthos.SchedName {
 		isPxOnMaster, err := IsPxRunningOnMaster()
 		log.FailOnError(err, "Failed to check if px is running on master")
 		if !isPxOnMaster {
@@ -3008,6 +3028,21 @@ func runCmdWithNoSudo(cmd string, n node.Node) error {
 	}
 
 	return err
+
+}
+
+// runCmdOnceNonRoot runs a command once on given node as non-root user
+func runCmdOnceNonRoot(cmd string, n node.Node) (string, error) {
+	output, err := Inst().N.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
+		Sudo:            false,
+	})
+	if err != nil {
+		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+	}
+
+	return output, err
 
 }
 
@@ -12921,4 +12956,308 @@ func GetMultipathDeviceOnPool(n *node.Node) (map[string][]string, error) {
 		}
 	}
 	return multipathMap, nil
+}
+
+func CreatePortworxStorageClass(scName string, ReclaimPolicy v1.PersistentVolumeReclaimPolicy, VolumeBinding storageapi.VolumeBindingMode, params map[string]string) (*storageapi.StorageClass, error) {
+	v1obj := metav1.ObjectMeta{
+		Name: scName,
+	}
+	scObj := storageapi.StorageClass{
+		ObjectMeta:        v1obj,
+		Provisioner:       k8s.PortworxVolumeProvisioner,
+		Parameters:        params,
+		ReclaimPolicy:     &ReclaimPolicy,
+		VolumeBindingMode: &VolumeBinding,
+	}
+	k8sStorage := schedstorage.Instance()
+	sc, err := k8sStorage.CreateStorageClass(&scObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CsiSnapshot storage class: %s.Error: %v", scName, err)
+	}
+	return sc, err
+}
+
+// Checks if list of volumes are present in group of flash arrays declared in pure.json and vice versa
+func CheckVolumesExistinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, NoVolumeExists bool) error {
+	/*
+		pvcFadaMap is a map which has volume name as key and value will NoVolume boolean value , once we find volume we mark it as true and after the loop
+		we check if all volumes are marked as true and vice versa once we try to check deleted volumes
+	*/
+	/*
+		NoVolumeExists is a boolean value which is used to check if we are checking for volume existence or deleted volume existence
+		NoVolumeExists -- false , means all volume names initially marked false and if we find volume in FA mark it as true
+		NoVolumeExists -- true , means all volume names initially marked true and if we don't find volume in FA mark it as false
+	*/
+	pvcFadaMap := make(map[string]bool)
+	for _, volumeName := range listofFadaPvc {
+		pvcFadaMap[volumeName] = NoVolumeExists
+	}
+	for _, fa := range flashArrays {
+		faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
+		if err != nil {
+			log.InfoD("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+			return err
+		}
+		for _, volumeName := range listofFadaPvc {
+			if !NoVolumeExists {
+				//This is to make sure we dont iterate through volumes which are already found in one FA,which means the value for that volume name is already true
+				if pvcFadaMap[volumeName] {
+					continue
+				}
+			}
+			volName, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
+			if volName != "" {
+				// As we found the volume we mark corresponding volume as true
+				log.Infof("Volume [%v] exists on FA [%v]", volName, fa.MgmtEndPoint)
+				pvcFadaMap[volumeName] = true
+
+			} else if err != nil && volName == "" {
+				log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v] on FA [%v]", volumeName, fa.MgmtEndPoint))
+
+			} else {
+				log.Infof("Volume [%v] does not exist on FA [%v]", volumeName, fa.MgmtEndPoint)
+				pvcFadaMap[volumeName] = false
+			}
+		}
+	}
+	// Loop through the map to check the volume status
+	for FadaVol, volStatus := range pvcFadaMap {
+		if NoVolumeExists {
+			// when NoVolumeExists is true, we dont want any volume to be present in FA
+			if volStatus {
+				return fmt.Errorf("PVC %s exists in FA", FadaVol)
+			}
+		} else {
+			// when Novolume is false, we want all volumes to be present in FA
+			if !volStatus {
+				return fmt.Errorf("PVC %s does not exist", FadaVol)
+			}
+		}
+	}
+	return nil
+}
+
+// Checks if list of volumes are present in group of flash blades declared in pure.json and vice versa
+func CheckVolumesExistinFB(flashBlades []pureutils.FlashBladeEntry, listofFbdaPvc []string, NoVolumeExists bool) error {
+	/*
+		pvcFbdaMap is a map which has volume name as key and value will NoVolume boolean value , once we find volume we mark it as true and after the loop
+		we check if all volumes are marked as true and vice versa once we try to check deleted volumes
+	*/
+	/*
+		NoVolumeExists is a boolean value which is used to check if we are checking for volume existence or deleted volume existence
+		NoVolumeExists -- false , means all volume names initially marked false and if we find volume in FA mark it as true
+		NoVolumeExists -- true , means all volume names initially marked true and if we don't find volume in FA mark it as false
+	*/
+	pvcFbdaMap := make(map[string]bool)
+	for _, volumeName := range listofFbdaPvc {
+		pvcFbdaMap[volumeName] = NoVolumeExists
+	}
+	for _, fb := range flashBlades {
+		fbClient, err := pureutils.PureCreateFbClientAndConnect(fb.MgmtEndPoint, fb.APIToken)
+		if err != nil {
+			return err
+		}
+		for _, volumeName := range listofFbdaPvc {
+			if !NoVolumeExists {
+				if pvcFbdaMap[volumeName] {
+					continue
+				}
+			}
+			FsFullName, nameErr := pureutils.GetFilesystemFullName(fbClient, volumeName)
+			log.FailOnError(nameErr, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
+			isExists, err := pureutils.IsFileSystemExists(fbClient, FsFullName)
+
+			if isExists && err == nil {
+				log.Infof("Volume [%v] exists on FB [%v]", volumeName, fb.MgmtEndPoint)
+				pvcFbdaMap[volumeName] = true
+			} else if !isExists && err == nil {
+				log.Infof("Volume [%v] does not exist on FB [%v]", volumeName, fb.MgmtEndPoint)
+				pvcFbdaMap[volumeName] = false
+			}
+			log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
+		}
+	}
+	for FbdaVol, volStatus := range pvcFbdaMap {
+		if NoVolumeExists {
+			if volStatus {
+				return fmt.Errorf("PVC %s exists in FB", FbdaVol)
+			}
+		} else {
+			if !volStatus {
+				return fmt.Errorf("PVC %s does not exist", FbdaVol)
+			}
+		}
+	}
+	return nil
+}
+func CheckIopsandBandwidthinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, reqBandwidth uint64, reqIops uint64) error {
+	pvcFadaMap := make(map[string]bool)
+	for _, volumeName := range listofFadaPvc {
+		pvcFadaMap[volumeName] = false
+	}
+	for _, fa := range flashArrays {
+		faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+		log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
+		volumes, err := pureutils.ListAllVolumesFromFA(faClient)
+		log.FailOnError(err, "Failed to list all volumes from FA")
+		for _, volname := range listofFadaPvc {
+			if pvcFadaMap[volname] {
+				continue
+			}
+			for _, volume := range volumes {
+				for _, volItem := range volume.Items {
+					if strings.Contains(volItem.Name, volname) {
+						bandwidth := volItem.QoS.BandwidthLimit
+						bandwidth = bandwidth / units.GiB
+						log.InfoD("bandwidth for volume [%v] is [%v]", volname, bandwidth)
+						iops := volItem.QoS.IopsLimit
+						log.FailOnError(err, "Failed to convert iops to int")
+						log.InfoD("iops for volume [%v] is [%v]", volname, iops)
+						//compare bandwidth and iops with max_iops and max_bandwidth
+						if bandwidth < reqBandwidth || iops < reqIops {
+							pvcFadaMap[volname] = false
+						} else {
+							pvcFadaMap[volname] = true
+						}
+					}
+				}
+			}
+		}
+	}
+	for FadaVol, volStatus := range pvcFadaMap {
+		if !volStatus {
+			return fmt.Errorf("PVC %s does not have required iops and bandwidth", FadaVol)
+		}
+	}
+	return nil
+}
+
+// RunCmdsOnAllMasterNodes Runs a set of commands on all the master nodes
+func RunCmdsOnAllMasterNodes(cmds []string) error {
+	for _, node := range node.GetMasterNodes() {
+		for _, cmd := range cmds {
+			log.InfoD(fmt.Sprintf("Running command %s on %s", cmd, node.Name))
+			_, err := runCmdOnceNonRoot(cmd, node)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// ConfigureClusterLevelPSA Configure cluster level PSA settings where all newly created namespaces will be affected by
+// it and will exclude kube-system, default, px-backup and portworx namespace
+func ConfigureClusterLevelPSA(psaProfile string, skipNamespace []string) error {
+
+	// Get the namespace where portworx is present
+	pxNs, err := Inst().S.GetPortworxNamespace()
+	if err != nil {
+		return err
+	}
+
+	// Get the namespace where px-backup is present
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+
+	// Create a list of all the namespaces which need to be excluded
+	namespaces := []string{"default", "kube-system", pxBackupNamespace}
+	if pxNs != "kube-system" {
+		namespaces = append(namespaces, pxNs)
+	}
+	namespaces = append(namespaces, skipNamespace...)
+	joined := "\"" + strings.Join(namespaces, "\",\"") + "\""
+
+	tempFilePath := kubeApiServerConfigFilePath + ".tmp"
+
+	cmds := []string{
+		fmt.Sprintf("mkdir -p /etc/kubernetes/admission"),
+		fmt.Sprintf("curl -o %s http://kubevirt-disk-registry.pwx.dev.purestorage.com/more_images/admissioncontroller.yaml", KubeAdmissionControllerFilePath),
+		fmt.Sprintf("sed -i 's/{Profile}/%s/' %s", psaProfile, KubeAdmissionControllerFilePath),
+		fmt.Sprintf("sed -i 's/{NS}/%s/' %s", joined, KubeAdmissionControllerFilePath),
+		fmt.Sprintf("cat  %s > %s", kubeApiServerConfigFilePath, tempFilePath),
+		fmt.Sprintf(`sed -i -e '/- kube-apiserver/a\ \ \  - --admission-control-config-file=/etc/kubernetes/admission/admissioncontroller.yaml' %s`, tempFilePath),
+		fmt.Sprintf(`sed -i -e '/volumeMounts:/a\ \ \  - mountPath: /etc/kubernetes/admission/\n\ \ \ \ \ \ name: admission-conf\n\ \ \ \ \ \ readOnly: true' %s`, tempFilePath),
+		fmt.Sprintf(`sed -i -e '/volumes:/a\  - hostPath:\n\ \ \ \ \ \ path: /etc/kubernetes/admission/\n\ \ \ \ \ \ type: DirectoryOrCreate\n\ \ \ \ name: admission-conf' %s`, tempFilePath),
+		fmt.Sprintf("cat  %s > %s", kubeApiServerConfigFilePath, kubeApiServerConfigFilePathBkp),
+		fmt.Sprintf("mv %s %s", tempFilePath, kubeApiServerConfigFilePath),
+	}
+	log.Infof(fmt.Sprintf("%s", strings.Join(cmds, "\n")))
+	// Run the above set of commands in all the master nodes
+	err = RunCmdsOnAllMasterNodes(cmds)
+	if err != nil {
+		return err
+	}
+
+	// Sleeping till the kubeAPI server comes up
+	time.Sleep(KubeApiServerWait)
+
+	// Wait for cluster to be in normal state
+	t := func() (interface{}, bool, error) {
+		if _, err := core.Instance().GetPods("kube-system", nil); err == nil {
+			return "", false, nil
+		}
+
+		return "", true, nil
+	}
+
+	_, err = task.DoRetryWithTimeout(t, kubeApiServerBringUpTimeout, KubeApiServerWait)
+	if err != nil {
+		return fmt.Errorf("API server didn't come up after change")
+	}
+	return nil
+}
+
+// RevertClusterLevelPSA Revert cluster level PSA settings set in the previous release
+func RevertClusterLevelPSA() error {
+
+	tempFilePath := kubeApiServerConfigFilePath + ".tmp"
+
+	cmds := []string{
+		fmt.Sprintf("mv %s %s", kubeApiServerConfigFilePath, tempFilePath),
+		fmt.Sprintf("mv %s %s", kubeApiServerConfigFilePathBkp, kubeApiServerConfigFilePath),
+		fmt.Sprintf("rm -rf %s", tempFilePath),
+		fmt.Sprintf("rm -rf /etc/kubernetes/admission"),
+	}
+
+	// Run the above set of commands in all the master nodes
+	err := RunCmdsOnAllMasterNodes(cmds)
+	if err != nil {
+		return err
+	}
+
+	// Sleeping till the kubeAPI server comes up
+	time.Sleep(KubeApiServerWait)
+
+	// Wait for cluster to be in normal state
+	t := func() (interface{}, bool, error) {
+		if _, err := core.Instance().GetPods("kube-system", nil); err == nil {
+			return "", false, nil
+		}
+
+		return "", true, nil
+	}
+
+	_, err = task.DoRetryWithTimeout(t, kubeApiServerBringUpTimeout, KubeApiServerWait)
+	if err != nil {
+		return fmt.Errorf("API server didn't come up after change")
+	}
+	return nil
+}
+
+// VerifyClusterLevelPSA Verify if the cluster level PSA settings are set correctly
+func VerifyClusterlevelPSA() error {
+	pods, err := core.Instance().GetPods("kube-system", map[string]string{"component": "kube-apiserver"})
+	if err != nil {
+		return err
+	}
+	command := pods.Items[0].Spec.Containers[0].Command
+	commandOpt := "--admission-control-config-file=/etc/kubernetes/admission/admissioncontroller.yaml"
+	if !strings.Contains(strings.Join(command, ""), commandOpt) {
+		return fmt.Errorf("PSA settings not reflecting in pod!")
+	}
+
+	return nil
 }
