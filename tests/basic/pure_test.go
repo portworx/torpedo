@@ -4597,19 +4597,19 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 	})
 })
 
-var _ = Describe("{DeployFADAAndFBDAAppsAndStopPortworx}", func() {
+var _ = Describe("{DeployAppsAndStopPortworx}", func() {
 	/*
 		https://purestorage.atlassian.net/browse/PTX-37401
-		1.Deploy FADA and FACD apps and parallely and stop portworx for 10 mins
+		1.Deploy Apps and parallely and stop portworx for 10 mins
 		2.After 10 mins make it up and check if the pods are running
 		3.Destroy the apps
 	*/
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeployFADAAndFBDAAppsAndStopPortworx",
-			"Deploy FADA and FBDA apps and parallely stop portworx for 10 mins and after 10 min make it up and check if the pods are running",
+		StartTorpedoTest("DeployAppsAndStopPortworx",
+			"Deploy Apps and parallely stop portworx for 10 mins and after 10 min make it up and check if the pods are running",
 			nil, 0)
 	})
-	itLog := "DeployFADAAndFBDAAppsAndStopPortworx"
+	itLog := "DeployAppsAndStopPortworx"
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var contexts []*scheduler.Context
@@ -4617,27 +4617,17 @@ var _ = Describe("{DeployFADAAndFBDAAppsAndStopPortworx}", func() {
 		var nodeToReboot []node.Node
 		stNodes := node.GetStorageNodes()
 		nodeToReboot = append(nodeToReboot, stNodes[rand.Intn(len(stNodes))])
-		appList := Inst().AppList
 		defer DestroyApps(contexts, nil)
-		defer func() {
-			Inst().AppList = appList
-		}()
-		stepLog := "Schedule FACD and FADA apps on the cluster"
+		stepLog := "Schedule apps on the cluster"
 		Step(stepLog, func() {
-			Inst().AppList = []string{"fio-fa-cloud-drives", "fio-fa-davol"}
-			appNamespace := fmt.Sprintf("fio-fada-facd-namespace-%s", Inst().InstanceID)
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				defer GinkgoRecover()
 				for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					context, err := Inst().S.Schedule(appNamespace, scheduler.ScheduleOptions{
-						AppKeys:            Inst().AppList,
-						StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
-					})
-					log.FailOnError(err, "Failed to schedule application of %v namespace", appNamespace)
-					contexts = append(contexts, context...)
+					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("stopportworx-%d", i))...)
 				}
+
 			}()
 			wg.Add(1)
 			go func() {
