@@ -107,7 +107,7 @@ func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *automationModels
 		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}
 
-	log.Debugf("deployment Name [%s]", *dsModel.Meta.Name)
+	log.Debugf("deployment Name [%s]", *dsModel.Status.CustomResourceName)
 
 	err = utilities.CopyStruct(dsModel, &dsResponse.Create)
 	if err != nil {

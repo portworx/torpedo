@@ -3,12 +3,16 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/units"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/node"
 
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
@@ -18,6 +22,7 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	corev1 "k8s.io/api/core/v1"
 )
 
 var (
@@ -26,6 +31,10 @@ var (
 	WorkflowPDSBackup       pds.WorkflowPDSBackup
 	WorkflowPDSRestore      pds.WorkflowPDSRestore
 	WorkflowPDSTemplate     pds.WorkflowPDSTemplates
+)
+
+var (
+	k8sCore = core.Instance()
 )
 
 const (
@@ -169,8 +178,10 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		log.Infof("Creating data service struct")
 
 		WorkflowDataService.Namespace = &WorkflowNamespace
+		WorkflowDataService.SkipValidatation = make(map[string]bool)
 		WorkflowDataService.DataServiceDeployment = make(map[string]*dslibs.DataServiceDetails)
 		WorkflowDataService.Dash = Inst().Dash
+		WorkflowDataService.UpdateDeploymentTemplates = false
 		WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 		WorkflowDataService.PDSParams = NewPdsParams
 
@@ -190,6 +201,7 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowPDSRestore.WorkflowBackup = &WorkflowPDSBackup
 		WorkflowPDSRestore.Restores = make(map[string]automationModels.PDSRestore)
 		WorkflowPDSRestore.Destination = &WorkflowNamespace
+		WorkflowPDSRestore.Validatation = make(map[string]bool)
 		WorkflowPDSRestore.RestoredDeployments = &pds.WorkflowDataService{
 			PDSParams:    NewPdsParams,
 			Namespace:    &WorkflowNamespace,
@@ -267,11 +279,12 @@ func PurgePDS() []error {
 
 	//log.InfoD("Purging all backup objects")
 	//err = WorkflowPDSBackup.Purge()
+	//// TODO: Uncomment once https://purestorage.atlassian.net/browse/DS-9546 is fixed
+	//// log.FailOnError(err, "some error occurred while purging backup config objects")
 	//if err != nil {
-	//	log.Errorf("Error while deleting backup objects - Error - [%s]", err.Error())
-	//	allErrors = append(allErrors, err)
+	//	log.Infof("Error while deleting backup objects - Error - [%s]", err.Error())
 	//}
-
+	//
 	//log.InfoD("Purging all backup config objects")
 	//err = WorkflowPDSBackupConfig.Purge(true)
 	//// TODO: Uncomment once https://purestorage.atlassian.net/browse/DS-9554 is fixed
@@ -293,9 +306,67 @@ func CheckforClusterSwitch() {
 	}
 }
 
+// Stops px service for the given nodes
+func StopPxServiceOnNodes(nodeList []*corev1.Node) error {
+	// Getting all worker nodes
+	workerNodes := node.GetWorkerNodes()
+	for _, nodeToStop := range nodeList {
+		log.InfoD("Disabling PX on Node %v ", nodeToStop.Name)
+		for _, workerNode := range workerNodes {
+			if workerNode.Name == nodeToStop.Name {
+				err := Inst().V.StopDriver([]node.Node{workerNode}, false, nil)
+				if err != nil {
+					return err
+				}
+				break
+			}
+		}
+	}
+	return nil
+}
+
+// GetVolumeNodesOnWhichPxIsRunning fetches the lit of Volnodes on which PX is running
+func GetVolumeNodesOnWhichPxIsRunning() []node.Node {
+	var (
+		nodesToStopPx []node.Node
+		stopPxNode    []node.Node
+		err           error
+	)
+	stopPxNode = node.GetStorageNodes()
+	if err != nil {
+		log.FailOnError(err, "Error while getting PX Node to Restart")
+	}
+	log.InfoD("PX the node with vol running found is-  %v ", stopPxNode)
+	nodesToStopPx = append(nodesToStopPx, stopPxNode[0])
+	return nodesToStopPx
+}
+
+// StopPxOnReplicaVolumeNode is used to STOP PX on the given list of nodes
+func StopPxOnReplicaVolumeNode(nodesToStopPx []node.Node) error {
+	err := Inst().V.StopDriver(nodesToStopPx, true, nil)
+	if err != nil {
+		log.FailOnError(err, "Error while trying to STOP PX on the volNode- [%v]", nodesToStopPx)
+	}
+	log.InfoD("PX stopped successfully on node %v", nodesToStopPx)
+	return nil
+}
+
+// StartPxOnReplicaVolumeNode is used to START PX on the given list of nodes
+func StartPxOnReplicaVolumeNode(nodesToStartPx []node.Node) error {
+	for _, nodeName := range nodesToStartPx {
+		log.InfoD("Going ahead and re-starting PX the node %v as there is an ", nodeName)
+		err := Inst().V.StartDriver(nodeName)
+		if err != nil {
+			log.FailOnError(err, "Error while trying to Start PX on the volNode- [%v]", nodeName)
+			return err
+		}
+		log.InfoD("PX ReStarted successfully on node %v", nodeName)
+	}
+	return nil
+}
+
 // RebootNodes will reboot the nodes in the given list
 func RebootNodes(nodeList []node.Node) error {
-
 	for _, n := range nodeList {
 		log.InfoD("reboot node: %s", n.Name)
 		err := Inst().N.RebootNode(n, node.RebootNodeOpts{
@@ -318,6 +389,113 @@ func RebootNodes(nodeList []node.Node) error {
 			return err
 		}
 	}
-
 	return nil
+}
+
+// Stops px service for the given nodes
+func StartPxServiceOnNodes(nodeList []*corev1.Node) error {
+	// Getting all worker nodes
+	workerNodes := node.GetWorkerNodes()
+	for _, nodeToStart := range nodeList {
+		log.InfoD("Enabling PX on Node %v ", nodeToStart.Name)
+		for _, workerNode := range workerNodes {
+			if workerNode.Name == nodeToStart.Name {
+				err := Inst().V.StartDriver(workerNode)
+				if err != nil {
+					return err
+				}
+
+				err = Inst().V.WaitDriverUpOnNode(workerNode, Inst().DriverStartTimeout)
+				if err != nil {
+					return err
+				}
+				break
+			}
+		}
+	}
+	return nil
+}
+
+// Increase PVC by 1 gb
+func IncreasePVCize(namespace string, deploymentName string, sizeInGb uint64) (*volume.Volume, error) {
+	log.Info("Resizing of the PVC begins")
+	var vol *volume.Volume
+	pvcList, _ := GetPvsAndPVCsfromDeployment(namespace, deploymentName)
+	initialCapacity, err := GetVolumeCapacityInGB(namespace, deploymentName)
+	log.Debugf("Initial volume storage size is : %v", initialCapacity)
+	if err != nil {
+		return nil, err
+	}
+	for _, pvc := range pvcList.Items {
+		k8sOps := k8sCore
+		storageSize := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+		extraAmount, _ := resource.ParseQuantity(fmt.Sprintf("%dGi", sizeInGb))
+		storageSize.Add(extraAmount)
+		pvc.Spec.Resources.Requests[corev1.ResourceStorage] = storageSize
+		_, err := k8sOps.UpdatePersistentVolumeClaim(&pvc)
+		if err != nil {
+			return nil, err
+		}
+		sizeInt64, _ := storageSize.AsInt64()
+		vol = &volume.Volume{
+			Name:          pvc.Name,
+			RequestedSize: uint64(sizeInt64),
+		}
+	}
+
+	// wait for the resize to take effect
+	time.Sleep(30 * time.Second)
+	newcapacity, err := GetVolumeCapacityInGB(namespace, deploymentName)
+	log.Infof("Resized volume storage size is : %v", newcapacity)
+	if err != nil {
+		return nil, err
+	}
+
+	if newcapacity > initialCapacity {
+		log.InfoD("Successfully resized the pvc by 1gb")
+		return vol, nil
+	} else {
+		return vol, err
+	}
+}
+
+func GetPvsAndPVCsfromDeployment(namespace string, deploymentName string) (*corev1.PersistentVolumeClaimList, []*volume.Volume) {
+	log.Infof("Get PVC List based on namespace and deployment")
+	var vols []*volume.Volume
+	labelSelector := make(map[string]string)
+	labelSelector["name"] = deploymentName
+	pvcList, _ := k8sCore.GetPersistentVolumeClaims(namespace, labelSelector)
+	for _, pvc := range pvcList.Items {
+		vols = append(vols, &volume.Volume{
+			ID: pvc.Spec.VolumeName,
+		})
+	}
+	return pvcList, vols
+}
+
+func GetVolumeCapacityInGB(namespace string, deploymentName string) (uint64, error) {
+	var pvcCapacity uint64
+	_, vols := GetPvsAndPVCsfromDeployment(namespace, deploymentName)
+	for _, vol := range vols {
+		appVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return 0, err
+		}
+		pvcCapacity = appVol.Spec.Size / units.GiB
+	}
+	return pvcCapacity, nil
+}
+
+func GetVolumeUsage(namespace string, deploymentName string) (float64, error) {
+	var pvcUsage float64
+	_, vols := GetPvsAndPVCsfromDeployment(namespace, deploymentName)
+	for _, vol := range vols {
+		appVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return 0, err
+		}
+		pvcUsage = float64(appVol.GetUsage())
+	}
+	log.InfoD("Amount of PVC consumed is- [%v]", pvcUsage)
+	return pvcUsage, nil
 }

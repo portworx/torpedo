@@ -8,15 +8,12 @@ import (
 
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/portworx/torpedo/pkg/units"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -30,7 +27,7 @@ var (
 )
 
 var (
-	instance *Torpedo
+	Instance *Torpedo
 	k8sCores = core.Instance()
 )
 
@@ -43,128 +40,42 @@ type Torpedo struct {
 
 // Inst returns the Torpedo instances
 func Inst() *Torpedo {
-	return instance
+	return Instance
 }
 
-func IncreasePVCby1Gig(namespace string, deploymentName string, sizeInGb uint64) (*volume.Volume, error) {
-	log.Info("Resizing of the PVC begins")
-	var vol *volume.Volume
-	pvcList, _ := GetPvsAndPVCsfromDeployment(namespace, deploymentName)
-	initialCapacity, err := GetVolumeCapacityInGB(namespace, deploymentName)
-	log.Debugf("Initial volume storage size is : %v", initialCapacity)
-	if err != nil {
-		return nil, err
-	}
-	for _, pvc := range pvcList.Items {
-		storageSize := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
-		extraAmount, _ := resource.ParseQuantity(fmt.Sprintf("%dGi", sizeInGb))
-		storageSize.Add(extraAmount)
-		pvc.Spec.Resources.Requests[corev1.ResourceStorage] = storageSize
-		_, err := k8sCores.UpdatePersistentVolumeClaim(&pvc)
-		if err != nil {
-			return nil, err
-		}
-		sizeInt64, _ := storageSize.AsInt64()
-		vol = &volume.Volume{
-			Name:          pvc.Name,
-			RequestedSize: uint64(sizeInt64),
-		}
-	}
-	// wait for the resize to take effect
-	time.Sleep(30 * time.Second)
-	newcapacity, err := GetVolumeCapacityInGB(namespace, deploymentName)
-	log.Infof("Resized volume storage size is : %v", newcapacity)
-	if err != nil {
-		return nil, err
-	}
-	if newcapacity > initialCapacity {
-		log.InfoD("Successfully resized the pvc by 1gb")
-		return vol, nil
-	} else {
-		return vol, err
-	}
-}
+//// Check the DS related PV usage and resize in case of 90% full
+//func CheckStorageFullCondition(namespace string, deploymentName string, thresholdPercentage float64) error {
+//	log.Infof("Check PVC Usage")
+//	f := func() (interface{}, bool, error) {
+//		initialCapacity, _ := GetVolumeCapacityInGB(namespace, deploymentName)
+//		floatCapacity := float64(initialCapacity)
+//		consumedCapacity, err := GetVolumeUsage(namespace, deploymentName)
+//		log.FailOnError(err, "unable to calculate vol usage")
+//		threshold := thresholdPercentage * (floatCapacity / 100)
+//		log.InfoD("threshold value calculated is- [%v]", threshold)
+//		if consumedCapacity >= threshold {
+//			log.Infof("The PVC capacity was %v , the consumed PVC in floating point value is- %v", initialCapacity, consumedCapacity)
+//			return nil, false, nil
+//		}
+//		return nil, true, fmt.Errorf("threshold not achieved for the PVC, ")
+//	}
+//	_, err := task.DoRetryWithTimeout(f, 35*time.Minute, 20*time.Second)
+//	return err
+//}
 
-func GetPvsAndPVCsfromDeployment(namespace string, deploymentName string) (*corev1.PersistentVolumeClaimList, []*volume.Volume) {
-	log.Infof("Get PVC List based on namespace and deployment")
-	var vols []*volume.Volume
-	labelSelector := make(map[string]string)
-	labelSelector["name"] = deploymentName
-	pvcList, _ := k8sCores.GetPersistentVolumeClaims(namespace, labelSelector)
-	for _, pvc := range pvcList.Items {
-		vols = append(vols, &volume.Volume{
-			ID: pvc.Spec.VolumeName,
-		})
-	}
-	return pvcList, vols
-}
-
-func GetVolumeCapacityInGB(namespace string, deploymentName string) (uint64, error) {
-	var pvcCapacity uint64
-	_, vols := GetPvsAndPVCsfromDeployment(namespace, deploymentName)
-	for _, vol := range vols {
-		appVol, err := Inst().V.InspectVolume(vol.ID)
-		if err != nil {
-			return 0, err
-		}
-		pvcCapacity = appVol.Spec.Size / units.GiB
-	}
-	return pvcCapacity, nil
-}
-
-func GetVolumeUsage(namespace string, deploymentName string) (float64, error) {
-	var pvcUsage float64
-	_, vols := GetPvsAndPVCsfromDeployment(namespace, deploymentName)
-	for _, vol := range vols {
-		appVol, err := Inst().V.InspectVolume(vol.ID)
-		if err != nil {
-			return 0, err
-		}
-		pvcUsage = float64(appVol.GetUsage())
-	}
-	log.InfoD("Amount of PVC consumed is- [%v]", pvcUsage)
-	return pvcUsage, nil
-}
-
-// Check the DS related PV usage and resize in case of 90% full
-func CheckStorageFullCondition(namespace string, deploymentName string, thresholdPercentage float64) error {
-	log.Infof("Check PVC Usage")
-	f := func() (interface{}, bool, error) {
-		initialCapacity, _ := GetVolumeCapacityInGB(namespace, deploymentName)
-		floatCapacity := float64(initialCapacity)
-		consumedCapacity, err := GetVolumeUsage(namespace, deploymentName)
-		log.FailOnError(err, "unable to calculate vol usage")
-		threshold := thresholdPercentage * (floatCapacity / 100)
-		log.InfoD("threshold value calculated is- [%v]", threshold)
-		if consumedCapacity >= threshold {
-			log.Infof("The PVC capacity was %v , the consumed PVC in floating point value is- %v", initialCapacity, consumedCapacity)
-			return nil, false, nil
-		}
-		return nil, true, fmt.Errorf("threshold not achieved for the PVC, ")
-	}
-	_, err := task.DoRetryWithTimeout(f, 35*time.Minute, 20*time.Second)
-	return err
-}
-
-func GetDbMasterNode(namespace string, dsName string, deployment string, kubeconfigPath string) (string, bool) {
+func GetDbMasterNode(namespace string, dsName string, deploymentName string, kubeConfig string) (string, bool) {
 	var command, dbMaster string
-	switch dsName {
-	case "deployment.Postgresql":
+	log.Debugf("DS Name - [%s]", dsName)
+	log.Debugf("KubeConfig - [%s]", kubeConfig)
+	log.Debugf("Deployment Name - [%s]", deploymentName)
+	log.Debugf("Namespace - [%s]", namespace)
+	switch strings.ToLower(dsName) {
+	case "postgresql":
+		log.Infof("DSName - [%s]", dsName)
 		command = fmt.Sprintf("patronictl list | grep -i leader | awk '{print $2}'")
-		dbMaster, _ = ExecuteCommandInStatefulSetPod("deployment.GetClusterResourceName()", namespace, command)
-		//log.FailOnError(err, "Failed while fetching db master pods=.")
-		//log.Infof("Deployment %v of type %v have the master "+
-		//"running at %v pod.", deployment.GetClusterResourceName(), dsName, dbMaster)
-	case "deployment.Mysql":
-		//_, connectionDetails, err := pdslib.ApiComponents.DataServiceDeployment.GetConnectionDetails("deployment.GetId()")
-		//log.FailOnError(err, "Failed while fetching connection details.")
-		//cred, err := pdslib.ApiComponents.DataServiceDeployment.GetDeploymentCredentials("deployment.GetId()")
-		//log.FailOnError(err, "Failed while fetching credentials.")
-		//command = fmt.Sprintf("mysqlsh --host=%v --port %v --user=innodb-config "+
-		//" --password=%v -- cluster status", connectionDetails["host"], connectionDetails["port"], cred.GetPassword())
-		dbMaster, _ = ExecuteCommandInStatefulSetPod("deployment.GetClusterResourceName()", namespace, command)
-		//log.Infof("Deployment %v of type %v have the master "+
-		//"running at %v pod.", deployment.GetClusterResourceName(), dsName, dbMaster)
+		dbMaster, _ = ExecuteCommandInStatefulSetPod(deploymentName, namespace, command, kubeConfig)
+	// TODO : Add this support for MySql
+
 	default:
 		return "", false
 	}
@@ -172,13 +83,13 @@ func GetDbMasterNode(namespace string, dsName string, deployment string, kubecon
 }
 
 // ExecuteCommandInStatefulSetPod executes the provided command inside a pod within the specified StatefulSet.
-func ExecuteCommandInStatefulSetPod(statefulsetName, namespace, command string) (string, error) {
+func ExecuteCommandInStatefulSetPod(statefulsetName, namespace, command string, kubeConfig string) (string, error) {
 	podName, err := GetAnyPodName(statefulsetName, namespace)
 	if err != nil {
 		return "", err
 	}
 
-	return ExecCommandInPod(podName, namespace, command)
+	return ExecCommandInPod(podName, namespace, command, kubeConfig)
 }
 
 func GetAnyPodName(statefulName, namespace string) (string, error) {
@@ -195,8 +106,8 @@ func GetAnyPodName(statefulName, namespace string) (string, error) {
 	return randomElement.GetName(), nil
 }
 
-func ExecCommandInPod(podName, namespace, command string) (string, error) {
-	cmd := fmt.Sprintf("kubectl --kubeconfig %v -n %v exec -it %v -- %v", "targetCluster.kubeconfig", namespace, podName, command)
+func ExecCommandInPod(podName, namespace, command string, kubeConfig string) (string, error) {
+	cmd := fmt.Sprintf("kubectl --kubeconfig %s -n %s exec -it %s -- %s", kubeConfig, namespace, podName, command)
 	log.Infof("Command: ", cmd)
 	output, _, err := osutils.ExecShell(cmd)
 	if err != nil {

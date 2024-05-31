@@ -92,7 +92,15 @@ func DeleteDeployment(deploymentId string) error {
 	return v2Components.PDS.DeleteDeployment(deploymentId)
 }
 
-func GetDeployment(deploymentId string) (*automationModels.PDSDeploymentResponse, string, error) {
+func GetDeployment(deploymentId string) (*automationModels.PDSDeploymentResponse, error) {
+	deployment, err := v2Components.PDS.GetDeployment(deploymentId)
+	if err != nil {
+		return nil, err
+	}
+	return deployment, nil
+}
+
+func GetDeploymentAndPodDetails(deploymentId string) (*automationModels.PDSDeploymentResponse, string, error) {
 	deployment, err := v2Components.PDS.GetDeployment(deploymentId)
 	if err != nil {
 		return nil, "", err
@@ -141,7 +149,6 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 		},
 	}
 
-	log.Infof("deployment name  [%s]", *depInputs.Create.V1Deployment.Meta.Name)
 	log.Infof("app template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations.Id)
 	log.Infof("resource template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings.Id)
 	log.Infof("storage template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].StorageOptions.Id)

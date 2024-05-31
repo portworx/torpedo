@@ -86,7 +86,7 @@ func (svcUser *WorkflowServiceAccount) CreateRoleBindingForUser(userDetails auto
 			if role == TenantAdmin {
 				allRoleBindings[TenantAdmin] = append(allRoleBindings[TenantAdmin], automationModels.V1RoleBinding{
 					RoleName:    TenantAdmin,
-					ResourceIds: allProjectIds,
+					ResourceIds: []string{svcUser.WorkflowProjects[0].Platform.TenantId},
 				})
 			}
 

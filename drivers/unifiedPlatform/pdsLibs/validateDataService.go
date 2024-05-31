@@ -139,7 +139,7 @@ func ValidateDeploymentConfigUpdate(deploymentConfigUpdateId, expectedPhase stri
 		deploymentConfig, err := GetDeploymentConfig(deploymentConfigUpdateId)
 		if err != nil {
 			log.Errorf("Error occured while getting deployment status %v", err)
-			return false, nil
+			return false, err
 		}
 		log.Debugf("Deployment Config Update phase -  %v", *deploymentConfig.Update.Status.Phase)
 		if string(*deploymentConfig.Update.Status.Phase) == expectedPhase {
@@ -151,14 +151,10 @@ func ValidateDeploymentConfigUpdate(deploymentConfigUpdateId, expectedPhase stri
 			return true, nil
 		}
 		log.Infof("Condition still not met. Will retry to see if it has met now.....")
-		return false, nil
+		return false, err
 	})
 
-	if waitErr != nil {
-		return err
-	}
-
-	return nil
+	return waitErr
 }
 
 // ValidateStatefulSetHealth validates the health of the statefulset pod
@@ -198,6 +194,7 @@ func ValidateDataServiceDeploymentHealth(deploymentId string, expectedHealth aut
 			return false, nil
 		}
 		if *res.Get.Status.Phase == stworkflows.FAILED {
+			log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Replicas, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
 			return true, fmt.Errorf("Deployment [%s] is [%s]", *res.Get.Meta.Name, *res.Get.Status.Phase)
 		}
 		log.Debugf("Health status - [%v]", *res.Get.Status.Health)

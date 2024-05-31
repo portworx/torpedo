@@ -38,7 +38,7 @@ var _ = BeforeSuite(func() {
 
 		log.InfoD("Get Account ID")
 		//TODO: Get the accountID
-		AccID = "acc:e593e80c-9142-4286-91e5-76dc8bb9b4d6"
+		AccID = "acc:3812878b-04b2-4d69-b7d0-ae61646663bb"
 
 		err = platformUtils.InitUnifiedApiComponents(os.Getenv(EnvControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
@@ -93,6 +93,7 @@ var _ = BeforeSuite(func() {
 	steplog = "Register Target Cluster and Install PDS app"
 	Step(steplog, func() {
 		log.InfoD(steplog)
+		WorkflowTargetCluster.KubeConfig = utilities.GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
 		WorkflowTargetCluster.Project = &WorkflowProject
 		log.Infof("Tenant ID [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
 		WorkflowTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane()
@@ -117,6 +118,7 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "Failed to switched to destination cluster")
 
 		WorkflowTargetClusterDestination.Project = &WorkflowProject
+		WorkflowTargetClusterDestination.KubeConfig = utilities.GetAndExpectStringEnvVar("DEST_KUBECONFIG")
 		log.Infof("Tenant ID [%s]", WorkflowTargetClusterDestination.Project.Platform.TenantId)
 		WorkflowTargetClusterDestination, err := WorkflowTargetClusterDestination.RegisterToControlPlane()
 		log.FailOnError(err, "Unable to register target cluster")
