@@ -41,9 +41,9 @@ func GetFBClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flashblade
 
 // GetApiTokenForMgmtEndpoints Returns API token for Mgmt Endpoints
 func GetApiTokenForFbMgmtEndpoints(secret PXPureSecret, mgmtEndPoint string) string {
-	for _, faDetails := range secret.Blades {
-		if faDetails.MgmtEndPoint == mgmtEndPoint {
-			return faDetails.APIToken
+	for _, fbDetails := range secret.Blades {
+		if fbDetails.MgmtEndPoint == mgmtEndPoint {
+			return fbDetails.APIToken
 		}
 	}
 	return ""
