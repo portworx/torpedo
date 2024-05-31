@@ -4701,11 +4701,10 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 					if CloudDriveListMap[cloudDrive] != "" {
 						continue
 					}
-					fmt.Println("cloud drive", cloudDrive)
 					cloudDrivefullName, err := GetVolumeCompleteNameOnFA(faClient, cloudDrive)
-					log.InfoD("Name of the cloud drive is [%v]", cloudDrivefullName)
 					log.FailOnError(err, fmt.Sprintf("Failed to get volume name for cloud drive id [%v]", cloudDrive))
 					if cloudDrivefullName != "" {
+						log.InfoD("cloud drive  [%v] exists in [%v]", cloudDrivefullName, fa.MgmtEndPoint)
 						CloudDriveListMap[cloudDrive] = fa.MgmtEndPoint
 					}
 				}
@@ -4717,7 +4716,6 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 				for _, fa := range CloudDriveListMap {
 					faEndPoints[fa]++
 				}
-				fmt.Println("faendpoint", faEndPoints)
 				log.InfoD("Check if the cloud drives are distributed across different FA from pure.json file")
 				for endpoint, count := range faEndPoints {
 					if count == 0 {
