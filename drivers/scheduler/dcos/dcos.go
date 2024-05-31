@@ -974,6 +974,14 @@ func (d *dcos) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string
 	}
 }
 
+func (d *dcos) CreateVolumeSnapshotClasses(snapClassName string, provisioner string, isDefault bool, deletePolicy string) (*volsnapv1.VolumeSnapshotClass, error) {
+	//CreateVolumeSnapshotClasses is not supported
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateVolumeSnapshotClasses()",
+	}
+}
+
 func (d *dcos) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*volsnapv1.VolumeSnapshot, error) {
 	//CreateCsiSanpshot is not supported
 	return nil, &errors.ErrNotSupported{
@@ -998,7 +1006,7 @@ func (d *dcos) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneRe
 	}
 }
 
-func (d *dcos) WaitForSinglePVCToBound(pvcName, namespace string) error {
+func (d *dcos) WaitForSinglePVCToBound(pvcName, namespace string, timeout int) error {
 	//WaitForSinglePVCToBound is not supported for DCOS
 	return &errors.ErrNotSupported{
 		Type:      "Function",

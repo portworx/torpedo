@@ -3,6 +3,7 @@ package portworx
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -90,6 +91,7 @@ const (
 	pxctlVolumeListFilter                     = "pxctl volume list -l %s=%s"
 	pxctlVolumeUpdate                         = "pxctl volume update "
 	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
+	pxctlClusterOptionsUpdate                 = "pxctl cluster options update"
 	pxctlDriveAddStart                        = "%s -j service drive add %s -o start"
 	pxctlDriveAddStatus                       = "%s -j service drive add %s -o status"
 	pxctlCloudDriveInspect                    = "%s -j cd inspect --node %s"
@@ -147,6 +149,7 @@ const (
 	validateStorageClusterTimeout     = 40 * time.Minute
 	expandStoragePoolTimeout          = 2 * time.Minute
 	volumeUpdateTimeout               = 2 * time.Minute
+	skinnySnapRetryInterval           = 5 * time.Second
 )
 const (
 	telemetryNotEnabled = "15"
@@ -487,6 +490,16 @@ func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 
 func (d *portworx) RefreshDriverEndpoints() error {
 
+	secretConfigMap := flag.Lookup("config-map").Value.(flag.Getter).Get().(string)
+	if secretConfigMap != "" {
+		log.Infof("Fetching token from configmap: %s", secretConfigMap)
+		token, err := d.schedOps.GetTokenFromConfigMap(secretConfigMap)
+		if err != nil {
+			return err
+		}
+		d.token = token
+	}
+
 	// getting namespace again (refreshing it) as namespace of portworx in switched context might have changed
 	namespace, err := d.GetVolumeDriverNamespace()
 	if err != nil {
@@ -649,16 +662,9 @@ func (d *portworx) comparePoolsAndDisks(srcNode *api.StorageNode,
 	srcDisks := srcNode.Disks
 	dstDisks := dstNode.Disks
 
-	for disk, value := range srcDisks {
-		if !srcDisks[disk].Metadata && !dstDisks[disk].Metadata {
-			if value.Id != dstDisks[disk].Id {
-				return false
-			}
-		} else if srcDisks[disk].Metadata && dstDisks[disk].Metadata {
-			if value.Id != dstDisks[disk].Id {
-				return false
-			}
-		}
+	if len(srcDisks) != len(dstDisks) {
+		log.Errorf("Source disks: [%v] not macthing with Destination disks: [%v]", srcDisks, dstDisks)
+		return false
 	}
 	return true
 }
@@ -1206,7 +1212,7 @@ func (d *portworx) ExitPoolMaintenance(n node.Node) error {
 
 	// no need to exit pool maintenance if node status is up
 	pxStatus, err := d.GetPxctlStatus(n)
-	if err == nil && pxStatus == api.Status_STATUS_OK.String(){
+	if err == nil && pxStatus == api.Status_STATUS_OK.String() {
 		log.Infof("node is up, no need to exit pool maintenance mode")
 		return nil
 	}
@@ -1256,6 +1262,7 @@ func (d *portworx) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting pool status on node [%s], Err: %v", n.Name, err)
 	}
+	log.Debugf("GetNodePoolsStatus output: %s", out)
 	outLines := strings.Split(out, "\n")
 
 	poolsData := make(map[string]string)
@@ -1503,10 +1510,10 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
 			}
 			/* Ignore shared setting.
-		case api.SpecShared:
-			if requestedSpec.Shared != vol.Spec.Shared {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.Shared, vol.Spec.Shared)
-			}
+			case api.SpecShared:
+				if requestedSpec.Shared != vol.Spec.Shared {
+					return errFailedToInspectVolume(volumeName, k, requestedSpec.Shared, vol.Spec.Shared)
+				}
 			*/
 		case api.SpecSticky:
 			if requestedSpec.Sticky != vol.Spec.Sticky {
@@ -1797,7 +1804,7 @@ func constructSnapshotName(volumeName string) string {
 	return volumeName + "-snapshot"
 }
 
-// GetCloudsnaps returns all the cloud snaps of the given volume
+// GetCloudsnaps returns all the cloud snaps of all volumes
 func (d *portworx) GetCloudsnaps(volumeName string, params map[string]string) ([]*api.SdkCloudBackupInfo, error) {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
@@ -1813,6 +1820,21 @@ func (d *portworx) GetCloudsnaps(volumeName string, params map[string]string) ([
 	}
 	return cloudSnapResponse.GetBackups(), nil
 
+}
+
+// GetCloudsnaps returns all the cloud snaps of the given volume
+func (d *portworx) GetCloudsnapsOfGivenVolume(volumeName string, sourceVolumeID string, params map[string]string) ([]*api.SdkCloudBackupInfo, error) {
+	var token string
+	token = d.getTokenForVolume(volumeName, params)
+	if val, hasKey := params[refreshEndpointParam]; hasKey {
+		refreshEndpoint, _ := strconv.ParseBool(val)
+		d.refreshEndpoint = refreshEndpoint
+	}
+	cloudSnapResponse, err := d.csbackupManager.EnumerateWithFilters(d.getContextWithToken(context.Background(), token), &api.SdkCloudBackupEnumerateWithFiltersRequest{SrcVolumeId: sourceVolumeID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cloudsnap, Err: %v", err)
+	}
+	return cloudSnapResponse.GetBackups(), nil
 }
 
 // DeleteAllCloudsnaps delete all cloud snaps for a given volume
@@ -1898,6 +1920,29 @@ func (d *portworx) ValidateVolumeInPxctlList(volumeName string) error {
 		return fmt.Errorf("volume name [%s] is not present in PXCTL volume list", volumeName)
 	}
 	return nil
+}
+
+func (d *portworx) UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) error {
+	nodes := node.GetStorageDriverNodes()
+	cmd := fmt.Sprintf("%s --pure_nfs_endpoint %s %s", pxctlVolumeUpdate, newEndpoint, volumeName)
+	_, err := d.nodeDriver.RunCommandWithNoRetry(
+		nodes[0],
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("failed setting FBDA NFS endpoint for volume [%s] to [%s] from node [%s], Err: %v", volumeName, newEndpoint, nodes[0], err)
+	}
+	return nil
+}
+
+func (d *portworx) ValidatePureFBDAMountSource(nodes []node.Node, vols []*torpedovolume.Volume, expectedIP string) error {
+	// For each node
+	//   Run `mount` on node
+	//   Search through lines for our volume names, check that all contain right IP
+	return fmt.Errorf("not implemented (ValidatePureFBDAMountSource)")
 }
 
 func (d *portworx) ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) error {
@@ -2446,8 +2491,17 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 				Cause: err.Error(),
 			}
 		}
+		isPureFile, err := d.IsPureFileVolume(vol)
+		if err != nil {
+			return nil, false, err
+		}
+		if isPureFile {
+			return nil, false, nil
+		}
+
 		pxVol := volumeInspectResponse.Volume
 		for _, n := range node.GetStorageDriverNodes() {
+
 			ok, err := d.IsVolumeAttachedOnNode(pxVol, n)
 			if err != nil {
 				return nil, false, err
@@ -2461,7 +2515,6 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 		if pxVol.Source.Parent != "" {
 			return nil, false, nil
 		}
-
 		return nil, true, fmt.Errorf("volume [%s] is not attached on any node", volumeName)
 	}
 
@@ -2690,7 +2743,13 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		case api.Status_STATUS_OFFLINE:
 			// in case node is offline and it is a storageless node, the id might have changed so update it
 			if len(pxNode.Pools) == 0 {
-				d.updateNodeID(&n, d.getNodeManager())
+				_, err = d.updateNodeID(&n, d.getNodeManager())
+				if err != nil {
+					return "", true, &ErrFailedToWaitForPx{
+						Node:  n,
+						Cause: fmt.Sprintf("failed to update node id [%s/%s], Err: %v", n.Name, n.VolDriverNodeID, err),
+					}
+				}
 			}
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
@@ -2698,6 +2757,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 					n.Name, n.VolDriverNodeID, api.Status_STATUS_OK, pxNode.Status),
 			}
 		default:
+			log.Infof("Status PX available %s", pxNode.Status.String())
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
 				Cause: fmt.Sprintf("PX cluster is usable but node [%s/%s] status is not ok. Expected: %v Actual: %v",
@@ -2835,7 +2895,7 @@ func (d *portworx) ValidateRebalanceJobs() error {
 }
 
 func (d *portworx) ResizeStoragePoolByPercentage(poolUUID string, e api.SdkStoragePool_ResizeOperationType, percentage uint64) error {
-	log.InfoD("Initiating pool %v resize by %v with operationtype %v", poolUUID, percentage, e.String())
+	log.InfoD("Initiating pool %v resize by %v with operation-type %v", poolUUID, percentage, e.String())
 
 	// Start a task to check if pool  resize is done
 	t := func() (interface{}, bool, error) {
@@ -4357,9 +4417,9 @@ func (d *portworx) updateNodeID(n *node.Node, nManager ...api.OpenStorageNodeCli
 		return n, err
 	}
 	if err = d.updateNode(n, nodes); err != nil {
-		return &node.Node{}, fmt.Errorf("failed to update node ID for node [%s], Err: %v", n.Name, err)
+		return &node.Node{}, fmt.Errorf("failed to update node ID for node [%s] with ID [%s] in the cluster, Err: %v", n.Name, n.Id, err)
 	}
-	return n, fmt.Errorf("failed to find node [%s] with ID [%s] in the cluster", n.Name, n.Id)
+	return n, nil
 }
 
 func getGroupMatches(groupRegex *regexp.Regexp, str string) map[string]string {
@@ -5224,7 +5284,8 @@ func (d *portworx) ValidateDriver(endpointVersion string, autoUpdateComponents b
 		}
 
 		// Validate StorageCluster
-		if err = optest.ValidateStorageCluster(imageList, newStc, validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
+		storageClusterValidateTimeout := time.Duration(len(node.GetStorageDriverNodes())*9) * time.Minute
+		if err = optest.ValidateStorageCluster(imageList, newStc, storageClusterValidateTimeout, defaultRetryInterval, true); err != nil {
 			return err
 		}
 	}
@@ -5268,8 +5329,8 @@ func (d *portworx) updateAndValidateStorageCluster(cluster *v1.StorageCluster, f
 			}
 		}
 	}
-
-	if err = optest.ValidateStorageCluster(imageList, stc, validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
+	storageClusterValidateTimeout := time.Duration(len(node.GetStorageDriverNodes())*9) * time.Minute
+	if err = optest.ValidateStorageCluster(imageList, stc, storageClusterValidateTimeout, defaultRetryInterval, true); err != nil {
 		return nil, err
 	}
 	return stc, nil
@@ -6184,4 +6245,42 @@ func (d *portworx) GetAlertsUsingResourceTypeByTime(resourceType api.ResourceTyp
 
 func (d *portworx) IsPxReadyOnNode(n node.Node) bool {
 	return d.schedOps.IsPXReadyOnNode(n)
+}
+
+// EnableSkinnySnap Enables skinnysnap on the cluster
+func (d *portworx) EnableSkinnySnap() error {
+	for _, eachNode := range node.GetNodes() {
+		cmd := fmt.Sprintf("echo Y | %s --skinnysnap on", pxctlClusterOptionsUpdate)
+		_, err := d.nodeDriver.RunCommandWithNoRetry(
+			eachNode,
+			cmd,
+			node.ConnectionOpts{
+				Timeout:         skinnySnapRetryInterval,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+		if err != nil {
+			return fmt.Errorf("Failed to enable skinny Snap on Cluster, Err: %v", err)
+		}
+		break
+	}
+	return nil
+}
+
+// UpdateSkinnySnapReplNum update skinnysnap Repl factor
+func (d *portworx) UpdateSkinnySnapReplNum(repl string) error {
+	for _, eachNode := range node.GetNodes() {
+		cmd := fmt.Sprintf("echo Y | %s --skinnysnap-num-repls %s", pxctlClusterOptionsUpdate, repl)
+		_, err := d.nodeDriver.RunCommandWithNoRetry(
+			eachNode,
+			cmd,
+			node.ConnectionOpts{
+				Timeout:         skinnySnapRetryInterval,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+		if err != nil {
+			return fmt.Errorf("failed to Update SkinnySnap Repl Factor, Err: %v", err)
+		}
+		break
+	}
+	return nil
 }
