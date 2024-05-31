@@ -4753,19 +4753,14 @@ var _ = Describe("{DeployAppsAndStopPortworx}", func() {
 		defer DestroyApps(contexts, nil)
 		stepLog := "Schedule apps on the cluster"
 		Step(stepLog, func() {
-			appNamespace := fmt.Sprintf("app-portworx-reboot-namespace-%s", Inst().InstanceID)
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				defer GinkgoRecover()
 				for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					context, err := Inst().S.Schedule(appNamespace, scheduler.ScheduleOptions{
-						AppKeys:            Inst().AppList,
-						StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
-					})
-					log.FailOnError(err, "Failed to schedule application of %v namespace", appNamespace)
-					contexts = append(contexts, context...)
+					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("stopportworx-%d", i))...)
 				}
+
 			}()
 			wg.Add(1)
 			go func() {
