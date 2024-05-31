@@ -4704,13 +4704,8 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 					cloudDrivefullName, err := GetVolumeCompleteNameOnFA(faClient, cloudDrive)
 					log.InfoD("Name of the cloud drive is [%v]", cloudDrivefullName)
 					log.FailOnError(err, fmt.Sprintf("Failed to get volume name for cloud drive id [%v]", cloudDrive))
-					isExists, err := pureutils.IsFAVolumeExists(faClient, cloudDrivefullName)
-					log.FailOnError(err, fmt.Sprintf("Failed to check if volume exists on FA: %v", err))
-					if isExists {
+					if cloudDrivefullName != "" {
 						CloudDriveListMap[cloudDrive] = fa.MgmtEndPoint
-						log.InfoD("Cloud Drive [%v] exists on the FA Cluster [%v]", cloudDrivefullName, fa.MgmtEndPoint)
-					} else {
-						log.InfoD("Cloud Drive[%v] doesn't exist on the FA Cluster [%v]", cloudDrive, fa.MgmtEndPoint)
 					}
 				}
 			}
