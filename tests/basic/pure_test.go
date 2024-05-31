@@ -4340,12 +4340,11 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 
 			fbParams := make(map[string]string)
 			fbParams["pure_export_rules"] = "*(rw)"
-			mountOptions := []string{"nfsvers=4.1", "tcp"}
 			// create storage class for FADA volumes
 			err = CreateFlashStorageClass(fbdaScName,
 				"pure_file",
 				v1.PersistentVolumeReclaimDelete,
-				fbParams, mountOptions, &allowVolExpansionFA,
+				fbParams, nil, &allowVolExpansionFA,
 				storageApi.VolumeBindingImmediate,
 				nil)
 			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", fbdaScName))
