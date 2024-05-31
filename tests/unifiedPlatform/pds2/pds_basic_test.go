@@ -19,6 +19,10 @@ import (
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 )
 
+const (
+	postgresql = "PostgreSQL"
+)
+
 var _ = BeforeSuite(func() {
 	steplog := "Get prerequisite params to run platform tests"
 

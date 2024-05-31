@@ -1,6 +1,7 @@
 package pdslibs
 
 import (
+	"encoding/base64"
 	"fmt"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
@@ -9,7 +10,9 @@ import (
 	"strings"
 )
 
-const DEPLOYMENT_TOPOLOGY = "pds-qa-test-topology"
+const (
+	DEPLOYMENT_TOPOLOGY = "pds-qa-test-topology"
+)
 
 type DataServiceDetails struct {
 	Deployment        automationModels.V1Deployment
@@ -17,6 +20,21 @@ type DataServiceDetails struct {
 	NamespaceId       string
 	SourceMd5Checksum string
 	DSParams          PDSDataService
+}
+
+// WorkloadGenerationParams has data service creds
+type WorkloadGenerationParams struct {
+	Host                         string
+	User                         string
+	Password                     string
+	DataServiceName              string
+	DeploymentName               string
+	DeploymentID                 string
+	ScaleFactor                  string
+	Iterations                   string
+	Namespace                    string
+	UseSSL, VerifyCerts, TimeOut string
+	Replicas                     int
 }
 
 // InitUnifiedApiComponents
@@ -98,6 +116,19 @@ func GetDeployment(deploymentId string) (*automationModels.PDSDeploymentResponse
 		return nil, err
 	}
 	return deployment, nil
+}
+
+func GetDeploymentCredentials(deploymentId string) (string, error) {
+
+	creds, err := v2Components.PDS.GetDeploymentCredentials(deploymentId)
+	if err != nil {
+		return "", err
+	}
+	password, err := base64.StdEncoding.DecodeString(creds)
+	if err != nil {
+		return "", fmt.Errorf("Failed to decode the password: %v\n", err)
+	}
+	return string(password), nil
 }
 
 func GetDeploymentAndPodDetails(deploymentId string) (*automationModels.PDSDeploymentResponse, string, error) {

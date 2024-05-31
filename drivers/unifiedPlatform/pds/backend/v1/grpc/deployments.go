@@ -3,7 +3,6 @@ package grpc
 import (
 	"context"
 	"fmt"
-
 	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
@@ -164,4 +163,22 @@ func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *PDSDeployme
 
 	return &depResponse, nil
 
+}
+
+func (deployment *PdsGrpc) GetDeploymentCredentials(deploymentId string) (string, error) {
+	ctx, client, _, err := deployment.getDeploymentClient()
+	if err != nil {
+		return "", fmt.Errorf("Error while getting grpc client: %v\n", err)
+	}
+
+	deploymentCredentialsRequest := &publicdeploymentapis.GetDeploymentCredentialsRequest{
+		Id: deploymentId,
+	}
+
+	ctx = WithAccountIDMetaCtx(ctx, deployment.AccountId)
+	apiResponse, err := client.GetDeploymentCredentials(ctx, deploymentCredentialsRequest)
+	if err != nil {
+		return "", fmt.Errorf("Error while getting the deployment: %v\n", err)
+	}
+	return apiResponse.Secret, nil
 }
