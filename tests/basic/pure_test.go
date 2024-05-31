@@ -4701,6 +4701,7 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 					if CloudDriveListMap[cloudDrive] != "" {
 						continue
 					}
+					fmt.Println("cloud drive", cloudDrive)
 					cloudDrivefullName, err := GetVolumeCompleteNameOnFA(faClient, cloudDrive)
 					log.InfoD("Name of the cloud drive is [%v]", cloudDrivefullName)
 					log.FailOnError(err, fmt.Sprintf("Failed to get volume name for cloud drive id [%v]", cloudDrive))
