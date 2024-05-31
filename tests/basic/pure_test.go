@@ -4273,6 +4273,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		numberOfPvc := 10
 		var k8sCore = core.Instance()
 		var wg sync.WaitGroup
+		var max_bandwidth uint64
+		var max_iops uint64
 
 		//Declaring SC name, namespaces and pvc prefixes and lists which are required for collection of PVC And Volume Names
 		baseScName := "base-portworx-volume-sc"
@@ -4281,8 +4283,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		BaseAppNameSpace := "base-app-namespace"
 		FadaAppNameSpace := "fada-app-namespace"
 		FbdaAppNameSpace := "fbda-app-namespace"
-		max_iops := 1000
-		max_bandwidth := 1
+		max_iops = 1000
+		max_bandwidth = 1
 		//Creating Two lists to collect the volume names of both FA and FB created volumes
 		listofFadaPvc := make([]string, 0)
 		listofFbdaPvc := make([]string, 0)
@@ -4414,7 +4416,6 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			for _, p := range allPvcList.Items {
 				pvclist = append(pvclist, p.Name)
 			}
-			fmt.Println("PVC name List :", pvclist)
 			return pvclist
 		}
 		stepLog = "Validate if PVC are created and bounded"
@@ -4438,7 +4439,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			}
 			return pvclist
 		}
-		log.InfoD("Putting a time as volume name for Pvc is taking bit of time ")
+		log.InfoD("waiting for a minute for volume name to populate")
 		time.Sleep(1 * time.Minute)
 		//collect volumes names which are required to find out the volumes in FA and FB backend
 		listofFadaPvc = GetVolumeNameFromPvc(FadaAppNameSpace, listofFadaPvc)
@@ -4480,7 +4481,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				err = storage.Instance().DeleteStorageClass(storageclass)
 				log.FailOnError(err, fmt.Sprintf("Failed to delete storageclass [%s]", storageclass))
 			}
-			log.InfoD("Putting a sleep as sometimes pvc deletion in backend is taking bit time")
+			log.InfoD("waiting for a minute for pvc deletion in flash backend")
 			time.Sleep(1 * time.Minute)
 			log.InfoD("Check if the volumes are deleted in FA and FB backend")
 			err := CheckVolumesExistinFA(flashArrays, listofFadaPvc, true)

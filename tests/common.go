@@ -12971,6 +12971,11 @@ func CheckVolumesExistinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPv
 		pvcFadaMap[volumeName] = NoVolumeExists
 	}
 	for _, fa := range flashArrays {
+		faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
+		if err != nil {
+			log.InfoD("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+			return err
+		}
 		for _, volumeName := range listofFadaPvc {
 			if !NoVolumeExists {
 				//This is to make sure we dont iterate through volumes which are already found in one FA,which means the value for that volume name is already true
@@ -12978,8 +12983,6 @@ func CheckVolumesExistinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPv
 					continue
 				}
 			}
-			faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
-			log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
 			volName, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
 			if volName != "" {
 				// As we found the volume we mark corresponding volume as true
@@ -13028,18 +13031,17 @@ func CheckVolumesExistinFB(flashBlades []pureutils.FlashBladeEntry, listofFbdaPv
 		pvcFbdaMap[volumeName] = NoVolumeExists
 	}
 	for _, fb := range flashBlades {
+		fbClient, err := pureutils.PureCreateFbClientAndConnect(fb.MgmtEndPoint, fb.APIToken)
+		if err != nil {
+			return err
+		}
 		for _, volumeName := range listofFbdaPvc {
 			if !NoVolumeExists {
 				if pvcFbdaMap[volumeName] {
 					continue
 				}
 			}
-			fbClient, err := pureutils.PureCreateFbClientAndConnect(fb.MgmtEndPoint, fb.APIToken)
-			if err != nil {
-				return err
-			}
 			FsFullName, nameErr := pureutils.GetFilesystemFullName(fbClient, volumeName)
-			fmt.Println("FsFullName", FsFullName)
 			log.FailOnError(nameErr, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
 			isExists, err := pureutils.IsFileSystemExists(fbClient, FsFullName)
 
@@ -13066,7 +13068,7 @@ func CheckVolumesExistinFB(flashBlades []pureutils.FlashBladeEntry, listofFbdaPv
 	}
 	return nil
 }
-func CheckIopsandBandwidthinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, reqBandwidth int, reqIops int) error {
+func CheckIopsandBandwidthinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, reqBandwidth uint64, reqIops uint64) error {
 	pvcFadaMap := make(map[string]bool)
 	for _, volumeName := range listofFadaPvc {
 		pvcFadaMap[volumeName] = false
