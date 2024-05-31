@@ -3,6 +3,7 @@ package pureutils
 import (
 	"fmt"
 	"github.com/devans10/pugo/flasharray"
+	"github.com/portworx/torpedo/pkg/log"
 	"strings"
 
 	"github.com/portworx/torpedo/pkg/units"
@@ -102,6 +103,7 @@ func IsFAVolumeExists(faClient *flasharray.Client, volumeName string) (bool, err
 	}
 	for _, eachVol := range allVolumes {
 		if strings.Contains(eachVol.Name, volumeName) {
+			log.InfoD("Volume [%v] exists on FA", eachVol.Name)
 			return true, nil
 		}
 	}
