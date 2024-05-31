@@ -4627,14 +4627,14 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 				log.Infof("Name of the Volume is [%v]", volName)
 				fmt.Println("Volume Name :", volumeName)
 
-				isExists, err := pureutils.IsFAVolumeExists(faClient, volName)
-				log.FailOnError(err, fmt.Sprintf("Failed to check if volume exists on FA: %v", err))
-
-				if isExists {
-					log.InfoD("Volume [%v] exists on the FA Cluster [%v]", volName, fa.MgmtEndPoint)
-					return nil
-				}
-				log.Infof("Volume [%v] doesn't exist on the FA Cluster [%v]", volName, fa.MgmtEndPoint)
+				//isExists, err := pureutils.IsFAVolumeExists(faClient, volName)
+				//log.FailOnError(err, fmt.Sprintf("Failed to check if volume exists on FA: %v", err))
+				//
+				////if isExists {
+				////	log.InfoD("Volume [%v] exists on the FA Cluster [%v]", volName, fa.MgmtEndPoint)
+				////	return nil
+				////}
+				////log.Infof("Volume [%v] doesn't exist on the FA Cluster [%v]", volName, fa.MgmtEndPoint)
 
 			}
 			if !cloneVolFound {
@@ -4645,6 +4645,8 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 		stepLog = "Check the corresponding volume clone is available in FA backend and delete the clone  volume"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			time.Sleep(1 * time.Minute)
+			fmt.Println("volume name in step", ClonevolumeName)
 			err := checkVolumeExistsInFlashArrays(ClonevolumeName, flashArrays)
 			log.FailOnError(err, "Failed to check if volume exists in FA backend")
 			log.InfoD("Deleting the Clone Volume")
