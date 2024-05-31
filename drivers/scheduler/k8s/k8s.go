@@ -4760,7 +4760,7 @@ func (k *K8s) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace 
 func (k *K8s) IsCsiSnapshotExists(ctx *scheduler.Context, snapshotName string, namespace string) (bool, error) {
 	snaplist, err := k.GetSnapshotsInNameSpace(ctx, namespace)
 	if err != nil {
-		log.InfoD("Failed to get Snapshots in namespace [%v]", namespace)
+		log.InfoD("Failed to get Snapshots for the app [%v] in namespace [%v]", ctx.App.Key, namespace)
 		return false, err
 	}
 	if len(snaplist.Items) == 0 {
@@ -4781,7 +4781,7 @@ func (k *K8s) IsCsiSnapshotExists(ctx *scheduler.Context, snapshotName string, n
 func (k *K8s) DeleteCsiSnapshotsFromNamespace(ctx *scheduler.Context, namespace string) error {
 	snaplist, err := k.GetSnapshotsInNameSpace(ctx, namespace)
 	if err != nil {
-		log.InfoD("Failed to get Snapshots in namespace [%v]", namespace)
+		log.InfoD("Failed to get Snapshots for app [%v] in namespace [%v]", ctx.App.Key, namespace)
 		return err
 	}
 	for _, snap := range snaplist.Items {

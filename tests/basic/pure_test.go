@@ -4378,7 +4378,6 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 		var volSnapshotClass *volsnapv1.VolumeSnapshotClass
 		var volumeSnapshotMap map[string]*volsnapv1.VolumeSnapshot
 		applist := Inst().AppList
-		defer DestroyApps(contexts, nil)
 		defer func() {
 			Inst().AppList = applist
 		}()
@@ -4396,6 +4395,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 			contexts = append(contexts, context...)
 		})
 		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
 		stepLog = "Create csi snapshot class and csi snapshots for the application"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -4406,6 +4406,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 		})
 		stepLog = "Creating snapshots for all apps in the context and validate them"
 		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			for _, ctx := range contexts {
 				volumeSnapshotMap, err = Inst().S.CreateCsiSnapsForVolumes(ctx, PureSnapShotClass)
 				log.FailOnError(err, "Failed to create the snapshots")
@@ -4419,12 +4420,14 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 			for _, ctx := range contexts {
 				err := Inst().S.DeleteCsiSnapshotsFromNamespace(ctx, ctx.App.NameSpace)
 				log.FailOnError(err, "Failed to delete the snapshots")
-				log.InfoD("Deleted the snapshots successfully")
 			}
+			log.InfoD("Deleted the snapshots successfully")
 		})
 		stepLog = "Validate all snapshots are deleted "
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			log.InfoD("Wait until all snapshots are deleted")
+			time.Sleep(1 * time.Minute)
 			for _, ctx := range contexts {
 				for _, snapshot := range volumeSnapshotMap {
 					isSnapshotExists, err := Inst().S.IsCsiSnapshotExists(ctx, snapshot.Name, snapshot.Namespace)
