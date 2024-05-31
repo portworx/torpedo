@@ -4581,6 +4581,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var ClonevolumeName string
+		var cloneVolumeId string
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details used")
 		stepLog := "Deploy FADA app"
@@ -4605,7 +4606,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 				log.FailOnError(err, "Failed to get volumes for app %s", context.App.Key)
 				log.InfoD("Starting the Clone of the Volume")
 				for _, vol := range appsvols[:1] {
-					cloneVolumeId, err := Inst().V.CloneVolume(vol.ID)
+					cloneVolumeId, err = Inst().V.CloneVolume(vol.ID)
 					log.FailOnError(err, "Failed to clone volume [%v]", vol.ID)
 					clonevol, err := Inst().V.InspectVolume(cloneVolumeId)
 					log.FailOnError(err, "Failed to inspect volume [%v]", cloneVolumeId)
@@ -4624,6 +4625,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 				volName, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
 				log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v]", volumeName))
 				log.Infof("Name of the Volume is [%v]", volName)
+				fmt.Println("Volume Name :", volumeName)
 
 				isExists, err := pureutils.IsFAVolumeExists(faClient, volName)
 				log.FailOnError(err, fmt.Sprintf("Failed to check if volume exists on FA: %v", err))
@@ -4640,11 +4642,15 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 			}
 			return nil
 		}
-		stepLog = "Check the corresponding volume clone is available in FA backend"
+		stepLog = "Check the corresponding volume clone is available in FA backend and delete the clone  volume"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			err := checkVolumeExistsInFlashArrays(ClonevolumeName, flashArrays)
 			log.FailOnError(err, "Failed to check if volume exists in FA backend")
+			log.InfoD("Deleting the Clone Volume")
+			err = Inst().V.DeleteVolume(cloneVolumeId)
+			log.FailOnError(err, "Failed to delete volume [%v]", ClonevolumeName)
+
 		})
 
 	})
