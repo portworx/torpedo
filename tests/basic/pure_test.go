@@ -4580,8 +4580,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 	itLog := "Create Clone of the FADA Volume and verify the status and check creation of cloned volume in FA backend"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		var volumeName string
-		var cloneVolumeId string
+		var ClonevolumeName string
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details used")
 		stepLog := "Deploy FADA app"
@@ -4608,20 +4607,11 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 				for _, vol := range appsvols[:1] {
 					cloneVolumeId, err := Inst().V.CloneVolume(vol.ID)
 					log.FailOnError(err, "Failed to clone volume [%v]", vol.ID)
+					clonevol, err := Inst().V.InspectVolume(cloneVolumeId)
+					log.FailOnError(err, "Failed to inspect volume [%v]", cloneVolumeId)
+					log.InfoD("Get the corresponding volume name for the volId")
+					ClonevolumeName = clonevol.Locator.Name
 					log.InfoD("Clone Volume ID [%v] for parent volume [%v]", cloneVolumeId, vol.ID)
-				}
-			}
-			log.InfoD("Get the corresponding volume name for the volId")
-			for _, context := range contexts {
-				appsvols, err := Inst().S.GetVolumes(context)
-				log.FailOnError(err, "Failed to get volumes for app %s", context.App.Key)
-				for _, vol := range appsvols {
-					fmt.Println("Volume name :", vol.Name)
-					if vol.ID == cloneVolumeId {
-						volumeName = vol.Name
-						log.InfoD("Volume Name for the Clone Volume is [%v]", volumeName)
-						break
-					}
 				}
 			}
 		})
@@ -4653,7 +4643,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 		stepLog = "Check the corresponding volume clone is available in FA backend"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			err := checkVolumeExistsInFlashArrays(volumeName, flashArrays)
+			err := checkVolumeExistsInFlashArrays(ClonevolumeName, flashArrays)
 			log.FailOnError(err, "Failed to check if volume exists in FA backend")
 		})
 
