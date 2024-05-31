@@ -13074,7 +13074,7 @@ func CheckIopsandBandwidthinFA(flashArrays []pureutils.FlashArrayEntry, listofFa
 		pvcFadaMap[volumeName] = false
 	}
 	for _, fa := range flashArrays {
-		faClient, err := pureutils.PureCreateClientAndConnectRest2(fa.MgmtEndPoint, fa.APIToken)
+		faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
 		log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
 		volumes, err := pureutils.ListAllVolumesFromFA(faClient)
 		log.FailOnError(err, "Failed to list all volumes from FA")
