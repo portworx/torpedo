@@ -4752,7 +4752,7 @@ var _ = Describe("{DeployAppsAndStopPortworx}", func() {
 			"Deploy Apps and parallely stop portworx for 10 mins and after 10 min make it up and check if the pods are running",
 			nil, 0)
 	})
-	itLog := "DeployFADAAndFBDAAppsAndStopPortworx"
+	itLog := "DeployAppsAndStopPortworx"
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var contexts []*scheduler.Context

@@ -12965,15 +12965,15 @@ func CheckVolumesExistinFB(flashBlades []pureutils.FlashBladeEntry, listofFbdaPv
 		pvcFbdaMap[volumeName] = NoVolumeExists
 	}
 	for _, fb := range flashBlades {
+		fbClient, err := pureutils.PureCreateFbClientAndConnect(fb.MgmtEndPoint, fb.APIToken)
+		if err != nil {
+			return err
+		}
 		for _, volumeName := range listofFbdaPvc {
 			if !NoVolumeExists {
 				if pvcFbdaMap[volumeName] {
 					continue
 				}
-			}
-			fbClient, err := pureutils.PureCreateFbClientAndConnect(fb.MgmtEndPoint, fb.APIToken)
-			if err != nil {
-				return err
 			}
 			FsFullName, nameErr := pureutils.GetFilesystemFullName(fbClient, volumeName)
 			log.FailOnError(nameErr, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
