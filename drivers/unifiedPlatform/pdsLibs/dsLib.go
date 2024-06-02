@@ -60,7 +60,7 @@ func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, 
 						References: automationModels.Reference{
 							ImageId: &imageId,
 						},
-						DeploymentTopologies: []automationModels.DeploymentTopology{
+						DataServiceDeploymentTopologies: []automationModels.V1DataServiceDeploymentTopology{
 							{
 								Name:      StringPtr(DEPLOYMENT_TOPOLOGY),
 								Instances: intToPointerString(ds.ScaleReplicas),
@@ -128,7 +128,7 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 						ImageId: &imageId,
 					},
 					TlsEnabled: nil,
-					DeploymentTopologies: []automationModels.DeploymentTopology{
+					DataServiceDeploymentTopologies: []automationModels.V1DataServiceDeploymentTopology{
 						{
 							Name:        StringPtr(DEPLOYMENT_TOPOLOGY),
 							Instances:   intToPointerString(ds.Replicas),
@@ -149,9 +149,9 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 		},
 	}
 
-	log.Infof("app template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations.Id)
-	log.Infof("resource template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings.Id)
-	log.Infof("storage template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].StorageOptions.Id)
+	log.Infof("app template ids [%s]", *depInputs.Create.V1Deployment.Config.DataServiceDeploymentTopologies[0].ServiceConfigurations.Id)
+	log.Infof("resource template ids [%s]", *depInputs.Create.V1Deployment.Config.DataServiceDeploymentTopologies[0].ResourceSettings.Id)
+	log.Infof("storage template ids [%s]", *depInputs.Create.V1Deployment.Config.DataServiceDeploymentTopologies[0].StorageOptions.Id)
 
 	log.Infof("depInputs [+%v]", depInputs.Create)
 	deployment, err := v2Components.PDS.CreateDeployment(depInputs)

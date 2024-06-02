@@ -101,12 +101,20 @@ type V1ConnectionDetails struct {
 type V1Config1 struct {
 	References Reference `copier:"must,nopanic"`
 	// Flag to enable TLS for the Data Service.
-	TlsEnabled *bool `copier:"must,nopanic"`
+	TlsEnabled *V1TLSConfig `copier:"must,nopanic"`
 	// A deployment topology contains a number of nodes that have various attributes as a collective group.
-	DeploymentTopologies []DeploymentTopology `copier:"must,nopanic"`
+	DataServiceDeploymentTopologies []V1DataServiceDeploymentTopology `copier:"must,nopanic"`
 }
 
-type DeploymentTopology struct {
+// V1TLSConfig TLS configuration for the Data Service.
+type V1TLSConfig struct {
+	// Flag to enable TLS for the Data Service.
+	Enabled *bool `json:"enabled,omitempty"`
+	// Issuer (Certificate Authority) name for the TLS certificates.
+	IssuerName *string `json:"issuerName,omitempty"`
+}
+
+type V1DataServiceDeploymentTopology struct {
 	Name *string `copier:"must,nopanic"`
 	// Description of the deployment topology.
 	Description *string `copier:"must,nopanic"`

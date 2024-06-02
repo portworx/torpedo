@@ -72,7 +72,7 @@ func ValidateRestoreDeployment(restoreId, namespace string) error {
 		return fmt.Errorf("error while fetching destination deployment object")
 	}
 
-	err = ValidateRestore(sourceDeployment.Get.Config.DeploymentTopologies[0], destinationDeployment.Get.Config.DeploymentTopologies[0])
+	err = ValidateRestore(sourceDeployment.Get.Config.DataServiceDeploymentTopologies[0], destinationDeployment.Get.Config.DataServiceDeploymentTopologies[0])
 	if err != nil {
 		return fmt.Errorf("error while validation data service entities(i.e App config, resource etc). Err: %v", err)
 	}
@@ -81,7 +81,7 @@ func ValidateRestoreDeployment(restoreId, namespace string) error {
 }
 
 // ValidateRestoreAfterSourceDeploymentUpgrade Validates the restored deployment config with source deployment config before upgrade
-func ValidateRestoreAfterSourceDeploymentUpgrade(restoreId string, sourceDeploymentConfig automationModels.DeploymentTopology) error {
+func ValidateRestoreAfterSourceDeploymentUpgrade(restoreId string, sourceDeploymentConfig automationModels.V1DataServiceDeploymentTopology) error {
 	restore, err := ValidateRestoreStatus(restoreId)
 	if err != nil {
 		return err
@@ -97,7 +97,7 @@ func ValidateRestoreAfterSourceDeploymentUpgrade(restoreId string, sourceDeploym
 		return fmt.Errorf("error while fetching destination deployment object")
 	}
 
-	err = ValidateRestore(sourceDeploymentConfig, destinationDeployment.Get.Config.DeploymentTopologies[0])
+	err = ValidateRestore(sourceDeploymentConfig, destinationDeployment.Get.Config.DataServiceDeploymentTopologies[0])
 	if err != nil {
 		return fmt.Errorf("error while validation data service entities(i.e App config, resource etc). Err: %v", err)
 	}
@@ -106,7 +106,7 @@ func ValidateRestoreAfterSourceDeploymentUpgrade(restoreId string, sourceDeploym
 }
 
 // ValidateRestore validates the Resource, App and Storage configurations of source and destination deployments
-func ValidateRestore(sourceDep, destDep automationModels.DeploymentTopology) error {
+func ValidateRestore(sourceDep, destDep automationModels.V1DataServiceDeploymentTopology) error {
 
 	//TODO : This validation needs to be revisited once we have the working pds templates api
 

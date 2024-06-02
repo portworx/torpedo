@@ -18,7 +18,7 @@ type WorkflowPDSRestore struct {
 	Validatation                        map[string]bool
 	Restores                            map[string]automationModels.PDSRestore
 	RestoredDeployments                 *WorkflowDataService
-	SourceDeploymentConfigBeforeUpgrade *automationModels.DeploymentTopology
+	SourceDeploymentConfigBeforeUpgrade *automationModels.V1DataServiceDeploymentTopology
 	SkipValidation                      map[string]bool
 	WorkflowBackup                      *WorkflowPDSBackup
 }

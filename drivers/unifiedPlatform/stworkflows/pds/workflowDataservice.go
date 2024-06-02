@@ -206,13 +206,13 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deploymentId 
 		return resourceTemp, storageOp, dbConfig, err
 	}
 
-	log.Debugf("Resource Template Id After Update [%s]", *deployment.Get.Config.DeploymentTopologies[0].ResourceSettings.Id)
-	resourceTemp, err = dslibs.GetResourceTemplateConfigs(*deployment.Get.Config.DeploymentTopologies[0].ResourceSettings.Id)
+	log.Debugf("Resource Template Id After Update [%s]", *deployment.Get.Config.DataServiceDeploymentTopologies[0].ResourceSettings.Id)
+	resourceTemp, err = dslibs.GetResourceTemplateConfigs(*deployment.Get.Config.DataServiceDeploymentTopologies[0].ResourceSettings.Id)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
 
-	storageOp, err = dslibs.GetStorageTemplateConfigs(*deployment.Get.Config.DeploymentTopologies[0].StorageOptions.Id)
+	storageOp, err = dslibs.GetStorageTemplateConfigs(*deployment.Get.Config.DataServiceDeploymentTopologies[0].StorageOptions.Id)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}

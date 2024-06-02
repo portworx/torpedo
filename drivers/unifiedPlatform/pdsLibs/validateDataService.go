@@ -194,12 +194,12 @@ func ValidateDataServiceDeploymentHealth(deploymentId string, expectedHealth aut
 			return false, nil
 		}
 		if *res.Get.Status.Phase == stworkflows.FAILED {
-			log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Instances, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
+			log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DataServiceDeploymentTopologies[0].Instances, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
 			return true, fmt.Errorf("Deployment [%s] is [%s]", *res.Get.Meta.Name, *res.Get.Status.Phase)
 		}
 		log.Debugf("Health status - [%v]", *res.Get.Status.Health)
 		if *res.Get.Status.Health == expectedHealth {
-			log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Instances, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
+			log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DataServiceDeploymentTopologies[0].Instances, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
 			if ResiFlag {
 				ResiliencyCondition <- true
 				log.InfoD("Resiliency Condition Met")
@@ -228,10 +228,10 @@ func ValidateDeploymentIsDeleted(deploymentId string) error {
 			return true, nil
 		}
 		log.Debugf("Health status -  %v", *res.Get.Status.Health)
-		if *res.Get.Config.DeploymentTopologies[0].Instances != *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas || *res.Get.Status.Health != PDS_DEPLOYMENT_AVAILABLE {
+		if *res.Get.Config.DataServiceDeploymentTopologies[0].Instances != *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas || *res.Get.Status.Health != PDS_DEPLOYMENT_AVAILABLE {
 			return false, nil
 		}
-		log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Instances, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
+		log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DataServiceDeploymentTopologies[0].Instances, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
 		return false, nil
 	})
 
