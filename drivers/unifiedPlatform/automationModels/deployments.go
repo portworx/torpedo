@@ -111,7 +111,7 @@ type DeploymentTopology struct {
 	// Description of the deployment topology.
 	Description *string `copier:"must,nopanic"`
 	// Number of replicas of data services.
-	Replicas *string `copier:"must,nopanic"`
+	Instances *string `copier:"must,nopanic"`
 	// Service type are standard Kubernetes service types such as clusterIP, NodePort, load balancers, etc.
 	ServiceType *string `copier:"must,nopanic"`
 	// Service name is the name of service as provided by user.

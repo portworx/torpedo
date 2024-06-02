@@ -20,7 +20,7 @@ var _ MappedNullable = &V1DataServiceVersion{}
 // V1DataServiceVersion Version represents a particular version of a data service.
 type V1DataServiceVersion struct {
 	Meta *V1Meta `json:"meta,omitempty"`
-	Info *V1Info1 `json:"info,omitempty"`
+	Info *V1Info2 `json:"info,omitempty"`
 }
 
 // NewV1DataServiceVersion instantiates a new V1DataServiceVersion object
@@ -73,9 +73,9 @@ func (o *V1DataServiceVersion) SetMeta(v V1Meta) {
 }
 
 // GetInfo returns the Info field value if set, zero value otherwise.
-func (o *V1DataServiceVersion) GetInfo() V1Info1 {
+func (o *V1DataServiceVersion) GetInfo() V1Info2 {
 	if o == nil || IsNil(o.Info) {
-		var ret V1Info1
+		var ret V1Info2
 		return ret
 	}
 	return *o.Info
@@ -83,7 +83,7 @@ func (o *V1DataServiceVersion) GetInfo() V1Info1 {
 
 // GetInfoOk returns a tuple with the Info field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *V1DataServiceVersion) GetInfoOk() (*V1Info1, bool) {
+func (o *V1DataServiceVersion) GetInfoOk() (*V1Info2, bool) {
 	if o == nil || IsNil(o.Info) {
 		return nil, false
 	}
@@ -99,8 +99,8 @@ func (o *V1DataServiceVersion) HasInfo() bool {
 	return false
 }
 
-// SetInfo gets a reference to the given V1Info1 and assigns it to the Info field.
-func (o *V1DataServiceVersion) SetInfo(v V1Info1) {
+// SetInfo gets a reference to the given V1Info2 and assigns it to the Info field.
+func (o *V1DataServiceVersion) SetInfo(v V1Info2) {
 	o.Info = &v
 }
 

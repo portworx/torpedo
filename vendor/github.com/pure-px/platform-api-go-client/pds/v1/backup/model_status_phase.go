@@ -15,7 +15,7 @@ import (
 	"fmt"
 )
 
-// StatusPhase Enum for Phase of the Deployment.   - PHASE_UNSPECIFIED: Phase is unspecified.  - IN_PROGRESS: Backup is in_progress.  - COMPLETED: Backup is completed.  - FAILED: Backup is failed.
+// StatusPhase Enum for Phase of the DataService Deployment.   - PHASE_UNSPECIFIED: Phase is unspecified.  - IN_PROGRESS: Backup is in_progress.  - COMPLETED: Backup is completed.  - FAILED: Backup is failed.
 type StatusPhase string
 
 // List of StatusPhase

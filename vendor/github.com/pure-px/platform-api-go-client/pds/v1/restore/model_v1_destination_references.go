@@ -22,7 +22,7 @@ type V1DestinationReferences struct {
 	// UID of the target cluster where restore will be created.
 	TargetClusterId *string `json:"targetClusterId,omitempty"`
 	// UID of the deployment created by the restore.
-	DeploymentId *string `json:"deploymentId,omitempty"`
+	DataServiceDeploymentId *string `json:"dataServiceDeploymentId,omitempty"`
 	// UID of the project.
 	ProjectId *string `json:"projectId,omitempty"`
 }
@@ -76,36 +76,36 @@ func (o *V1DestinationReferences) SetTargetClusterId(v string) {
 	o.TargetClusterId = &v
 }
 
-// GetDeploymentId returns the DeploymentId field value if set, zero value otherwise.
-func (o *V1DestinationReferences) GetDeploymentId() string {
-	if o == nil || IsNil(o.DeploymentId) {
+// GetDataServiceDeploymentId returns the DataServiceDeploymentId field value if set, zero value otherwise.
+func (o *V1DestinationReferences) GetDataServiceDeploymentId() string {
+	if o == nil || IsNil(o.DataServiceDeploymentId) {
 		var ret string
 		return ret
 	}
-	return *o.DeploymentId
+	return *o.DataServiceDeploymentId
 }
 
-// GetDeploymentIdOk returns a tuple with the DeploymentId field value if set, nil otherwise
+// GetDataServiceDeploymentIdOk returns a tuple with the DataServiceDeploymentId field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *V1DestinationReferences) GetDeploymentIdOk() (*string, bool) {
-	if o == nil || IsNil(o.DeploymentId) {
+func (o *V1DestinationReferences) GetDataServiceDeploymentIdOk() (*string, bool) {
+	if o == nil || IsNil(o.DataServiceDeploymentId) {
 		return nil, false
 	}
-	return o.DeploymentId, true
+	return o.DataServiceDeploymentId, true
 }
 
-// HasDeploymentId returns a boolean if a field has been set.
-func (o *V1DestinationReferences) HasDeploymentId() bool {
-	if o != nil && !IsNil(o.DeploymentId) {
+// HasDataServiceDeploymentId returns a boolean if a field has been set.
+func (o *V1DestinationReferences) HasDataServiceDeploymentId() bool {
+	if o != nil && !IsNil(o.DataServiceDeploymentId) {
 		return true
 	}
 
 	return false
 }
 
-// SetDeploymentId gets a reference to the given string and assigns it to the DeploymentId field.
-func (o *V1DestinationReferences) SetDeploymentId(v string) {
-	o.DeploymentId = &v
+// SetDataServiceDeploymentId gets a reference to the given string and assigns it to the DataServiceDeploymentId field.
+func (o *V1DestinationReferences) SetDataServiceDeploymentId(v string) {
+	o.DataServiceDeploymentId = &v
 }
 
 // GetProjectId returns the ProjectId field value if set, zero value otherwise.
@@ -153,8 +153,8 @@ func (o V1DestinationReferences) ToMap() (map[string]interface{}, error) {
 	if !IsNil(o.TargetClusterId) {
 		toSerialize["targetClusterId"] = o.TargetClusterId
 	}
-	if !IsNil(o.DeploymentId) {
-		toSerialize["deploymentId"] = o.DeploymentId
+	if !IsNil(o.DataServiceDeploymentId) {
+		toSerialize["dataServiceDeploymentId"] = o.DataServiceDeploymentId
 	}
 	if !IsNil(o.ProjectId) {
 		toSerialize["projectId"] = o.ProjectId

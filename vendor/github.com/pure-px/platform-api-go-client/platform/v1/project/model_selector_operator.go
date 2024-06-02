@@ -15,7 +15,7 @@ import (
 	"fmt"
 )
 
-// SelectorOperator Operator specifies the relationship between the provided (key,value) pairs in the response.   - OPERATOR_UNSPECIFIED: Unspecified, do not use.  - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.  - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list.
+// SelectorOperator Operator specifies the relationship between the provided (key,value) pairs in the response.   - OPERATOR_UNSPECIFIED: Unspecified, do not use.  - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.  - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list.  - LIKE: LIKE specified that the key should be of a specified pattern
 type SelectorOperator string
 
 // List of SelectorOperator
@@ -23,6 +23,7 @@ const (
 	SELECTOROPERATOR_OPERATOR_UNSPECIFIED SelectorOperator = "OPERATOR_UNSPECIFIED"
 	SELECTOROPERATOR_IN SelectorOperator = "IN"
 	SELECTOROPERATOR_NOT_IN SelectorOperator = "NOT_IN"
+	SELECTOROPERATOR_LIKE SelectorOperator = "LIKE"
 )
 
 // All allowed values of SelectorOperator enum
@@ -30,6 +31,7 @@ var AllowedSelectorOperatorEnumValues = []SelectorOperator{
 	"OPERATOR_UNSPECIFIED",
 	"IN",
 	"NOT_IN",
+	"LIKE",
 }
 
 func (v *SelectorOperator) UnmarshalJSON(src []byte) error {

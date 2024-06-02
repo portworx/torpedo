@@ -1402,15 +1402,15 @@ github.com/prometheus/procfs/internal/util
 ## explicit; go 1.13
 github.com/prometheus/statsd_exporter/pkg/mapper
 github.com/prometheus/statsd_exporter/pkg/mapper/fsm
-# github.com/pure-px/apis v0.0.0-20240326194748-e9f7f27de779
+# github.com/pure-px/apis v0.0.3
 ## explicit; go 1.21
 github.com/pure-px/apis/public/portworx/common/apiv1
 github.com/pure-px/apis/public/portworx/pds/backup/apiv1
 github.com/pure-px/apis/public/portworx/pds/backupconfig/apiv1
 github.com/pure-px/apis/public/portworx/pds/catalog/templatedefinition/apiv1
-github.com/pure-px/apis/public/portworx/pds/deployment/apiv1
-github.com/pure-px/apis/public/portworx/pds/deploymentconfigupdate/apiv1
-github.com/pure-px/apis/public/portworx/pds/deploymenttopology/apiv1
+github.com/pure-px/apis/public/portworx/pds/dataservicedeployment/apiv1
+github.com/pure-px/apis/public/portworx/pds/dataservicedeploymentconfigupdate/apiv1
+github.com/pure-px/apis/public/portworx/pds/dataservicedeploymenttopology/apiv1
 github.com/pure-px/apis/public/portworx/pds/restore/apiv1
 github.com/pure-px/apis/public/portworx/platform/account/apiv1
 github.com/pure-px/apis/public/portworx/platform/backuplocation/apiv1
@@ -1428,13 +1428,13 @@ github.com/pure-px/apis/public/portworx/platform/template/apiv1
 github.com/pure-px/apis/public/portworx/platform/tenant/apiv1
 github.com/pure-px/apis/public/portworx/platform/tenant/application/apiv1
 github.com/pure-px/apis/public/portworx/platform/whoami/apiv1
-# github.com/pure-px/platform-api-go-client v0.0.0-20240422094205-23129136cfd2
+# github.com/pure-px/platform-api-go-client v0.0.0-20240529124619-a3e5f98d62f0
 ## explicit; go 1.21.4
 github.com/pure-px/platform-api-go-client/pds/v1/backup
 github.com/pure-px/platform-api-go-client/pds/v1/backupconfig
 github.com/pure-px/platform-api-go-client/pds/v1/catalog
-github.com/pure-px/platform-api-go-client/pds/v1/deployment
-github.com/pure-px/platform-api-go-client/pds/v1/deploymentconfigupdate
+github.com/pure-px/platform-api-go-client/pds/v1/dataservicedeployment
+github.com/pure-px/platform-api-go-client/pds/v1/dataservicedeploymentconfigupdate
 github.com/pure-px/platform-api-go-client/pds/v1/restore
 github.com/pure-px/platform-api-go-client/platform/v1/account
 github.com/pure-px/platform-api-go-client/platform/v1/backuplocation

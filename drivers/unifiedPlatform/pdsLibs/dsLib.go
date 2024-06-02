@@ -62,8 +62,8 @@ func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, 
 						},
 						DeploymentTopologies: []automationModels.DeploymentTopology{
 							{
-								Name:     StringPtr(DEPLOYMENT_TOPOLOGY),
-								Replicas: intToPointerString(ds.ScaleReplicas),
+								Name:      StringPtr(DEPLOYMENT_TOPOLOGY),
+								Instances: intToPointerString(ds.ScaleReplicas),
 								ResourceSettings: &automationModels.PdsTemplates{
 									Id: &resConfigId,
 								},
@@ -131,7 +131,7 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 					DeploymentTopologies: []automationModels.DeploymentTopology{
 						{
 							Name:        StringPtr(DEPLOYMENT_TOPOLOGY),
-							Replicas:    intToPointerString(ds.Replicas),
+							Instances:   intToPointerString(ds.Replicas),
 							ServiceType: StringPtr(ds.ServiceType),
 							ResourceSettings: &automationModels.PdsTemplates{
 								Id: &resConfigId,

@@ -24,7 +24,7 @@ import "public/portworx/common/apiv1/meta.proto";
 import "public/portworx/common/apiv1/pagination.proto";
 import "public/portworx/common/apiv1/sort.proto";
 
-option go_package = "github.com/pure-px/apis/public/portworx/pds/apiv1/backupconfig;backupconfig";
+option go_package = "github.com/pure-px/apis/public/portworx/pds/backupconfig/apiv1;backupconfig";
 option java_multiple_files = true;
 option java_package = "com.public.portworx.pds.backupconfig.v1";
 option java_outer_classname = "BackupConfigProto";
@@ -39,7 +39,7 @@ service BackupConfigService {
     };
   }
 
-  // ListBackupConfigs API lists all the backup configuration for a deployment.
+  // ListBackupConfigs API lists all the backup configuration for a data service deployment.
   rpc ListBackupConfigs(ListBackupConfigsRequest)
     returns (ListBackupConfigsResponse) {
     option(google.api.http) = {
@@ -84,30 +84,30 @@ message GetBackupConfigRequest {
 message ListBackupConfigsRequest {
   // Specifies a filter to list the backup configurations.
   oneof list_by {
-    // Account ID for which the backup configurations will be listed.
-    string account_id = 1;
-
     // Tenant ID for which the backup configurations will be listed.
-    string tenant_id = 2;
+    string tenant_id = 1;
 
     // Project ID for which the backup configurations will be listed.
-    string project_id = 3;
+    string project_id = 2;
 
     // Cluster ID for which the backup configurations will be listed.
-    string target_cluster_id = 4;
+    string target_cluster_id = 3;
 
     // Namespace ID for which the backup configurations will be listed.
-    string namespace_id = 5;
+    string namespace_id = 4;
 
-    // Deployment ID for which the backup configurations will be listed.
-    string deployment_id = 6;
+    // Data service Deployment ID for which the backup configurations will be listed.
+    string data_service_deployment_id = 5;
   }
 
   // Pagination metadata for listing backup configuration.
-  public.portworx.common.v1.PageBasedPaginationRequest pagination = 7;
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 6;
 
   // Sorting details using which requested list of backup configurations to be sorted.
-  public.portworx.common.v1.Sort sort = 8;
+  public.portworx.common.v1.Sort sort = 7;
+
+  // Filter backup configs based on suspended flag.
+  BackupConfigSuspended suspended = 8 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // Response of list of backup configurations.
@@ -138,8 +138,8 @@ message CreateBackupConfigRequest {
   // (-- api-linter: core::0133::request-required-fields=disabled
   //     aip.dev/not-precedent: We really need this field to be required
   //     to support creation of the resource in the deployment context.. --)
-  // Deployment id associated with the backup configuration.
-  string deployment_id = 2 [(google.api.field_behavior) = REQUIRED];
+  // Data service Deployment id associated with the backup configuration.
+  string data_service_deployment_id = 2 [(google.api.field_behavior) = REQUIRED];
 
   // Backup configuration for the backup.
   BackupConfig backup_config = 3 [(google.api.field_behavior) = REQUIRED];
@@ -152,8 +152,8 @@ message UpdateBackupConfigRequest {
   // ID of the backup configuration.
   string id = 1;
 
-  // Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1.
-  int32 job_history_limit = 2;
+  // Suspend flag is used to suspend or resume a scheduled backup.
+  BackupConfigSuspended suspend = 2;
 
   // Labels to apply to the Backup Config object.
   map<string, string> labels = 3;
@@ -166,6 +166,9 @@ message UpdateBackupConfigRequest {
 message DeleteBackupConfigRequest {
   // ID of the backup configuration.
   string id = 1;
+
+  // Force flag to delete backup configuration from control plane only.
+  bool force = 9 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // Resource representing the backup configuration for a backup.
@@ -185,14 +188,11 @@ message Config {
   // References to the associated objects for backup configuration.
   References references = 1;
 
-  // Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1.
-  int32 job_history_limit = 2;
-
   // BackupPolicy associated with the backup config.
-  BackupPolicy backup_policy = 3 [(google.api.field_behavior) = OPTIONAL];
+  BackupPolicy backup_policy = 2 [(google.api.field_behavior) = OPTIONAL];
 
-  // Suspend flag is used to suspend a scheduled backup from creating new backup jobs.
-  bool suspend = 4;
+  // Suspend flag is used to suspend a scheduled backup from creating new backups.
+  bool suspend = 3;
 
   // Enum for Backup Type of the backup configuration.
   enum BackupType {
@@ -207,7 +207,7 @@ message Config {
   }
 
   // Backup Type for the backup configuration.
-  BackupType backup_type = 5;
+  BackupType backup_type = 4;
 
   // Enum for Backup Level of the backup configuration.
   enum BackupLevel {
@@ -222,7 +222,7 @@ message Config {
   }
 
   // Backup Level for the backup configuration.
-  BackupLevel backup_level = 6;
+  BackupLevel backup_level = 5;
 
   // Enum for Reclaim Policy for the backup configuration.
   enum ReclaimPolicyType {
@@ -237,13 +237,13 @@ message Config {
   }
 
   // Reclaim Policy decides if the volume snapshots should get deleted when a Backup CR gets deleted.
-  ReclaimPolicyType reclaim_policy = 7;
+  ReclaimPolicyType reclaim_policy = 6;
 }
 
 // References to the associated resources for backup configuration.
 message References {
-  // UID of the deployment to which the backup configuration belong.
-  string deployment_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // UID of the data service deployment to which the backup configuration belong.
+  string data_service_deployment_id = 1 [(google.api.field_behavior) = REQUIRED];
 
   // UID of the backup target to which the backup configuration belong.
   string backup_location_id = 2 [(google.api.field_behavior) = REQUIRED];
@@ -263,27 +263,6 @@ message BackupPolicy {
 
 // Status for backup configuration.
 message Status {
-  // Enum for Phases of the backup configuration.
-  enum Phase {
-    // Unspecified state.
-    PHASE_UNSPECIFIED = 0;
-
-    // Preparing state before creation is successful.
-    PREPARING = 1;
-
-    // Applied state when create/update is successful.
-    APPLIED = 2;
-
-    // Updating state.
-    UPDATING = 3;
-
-    // Failed state.
-    FAILED = 4;
-
-    // Suspended state.
-    SUSPENDED = 5;
-  }
-
   // Phase specifies the phase of backup CR in target cluster.
   Phase phase = 1;
 
@@ -293,24 +272,64 @@ message Status {
   // Flag to check if the backup policy is synchronized or not.
   bool is_backup_policy_synchronized = 3;
 
-  // Deployment Meta Data.
-  DeploymentMetaData deployment_meta_data = 4;
+  // DataService Deployment Meta Data.
+  DataServiceDeploymentMetaData data_service_deployment_meta_data = 4;
+
+  // Error code.
+  string error_code = 5;
+
+  // Error message.
+  string error_message = 6;
 }
 
-// Deployment Meta Data contains the details of the deployment associated with the backup configuration.
-message DeploymentMetaData {
-  // Name of the deployment.
+// DataServiceDeployment Meta Data contains the details of the DataService deployment associated with the backup configuration.
+message DataServiceDeploymentMetaData {
+  // Name of the DataService deployment.
   string name = 1;
 
   // Custom Resource Name is the kubernetes resource name for the deployment meta data.
   string custom_resource_name = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
 
-  // Deployment Target Name associated with the backup configuration.
-  string deployment_target_name = 3;
+  // Target cluster Name associated with the backup configuration.
+  string target_cluster_name = 3;
 
   // Namespace name to which the backup configuration is associated.
   string namespace_name = 4;
 
   // Flag to check whether Transport Layer Security support is enabled or not.
   bool tls_enabled = 5;
+}
+
+// BackupConfigSuspended to accept value for suspended flag.
+enum BackupConfigSuspended {
+  // List all backup configs.
+  BACKUP_CONFIG_SUSPENDED_UNSPECIFIED = 0;
+  // List only suspended backup configs.
+  TRUE = 1;
+  // List only disabled backup configs.
+  FALSE = 2;
+}
+
+// Enum for Phases of the backup configuration.
+enum Phase {
+  // Unspecified state.
+  PHASE_UNSPECIFIED = 0;
+
+  // Preparing state before creation is successful.
+  PREPARING = 1;
+
+  // Applied state when create/update is successful.
+  APPLIED = 2;
+
+  // Updating state.
+  UPDATING = 3;
+
+  // Failed state.
+  FAILED = 4;
+
+  // Suspended state.
+  SUSPENDED = 5;
+
+  // Deleting state.
+  DELETING = 6;
 }

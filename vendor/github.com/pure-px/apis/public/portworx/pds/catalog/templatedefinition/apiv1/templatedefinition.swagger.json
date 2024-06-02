@@ -115,7 +115,7 @@
         },
         "/pds/v1/catalog/templateDefinition/revisions": {
             "get": {
-                "summary": "ListRevisions list the revisions.",
+                "summary": "List API lists all the revision",
                 "operationId": "TemplateDefinitionService_ListRevisions",
                 "responses": {
                     "200": {
@@ -258,6 +258,48 @@
                 ]
             }
         },
+        "/pds/v1/catalog/templateDefinition/revisions:search": {
+            "post": {
+                "summary": "List API lists all the revision",
+                "operationId": "TemplateDefinitionService_ListRevisions2",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListRevisionsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/v1ListRevisionsRequest"
+                            }
+                        }
+                    },
+                    "description": "Request parameters for listing revisions.",
+                    "required": true
+                },
+                "tags": [
+                    "TemplateDefinitionService"
+                ]
+            }
+        },
         "/pds/v1/catalog/templateDefinition/samples": {
             "get": {
                 "summary": "ListTemplateSamples: Used to list template sample schema.",
@@ -290,6 +332,68 @@
                         "description": "filter sample templates based on kind, this accepts wild card, eg: pds:service:postgre*",
                         "in": "query",
                         "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageNumber",
+                        "description": "Page number is the page number to return based on the size.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageSize",
+                        "description": "Page size is the maximum number of records to include per page.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    }
+                ],
+                "tags": [
+                    "TemplateDefinitionService"
+                ]
+            }
+        },
+        "/pds/v1/catalog/templateDefinition/samples/{id}": {
+            "get": {
+                "summary": "GetTemplateSample API returns the template sample for a given template id.",
+                "operationId": "TemplateDefinitionService_GetTemplateSample",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1TemplateSample"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "id",
+                        "description": "UID of the template sample.",
+                        "in": "path",
+                        "required": true,
                         "schema": {
                             "type": "string"
                         }
@@ -473,10 +577,11 @@
                 "enum": [
                     "OPERATOR_UNSPECIFIED",
                     "IN",
-                    "NOT_IN"
+                    "NOT_IN",
+                    "LIKE"
                 ],
                 "default": "OPERATOR_UNSPECIFIED",
-                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list."
+                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list.\n - LIKE: LIKE specified that the key should be of a specified pattern"
             },
             "SortByField": {
                 "type": "string",
@@ -525,22 +630,37 @@
                     }
                 }
             },
-            "v1Info": {
+            "templatedefinitionv1Info": {
                 "type": "object",
                 "properties": {
                     "kind": {
                         "type": "string",
                         "title": "Kind of the template"
                     },
-                    "values": {
+                    "templateValues": {
                         "type": "object",
                         "additionalProperties": {
                             "type": "string"
                         },
-                        "description": "values of the sample template."
+                        "description": "template_values of the sample template."
                     }
                 },
                 "description": "Info of sample template."
+            },
+            "v1ListRevisionsRequest": {
+                "type": "object",
+                "properties": {
+                    "fieldSelector": {
+                        "$ref": "#/components/schemas/v1Selector"
+                    },
+                    "sort": {
+                        "$ref": "#/components/schemas/v1Sort"
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationRequest"
+                    }
+                },
+                "description": "Request parameters for listing revisions."
             },
             "v1ListRevisionsResponse": {
                 "type": "object",
@@ -811,7 +931,7 @@
                         "$ref": "#/components/schemas/v1Meta"
                     },
                     "info": {
-                        "$ref": "#/components/schemas/v1Info"
+                        "$ref": "#/components/schemas/templatedefinitionv1Info"
                     }
                 },
                 "description": "TemplateSample represents the sample template schema."

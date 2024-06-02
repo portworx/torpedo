@@ -90,15 +90,6 @@
                 },
                 "parameters": [
                     {
-                        "name": "accountId",
-                        "description": "Account ID for which the restore will be listed.",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
                         "name": "tenantId",
                         "description": "Tenant ID for which the restore will be listed.",
                         "in": "query",
@@ -117,7 +108,7 @@
                         }
                     },
                     {
-                        "name": "deploymentId",
+                        "name": "dataServiceDeploymentId",
                         "description": "Deployment ID for which the restore will be listed.",
                         "in": "query",
                         "required": false,
@@ -222,47 +213,6 @@
                     {
                         "name": "id",
                         "description": "UID of the restore.",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "tags": [
-                    "RestoreService"
-                ]
-            },
-            "delete": {
-                "summary": "DeleteRestore API deletes the restore.",
-                "operationId": "RestoreService_DeleteRestore",
-                "responses": {
-                    "200": {
-                        "description": "A successful response.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {}
-                                }
-                            }
-                        }
-                    },
-                    "default": {
-                        "description": "An unexpected error response.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/googlerpcStatus"
-                                }
-                            }
-                        }
-                    }
-                },
-                "parameters": [
-                    {
-                        "name": "id",
-                        "description": "UID of the Restore.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -472,6 +422,10 @@
                     },
                     "phase": {
                         "$ref": "#/components/schemas/v1Phase"
+                    },
+                    "customResourceName": {
+                        "type": "string",
+                        "description": "Custom Resource Name is the kubernetes resource name for the restore that is built from ID."
                     }
                 },
                 "description": "Status of the restore."
@@ -501,7 +455,7 @@
                         "description": "UID of the target cluster where restore will be created.",
                         "readOnly": true
                     },
-                    "deploymentId": {
+                    "dataServiceDeploymentId": {
                         "type": "string",
                         "description": "UID of the deployment created by the restore.",
                         "readOnly": true
@@ -518,19 +472,12 @@
                 "type": "string",
                 "enum": [
                     "ERROR_CODE_UNSPECIFIED",
-                    "PX_CLOUD_CREDENTIALS_NOT_FOUND",
-                    "PX_CLOUD_SNAP_RESTORE_TRIGGER_FAILED",
-                    "PX_CLOUD_SNAP_RESTORE_FAILED",
-                    "PX_GET_CLOUD_SNAP_STATUS_FAILED",
-                    "PX_GET_VOLUME_FAILED",
-                    "READ_DATA_SERVICE_MANIFEST_FAILED",
-                    "UNMARSHAL_DATA_SERVICE_JSON",
-                    "DEPLOYMENT_NAME_ALREADY_EXIST",
-                    "TIMEOUT_BUSYBOX_POD_RUNNING",
-                    "BUSYBOX_POD_FAILED"
+                    "DATA_SERVICE_DEPLOYMENT_NAME_ALREADY_EXIST",
+                    "FAILED_BACKUP_CREDENTIAL_SYNC",
+                    "RESTORE_INTERNAL_ERROR"
                 ],
                 "default": "ERROR_CODE_UNSPECIFIED",
-                "description": "Enums for error codes for restore on the target cluster.\n\n - ERROR_CODE_UNSPECIFIED: Error code not specified.\n - PX_CLOUD_CREDENTIALS_NOT_FOUND: Cloud credentials specified in Restore spec were not found by Portworx.\n - PX_CLOUD_SNAP_RESTORE_TRIGGER_FAILED: Problem triggering the cloudsnap restore in PX.\n - PX_CLOUD_SNAP_RESTORE_FAILED: Problem with finishing the cloudsnap restore in PX.\n - PX_GET_CLOUD_SNAP_STATUS_FAILED: Problem with getting the cloudsnap restore status from PX.\n - PX_GET_VOLUME_FAILED: Problem with getting the volume from PX.\n - READ_DATA_SERVICE_MANIFEST_FAILED: Problem with reading the data service manifest from the busybox pod.\n - UNMARSHAL_DATA_SERVICE_JSON: Problem with unmarshalling the JSON with data service manifest.\n - DEPLOYMENT_NAME_ALREADY_EXIST: Deployment name already used in the namespace.\n - TIMEOUT_BUSYBOX_POD_RUNNING: Timeout while waiting for the BusyBox pod to enter the running state.\n - BUSYBOX_POD_FAILED: Busybox pod has failed."
+                "description": "Enums for error codes for restore on the target cluster.\n\n - ERROR_CODE_UNSPECIFIED: Error code not specified.\n - DATA_SERVICE_DEPLOYMENT_NAME_ALREADY_EXIST: Deployment name already used in the namespace.\n - FAILED_BACKUP_CREDENTIAL_SYNC: Failed to sync backup credentials on the target cluster.\n - RESTORE_INTERNAL_ERROR: Restore Internal error."
             },
             "v1ListRestoresResponse": {
                 "type": "object",
@@ -666,14 +613,14 @@
                     "INITIALIZING",
                     "PENDING",
                     "RESTORING_CLOUDSNAP",
-                    "RESTORING_DATA_SERVICE_CR",
-                    "RESTORING_DEPLOYMENT",
-                    "DEPLOYMENT_ENTERING_NORMAL_MODE",
+                    "RESTORING_DATA_SERVICE_DEPLOYMENT_CR",
+                    "RESTORING_DATA_SERVICE_DEPLOYMENT",
+                    "DATA_SERVICE_DEPLOYMENT_ENTERING_NORMAL_MODE",
                     "SUCCESSFUL",
                     "FAILED"
                 ],
                 "default": "PHASE_UNSPECIFIED",
-                "description": "Enum for phase of the restore.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - INITIALIZING: Restore is initializing.\n - PENDING: Restore has not yet started.\n - RESTORING_CLOUDSNAP: Waiting for the cloud snap restore to complete.\n - RESTORING_DATA_SERVICE_CR: PV and PVC resources are ready and we're waiting to get the data service manifest from the backup.\n - RESTORING_DEPLOYMENT: New data service has been created and we're waiting for the restore process to complete.\n - DEPLOYMENT_ENTERING_NORMAL_MODE: Restore process in data service has succeeded and we're waiting until it becomes healthy in normal mode.\n - SUCCESSFUL: Restore successful.\n - FAILED: Restore failed."
+                "description": "Enum for phase of the restore.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - INITIALIZING: Restore is initializing.\n - PENDING: Restore has not yet started.\n - RESTORING_CLOUDSNAP: Waiting for the cloud snap restore to complete.\n - RESTORING_DATA_SERVICE_DEPLOYMENT_CR: PV and PVC resources are ready and we're waiting to get the data service deployment manifest from the backup.\n - RESTORING_DATA_SERVICE_DEPLOYMENT: New data service deployment has been created and we're waiting for the restore process to complete.\n - DATA_SERVICE_DEPLOYMENT_ENTERING_NORMAL_MODE: Restore process in data service deployment has succeeded and we're waiting until it becomes healthy in normal mode.\n - SUCCESSFUL: Restore successful.\n - FAILED: Restore failed."
             },
             "v1Reference": {
                 "type": "object",
@@ -769,7 +716,7 @@
             "v1SourceReferences": {
                 "type": "object",
                 "properties": {
-                    "deploymentId": {
+                    "dataServiceDeploymentId": {
                         "type": "string",
                         "description": "UID of the deployment which was backed up.",
                         "readOnly": true

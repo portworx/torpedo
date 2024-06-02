@@ -145,8 +145,8 @@ func ValidateRestore(sourceDep, destDep automationModels.DeploymentTopology) err
 	}
 
 	// Validate the replicas
-	sourceReplicas := sourceDep.Replicas
-	destReplicas := destDep.Replicas
+	sourceReplicas := sourceDep.Instances
+	destReplicas := destDep.Instances
 	log.Debugf("source replicas [%d], dest repicas [%d]", *sourceReplicas, *destReplicas)
 	if *sourceReplicas != *destReplicas {
 		return fmt.Errorf("restored replicas are not same as backed up resource config")

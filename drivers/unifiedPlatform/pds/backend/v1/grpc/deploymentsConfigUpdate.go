@@ -8,16 +8,16 @@ import (
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	commonapiv1 "github.com/pure-px/apis/public/portworx/common/apiv1"
-	publicdeploymentapis "github.com/pure-px/apis/public/portworx/pds/deployment/apiv1"
-	publicdeploymentConfigUpdate "github.com/pure-px/apis/public/portworx/pds/deploymentconfigupdate/apiv1"
-	deploymenttopology "github.com/pure-px/apis/public/portworx/pds/deploymenttopology/apiv1"
+	publicdeploymentapis "github.com/pure-px/apis/public/portworx/pds/dataservicedeployment/apiv1"
+	publicdeploymentConfigUpdate "github.com/pure-px/apis/public/portworx/pds/dataservicedeploymentconfigupdate/apiv1"
+	deploymenttopology "github.com/pure-px/apis/public/portworx/pds/dataservicedeploymenttopology/apiv1"
 	"google.golang.org/grpc"
 )
 
 // GetClient updates the header with bearer token and returns the new client
-func (deployment *PdsGrpc) getDeploymentConfigClient() (context.Context, publicdeploymentConfigUpdate.DeploymentConfigUpdateServiceClient, string, error) {
+func (deployment *PdsGrpc) getDeploymentConfigClient() (context.Context, publicdeploymentConfigUpdate.DataServiceDeploymentConfigUpdateServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
-	var depClient publicdeploymentConfigUpdate.DeploymentConfigUpdateServiceClient
+	var depClient publicdeploymentConfigUpdate.DataServiceDeploymentConfigUpdateServiceClient
 
 	ctx, token, err := GetBearerToken()
 	if err != nil {
@@ -28,7 +28,7 @@ func (deployment *PdsGrpc) getDeploymentConfigClient() (context.Context, publicd
 		Token: token,
 	}
 
-	depClient = publicdeploymentConfigUpdate.NewDeploymentConfigUpdateServiceClient(deployment.ApiClientV2)
+	depClient = publicdeploymentConfigUpdate.NewDataServiceDeploymentConfigUpdateServiceClient(deployment.ApiClientV2)
 
 	return ctx, depClient, token, nil
 }
@@ -49,8 +49,8 @@ func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *automationM
 	}
 
 	//TODO: try copy else go with the below approach
-	updateRequest := &publicdeploymentConfigUpdate.CreateDeploymentConfigUpdateRequest{
-		DeploymentConfigUpdate: &publicdeploymentConfigUpdate.DeploymentConfigUpdate{
+	updateRequest := &publicdeploymentConfigUpdate.CreateDataServiceDeploymentConfigUpdateRequest{
+		DataServiceDeploymentConfigUpdate: &publicdeploymentConfigUpdate.DataServiceDeploymentConfigUpdate{
 			Meta: &commonapiv1.Meta{
 				Uid:             "",
 				Name:            "",
@@ -64,7 +64,7 @@ func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *automationM
 				ResourceNames:   nil,
 			},
 			Config: &publicdeploymentConfigUpdate.Config{
-				DeploymentMeta: &commonapiv1.Meta{
+				DataServiceDeploymentMeta: &commonapiv1.Meta{
 					Uid:             "",
 					Name:            "",
 					Description:     "",
@@ -76,14 +76,14 @@ func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *automationM
 					ParentReference: nil,
 					ResourceNames:   nil,
 				},
-				DeploymentConfig: &publicdeploymentapis.Config{
+				DataServiceDeploymentConfig: &publicdeploymentapis.Config{
 					References: nil,
 					//TlsEnabled: false,
-					DeploymentTopologies: []*deploymenttopology.DeploymentTopology{
+					DataServiceDeploymentTopologies: []*deploymenttopology.DataServiceDeploymentTopology{
 						{
 							Name:        "",
 							Description: "",
-							Replicas:    4,
+							Instances:   4,
 							ResourceSettings: &deploymenttopology.Template{
 								Id:              "",
 								ResourceVersion: "",
@@ -102,7 +102,7 @@ func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *automationM
 		return nil, fmt.Errorf("Error while c: %v\n", err)
 	}
 
-	apiResponse, err := client.CreateDeploymentConfigUpdate(ctx, updateRequest, grpc.PerRPCCredentials(credentials))
+	apiResponse, err := client.CreateDataServiceDeploymentConfigUpdate(ctx, updateRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error while updating the deployment: %v\n", err)
 	}

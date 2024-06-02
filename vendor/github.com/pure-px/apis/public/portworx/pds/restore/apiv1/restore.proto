@@ -56,14 +56,6 @@ service RestoreService {
     };
   }
 
-  // DeleteRestore API deletes the restore.
-  rpc DeleteRestore(DeleteRestoreRequest)
-    returns(google.protobuf.Empty) {
-    option(google.api.http) = {
-      delete: "/pds/v1/restores/{id}"
-    };
-  }
-
   // RecreateRestore API recreates a already failed restore.
   rpc RecreateRestore(RecreateRestoreRequest)
     returns(Restore) {
@@ -107,7 +99,7 @@ message CreateRestoreRequest {
 }
 
 // Request to get a restore.
-message GetRestoreRequest {  
+message GetRestoreRequest {
   // UID of the restore.
   string id = 1;
 }
@@ -116,21 +108,19 @@ message GetRestoreRequest {
 message ListRestoresRequest {
   // Specifies a filter to list restores.
   oneof list_by {
-    // Account ID for which the restore will be listed.
-    string account_id = 1;
     // Tenant ID for which the restore will be listed.
-    string tenant_id = 2;
+    string tenant_id = 1;
     // Project ID for which the restore will be listed.
-    string project_id = 3;
+    string project_id = 2;
     // Deployment ID for which the restore will be listed.
-    string deployment_id = 4;
+    string data_service_deployment_id = 3;
     // Backup ID for which the restore will be listed.
-    string backup_id = 5;
+    string backup_id = 4;
   }
   // Sorting details using which requested list to be sorted.
-  public.portworx.common.v1.Sort sort = 6;
+  public.portworx.common.v1.Sort sort = 5;
   // Pagination metadata for this response.
-  public.portworx.common.v1.PageBasedPaginationRequest pagination = 7;
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 6;
 }
 
 // ListRestoresResponse represents list restores response.
@@ -141,12 +131,6 @@ message ListRestoresResponse {
   // (-- api-linter: core::0132::response-unknown-fields=disabled
   //     aip.dev/not-precedent: We need this field for pagination. --)
   public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
-}
-
-// Request to delete a restore.
-message DeleteRestoreRequest {
-  // UID of the Restore.
-  string id = 2;
 }
 
 // Request to recreate a restore.
@@ -184,7 +168,7 @@ message Config {
 // SourceReferences for the restore.
 message SourceReferences {
   // UID of the deployment which was backed up.
-  string deployment_id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+  string data_service_deployment_id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
   // UID of the backup.
   string backup_id = 2 [(google.api.field_behavior) = REQUIRED];
   // UID of the backup location.
@@ -198,7 +182,7 @@ message DestinationReferences {
   // UID of the target cluster where restore will be created.
   string target_cluster_id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
   // UID of the deployment created by the restore.
-  string deployment_id = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+  string data_service_deployment_id = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
   // UID of the project.
   string project_id = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
@@ -219,6 +203,8 @@ message Status {
   string error_message = 4;
   // Phase of the restore.
   Phase phase = 5;
+  // Custom Resource Name is the kubernetes resource name for the restore that is built from ID.
+  string custom_resource_name = 6;
 }
 
 // RestorabilityMatrix represents the compatibility matrix for restore.
@@ -255,15 +241,15 @@ enum Phase {
   PENDING = 2;
   // Waiting for the cloud snap restore to complete.
   RESTORING_CLOUDSNAP = 3;
-  // PV and PVC resources are ready and we're waiting to get the data service manifest from the backup.
-  RESTORING_DATA_SERVICE_CR = 4;
-  // New data service has been created and we're waiting for the restore process to complete.
-  RESTORING_DEPLOYMENT = 5;
-  // Restore process in data service has succeeded and we're waiting until it becomes healthy in normal mode.
-  DEPLOYMENT_ENTERING_NORMAL_MODE = 6;
+  // PV and PVC resources are ready and we're waiting to get the data service deployment manifest from the backup.
+  RESTORING_DATA_SERVICE_DEPLOYMENT_CR = 4;
+  // New data service deployment has been created and we're waiting for the restore process to complete.
+  RESTORING_DATA_SERVICE_DEPLOYMENT = 5;
+  // Restore process in data service deployment has succeeded and we're waiting until it becomes healthy in normal mode.
+  DATA_SERVICE_DEPLOYMENT_ENTERING_NORMAL_MODE = 6;
   // Restore successful.
   SUCCESSFUL = 7;
-  // Restore failed. 
+  // Restore failed.
   FAILED = 8;
 }
 
@@ -271,25 +257,10 @@ enum Phase {
 enum ErrorCode {
   // Error code not specified.
   ERROR_CODE_UNSPECIFIED = 0;
-  // Cloud credentials specified in Restore spec were not found by Portworx.
-  PX_CLOUD_CREDENTIALS_NOT_FOUND = 1;
-  // Problem triggering the cloudsnap restore in PX.
-  PX_CLOUD_SNAP_RESTORE_TRIGGER_FAILED = 2;
-  // Problem with finishing the cloudsnap restore in PX.
-  PX_CLOUD_SNAP_RESTORE_FAILED = 3;
-  // Problem with getting the cloudsnap restore status from PX.
-  PX_GET_CLOUD_SNAP_STATUS_FAILED = 4;
-  // Problem with getting the volume from PX.
-  PX_GET_VOLUME_FAILED = 5;
-  // Problem with reading the data service manifest from the busybox pod.
-  READ_DATA_SERVICE_MANIFEST_FAILED = 6;
-  // Problem with unmarshalling the JSON with data service manifest.
-  UNMARSHAL_DATA_SERVICE_JSON = 7;
   // Deployment name already used in the namespace.
-  DEPLOYMENT_NAME_ALREADY_EXIST = 8;
-  // Timeout while waiting for the BusyBox pod to enter the running state.
-  TIMEOUT_BUSYBOX_POD_RUNNING = 9;
-  // Busybox pod has failed.
-  BUSYBOX_POD_FAILED = 10;
+  DATA_SERVICE_DEPLOYMENT_NAME_ALREADY_EXIST = 1;
+  // Failed to sync backup credentials on the target cluster.
+  FAILED_BACKUP_CREDENTIAL_SYNC = 2;
+  // Restore Internal error.
+  RESTORE_INTERNAL_ERROR = 3;
 }
-

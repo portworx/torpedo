@@ -10,6 +10,124 @@
         }
     ],
     "paths": {
+        "/core/v1/applications/{application.meta.uid}": {
+            "put": {
+                "summary": "UpdateApplication API updates specified application on the target cluster.",
+                "operationId": "ApplicationService_UpdateApplication",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1Application"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "application.meta.uid",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "meta": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "description": "Name of the resource."
+                                            },
+                                            "description": {
+                                                "type": "string",
+                                                "description": "Description of the resource."
+                                            },
+                                            "resourceVersion": {
+                                                "type": "string",
+                                                "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                                            },
+                                            "createTime": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "description": "Creation time of the object.",
+                                                "readOnly": true
+                                            },
+                                            "updateTime": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "description": "Update time of the object.",
+                                                "readOnly": true
+                                            },
+                                            "labels": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Labels to apply to the object."
+                                            },
+                                            "annotations": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Annotations for the object."
+                                            },
+                                            "parentReference": {
+                                                "$ref": "#/components/schemas/v1Reference"
+                                            },
+                                            "resourceNames": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                                                "readOnly": true
+                                            }
+                                        },
+                                        "description": "Metadata of the application(Resource Meta).",
+                                        "title": "Metadata of the application(Resource Meta)."
+                                    },
+                                    "config": {
+                                        "$ref": "#/components/schemas/v1Config"
+                                    },
+                                    "status": {
+                                        "$ref": "#/components/schemas/applicationv1Status"
+                                    }
+                                },
+                                "title": "application to be updated."
+                            }
+                        }
+                    },
+                    "description": "application to be updated.",
+                    "required": true
+                },
+                "tags": [
+                    "ApplicationService"
+                ]
+            }
+        },
         "/core/v1/applications/{id}": {
             "get": {
                 "summary": "GetApplication API returns the info about application with given id.",
@@ -328,6 +446,17 @@
     },
     "components": {
         "schemas": {
+            "ApplicationHealthHealth": {
+                "type": "string",
+                "enum": [
+                    "HEALTH_UNSPECIFIED",
+                    "UNKNOWN",
+                    "HEALTHY",
+                    "UNHEALTHY"
+                ],
+                "default": "HEALTH_UNSPECIFIED",
+                "description": "Health determines health of an application.\n\n - HEALTH_UNSPECIFIED: Must be set in the proto file; ignore.\n - UNKNOWN: Application health is unknown.\n - HEALTHY: Application is healthy.\n - UNHEALTHY: Application is unhealthy."
+            },
             "ApplicationPhasePhase": {
                 "type": "string",
                 "enum": [
@@ -341,6 +470,47 @@
                 "default": "PHASE_UNSPECIFIED",
                 "description": "AppStatus determines status of an application.\n\n - PHASE_UNSPECIFIED: Must be set in the proto file; ignore.\n - PENDING: Application yet to be installed.\n - DEPLOYING: Application deployment on the target cluster in progress.\n - SUCCEEDED: Installed successfully.\n - FAILED: Application failed to install.\n - DELETING: Application is being deleted."
             },
+            "PDSPropertiesGlobal": {
+                "type": "object",
+                "properties": {
+                    "dataServiceTlsEnabled": {
+                        "type": "boolean",
+                        "description": "data_service_tls_enabled enables TLS for dataservices.\nThis requires cert-manager to be pre-installed."
+                    }
+                },
+                "description": "Global is the global property block for PDS."
+            },
+            "SelectorFilter": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "description": "Key of key,value pair against which filtering needs to be performs."
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/SelectorOperator"
+                    },
+                    "values": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Value of key,value pair against which filtering needs to be performs if operator is EXIST, value should be an empty array."
+                    }
+                },
+                "description": "Filter for a given key."
+            },
+            "SelectorOperator": {
+                "type": "string",
+                "enum": [
+                    "OPERATOR_UNSPECIFIED",
+                    "IN",
+                    "NOT_IN",
+                    "LIKE"
+                ],
+                "default": "OPERATOR_UNSPECIFIED",
+                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list.\n - LIKE: LIKE specified that the key should be of a specified pattern"
+            },
             "applicationv1Status": {
                 "type": "object",
                 "properties": {
@@ -350,6 +520,16 @@
                     },
                     "phase": {
                         "$ref": "#/components/schemas/ApplicationPhasePhase"
+                    },
+                    "health": {
+                        "$ref": "#/components/schemas/ApplicationHealthHealth"
+                    },
+                    "conditions": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "conditions of the application."
                     }
                 },
                 "description": "Status of the Application."
@@ -408,6 +588,9 @@
                         "type": "string",
                         "description": "desired application chart version.",
                         "readOnly": true
+                    },
+                    "pds": {
+                        "$ref": "#/components/schemas/v1PDSProperties"
                     }
                 },
                 "description": "Desired configuration of the Application."
@@ -487,6 +670,15 @@
                 },
                 "description": "Meta holds general resource metadata."
             },
+            "v1PDSProperties": {
+                "type": "object",
+                "properties": {
+                    "global": {
+                        "$ref": "#/components/schemas/PDSPropertiesGlobal"
+                    }
+                },
+                "description": "PDSProperties are the properties available for PDS."
+            },
             "v1PageBasedPaginationRequest": {
                 "type": "object",
                 "properties": {
@@ -556,6 +748,19 @@
                     }
                 },
                 "description": "Reference identifies the resource type, version of the uid and the resource."
+            },
+            "v1Selector": {
+                "type": "object",
+                "properties": {
+                    "filters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SelectorFilter"
+                        },
+                        "description": "FilterList is the list of all filters that should be applied."
+                    }
+                },
+                "description": "Selector is used to query resources using the associated labels or field names."
             }
         }
     }

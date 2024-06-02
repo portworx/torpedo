@@ -1,0 +1,734 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/pds/dataservicedeploymentconfigupdate/apiv1/dataservicedeploymentconfigupdate.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "DataServiceDeploymentConfigUpdateService"
+        }
+    ],
+    "paths": {
+        "/pds/v1/dataServiceDeploymentConfigUpdates": {
+            "get": {
+                "summary": "ListDataServiceDeploymentConfigUpdates API returns a list of data service deployment config updates.",
+                "operationId": "DataServiceDeploymentConfigUpdateService_ListDataServiceDeploymentConfigUpdates",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListDataServiceDeploymentConfigUpdatesResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "dataServiceDeploymentId",
+                        "description": "UID of the DataService Deployment.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "sort.sortBy",
+                        "description": "Name of the attribute to sort results by.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "FIELD_UNSPECIFIED",
+                                "NAME",
+                                "CREATED_AT",
+                                "UPDATED_AT",
+                                "PHASE"
+                            ],
+                            "default": "FIELD_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "sort.sortOrder",
+                        "description": "Order of sorting to be applied on requested list.\nIf sort_by having some value and sort_order is not provided, by default ascending order will be used to sort the list.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "VALUE_UNSPECIFIED",
+                                "ASC",
+                                "DESC"
+                            ],
+                            "default": "VALUE_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageNumber",
+                        "description": "Page number is the page number to return based on the size.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageSize",
+                        "description": "Page size is the maximum number of records to include per page.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    }
+                ],
+                "tags": [
+                    "DataServiceDeploymentConfigUpdateService"
+                ]
+            }
+        },
+        "/pds/v1/dataServiceDeploymentConfigUpdates/{id}": {
+            "get": {
+                "summary": "GetDataServiceDeploymentConfigUpdate API returns a DataService deployment config update by id.",
+                "operationId": "DataServiceDeploymentConfigUpdateService_GetDataServiceDeploymentConfigUpdate",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1DataServiceDeploymentConfigUpdate"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "id",
+                        "description": "UID of the DataService deployment config update.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "DataServiceDeploymentConfigUpdateService"
+                ]
+            }
+        },
+        "/pds/v1/dataServiceDeploymentConfigUpdates/{id}:retry": {
+            "post": {
+                "summary": "RetryDataServiceDeploymentConfigUpdate API retries a data service deployment config update.",
+                "operationId": "DataServiceDeploymentConfigUpdateService_RetryDataServiceDeploymentConfigUpdate",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1DataServiceDeploymentConfigUpdate"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "id",
+                        "description": "UID of the DataService deployment config update.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DataServiceDeploymentConfigUpdateServiceRetryDataServiceDeploymentConfigUpdateBody"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "tags": [
+                    "DataServiceDeploymentConfigUpdateService"
+                ]
+            }
+        },
+        "/pds/v1/dataServiceDeployments/{dataServiceDeploymentConfigUpdate.config.dataServiceDeploymentMeta.uid}/dataServiceDeploymentConfigUpdates": {
+            "put": {
+                "summary": "CreateDataServiceDeploymentConfigUpdate API creates config update for deployment.",
+                "operationId": "DataServiceDeploymentConfigUpdateService_CreateDataServiceDeploymentConfigUpdate",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1DataServiceDeploymentConfigUpdate"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "dataServiceDeploymentConfigUpdate.config.dataServiceDeploymentMeta.uid",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "meta": {
+                                        "$ref": "#/components/schemas/v1Meta"
+                                    },
+                                    "config": {
+                                        "type": "object",
+                                        "properties": {
+                                            "dataServiceDeploymentMeta": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "name": {
+                                                        "type": "string",
+                                                        "description": "Name of the resource."
+                                                    },
+                                                    "description": {
+                                                        "type": "string",
+                                                        "description": "Description of the resource."
+                                                    },
+                                                    "resourceVersion": {
+                                                        "type": "string",
+                                                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                                                    },
+                                                    "createTime": {
+                                                        "type": "string",
+                                                        "format": "date-time",
+                                                        "description": "Creation time of the object.",
+                                                        "readOnly": true
+                                                    },
+                                                    "updateTime": {
+                                                        "type": "string",
+                                                        "format": "date-time",
+                                                        "description": "Update time of the object.",
+                                                        "readOnly": true
+                                                    },
+                                                    "labels": {
+                                                        "type": "object",
+                                                        "additionalProperties": {
+                                                            "type": "string"
+                                                        },
+                                                        "description": "Labels to apply to the object."
+                                                    },
+                                                    "annotations": {
+                                                        "type": "object",
+                                                        "additionalProperties": {
+                                                            "type": "string"
+                                                        },
+                                                        "description": "Annotations for the object."
+                                                    },
+                                                    "parentReference": {
+                                                        "$ref": "#/components/schemas/v1Reference"
+                                                    },
+                                                    "resourceNames": {
+                                                        "type": "object",
+                                                        "additionalProperties": {
+                                                            "type": "string"
+                                                        },
+                                                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                                                        "readOnly": true
+                                                    }
+                                                },
+                                                "description": "Metadata of the DataService deployment resource.",
+                                                "title": "Metadata of the DataService deployment resource."
+                                            },
+                                            "dataServiceDeploymentConfig": {
+                                                "$ref": "#/components/schemas/pdsdataservicedeploymentv1Config"
+                                            }
+                                        },
+                                        "description": "Config of the DataService deployment for which config update is requested.",
+                                        "title": "Config of the DataService deployment for which config update is requested."
+                                    },
+                                    "status": {
+                                        "$ref": "#/components/schemas/pdsdataservicedeploymentconfigupdatev1Status"
+                                    }
+                                },
+                                "title": "DataServiceDeploymentConfigUpdate of the DataService config deployment update request."
+                            }
+                        }
+                    },
+                    "description": "DataServiceDeploymentConfigUpdate of the DataService config deployment update request.",
+                    "required": true
+                },
+                "tags": [
+                    "DataServiceDeploymentConfigUpdateService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "DataServiceDeploymentConfigUpdateServiceRetryDataServiceDeploymentConfigUpdateBody": {
+                "type": "object",
+                "description": "RetryDataServiceDeploymentConfigUpdateRequest is the request for RetryDataServiceDeploymentConfigUpdate."
+            },
+            "SortByField": {
+                "type": "string",
+                "enum": [
+                    "FIELD_UNSPECIFIED",
+                    "NAME",
+                    "CREATED_AT",
+                    "UPDATED_AT",
+                    "PHASE"
+                ],
+                "default": "FIELD_UNSPECIFIED",
+                "description": "Field names for sorting the list of resources.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource."
+            },
+            "googlerpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "pdsdataservicedeploymentconfigupdatev1Config": {
+                "type": "object",
+                "properties": {
+                    "dataServiceDeploymentMeta": {
+                        "$ref": "#/components/schemas/v1Meta"
+                    },
+                    "dataServiceDeploymentConfig": {
+                        "$ref": "#/components/schemas/pdsdataservicedeploymentv1Config"
+                    }
+                },
+                "description": "Config of the desired DataService deployment configuration."
+            },
+            "pdsdataservicedeploymentconfigupdatev1Status": {
+                "type": "object",
+                "properties": {
+                    "errorCode": {
+                        "type": "string",
+                        "description": "Error Code is a short string that represents the error."
+                    },
+                    "errorMessage": {
+                        "type": "string",
+                        "description": "Error Message is a description of the error."
+                    },
+                    "retryCount": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Number of times the DataService config update has been retried."
+                    },
+                    "phase": {
+                        "$ref": "#/components/schemas/pdsdataservicedeploymentconfigupdatev1StatusPhase"
+                    }
+                },
+                "description": "Status of the DataService  deployment config update."
+            },
+            "pdsdataservicedeploymentconfigupdatev1StatusPhase": {
+                "type": "string",
+                "enum": [
+                    "PHASE_UNSPECIFIED",
+                    "FAILED",
+                    "QUEUED",
+                    "IN_PROGRESS",
+                    "COMPLETED",
+                    "REQUEUED"
+                ],
+                "default": "PHASE_UNSPECIFIED",
+                "description": "Enum for Phase of the DataService  deployment config update.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - FAILED: DataService deployment config update failed.\n - QUEUED: DataService deployment config update is queued.\n - IN_PROGRESS: DataService deployment config update is in progress.\n - COMPLETED: DataService deployment config update is completed.\n - REQUEUED: DataService config update is requeued."
+            },
+            "pdsdataservicedeploymentv1Config": {
+                "type": "object",
+                "properties": {
+                    "references": {
+                        "$ref": "#/components/schemas/v1References"
+                    },
+                    "tlsConfig": {
+                        "$ref": "#/components/schemas/v1TLSConfig"
+                    },
+                    "dataServiceDeploymentTopologies": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1DataServiceDeploymentTopology"
+                        },
+                        "description": "A DataService deployment topology contains a number of nodes that have various attributes as a collective group."
+                    }
+                },
+                "description": "Desired configuration of the DataService Deployment."
+            },
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "v1DataServiceDeploymentConfigUpdate": {
+                "type": "object",
+                "properties": {
+                    "meta": {
+                        "$ref": "#/components/schemas/v1Meta"
+                    },
+                    "config": {
+                        "$ref": "#/components/schemas/pdsdataservicedeploymentconfigupdatev1Config"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/pdsdataservicedeploymentconfigupdatev1Status"
+                    }
+                },
+                "description": "DataServiceDeploymentConfigUpdate represents a DataService deployment config update resource."
+            },
+            "v1DataServiceDeploymentTopology": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the DataServiceDeployment topology."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the DataServiceDeployment topology."
+                    },
+                    "instances": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Number of instances of data services."
+                    },
+                    "serviceType": {
+                        "type": "string",
+                        "description": "Service type are standard Kubernetes service types such as clusterIP, NodePort, load balancers, etc."
+                    },
+                    "serviceName": {
+                        "type": "string",
+                        "description": "Service name is the name of service as provided by user."
+                    },
+                    "loadBalancerSourceRanges": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Source IP ranges to use for the deployed Load Balancer."
+                    },
+                    "resourceSettings": {
+                        "$ref": "#/components/schemas/v1Template"
+                    },
+                    "serviceConfigurations": {
+                        "$ref": "#/components/schemas/v1Template"
+                    },
+                    "storageOptions": {
+                        "$ref": "#/components/schemas/v1Template"
+                    }
+                },
+                "description": "A DataService topology contains a number of nodes that have various attributes as a collective group.\nThis is consumed in a DataService Deployment and the functionality is being controlled by the CRUD APIs of DataService Deployment."
+            },
+            "v1ListDataServiceDeploymentConfigUpdatesResponse": {
+                "type": "object",
+                "properties": {
+                    "dataServiceDeploymentConfigUpdates": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1DataServiceDeploymentConfigUpdate"
+                        },
+                        "description": "List of DataService deployment config updates."
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
+                    }
+                },
+                "description": "ListDataServiceDeploymentConfigUpdatesResponse is the response for ListDataServiceDeploymentConfigUpdates."
+            },
+            "v1Meta": {
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the resource."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the resource."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                    },
+                    "createTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Creation time of the object.",
+                        "readOnly": true
+                    },
+                    "updateTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Update time of the object.",
+                        "readOnly": true
+                    },
+                    "labels": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Labels to apply to the object."
+                    },
+                    "annotations": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Annotations for the object."
+                    },
+                    "parentReference": {
+                        "$ref": "#/components/schemas/v1Reference"
+                    },
+                    "resourceNames": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                        "readOnly": true
+                    }
+                },
+                "description": "Meta holds general resource metadata."
+            },
+            "v1PageBasedPaginationRequest": {
+                "type": "object",
+                "properties": {
+                    "pageNumber": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page number is the page number to return based on the size."
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page size is the maximum number of records to include per page."
+                    }
+                },
+                "description": "Request parameters for page-based pagination."
+            },
+            "v1PageBasedPaginationResponse": {
+                "type": "object",
+                "properties": {
+                    "totalRecords": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Total records without pagination available in the dataset."
+                    },
+                    "currentPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Current page number for this paginated response."
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page size used for pagination."
+                    },
+                    "totalPages": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Total pages based on the page_size provided in the request."
+                    },
+                    "nextPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Next page if available in the dataset, -1 if unavailable."
+                    },
+                    "prevPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Previous page if available in the dataset, -1 if unavailable."
+                    }
+                },
+                "description": "Metadata related to page based pagination for paginated API responses."
+            },
+            "v1Reference": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": "API group of the resource."
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Version of the API."
+                    },
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource."
+                    }
+                },
+                "description": "Reference identifies the resource type, version of the uid and the resource."
+            },
+            "v1References": {
+                "type": "object",
+                "properties": {
+                    "targetClusterId": {
+                        "type": "string",
+                        "description": "UID of the target cluster in which Data Service will be deployed.",
+                        "readOnly": true
+                    },
+                    "imageId": {
+                        "type": "string",
+                        "description": "UID of the image to be used for the Data Service Deployment."
+                    },
+                    "projectId": {
+                        "type": "string",
+                        "description": "UID of the project to which DataService Deployment associated.",
+                        "readOnly": true
+                    },
+                    "restoreId": {
+                        "type": "string",
+                        "description": "UID of the restore id for the data service Deployment.",
+                        "readOnly": true
+                    },
+                    "dataServiceId": {
+                        "type": "string",
+                        "title": "UID of the data service",
+                        "readOnly": true
+                    }
+                },
+                "description": "References to other resources."
+            },
+            "v1Sort": {
+                "type": "object",
+                "properties": {
+                    "sortBy": {
+                        "$ref": "#/components/schemas/SortByField"
+                    },
+                    "sortOrder": {
+                        "$ref": "#/components/schemas/v1SortOrderValue"
+                    }
+                },
+                "description": "The details of the attribute for which the requested list of resource to be sorted."
+            },
+            "v1SortOrderValue": {
+                "type": "string",
+                "enum": [
+                    "VALUE_UNSPECIFIED",
+                    "ASC",
+                    "DESC"
+                ],
+                "default": "VALUE_UNSPECIFIED",
+                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
+            },
+            "v1TLSConfig": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "Flag to enable TLS for the Data Service."
+                    },
+                    "issuerName": {
+                        "type": "string",
+                        "description": "Issuer (Certificate Authority) name for the TLS certificates."
+                    }
+                },
+                "description": "TLS configuration for the Data Service."
+            },
+            "v1Template": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "UID of the Template."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "Resource version of the template.",
+                        "readOnly": true
+                    },
+                    "values": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Values required for template."
+                    }
+                },
+                "description": "Template."
+            }
+        }
+    }
+}

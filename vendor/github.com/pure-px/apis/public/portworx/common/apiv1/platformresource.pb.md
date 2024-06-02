@@ -44,7 +44,7 @@ Type of the resource can be associated to the project.
 | Name | Number | Description |
 | ---- | ------ | ----------- |
 | TYPE_UNSPECIFIED | 0 | Unspecified, do not use. |
-| PDS_DEPLOYMENT | 1 | List of supported PDS application resources. PDS application resource of type deployment. |
+| PDS_DATA_SERVICE_DEPLOYMENT | 1 | List of supported PDS application resources. PDS application resource of type deployment. |
 | PDS_BACKUPCONFIG | 2 | PDS application resource of type backup. |
 | PDS_RESTORE | 3 | PDS application resource of type restore. |
 | BAAS_BACKUP | 4 | List of supported BAAS application resources. BAAS application resource of type backup. |

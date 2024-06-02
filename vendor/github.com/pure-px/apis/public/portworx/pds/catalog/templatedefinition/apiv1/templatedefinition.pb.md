@@ -12,9 +12,10 @@
 
 
 - Messages
+    - [GetTemplateSampleRequest](#gettemplatesamplerequest)
     - [GetTemplateTypeRequest](#gettemplatetyperequest)
     - [Info](#info)
-    - [Info.ValuesEntry](#infovaluesentry)
+    - [Info.TemplateValuesEntry](#infotemplatevaluesentry)
     - [ListTemplateKindsRequest](#listtemplatekindsrequest)
     - [ListTemplateKindsResponse](#listtemplatekindsresponse)
     - [ListTemplateSamplesRequest](#listtemplatesamplesrequest)
@@ -46,6 +47,11 @@ GetRevision gets the revision details, containing the actual schema.
 > **rpc** ListRevisions([.public.portworx.common.v1.ListRevisionsRequest](#publicportworxcommonv1listrevisionsrequest))
     [.public.portworx.common.v1.ListRevisionsResponse](#publicportworxcommonv1listrevisionsresponse)
 
+(-- api-linter: core::0132::http-body=disabled
+    api-linter: core::0132::http-method=disabled
+    aip.dev/not-precedent: We need to do this because
+we can't have advance filters as query params.
+--)
 ListRevisions list the revisions.
 ### ListTemplateKinds {#methodpublicportworxpdscatalogtemplatedefinitionv1templatedefinitionservicelisttemplatekinds}
 
@@ -71,10 +77,27 @@ GetTemplateType API returns the template type by id.
     [ListTemplateSamplesResponse](#listtemplatesamplesresponse)
 
 ListTemplateSamples: Used to list template sample schema.
+### GetTemplateSample {#methodpublicportworxpdscatalogtemplatedefinitionv1templatedefinitionservicegettemplatesample}
+
+> **rpc** GetTemplateSample([GetTemplateSampleRequest](#gettemplatesamplerequest))
+    [TemplateSample](#templatesample)
+
+GetTemplateSample API returns the template sample for a given template id.
  <!-- end methods -->
  <!-- end services -->
 
 ## Messages
+
+
+### GetTemplateSampleRequest {#gettemplatesamplerequest}
+Request to get the template sample resource.
+
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| id | [ string](#string) | UID of the template sample. |
+ <!-- end Fields -->
+ <!-- end HasFields -->
 
 
 ### GetTemplateTypeRequest {#gettemplatetyperequest}
@@ -95,12 +118,12 @@ Info of sample template.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | kind | [ string](#string) | Kind of the template |
-| values | [map Info.ValuesEntry](#infovaluesentry) | values of the sample template. |
+| template_values | [map Info.TemplateValuesEntry](#infotemplatevaluesentry) | template_values of the sample template. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
-### Info.ValuesEntry {#infovaluesentry}
+### Info.TemplateValuesEntry {#infotemplatevaluesentry}
 
 
 
@@ -145,6 +168,7 @@ ListTemplateSamplesRequest list templates samples request.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | kind | [ string](#string) | filter sample templates based on kind, this accepts wild card, eg: pds:service:postgre* |
+| pagination | [ public.portworx.common.v1.PageBasedPaginationRequest](#publicportworxcommonv1pagebasedpaginationrequest) | Pagination metadata for this request. |
  <!-- end Fields -->
  <!-- end HasFields -->
 

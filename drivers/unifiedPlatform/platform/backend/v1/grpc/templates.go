@@ -88,7 +88,7 @@ func (templateGrpc *PlatformGrpc) UpdateTemplates(templateReq *PlatformTemplates
 	}
 	tempval := structpb.Struct{}
 	updateTemplateReq := publictemplateapis.UpdateTemplateRequest{
-		Id: templateReq.Update.Id,
+		//Id: templateReq.Update.Id,
 		Template: &publictemplateapis.Template{
 			Meta: &commonapiv1.Meta{Name: *templateReq.Create.Template.Meta.Name},
 			Config: &publictemplateapis.Config{

@@ -38,7 +38,6 @@ const (
 	RestoreService_CreateRestore_FullMethodName          = "/public.portworx.pds.restore.v1.RestoreService/CreateRestore"
 	RestoreService_GetRestore_FullMethodName             = "/public.portworx.pds.restore.v1.RestoreService/GetRestore"
 	RestoreService_ListRestores_FullMethodName           = "/public.portworx.pds.restore.v1.RestoreService/ListRestores"
-	RestoreService_DeleteRestore_FullMethodName          = "/public.portworx.pds.restore.v1.RestoreService/DeleteRestore"
 	RestoreService_RecreateRestore_FullMethodName        = "/public.portworx.pds.restore.v1.RestoreService/RecreateRestore"
 	RestoreService_GetRestorabilityMatrix_FullMethodName = "/public.portworx.pds.restore.v1.RestoreService/GetRestorabilityMatrix"
 )
@@ -53,8 +52,6 @@ type RestoreServiceClient interface {
 	GetRestore(ctx context.Context, in *GetRestoreRequest, opts ...grpc.CallOption) (*Restore, error)
 	// ListRestore API lists the Restore resources.
 	ListRestores(ctx context.Context, in *ListRestoresRequest, opts ...grpc.CallOption) (*ListRestoresResponse, error)
-	// DeleteRestore API deletes the restore.
-	DeleteRestore(ctx context.Context, in *DeleteRestoreRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// RecreateRestore API recreates a already failed restore.
 	RecreateRestore(ctx context.Context, in *RecreateRestoreRequest, opts ...grpc.CallOption) (*Restore, error)
 	// GetRestorabilityMatrix API returns the compatibility matrix for restore.
@@ -99,15 +96,6 @@ func (c *restoreServiceClient) ListRestores(ctx context.Context, in *ListRestore
 	return out, nil
 }
 
-func (c *restoreServiceClient) DeleteRestore(ctx context.Context, in *DeleteRestoreRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, RestoreService_DeleteRestore_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *restoreServiceClient) RecreateRestore(ctx context.Context, in *RecreateRestoreRequest, opts ...grpc.CallOption) (*Restore, error) {
 	out := new(Restore)
 	err := c.cc.Invoke(ctx, RestoreService_RecreateRestore_FullMethodName, in, out, opts...)
@@ -136,8 +124,6 @@ type RestoreServiceServer interface {
 	GetRestore(context.Context, *GetRestoreRequest) (*Restore, error)
 	// ListRestore API lists the Restore resources.
 	ListRestores(context.Context, *ListRestoresRequest) (*ListRestoresResponse, error)
-	// DeleteRestore API deletes the restore.
-	DeleteRestore(context.Context, *DeleteRestoreRequest) (*emptypb.Empty, error)
 	// RecreateRestore API recreates a already failed restore.
 	RecreateRestore(context.Context, *RecreateRestoreRequest) (*Restore, error)
 	// GetRestorabilityMatrix API returns the compatibility matrix for restore.
@@ -160,9 +146,6 @@ func (UnimplementedRestoreServiceServer) GetRestore(context.Context, *GetRestore
 }
 func (UnimplementedRestoreServiceServer) ListRestores(context.Context, *ListRestoresRequest) (*ListRestoresResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListRestores not implemented")
-}
-func (UnimplementedRestoreServiceServer) DeleteRestore(context.Context, *DeleteRestoreRequest) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteRestore not implemented")
 }
 func (UnimplementedRestoreServiceServer) RecreateRestore(context.Context, *RecreateRestoreRequest) (*Restore, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RecreateRestore not implemented")
@@ -237,24 +220,6 @@ func _RestoreService_ListRestores_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RestoreService_DeleteRestore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteRestoreRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(RestoreServiceServer).DeleteRestore(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: RestoreService_DeleteRestore_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RestoreServiceServer).DeleteRestore(ctx, req.(*DeleteRestoreRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _RestoreService_RecreateRestore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RecreateRestoreRequest)
 	if err := dec(in); err != nil {
@@ -309,10 +274,6 @@ var RestoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListRestores",
 			Handler:    _RestoreService_ListRestores_Handler,
-		},
-		{
-			MethodName: "DeleteRestore",
-			Handler:    _RestoreService_DeleteRestore_Handler,
 		},
 		{
 			MethodName: "RecreateRestore",

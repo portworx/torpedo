@@ -19,12 +19,16 @@ var _ MappedNullable = &Backupconfigv1Status{}
 
 // Backupconfigv1Status Status for backup configuration.
 type Backupconfigv1Status struct {
-	Phase *StatusPhase `json:"phase,omitempty"`
+	Phase *V1Phase `json:"phase,omitempty"`
 	// Custom Resource Name is the kubernetes resource name for the backup that is built from ID.
 	CustomResourceName *string `json:"customResourceName,omitempty"`
 	// Flag to check if the backup policy is synchronized or not.
 	IsBackupPolicySynchronized *bool `json:"isBackupPolicySynchronized,omitempty"`
-	DeploymentMetaData *V1DeploymentMetaData `json:"deploymentMetaData,omitempty"`
+	DataServiceDeploymentMetaData *V1DataServiceDeploymentMetaData `json:"dataServiceDeploymentMetaData,omitempty"`
+	// Error code.
+	ErrorCode *string `json:"errorCode,omitempty"`
+	// Error message.
+	ErrorMessage *string `json:"errorMessage,omitempty"`
 }
 
 // NewBackupconfigv1Status instantiates a new Backupconfigv1Status object
@@ -33,7 +37,7 @@ type Backupconfigv1Status struct {
 // will change when the set of required properties is changed
 func NewBackupconfigv1Status() *Backupconfigv1Status {
 	this := Backupconfigv1Status{}
-	var phase StatusPhase = STATUSPHASE_PHASE_UNSPECIFIED
+	var phase V1Phase = V1PHASE_PHASE_UNSPECIFIED
 	this.Phase = &phase
 	return &this
 }
@@ -43,15 +47,15 @@ func NewBackupconfigv1Status() *Backupconfigv1Status {
 // but it doesn't guarantee that properties required by API are set
 func NewBackupconfigv1StatusWithDefaults() *Backupconfigv1Status {
 	this := Backupconfigv1Status{}
-	var phase StatusPhase = STATUSPHASE_PHASE_UNSPECIFIED
+	var phase V1Phase = V1PHASE_PHASE_UNSPECIFIED
 	this.Phase = &phase
 	return &this
 }
 
 // GetPhase returns the Phase field value if set, zero value otherwise.
-func (o *Backupconfigv1Status) GetPhase() StatusPhase {
+func (o *Backupconfigv1Status) GetPhase() V1Phase {
 	if o == nil || IsNil(o.Phase) {
-		var ret StatusPhase
+		var ret V1Phase
 		return ret
 	}
 	return *o.Phase
@@ -59,7 +63,7 @@ func (o *Backupconfigv1Status) GetPhase() StatusPhase {
 
 // GetPhaseOk returns a tuple with the Phase field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *Backupconfigv1Status) GetPhaseOk() (*StatusPhase, bool) {
+func (o *Backupconfigv1Status) GetPhaseOk() (*V1Phase, bool) {
 	if o == nil || IsNil(o.Phase) {
 		return nil, false
 	}
@@ -75,8 +79,8 @@ func (o *Backupconfigv1Status) HasPhase() bool {
 	return false
 }
 
-// SetPhase gets a reference to the given StatusPhase and assigns it to the Phase field.
-func (o *Backupconfigv1Status) SetPhase(v StatusPhase) {
+// SetPhase gets a reference to the given V1Phase and assigns it to the Phase field.
+func (o *Backupconfigv1Status) SetPhase(v V1Phase) {
 	o.Phase = &v
 }
 
@@ -144,36 +148,100 @@ func (o *Backupconfigv1Status) SetIsBackupPolicySynchronized(v bool) {
 	o.IsBackupPolicySynchronized = &v
 }
 
-// GetDeploymentMetaData returns the DeploymentMetaData field value if set, zero value otherwise.
-func (o *Backupconfigv1Status) GetDeploymentMetaData() V1DeploymentMetaData {
-	if o == nil || IsNil(o.DeploymentMetaData) {
-		var ret V1DeploymentMetaData
+// GetDataServiceDeploymentMetaData returns the DataServiceDeploymentMetaData field value if set, zero value otherwise.
+func (o *Backupconfigv1Status) GetDataServiceDeploymentMetaData() V1DataServiceDeploymentMetaData {
+	if o == nil || IsNil(o.DataServiceDeploymentMetaData) {
+		var ret V1DataServiceDeploymentMetaData
 		return ret
 	}
-	return *o.DeploymentMetaData
+	return *o.DataServiceDeploymentMetaData
 }
 
-// GetDeploymentMetaDataOk returns a tuple with the DeploymentMetaData field value if set, nil otherwise
+// GetDataServiceDeploymentMetaDataOk returns a tuple with the DataServiceDeploymentMetaData field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *Backupconfigv1Status) GetDeploymentMetaDataOk() (*V1DeploymentMetaData, bool) {
-	if o == nil || IsNil(o.DeploymentMetaData) {
+func (o *Backupconfigv1Status) GetDataServiceDeploymentMetaDataOk() (*V1DataServiceDeploymentMetaData, bool) {
+	if o == nil || IsNil(o.DataServiceDeploymentMetaData) {
 		return nil, false
 	}
-	return o.DeploymentMetaData, true
+	return o.DataServiceDeploymentMetaData, true
 }
 
-// HasDeploymentMetaData returns a boolean if a field has been set.
-func (o *Backupconfigv1Status) HasDeploymentMetaData() bool {
-	if o != nil && !IsNil(o.DeploymentMetaData) {
+// HasDataServiceDeploymentMetaData returns a boolean if a field has been set.
+func (o *Backupconfigv1Status) HasDataServiceDeploymentMetaData() bool {
+	if o != nil && !IsNil(o.DataServiceDeploymentMetaData) {
 		return true
 	}
 
 	return false
 }
 
-// SetDeploymentMetaData gets a reference to the given V1DeploymentMetaData and assigns it to the DeploymentMetaData field.
-func (o *Backupconfigv1Status) SetDeploymentMetaData(v V1DeploymentMetaData) {
-	o.DeploymentMetaData = &v
+// SetDataServiceDeploymentMetaData gets a reference to the given V1DataServiceDeploymentMetaData and assigns it to the DataServiceDeploymentMetaData field.
+func (o *Backupconfigv1Status) SetDataServiceDeploymentMetaData(v V1DataServiceDeploymentMetaData) {
+	o.DataServiceDeploymentMetaData = &v
+}
+
+// GetErrorCode returns the ErrorCode field value if set, zero value otherwise.
+func (o *Backupconfigv1Status) GetErrorCode() string {
+	if o == nil || IsNil(o.ErrorCode) {
+		var ret string
+		return ret
+	}
+	return *o.ErrorCode
+}
+
+// GetErrorCodeOk returns a tuple with the ErrorCode field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *Backupconfigv1Status) GetErrorCodeOk() (*string, bool) {
+	if o == nil || IsNil(o.ErrorCode) {
+		return nil, false
+	}
+	return o.ErrorCode, true
+}
+
+// HasErrorCode returns a boolean if a field has been set.
+func (o *Backupconfigv1Status) HasErrorCode() bool {
+	if o != nil && !IsNil(o.ErrorCode) {
+		return true
+	}
+
+	return false
+}
+
+// SetErrorCode gets a reference to the given string and assigns it to the ErrorCode field.
+func (o *Backupconfigv1Status) SetErrorCode(v string) {
+	o.ErrorCode = &v
+}
+
+// GetErrorMessage returns the ErrorMessage field value if set, zero value otherwise.
+func (o *Backupconfigv1Status) GetErrorMessage() string {
+	if o == nil || IsNil(o.ErrorMessage) {
+		var ret string
+		return ret
+	}
+	return *o.ErrorMessage
+}
+
+// GetErrorMessageOk returns a tuple with the ErrorMessage field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *Backupconfigv1Status) GetErrorMessageOk() (*string, bool) {
+	if o == nil || IsNil(o.ErrorMessage) {
+		return nil, false
+	}
+	return o.ErrorMessage, true
+}
+
+// HasErrorMessage returns a boolean if a field has been set.
+func (o *Backupconfigv1Status) HasErrorMessage() bool {
+	if o != nil && !IsNil(o.ErrorMessage) {
+		return true
+	}
+
+	return false
+}
+
+// SetErrorMessage gets a reference to the given string and assigns it to the ErrorMessage field.
+func (o *Backupconfigv1Status) SetErrorMessage(v string) {
+	o.ErrorMessage = &v
 }
 
 func (o Backupconfigv1Status) MarshalJSON() ([]byte, error) {
@@ -195,8 +263,14 @@ func (o Backupconfigv1Status) ToMap() (map[string]interface{}, error) {
 	if !IsNil(o.IsBackupPolicySynchronized) {
 		toSerialize["isBackupPolicySynchronized"] = o.IsBackupPolicySynchronized
 	}
-	if !IsNil(o.DeploymentMetaData) {
-		toSerialize["deploymentMetaData"] = o.DeploymentMetaData
+	if !IsNil(o.DataServiceDeploymentMetaData) {
+		toSerialize["dataServiceDeploymentMetaData"] = o.DataServiceDeploymentMetaData
+	}
+	if !IsNil(o.ErrorCode) {
+		toSerialize["errorCode"] = o.ErrorCode
+	}
+	if !IsNil(o.ErrorMessage) {
+		toSerialize["errorMessage"] = o.ErrorMessage
 	}
 	return toSerialize, nil
 }

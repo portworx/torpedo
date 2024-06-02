@@ -35,6 +35,14 @@ service WhoAmIService {
       get: "/core/v1/whoami"
     };
   }
+
+  // InvitationsWhoAmI API returns the current actor pending invitations cross accounts.
+  rpc InvitationsWhoAmI(google.protobuf.Empty)
+      returns (WhoAmIResponse) {
+    option(google.api.http) = {
+      get: "/core/v1/whoami:invitations"
+    };
+  }
 }
 
 // WhoAmI response return accounts for current actor.

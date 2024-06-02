@@ -12,7 +12,7 @@
     "paths": {
         "/pds/v1/backupConfigs": {
             "get": {
-                "summary": "ListBackupConfigs API lists all the backup configuration for a deployment.",
+                "summary": "ListBackupConfigs API lists all the backup configuration for a data service deployment.",
                 "operationId": "BackupConfigService_ListBackupConfigs",
                 "responses": {
                     "200": {
@@ -37,15 +37,6 @@
                     }
                 },
                 "parameters": [
-                    {
-                        "name": "accountId",
-                        "description": "Account ID for which the backup configurations will be listed.",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
                     {
                         "name": "tenantId",
                         "description": "Tenant ID for which the backup configurations will be listed.",
@@ -83,8 +74,8 @@
                         }
                     },
                     {
-                        "name": "deploymentId",
-                        "description": "Deployment ID for which the backup configurations will be listed.",
+                        "name": "dataServiceDeploymentId",
+                        "description": "Data service Deployment ID for which the backup configurations will be listed.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -141,6 +132,21 @@
                                 "DESC"
                             ],
                             "default": "VALUE_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "suspended",
+                        "description": "Filter backup configs based on suspended flag.\n\n - BACKUP_CONFIG_SUSPENDED_UNSPECIFIED: List all backup configs.\n - TRUE: List only suspended backup configs.\n - FALSE: List only disabled backup configs.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "BACKUP_CONFIG_SUSPENDED_UNSPECIFIED",
+                                "TRUE",
+                                "FALSE"
+                            ],
+                            "default": "BACKUP_CONFIG_SUSPENDED_UNSPECIFIED"
                         }
                     }
                 ],
@@ -224,6 +230,15 @@
                         "required": true,
                         "schema": {
                             "type": "string"
+                        }
+                    },
+                    {
+                        "name": "force",
+                        "description": "Force flag to delete backup configuration from control plane only.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
                         }
                     }
                 ],
@@ -340,9 +355,9 @@
             "BackupConfigServiceCreateBackupConfigBody": {
                 "type": "object",
                 "properties": {
-                    "deploymentId": {
+                    "dataServiceDeploymentId": {
                         "type": "string",
-                        "description": "\nDeployment id associated with the backup configuration."
+                        "description": "\nData service Deployment id associated with the backup configuration."
                     },
                     "backupConfig": {
                         "$ref": "#/components/schemas/v1BackupConfig"
@@ -350,17 +365,15 @@
                 },
                 "description": "Request to create a backup configuration.",
                 "required": [
-                    "deploymentId",
+                    "dataServiceDeploymentId",
                     "backupConfig"
                 ]
             },
             "BackupConfigServiceUpdateBackupConfigBody": {
                 "type": "object",
                 "properties": {
-                    "jobHistoryLimit": {
-                        "type": "integer",
-                        "format": "int32",
-                        "description": "Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1."
+                    "suspend": {
+                        "$ref": "#/components/schemas/v1BackupConfigSuspended"
                     },
                     "labels": {
                         "type": "object",
@@ -431,24 +444,11 @@
                 "default": "VALUE_UNSPECIFIED",
                 "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
             },
-            "StatusPhase": {
-                "type": "string",
-                "enum": [
-                    "PHASE_UNSPECIFIED",
-                    "PREPARING",
-                    "APPLIED",
-                    "UPDATING",
-                    "FAILED",
-                    "SUSPENDED"
-                ],
-                "default": "PHASE_UNSPECIFIED",
-                "description": "Enum for Phases of the backup configuration.\n\n - PHASE_UNSPECIFIED: Unspecified state.\n - PREPARING: Preparing state before creation is successful.\n - APPLIED: Applied state when create/update is successful.\n - UPDATING: Updating state.\n - FAILED: Failed state.\n - SUSPENDED: Suspended state."
-            },
             "backupconfigv1Status": {
                 "type": "object",
                 "properties": {
                     "phase": {
-                        "$ref": "#/components/schemas/StatusPhase"
+                        "$ref": "#/components/schemas/v1Phase"
                     },
                     "customResourceName": {
                         "type": "string",
@@ -458,8 +458,16 @@
                         "type": "boolean",
                         "description": "Flag to check if the backup policy is synchronized or not."
                     },
-                    "deploymentMetaData": {
-                        "$ref": "#/components/schemas/v1DeploymentMetaData"
+                    "dataServiceDeploymentMetaData": {
+                        "$ref": "#/components/schemas/v1DataServiceDeploymentMetaData"
+                    },
+                    "errorCode": {
+                        "type": "string",
+                        "description": "Error code."
+                    },
+                    "errorMessage": {
+                        "type": "string",
+                        "description": "Error message."
                     }
                 },
                 "description": "Status for backup configuration."
@@ -506,6 +514,16 @@
                 },
                 "description": "Resource representing the backup configuration for a backup."
             },
+            "v1BackupConfigSuspended": {
+                "type": "string",
+                "enum": [
+                    "BACKUP_CONFIG_SUSPENDED_UNSPECIFIED",
+                    "TRUE",
+                    "FALSE"
+                ],
+                "default": "BACKUP_CONFIG_SUSPENDED_UNSPECIFIED",
+                "description": "BackupConfigSuspended to accept value for suspended flag.\n\n - BACKUP_CONFIG_SUSPENDED_UNSPECIFIED: List all backup configs.\n - TRUE: List only suspended backup configs.\n - FALSE: List only disabled backup configs."
+            },
             "v1BackupPolicy": {
                 "type": "object",
                 "properties": {
@@ -526,17 +544,12 @@
                     "references": {
                         "$ref": "#/components/schemas/v1References"
                     },
-                    "jobHistoryLimit": {
-                        "type": "integer",
-                        "format": "int32",
-                        "description": "Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1."
-                    },
                     "backupPolicy": {
                         "$ref": "#/components/schemas/v1BackupPolicy"
                     },
                     "suspend": {
                         "type": "boolean",
-                        "description": "Suspend flag is used to suspend a scheduled backup from creating new backup jobs."
+                        "description": "Suspend flag is used to suspend a scheduled backup from creating new backups."
                     },
                     "backupType": {
                         "$ref": "#/components/schemas/ConfigBackupType"
@@ -550,21 +563,21 @@
                 },
                 "description": "Desired config of the backup configuration."
             },
-            "v1DeploymentMetaData": {
+            "v1DataServiceDeploymentMetaData": {
                 "type": "object",
                 "properties": {
                     "name": {
                         "type": "string",
-                        "description": "Name of the deployment."
+                        "description": "Name of the DataService deployment."
                     },
                     "customResourceName": {
                         "type": "string",
                         "description": "Custom Resource Name is the kubernetes resource name for the deployment meta data.",
                         "readOnly": true
                     },
-                    "deploymentTargetName": {
+                    "targetClusterName": {
                         "type": "string",
-                        "description": "Deployment Target Name associated with the backup configuration."
+                        "description": "Target cluster Name associated with the backup configuration."
                     },
                     "namespaceName": {
                         "type": "string",
@@ -575,7 +588,7 @@
                         "description": "Flag to check whether Transport Layer Security support is enabled or not."
                     }
                 },
-                "description": "Deployment Meta Data contains the details of the deployment associated with the backup configuration."
+                "description": "DataServiceDeployment Meta Data contains the details of the DataService deployment associated with the backup configuration."
             },
             "v1ListBackupConfigsResponse": {
                 "type": "object",
@@ -704,6 +717,20 @@
                 },
                 "description": "Metadata related to page based pagination for paginated API responses."
             },
+            "v1Phase": {
+                "type": "string",
+                "enum": [
+                    "PHASE_UNSPECIFIED",
+                    "PREPARING",
+                    "APPLIED",
+                    "UPDATING",
+                    "FAILED",
+                    "SUSPENDED",
+                    "DELETING"
+                ],
+                "default": "PHASE_UNSPECIFIED",
+                "description": "Enum for Phases of the backup configuration.\n\n - PHASE_UNSPECIFIED: Unspecified state.\n - PREPARING: Preparing state before creation is successful.\n - APPLIED: Applied state when create/update is successful.\n - UPDATING: Updating state.\n - FAILED: Failed state.\n - SUSPENDED: Suspended state.\n - DELETING: Deleting state."
+            },
             "v1Reference": {
                 "type": "object",
                 "properties": {
@@ -725,9 +752,9 @@
             "v1References": {
                 "type": "object",
                 "properties": {
-                    "deploymentId": {
+                    "dataServiceDeploymentId": {
                         "type": "string",
-                        "description": "UID of the deployment to which the backup configuration belong."
+                        "description": "UID of the data service deployment to which the backup configuration belong."
                     },
                     "backupLocationId": {
                         "type": "string",
@@ -741,7 +768,7 @@
                 },
                 "description": "References to the associated resources for backup configuration.",
                 "required": [
-                    "deploymentId",
+                    "dataServiceDeploymentId",
                     "backupLocationId"
                 ]
             },

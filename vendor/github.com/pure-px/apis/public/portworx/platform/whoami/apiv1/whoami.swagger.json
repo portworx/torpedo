@@ -40,6 +40,37 @@
                     "WhoAmIService"
                 ]
             }
+        },
+        "/core/v1/whoami:invitations": {
+            "get": {
+                "summary": "InvitationsWhoAmI API returns the current actor pending invitations cross accounts.",
+                "operationId": "WhoAmIService_InvitationsWhoAmI",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1WhoAmIResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "WhoAmIService"
+                ]
+            }
         }
     },
     "components": {

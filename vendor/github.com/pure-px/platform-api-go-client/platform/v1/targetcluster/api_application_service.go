@@ -736,3 +736,124 @@ func (a *ApplicationServiceAPIService) ApplicationServiceUninstallApplication2Ex
 
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
+
+type ApiApplicationServiceUpdateApplicationRequest struct {
+	ctx context.Context
+	ApiService *ApplicationServiceAPIService
+	applicationMetaUid string
+	applicationToBeUpdated *ApplicationToBeUpdated
+}
+
+// application to be updated.
+func (r ApiApplicationServiceUpdateApplicationRequest) ApplicationToBeUpdated(applicationToBeUpdated ApplicationToBeUpdated) ApiApplicationServiceUpdateApplicationRequest {
+	r.applicationToBeUpdated = &applicationToBeUpdated
+	return r
+}
+
+func (r ApiApplicationServiceUpdateApplicationRequest) Execute() (*V1Application, *http.Response, error) {
+	return r.ApiService.ApplicationServiceUpdateApplicationExecute(r)
+}
+
+/*
+ApplicationServiceUpdateApplication UpdateApplication API updates specified application on the target cluster.
+
+ @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+ @param applicationMetaUid UID of the resource of the format <resource prefix>-<uuid>.
+ @return ApiApplicationServiceUpdateApplicationRequest
+*/
+func (a *ApplicationServiceAPIService) ApplicationServiceUpdateApplication(ctx context.Context, applicationMetaUid string) ApiApplicationServiceUpdateApplicationRequest {
+	return ApiApplicationServiceUpdateApplicationRequest{
+		ApiService: a,
+		ctx: ctx,
+		applicationMetaUid: applicationMetaUid,
+	}
+}
+
+// Execute executes the request
+//  @return V1Application
+func (a *ApplicationServiceAPIService) ApplicationServiceUpdateApplicationExecute(r ApiApplicationServiceUpdateApplicationRequest) (*V1Application, *http.Response, error) {
+	var (
+		localVarHTTPMethod   = http.MethodPut
+		localVarPostBody     interface{}
+		formFiles            []formFile
+		localVarReturnValue  *V1Application
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ApplicationServiceAPIService.ApplicationServiceUpdateApplication")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/core/v1/applications/{application.meta.uid}"
+	localVarPath = strings.Replace(localVarPath, "{"+"application.meta.uid"+"}", url.PathEscape(parameterValueToString(r.applicationMetaUid, "applicationMetaUid")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+	if r.applicationToBeUpdated == nil {
+		return localVarReturnValue, nil, reportError("applicationToBeUpdated is required and must be specified")
+	}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{"application/json"}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	// body params
+	localVarPostBody = r.applicationToBeUpdated
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+			var v GooglerpcStatus
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+					newErr.model = v
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
