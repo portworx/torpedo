@@ -4508,11 +4508,9 @@ var _ = Describe("{ValidateVolumeResizeInParallel}", func() {
 	itLog := "Px Volume Resize in parallel to FADA/FBDA Volume Resize ( PVC Resize )"
 	It(itLog, func() {
 		log.InfoD(itLog)
-
 		var wg sync.WaitGroup
 		var resizedVols []*volume.Volume
 		appList := Inst().AppList
-		defer appsValidateAndDestroy(contexts)
 		defer func() {
 			Inst().AppList = appList
 		}()
@@ -4536,6 +4534,7 @@ var _ = Describe("{ValidateVolumeResizeInParallel}", func() {
 
 		})
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 		resizeVolumes := func(ctx *scheduler.Context) {
 			var pvcs []*v1.PersistentVolumeClaim
 			appVolumes, err := Inst().S.GetVolumes(ctx)
