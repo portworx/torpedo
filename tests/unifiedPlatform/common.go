@@ -196,16 +196,6 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 			FailOnError:    NewPdsParams.LoadGen.FailOnError,
 		}
 
-		//WorkflowDataService.WorkloadGenParams = &dslibs.LoadGenParams{
-		//	LoadGenDepName: NewPdsParams.LoadGen.LoadGenDepName,
-		//	Namespace:      PDS_DEFAULT_NAMESPACE,
-		//	NumOfRows:      WorkflowDataService.PDSParams.LoadGen.NumOfRows,
-		//	Timeout:        WorkflowDataService.PDSParams.LoadGen.Timeout,
-		//	Replicas:       WorkflowDataService.PDSParams.LoadGen.Replicas,
-		//	Iterations:     WorkflowDataService.PDSParams.LoadGen.Iterations,
-		//	FailOnError:    WorkflowDataService.PDSParams.LoadGen.FailOnError,
-		//}
-
 		log.Infof("Creating backup config struct")
 		WorkflowPDSBackupConfig.WorkflowBackupLocation = WorkflowbkpLoc
 		WorkflowPDSBackupConfig.WorkflowDataService = &WorkflowDataService

@@ -51,7 +51,6 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 
 			stepLog := "Running Workloads after ScaleUp of DataService"
 			Step(stepLog, func() {
-				//WorkflowDataService.WorkloadGenParams.TableName = "wltesting" + RandomString(3)
 				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error while running workloads on ds")
 			})
@@ -88,7 +87,6 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 
 			stepLog := "Running Workloads after upgrading the ds image"
 			Step(stepLog, func() {
-				WorkflowDataService.WorkloadGenParams.TableName = "wltesting" + RandomString(3)
 				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error while running workloads on ds")
 			})
@@ -142,7 +140,6 @@ var _ = Describe("{ScaleUpCpuMemLimitsandStorageOfDS}", func() {
 
 			stepLog := "Running Workloads after upgrading the ds image"
 			Step(stepLog, func() {
-				WorkflowDataService.WorkloadGenParams.TableName = "wltesting" + RandomString(3)
 				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error while running workloads on ds")
 			})
@@ -243,7 +240,6 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 			stepLog := "Running Workloads before deleting pods in Px-System namespace"
 			Step(stepLog, func() {
-				WorkflowDataService.WorkloadGenParams.TableName = "wltesting" + RandomString(3)
 				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error while running workloads on ds")
 			})
