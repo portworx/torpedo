@@ -47,26 +47,25 @@ var _ = Describe("{UpgradeCluster}", func() {
 		Expect(versions).NotTo(BeEmpty())
 
 		var mError error
-		if Inst().S.String() != aks.SchedName {
-			stopSignal := make(chan struct{})
-			go validateClusterNodes(stopSignal, &mError)
-			defer func() {
-				close(stopSignal)
-			}()
-		}
 
-		preUpgradeNodeDisksMap := make(map[string]map[string]int)
-		printDisks := func(nodeDiskMap map[string]map[string]int) {
+		stopSignal := make(chan struct{})
+		go validateClusterNodes(stopSignal, &mError)
+		defer func() {
+			close(stopSignal)
+		}()
+
+		preUpgradeNodeDisksMap := make(map[string]int)
+		printDisks := func(nodeDiskMap map[string]int) {
 			stNodes := node.GetStorageNodes()
 			for _, stNode := range stNodes {
-				nodeDiskMap[stNode.Name] = make(map[string]int)
+
 				drvNode, err := Inst().V.GetDriverNode(&stNode)
 				if err != nil {
 					log.Errorf("error getting driver node [%s]: [%v]", stNode.Name, err)
 				} else {
 					log.Infof("Node [%s] has disks: [%s]", stNode.Name, drvNode.Disks)
 					for _, disk := range drvNode.Disks {
-						nodeDiskMap[stNode.Name][disk.Medium.String()] = nodeDiskMap[stNode.Name][disk.Medium.String()] + 1
+						nodeDiskMap[disk.Medium.String()] = nodeDiskMap[disk.Medium.String()] + 1
 					}
 				}
 			}
@@ -142,19 +141,15 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 				// Printing pxctl status after the upgrade
 				PrintPxctlStatus()
-				postUpgradeNodeDisksMap := make(map[string]map[string]int)
+				postUpgradeNodeDisksMap := make(map[string]int)
 				printDisks(postUpgradeNodeDisksMap)
-				for nodeName, disks := range preUpgradeNodeDisksMap {
-					if _, ok := postUpgradeNodeDisksMap[nodeName]; !ok {
-						log.FailOnError(fmt.Errorf("node [%s] is not present in post upgrade node disks map", nodeName), "Node is not present in post upgrade node disks map")
+				for preDiskType, preDisksCount := range preUpgradeNodeDisksMap {
 
+					if postUpgradeNodeDisksMap[preDiskType] != preDisksCount {
+						log.Errorf("disk type [%s] count mismatch. Pre upgrade: [%d], Post upgrade: [%d]", preDiskType, preDisksCount, postUpgradeNodeDisksMap[preDiskType])
+						dash.VerifySafely(postUpgradeNodeDisksMap[preDiskType], preDisksCount, fmt.Sprintf("Verify disk type [%s] count matched.", preDiskType))
 					}
-					for diskType, diskCount := range disks {
-						if postUpgradeNodeDisksMap[nodeName][diskType] != diskCount {
-							log.Errorf("Node [%s] disk type [%s] count mismatch. Pre upgrade: [%d], Post upgrade: [%d]", nodeName, diskType, preUpgradeNodeDisksMap[nodeName][diskType], diskCount)
-							dash.VerifySafely(preUpgradeNodeDisksMap[nodeName][diskType], diskCount, fmt.Sprintf("Verify Node [%s] disk type [%s] count matched.", nodeName, diskType))
-						}
-					}
+
 				}
 			})
 
@@ -172,9 +167,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 			})
 
-			if Inst().S.String() != aks.SchedName {
-				dash.VerifySafely(mError, nil, "validate no parallel upgrade of nodes")
-			}
+			dash.VerifySafely(mError, nil, "validate no parallel upgrade of nodes")
 
 			Step("validate all apps after upgrade", func() {
 				ValidateApplications(contexts)

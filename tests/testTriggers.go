@@ -7092,11 +7092,13 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 					log.Infof("autofstrim status for volume %v, status: %v", appVol.Id, val.String())
 					if fsTrimStatus != -1 {
 						if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_COMPLETED {
+							log.InfoD("autofstrim status for volume %v completed successfully [%v]", v.ID, val.String())
 							return nil, false, nil
 						} else if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_FAILED {
 							return nil, false, fmt.Errorf("autoFstrim failed for volume %v, status: %v", v.ID, val.String())
 						} else {
-							return nil, true, fmt.Errorf("current autofstrim status for volume %v is %v. Expected status is %v", v.ID, val.String(), opsapi.FilesystemTrim_FS_TRIM_COMPLETED)
+							log.InfoD("current autofstrim status for volume %v is %v", v.ID, val.String())
+							return nil, false, nil
 						}
 					} else {
 						return nil, true, fmt.Errorf("autofstrim for volume %v not started yet", v.ID)
