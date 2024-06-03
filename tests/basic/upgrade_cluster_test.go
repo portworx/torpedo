@@ -2,22 +2,24 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler/iks"
-	"github.com/portworx/torpedo/drivers/scheduler/oke"
-	"net/url"
-	"strings"
-	"time"
-
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
 	"github.com/portworx/torpedo/drivers/scheduler/eks"
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
+	"github.com/portworx/torpedo/drivers/scheduler/iks"
+	"github.com/portworx/torpedo/drivers/scheduler/oke"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	corev1 "k8s.io/api/core/v1"
+	"net/url"
+	"strings"
+	"time"
 )
 
 var _ = Describe("{UpgradeCluster}", func() {
@@ -44,16 +46,14 @@ var _ = Describe("{UpgradeCluster}", func() {
 		}
 		Expect(versions).NotTo(BeEmpty())
 
-		// TODO: Commenting out below changes as it doesn't work for most distros upgrades, see PTX-22409
-		/*var mError error
+		var mError error
 		if Inst().S.String() != aks.SchedName {
 			stopSignal := make(chan struct{})
-			go getClusterNodesInfo(stopSignal, &mError)
-
+			go validateClusterNodes(stopSignal, &mError)
 			defer func() {
 				close(stopSignal)
 			}()
-		}*/
+		}
 
 		preUpgradeNodeDisksMap := make(map[string]map[string]int)
 		printDisks := func(nodeDiskMap map[string]map[string]int) {
@@ -172,10 +172,9 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 			})
 
-			// TODO: This currently doesn't work for most distros and commenting out this change, see PTX-22409
-			/*if Inst().S.String() != aks.SchedName {
-				dash.VerifyFatal(mError, nil, "validate no parallel upgrade of nodes")
-			}*/
+			if Inst().S.String() != aks.SchedName {
+				dash.VerifySafely(mError, nil, "validate no parallel upgrade of nodes")
+			}
 
 			Step("validate all apps after upgrade", func() {
 				ValidateApplications(contexts)
@@ -196,3 +195,88 @@ var _ = Describe("{UpgradeCluster}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+func validateClusterNodes(stopSignal <-chan struct{}, mError *error) {
+	stNodes := node.GetStorageNodes()
+
+	nodeSchedulableStatus := make(map[string]string)
+	stNodeNames := make(map[string]bool)
+
+	for _, stNode := range stNodes {
+		stNodeNames[stNode.Name] = true
+	}
+
+	//Handling case where we have storageless node as kvdb node with dedicated kvdb device attached.
+	kvdbNodes, _ := GetAllKvdbNodes()
+	for _, kvdbNode := range kvdbNodes {
+		sNode, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+		if err == nil {
+			stNodeNames[sNode.Name] = true
+		} else {
+			log.Errorf("got error while getting with id [%s]", kvdbNode.ID)
+		}
+	}
+
+	log.Infof("storage nodes are %#v", stNodeNames)
+	itr := 1
+	for {
+		log.Infof("K8s node validation. iteration: #%d", itr)
+		select {
+		case <-stopSignal:
+			log.Infof("Exiting node validations routine")
+			return
+		default:
+
+			var nodeList *corev1.NodeList
+			var err error
+			t := func() (interface{}, bool, error) {
+				nodeList, err = core.Instance().GetNodes()
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+			_, err = task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second)
+
+			if err != nil {
+				log.Errorf("Got error : %s", err.Error())
+				*mError = err
+				return
+			}
+
+			nodeNotReadyeCount := 0
+			for _, k8sNode := range nodeList.Items {
+				for _, status := range k8sNode.Status.Conditions {
+					if status.Type == corev1.NodeReady {
+						nodeSchedulableStatus[k8sNode.Name] = string(status.Status)
+						if status.Status != corev1.ConditionTrue && stNodeNames[k8sNode.Name] {
+							nodeNotReadyeCount += 1
+						}
+						break
+					}
+				}
+
+			}
+			if nodeNotReadyeCount > 1 {
+				err = fmt.Errorf("multiple  nodes are Unschedulable at same time,"+
+					"node status:%#v", nodeSchedulableStatus)
+				log.Errorf("Got error : %s", err.Error())
+				log.Infof("Node Details: %#v", nodeList.Items)
+				*mError = err
+				output, cerr := Inst().N.RunCommand(stNodes[0], "pxctl status", node.ConnectionOpts{
+					IgnoreError:     false,
+					TimeBeforeRetry: defaultRetryInterval,
+					Timeout:         defaultTimeout,
+					Sudo:            true,
+				})
+				if cerr != nil {
+					log.Errorf("failed to get pxctl status, Err: %v", cerr)
+				}
+				log.Infof(output)
+				return
+			}
+		}
+		itr++
+		time.Sleep(30 * time.Second)
+	}
+}
