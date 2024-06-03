@@ -4354,8 +4354,12 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 	})
 	itLog := "Check Cloud Drives are present in FA"
 	It(itLog, func() {
+		// A list to store the cloud drives
 		var clouddrives []string
+		//Create a map to track the FA endpoints and the count of cloud drives in each FA
 		faEndPoints := make(map[string]int)
+		//Create a map to track the cloud drives and the FA in which they are present
+		CloudDriveListMap := make(map[string]string)
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details used")
 		for _, fa := range flashArrays {
@@ -4376,8 +4380,7 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 				}
 			}
 		})
-		//Create a map to track the cloud drives and the FA in which they are present
-		CloudDriveListMap := make(map[string]string)
+
 		stepLog = "Check if the cloud drives are present in FA"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -4385,14 +4388,14 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 				faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
 				log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
 				for _, cloudDrive := range clouddrives {
-					//If the cloud drive is already present in the map then skip
+					//If the cloud drive is already present in the map then we are skipping the current loop
 					if CloudDriveListMap[cloudDrive] != "" {
 						continue
 					}
 					cloudDrivefullName, err := GetVolumeCompleteNameOnFA(faClient, cloudDrive)
 					log.FailOnError(err, fmt.Sprintf("Failed to get volume name for cloud drive id [%v]", cloudDrive))
 					if cloudDrivefullName != "" {
-						log.InfoD("cloud drive  [%v] exists in [%v]", cloudDrivefullName, fa.MgmtEndPoint)
+						log.InfoD("cloud drive [%v] exists in [%v]", cloudDrivefullName, fa.MgmtEndPoint)
 						CloudDriveListMap[cloudDrive] = fa.MgmtEndPoint
 					}
 				}
