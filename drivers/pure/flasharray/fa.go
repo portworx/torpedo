@@ -31,6 +31,8 @@ type Client struct {
 	// Client object defined here
 	client  *http.Client
 	Volumes *VolumeServices
+	Realms  *RealmsServices
+	Pods    *PodServices
 }
 
 // Type supported is used for retrieving the support API versions from the Flash Array

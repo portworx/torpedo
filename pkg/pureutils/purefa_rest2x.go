@@ -39,3 +39,12 @@ func ListAllDestroyedVolumesFromFA(faClient *flasharray.Client) ([]flasharray.Vo
 	}
 	return volumes, nil
 }
+
+func ListAllRealmsFromFA(faClient *flasharray.Client) ([]flasharray.RealmResponse, error) {
+	params := make(map[string]string)
+	realms, err := faClient.Realms.ListAllAvailableRealms(params, nil)
+	if err != nil {
+		return nil, err
+	}
+	return realms, nil
+}
