@@ -526,7 +526,7 @@ var _ = Describe("{RebootActiveNodeMultipleTimesDuringDeployment}", func() {
 
 			Step("Validate Data Service to after node reboot", func() {
 				log.InfoD("Validate Data Service to after node reboot")
-				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.ScaleReplicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
 				log.FailOnError(err, "Error while Validating dataservice after px-agent reboot")
 			})
 
