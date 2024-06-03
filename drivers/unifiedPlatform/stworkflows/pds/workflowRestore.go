@@ -104,7 +104,7 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 			log.Infof("Skipping data validation for the restore [%s]", name)
 		}
 	} else {
-		err := restore.ValidateDataAfterRestore(createRestore.Create.Config.DestinationReferences.DataServiceDeploymentId, backupUid)
+		err := restore.ValidateDataAfterRestore(createRestore.Create.Config.DestinationReferences.DataServiceDeploymentId, backupUid, namespace)
 		if err != nil {
 			return nil, fmt.Errorf("data validation failed. Error - [%s]", err.Error())
 		}
@@ -113,8 +113,13 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 	return createRestore, nil
 }
 
-func (restore WorkflowPDSRestore) ValidateDataAfterRestore(destinationDeploymentId string, backupId string) error {
+func (restore WorkflowPDSRestore) ValidateDataAfterRestore(destinationDeploymentId string, backupId, namespace string) error {
 
+	tableName := restore.WorkflowBackup.Backups[backupId].TableName
+	log.Debugf("TableName to read: [%s]", tableName)
+
+	restore.RestoredDeployments.WorkloadGenParams.TableName = tableName
+	restore.RestoredDeployments.WorkloadGenParams.Namespace = namespace
 	err := restore.RestoredDeployments.ReadAndUpdateDataServiceDataHash(destinationDeploymentId)
 	if err != nil {
 		return fmt.Errorf("unable to read data from restored database. Error - [%s]", err.Error())
@@ -127,7 +132,7 @@ func (restore WorkflowPDSRestore) ValidateDataAfterRestore(destinationDeployment
 	log.Infof("Restore Md5 Hash - [%s]", destinationCheckSum)
 
 	if sourceCheckSum != destinationCheckSum {
-		return fmt.Errorf("Data validation failed for restore. Expected - [%s], Found - [%s]", sourceCheckSum, destinationCheckSum)
+		return fmt.Errorf("Data validation failed for restore. Expected - [%s], Found - [%s]\n", sourceCheckSum, destinationCheckSum)
 	}
 
 	return nil

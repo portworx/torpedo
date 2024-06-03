@@ -261,6 +261,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 			stepLog = "Running Workloads after deleting pods in Px-System namespace"
 			Step(stepLog, func() {
+				WorkflowDataService.PDSParams.LoadGen.TableName = "wltesting" + RandomString(3)
 				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error while running workloads on ds")
 			})
