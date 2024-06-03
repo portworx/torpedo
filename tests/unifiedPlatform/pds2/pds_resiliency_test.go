@@ -299,19 +299,11 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 			})
 
-			Step("ScaleUp DataService", func() {
-				log.InfoD("Scaling Up dataServices...")
-				updateDeployment, err := WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
-				log.FailOnError(err, "Error while updating ds")
-				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
-				deploymentAfterUpdate, err = WorkflowDataService.GetDeployment(*deployment.Create.Meta.Uid)
-				log.FailOnError(err, "Error while fetching the deployment")
-			})
-
 			Step("Restart PX while data service is scaling up", func() {
 				log.InfoD("Restart PX while data service is scaling up")
 				// Global Resiliency TC marker
 				pdsResLib.MarkResiliencyTC(true)
+				pdsResLib.UpdateTemplate = WorkflowDataService.PDSTemplates.UpdateResourceTemplateId
 				// Type of failure that this TC needs to cover
 				failuretype := pdsResLib.TypeOfFailure{
 					Type: pdsResLib.RestartPxDuringDSScaleUp,
