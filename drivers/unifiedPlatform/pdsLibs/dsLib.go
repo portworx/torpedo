@@ -52,11 +52,11 @@ func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, 
 				Meta: automationModels.Meta{
 					Name: &ds.DeploymentName,
 				},
-				Config: automationModels.DeploymentUpdateConfig{
-					DeploymentMeta: automationModels.Meta{
+				Config: automationModels.DataServiceDeploymentUpdateConfig{
+					DataServiceDeploymentMeta: automationModels.Meta{
 						Description: StringPtr("pds-qa-tests"),
 					},
-					DeploymentConfig: automationModels.V1Config1{
+					DataServiceDeploymentConfig: automationModels.V1Config1{
 						References: automationModels.Reference{
 							ImageId: &imageId,
 						},
@@ -106,7 +106,7 @@ func GetDeploymentAndPodDetails(deploymentId string) (*automationModels.PDSDeplo
 		return nil, "", err
 	}
 	log.Debugf("deployment [%+v]", deployment)
-	pod := deployment.Get.Status.DeploymentTopologyStatus[0].ConnectionInfo.Pods[0].Name
+	pod := deployment.Get.Status.DataServiceDeploymentTopologyStatus[0].ConnectionInfo.ReadyInstances[0].Name
 	log.Debugf("pods [%+v]", *pod)
 	podName := utilities.GetBasePodName(*pod)
 	return deployment, podName, err

@@ -83,13 +83,13 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 	}
 
 	restore.Restores[name] = createRestore.Create
-	deployment, err := pdslibs.GetDeployment(createRestore.Create.Config.DestinationReferences.DeploymentId)
+	deployment, err := pdslibs.GetDeployment(createRestore.Create.Config.DestinationReferences.DataServiceDeploymentId)
 	if err != nil {
 		return nil, err
 	}
 
 	// TODO: The Get MD5Hash needs to be run here to get the Md5CheckSum
-	restore.RestoredDeployments.DataServiceDeployment[createRestore.Create.Config.DestinationReferences.DeploymentId] = &pdslibs.DataServiceDetails{
+	restore.RestoredDeployments.DataServiceDeployment[createRestore.Create.Config.DestinationReferences.DataServiceDeploymentId] = &pdslibs.DataServiceDetails{
 		Deployment:        deployment.Get,
 		Namespace:         namespace,
 		NamespaceId:       restore.Destination.Namespaces[namespace],
@@ -99,12 +99,12 @@ func (restore WorkflowPDSRestore) CreateRestore(name string, backupUid string, n
 
 	log.Infof("Validating data after restore")
 	if value, ok := restore.SkipValidation[CheckDataAfterRestore]; ok ||
-		slices.Contains(stworkflows.SKIPDATASERVICEFROMWORKLOAD, restore.RestoredDeployments.DataServiceDeployment[createRestore.Create.Config.DestinationReferences.DeploymentId].DSParams.Name) {
+		slices.Contains(stworkflows.SKIPDATASERVICEFROMWORKLOAD, restore.RestoredDeployments.DataServiceDeployment[createRestore.Create.Config.DestinationReferences.DataServiceDeploymentId].DSParams.Name) {
 		if value == true {
 			log.Infof("Skipping data validation for the restore [%s]", name)
 		}
 	} else {
-		err := restore.ValidateDataAfterRestore(createRestore.Create.Config.DestinationReferences.DeploymentId, backupUid)
+		err := restore.ValidateDataAfterRestore(createRestore.Create.Config.DestinationReferences.DataServiceDeploymentId, backupUid)
 		if err != nil {
 			return nil, fmt.Errorf("data validation failed. Error - [%s]", err.Error())
 		}

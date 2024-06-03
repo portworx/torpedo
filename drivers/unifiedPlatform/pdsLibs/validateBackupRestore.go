@@ -55,19 +55,19 @@ func ValidateRestoreDeployment(restoreId, namespace string) error {
 	}
 
 	newDeployment := make(map[string]string)
-	newDeployment[*restore.Get.Meta.Name] = restore.Get.Config.DestinationReferences.DeploymentId
+	newDeployment[*restore.Get.Meta.Name] = restore.Get.Config.DestinationReferences.DataServiceDeploymentId
 
-	err = ValidateDataServiceDeploymentHealth(restore.Get.Config.DestinationReferences.DeploymentId, PDS_DEPLOYMENT_AVAILABLE)
+	err = ValidateDataServiceDeploymentHealth(restore.Get.Config.DestinationReferences.DataServiceDeploymentId, PDS_DEPLOYMENT_AVAILABLE)
 	if err != nil {
 		return fmt.Errorf("error while validating restored deployment readiness")
 	}
 
-	sourceDeployment, err := GetDeployment(restore.Get.Config.SourceReferences.DeploymentId)
+	sourceDeployment, err := GetDeployment(restore.Get.Config.SourceReferences.DataServiceDeploymentId)
 	if err != nil {
 		return fmt.Errorf("error while fetching source deployment object")
 	}
 
-	destinationDeployment, err := GetDeployment(restore.Get.Config.DestinationReferences.DeploymentId)
+	destinationDeployment, err := GetDeployment(restore.Get.Config.DestinationReferences.DataServiceDeploymentId)
 	if err != nil {
 		return fmt.Errorf("error while fetching destination deployment object")
 	}
@@ -87,12 +87,12 @@ func ValidateRestoreAfterSourceDeploymentUpgrade(restoreId string, sourceDeploym
 		return err
 	}
 
-	err = ValidateDataServiceDeploymentHealth(restore.Get.Config.DestinationReferences.DeploymentId, PDS_DEPLOYMENT_AVAILABLE)
+	err = ValidateDataServiceDeploymentHealth(restore.Get.Config.DestinationReferences.DataServiceDeploymentId, PDS_DEPLOYMENT_AVAILABLE)
 	if err != nil {
 		return fmt.Errorf("error while validating restored deployment readiness")
 	}
 
-	destinationDeployment, err := GetDeployment(restore.Get.Config.DestinationReferences.DeploymentId)
+	destinationDeployment, err := GetDeployment(restore.Get.Config.DestinationReferences.DataServiceDeploymentId)
 	if err != nil {
 		return fmt.Errorf("error while fetching destination deployment object")
 	}

@@ -142,7 +142,7 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 			return nil, err
 		}
 
-		err = wfDataService.ValidatePdsDataServiceDeployments(*deployment.Update.Config.DeploymentMeta.Uid, ds, ds.ScaleReplicas, resConfigId, stConfigId, namespaceName, version, image)
+		err = wfDataService.ValidatePdsDataServiceDeployments(*deployment.Update.Config.DataServiceDeploymentMeta.Uid, ds, ds.ScaleReplicas, resConfigId, stConfigId, namespaceName, version, image)
 		if err != nil {
 			return nil, err
 		}
