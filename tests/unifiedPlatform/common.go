@@ -442,7 +442,7 @@ func IncreasePVCize(namespace string, deploymentName string, sizeInGb uint64) (*
 	var vol *volume.Volume
 	pvcList, _ := GetPvsAndPVCsfromDeployment(namespace, deploymentName)
 	initialCapacity, err := GetVolumeCapacityInGB(namespace, deploymentName)
-	log.Debugf("Initial volume storage size is : %v", initialCapacity)
+	log.InfoD("Initial volume storage size is : %vG", initialCapacity)
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +466,7 @@ func IncreasePVCize(namespace string, deploymentName string, sizeInGb uint64) (*
 	// wait for the resize to take effect
 	time.Sleep(30 * time.Second)
 	newcapacity, err := GetVolumeCapacityInGB(namespace, deploymentName)
-	log.Infof("Resized volume storage size is : %v", newcapacity)
+	log.InfoD("Resized volume storage size is : %vG", newcapacity)
 	if err != nil {
 		return nil, err
 	}

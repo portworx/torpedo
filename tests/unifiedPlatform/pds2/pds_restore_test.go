@@ -594,13 +594,30 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 				log.FailOnError(err, "Error while Validating dataservice after scale up")
 			})
 
+			Step("ScaleUp DataService and Validate PVC size", func() {
+				log.InfoD("ScaleUp DataService and Validate PVC size")
+
+				sizeBeforeScaleUp, err := GetVolumeCapacityInGB(WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace, *deployment.Create.Status.CustomResourceName)
+				log.FailOnError(err, "Error while getting volume capacity")
+				log.Infof("PVC Size Before Scale Up [%v]", sizeBeforeScaleUp)
+
+				updateDeployment, err := WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
+				log.FailOnError(err, "Error while updating ds")
+				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
+
+				sizeAfterScaleUp, err := GetVolumeCapacityInGB(WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Namespace, *deployment.Create.Status.CustomResourceName)
+				log.FailOnError(err, "Error while getting volume capacity")
+				log.Infof("PVC Size After Scale Up [%v]", sizeAfterScaleUp)
+
+				dash.VerifyFatal(sizeBeforeScaleUp == sizeAfterScaleUp, true, "validating pvc size")
+
+			})
+
 			Step("Run data load on the deployment", func() {
 				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error while running workloads on ds")
 			})
-
 		}
-
 	})
 
 	JustAfterEach(func() {
