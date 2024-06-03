@@ -231,7 +231,7 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 				)
 				log.FailOnError(err, "Unable to associate Templates to Project")
 				log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
-				pdsResLib.UpdateTemplate = resConfigIdUpdated
+				pdsResLib.Templates = &WorkflowPDSTemplate
 			})
 
 			Step("Fetch Volume Nodes on which PX is Running", func() {
@@ -303,7 +303,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				log.InfoD("Restart PX while data service is scaling up")
 				// Global Resiliency TC marker
 				pdsResLib.MarkResiliencyTC(true)
-				pdsResLib.UpdateTemplate = WorkflowDataService.PDSTemplates.UpdateResourceTemplateId
+				pdsResLib.Templates = &WorkflowPDSTemplate
 				// Type of failure that this TC needs to cover
 				failuretype := pdsResLib.TypeOfFailure{
 					Type: pdsResLib.RestartPxDuringDSScaleUp,
@@ -369,7 +369,7 @@ var _ = Describe("{RebootNodeDuringAppResourceUpdate}", func() {
 				)
 				log.FailOnError(err, "Unable to associate Templates to Project")
 				log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
-				pdsResLib.UpdateTemplate = resConfigIdUpdated
+				pdsResLib.Templates = &WorkflowPDSTemplate
 			})
 
 			Step("Reboot nodes while app resource are updated", func() {
@@ -442,7 +442,7 @@ var _ = Describe("{RestartAppDuringResourceUpdate}", func() {
 				)
 				log.FailOnError(err, "Unable to associate Templates to Project")
 				log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
-				pdsResLib.UpdateTemplate = resConfigIdUpdated
+				pdsResLib.Templates = &WorkflowPDSTemplate
 			})
 
 			Step("Restart applications during resource update", func() {

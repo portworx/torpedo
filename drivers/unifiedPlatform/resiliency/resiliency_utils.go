@@ -7,6 +7,7 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -52,7 +53,7 @@ var (
 	CapturedErrors            = make(chan error, 10)
 	checkTillReplica          int32
 	ResiliencyCondition       = make(chan bool)
-	UpdateTemplate            string
+	Templates                 *pds.WorkflowPDSTemplates
 )
 
 // Struct Definition for kind of Failure the framework needs to trigger
@@ -155,7 +156,7 @@ func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deploy
 		}
 
 		func1 := func() {
-			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, UpdateTemplate)
+			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, Templates)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)
@@ -175,7 +176,7 @@ func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deploy
 		}
 
 		func1 := func() {
-			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, UpdateTemplate)
+			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, Templates)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)
@@ -195,7 +196,7 @@ func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deploy
 		}
 
 		func1 := func() {
-			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, UpdateTemplate)
+			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, Templates)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)
@@ -215,7 +216,7 @@ func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deploy
 		}
 
 		func1 := func() {
-			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, UpdateTemplate)
+			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, Templates)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)
