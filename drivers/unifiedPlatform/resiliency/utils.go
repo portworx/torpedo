@@ -649,6 +649,7 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 	log.Debugf("Starting to resize the storage and UpdateDeploymentResourceConfig")
 
 	//Get required Id's
+	log.Infof("Topologies - [%v]", deployment.Config)
 	stConfigId := *deployment.Config.DeploymentTopologies[0].StorageOptions.Id
 	appConfigId := *deployment.Config.DeploymentTopologies[0].ServiceConfigurations.Id
 	oldResConfigId := *deployment.Config.DeploymentTopologies[0].ResourceSettings.Id
