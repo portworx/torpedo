@@ -316,6 +316,11 @@ func GenerateWorkload(deploymentName, dataServiceName, crdName string, wkloadGen
 	log.Debugf("DeploymentName [%s]", deploymentName)
 	log.Debugf("dataServiceName [%s]", dataServiceName)
 	log.Debugf("CrdName [%s]", crdName)
+	log.Debugf("workloadDepName [%s]", workloadDepName)
+	log.Debugf("tableName [%s]", seed)
+	log.Debugf("namespace [%s]", namespace)
+	log.Debugf("mode [%s]", mode)
+	log.Debugf("counts [%s], iterations [%s]", counts, iterations)
 
 	serviceAccount, err := pds.CreatePolicies(namespace, crdName)
 	if err != nil {

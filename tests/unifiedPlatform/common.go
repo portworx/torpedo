@@ -185,6 +185,17 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 		WorkflowDataService.PDSParams = NewPdsParams
 
+		//Initializing the parameters required for workload generation
+		WorkflowDataService.WorkloadGenParams = &dslibs.LoadGenParams{
+			LoadGenDepName: NewPdsParams.LoadGen.LoadGenDepName,
+			Namespace:      PDS_DEFAULT_NAMESPACE,
+			NumOfRows:      NewPdsParams.LoadGen.NumOfRows,
+			Timeout:        NewPdsParams.LoadGen.Timeout,
+			Replicas:       NewPdsParams.LoadGen.Replicas,
+			Iterations:     NewPdsParams.LoadGen.Iterations,
+			FailOnError:    NewPdsParams.LoadGen.FailOnError,
+		}
+
 		log.Infof("Creating backup config struct")
 		WorkflowPDSBackupConfig.WorkflowBackupLocation = WorkflowbkpLoc
 		WorkflowPDSBackupConfig.WorkflowDataService = &WorkflowDataService
@@ -207,6 +218,15 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 			Namespace:    &WorkflowNamespace,
 			Dash:         Inst().Dash,
 			PDSTemplates: WorkflowPDSTemplate,
+			WorkloadGenParams: &dslibs.LoadGenParams{
+				LoadGenDepName: NewPdsParams.LoadGen.LoadGenDepName,
+				Namespace:      PDS_DEFAULT_NAMESPACE,
+				NumOfRows:      NewPdsParams.LoadGen.NumOfRows,
+				Timeout:        NewPdsParams.LoadGen.Timeout,
+				Replicas:       NewPdsParams.LoadGen.Replicas,
+				Iterations:     NewPdsParams.LoadGen.Iterations,
+				FailOnError:    NewPdsParams.LoadGen.FailOnError,
+			},
 		}
 		WorkflowPDSRestore.RestoredDeployments.DataServiceDeployment = make(map[string]*dslibs.DataServiceDetails)
 

@@ -22,6 +22,7 @@ type BackupDetails struct {
 	Backup         *automationModels.V1Backup
 	BackupConfigId string
 	Md5Hash        string
+	TableName      string
 }
 
 const (
@@ -68,6 +69,7 @@ func (backup WorkflowPDSBackup) WaitForBackupToComplete(backupId string) error {
 				Backup:         &backupModel.Get,
 				BackupConfigId: *backupModel.Get.Meta.ParentReference.Uid,
 				Md5Hash:        backup.WorkflowBackupConfig.BackupConfigs[*backupModel.Get.Meta.ParentReference.Uid].Md5,
+				TableName:      backup.WorkflowBackupConfig.BackupConfigs[*backupModel.Get.Meta.ParentReference.Uid].ChkSumMap[*backupModel.Get.Meta.ParentReference.Uid],
 			}
 			return nil, false, nil
 		}
