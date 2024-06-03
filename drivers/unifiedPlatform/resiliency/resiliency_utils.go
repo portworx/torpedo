@@ -97,6 +97,9 @@ func InduceFailure(failure string, ns string) {
 }
 
 func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deployment, namespace string, CheckTillReplica int32, ds dslibs.PDSDataService) error {
+
+	log.Infof("Deployment - [%v]", deployment)
+
 	switch FailureType.Type {
 	// Case when we want to reboot a node onto which a deployment pod is coming up
 	case ActiveNodeRebootDuringDeployment:
@@ -156,7 +159,7 @@ func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deploy
 		}
 
 		func1 := func() {
-			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, Templates)
+			ResizeDataServiceStorage(*deployment, ds, *nameSpace.Meta.Uid, Templates)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)
@@ -176,7 +179,7 @@ func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deploy
 		}
 
 		func1 := func() {
-			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, Templates)
+			ResizeDataServiceStorage(*deployment, ds, *nameSpace.Meta.Uid, Templates)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)
@@ -196,7 +199,7 @@ func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deploy
 		}
 
 		func1 := func() {
-			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, Templates)
+			ResizeDataServiceStorage(*deployment, ds, *nameSpace.Meta.Uid, Templates)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)
@@ -216,7 +219,7 @@ func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deploy
 		}
 
 		func1 := func() {
-			ResizeDataServiceStorage(deployment, ds, *nameSpace.Meta.Uid, Templates)
+			ResizeDataServiceStorage(*deployment, ds, *nameSpace.Meta.Uid, Templates)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)
