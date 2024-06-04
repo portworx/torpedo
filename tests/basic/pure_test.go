@@ -4354,6 +4354,7 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 	})
 	itLog := "Check Cloud Drives are present in FA"
 	It(itLog, func() {
+		log.InfoD(itLog)
 		// A list to store the cloud drives
 		var clouddrives []string
 		//Create a map to track the FA endpoints and the count of cloud drives in each FA
@@ -4374,9 +4375,9 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 			log.FailOnError(err, "Failed to get cloud drives")
 			log.InfoD("Collect the Drive ID from drive set configuration from each node")
 			for _, cloudDrive := range *cloudData {
-				for i, _ := range cloudDrive.Configs {
-					log.InfoD("Cloud Drive ID [%v] in the node [%v]", cloudDrive.Configs[i].ID, cloudDrive.NodeID)
-					clouddrives = append(clouddrives, cloudDrive.Configs[i].ID)
+				for _, v := range cloudDrive.Configs {
+					log.InfoD("Cloud Drive ID [%v] in the node [%v]", v.ID, cloudDrive.NodeID)
+					clouddrives = append(clouddrives, v.ID)
 				}
 			}
 		})
@@ -4416,5 +4417,8 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 				}
 			})
 		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 })
