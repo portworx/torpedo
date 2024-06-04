@@ -175,6 +175,7 @@ const (
 	storkControllerConfigMapRetry             = 30 * time.Second
 	BackupLocationValidationTimeout           = 10 * time.Minute
 	BackupLocationValidationRetryTime         = 30 * time.Second
+	CustomRestrictedPSATemplateName           = "custom-restricted6"
 )
 
 var (
@@ -3760,6 +3761,23 @@ func IsPresent(dataSlice interface{}, data interface{}) bool {
 		}
 	}
 	return false
+}
+
+// AppendList append only unique items of one list into another list
+func AppendList[T comparable](dataSlice1 []T, dataSlice2 []T) []T {
+	var map1 = make(map[T]bool, 0)
+	var list1 []T
+
+	for _, element := range dataSlice1 {
+		map1[element] = true
+	}
+	for _, element := range dataSlice2 {
+		map1[element] = true
+	}
+	for key := range map1 {
+		list1 = append(list1, key)
+	}
+	return list1
 }
 
 func DeleteBackupAndWait(backupName string, ctx context1.Context) error {
