@@ -13,6 +13,8 @@ import (
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/log"
+	appsv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	"math/rand"
 	"net/url"
@@ -69,6 +71,7 @@ const (
 	defaultCmdTimeout               = 20 * time.Second
 	defaultCmdRetryInterval         = 5 * time.Second
 	defaultKubeconfigMapForKubevirt = "kubevirt-creds"
+	postgresqlStressImage           = "portworx/torpedo-pgbench:pdsloadTest"
 )
 
 // RandomString generates a random lowercase string of length characters.
@@ -592,6 +595,53 @@ func ParseInterfaceAndGetDetails(connectionDetails interface{}, dataServiceName 
 	}
 
 	return dnsEndPoint, nil
+}
+
+func CreatePostgresqlWorkload(dnsEndpoint, pdsPassword, scaleFactor, iterations, deploymentName, namespace string) (*appsv1.Deployment, error) {
+	var replicas int32 = 1
+	deploymentSpec := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: deploymentName + "-",
+			Namespace:    namespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": deploymentName},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": deploymentName},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:    "pgbench",
+							Image:   postgresqlStressImage,
+							Command: []string{"/pgloadgen.sh"},
+							Args:    []string{dnsEndpoint, pdsPassword, scaleFactor, iterations},
+						},
+					},
+					RestartPolicy: corev1.RestartPolicyAlways,
+				},
+			},
+		},
+	}
+	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
+	if err != nil {
+		log.Errorf("An Error Occured while creating deployment %v", err)
+		return nil, err
+	}
+	err = k8sApps.ValidateDeployment(deployment, timeOut, timeInterval)
+	if err != nil {
+		log.Errorf("An Error Occured while validating the pod %v", err)
+		return nil, err
+	}
+
+	//TODO: Remove static sleep and verify the injected data
+	time.Sleep(2 * time.Minute)
+
+	return deployment, err
 }
 
 func ConvertInterfacetoString(value interface{}) (string, error) {

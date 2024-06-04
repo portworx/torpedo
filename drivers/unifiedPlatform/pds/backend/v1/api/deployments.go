@@ -115,3 +115,16 @@ func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *automationModels
 	}
 	return &dsResponse, err
 }
+
+func (ds *PDS_API_V1) GetDeploymentCredentials(deploymentId string) (string, error) {
+	ctx, dsClient, err := ds.getDeploymentClient()
+	if err != nil {
+		return "", fmt.Errorf("Error in getting context for backend call: %v\n", err)
+	}
+	dsModel, res, err := dsClient.DeploymentServiceGetDeploymentCredentials(ctx, deploymentId).Execute()
+	if err != nil || res.StatusCode != status.StatusOK {
+		return "", fmt.Errorf("Error when calling `DeploymentServiceGetDeployment`: %v\n.Full HTTP response: %v", err, res)
+	}
+
+	return *dsModel.Secret, nil
+}

@@ -16,6 +16,7 @@ import (
 	utils "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -37,6 +38,7 @@ const (
 	PlatformNamespace          = "px-system"
 	ValidateDeploymentDeletion = "VALIDATE_DELETE_DEPLOYMENT"
 	PDS_DEPLOYMENT_AVAILABLE   = "AVAILABLE"
+	postgresql                 = "PostgreSQL"
 )
 
 func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService, image, version string, namespace string) (*automationModels.PDSDeploymentResponse, error) {
@@ -529,4 +531,72 @@ func (wfDataService *WorkflowDataService) Purge(ignoreError bool) error {
 	}
 
 	return nil
+}
+
+func (wfDataService *WorkflowDataService) RunStress(deploymentID, deploymentName, dsName, namespace string) (*corev1.Pod, *appsv1.Deployment, error) {
+	var (
+		pod *corev1.Pod
+		dep *appsv1.Deployment
+		err error
+	)
+	params := &dslibs.WorkloadGenerationParams{
+		DataServiceName: dsName,
+		DeploymentID:    deploymentID,
+		DeploymentName:  deploymentName,
+		Namespace:       namespace,
+	}
+
+	//params.DataServiceName = wfDataService.DataServiceDeployment[deploymentID].DSParams.Name
+
+	log.Infof("Dataservice Name : %s", params.DataServiceName)
+
+	if params.DataServiceName == postgresql {
+		params.DeploymentName = "pgload"
+		params.ScaleFactor = "100"
+		params.Iterations = "1"
+
+		log.Infof("Running Workloads on DataService %v ", params.DataServiceName)
+		pod, dep, err = wfDataService.CreateDataServiceWorkloads(params)
+	}
+	return pod, dep, err
+}
+
+// CreateDataServiceWorkloads generates workloads for the given data services
+func (wfDataService *WorkflowDataService) CreateDataServiceWorkloads(params *dslibs.WorkloadGenerationParams) (*corev1.Pod, *appsv1.Deployment, error) {
+	var dep *appsv1.Deployment
+	var pod *corev1.Pod
+
+	dnsEndPoint := ""
+	deployment, err := dslibs.GetDeployment(params.DeploymentID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	connectionDetails := deployment.Get.Status.ConnectionInfo["connectionDetails"]
+	dnsEndPoint, err = utils.ParseInterfaceAndGetDetails(connectionDetails, params.DataServiceName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = dslibs.ValidateDNSEndPoint(dnsEndPoint)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error occured while validating connection info, Err: %v", err)
+	}
+	log.Infof("DNS endpoints are reachable...")
+
+	pdsPassword, err := dslibs.GetDeploymentCredentials(params.DeploymentID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error occured while getting credentials info, Err: %v", err)
+	}
+
+	switch params.DataServiceName {
+	case postgresql:
+		endPoint := strings.Split(dnsEndPoint, ":")[0]
+		dep, err = utils.CreatePostgresqlWorkload(endPoint, pdsPassword, params.ScaleFactor, params.Iterations, params.DeploymentName, params.Namespace)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error occured while creating postgresql workload, Err: %v", err)
+		}
+
+	}
+	return pod, dep, nil
 }
