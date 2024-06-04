@@ -2053,6 +2053,8 @@ func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 		foundDevices[currentEntry.WWID] = *currentEntry
 	}
 
+	log.Infof("Found devices [%v]", foundDevices)
+
 	return foundDevices, nil
 }
 
@@ -2094,6 +2096,7 @@ func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEn
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse lsblk output on node %s, Err: %v", n.MgmtIp, err)
 	}
+	log.Infof("lsblk output [%v]", lsblkParsed)
 
 	if len(lsblkParsed) != len(dmsetupFoundMappers) {
 		return nil, fmt.Errorf("found %d mappers in dmsetup but %d devices in lsblk on node %s, inconsistent disk state (we didn't clean something up right?)", len(dmsetupFoundMappers), len(lsblkParsed), n.MgmtIp)
