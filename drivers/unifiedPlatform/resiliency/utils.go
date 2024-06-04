@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
-	pds2 "github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
 	"math/rand"
 	"time"
 
@@ -646,18 +645,17 @@ func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 	return conditionError
 }
 
-func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dslibs.PDSDataService, namespaceId string, template *pds2.WorkflowPDSTemplates) (bool, error) {
+func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dslibs.PDSDataService, namespaceId, newResConfigId string) (bool, error) {
 	log.Debugf("Starting to resize the storage and UpdateDeploymentResourceConfig")
 
 	//Get required Id's
 	log.Infof("Topologies - [%v]", deployment.Config)
-	stConfigId := template.StorageTemplateId
-	appConfigId := template.ServiceConfigTemplateIds[ds.Name]
-	oldResConfigId := template.ResourceTemplateId
+	stConfigId := *deployment.Config.DeploymentTopologies[0].StorageOptions.Id
+	appConfigId := *deployment.Config.DeploymentTopologies[0].ServiceConfigurations.Id
+	oldResConfigId := *deployment.Config.DeploymentTopologies[0].ResourceSettings.Id
 	projectId := *deployment.Config.References.ProjectId
 	imageId := *deployment.Config.References.ImageId
 	deploymentId := *deployment.Meta.Uid
-	newResConfigId := template.UpdateResourceTemplateId
 
 	resourceTemp, err := dslibs.GetResourceTemplateConfigs(oldResConfigId)
 	if err != nil {
