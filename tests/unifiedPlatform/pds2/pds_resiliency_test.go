@@ -282,9 +282,8 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 
 var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 	var (
-		deploymentAfterUpdate automationModels.V1Deployment
-		deployment            *automationModels.PDSDeploymentResponse
-		err                   error
+		deployment *automationModels.PDSDeploymentResponse
+		err        error
 	)
 
 	JustBeforeEach(func() {
@@ -313,7 +312,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				}
 
 				pdsResLib.DefineFailureType(failuretype)
-				err = pdsResLib.InduceFailureAfterWaitingForCondition(&deploymentAfterUpdate, PDS_DEFAULT_NAMESPACE, int32(ds.ScaleReplicas), ds)
+				err = pdsResLib.InduceFailureAfterWaitingForCondition(&deployment.Create, PDS_DEFAULT_NAMESPACE, int32(ds.ScaleReplicas), ds)
 				log.FailOnError(err, fmt.Sprintf("Error happened while executing restarting PX %v", *deployment.Create.Status.CustomResourceName))
 			})
 
