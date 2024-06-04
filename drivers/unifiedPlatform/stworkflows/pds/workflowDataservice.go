@@ -94,7 +94,6 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		log.Infof("Sleeping for 1 minutes to make sure deployment gets healthy")
 		time.Sleep(1 * time.Minute)
 
-		wfDataService.WorkloadGenParams.TableName = "wltesting" + utils.RandomString(3)
 		_, err := wfDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
 		if err != nil {
 			return deployment, fmt.Errorf("unable to run workfload on the data service. Error - [%s]", err.Error())
@@ -267,21 +266,29 @@ func (wfDataService *WorkflowDataService) ValidateDNSEndpoint(deploymentId strin
 	return nil
 }
 
-func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(deploymentId string) (string, error) {
+func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(deploymentId string) (map[string]string, error) {
+	chkSumMap := make(map[string]string)
+
+	//Initializing the tableName
+	wfDataService.WorkloadGenParams.TableName = "wltesting" + utils.RandomString(3)
+
 	if slices.Contains(stworkflows.SKIPDATASERVICEFROMWORKLOAD, strings.ToLower(wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)) {
 		log.Warnf("Workload is not enabled for this - [%s] - data service", wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)
-		return "", nil
+		return nil, nil
 	}
 
 	chkSum, wlDep, err := dslibs.InsertDataAndReturnChecksum(*wfDataService.DataServiceDeployment[deploymentId], *wfDataService.WorkloadGenParams)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
+
+	// Updating the hash for the tableName
+	chkSumMap[wfDataService.WorkloadGenParams.TableName] = chkSum
 
 	// Updating the data hash for the deployment
 	wfDataService.DataServiceDeployment[deploymentId].SourceMd5Checksum = chkSum
 
-	return chkSum, dslibs.DeleteWorkloadDeployments(wlDep)
+	return chkSumMap, dslibs.DeleteWorkloadDeployments(wlDep)
 }
 
 // Reads and update the md5 hash for the data service
@@ -290,7 +297,7 @@ func (wfDataService *WorkflowDataService) ReadAndUpdateDataServiceDataHash(deplo
 		log.Warnf("Workload is not enabled for this - [%s] - data service", wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)
 		return nil
 	}
-	
+
 	chkSum, _, err := dslibs.ReadDataAndReturnChecksum(
 		*wfDataService.DataServiceDeployment[deploymentId],
 		wfDataService.DataServiceDeployment[deploymentId].DSParams.Name,

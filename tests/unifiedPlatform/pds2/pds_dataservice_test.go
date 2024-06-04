@@ -238,12 +238,6 @@ var _ = Describe("{DeletePDSPods}", func() {
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 			})
 
-			stepLog := "Running Workloads before deleting pods in Px-System namespace"
-			Step(stepLog, func() {
-				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
-				log.FailOnError(err, "Error while running workloads on ds")
-			})
-
 			Step("Delete PDSPods", func() {
 				err := WorkflowDataService.DeletePDSPods([]string{"pds-backups", "pds-target"}, PlatformNamespace)
 				log.FailOnError(err, "Error while deleting pds pods")
@@ -259,9 +253,8 @@ var _ = Describe("{DeletePDSPods}", func() {
 				log.FailOnError(err, "Error while Validating dataservice")
 			})
 
-			stepLog = "Running Workloads after deleting pods in Px-System namespace"
+			stepLog := "Running Workloads after deleting pods in Px-System namespace"
 			Step(stepLog, func() {
-				WorkflowDataService.PDSParams.LoadGen.TableName = "wltesting" + RandomString(3)
 				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
 				log.FailOnError(err, "Error while running workloads on ds")
 			})

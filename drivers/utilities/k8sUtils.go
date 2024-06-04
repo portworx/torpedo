@@ -389,7 +389,7 @@ func RemoveFinalizersFromAllResources(namespace string) error {
 
 		_, err := k8sCore.UpdateEndpoints(&endpoint)
 		if err != nil {
-			allErrors = append(allErrors, err.Error())
+			allErrors = append(allErrors, fmt.Errorf("Error Setting finalizer for dns endpoints %v\n", err.Error()).Error())
 		}
 	}
 
@@ -401,7 +401,7 @@ func RemoveFinalizersFromAllResources(namespace string) error {
 
 		_, err := k8sCore.UpdateService(&service)
 		if err != nil {
-			allErrors = append(allErrors, err.Error())
+			allErrors = append(allErrors, fmt.Errorf("Error Setting finalizer for services %v\n", err.Error()).Error())
 		}
 	}
 
@@ -409,7 +409,7 @@ func RemoveFinalizersFromAllResources(namespace string) error {
 	ns.SetFinalizers([]string{})
 	_, err = k8sCore.UpdateNamespace(ns)
 	if err != nil {
-		allErrors = append(allErrors, err.Error())
+		allErrors = append(allErrors, fmt.Errorf("Error Setting finalizer for namespace %v\n", err.Error()).Error())
 	}
 
 	if len(allErrors) > 0 {
