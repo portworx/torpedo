@@ -649,15 +649,26 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 	log.Debugf("Starting to resize the storage and UpdateDeploymentResourceConfig")
 
 	//Get required Id's
+	log.Infof("newResConfigId - [%v]", newResConfigId)
 	log.Infof("Topologies - [%v]", deployment.Config)
 	stConfigId := *deployment.Config.DeploymentTopologies[0].StorageOptions.Id
+	log.Infof("St Config Id - [%s]", stConfigId)
 	appConfigId := *deployment.Config.DeploymentTopologies[0].ServiceConfigurations.Id
+	log.Infof("App Config Id - [%s]", appConfigId)
 	oldResConfigId := *deployment.Config.DeploymentTopologies[0].ResourceSettings.Id
+	log.Infof("Old Res Config Id - [%s]", oldResConfigId)
 	projectId := *deployment.Config.References.ProjectId
+	log.Infof("Project Id - [%s]", projectId)
 	imageId := *deployment.Config.References.ImageId
+	log.Infof("Image Id - [%s]", imageId)
 	deploymentId := *deployment.Meta.Uid
+	log.Infof("Deployment Id - [%s]", deploymentId)
+	log.Infof("Namespace Id - [%s]", namespaceId)
 
 	resourceTemp, err := dslibs.GetResourceTemplateConfigs(oldResConfigId)
+
+	log.Infof("Resource Temp Id - [%s]", resourceTemp)
+
 	if err != nil {
 		if ResiliencyFlag {
 			ResiliencyCondition <- false
@@ -670,7 +681,8 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 	initialCapacity := resourceTemp.Resources.Requests.Storage
 	log.Debugf("Initial Capacity of the dataservice is [%s]", initialCapacity)
 	log.Debugf("newResConfigId [%s]", newResConfigId)
-
+	// Setting scale replica count to the initial replica count
+	ds.ScaleReplicas = ds.Replicas
 	newDeployment, err := dslibs.UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, newResConfigId, stConfigId)
 	if err != nil {
 		if ResiliencyFlag {

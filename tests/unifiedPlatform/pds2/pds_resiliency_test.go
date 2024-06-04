@@ -298,11 +298,28 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
 			})
 
+			Step("Create and associate update template to the projectß", func() {
+				resConfigIdUpdated, err := WorkflowPDSTemplate.CreateResourceTemplateWithCustomValue(NewPdsParams)
+				log.FailOnError(err, "Unable to create Custom Templates for PDS")
+				log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdated)
+				log.Infof("Associate newly created template to the project")
+				err = WorkflowProject.Associate(
+					[]string{},
+					[]string{},
+					[]string{},
+					[]string{},
+					[]string{resConfigIdUpdated},
+					[]string{},
+				)
+				log.FailOnError(err, "Unable to associate Templates to Project")
+			})
+
 			Step("Restart PX while data service is scaling up", func() {
 				log.InfoD("Restart PX while data service is scaling up")
 				// Global Resiliency TC marker
+				pdsResLib.UpdateTemplate = WorkflowPDSTemplate.UpdateResourceTemplateId
 				pdsResLib.MarkResiliencyTC(true)
-				pdsResLib.UpdateTemplate = WorkflowDataService.PDSTemplates.UpdateResourceTemplateId
+				log.Infof("Update Id: [%s]", WorkflowDataService.PDSTemplates.UpdateResourceTemplateId)
 				// Type of failure that this TC needs to cover
 				failuretype := pdsResLib.TypeOfFailure{
 					Type: pdsResLib.RestartPxDuringDSScaleUp,
@@ -312,7 +329,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				}
 
 				pdsResLib.DefineFailureType(failuretype)
-				err = pdsResLib.InduceFailureAfterWaitingForCondition(&deployment.Create, PDS_DEFAULT_NAMESPACE, int32(ds.ScaleReplicas), ds)
+				err = pdsResLib.InduceFailureAfterWaitingForCondition(&deployment.Create, PDS_DEFAULT_NAMESPACE, int32(ds.Replicas), ds)
 				log.FailOnError(err, fmt.Sprintf("Error happened while executing restarting PX %v", *deployment.Create.Status.CustomResourceName))
 			})
 

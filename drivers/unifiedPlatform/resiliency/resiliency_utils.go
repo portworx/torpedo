@@ -96,6 +96,9 @@ func InduceFailure(failure string, ns string) {
 }
 
 func InduceFailureAfterWaitingForCondition(deployment *automationModels.V1Deployment, namespace string, CheckTillReplica int32, ds dslibs.PDSDataService) error {
+
+	log.Infof("Update Id: [%s]", UpdateTemplate)
+
 	switch FailureType.Type {
 	// Case when we want to reboot a node onto which a deployment pod is coming up
 	case ActiveNodeRebootDuringDeployment:
