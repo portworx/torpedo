@@ -124,7 +124,7 @@ const (
 	CloudSnapshotMissingValidationForNFSLocation                                       TestCaseName = "CloudSnapshotMissingValidationForNFSLocation"
 	MultipleProvisionerCsiKdmpBackupAndRestore                                         TestCaseName = "MultipleProvisionerCsiKdmpBackupAndRestore"
 	KubevirtVMMigrationTest                                                            TestCaseName = "KubevirtVMMigrationTest"
-	DummyPSATestcase                                                                   TestCaseName = "DummyPSATestcase"
+	BackupAndRestoreWithClusterWidePSAInRke                                            TestCaseName = "BackupAndRestoreWithClusterWidePSAInRke"
 )
 
 // Test case labels

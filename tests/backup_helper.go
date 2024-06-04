@@ -176,6 +176,7 @@ const (
 	storkControllerConfigMapRetry             = 30 * time.Second
 	BackupLocationValidationTimeout           = 10 * time.Minute
 	BackupLocationValidationRetryTime         = 30 * time.Second
+	RestrictedPSA                             = "rancher-restricted"
 )
 
 var (
