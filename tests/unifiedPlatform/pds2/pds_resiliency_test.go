@@ -317,7 +317,6 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 			Step("Restart PX while data service is scaling up", func() {
 				log.InfoD("Restart PX while data service is scaling up")
 				// Global Resiliency TC marker
-				pdsResLib.UpdateTemplate = WorkflowPDSTemplate.ResourceTemplateId
 				pdsResLib.MarkResiliencyTC(true)
 				log.Infof("Update Id: [%s]", WorkflowDataService.PDSTemplates.UpdateResourceTemplateId)
 				// Type of failure that this TC needs to cover

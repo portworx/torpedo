@@ -646,6 +646,10 @@ func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 }
 
 func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dslibs.PDSDataService, namespaceId, newResConfigId string) (bool, error) {
+
+	var newDeployment *automationModels.PDSDeploymentResponse
+	var err error
+
 	log.Debugf("Starting to resize the storage and UpdateDeploymentResourceConfig")
 
 	//Get required Id's
@@ -666,6 +670,8 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 	log.Infof("Namespace Id - [%s]", namespaceId)
 
 	resourceTemp, err := dslibs.GetResourceTemplateConfigs(oldResConfigId)
+	// Get the initial capacity of the DataService
+	initialCapacity := resourceTemp.Resources.Requests.Storage
 
 	log.Infof("Resource Temp Id - [%s]", resourceTemp)
 
@@ -677,12 +683,13 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 		return false, err
 	}
 
-	// Get the initial capacity of the DataService
-	initialCapacity := resourceTemp.Resources.Requests.Storage
-	log.Debugf("Initial Capacity of the dataservice is [%s]", initialCapacity)
-	log.Debugf("newResConfigId [%s]", newResConfigId)
-	// Setting scale replica count to the initial replica count
-	newDeployment, err := dslibs.UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, newResConfigId, stConfigId)
+	if len(UpdateTemplate) > 0 {
+		log.Debugf("Initial Capacity of the dataservice is [%s]", initialCapacity)
+		log.Debugf("newResConfigId [%s]", newResConfigId)
+		newDeployment, err = dslibs.UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, newResConfigId, stConfigId)
+	} else {
+		newDeployment, err = dslibs.UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, oldResConfigId, stConfigId)
+	}
 	if err != nil {
 		if ResiliencyFlag {
 			ResiliencyCondition <- false
@@ -735,15 +742,17 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 	updatedCapacity := newResourceTemp.Resources.Requests.Storage
 	log.Debugf("Updated Capacity of the dataservice is [%s]", updatedCapacity)
 
-	if updatedCapacity > initialCapacity {
-		log.InfoD("Initial PVC Capacity is- %v and Updated PVC Capacity is- %v", initialCapacity, updatedCapacity)
-		log.InfoD("Storage is Successfully increased to  [%v]", updatedCapacity)
-	} else {
-		if ResiliencyFlag {
-			ResiliencyCondition <- false
-			CapturedErrors <- fmt.Errorf("Failed to verify Storage Resize at PV/PVC level \n", "updatedCapacity should be higher than the initial capacity")
+	if len(UpdateTemplate) > 0 {
+		if updatedCapacity > initialCapacity {
+			log.InfoD("Initial PVC Capacity is- %v and Updated PVC Capacity is- %v", initialCapacity, updatedCapacity)
+			log.InfoD("Storage is Successfully increased to  [%v]", updatedCapacity)
+		} else {
+			if ResiliencyFlag {
+				ResiliencyCondition <- false
+				CapturedErrors <- fmt.Errorf("Failed to verify Storage Resize at PV/PVC level \n", "updatedCapacity should be higher than the initial capacity")
+			}
+			return false, err
 		}
-		return false, err
 	}
 	return true, nil
 }
