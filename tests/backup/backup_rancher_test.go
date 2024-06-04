@@ -1,9 +1,7 @@
 package tests
 
 import (
-	"context"
 	"fmt"
-	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"strconv"
 	"time"
 
@@ -146,7 +144,7 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range appNamespaces {
-				restoredNamespace := "restore-to-same-pro-diff-ns" + RandomString(5)
+				restoredNamespace := "restore-to-same-pro-diff-ns" + RandomString(3)
 				namespaceMapping[namespace] = restoredNamespace
 				restoreNamespacesAll = append(restoreNamespacesAll, restoredNamespace)
 				restoredNamespaceList = append(restoredNamespaceList, restoredNamespace)
@@ -169,7 +167,7 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range appNamespaces {
-				restoredNamespace := "restored-different-project-" + RandomString(5)
+				restoredNamespace := "restored-different-project-" + RandomString(3)
 				namespaceMapping[namespace] = restoredNamespace
 				restoreNamespacesAll = append(restoreNamespacesAll, restoredNamespace)
 				restoredNamespaceList = append(restoredNamespaceList, restoredNamespace)
@@ -207,14 +205,14 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range appNamespaces {
-				//restoredNamespace := "restored-diff-project-diff-cluster-same-ns" + RandomString(5)
+				//restoredNamespace := "restored-diff-project-diff-cluster-same-ns" + RandomString(3)
 				namespaceMapping[namespace] = namespace
 				destRestoreNamespacesAll = append(destRestoreNamespacesAll, namespace)
 				restoredNamespaceList = append(restoredNamespaceList, namespace)
 			}
 			projectNameMapping[sourceClusterProjectList[0]] = destClusterProjectList[0]
 			projectUIDMapping[sourceClusterProjectUIDList[0]] = destClusterProjectUIDList[0]
-			restoreName := fmt.Sprintf("%s-diff-proj-same-ns-diff-cluster%v", RestoreNamePrefix, RandomString(5))
+			restoreName := fmt.Sprintf("%s-diff-proj-same-ns-diff-cluster%v", RestoreNamePrefix, RandomString(3))
 			restoreList = append(restoreList, restoreName)
 			err = CreateRestoreWithProjectMapping(restoreName, backupName, namespaceMapping, DestinationClusterName, BackupOrgID, ctx, nil, projectUIDMapping, projectNameMapping)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s from backup %s", restoreName, backupName))
@@ -230,14 +228,14 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range appNamespaces {
-				restoredNamespace := "restored-diff-project-diff-cluster-same-ns-" + RandomString(5)
+				restoredNamespace := "restored-diff-project-diff-cluster-same-ns-" + RandomString(3)
 				namespaceMapping[namespace] = restoredNamespace
 				destRestoreNamespacesAll = append(destRestoreNamespacesAll, restoredNamespace)
 				restoredNamespaceList = append(restoredNamespaceList, restoredNamespace)
 			}
 			projectNameMapping[sourceClusterProjectList[0]] = destClusterProjectList[0]
 			projectUIDMapping[sourceClusterProjectUIDList[0]] = destClusterProjectUIDList[0]
-			restoreName := fmt.Sprintf("%s-diff-proj-diff-ns-diff-cluster%v", RestoreNamePrefix, RandomString(5))
+			restoreName := fmt.Sprintf("%s-diff-proj-diff-ns-diff-cluster%v", RestoreNamePrefix, RandomString(3))
 			restoreList = append(restoreList, restoreName)
 			err = CreateRestoreWithProjectMapping(restoreName, backupName, namespaceMapping, DestinationClusterName, BackupOrgID, ctx, nil, projectUIDMapping, projectNameMapping)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s from backup %s", restoreName, backupName))
@@ -1179,45 +1177,105 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", La
 	})
 })
 
-// This testcase takes backup & restore with cluster wide PSA
-var _ = Describe("{BackupAndRestoreWithClusterWidePSAInRke}", Label(TestCaseLabelsMap[BackupAndRestoreWithClusterWidePSAInRke]...), func() {
+// This testcase takes backup & restore with cluster wide PSA in RKE cluster
+var _ = Describe("{BackupAndRestoreWithClusterWidePSAInRancher}", Label(TestCaseLabelsMap[BackupAndRestoreWithClusterWidePSAInRancher]...), func() {
 	var (
-		err                  error
-		cloudCredName        string
-		cloudCredUID         string
-		bkpLocationName      string
-		backupLocationUID    string
-		clusterList          []string
-		appNamespaces        []string
-		ctx                  context.Context
-		scheduledAppContexts []*scheduler.Context
-		srcClusterStatus     api.ClusterInfo_StatusInfo_Status
-		destClusterStatus    api.ClusterInfo_StatusInfo_Status
+		err                                                                   error
+		backupLocationUID                                                     string
+		backupLocationName                                                    string
+		credName                                                              string
+		credUid                                                               string
+		backupNameWithVolumeAndResource                                       string
+		pvcOnlyBackupName                                                     string
+		deploymentOnlyBackupName                                              string
+		srcClusterUid                                                         string
+		backupFromRestoreNamespace                                            string
+		destClusterUid                                                        string
+		preRuleName                                                           string
+		postRuleName                                                          string
+		preRuleUid                                                            string
+		postRuleUid                                                           string
+		customRestoreWithNamespaceAndStorageClassMapping                      string
+		customRestoreWithNamespaceAndStorageClassMappingToRestrictedNamespace string
+		customRestoreWithNamespaceAndStorageClassMappingToBaselineNamespace   string
+		restoreNameCustomResourcePVCBackup                                    string
+		scName                                                                string
+		restoreNameCustomResourceDeploymentBackup                             string
+		restoreFromBackupTakenFromRestoreName                                 string
+		backupNameWithVolumeAndResourceWithBaselineLabel                      string
+		namespaceListOfRestrictedPSA                                          []string
+		restoreListInDestinationCluster                                       []string
+		clusterListRancher                                                    []string
+		appNamespaces                                                         []string
+		backupList                                                            []string
+
+		sourceScNameList           []*storageApi.StorageClass
+		scheduledAppContexts       []*scheduler.Context
+		singleScheduledAppContexts []*scheduler.Context
+		psaApp                     []string
 	)
+	params := make(map[string]string)
+	storageClassMapping := make(map[string]string)
+	storageClassMappingRestrictedPsa := make(map[string]string)
+	storageClassMappingBaselinePsa := make(map[string]string)
+	namespaceMappingForRestrictedPsa := make(map[string]string)
+	restoredAppContextsInDestinationCluster := make([]*scheduler.Context, 0)
 	numberOfBackups, _ := strconv.Atoi(GetEnv(MaxBackupsToBeCreated, "3"))
-	customRestrictedPSA := "custom-restricted"
-	customRestrictedPSADescription := "Custom Restricted PSA"
+	customRestrictedPSA := fmt.Sprintf("custom-restricted-%v", RandomString(3))
+	clusterList := []string{DestinationClusterName, SourceClusterName}
+	restoreReplacePolicy := []ReplacePolicyType{ReplacePolicyRetain, ReplacePolicyDelete}
+
 	backupLocationMap := make(map[string]string)
 	JustBeforeEach(func() {
-		log.InfoD("Getting the list of all the RKE clusters added to rancher")
-		clusterList, err = Inst().S.(*rke.Rancher).GetRKEClusterList()
-		log.FailOnError(err, "Getting RKE cluster list")
-		log.InfoD("The RKE cluster list is %v", clusterList)
-		err = RemoveElementByValue(&clusterList, RancherActiveCluster)
+		appList := Inst().AppList
+		log.InfoD("The app list at the start of the testcase is %v", Inst().AppList)
+		defer func() {
+			Inst().AppList = appList
+		}()
+		for _, app := range appList {
+
+			psaApp = append(psaApp, PSAAppMap[app])
+		}
+		log.Infof("The PSA app list is %v", psaApp)
+		Inst().AppList = psaApp
+
+		log.InfoD("Getting the list of all the RKE clusters added to Rancher")
+		clusterListRancher, err = Inst().S.(*rke.Rancher).GetRKEClusterList()
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Getting list of RKE cluster: %v", clusterListRancher))
+		err = RemoveElementByValue(&clusterListRancher, RancherActiveCluster)
 		log.FailOnError(err, "Removing the management Rancher cluster: local from the cluster list")
+		psa1, _ := Inst().S.(*rke.Rancher).GetCurrentClusterWidePSA(clusterListRancher[0])
+
+		log.Infof("The PSA applied to cluster %v at the start of the testcase is %v", clusterListRancher[0], psa1)
 
 		pxBackupNS, err := backup.GetPxBackupNamespace()
 		log.FailOnError(err, "Getting backup namespace")
 		portworxNamespace, err := Inst().S.GetPortworxNamespace()
 		log.FailOnError(err, "Getting portworx namespace")
 		nsExemptList := []string{"default", pxBackupNS, portworxNamespace}
-		Inst().S.(*rke.Rancher).CreateCustomRestrictedPSA(customRestrictedPSA, nsExemptList, customRestrictedPSADescription)
 
-		Inst().S.(*rke.Rancher).UpdateClusterWidePSA(clusterList[0], customRestrictedPSA)
-		log.FailOnError(err, "Adding custom PSA with restricted mode")
+		var defaultExemptListForRestrictedPSA []string
+		psaList, err := Inst().S.(*rke.Rancher).GetPodSecurityAdmissionConfigurationTemplateList()
+		log.FailOnError(err, "Getting default PSA list")
+		log.Infof("PSA Template list is %v", psaList)
+		for _, psa := range psaList.Data {
+			if psa.Name == "rancher-restricted" {
+				defaultExemptListForRestrictedPSA = psa.Configuration.Exemptions.Namespaces
+				break
+			}
+		}
+		log.Infof("Exempted list of namespaces for default PSA: %s is %v", "rancher-restricted", defaultExemptListForRestrictedPSA)
+		log.Infof("Getting a list of unique namespaces to be exempted for custom restricted PSA")
+		nsExemptListFinal := AppendList(nsExemptList, defaultExemptListForRestrictedPSA)
+		err = Inst().S.(*rke.Rancher).CreateCustomPodSecurityAdmissionConfigurationTemplate(customRestrictedPSA, nsExemptListFinal, RestrictedPSA, RestrictedPSAVersion, CustomRestrictedPSADescription)
+		log.FailOnError(err, "Creating custom PSA")
+		err = Inst().S.(*rke.Rancher).UpdateClusterWidePSA(clusterListRancher[0], customRestrictedPSA)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Updating cluster level custom restricted PSA %v", customRestrictedPSA))
+		psa2, _ := Inst().S.(*rke.Rancher).GetCurrentClusterWidePSA(clusterListRancher[0])
+		log.Infof("The PSA applied to cluster %v after updating custom PSA is %v", clusterListRancher[0], psa2)
 
 		log.InfoD("Deploying application with restricted policy")
-		scheduledAppContexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < numberOfBackups; i++ {
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
@@ -1232,43 +1290,405 @@ var _ = Describe("{BackupAndRestoreWithClusterWidePSAInRke}", Label(TestCaseLabe
 
 	})
 
-	It("Dummy PSA testcase to validate the PSA related methods for RKE", func() {
-
+	It("Testcase to take backup and restore with cluster wide PSA set on rancher cluster", func() {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.InfoD("The app list before starting the testcase is %v", Inst().AppList)
 		Step("Validating the deployed applications", func() {
-			log.InfoD("Validating the deployed applications on destination cluster")
+			log.InfoD("Validating the deployed applications")
 			ValidateApplications(scheduledAppContexts)
-			log.InfoD("Switching cluster context back to source[backup] cluster")
-			err := SetSourceKubeConfig()
-			log.FailOnError(err, "Switching context to source cluster required for creating backup location")
 		})
 
-		Step("Adding cloud credential and backup location", func() {
-			log.InfoD("Adding cloud credential and backup location")
-			providers := GetBackupProviders()
-			for _, provider := range providers {
-				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
-				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
-				cloudCredUID = uuid.New()
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			backupLocationProviders := GetBackupProviders()
+			for _, provider := range backupLocationProviders {
+				credName = fmt.Sprintf("%s-cred-%v", provider, RandomString(10))
+				credUid = uuid.New()
+				err := CreateCloudCredential(provider, credName, credUid, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s]  as provider %s", credName, BackupOrgID, provider))
+				backupLocationName = fmt.Sprintf("%s-backup-location-%v", provider, RandomString(10))
 				backupLocationUID = uuid.New()
-				backupLocationMap[backupLocationUID] = bkpLocationName
-				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
-				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, credName, credUid, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocationName))
 			}
 		})
-		Step("Registering source and destination clusters for backup", func() {
-			log.InfoD("Registering source and destination clusters for backup")
-			err := CreateApplicationClusters(BackupOrgID, "", "", ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, DestinationClusterName))
-			srcClusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
-			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-			destClusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
-			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
-			_, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+
+		Step("Registering application clusters for backup", func() {
+			log.InfoD("Registering application clusters for backup")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+		})
+
+		Step(fmt.Sprintf("Creation of pre and post exec rules for applications "), func() {
+			log.InfoD("Creation of pre and post exec rules for applications ")
+			preRuleName, postRuleName, err = CreateRuleForBackupWithMultipleApplications(BackupOrgID, Inst().AppList, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of pre and post exec rules for applications from px-admin"))
+			if preRuleName != "" {
+				preRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleName)
+				log.FailOnError(err, "Fetching pre backup rule [%s] uid", preRuleName)
+				log.InfoD("Pre backup rule [%s] uid: [%s]", preRuleName, preRuleUid)
+			}
+			if postRuleName != "" {
+				postRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleName)
+				log.FailOnError(err, "Fetching post backup rule [%s] uid", postRuleName)
+				log.InfoD("Post backup rule [%s] uid: [%s]", postRuleName, postRuleUid)
+			}
+		})
+
+		Step("Taking backup of applications with both volume and resources", func() {
+			log.InfoD("Taking backup of applications with both volume and resources")
+			backupNameWithVolumeAndResource = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(10))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateBackupWithValidation(ctx, backupNameWithVolumeAndResource, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, srcClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup of namespaces with volume and resources [%s]", backupNameWithVolumeAndResource))
+			backupList = append(backupList, backupNameWithVolumeAndResource)
+		})
+
+		Step("Taking backup of only PVC from the namespaces", func() {
+			log.InfoD("Taking  backup of only PVC from the namespaces")
+			pvcOnlyBackupName = fmt.Sprintf("%s-resource-pvc-%v", BackupNamePrefix, RandomString(3))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateBackupWithCustomResourceTypeWithValidation(ctx, pvcOnlyBackupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, []string{"PersistentVolumeClaim"}, nil, BackupOrgID, srcClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] containing only PVC", pvcOnlyBackupName))
+			backupList = append(backupList, pvcOnlyBackupName)
+		})
+
+		Step("Taking backup of only Deployment from the namespaces", func() {
+			log.InfoD("Taking  backup of only Deployment from the namespaces")
+			deploymentOnlyBackupName = fmt.Sprintf("%s-resource-deployment-%v", BackupNamePrefix, RandomString(3))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateBackupWithCustomResourceTypeWithValidation(ctx, deploymentOnlyBackupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, []string{"Deployment"}, nil, BackupOrgID, srcClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] containing only Deployment", deploymentOnlyBackupName))
+			backupList = append(backupList, deploymentOnlyBackupName)
+		})
+
+		log.InfoD("The list of backup taken is %v", backupList)
+
+		Step("Getting storage class of the source cluster", func() {
+			for _, appNamespaces := range appNamespaces {
+				log.InfoD("Getting storage class of the source cluster")
+				pvcs, err := core.Instance().GetPersistentVolumeClaims(appNamespaces, make(map[string]string))
+				singlePvc := pvcs.Items[0]
+				tempSc, err := core.Instance().GetStorageClassForPVC(&singlePvc)
+				sourceScNameList = append(sourceScNameList, tempSc)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting SC %v from PVC in source cluster", tempSc.Name))
+			}
+			log.InfoD("The list of storage class in source cluster is %v", sourceScNameList)
+		})
+
+		Step(fmt.Sprintf("Default restores of backup containing both volume and resources with different restore policy"), func() {
+			for _, cluster := range clusterList {
+				for _, policy := range restoreReplacePolicy {
+					log.InfoD(fmt.Sprintf("Default restore of backup %v with policy %v in %s cluster", backupNameWithVolumeAndResource, policy, cluster))
+					defaultRestoreName := fmt.Sprintf("default-%v-%v-%v-%v-%v", RestoreNamePrefix, backupNameWithVolumeAndResource, policy, cluster, RandomString(3))
+					err = CreateRestoreWithReplacePolicyWithValidation(defaultRestoreName, backupNameWithVolumeAndResource, make(map[string]string), cluster, BackupOrgID, ctx, make(map[string]string), policy, scheduledAppContexts)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating default restore %v for manual backup %v with replace policy [%v] on cluster %v ", defaultRestoreName, backupNameWithVolumeAndResource, policy, cluster))
+				}
+			}
+		})
+
+		Step("Custom restore of manual backup containing both volume and resources with namespace & storage class mapping to new namespace in destination cluster", func() {
+			log.InfoD("Custom restore of manual backup %v containing both volume and resources with namespace & storage class mapping in destination cluster", backupNameWithVolumeAndResource)
+
+			log.InfoD("Switching cluster context to destination cluster")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Failed to set destination kubeconfig")
+			params["repl"] = "2"
+			for _, sc := range sourceScNameList {
+				scName = fmt.Sprintf("replica-sc-%v", RandomString(3))
+				v1obj := metaV1.ObjectMeta{
+					Name: scName,
+				}
+				reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+				bindMode := storageApi.VolumeBindingImmediate
+				scObj := storageApi.StorageClass{
+					ObjectMeta:        v1obj,
+					Provisioner:       k8s.CsiProvisioner,
+					Parameters:        params,
+					ReclaimPolicy:     &reclaimPolicyDelete,
+					VolumeBindingMode: &bindMode,
+				}
+				log.InfoD("Create new storage class on destination cluster for storage class mapping for restore")
+				_, err = storage.Instance().CreateStorageClass(&scObj)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating new storage class %v on destination cluster %s", scName, DestinationClusterName))
+				storageClassMapping[sc.Name] = scName
+			}
+			log.Infof("Storage class mapping is %v", storageClassMapping)
+			log.InfoD("Switching cluster context back to source cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Failed to set source kubeconfig")
+
+			namespaceList, err := FetchNamespacesFromBackup(ctx, backupNameWithVolumeAndResource, BackupOrgID)
+			namespaceMapping := make(map[string]string)
+			for _, namespace := range namespaceList {
+				namespaceMapping[namespace] = namespace + RandomString(3)
+			}
+			log.Infof("Namespace mapping is %v", namespaceMapping)
+			customRestoreWithNamespaceAndStorageClassMapping = fmt.Sprintf("%s-%v-ns-mapping-%v", RestoreNamePrefix, RandomString(3), backupNameWithVolumeAndResource)
+			appContextsToRestore := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMapping, backupNameWithVolumeAndResource, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, appContextsToRestore)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation with namespace mapping %v and storage class mapping %v", backupNameWithVolumeAndResource, customRestoreWithNamespaceAndStorageClassMapping, namespaceMapping, storageClassMapping))
+			restoreListInDestinationCluster = append(restoreListInDestinationCluster, customRestoreWithNamespaceAndStorageClassMapping)
+		})
+
+		Step("Custom restore of manual backup containing both volume and resources with namespace & storage class mapping to existing namespace with restricted PSA in destination cluster", func() {
+			log.InfoD("Custom restore of manual backup %v containing both volume and resources with namespace & storage class mapping to existing namespace with restricted PSA in destination cluster", backupNameWithVolumeAndResource)
+
+			log.InfoD("Switching cluster context to destination cluster")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Failed to set destination kubeconfig")
+			params["repl"] = "2"
+			for _, sc := range sourceScNameList {
+				scName = fmt.Sprintf("replica-sc-%v", RandomString(3))
+				v1obj := metaV1.ObjectMeta{
+					Name: scName,
+				}
+				reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+				bindMode := storageApi.VolumeBindingImmediate
+				scObj := storageApi.StorageClass{
+					ObjectMeta:        v1obj,
+					Provisioner:       k8s.CsiProvisioner,
+					Parameters:        params,
+					ReclaimPolicy:     &reclaimPolicyDelete,
+					VolumeBindingMode: &bindMode,
+				}
+				log.InfoD("Create new storage class on destination cluster for storage class mapping for restore")
+				_, err = storage.Instance().CreateStorageClass(&scObj)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating new storage class %v on destination cluster %s", scName, DestinationClusterName))
+				storageClassMappingRestrictedPsa[sc.Name] = scName
+			}
+			log.InfoD("Storage class mapping for restore in restricted namespace is %v", storageClassMappingRestrictedPsa)
+			log.InfoD("Switching cluster context back to source cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Failed to set source kubeconfig")
+			namespaceList, err := FetchNamespacesFromBackup(ctx, backupNameWithVolumeAndResource, BackupOrgID)
+
+			for _, namespace := range namespaceList {
+				newNs := namespace + RandomString(3)
+				namespaceListOfRestrictedPSA = append(namespaceListOfRestrictedPSA, newNs)
+				_, err = core.Instance().CreateNamespace(&v1.Namespace{
+					ObjectMeta: metaV1.ObjectMeta{
+						Name: newNs,
+						// SNigdha: Uncomment it once PSA is fixed from Aetos
+						//Labels: RestrictedPSALabel,
+					},
+				})
+
+				namespaceMappingForRestrictedPsa[namespace] = newNs
+			}
+			log.Infof("Namespace mapping is %v", namespaceMappingForRestrictedPsa)
+			customRestoreWithNamespaceAndStorageClassMappingToRestrictedNamespace = fmt.Sprintf("%s-%v-ns-mapping-%v", RestoreNamePrefix, RandomString(3), backupNameWithVolumeAndResource)
+			appContextsToRestore := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMappingToRestrictedNamespace, backupNameWithVolumeAndResource, namespaceMappingForRestrictedPsa, storageClassMappingRestrictedPsa, DestinationClusterName, BackupOrgID, appContextsToRestore)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation with namespace mapping with restricted PSA %v and storage class maping %v ", backupNameWithVolumeAndResource, customRestoreWithNamespaceAndStorageClassMappingToRestrictedNamespace, namespaceMappingForRestrictedPsa, storageClassMappingRestrictedPsa))
+			restoreListInDestinationCluster = append(restoreListInDestinationCluster, customRestoreWithNamespaceAndStorageClassMappingToRestrictedNamespace)
+		})
+
+		Step("Custom restore of manual backup containing both volume and resources with namespace & storage class mapping to existing namespace with baseline PSA in destination cluster", func() {
+			log.InfoD("Custom restore of manual backup %v containing both volume and resources with namespace & storage class mapping to existing namespace with baseline PSA in destination cluster", backupNameWithVolumeAndResource)
+
+			log.InfoD("Switching cluster context to destination cluster")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Failed to set destination kubeconfig")
+			params["repl"] = "2"
+			for _, sc := range sourceScNameList {
+				scName = fmt.Sprintf("replica-sc-%v", RandomString(3))
+				v1obj := metaV1.ObjectMeta{
+					Name: scName,
+				}
+				reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+				bindMode := storageApi.VolumeBindingImmediate
+				scObj := storageApi.StorageClass{
+					ObjectMeta:        v1obj,
+					Provisioner:       k8s.CsiProvisioner,
+					Parameters:        params,
+					ReclaimPolicy:     &reclaimPolicyDelete,
+					VolumeBindingMode: &bindMode,
+				}
+				log.InfoD("Create new storage class on destination cluster for storage class mapping for restore")
+				_, err = storage.Instance().CreateStorageClass(&scObj)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating new storage class %v on destination cluster %s", scName, DestinationClusterName))
+				storageClassMappingBaselinePsa[sc.Name] = scName
+			}
+			log.InfoD("Storage class mapping for restore in baseline PSA is %v", storageClassMappingBaselinePsa)
+			log.InfoD("Switching cluster context back to source cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Failed to set source kubeconfig")
+			namespaceList, err := FetchNamespacesFromBackup(ctx, backupNameWithVolumeAndResource, BackupOrgID)
+			namespaceMapping := make(map[string]string)
+
+			for _, namespace := range namespaceList {
+				newNs := namespace + RandomString(3)
+				_, err = core.Instance().CreateNamespace(&v1.Namespace{
+					ObjectMeta: metaV1.ObjectMeta{
+						Name:   newNs,
+						Labels: BaselinePSALabel,
+					},
+				})
+				namespaceMapping[namespace] = newNs
+			}
+			log.Infof("Namespace mapping is %v", namespaceMapping)
+			customRestoreWithNamespaceAndStorageClassMappingToBaselineNamespace = fmt.Sprintf("%s-%v-ns-mapping-%v", RestoreNamePrefix, RandomString(3), backupNameWithVolumeAndResource)
+			appContextsToRestore := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMappingToBaselineNamespace, backupNameWithVolumeAndResource, namespaceMapping, storageClassMappingBaselinePsa, DestinationClusterName, BackupOrgID, appContextsToRestore)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation with namespace mapping %v with baseline PSA and storage class mapping %v", backupNameWithVolumeAndResource, customRestoreWithNamespaceAndStorageClassMappingToBaselineNamespace, namespaceMapping, storageClassMappingBaselinePsa))
+			restoreListInDestinationCluster = append(restoreListInDestinationCluster, customRestoreWithNamespaceAndStorageClassMappingToBaselineNamespace)
+		})
+
+		Step("Restoring custom resource backup containing only PVC to a namespace with restricted PSA", func() {
+			log.InfoD("Restoring custom resource backup containing only PVC %s to a namespace with restricted PSA", deploymentOnlyBackupName)
+
+			restoreNameCustomResourcePVCBackup = fmt.Sprintf("%s-%s-%v", RestoreNamePrefix, pvcOnlyBackupName, RandomString(3))
+			restoreListInDestinationCluster = append(restoreListInDestinationCluster, restoreNameCustomResourcePVCBackup)
+			namespaceMapping := make(map[string]string)
+			namespaceList, err := FetchNamespacesFromBackup(ctx, pvcOnlyBackupName, BackupOrgID)
+			for _, namespace := range namespaceList {
+				restoredNameSpace := fmt.Sprintf("%s-%s-%s", namespace, RandomString(3), "restored")
+				_, err = core.Instance().CreateNamespace(&v1.Namespace{
+					ObjectMeta: metaV1.ObjectMeta{
+						Name:   restoredNameSpace,
+						Labels: RestrictedPSALabel,
+					},
+				})
+				namespaceMapping[namespace] = restoredNameSpace
+			}
+			log.InfoD("Namespace mapping for restoring backup with only PVC is %v:", namespaceMapping)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, namespaceList)
+			restoreContextMap := make(map[string][]*scheduler.Context)
+			restoreContextMap[restoreNameCustomResourcePVCBackup] = appContextsToBackup
+			err = CreateRestore(restoreNameCustomResourcePVCBackup, pvcOnlyBackupName, namespaceMapping, DestinationClusterName, BackupOrgID, ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore: %s from backup: %s with only PVC to a namespace with restricted PSA", restoreNameCustomResourcePVCBackup, pvcOnlyBackupName))
+			err = ValidateCustomResourceRestores(ctx, BackupOrgID, []string{"PersistentVolumeClaim"}, restoreContextMap, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validating restore %v of backup %v containing only PVC", restoreNameCustomResourcePVCBackup, pvcOnlyBackupName))
+		})
+
+		Step("Restoring custom resource backup containing only Deployment to a namespace with restricted PSA", func() {
+			log.InfoD("Restoring custom resource backup containing only Deployment %s to a namespace with restricted PS", deploymentOnlyBackupName)
+
+			restoreNameCustomResourceDeploymentBackup = fmt.Sprintf("%s-%s-%v", RestoreNamePrefix, deploymentOnlyBackupName, RandomString(3))
+			restoreListInDestinationCluster = append(restoreListInDestinationCluster, restoreNameCustomResourceDeploymentBackup)
+			namespaceMapping := make(map[string]string)
+			namespaceList, err := FetchNamespacesFromBackup(ctx, deploymentOnlyBackupName, BackupOrgID)
+			for _, namespace := range namespaceList {
+				restoredNameSpace := fmt.Sprintf("%s-%s-%s", namespace, RandomString(3), "restored")
+				_, err = core.Instance().CreateNamespace(&v1.Namespace{
+					ObjectMeta: metaV1.ObjectMeta{
+						Name:   restoredNameSpace,
+						Labels: RestrictedPSALabel,
+					},
+				})
+				namespaceMapping[namespace] = restoredNameSpace
+			}
+			log.InfoD("Namespace mapping for restoring backup with only Deployment is %v:", namespaceMapping)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, namespaceList)
+			restoreContextMap := make(map[string][]*scheduler.Context)
+			restoreContextMap[restoreNameCustomResourceDeploymentBackup] = appContextsToBackup
+			err = CreateRestore(restoreNameCustomResourceDeploymentBackup, deploymentOnlyBackupName, namespaceMapping, DestinationClusterName, BackupOrgID, ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore: %s from backup: %s with only Deployment", restoreNameCustomResourceDeploymentBackup, deploymentOnlyBackupName))
+			//	err = ValidateCustomResourceRestores(ctx, BackupOrgID, []string{"Deployment"}, restoreContextMap, DestinationClusterName)
+			//	dash.VerifyFatal(err, nil, fmt.Sprintf("Validating restore %v of backup %v containing only Deployment", restoreNameCustomResourceDeploymentBackup, deploymentOnlyBackupName))
+		})
+
+		Step("Taking backup of restored application on destination cluster and restoring it to source cluster", func() {
+			log.InfoD("Taking backup of restored application of restore %v on destination cluster and restoring it to source cluster", customRestoreWithNamespaceAndStorageClassMappingToRestrictedNamespace)
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			for _, scheduledAppContext := range scheduledAppContexts {
+				restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMappingForRestrictedPsa, storageClassMappingRestrictedPsa, true)
+				if err != nil {
+					log.Errorf("TransformAppContextWithMappings: %v", err)
+					continue
+				}
+				restoredAppContextsInDestinationCluster = append(restoredAppContextsInDestinationCluster, restoredAppContext)
+			}
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+			backupFromRestoreNamespace = fmt.Sprintf("%s-%v-backup-from-restore", BackupNamePrefix, RandomString(10))
+			err = CreateBackupWithValidation(ctx, backupFromRestoreNamespace, DestinationClusterName, backupLocationName, backupLocationUID, restoredAppContextsInDestinationCluster, nil, BackupOrgID, destClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup %v from restored namespace [%s]", backupFromRestoreNamespace, namespaceListOfRestrictedPSA))
+			backupList = append(backupList, backupNameWithVolumeAndResource)
+
+			log.InfoD("Restoring the backup %v taken from restored namespace", backupFromRestoreNamespace)
+
+			namespaceMapping := make(map[string]string)
+			for _, namespace := range namespaceListOfRestrictedPSA {
+				namespaceMapping[namespace] = namespace + "-restored"
+			}
+			restoreFromBackupTakenFromRestoreName = fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
+			//appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateRestoreWithValidation(ctx, restoreFromBackupTakenFromRestoreName, backupFromRestoreNamespace, namespaceMapping, make(map[string]string), SourceClusterName, BackupOrgID, restoredAppContextsInDestinationCluster)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup %v having restore namespace", restoreFromBackupTakenFromRestoreName, backupFromRestoreNamespace))
+		})
+
+		Step("Taking backup of application with baseline PSA set at namespace level while restricted PSA is applied at cluster level", func() {
+			log.InfoD("Taking backup of application with baseline PSA set at namespace level while restricted PSA is applied at cluster level")
+
+			baselineNamespace := fmt.Sprintf("single-ns-multi-app-%v-baseline-label", RandomString(3))
+			_, err = core.Instance().CreateNamespace(&v1.Namespace{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:   baselineNamespace,
+					Labels: BaselinePSALabel,
+				},
+			})
+			log.Infof("The namespace with baseline PSA label set is %v", baselineNamespace)
+
+			for i := 0; i < numberOfBackups; i++ {
+				taskName := fmt.Sprintf("%s-%v-%d", TaskNamePrefix, RandomString(3), i)
+				singleScheduledAppContexts = ScheduleApplicationsOnNamespace(baselineNamespace, taskName)
+			}
+			log.InfoD("Validating the deployed applications")
+			ValidateApplications(singleScheduledAppContexts)
+			log.InfoD("Taking backup of applications with both volume and resources on namespace with baseline label set")
+			backupNameWithVolumeAndResourceWithBaselineLabel = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(10))
+			//appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateBackupWithValidation(ctx, backupNameWithVolumeAndResourceWithBaselineLabel, SourceClusterName, backupLocationName, backupLocationUID, singleScheduledAppContexts, nil, BackupOrgID, srcClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup of namespaces with volume and resources [%s]", backupNameWithVolumeAndResource))
+
+			log.InfoD("Restoring backup of baseline namespace with namespace & storage class mapping")
+			log.InfoD("Switching cluster context to destination cluster")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Failed to set destination kubeconfig")
+			params["repl"] = "2"
+			for _, sc := range sourceScNameList {
+				scName = fmt.Sprintf("replica-sc-%v", RandomString(3))
+				v1obj := metaV1.ObjectMeta{
+					Name: scName,
+				}
+				reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+				bindMode := storageApi.VolumeBindingImmediate
+				scObj := storageApi.StorageClass{
+					ObjectMeta:        v1obj,
+					Provisioner:       k8s.CsiProvisioner,
+					Parameters:        params,
+					ReclaimPolicy:     &reclaimPolicyDelete,
+					VolumeBindingMode: &bindMode,
+				}
+				log.InfoD("Create new storage class on destination cluster for storage class mapping for restore")
+				_, err = storage.Instance().CreateStorageClass(&scObj)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating new storage class %v on destination cluster %s for restore of backup with baseline label", scName, DestinationClusterName))
+				storageClassMapping[sc.Name] = scName
+			}
+			log.Infof("Storage class mapping is %v", storageClassMapping)
+			log.InfoD("Switching cluster context back to source cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Failed to set source kubeconfig")
+
+			namespaceMapping := make(map[string]string)
+
+			namespaceMapping[baselineNamespace] = baselineNamespace + RandomString(3)
+
+			log.Infof("Namespace mapping is %v", namespaceMapping)
+			customRestoreWithNamespaceAndStorageClassMapping = fmt.Sprintf("%s-%v-ns-mapping-%v", RestoreNamePrefix, RandomString(3), backupNameWithVolumeAndResource)
+			//appContextsToRestore := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMapping, backupNameWithVolumeAndResourceWithBaselineLabel, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, singleScheduledAppContexts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation with namespace mapping %v and storage class mapping %v", backupNameWithVolumeAndResourceWithBaselineLabel, customRestoreWithNamespaceAndStorageClassMapping, namespaceMapping, storageClassMapping))
+
 		})
 
 	})
