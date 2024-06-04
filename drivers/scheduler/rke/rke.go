@@ -10,7 +10,6 @@ import (
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/tests"
 	_ "github.com/rancher/norman/clientbase"
 	rancherClientBase "github.com/rancher/norman/clientbase"
 	"github.com/rancher/norman/types"
@@ -81,7 +80,8 @@ func (r *Rancher) GetRancherClusterParametersValue() (*RancherClusterParameters,
 	// TODO Rancher URL for cloud cluster will not be fetched from master node IP
 	masterNodeName := node.GetMasterNodes()[0].Name
 	log.Infof("The master node here is %v", masterNodeName)
-	endpoint := "https://" + masterNodeName + "/v3"
+	//endpoint := "https://" + masterNodeName + "/v3"
+	endpoint := "https://ip-10-13-228-50.pwx.purestorage.com/v3"
 	rkeParameters.Endpoint = endpoint
 	rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
 	if rkeToken == "" {
@@ -98,8 +98,9 @@ func (r *Rancher) UpdateRancherClient(clusterName string) error {
 	var rkeParametersValue RancherClusterParameters
 	var err error
 	var rkeToken string
-	masterNodeName := node.GetMasterNodes()[0].Name
-	endpoint := "https://" + masterNodeName + "/v3"
+	//masterNodeName := node.GetMasterNodes()[0].Name
+	//endpoint := "https://" + masterNodeName + "/v3"
+	endpoint := "https://ip-10-13-228-50.pwx.purestorage.com/v3"
 	if clusterName == "destination-config" {
 		rkeToken = os.Getenv("DESTINATION_RKE_TOKEN")
 		if rkeToken == "" {
@@ -462,7 +463,17 @@ func (r *Rancher) SetASGClusterSize(perZoneCount int64, timeout time.Duration) e
 }
 
 // CreateCustomPodSecurityAdmissionConfigurationTemplate creates a custom PSA template
-func (r *Rancher) CreateCustomPodSecurityAdmissionConfigurationTemplate(psaTemplateName string, description string, psaTemplateDefaults *rancherClient.PodSecurityAdmissionConfigurationTemplateDefaults, psaTemplateExemptions *rancherClient.PodSecurityAdmissionConfigurationTemplateExemptions) error {
+func (r *Rancher) CreateCustomPodSecurityAdmissionConfigurationTemplate(psaTemplateName string, nsExemptList []string, enforce string, enforceVersion string, description string) error {
+	log.Infof("Creating a custom PSA template %v", psaTemplateName)
+	psaTemplateExemptions := &rancherClient.PodSecurityAdmissionConfigurationTemplateExemptions{
+		Namespaces: nsExemptList,
+	}
+
+	psaTemplateDefaults := &rancherClient.PodSecurityAdmissionConfigurationTemplateDefaults{
+		Enforce:        enforce,
+		EnforceVersion: enforceVersion,
+	}
+
 	PSAInterface := &rancherClient.PodSecurityAdmissionConfigurationTemplate{
 		Name:        psaTemplateName,
 		Description: description,
@@ -531,32 +542,6 @@ func (r *Rancher) UpdateClusterWidePSA(clusterName string, psaName string) error
 		}
 	}
 	return fmt.Errorf("cluster with cluster name %s is not present", clusterName)
-}
-
-// CreateCustomRestrictedPSA creates a custom restricted PSA
-func (r *Rancher) CreateCustomRestrictedPSA(psaTemplateName string, nsExemptList []string, description string) error {
-	var defaultExemptListForRestrictedPSA []string
-	log.InfoD("Getting the list of default PSA templates present in the Rancher")
-	psaList, err := r.GetPodSecurityAdmissionConfigurationTemplateList()
-	log.FailOnError(err, "Getting default PSA list")
-	log.InfoD("Default PSA Template list is %v", psaList)
-	for _, psa := range psaList.Data {
-		if psa.Name == tests.RestrictedPSA {
-			defaultExemptListForRestrictedPSA = psa.Configuration.Exemptions.Namespaces
-			break
-		}
-	}
-	log.InfoD("Exempted list of namespaces for default PSA %s is %v", tests.RestrictedPSA, defaultExemptListForRestrictedPSA)
-	newList := tests.AppendList(nsExemptList, defaultExemptListForRestrictedPSA)
-	psaTemplateExemptions := &rancherClient.PodSecurityAdmissionConfigurationTemplateExemptions{
-		Namespaces: newList,
-	}
-	log.InfoD("Creating a custom PSA template with restricted mode")
-	psaTemplateDefaults := &rancherClient.PodSecurityAdmissionConfigurationTemplateDefaults{
-		Enforce: "restricted",
-	}
-	err = r.CreateCustomPodSecurityAdmissionConfigurationTemplate(psaTemplateName, description, psaTemplateDefaults, psaTemplateExemptions)
-	return err
 }
 
 func init() {
