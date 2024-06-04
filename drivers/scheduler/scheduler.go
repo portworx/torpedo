@@ -154,6 +154,8 @@ type ScheduleOptions struct {
 	Namespace string
 	// TopoLogy Labels
 	TopologyLabels []map[string]string
+	// Security Context
+	SecurityContext *corev1.SecurityContext
 }
 
 // Driver must be implemented to provide test support to various schedulers.
