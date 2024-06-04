@@ -70,18 +70,18 @@ func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, 
 				Meta: automationModels.Meta{
 					Name: &ds.DeploymentName,
 				},
-				Config: automationModels.DeploymentUpdateConfig{
-					DeploymentMeta: automationModels.Meta{
+				Config: automationModels.DataServiceDeploymentUpdateConfig{
+					DataServiceDeploymentMeta: automationModels.Meta{
 						Description: StringPtr("pds-qa-tests"),
 					},
-					DeploymentConfig: automationModels.V1Config1{
+					DataServiceDeploymentConfig: automationModels.V1Config1{
 						References: automationModels.Reference{
 							ImageId: &imageId,
 						},
-						DeploymentTopologies: []automationModels.DeploymentTopology{
+						DataServiceDeploymentTopologies: []automationModels.V1DataServiceDeploymentTopology{
 							{
-								Name:     StringPtr(DEPLOYMENT_TOPOLOGY),
-								Replicas: intToPointerString(ds.ScaleReplicas),
+								Name:      StringPtr(DEPLOYMENT_TOPOLOGY),
+								Instances: intToPointerString(ds.ScaleReplicas),
 								ResourceSettings: &automationModels.PdsTemplates{
 									Id: &resConfigId,
 								},
@@ -137,7 +137,7 @@ func GetDeploymentAndPodDetails(deploymentId string) (*automationModels.PDSDeplo
 		return nil, "", err
 	}
 	log.Debugf("deployment [%+v]", deployment)
-	pod := deployment.Get.Status.DeploymentTopologyStatus[0].ConnectionInfo.Pods[0].Name
+	pod := deployment.Get.Status.DataServiceDeploymentTopologyStatus[0].ConnectionInfo.ReadyInstances[0].Name
 	log.Debugf("pods [%+v]", *pod)
 	podName := utilities.GetBasePodName(*pod)
 	return deployment, podName, err
@@ -159,10 +159,10 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 						ImageId: &imageId,
 					},
 					TlsEnabled: nil,
-					DeploymentTopologies: []automationModels.DeploymentTopology{
+					DataServiceDeploymentTopologies: []automationModels.V1DataServiceDeploymentTopology{
 						{
 							Name:        StringPtr(DEPLOYMENT_TOPOLOGY),
-							Replicas:    intToPointerString(ds.Replicas),
+							Instances:   intToPointerString(ds.Replicas),
 							ServiceType: StringPtr(ds.ServiceType),
 							ResourceSettings: &automationModels.PdsTemplates{
 								Id: &resConfigId,
@@ -180,9 +180,9 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 		},
 	}
 
-	log.Infof("app template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations.Id)
-	log.Infof("resource template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings.Id)
-	log.Infof("storage template ids [%s]", *depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].StorageOptions.Id)
+	log.Infof("app template ids [%s]", *depInputs.Create.V1Deployment.Config.DataServiceDeploymentTopologies[0].ServiceConfigurations.Id)
+	log.Infof("resource template ids [%s]", *depInputs.Create.V1Deployment.Config.DataServiceDeploymentTopologies[0].ResourceSettings.Id)
+	log.Infof("storage template ids [%s]", *depInputs.Create.V1Deployment.Config.DataServiceDeploymentTopologies[0].StorageOptions.Id)
 
 	log.Infof("depInputs [+%v]", depInputs.Create)
 	deployment, err := v2Components.PDS.CreateDeployment(depInputs)

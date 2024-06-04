@@ -84,17 +84,19 @@ func (template *PLATFORM_API_V1) UpdateTemplates(templateReq *PlatformTemplatesR
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 	templateResponse := PlatformTemplatesResponse{}
-	tempValueBody := templatesv1.V1Template{
-		Meta: &templatesv1.V1Meta{Name: templateReq.Create.Template.Meta.Name},
-		Config: &templatesv1.V1Config{
-			Kind:            templateReq.Create.Template.Config.Kind,
-			SemanticVersion: templateReq.Create.Template.Config.SemanticVersion,
-			RevisionUid:     templateReq.Create.Template.Config.RevisionUid,
-			TemplateValues:  templateReq.Create.Template.Config.TemplateValues,
+	tempValueBody := templatesv1.TemplateServiceUpdateTemplateBody{
+		Template: &templatesv1.DesiredTemplateConfiguration{
+			Meta: &templatesv1.MetadataOfTheResource{Name: templateReq.Create.Template.Meta.Name},
+			Config: &templatesv1.V1Config{
+				Kind:            templateReq.Create.Template.Config.Kind,
+				SemanticVersion: templateReq.Create.Template.Config.SemanticVersion,
+				RevisionUid:     templateReq.Create.Template.Config.RevisionUid,
+				TemplateValues:  templateReq.Create.Template.Config.TemplateValues,
+			},
 		},
 	}
 	templateUpdateRequest := client.TemplateServiceUpdateTemplate(ctx, templateReq.Update.Id)
-	templateUpdateRequest = templateUpdateRequest.V1Template(tempValueBody)
+	templateUpdateRequest = templateUpdateRequest.TemplateServiceUpdateTemplateBody(tempValueBody)
 	templateModel, res, err := templateUpdateRequest.Execute()
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `TemplateServiceUpdateTemplateExecute`: %v\n.Full HTTP response: %v", err, res)

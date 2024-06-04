@@ -1,0 +1,68 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+
+syntax = "proto3";
+
+package public.portworx.common.v1;
+
+option go_package = "github.com/pure-px/apis/public/portworx/common/apiv1;common";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.common.v1";
+option java_outer_classname = "HealthCheckProto";
+
+// The health check result.
+message HealthCheckResultTypes {
+  // Type of health check restult
+  enum Type {
+    // Unspecified, do not use.
+    TYPE_UNSPECIFIED = 0;
+    // Check was successful.
+    SUCCESS = 1;
+    // Check encountered an issue and returned with a warning.
+    WARNING = 2;
+    // Check found an error.
+    ERROR = 3;
+  }
+}
+
+// Information about each health check.
+message HealthCheck {
+  // Description of the health check.
+  string description = 1;
+  // A url providing the reader with more information about the check.
+  string hint = 2;
+  // Error found if any.
+  string error = 3;
+  // The result of the health check.
+  HealthCheckResultTypes.Type result = 4;
+}
+
+// A set of health checks.
+message HealthCheckCategory {
+  // The name of the category of health checks.
+  string name = 1;
+  // The results of the health checks that were executed.
+  repeated HealthCheck checks = 2;
+}
+
+// The results from a health check run.
+message HealthCheckResults {
+  // True if none of the health checks returned an error.
+  bool success = 1;
+  // True if any of the tests returned a warning
+  bool warning = 2;
+  // Collection of results from all the category of health checks
+  repeated HealthCheckCategory categories = 3;
+}

@@ -16,8 +16,8 @@
     - [BackupPolicy](#backuppolicy)
     - [Config](#config)
     - [CreateBackupConfigRequest](#createbackupconfigrequest)
+    - [DataServiceDeploymentMetaData](#dataservicedeploymentmetadata)
     - [DeleteBackupConfigRequest](#deletebackupconfigrequest)
-    - [DeploymentMetaData](#deploymentmetadata)
     - [GetBackupConfigRequest](#getbackupconfigrequest)
     - [ListBackupConfigsRequest](#listbackupconfigsrequest)
     - [ListBackupConfigsResponse](#listbackupconfigsresponse)
@@ -28,6 +28,14 @@
     - [UpdateBackupConfigRequest.LabelsEntry](#updatebackupconfigrequestlabelsentry)
   
 
+
+- Enums
+    - [BackupConfigSuspended](#backupconfigsuspended)
+    - [Config.BackupLevel](#configbackuplevel)
+    - [Config.BackupType](#configbackuptype)
+    - [Config.ReclaimPolicyType](#configreclaimpolicytype)
+    - [Phase](#phase)
+  
 
 
 - [Scalar Value Types](#scalar-value-types)
@@ -49,7 +57,7 @@ GetBackupConfig API returns the the backup configuration resource.
 > **rpc** ListBackupConfigs([ListBackupConfigsRequest](#listbackupconfigsrequest))
     [ListBackupConfigsResponse](#listbackupconfigsresponse)
 
-ListBackupConfigs API lists all the backup configuration for a deployment.
+ListBackupConfigs API lists all the backup configuration for a data service deployment.
 ### CreateBackupConfig {#methodpublicportworxpdsbackupconfigv1backupconfigservicecreatebackupconfig}
 
 > **rpc** CreateBackupConfig([CreateBackupConfigRequest](#createbackupconfigrequest))
@@ -106,9 +114,8 @@ Desired config of the backup configuration.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | references | [ References](#references) | References to the associated objects for backup configuration. |
-| job_history_limit | [ int32](#int32) | Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1. |
 | backup_policy | [ BackupPolicy](#backuppolicy) | BackupPolicy associated with the backup config. |
-| suspend | [ bool](#bool) | Suspend flag is used to suspend a scheduled backup from creating new backup jobs. |
+| suspend | [ bool](#bool) | Suspend flag is used to suspend a scheduled backup from creating new backups. |
 | backup_type | [ Config.BackupType](#configbackuptype) | Backup Type for the backup configuration. |
 | backup_level | [ Config.BackupLevel](#configbackuplevel) | Backup Level for the backup configuration. |
 | reclaim_policy | [ Config.ReclaimPolicyType](#configreclaimpolicytype) | Reclaim Policy decides if the volume snapshots should get deleted when a Backup CR gets deleted. |
@@ -123,8 +130,23 @@ Request to create a backup configuration.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | project_id | [ string](#string) | (-- api-linter: core::0133::request-required-fields=disabled aip.dev/not-precedent: We really need this field to be required to support creation of the resource in the project context. --) (-- api-linter: core::0133::request-unknown-fields=disabled aip.dev/not-precedent: We really need this field to be required to support creation of the resource in the project context. --) The parent project id under which backup configuration will be created. |
-| deployment_id | [ string](#string) | (-- api-linter: core::0133::request-unknown-fields=disabled aip.dev/not-precedent: We really need this field to be required to support creation of the resource in the deployment context.. --) (-- api-linter: core::0133::request-required-fields=disabled aip.dev/not-precedent: We really need this field to be required to support creation of the resource in the deployment context.. --) Deployment id associated with the backup configuration. |
+| data_service_deployment_id | [ string](#string) | (-- api-linter: core::0133::request-unknown-fields=disabled aip.dev/not-precedent: We really need this field to be required to support creation of the resource in the deployment context.. --) (-- api-linter: core::0133::request-required-fields=disabled aip.dev/not-precedent: We really need this field to be required to support creation of the resource in the deployment context.. --) Data service Deployment id associated with the backup configuration. |
 | backup_config | [ BackupConfig](#backupconfig) | Backup configuration for the backup. |
+ <!-- end Fields -->
+ <!-- end HasFields -->
+
+
+### DataServiceDeploymentMetaData {#dataservicedeploymentmetadata}
+DataServiceDeployment Meta Data contains the details of the DataService deployment associated with the backup configuration.
+
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| name | [ string](#string) | Name of the DataService deployment. |
+| custom_resource_name | [ string](#string) | Custom Resource Name is the kubernetes resource name for the deployment meta data. |
+| target_cluster_name | [ string](#string) | Target cluster Name associated with the backup configuration. |
+| namespace_name | [ string](#string) | Namespace name to which the backup configuration is associated. |
+| tls_enabled | [ bool](#bool) | Flag to check whether Transport Layer Security support is enabled or not. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -136,21 +158,7 @@ Request to delete a backup configuration.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | id | [ string](#string) | ID of the backup configuration. |
- <!-- end Fields -->
- <!-- end HasFields -->
-
-
-### DeploymentMetaData {#deploymentmetadata}
-Deployment Meta Data contains the details of the deployment associated with the backup configuration.
-
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| name | [ string](#string) | Name of the deployment. |
-| custom_resource_name | [ string](#string) | Custom Resource Name is the kubernetes resource name for the deployment meta data. |
-| deployment_target_name | [ string](#string) | Deployment Target Name associated with the backup configuration. |
-| namespace_name | [ string](#string) | Namespace name to which the backup configuration is associated. |
-| tls_enabled | [ bool](#bool) | Flag to check whether Transport Layer Security support is enabled or not. |
+| force | [ bool](#bool) | Force flag to delete backup configuration from control plane only. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -172,14 +180,14 @@ Request to list all the backup configurations.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.account_id | [ string](#string) | Account ID for which the backup configurations will be listed. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.tenant_id | [ string](#string) | Tenant ID for which the backup configurations will be listed. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.project_id | [ string](#string) | Project ID for which the backup configurations will be listed. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.target_cluster_id | [ string](#string) | Cluster ID for which the backup configurations will be listed. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.namespace_id | [ string](#string) | Namespace ID for which the backup configurations will be listed. |
-| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.deployment_id | [ string](#string) | Deployment ID for which the backup configurations will be listed. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.data_service_deployment_id | [ string](#string) | Data service Deployment ID for which the backup configurations will be listed. |
 | pagination | [ public.portworx.common.v1.PageBasedPaginationRequest](#publicportworxcommonv1pagebasedpaginationrequest) | Pagination metadata for listing backup configuration. |
 | sort | [ public.portworx.common.v1.Sort](#publicportworxcommonv1sort) | Sorting details using which requested list of backup configurations to be sorted. |
+| suspended | [ BackupConfigSuspended](#backupconfigsuspended) | Filter backup configs based on suspended flag. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -202,7 +210,7 @@ References to the associated resources for backup configuration.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| deployment_id | [ string](#string) | UID of the deployment to which the backup configuration belong. |
+| data_service_deployment_id | [ string](#string) | UID of the data service deployment to which the backup configuration belong. |
 | backup_location_id | [ string](#string) | UID of the backup target to which the backup configuration belong. |
 | data_service_id | [ string](#string) | UID of the data service to which the backup configuration belong. |
  <!-- end Fields -->
@@ -215,10 +223,12 @@ Status for backup configuration.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| phase | [ Status.Phase](#statusphase) | Phase specifies the phase of backup CR in target cluster. |
+| phase | [ Phase](#phase) | Phase specifies the phase of backup CR in target cluster. |
 | custom_resource_name | [ string](#string) | Custom Resource Name is the kubernetes resource name for the backup that is built from ID. |
 | is_backup_policy_synchronized | [ bool](#bool) | Flag to check if the backup policy is synchronized or not. |
-| deployment_meta_data | [ DeploymentMetaData](#deploymentmetadata) | Deployment Meta Data. |
+| data_service_deployment_meta_data | [ DataServiceDeploymentMetaData](#dataservicedeploymentmetadata) | DataService Deployment Meta Data. |
+| error_code | [ string](#string) | Error code. |
+| error_message | [ string](#string) | Error message. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -232,7 +242,7 @@ Request to update a backup configuration.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | id | [ string](#string) | ID of the backup configuration. |
-| job_history_limit | [ int32](#int32) | Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1. |
+| suspend | [ BackupConfigSuspended](#backupconfigsuspended) | Suspend flag is used to suspend or resume a scheduled backup. |
 | labels | [map UpdateBackupConfigRequest.LabelsEntry](#updatebackupconfigrequestlabelsentry) | Labels to apply to the Backup Config object. |
 | annotations | [map UpdateBackupConfigRequest.AnnotationsEntry](#updatebackupconfigrequestannotationsentry) | Annotations for the Backup Config object. |
  <!-- end Fields -->
@@ -264,6 +274,18 @@ Request to update a backup configuration.
  <!-- end messages -->
 
 ## Enums
+
+
+### BackupConfigSuspended {#backupconfigsuspended}
+BackupConfigSuspended to accept value for suspended flag.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| BACKUP_CONFIG_SUSPENDED_UNSPECIFIED | 0 | List all backup configs. |
+| TRUE | 1 | List only suspended backup configs. |
+| FALSE | 2 | List only disabled backup configs. |
+
+
 
 
 ### Config.BackupLevel {#configbackuplevel}
@@ -302,7 +324,7 @@ Enum for Reclaim Policy for the backup configuration.
 
 
 
-### Status.Phase {#statusphase}
+### Phase {#phase}
 Enum for Phases of the backup configuration.
 
 | Name | Number | Description |
@@ -313,6 +335,7 @@ Enum for Phases of the backup configuration.
 | UPDATING | 3 | Updating state. |
 | FAILED | 4 | Failed state. |
 | SUSPENDED | 5 | Suspended state. |
+| DELETING | 6 | Deleting state. |
 
 
  <!-- end Enums -->

@@ -1,5 +1,5 @@
 // Please use the following editor setup for this file:
-// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+// Tab size=2; Tabs as spaces; Clean up trailing whitespace
 //
 // In vim add: au FileType proto setl sw=2 ts=2 expandtab list
 //
@@ -22,6 +22,7 @@ import "google/api/field_behavior.proto";
 import "google/protobuf/empty.proto";
 import "public/portworx/common/apiv1/meta.proto";
 import "public/portworx/common/apiv1/pagination.proto";
+import "public/portworx/common/apiv1/selector.proto";
 
 option go_package = "github.com/pure-px/apis/public/portworx/platform/tenant/apiv1;tenant";
 option java_multiple_files = true;
@@ -79,6 +80,10 @@ service TenantService {
 message ListTenantsRequest {
   // Pagination parameters for listing tenants.
   public.portworx.common.v1.PageBasedPaginationRequest pagination = 1;
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for resource_selector. --)
+  // Filtering list of tenants based on the provided resource details..
+  public.portworx.common.v1.ResourceSelector resource_selector = 2;
 }
 
 // ListTenantsResponse is the response message to the ListTenants API and contains
@@ -90,7 +95,6 @@ message ListTenantsResponse {
   // (-- api-linter: core::0132::response-unknown-fields=disabled
   //     aip.dev/not-precedent: We need this field for pagination. --)
   public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
-
 }
 
 // Request for getting  a tenant.

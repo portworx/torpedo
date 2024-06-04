@@ -13,14 +13,19 @@
 
 - Messages
     - [Application](#application)
+    - [ApplicationHealth](#applicationhealth)
     - [ApplicationPhase](#applicationphase)
     - [Config](#config)
     - [GetApplicationRequest](#getapplicationrequest)
     - [InstallApplicationRequest](#installapplicationrequest)
     - [ListApplicationsRequest](#listapplicationsrequest)
     - [ListApplicationsResponse](#listapplicationsresponse)
+    - [PDSProperties](#pdsproperties)
+    - [PDSProperties.Global](#pdspropertiesglobal)
     - [Status](#status)
+    - [Status.ConditionsEntry](#statusconditionsentry)
     - [UninstallApplicationRequest](#uninstallapplicationrequest)
+    - [UpdateApplicationRequest](#updateapplicationrequest)
   
 
 
@@ -51,6 +56,12 @@ GetApplication API returns the info about application with given id.
     [Application](#application)
 
 InstallApplication API installs specified application on the target cluster.
+### UpdateApplication {#methodpublicportworxplatformtargetclusterapplicationv1applicationserviceupdateapplication}
+
+> **rpc** UpdateApplication([UpdateApplicationRequest](#updateapplicationrequest))
+    [Application](#application)
+
+UpdateApplication API updates specified application on the target cluster.
 ### UninstallApplication {#methodpublicportworxplatformtargetclusterapplicationv1applicationserviceuninstallapplication}
 
 > **rpc** UninstallApplication([UninstallApplicationRequest](#uninstallapplicationrequest))
@@ -80,6 +91,12 @@ for e.g. PXE, BaaS, etc.
  <!-- end HasFields -->
 
 
+### ApplicationHealth {#applicationhealth}
+ApplicationHealth represents the health of an application in target cluster.
+
+ <!-- end HasFields -->
+
+
 ### ApplicationPhase {#applicationphase}
 ApplicationPhase represents the phase of an application in target cluster.
 
@@ -94,6 +111,7 @@ Desired configuration of the Application.
 | ----- | ---- | ----------- |
 | namespace | [ string](#string) | namespace in target cluster where application will be installed. |
 | version | [ string](#string) | desired application chart version. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) properties.pds | [ PDSProperties](#pdsproperties) | pds app properties. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -129,7 +147,8 @@ ListApplicationsRequest is the request to the ListApplications API.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | cluster_id | [ string](#string) | Unique identifier of the cluster whose details needs to be fetched. |
-| pagination | [ public.portworx.common.v1.PageBasedPaginationRequest](#publicportworxcommonv1pagebasedpaginationrequest) | Pagination parameters for listing target clusters. |
+| pagination | [ public.portworx.common.v1.PageBasedPaginationRequest](#publicportworxcommonv1pagebasedpaginationrequest) | Pagination parameters for listing applications. |
+| field_selector | [ public.portworx.common.v1.Selector](#publicportworxcommonv1selector) | Field selector is used to filter applications based on the fields in application proto message. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -146,6 +165,28 @@ ListApplicationsResponse is the response to the ListApplications API.
  <!-- end HasFields -->
 
 
+### PDSProperties {#pdsproperties}
+PDSProperties are the properties available for PDS.
+
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| global | [ PDSProperties.Global](#pdspropertiesglobal) | global properties for PDS. (-- api-linter: core::0140::reserved-words=disabled aip.dev/not-precedent: We need to do this to be similar to helm config values. --). |
+ <!-- end Fields -->
+ <!-- end HasFields -->
+
+
+### PDSProperties.Global {#pdspropertiesglobal}
+Global is the global property block for PDS.
+
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| data_service_tls_enabled | [ bool](#bool) | data_service_tls_enabled enables TLS for dataservices. This requires cert-manager to be pre-installed. |
+ <!-- end Fields -->
+ <!-- end HasFields -->
+
+
 ### Status {#status}
 Status of the Application.
 
@@ -154,6 +195,20 @@ Status of the Application.
 | ----- | ---- | ----------- |
 | version | [ string](#string) | current application chart version. |
 | phase | [ ApplicationPhase.Phase](#applicationphasephase) | current phase of the application. |
+| health | [ ApplicationHealth.Health](#applicationhealthhealth) | current health of the application. |
+| conditions | [map Status.ConditionsEntry](#statusconditionsentry) | conditions of the application. |
+ <!-- end Fields -->
+ <!-- end HasFields -->
+
+
+### Status.ConditionsEntry {#statusconditionsentry}
+
+
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| key | [ string](#string) | none |
+| value | [ string](#string) | none |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -168,9 +223,33 @@ UninstallApplicationRequest is the request to the UninstallApplication API.
 | id | [ string](#string) | unique identifier of the application. |
  <!-- end Fields -->
  <!-- end HasFields -->
+
+
+### UpdateApplicationRequest {#updateapplicationrequest}
+UpdateApplicationRequest is the request to the update application.
+
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| application | [ Application](#application) | application to be updated. |
+ <!-- end Fields -->
+ <!-- end HasFields -->
  <!-- end messages -->
 
 ## Enums
+
+
+### ApplicationHealth.Health {#applicationhealthhealth}
+Health determines health of an application.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| HEALTH_UNSPECIFIED | 0 | Must be set in the proto file; ignore. |
+| UNKNOWN | 1 | Application health is unknown. |
+| HEALTHY | 2 | Application is healthy. |
+| UNHEALTHY | 3 | Application is unhealthy. |
+
+
 
 
 ### ApplicationPhase.Phase {#applicationphasephase}

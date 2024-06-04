@@ -37,7 +37,7 @@ var _ = Describe("{RestartPdsAgentPodAndPerformBackupAndRestore}", func() {
 				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
-				WorkflowPDSRestore.SourceDeploymentConfigBeforeUpgrade = &deployment.Create.Config.DeploymentTopologies[0]
+				WorkflowPDSRestore.SourceDeploymentConfigBeforeUpgrade = &deployment.Create.Config.DataServiceDeploymentTopologies[0]
 			})
 
 			steplog = "Create Adhoc backup config of the existing deployment"

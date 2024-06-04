@@ -20,7 +20,7 @@ var _ MappedNullable = &V1Image{}
 // V1Image Resource representing the data service image.
 type V1Image struct {
 	Meta *V1Meta `json:"meta,omitempty"`
-	Info *V1Info2 `json:"info,omitempty"`
+	Info *V1Info1 `json:"info,omitempty"`
 }
 
 // NewV1Image instantiates a new V1Image object
@@ -73,9 +73,9 @@ func (o *V1Image) SetMeta(v V1Meta) {
 }
 
 // GetInfo returns the Info field value if set, zero value otherwise.
-func (o *V1Image) GetInfo() V1Info2 {
+func (o *V1Image) GetInfo() V1Info1 {
 	if o == nil || IsNil(o.Info) {
-		var ret V1Info2
+		var ret V1Info1
 		return ret
 	}
 	return *o.Info
@@ -83,7 +83,7 @@ func (o *V1Image) GetInfo() V1Info2 {
 
 // GetInfoOk returns a tuple with the Info field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *V1Image) GetInfoOk() (*V1Info2, bool) {
+func (o *V1Image) GetInfoOk() (*V1Info1, bool) {
 	if o == nil || IsNil(o.Info) {
 		return nil, false
 	}
@@ -99,8 +99,8 @@ func (o *V1Image) HasInfo() bool {
 	return false
 }
 
-// SetInfo gets a reference to the given V1Info2 and assigns it to the Info field.
-func (o *V1Image) SetInfo(v V1Info2) {
+// SetInfo gets a reference to the given V1Info1 and assigns it to the Info field.
+func (o *V1Image) SetInfo(v V1Info1) {
 	o.Info = &v
 }
 

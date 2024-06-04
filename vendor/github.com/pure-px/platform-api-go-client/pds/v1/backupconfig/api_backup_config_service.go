@@ -378,7 +378,7 @@ type ApiBackupConfigServiceListBackupConfigsRequest struct {
 	projectId *string
 	targetClusterId *string
 	namespaceId *string
-	deploymentId *string
+	dataServiceDeploymentId *string
 	paginationPageNumber *string
 	paginationPageSize *string
 	sortSortBy *string
@@ -410,9 +410,9 @@ func (r ApiBackupConfigServiceListBackupConfigsRequest) NamespaceId(namespaceId 
 	return r
 }
 
-// Deployment ID for which the backup configurations will be listed.
-func (r ApiBackupConfigServiceListBackupConfigsRequest) DeploymentId(deploymentId string) ApiBackupConfigServiceListBackupConfigsRequest {
-	r.deploymentId = &deploymentId
+// Data service Deployment ID for which the backup configurations will be listed.
+func (r ApiBackupConfigServiceListBackupConfigsRequest) DataServiceDeploymentId(dataServiceDeploymentId string) ApiBackupConfigServiceListBackupConfigsRequest {
+	r.dataServiceDeploymentId = &dataServiceDeploymentId
 	return r
 }
 
@@ -451,7 +451,7 @@ func (r ApiBackupConfigServiceListBackupConfigsRequest) Execute() (*V1ListBackup
 }
 
 /*
-BackupConfigServiceListBackupConfigs ListBackupConfigs API lists all the backup configuration for a deployment.
+BackupConfigServiceListBackupConfigs ListBackupConfigs API lists all the backup configuration for a data service deployment.
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  @return ApiBackupConfigServiceListBackupConfigsRequest
@@ -496,8 +496,8 @@ func (a *BackupConfigServiceAPIService) BackupConfigServiceListBackupConfigsExec
 	if r.namespaceId != nil {
 		parameterAddToHeaderOrQuery(localVarQueryParams, "namespaceId", r.namespaceId, "")
 	}
-	if r.deploymentId != nil {
-		parameterAddToHeaderOrQuery(localVarQueryParams, "deploymentId", r.deploymentId, "")
+	if r.dataServiceDeploymentId != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "dataServiceDeploymentId", r.dataServiceDeploymentId, "")
 	}
 	if r.paginationPageNumber != nil {
 		parameterAddToHeaderOrQuery(localVarQueryParams, "pagination.pageNumber", r.paginationPageNumber, "")

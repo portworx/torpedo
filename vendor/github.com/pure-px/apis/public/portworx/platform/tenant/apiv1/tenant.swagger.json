@@ -304,6 +304,36 @@
     },
     "components": {
         "schemas": {
+            "ResourceSelectorResourceFilter": {
+                "type": "object",
+                "properties": {
+                    "resourceType": {
+                        "$ref": "#/components/schemas/v1InfraResourceType"
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/SelectorOperator"
+                    },
+                    "values": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Value of key,value pair against which filtering needs to be performs."
+                    }
+                },
+                "description": "ResourceFilter is filter for a given resource type."
+            },
+            "SelectorOperator": {
+                "type": "string",
+                "enum": [
+                    "OPERATOR_UNSPECIFIED",
+                    "IN",
+                    "NOT_IN",
+                    "LIKE"
+                ],
+                "default": "OPERATOR_UNSPECIFIED",
+                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list.\n - LIKE: LIKE specified that the key should be of a specified pattern"
+            },
             "googlerpcStatus": {
                 "type": "object",
                 "properties": {
@@ -343,6 +373,23 @@
                     }
                 },
                 "description": "Status represents the current state of the tenant."
+            },
+            "v1InfraResourceType": {
+                "type": "string",
+                "enum": [
+                    "TYPE_UNSPECIFIED",
+                    "ACCOUNT",
+                    "TENANT",
+                    "PROJECT",
+                    "TARGET_CLUSTER",
+                    "NAMESPACE",
+                    "CREDENTIAL",
+                    "BACKUP_LOCATION",
+                    "BACKUP_POLICY",
+                    "TEMPLATE"
+                ],
+                "default": "TYPE_UNSPECIFIED",
+                "description": "Type of the resource.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACCOUNT: Currently supported infra resources.\nInfra resource of type account.\n - TENANT: Infra resource of type tenant.\n - PROJECT: Infra resource of type projects.\n - TARGET_CLUSTER: Infra resource target cluster.\n - NAMESPACE: Infra resource of type namespace.\n - CREDENTIAL: Infra resource of type credential.\n - BACKUP_LOCATION: Infra resource of type backup location.\n - BACKUP_POLICY: Infra resource of type backup policy.\n - TEMPLATE: Infra resource of type template."
             },
             "v1ListTenantsResponse": {
                 "type": "object",
@@ -500,6 +547,19 @@
                     }
                 },
                 "description": "Reference identifies the resource type, version of the uid and the resource."
+            },
+            "v1ResourceSelector": {
+                "type": "object",
+                "properties": {
+                    "infraResourceFilters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ResourceSelectorResourceFilter"
+                        },
+                        "description": "Infra_resource_filters is the list of all filters that should be applied to fetch data related to infra resource.\nEach filter will have AND relationship."
+                    }
+                },
+                "description": "ResourceSelector is used to query resources using the associated infra resources."
             },
             "v1Tenant": {
                 "type": "object",

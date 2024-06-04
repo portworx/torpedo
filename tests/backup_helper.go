@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"bytes"
 	context1 "context"
 	"fmt"
 	"io/ioutil"
@@ -15,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -145,7 +147,7 @@ const (
 	fullMaintenancePod                        = "full-maintenance-repo"
 	jobDeleteTimeout                          = 5 * time.Minute
 	jobDeleteRetryTime                        = 10 * time.Second
-	PodStatusTimeOut                          = 20 * time.Minute
+	PodStatusTimeOut                          = 30 * time.Minute
 	PodStatusRetryTime                        = 30 * time.Second
 	licenseCountUpdateTimeout                 = 15 * time.Minute
 	licenseCountUpdateRetryTime               = 1 * time.Minute
@@ -171,6 +173,8 @@ const (
 	storkControllerConfigMap                  = "stork-controller-config"
 	storkControllerConfigMapUpdateTimeout     = 15 * time.Minute
 	storkControllerConfigMapRetry             = 30 * time.Second
+	BackupLocationValidationTimeout           = 10 * time.Minute
+	BackupLocationValidationRetryTime         = 30 * time.Second
 )
 
 var (
@@ -204,6 +208,8 @@ var (
 	NfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
 	queryCountForValidation    = 10
 	IsBackupLongevityRun       = false
+	PvcListBeforeRun           []string
+	PvcListAfterRun            []string
 )
 
 type UserRoleAccess struct {
@@ -2074,10 +2080,10 @@ func CreateUsers(numberOfUsers int) []string {
 	log.InfoD("Creating %d users", numberOfUsers)
 	var wg sync.WaitGroup
 	for i := 1; i <= numberOfUsers; i++ {
-		userName := fmt.Sprintf("testuser%v-%v", i, time.Now().Unix())
-		firstName := fmt.Sprintf("FirstName%v", i)
-		lastName := fmt.Sprintf("LastName%v", i)
-		email := fmt.Sprintf("%v@cnbu.com", userName)
+		userName := fmt.Sprintf("tp-user%d-%s", i, RandomString(4))
+		firstName := fmt.Sprintf("FirstName%d", i)
+		lastName := fmt.Sprintf("LastName%d", i)
+		email := fmt.Sprintf("%s@cnbu.com", userName)
 		wg.Add(1)
 		go func(userName, firstName, lastName, email string) {
 			defer GinkgoRecover()
@@ -2168,7 +2174,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 					log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterObj.GetName())
 				}
 			}
-			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), BackupOrgID, ctx, false)
+			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), BackupOrgID, ctx, true)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterObj.GetName()))
 			if clusterCredName != "" {
 				err = DeleteCloudCredential(clusterCredName, BackupOrgID, clusterCredUID)
@@ -3929,8 +3935,74 @@ func PxBackupUpgrade(versionToUpgrade string) error {
 
 	// Execute helm upgrade using cmd
 	log.Infof("Upgrading Px-Backup version from %s to %s", currentBackupVersionString, versionToUpgrade)
-	cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
-		versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
+	customRegistry := os.Getenv("CUSTOM_REGISTRY")
+	customRepo := os.Getenv("CUSTOM_REPO")
+	if customRegistry == "" || customRepo == "" {
+		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
+			versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
+	} else {
+		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
+			versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
+
+		// Additional settings to be appended using template
+		tmpl := `,{{range .Images}}images.{{.Name}}.repo="{{$.CustomRepo}}",images.{{.Name}}.registry="{{$.CustomRegistry}}",{{end}}`
+
+		// Define the template
+		t, err := template.New("cmd").Parse(tmpl)
+		if err != nil {
+			return err
+		}
+
+		// Data for the template
+		data := struct {
+			CustomRegistry string
+			CustomRepo     string
+			Images         []struct{ Name string }
+		}{
+			CustomRegistry: customRegistry,
+			CustomRepo:     customRepo,
+			Images: []struct{ Name string }{
+				{Name: "pxcentralApiServerImage"},
+				{Name: "pxcentralFrontendImage"},
+				{Name: "pxcentralBackendImage"},
+				{Name: "pxcentralMiddlewareImage"},
+				{Name: "postInstallSetupImage"},
+				{Name: "keycloakBackendImage"},
+				{Name: "keycloakFrontendImage"},
+				{Name: "keycloakLoginThemeImage"},
+				{Name: "keycloakInitContainerImage"},
+				{Name: "mysqlImage"},
+				{Name: "pxBackupImage"},
+				{Name: "mongodbImage"},
+				{Name: "licenseServerImage"},
+				{Name: "cortexImage"},
+				{Name: "cassandraImage"},
+				{Name: "proxyConfigImage"},
+				{Name: "consulImage"},
+				{Name: "dnsmasqImage"},
+				{Name: "grafanaImage"},
+				{Name: "prometheusImage"},
+				{Name: "prometheusConfigReloadrImage"},
+				{Name: "prometheusOperatorImage"},
+				{Name: "memcachedMetricsImage"},
+				{Name: "memcachedIndexImage"},
+				{Name: "memcachedImage"},
+				{Name: "pxBackupPrometheusImage"},
+				{Name: "pxBackupAlertmanagerImage"},
+				{Name: "pxBackupPrometheusOperatorImage"},
+				{Name: "pxBackupPrometheusConfigReloaderImage"},
+			},
+		}
+
+		// Execute the template and append the result to the existing command
+		var buf bytes.Buffer
+		if err := t.Execute(&buf, data); err != nil {
+			return err
+		}
+
+		// Append the dynamically generated settings to the initial command
+		cmd += buf.String()
+	}
 	log.Infof("helm command: %v ", cmd)
 
 	pxBackupUpgradeStartTime := time.Now()
@@ -8630,5 +8702,53 @@ func GetUpdatedKubeVirtVMSpecForBackup(scheduledAppContextsToBackup []*scheduler
 			return err
 		}
 	}
+	return nil
+}
+
+// GetPVCListForNamespace retrieves the list of PVCs in the specified namespace.
+func GetPVCListForNamespace(namespace string) ([]string, error) {
+	k8sCore := core.Instance()
+	pvcList, err := k8sCore.GetPersistentVolumeClaims(namespace, make(map[string]string))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", namespace, err)
+	}
+	// Extract PVC names from the list
+	var pvcNameList []string
+	for _, pvc := range pvcList.Items {
+		pvcNameList = append(pvcNameList, pvc.Name)
+	}
+	return pvcNameList, nil
+}
+
+// ValidatePVCCleanup checks if there is a mismatch between the original PVC list and the current one.
+func ValidatePVCCleanup(pvcBefore, pvcAfter []string) error {
+	pvcBeforeSet := make(map[string]bool)
+	pvcAfterSet := make(map[string]bool)
+
+	// Populate sets for PVC names before and after the run
+	for _, pvc := range pvcBefore {
+		pvcBeforeSet[pvc] = true
+	}
+
+	for _, pvc := range pvcAfter {
+		pvcAfterSet[pvc] = true
+	}
+
+	// Check for missing PVCs after the run
+	for pvc := range pvcBeforeSet {
+		if !pvcAfterSet[pvc] {
+			fmt.Printf("PVC '%s' is present before the run but not after the run\n", pvc)
+			return fmt.Errorf("mismatch in PVC list before and after the run")
+		}
+	}
+
+	// Check for extra PVCs after the run
+	for pvc := range pvcAfterSet {
+		if !pvcBeforeSet[pvc] {
+			fmt.Printf("PVC '%s' is present after the run but not before the run\n", pvc)
+			return fmt.Errorf("mismatch in PVC list before and after the run")
+		}
+	}
+
 	return nil
 }

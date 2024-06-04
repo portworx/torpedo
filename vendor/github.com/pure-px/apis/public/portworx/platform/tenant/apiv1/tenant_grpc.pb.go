@@ -1,5 +1,5 @@
 // Please use the following editor setup for this file:
-// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+// Tab size=2; Tabs as spaces; Clean up trailing whitespace
 //
 // In vim add: au FileType proto setl sw=2 ts=2 expandtab list
 //

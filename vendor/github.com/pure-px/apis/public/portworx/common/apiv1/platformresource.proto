@@ -59,7 +59,7 @@ message ApplicationResource {
     TYPE_UNSPECIFIED = 0;
     // List of supported PDS application resources.
     // PDS application resource of type deployment.
-    PDS_DEPLOYMENT = 1;
+    PDS_DATA_SERVICE_DEPLOYMENT = 1;
     // PDS application resource of type backup.
     PDS_BACKUPCONFIG = 2;
     // PDS application resource of type restore.

@@ -41,6 +41,7 @@ const (
 	TemplateDefinitionService_ListTemplateTypes_FullMethodName   = "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/ListTemplateTypes"
 	TemplateDefinitionService_GetTemplateType_FullMethodName     = "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/GetTemplateType"
 	TemplateDefinitionService_ListTemplateSamples_FullMethodName = "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/ListTemplateSamples"
+	TemplateDefinitionService_GetTemplateSample_FullMethodName   = "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/GetTemplateSample"
 )
 
 // TemplateDefinitionServiceClient is the client API for TemplateDefinitionService service.
@@ -49,6 +50,13 @@ const (
 type TemplateDefinitionServiceClient interface {
 	// GetRevision gets the revision details, containing the actual schema.
 	GetRevision(ctx context.Context, in *apiv1.GetRevisionRequest, opts ...grpc.CallOption) (*apiv1.Revision, error)
+	// (-- api-linter: core::0132::http-body=disabled
+	//
+	//	api-linter: core::0132::http-method=disabled
+	//	aip.dev/not-precedent: We need to do this because
+	//
+	// we can't have advance filters as query params.
+	// --)
 	// ListRevisions list the revisions.
 	ListRevisions(ctx context.Context, in *apiv1.ListRevisionsRequest, opts ...grpc.CallOption) (*apiv1.ListRevisionsResponse, error)
 	// ListTemplateKindRequest: Used to list unique template kind(names).
@@ -59,6 +67,8 @@ type TemplateDefinitionServiceClient interface {
 	GetTemplateType(ctx context.Context, in *GetTemplateTypeRequest, opts ...grpc.CallOption) (*TemplateType, error)
 	// ListTemplateSamples: Used to list template sample schema.
 	ListTemplateSamples(ctx context.Context, in *ListTemplateSamplesRequest, opts ...grpc.CallOption) (*ListTemplateSamplesResponse, error)
+	// GetTemplateSample API returns the template sample for a given template id.
+	GetTemplateSample(ctx context.Context, in *GetTemplateSampleRequest, opts ...grpc.CallOption) (*TemplateSample, error)
 }
 
 type templateDefinitionServiceClient struct {
@@ -123,12 +133,28 @@ func (c *templateDefinitionServiceClient) ListTemplateSamples(ctx context.Contex
 	return out, nil
 }
 
+func (c *templateDefinitionServiceClient) GetTemplateSample(ctx context.Context, in *GetTemplateSampleRequest, opts ...grpc.CallOption) (*TemplateSample, error) {
+	out := new(TemplateSample)
+	err := c.cc.Invoke(ctx, TemplateDefinitionService_GetTemplateSample_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TemplateDefinitionServiceServer is the server API for TemplateDefinitionService service.
 // All implementations must embed UnimplementedTemplateDefinitionServiceServer
 // for forward compatibility
 type TemplateDefinitionServiceServer interface {
 	// GetRevision gets the revision details, containing the actual schema.
 	GetRevision(context.Context, *apiv1.GetRevisionRequest) (*apiv1.Revision, error)
+	// (-- api-linter: core::0132::http-body=disabled
+	//
+	//	api-linter: core::0132::http-method=disabled
+	//	aip.dev/not-precedent: We need to do this because
+	//
+	// we can't have advance filters as query params.
+	// --)
 	// ListRevisions list the revisions.
 	ListRevisions(context.Context, *apiv1.ListRevisionsRequest) (*apiv1.ListRevisionsResponse, error)
 	// ListTemplateKindRequest: Used to list unique template kind(names).
@@ -139,6 +165,8 @@ type TemplateDefinitionServiceServer interface {
 	GetTemplateType(context.Context, *GetTemplateTypeRequest) (*TemplateType, error)
 	// ListTemplateSamples: Used to list template sample schema.
 	ListTemplateSamples(context.Context, *ListTemplateSamplesRequest) (*ListTemplateSamplesResponse, error)
+	// GetTemplateSample API returns the template sample for a given template id.
+	GetTemplateSample(context.Context, *GetTemplateSampleRequest) (*TemplateSample, error)
 	mustEmbedUnimplementedTemplateDefinitionServiceServer()
 }
 
@@ -163,6 +191,9 @@ func (UnimplementedTemplateDefinitionServiceServer) GetTemplateType(context.Cont
 }
 func (UnimplementedTemplateDefinitionServiceServer) ListTemplateSamples(context.Context, *ListTemplateSamplesRequest) (*ListTemplateSamplesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListTemplateSamples not implemented")
+}
+func (UnimplementedTemplateDefinitionServiceServer) GetTemplateSample(context.Context, *GetTemplateSampleRequest) (*TemplateSample, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTemplateSample not implemented")
 }
 func (UnimplementedTemplateDefinitionServiceServer) mustEmbedUnimplementedTemplateDefinitionServiceServer() {
 }
@@ -286,6 +317,24 @@ func _TemplateDefinitionService_ListTemplateSamples_Handler(srv interface{}, ctx
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TemplateDefinitionService_GetTemplateSample_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTemplateSampleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TemplateDefinitionServiceServer).GetTemplateSample(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TemplateDefinitionService_GetTemplateSample_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TemplateDefinitionServiceServer).GetTemplateSample(ctx, req.(*GetTemplateSampleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TemplateDefinitionService_ServiceDesc is the grpc.ServiceDesc for TemplateDefinitionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -316,6 +365,10 @@ var TemplateDefinitionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListTemplateSamples",
 			Handler:    _TemplateDefinitionService_ListTemplateSamples_Handler,
+		},
+		{
+			MethodName: "GetTemplateSample",
+			Handler:    _TemplateDefinitionService_GetTemplateSample_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

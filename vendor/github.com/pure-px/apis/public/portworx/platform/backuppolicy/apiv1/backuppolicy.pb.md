@@ -173,6 +173,7 @@ Request to list the backup policies for a tenant.
 | field_selector | [ public.portworx.common.v1.Selector](#publicportworxcommonv1selector) | Field selector is used to filter backup policies based on the fields in the backup policy's proto message. |
 | infra_resource_selector | [ public.portworx.common.v1.ResourceSelector](#publicportworxcommonv1resourceselector) | Infra_resource_selector is used to filter backup policies based on the infra resources associated with the backup policy. Supported infra resource filters: PROJECT. |
 | sort | [ public.portworx.common.v1.Sort](#publicportworxcommonv1sort) | Sorting details using which requested list of backup policies to be sorted. |
+| resp_data | [ public.portworx.common.v1.RespData](#publicportworxcommonv1respdata) | Response data flags for listing backup policies. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -237,13 +238,30 @@ Weekly Policy.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| day | [ string](#string) | Day of the week when the policy should be triggered. For example, sunday or sun. |
+| day | [ WeeklyPolicy.Weekday](#weeklypolicyweekday) | day of Weekday |
 | time | [ string](#string) | Time, when the policy should be triggered. Expected format is time. Eg 12:04PM or 12:04pm. (-- api-linter: core::0142::time-field-type=disabled aip.dev/not-precedent: We need to do this to take input in string format. --) |
  <!-- end Fields -->
  <!-- end HasFields -->
  <!-- end messages -->
 
 ## Enums
+
+
+### WeeklyPolicy.Weekday {#weeklypolicyweekday}
+Day of the week when the policy should be triggered.
+For example, sunday or sun.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| SUNDAY | 0 | (-- api-linter: core::0126::unspecified=disabled aip.dev/not-precedent: We need to do this because reasons. --) Sunday |
+| MONDAY | 1 | Monday |
+| TUESDAY | 2 | Tuesday |
+| WEDNESDAY | 3 | Wednesday |
+| THURSDAY | 4 | Thursday |
+| FRIDAY | 5 | Friday |
+| SATURDAY | 6 | Saturday |
+
+
  <!-- end Enums -->
  <!-- end Files -->
 

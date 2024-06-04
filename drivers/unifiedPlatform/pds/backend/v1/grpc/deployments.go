@@ -7,15 +7,15 @@ import (
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
-	publicdeploymentapis "github.com/pure-px/apis/public/portworx/pds/deployment/apiv1"
-	deploymenttopology "github.com/pure-px/apis/public/portworx/pds/deploymenttopology/apiv1"
+	publicdeploymentapis "github.com/pure-px/apis/public/portworx/pds/dataservicedeployment/apiv1"
+	deploymenttopology "github.com/pure-px/apis/public/portworx/pds/dataservicedeploymenttopology/apiv1"
 	"google.golang.org/grpc"
 )
 
 // getDeploymentClient updates the header with bearer token and returns the new client
-func (deployment *PdsGrpc) getDeploymentClient() (context.Context, publicdeploymentapis.DeploymentServiceClient, string, error) {
+func (deployment *PdsGrpc) getDeploymentClient() (context.Context, publicdeploymentapis.DataServiceDeploymentServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
-	var depClient publicdeploymentapis.DeploymentServiceClient
+	var depClient publicdeploymentapis.DataServiceDeploymentServiceClient
 
 	ctx, token, err := GetBearerToken()
 	if err != nil {
@@ -26,7 +26,7 @@ func (deployment *PdsGrpc) getDeploymentClient() (context.Context, publicdeploym
 		Token: token,
 	}
 
-	depClient = publicdeploymentapis.NewDeploymentServiceClient(deployment.ApiClientV2)
+	depClient = publicdeploymentapis.NewDataServiceDeploymentServiceClient(deployment.ApiClientV2)
 
 	return ctx, depClient, token, nil
 }
@@ -40,11 +40,11 @@ func (deployment *PdsGrpc) GetDeployment(deploymentId string) (*PDSDeploymentRes
 		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
 	}
 
-	getRequest := &publicdeploymentapis.GetDeploymentRequest{
+	getRequest := &publicdeploymentapis.GetDataServiceDeploymentRequest{
 		Id: deploymentId,
 	}
 	ctx = WithAccountIDMetaCtx(ctx, deployment.AccountId)
-	apiResponse, err := client.GetDeployment(ctx, getRequest)
+	apiResponse, err := client.GetDataServiceDeployment(ctx, getRequest)
 	log.Infof("api response [+%v]", apiResponse)
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting the deployment: %v\n", err)
@@ -63,12 +63,12 @@ func (deployment *PdsGrpc) DeleteDeployment(deploymentId string) error {
 		return fmt.Errorf("Error while getting grpc client: %v\n", err)
 	}
 
-	deleteRequest := &publicdeploymentapis.DeleteDeploymentRequest{
+	deleteRequest := &publicdeploymentapis.DeleteDataServiceDeploymentRequest{
 		Id: deploymentId,
 	}
 
 	ctx = WithAccountIDMetaCtx(ctx, deployment.AccountId)
-	apiResponse, err := client.DeleteDeployment(ctx, deleteRequest)
+	apiResponse, err := client.DeleteDataServiceDeployment(ctx, deleteRequest)
 	log.Infof("api response [+%v]", apiResponse)
 	if err != nil {
 		return fmt.Errorf("Error while deleting the deployment: %v\n", err)
@@ -89,14 +89,13 @@ func (deployment *PdsGrpc) ListDeployment(projectId string) (*PDSDeploymentRespo
 		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
 	}
 
-	listRequest := &publicdeploymentapis.ListDeploymentsRequest{
-		ListBy:     nil,
+	listRequest := &publicdeploymentapis.ListDataServiceDeploymentsRequest{
 		Pagination: NewPaginationRequest(1, 50),
 		Sort:       nil,
 	}
 
 	ctx = WithAccountIDMetaCtx(ctx, deployment.AccountId)
-	apiResponse, err := client.ListDeployments(ctx, listRequest, grpc.PerRPCCredentials(credentials))
+	apiResponse, err := client.ListDataServiceDeployments(ctx, listRequest, grpc.PerRPCCredentials(credentials))
 	log.Infof("api response [+%v]", apiResponse)
 	if err != nil {
 		return nil, fmt.Errorf("Error while creating the deployment: %v\n", err)
@@ -115,19 +114,19 @@ func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *PDSDeployme
 	}
 	dep := createDeploymentRequest.Create.V1Deployment
 
-	createRequest := &publicdeploymentapis.CreateDeploymentRequest{
+	createRequest := &publicdeploymentapis.CreateDataServiceDeploymentRequest{
 		NamespaceId: createDeploymentRequest.Create.NamespaceID,
-		Deployment: &publicdeploymentapis.Deployment{
+		DataServiceDeployment: &publicdeploymentapis.DataServiceDeployment{
 			Meta: nil,
 			Config: &publicdeploymentapis.Config{
 				References: nil,
-				DeploymentTopologies: []*deploymenttopology.DeploymentTopology{
+				DataServiceDeploymentTopologies: []*deploymenttopology.DataServiceDeploymentTopology{
 					{
 						Name:        *dep.Meta.Name,
 						Description: "",
-						Replicas:    3,
+						Instances:   3,
 						ResourceSettings: &deploymenttopology.Template{
-							Id:              *dep.Config.DeploymentTopologies[0].ResourceSettings.Id,
+							Id:              *dep.Config.DataServiceDeploymentTopologies[0].ResourceSettings.Id,
 							ResourceVersion: "",
 							Values:          nil,
 						},
@@ -144,11 +143,11 @@ func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *PDSDeployme
 
 	log.Debugf("Account ID: [%s]", deployment.AccountId)
 	log.Debugf("Namespace ID: [%s]", createDeploymentRequest.Create.NamespaceID)
-	log.Debugf("workflowrequest ResourceTemplateId: [%s]", *createDeploymentRequest.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings.Id)
+	log.Debugf("workflowrequest ResourceTemplateId: [%s]", *createDeploymentRequest.Create.V1Deployment.Config.DataServiceDeploymentTopologies[0].ResourceSettings.Id)
 
 	ctx = WithAccountIDMetaCtx(ctx, deployment.AccountId)
 
-	apiResponse, err := client.CreateDeployment(ctx, createRequest, grpc.PerRPCCredentials(credentials))
+	apiResponse, err := client.CreateDataServiceDeployment(ctx, createRequest, grpc.PerRPCCredentials(credentials))
 	log.Infof("api response [+%v]", apiResponse)
 	if err != nil {
 		return nil, fmt.Errorf("Error while creating the deployment: %v\n", err)

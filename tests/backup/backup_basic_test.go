@@ -80,13 +80,23 @@ func BackupInitInstance() {
 	var commitID string
 	log.Infof("Inside BackupInitInstance")
 	err = Inst().S.Init(scheduler.InitOptions{
-		SpecDir:            Inst().SpecDir,
-		VolDriverName:      Inst().V.String(),
-		StorageProvisioner: Inst().Provisioner,
-		NodeDriverName:     Inst().N.String(),
-		CustomAppConfig:    Inst().CustomAppConfig,
+		SpecDir:             Inst().SpecDir,
+		VolDriverName:       Inst().V.String(),
+		StorageProvisioner:  Inst().Provisioner,
+		NodeDriverName:      Inst().N.String(),
+		CustomAppConfig:     Inst().CustomAppConfig,
+		SecretConfigMapName: Inst().ConfigMap,
+		SecureApps:          Inst().SecureAppList,
 	})
 	log.FailOnError(err, "Error occurred while Scheduler Driver Initialization")
+	if Inst().ConfigMap != "" {
+		log.Infof("Using Config Map: %s ", Inst().ConfigMap)
+		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+		log.FailOnError(err, "Error occured while getting token from config map")
+		log.Infof("Token used for initializing: %s ", token)
+	} else {
+		token = ""
+	}
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
 	})
@@ -235,6 +245,11 @@ var _ = BeforeSuite(func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for Global Post-rule of application"))
 		}
 	}
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	log.FailOnError(err, "failed to get Px-Backup namespace")
+	PvcListBeforeRun, err = GetPVCListForNamespace(pxBackupNamespace)
+	log.FailOnError(err, "failed to list PVCs before run")
+	log.Infof("PVC list before the run is [%s]", PvcListBeforeRun)
 })
 
 var _ = AfterSuite(func() {
@@ -417,6 +432,20 @@ var _ = AfterSuite(func() {
 				log.Infof("Group %s was not deleted", group.Name)
 			}
 		}
+
+		// Fetch PVC list for Px-Backup namespace
+		pxBackupNamespace, err := backup.GetPxBackupNamespace()
+		log.FailOnError(err, "failed to get Px-Backup namespace")
+		PvcListAfterRun, err = GetPVCListForNamespace(pxBackupNamespace)
+		log.FailOnError(err, "failed to list PVCs after run")
+		log.Infof("PVC list after the run is [%s]", PvcListAfterRun)
+
+		//TO DO: Uncomment the below part after fixing ValidatePVCCleanup
+		// Verify PVC Cleanup on PX-Backup namespace
+		//if err := ValidatePVCCleanup(PvcListBeforeRun, PvcListAfterRun); err != nil {
+		//	log.FailOnError(err, "PVC cleanup validation failed")
+		//}
+		//fmt.Println("PVC cleanup validation passed.")
 	}
 })
 

@@ -147,7 +147,7 @@ func request_TemplateService_UpdateTemplate_0(ctx context.Context, marshaler run
 	var protoReq UpdateTemplateRequest
 	var metadata runtime.ServerMetadata
 
-	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.Template); err != nil && err != io.EOF {
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && err != io.EOF {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -158,14 +158,14 @@ func request_TemplateService_UpdateTemplate_0(ctx context.Context, marshaler run
 		_   = err
 	)
 
-	val, ok = pathParams["id"]
+	val, ok = pathParams["template.meta.uid"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "template.meta.uid")
 	}
 
-	protoReq.Id, err = runtime.String(val)
+	err = runtime.PopulateFieldFromPath(&protoReq, "template.meta.uid", val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "template.meta.uid", err)
 	}
 
 	msg, err := client.UpdateTemplate(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -177,7 +177,7 @@ func local_request_TemplateService_UpdateTemplate_0(ctx context.Context, marshal
 	var protoReq UpdateTemplateRequest
 	var metadata runtime.ServerMetadata
 
-	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.Template); err != nil && err != io.EOF {
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && err != io.EOF {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -188,14 +188,14 @@ func local_request_TemplateService_UpdateTemplate_0(ctx context.Context, marshal
 		_   = err
 	)
 
-	val, ok = pathParams["id"]
+	val, ok = pathParams["template.meta.uid"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "template.meta.uid")
 	}
 
-	protoReq.Id, err = runtime.String(val)
+	err = runtime.PopulateFieldFromPath(&protoReq, "template.meta.uid", val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "template.meta.uid", err)
 	}
 
 	msg, err := server.UpdateTemplate(ctx, &protoReq)
@@ -381,7 +381,7 @@ func RegisterTemplateServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/UpdateTemplate", runtime.WithHTTPPathPattern("/core/v1/templates/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/UpdateTemplate", runtime.WithHTTPPathPattern("/core/v1/templates/{template.meta.uid}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -564,7 +564,7 @@ func RegisterTemplateServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/UpdateTemplate", runtime.WithHTTPPathPattern("/core/v1/templates/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/UpdateTemplate", runtime.WithHTTPPathPattern("/core/v1/templates/{template.meta.uid}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -654,7 +654,7 @@ var (
 
 	pattern_TemplateService_CreateTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"core", "v1", "tenants", "tenant_id", "templates"}, ""))
 
-	pattern_TemplateService_UpdateTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "templates", "id"}, ""))
+	pattern_TemplateService_UpdateTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "templates", "template.meta.uid"}, ""))
 
 	pattern_TemplateService_ListTemplates_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"core", "v1", "templates"}, ""))
 

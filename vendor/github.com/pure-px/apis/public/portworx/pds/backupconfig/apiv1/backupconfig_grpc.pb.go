@@ -48,7 +48,7 @@ const (
 type BackupConfigServiceClient interface {
 	// GetBackupConfig API returns the the backup configuration resource.
 	GetBackupConfig(ctx context.Context, in *GetBackupConfigRequest, opts ...grpc.CallOption) (*BackupConfig, error)
-	// ListBackupConfigs API lists all the backup configuration for a deployment.
+	// ListBackupConfigs API lists all the backup configuration for a data service deployment.
 	ListBackupConfigs(ctx context.Context, in *ListBackupConfigsRequest, opts ...grpc.CallOption) (*ListBackupConfigsResponse, error)
 	// CreateBackupConfig API creates the backup configuration of the backup.
 	CreateBackupConfig(ctx context.Context, in *CreateBackupConfigRequest, opts ...grpc.CallOption) (*BackupConfig, error)
@@ -117,7 +117,7 @@ func (c *backupConfigServiceClient) DeleteBackupConfig(ctx context.Context, in *
 type BackupConfigServiceServer interface {
 	// GetBackupConfig API returns the the backup configuration resource.
 	GetBackupConfig(context.Context, *GetBackupConfigRequest) (*BackupConfig, error)
-	// ListBackupConfigs API lists all the backup configuration for a deployment.
+	// ListBackupConfigs API lists all the backup configuration for a data service deployment.
 	ListBackupConfigs(context.Context, *ListBackupConfigsRequest) (*ListBackupConfigsResponse, error)
 	// CreateBackupConfig API creates the backup configuration of the backup.
 	CreateBackupConfig(context.Context, *CreateBackupConfigRequest) (*BackupConfig, error)

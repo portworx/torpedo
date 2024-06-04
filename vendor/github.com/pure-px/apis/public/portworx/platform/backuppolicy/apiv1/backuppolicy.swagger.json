@@ -97,6 +97,22 @@
                             ],
                             "default": "VALUE_UNSPECIFIED"
                         }
+                    },
+                    {
+                        "name": "respData",
+                        "description": "Response data flags for listing backup policies.\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "RESP_DATA_UNSPECIFIED",
+                                "INDEX",
+                                "LITE",
+                                "FULL"
+                            ],
+                            "default": "RESP_DATA_UNSPECIFIED"
+                        }
                     }
                 ],
                 "tags": [
@@ -434,10 +450,11 @@
                 "enum": [
                     "OPERATOR_UNSPECIFIED",
                     "IN",
-                    "NOT_IN"
+                    "NOT_IN",
+                    "LIKE"
                 ],
                 "default": "OPERATOR_UNSPECIFIED",
-                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list."
+                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list.\n - LIKE: LIKE specified that the key should be of a specified pattern"
             },
             "SortByField": {
                 "type": "string",
@@ -450,6 +467,20 @@
                 ],
                 "default": "FIELD_UNSPECIFIED",
                 "description": "Field names for sorting the list of resources.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource."
+            },
+            "WeeklyPolicyWeekday": {
+                "type": "string",
+                "enum": [
+                    "SUNDAY",
+                    "MONDAY",
+                    "TUESDAY",
+                    "WEDNESDAY",
+                    "THURSDAY",
+                    "FRIDAY",
+                    "SATURDAY"
+                ],
+                "default": "SUNDAY",
+                "description": "Day of the week when the policy should be triggered.\nFor example, sunday or sun.\n\n - SUNDAY: \nSunday\n - MONDAY: Monday\n - TUESDAY: Tuesday\n - WEDNESDAY: Wednesday\n - THURSDAY: Thursday\n - FRIDAY: Friday\n - SATURDAY: Saturday"
             },
             "protobufAny": {
                 "type": "object",
@@ -562,6 +593,9 @@
                     },
                     "sort": {
                         "$ref": "#/components/schemas/v1Sort"
+                    },
+                    "respData": {
+                        "$ref": "#/components/schemas/v1RespData"
                     }
                 },
                 "description": "Request to list the backup policies for a tenant."
@@ -739,6 +773,17 @@
                 },
                 "description": "ResourceSelector is used to query resources using the associated infra resources."
             },
+            "v1RespData": {
+                "type": "string",
+                "enum": [
+                    "RESP_DATA_UNSPECIFIED",
+                    "INDEX",
+                    "LITE",
+                    "FULL"
+                ],
+                "default": "RESP_DATA_UNSPECIFIED",
+                "description": "RespData provides flags which provides info about the fields that should be populated in the response.\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated."
+            },
             "v1Schedule": {
                 "type": "object",
                 "properties": {
@@ -810,8 +855,7 @@
                 "type": "object",
                 "properties": {
                     "day": {
-                        "type": "string",
-                        "description": "Day of the week when the policy should be triggered.\nFor example, sunday or sun."
+                        "$ref": "#/components/schemas/WeeklyPolicyWeekday"
                     },
                     "time": {
                         "type": "string",

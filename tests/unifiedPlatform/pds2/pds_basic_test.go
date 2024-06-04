@@ -42,7 +42,7 @@ var _ = BeforeSuite(func() {
 
 		log.InfoD("Get Account ID")
 		//TODO: Get the accountID
-		AccID = "acc:a84dcc32-d04d-488f-8627-3cb38e214e43"
+		AccID = "acc:ca0b0c67-35f9-4d41-83f6-73fd6faab110"
 
 		err = platformUtils.InitUnifiedApiComponents(os.Getenv(EnvControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
@@ -58,20 +58,6 @@ var _ = BeforeSuite(func() {
 		//Initialising UnifiedApiComponents in ds utils
 		err = dsUtils.InitUnifiedApiComponents(infraParams.ControlPlaneURL, AccID)
 		log.FailOnError(err, "error while initialising api components in ds utils")
-	})
-
-	steplog = "Dumping kubeconfigs file"
-	Step(steplog, func() {
-		log.InfoD(steplog)
-		kubeconfigs := os.Getenv("KUBECONFIGS")
-		if kubeconfigs != "" {
-			kubeconfigList := strings.Split(kubeconfigs, ",")
-			if len(kubeconfigList) < 2 {
-				log.FailOnError(fmt.Errorf("At least minimum two kubeconfigs required but has"),
-					"Failed to get k8s config path.At least minimum two kubeconfigs required")
-			}
-			DumpKubeconfigs(kubeconfigList)
-		}
 	})
 
 	steplog = "Get Default Tenant"
@@ -110,27 +96,6 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "Unable to Install pds on target cluster")
 	})
 
-	steplog = "Register Destination target Cluster"
-	Step(steplog, func() {
-		log.InfoD(steplog)
-		defer func() {
-			err := SetSourceKubeConfig()
-			log.FailOnError(err, "failed to switch context to source cluster")
-		}()
-
-		err := SetDestinationKubeConfig()
-		log.FailOnError(err, "Failed to switched to destination cluster")
-
-		WorkflowTargetClusterDestination.Project = &WorkflowProject
-		WorkflowTargetClusterDestination.KubeConfig = utilities.GetAndExpectStringEnvVar("DEST_KUBECONFIG")
-		log.Infof("Tenant ID [%s]", WorkflowTargetClusterDestination.Project.Platform.TenantId)
-		WorkflowTargetClusterDestination, err := WorkflowTargetClusterDestination.RegisterToControlPlane()
-		log.FailOnError(err, "Unable to register target cluster")
-		log.Infof("Destination Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
-		err = WorkflowTargetClusterDestination.InstallPDSAppOnTC(WorkflowTargetCluster.ClusterUID)
-		log.FailOnError(err, "Unable to Install pds on destination target cluster")
-	})
-
 	steplog = "Create Service Configuration, Resource and Storage Templates"
 	Step(steplog, func() {
 		log.InfoD(steplog)
@@ -165,6 +130,41 @@ var _ = BeforeSuite(func() {
 	})
 
 	if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
+		steplog = "Dumping kubeconfigs file"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			kubeconfigs := os.Getenv("KUBECONFIGS")
+			if kubeconfigs != "" {
+				kubeconfigList := strings.Split(kubeconfigs, ",")
+				if len(kubeconfigList) < 2 {
+					log.FailOnError(fmt.Errorf("At least minimum two kubeconfigs required but has"),
+						"Failed to get k8s config path.At least minimum two kubeconfigs required")
+				}
+				DumpKubeconfigs(kubeconfigList)
+			}
+		})
+
+		steplog = "Register Destination target Cluster"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			defer func() {
+				err := SetSourceKubeConfig()
+				log.FailOnError(err, "failed to switch context to source cluster")
+			}()
+
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Failed to switched to destination cluster")
+
+			WorkflowTargetClusterDestination.Project = &WorkflowProject
+			WorkflowTargetClusterDestination.KubeConfig = utilities.GetAndExpectStringEnvVar("DEST_KUBECONFIG")
+			log.Infof("Tenant ID [%s]", WorkflowTargetClusterDestination.Project.Platform.TenantId)
+			WorkflowTargetClusterDestination, err := WorkflowTargetClusterDestination.RegisterToControlPlane()
+			log.FailOnError(err, "Unable to register target cluster")
+			log.Infof("Destination Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
+			err = WorkflowTargetClusterDestination.InstallPDSAppOnTC(WorkflowTargetCluster.ClusterUID)
+			log.FailOnError(err, "Unable to Install pds on destination target cluster")
+		})
+
 		steplog = "Create Buckets"
 		Step(steplog, func() {
 			log.InfoD(steplog)
@@ -220,7 +220,6 @@ var _ = BeforeSuite(func() {
 			log.FailOnError(err, "Unable to associate Cluster to Project")
 			log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
 		})
-
 	}
 
 })

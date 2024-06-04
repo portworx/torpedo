@@ -501,13 +501,13 @@ func ParseInterfaceAndGetDetails(connectionDetails interface{}, dataServiceName 
 		return "", fmt.Errorf("Error: connectionDetails is not of type map[string]interface{}")
 	}
 
-	nodesInterface, ok := connDetailsMap["nodes"]
+	nodesInterface, ok := connDetailsMap["instances"]
 	if !ok {
-		return "", fmt.Errorf("Error: nodes not found in connectionDetails")
+		return "", fmt.Errorf("Error: instances not found in connectionDetails")
 	}
 	nodes, ok := nodesInterface.([]interface{})
 	if !ok {
-		return "", fmt.Errorf("Error: nodes is not of type []interface{}")
+		return "", fmt.Errorf("Error: instances is not of type []interface{}")
 	}
 
 	log.Debugf("Available nodes")

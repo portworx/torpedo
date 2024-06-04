@@ -17,11 +17,23 @@ import (
 // checks if the V1Info1 type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &V1Info1{}
 
-// V1Info1 Information related to the data service version.
+// V1Info1 Information related to the data service image.
 type V1Info1 struct {
-	// Enabled indicates if the version is enabled.
-	Enabled *bool `json:"enabled,omitempty"`
-	RevisionId *string `json:"revisionId,omitempty"`
+	References *V1References `json:"references,omitempty"`
+	// Image registry where the image is stored.
+	Registry *string `json:"registry,omitempty"`
+	// Image registry namespace where the image is stored.
+	Namespace *string `json:"namespace,omitempty"`
+	// Tag associated with the image.
+	Tag *string `json:"tag,omitempty"`
+	// Build version of the image.
+	Build *string `json:"build,omitempty"`
+	// Flag indicating if TLS is supported for a data service using this image.
+	TlsSupport *bool `json:"tlsSupport,omitempty"`
+	// Capabilities associated with this image.
+	Capabilities *map[string]string `json:"capabilities,omitempty"`
+	// Additional images associated with this data service image.
+	AdditionalImages *map[string]string `json:"additionalImages,omitempty"`
 }
 
 // NewV1Info1 instantiates a new V1Info1 object
@@ -41,68 +53,260 @@ func NewV1Info1WithDefaults() *V1Info1 {
 	return &this
 }
 
-// GetEnabled returns the Enabled field value if set, zero value otherwise.
-func (o *V1Info1) GetEnabled() bool {
-	if o == nil || IsNil(o.Enabled) {
-		var ret bool
+// GetReferences returns the References field value if set, zero value otherwise.
+func (o *V1Info1) GetReferences() V1References {
+	if o == nil || IsNil(o.References) {
+		var ret V1References
 		return ret
 	}
-	return *o.Enabled
+	return *o.References
 }
 
-// GetEnabledOk returns a tuple with the Enabled field value if set, nil otherwise
+// GetReferencesOk returns a tuple with the References field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *V1Info1) GetEnabledOk() (*bool, bool) {
-	if o == nil || IsNil(o.Enabled) {
+func (o *V1Info1) GetReferencesOk() (*V1References, bool) {
+	if o == nil || IsNil(o.References) {
 		return nil, false
 	}
-	return o.Enabled, true
+	return o.References, true
 }
 
-// HasEnabled returns a boolean if a field has been set.
-func (o *V1Info1) HasEnabled() bool {
-	if o != nil && !IsNil(o.Enabled) {
+// HasReferences returns a boolean if a field has been set.
+func (o *V1Info1) HasReferences() bool {
+	if o != nil && !IsNil(o.References) {
 		return true
 	}
 
 	return false
 }
 
-// SetEnabled gets a reference to the given bool and assigns it to the Enabled field.
-func (o *V1Info1) SetEnabled(v bool) {
-	o.Enabled = &v
+// SetReferences gets a reference to the given V1References and assigns it to the References field.
+func (o *V1Info1) SetReferences(v V1References) {
+	o.References = &v
 }
 
-// GetRevisionId returns the RevisionId field value if set, zero value otherwise.
-func (o *V1Info1) GetRevisionId() string {
-	if o == nil || IsNil(o.RevisionId) {
+// GetRegistry returns the Registry field value if set, zero value otherwise.
+func (o *V1Info1) GetRegistry() string {
+	if o == nil || IsNil(o.Registry) {
 		var ret string
 		return ret
 	}
-	return *o.RevisionId
+	return *o.Registry
 }
 
-// GetRevisionIdOk returns a tuple with the RevisionId field value if set, nil otherwise
+// GetRegistryOk returns a tuple with the Registry field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *V1Info1) GetRevisionIdOk() (*string, bool) {
-	if o == nil || IsNil(o.RevisionId) {
+func (o *V1Info1) GetRegistryOk() (*string, bool) {
+	if o == nil || IsNil(o.Registry) {
 		return nil, false
 	}
-	return o.RevisionId, true
+	return o.Registry, true
 }
 
-// HasRevisionId returns a boolean if a field has been set.
-func (o *V1Info1) HasRevisionId() bool {
-	if o != nil && !IsNil(o.RevisionId) {
+// HasRegistry returns a boolean if a field has been set.
+func (o *V1Info1) HasRegistry() bool {
+	if o != nil && !IsNil(o.Registry) {
 		return true
 	}
 
 	return false
 }
 
-// SetRevisionId gets a reference to the given string and assigns it to the RevisionId field.
-func (o *V1Info1) SetRevisionId(v string) {
-	o.RevisionId = &v
+// SetRegistry gets a reference to the given string and assigns it to the Registry field.
+func (o *V1Info1) SetRegistry(v string) {
+	o.Registry = &v
+}
+
+// GetNamespace returns the Namespace field value if set, zero value otherwise.
+func (o *V1Info1) GetNamespace() string {
+	if o == nil || IsNil(o.Namespace) {
+		var ret string
+		return ret
+	}
+	return *o.Namespace
+}
+
+// GetNamespaceOk returns a tuple with the Namespace field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *V1Info1) GetNamespaceOk() (*string, bool) {
+	if o == nil || IsNil(o.Namespace) {
+		return nil, false
+	}
+	return o.Namespace, true
+}
+
+// HasNamespace returns a boolean if a field has been set.
+func (o *V1Info1) HasNamespace() bool {
+	if o != nil && !IsNil(o.Namespace) {
+		return true
+	}
+
+	return false
+}
+
+// SetNamespace gets a reference to the given string and assigns it to the Namespace field.
+func (o *V1Info1) SetNamespace(v string) {
+	o.Namespace = &v
+}
+
+// GetTag returns the Tag field value if set, zero value otherwise.
+func (o *V1Info1) GetTag() string {
+	if o == nil || IsNil(o.Tag) {
+		var ret string
+		return ret
+	}
+	return *o.Tag
+}
+
+// GetTagOk returns a tuple with the Tag field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *V1Info1) GetTagOk() (*string, bool) {
+	if o == nil || IsNil(o.Tag) {
+		return nil, false
+	}
+	return o.Tag, true
+}
+
+// HasTag returns a boolean if a field has been set.
+func (o *V1Info1) HasTag() bool {
+	if o != nil && !IsNil(o.Tag) {
+		return true
+	}
+
+	return false
+}
+
+// SetTag gets a reference to the given string and assigns it to the Tag field.
+func (o *V1Info1) SetTag(v string) {
+	o.Tag = &v
+}
+
+// GetBuild returns the Build field value if set, zero value otherwise.
+func (o *V1Info1) GetBuild() string {
+	if o == nil || IsNil(o.Build) {
+		var ret string
+		return ret
+	}
+	return *o.Build
+}
+
+// GetBuildOk returns a tuple with the Build field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *V1Info1) GetBuildOk() (*string, bool) {
+	if o == nil || IsNil(o.Build) {
+		return nil, false
+	}
+	return o.Build, true
+}
+
+// HasBuild returns a boolean if a field has been set.
+func (o *V1Info1) HasBuild() bool {
+	if o != nil && !IsNil(o.Build) {
+		return true
+	}
+
+	return false
+}
+
+// SetBuild gets a reference to the given string and assigns it to the Build field.
+func (o *V1Info1) SetBuild(v string) {
+	o.Build = &v
+}
+
+// GetTlsSupport returns the TlsSupport field value if set, zero value otherwise.
+func (o *V1Info1) GetTlsSupport() bool {
+	if o == nil || IsNil(o.TlsSupport) {
+		var ret bool
+		return ret
+	}
+	return *o.TlsSupport
+}
+
+// GetTlsSupportOk returns a tuple with the TlsSupport field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *V1Info1) GetTlsSupportOk() (*bool, bool) {
+	if o == nil || IsNil(o.TlsSupport) {
+		return nil, false
+	}
+	return o.TlsSupport, true
+}
+
+// HasTlsSupport returns a boolean if a field has been set.
+func (o *V1Info1) HasTlsSupport() bool {
+	if o != nil && !IsNil(o.TlsSupport) {
+		return true
+	}
+
+	return false
+}
+
+// SetTlsSupport gets a reference to the given bool and assigns it to the TlsSupport field.
+func (o *V1Info1) SetTlsSupport(v bool) {
+	o.TlsSupport = &v
+}
+
+// GetCapabilities returns the Capabilities field value if set, zero value otherwise.
+func (o *V1Info1) GetCapabilities() map[string]string {
+	if o == nil || IsNil(o.Capabilities) {
+		var ret map[string]string
+		return ret
+	}
+	return *o.Capabilities
+}
+
+// GetCapabilitiesOk returns a tuple with the Capabilities field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *V1Info1) GetCapabilitiesOk() (*map[string]string, bool) {
+	if o == nil || IsNil(o.Capabilities) {
+		return nil, false
+	}
+	return o.Capabilities, true
+}
+
+// HasCapabilities returns a boolean if a field has been set.
+func (o *V1Info1) HasCapabilities() bool {
+	if o != nil && !IsNil(o.Capabilities) {
+		return true
+	}
+
+	return false
+}
+
+// SetCapabilities gets a reference to the given map[string]string and assigns it to the Capabilities field.
+func (o *V1Info1) SetCapabilities(v map[string]string) {
+	o.Capabilities = &v
+}
+
+// GetAdditionalImages returns the AdditionalImages field value if set, zero value otherwise.
+func (o *V1Info1) GetAdditionalImages() map[string]string {
+	if o == nil || IsNil(o.AdditionalImages) {
+		var ret map[string]string
+		return ret
+	}
+	return *o.AdditionalImages
+}
+
+// GetAdditionalImagesOk returns a tuple with the AdditionalImages field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *V1Info1) GetAdditionalImagesOk() (*map[string]string, bool) {
+	if o == nil || IsNil(o.AdditionalImages) {
+		return nil, false
+	}
+	return o.AdditionalImages, true
+}
+
+// HasAdditionalImages returns a boolean if a field has been set.
+func (o *V1Info1) HasAdditionalImages() bool {
+	if o != nil && !IsNil(o.AdditionalImages) {
+		return true
+	}
+
+	return false
+}
+
+// SetAdditionalImages gets a reference to the given map[string]string and assigns it to the AdditionalImages field.
+func (o *V1Info1) SetAdditionalImages(v map[string]string) {
+	o.AdditionalImages = &v
 }
 
 func (o V1Info1) MarshalJSON() ([]byte, error) {
@@ -115,11 +319,29 @@ func (o V1Info1) MarshalJSON() ([]byte, error) {
 
 func (o V1Info1) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.Enabled) {
-		toSerialize["enabled"] = o.Enabled
+	if !IsNil(o.References) {
+		toSerialize["references"] = o.References
 	}
-	if !IsNil(o.RevisionId) {
-		toSerialize["revisionId"] = o.RevisionId
+	if !IsNil(o.Registry) {
+		toSerialize["registry"] = o.Registry
+	}
+	if !IsNil(o.Namespace) {
+		toSerialize["namespace"] = o.Namespace
+	}
+	if !IsNil(o.Tag) {
+		toSerialize["tag"] = o.Tag
+	}
+	if !IsNil(o.Build) {
+		toSerialize["build"] = o.Build
+	}
+	if !IsNil(o.TlsSupport) {
+		toSerialize["tlsSupport"] = o.TlsSupport
+	}
+	if !IsNil(o.Capabilities) {
+		toSerialize["capabilities"] = o.Capabilities
+	}
+	if !IsNil(o.AdditionalImages) {
+		toSerialize["additionalImages"] = o.AdditionalImages
 	}
 	return toSerialize, nil
 }

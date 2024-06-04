@@ -648,9 +648,9 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 	log.Debugf("Starting to resize the storage and UpdateDeploymentResourceConfig")
 
 	//Get required Id's
-	stConfigId := *deployment.Config.DeploymentTopologies[0].StorageOptions.Id
-	appConfigId := *deployment.Config.DeploymentTopologies[0].ServiceConfigurations.Id
-	oldResConfigId := *deployment.Config.DeploymentTopologies[0].ResourceSettings.Id
+	stConfigId := *deployment.Config.DataServiceDeploymentTopologies[0].StorageOptions.Id
+	appConfigId := *deployment.Config.DataServiceDeploymentTopologies[0].ServiceConfigurations.Id
+	oldResConfigId := *deployment.Config.DataServiceDeploymentTopologies[0].ResourceSettings.Id
 	projectId := *deployment.Config.References.ProjectId
 	imageId := *deployment.Config.References.ImageId
 	deploymentId := *deployment.Meta.Uid
@@ -709,7 +709,7 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 		return false, err
 	}
 
-	newResourceTemp, err := dslibs.GetResourceTemplateConfigs(*UpdatedDeployment.Get.Config.DeploymentTopologies[0].ResourceSettings.Id)
+	newResourceTemp, err := dslibs.GetResourceTemplateConfigs(*UpdatedDeployment.Get.Config.DataServiceDeploymentTopologies[0].ResourceSettings.Id)
 	if err != nil {
 		if ResiliencyFlag {
 			ResiliencyCondition <- false

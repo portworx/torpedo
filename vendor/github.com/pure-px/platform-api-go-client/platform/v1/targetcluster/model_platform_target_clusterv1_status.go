@@ -24,9 +24,9 @@ type PlatformTargetClusterv1Status struct {
 	Phase *V1TargetClusterPhasePhase `json:"phase,omitempty"`
 	// Timestamp of cluster's last status update to control plane.
 	LastStatusUpdateTime *time.Time `json:"lastStatusUpdateTime,omitempty"`
-	PlatformAgent *V1ApplicationPhasePhase `json:"platformAgent,omitempty"`
+	PlatformAgent *V1TargetClusterApplicationStatus `json:"platformAgent,omitempty"`
 	// Status of applications running in the target cluster eg: BAAS, PDS, MPXE.
-	Applications *map[string]V1ApplicationPhasePhase `json:"applications,omitempty"`
+	Applications *map[string]V1TargetClusterApplicationStatus `json:"applications,omitempty"`
 }
 
 // NewPlatformTargetClusterv1Status instantiates a new PlatformTargetClusterv1Status object
@@ -37,8 +37,6 @@ func NewPlatformTargetClusterv1Status() *PlatformTargetClusterv1Status {
 	this := PlatformTargetClusterv1Status{}
 	var phase V1TargetClusterPhasePhase = V1TARGETCLUSTERPHASEPHASE_PHASE_UNSPECIFIED
 	this.Phase = &phase
-	var platformAgent V1ApplicationPhasePhase = V1APPLICATIONPHASEPHASE_PHASE_UNSPECIFIED
-	this.PlatformAgent = &platformAgent
 	return &this
 }
 
@@ -49,8 +47,6 @@ func NewPlatformTargetClusterv1StatusWithDefaults() *PlatformTargetClusterv1Stat
 	this := PlatformTargetClusterv1Status{}
 	var phase V1TargetClusterPhasePhase = V1TARGETCLUSTERPHASEPHASE_PHASE_UNSPECIFIED
 	this.Phase = &phase
-	var platformAgent V1ApplicationPhasePhase = V1APPLICATIONPHASEPHASE_PHASE_UNSPECIFIED
-	this.PlatformAgent = &platformAgent
 	return &this
 }
 
@@ -151,9 +147,9 @@ func (o *PlatformTargetClusterv1Status) SetLastStatusUpdateTime(v time.Time) {
 }
 
 // GetPlatformAgent returns the PlatformAgent field value if set, zero value otherwise.
-func (o *PlatformTargetClusterv1Status) GetPlatformAgent() V1ApplicationPhasePhase {
+func (o *PlatformTargetClusterv1Status) GetPlatformAgent() V1TargetClusterApplicationStatus {
 	if o == nil || IsNil(o.PlatformAgent) {
-		var ret V1ApplicationPhasePhase
+		var ret V1TargetClusterApplicationStatus
 		return ret
 	}
 	return *o.PlatformAgent
@@ -161,7 +157,7 @@ func (o *PlatformTargetClusterv1Status) GetPlatformAgent() V1ApplicationPhasePha
 
 // GetPlatformAgentOk returns a tuple with the PlatformAgent field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *PlatformTargetClusterv1Status) GetPlatformAgentOk() (*V1ApplicationPhasePhase, bool) {
+func (o *PlatformTargetClusterv1Status) GetPlatformAgentOk() (*V1TargetClusterApplicationStatus, bool) {
 	if o == nil || IsNil(o.PlatformAgent) {
 		return nil, false
 	}
@@ -177,15 +173,15 @@ func (o *PlatformTargetClusterv1Status) HasPlatformAgent() bool {
 	return false
 }
 
-// SetPlatformAgent gets a reference to the given V1ApplicationPhasePhase and assigns it to the PlatformAgent field.
-func (o *PlatformTargetClusterv1Status) SetPlatformAgent(v V1ApplicationPhasePhase) {
+// SetPlatformAgent gets a reference to the given V1TargetClusterApplicationStatus and assigns it to the PlatformAgent field.
+func (o *PlatformTargetClusterv1Status) SetPlatformAgent(v V1TargetClusterApplicationStatus) {
 	o.PlatformAgent = &v
 }
 
 // GetApplications returns the Applications field value if set, zero value otherwise.
-func (o *PlatformTargetClusterv1Status) GetApplications() map[string]V1ApplicationPhasePhase {
+func (o *PlatformTargetClusterv1Status) GetApplications() map[string]V1TargetClusterApplicationStatus {
 	if o == nil || IsNil(o.Applications) {
-		var ret map[string]V1ApplicationPhasePhase
+		var ret map[string]V1TargetClusterApplicationStatus
 		return ret
 	}
 	return *o.Applications
@@ -193,7 +189,7 @@ func (o *PlatformTargetClusterv1Status) GetApplications() map[string]V1Applicati
 
 // GetApplicationsOk returns a tuple with the Applications field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *PlatformTargetClusterv1Status) GetApplicationsOk() (*map[string]V1ApplicationPhasePhase, bool) {
+func (o *PlatformTargetClusterv1Status) GetApplicationsOk() (*map[string]V1TargetClusterApplicationStatus, bool) {
 	if o == nil || IsNil(o.Applications) {
 		return nil, false
 	}
@@ -209,8 +205,8 @@ func (o *PlatformTargetClusterv1Status) HasApplications() bool {
 	return false
 }
 
-// SetApplications gets a reference to the given map[string]V1ApplicationPhasePhase and assigns it to the Applications field.
-func (o *PlatformTargetClusterv1Status) SetApplications(v map[string]V1ApplicationPhasePhase) {
+// SetApplications gets a reference to the given map[string]V1TargetClusterApplicationStatus and assigns it to the Applications field.
+func (o *PlatformTargetClusterv1Status) SetApplications(v map[string]V1TargetClusterApplicationStatus) {
 	o.Applications = &v
 }
 

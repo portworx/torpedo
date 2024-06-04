@@ -1,0 +1,285 @@
+
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+
+syntax = "proto3";
+
+package public.portworx.pds.dataservicedeployment.v1;
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+import "public/portworx/common/apiv1/meta.proto";
+import "public/portworx/common/apiv1/selector.proto";
+import "public/portworx/pds/dataservicedeploymenttopology/apiv1/dataservicedeploymenttopology.proto";
+import "public/portworx/common/apiv1/pagination.proto";
+import "public/portworx/common/apiv1/sort.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/pds/dataservicedeployment/apiv1;dataservicedeployment";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.pds.dataservicedeployment.v1";
+option java_outer_classname = "DataServiceDeploymentProto";
+
+// DataServiceDeploymentService serves DataService Deployment resource APIs.
+service DataServiceDeploymentService {
+  // CreateDataServiceDeployment API creates the Deployment resource.
+  rpc CreateDataServiceDeployment(CreateDataServiceDeploymentRequest)
+    returns (DataServiceDeployment) {
+    option(google.api.http) = {
+      post: "/pds/v1/namespace/{namespace_id}/dataServiceDeployment"
+      body: "*"
+    };
+  }
+
+  // GetDataServiceDeployment API returns the DataService Deployment resource.
+  rpc GetDataServiceDeployment(GetDataServiceDeploymentRequest)
+    returns (DataServiceDeployment) {
+    option(google.api.http) = {
+      get: "/pds/v1/dataServiceDeployments/{id}"
+    };
+  }
+
+  // DeleteDataServiceDeployment API deletes the DataService Deployment resource.
+  rpc DeleteDataServiceDeployment(DeleteDataServiceDeploymentRequest)
+    returns (google.protobuf.Empty) {
+    option(google.api.http) = {
+      delete: "/pds/v1/dataServiceDeployments/{id}"
+    };
+  }
+
+  // (-- api-linter: core::0132::http-body=disabled
+  //     api-linter: core::0132::http-method=disabled
+  //     aip.dev/not-precedent: We need to do this because we can't have advance filters as query params. --)
+  // ListDataServiceDeployments API lists the DataService Deployment resources.
+  rpc ListDataServiceDeployments(ListDataServiceDeploymentsRequest)
+    returns (ListDataServiceDeploymentsResponse) {
+    option(google.api.http) = {
+      post: "/pds/v1/dataServiceDeployments:search"
+      body: "*"
+    };
+  }
+
+  // GetDataServiceDeploymentCredentials API returns the Credentials to be used to access the DataService Deployment.
+  rpc GetDataServiceDeploymentCredentials(GetDataServiceDeploymentCredentialsRequest)
+    returns (DataServiceDeploymentCredentials) {
+    option(google.api.http) = {
+      get: "/pds/v1/dataServiceDeployments/{id}:credentials"
+    };
+  }
+}
+
+// Resource representing a DataService Deployment.
+message DataServiceDeployment {
+  // Metadata of the resource.
+  public.portworx.common.v1.Meta meta = 1;
+
+  // Desired configuration of the DataService Deployment.
+  Config config = 2;
+
+  // Current status of the DataService Deployment.
+  Status status = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+// Credentials to access a DataService Deployment.
+message DataServiceDeploymentCredentials {
+  // secret to access the resource.
+  string secret = 1;
+}
+
+// Desired configuration of the DataService Deployment.
+message Config {
+  // References to other objects.
+  References references = 1;
+
+  // TLS configuration for the Data Service.
+  TLSConfig tls_config = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // A DataService deployment topology contains a number of nodes that have various attributes as a collective group.
+  repeated public.portworx.pds.dataservicedeploymenttopology.v1.DataServiceDeploymentTopology  data_service_deployment_topologies = 3;
+}
+
+// TLS configuration for the Data Service.
+message TLSConfig {
+  // Flag to enable TLS for the Data Service.
+  bool enabled = 1;
+  // Issuer (Certificate Authority) name for the TLS certificates.
+  string issuer_name = 2;
+}
+
+// References to other resources.
+message References {
+  // UID of the target cluster in which Data Service will be deployed.
+  string target_cluster_id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // UID of the image to be used for the Data Service Deployment.
+  string image_id = 2;
+
+  // UID of the project to which DataService Deployment associated.
+  string project_id = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // UID of the restore id for the data service Deployment.
+  string restore_id = 4 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // UID of the data service
+  string data_service_id = 5 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+// Status of the DataService Deployment.
+message Status {
+  // Enum for Health of the DataService Deployment.
+  enum Health {
+    // Health is unspecified.
+    HEALTH_UNSPECIFIED = 0;
+
+    // DataService Deployment is Available.
+    AVAILABLE = 1;
+
+    // DataService Deployment is PartiallyAvailable.
+    PARTIALLY_AVAILABLE = 2;
+
+    // DataService Deployment is Unavailable.
+    UNAVAILABLE = 3;
+
+    // DataService Deployment is deleted from cluster.
+    NOT_APPLICABLE = 4;
+  }
+
+  // Health of the DataService Deployment.
+  Health health = 1;
+
+  // Enum for Status of the DataService Deployment.
+  enum Phase {
+    // Phase is unspecified.
+    PHASE_UNSPECIFIED = 0;
+
+    // Restore of DataService Deployment is in progress.
+    RESTORING = 1;
+
+    // DataService Deployment is Failed.
+    FAILED = 2;
+
+    // DataService Deployment is being deleted.
+    DELETING = 3;
+
+    // DataService Deployment is Preparing.
+    PREPARING = 4;
+
+    // DataService Deployment is Deploying.
+    DEPLOYING = 5;
+
+    // DataService Deployment is Deployed.
+    DEPLOYED = 6;
+
+    // DataService Deployment is Updating.
+    UPDATING = 7;
+
+    // DataService Deployment is Timeout.
+    TIMED_OUT = 8;
+
+    // DataService Deployment is deleted from cluster.
+    DELETED_FROM_CLUSTER = 9;
+  }
+
+  // Status of the DataService Deployment.
+  Phase phase = 2;
+
+  // ConnectionDetails urls, ports, credentials, etc for connecting to the data service.
+  google.protobuf.Struct connection_info = 3;
+
+  // Initialize used to control startup scripts.
+  string  initialized = 4;
+
+  // Status of the deployment topology.
+  repeated public.portworx.pds.dataservicedeploymenttopology.v1.DataServiceDeploymentTopologyStatus data_service_deployment_topology_status = 5;
+
+  // Custom Resource Name is the kubernetes resource name for the deployment that is built from ID.
+  string custom_resource_name = 6;
+
+  // dns zone of the deployment.
+  string dns_zone = 7;
+}
+
+// Request to get the DataService Deployment resource.
+message GetDataServiceDeploymentRequest {
+  // UID of the DataService Deployment.
+  string id = 1;
+}
+
+// Request to get the DataService Deployment Credentials resource.
+message GetDataServiceDeploymentCredentialsRequest {
+  // UID of the DataService Deployment.
+  string id = 1;
+}
+
+// Request to delete the DataService Deployment resource.
+message DeleteDataServiceDeploymentRequest {
+  // UID of the DataService Deployment.
+  string id = 1;
+
+  // Force flag to delete backup configuration from control plane only.
+  bool force = 9 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// Request to create the DataService Deployment resource.
+message CreateDataServiceDeploymentRequest {
+  // UID of the namespace resource where this DataService deployment will be created.
+  // (-- api-linter: core::0133::request-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for to support creation of
+  //     the resource in the namespace context. --)
+  string namespace_id = 1;
+
+  // UID of the project.
+  // (-- api-linter: core::0133::request-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for to know the project with which the deployment is associated with. --)
+  string project_id = 2;
+
+  // DataService Deployment resource.
+  DataServiceDeployment data_service_deployment = 3;
+}
+
+// Request to list the data service deployment resources.
+message ListDataServiceDeploymentsRequest {
+  // tenant ID for which data service deployments need to be fetched.
+  string tenant_id = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // Provides the key in labels and associated values for which data service deployments need to be listed.
+  public.portworx.common.v1.Selector label_selector = 2;
+
+  // Field selector is used to filter data service deployments based on the fields in the deployments's proto message.
+  public.portworx.common.v1.Selector field_selector = 3;
+
+  // Infra_resource_selector is used to filter deployments based on the infra resources associated with the data service deployments.
+  // Supported infra resource filters: PROJECT, CLUSTER, NAMESPACE.
+  public.portworx.common.v1.ResourceSelector infra_resource_selector = 4;
+
+  // Sorting details using which requested list of data service deployments to be sorted.
+  public.portworx.common.v1.Sort sort = 5 [(google.api.field_behavior) = OPTIONAL];
+
+  // Pagination parameters for listing data service deployments.
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 6 [(google.api.field_behavior) = OPTIONAL];
+}
+
+
+// Response to list DataService Deployment request.
+message ListDataServiceDeploymentsResponse {
+  // List of DataService deployment resources.
+  repeated DataServiceDeployment data_service_deployments = 1;
+
+  // Pagination metadata for this response.
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
