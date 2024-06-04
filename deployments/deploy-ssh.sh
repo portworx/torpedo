@@ -798,6 +798,8 @@ spec:
       value: "${GKE_UPGRADE_STRATEGY}"
     - name: GKE_SURGE_VALUE
       value: "${GKE_SURGE_VALUE}"
+    - name: GOOGLE_APPLICATION_CREDENTIALS
+      value: "${GOOGLE_APPLICATION_CREDENTIALS}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
