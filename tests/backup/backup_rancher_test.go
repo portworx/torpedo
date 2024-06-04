@@ -1,8 +1,10 @@
 package tests
 
 import (
+	"context"
 	"fmt"
-	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
+	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1177,63 +1179,98 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", La
 	})
 })
 
-// This is a dummy PSA testcase to validate the PSA related methods for RKE
-var _ = Describe("{DummyPSATestcase}", Label(TestCaseLabelsMap[DummyPSATestcase]...), func() {
+// This testcase takes backup & restore with cluster wide PSA
+var _ = Describe("{BackupAndRestoreWithClusterWidePSAInRke}", Label(TestCaseLabelsMap[BackupAndRestoreWithClusterWidePSAInRke]...), func() {
+	var (
+		err                  error
+		cloudCredName        string
+		cloudCredUID         string
+		bkpLocationName      string
+		backupLocationUID    string
+		clusterList          []string
+		appNamespaces        []string
+		ctx                  context.Context
+		scheduledAppContexts []*scheduler.Context
+		srcClusterStatus     api.ClusterInfo_StatusInfo_Status
+		destClusterStatus    api.ClusterInfo_StatusInfo_Status
+	)
+	numberOfBackups, _ := strconv.Atoi(GetEnv(MaxBackupsToBeCreated, "3"))
+	customRestrictedPSA := "custom-restricted"
+	customRestrictedPSADescription := "Custom Restricted PSA"
+	backupLocationMap := make(map[string]string)
 	JustBeforeEach(func() {
-		log.InfoD("No pre-configuration needed")
+		log.InfoD("Getting the list of all the RKE clusters added to rancher")
+		clusterList, err = Inst().S.(*rke.Rancher).GetRKEClusterList()
+		log.FailOnError(err, "Getting RKE cluster list")
+		log.InfoD("The RKE cluster list is %v", clusterList)
+		err = RemoveElementByValue(&clusterList, RancherActiveCluster)
+		log.FailOnError(err, "Removing the management Rancher cluster: local from the cluster list")
+
+		pxBackupNS, err := backup.GetPxBackupNamespace()
+		log.FailOnError(err, "Getting backup namespace")
+		portworxNamespace, err := Inst().S.GetPortworxNamespace()
+		log.FailOnError(err, "Getting portworx namespace")
+		nsExemptList := []string{"default", pxBackupNS, portworxNamespace}
+		Inst().S.(*rke.Rancher).CreateCustomRestrictedPSA(customRestrictedPSA, nsExemptList, customRestrictedPSADescription)
+
+		Inst().S.(*rke.Rancher).UpdateClusterWidePSA(clusterList[0], customRestrictedPSA)
+		log.FailOnError(err, "Adding custom PSA with restricted mode")
+
+		log.InfoD("Deploying application with restricted policy")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < numberOfBackups; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = AppReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+		log.Infof("The list of namespaces are %v", appNamespaces)
+
 	})
 
 	It("Dummy PSA testcase to validate the PSA related methods for RKE", func() {
-		Step("Dummy PSA testcase to validate the PSA related methods for RKE", func() {
-			var clusterList []string
-			var err1 error
-			var defaultExemptListForRestrictedPSA []string
-			log.InfoD("Getting the list of all the RKE clusters added to rancher")
-			clusterList, err1 = Inst().S.(*rke.Rancher).GetRKEClusterList()
-			log.FailOnError(err1, "Getting RKE cluster list")
-			log.InfoD("The RKE cluster list is %v", clusterList)
-			err := RemoveElementByValue(&clusterList, RancherActiveCluster)
 
-			log.InfoD("Getting the cluster wide PSA setting at the beginning of the testcase")
-			currentPSA, err := Inst().S.(*rke.Rancher).GetCurrentClusterWidePSA(clusterList[0])
-			log.FailOnError(err, "Fetching cluster wide PSA setting for cluster %v", clusterList[0])
-			log.InfoD("Cluster wide PSA for cluster %v is %v", clusterList[0], currentPSA)
-
-			log.InfoD("Getting the list of default PSA templates present in the Rancher")
-			psaList, err := Inst().S.(*rke.Rancher).GetPodSecurityAdmissionConfigurationTemplateList()
-			log.FailOnError(err, "Getting default PSA list")
-			log.InfoD("Default PSA Template list is %v", psaList)
-			for _, psa := range psaList.Data {
-				if psa.Name == "rancher-restricted" {
-					defaultExemptListForRestrictedPSA = psa.Configuration.Exemptions.Namespaces
-					break
-				}
-			}
-			log.InfoD("Exempted list of namespaces for default PSA rancher-restricted is %v", defaultExemptListForRestrictedPSA)
-
-			log.InfoD("Creating a custom PSA template with restricted mode")
-			psaTemplateDefaults := &rancherClient.PodSecurityAdmissionConfigurationTemplateDefaults{
-				Enforce: "restricted",
-			}
-			pxBackupNS, err := backup.GetPxBackupNamespace()
-			log.FailOnError(err, "Getting backup namespace")
-			portworxNamespace, err := Inst().S.GetPortworxNamespace()
-			log.FailOnError(err, "Getting portworx namespace")
-			nsExemptList := []string{"default", pxBackupNS, portworxNamespace}
-			newList := AppendList(nsExemptList, defaultExemptListForRestrictedPSA)
-			psaTemplateExemptions := &rancherClient.PodSecurityAdmissionConfigurationTemplateExemptions{
-				Namespaces: newList,
-			}
-			err = Inst().S.(*rke.Rancher).CreateCustomPodSecurityAdmissionConfigurationTemplate("custom-restricted-psa3", "Added custom PSA with restricted mode", psaTemplateDefaults, psaTemplateExemptions)
-			log.FailOnError(err, "Creating new PSA template with restricted mode")
-			Inst().S.(*rke.Rancher).UpdateClusterWidePSA(clusterList[0], "custom-restricted-psa3")
-			log.FailOnError(err, "Adding custom PSA with restricted mode")
-
-			log.InfoD("Verifying if custom PSA is applied to the cluster")
-			currentPSA, err = Inst().S.(*rke.Rancher).GetCurrentClusterWidePSA(clusterList[0])
-			log.FailOnError(err, "Fetching cluster wide PSA setting for cluster %v", clusterList[0])
-			log.InfoD("Cluster wide PSA for cluster %v is %v", clusterList[0], currentPSA)
+		Step("Validating the deployed applications", func() {
+			log.InfoD("Validating the deployed applications on destination cluster")
+			ValidateApplications(scheduledAppContexts)
+			log.InfoD("Switching cluster context back to source[backup] cluster")
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster required for creating backup location")
 		})
+
+		Step("Adding cloud credential and backup location", func() {
+			log.InfoD("Adding cloud credential and backup location")
+			providers := GetBackupProviders()
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+		Step("Registering source and destination clusters for backup", func() {
+			log.InfoD("Registering source and destination clusters for backup")
+			err := CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, DestinationClusterName))
+			srcClusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			destClusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+			_, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+		})
+
 	})
 
 	JustAfterEach(func() {
