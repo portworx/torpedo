@@ -170,12 +170,12 @@ func (deployment *PdsGrpc) GetDeploymentCredentials(deploymentId string) (string
 		return "", fmt.Errorf("Error while getting grpc client: %v\n", err)
 	}
 
-	deploymentCredentialsRequest := &publicdeploymentapis.GetDeploymentCredentialsRequest{
+	deploymentCredentialsRequest := &publicdeploymentapis.GetDataServiceDeploymentCredentialsRequest{
 		Id: deploymentId,
 	}
 
 	ctx = WithAccountIDMetaCtx(ctx, deployment.AccountId)
-	apiResponse, err := client.GetDeploymentCredentials(ctx, deploymentCredentialsRequest)
+	apiResponse, err := client.GetDataServiceDeploymentCredentials(ctx, deploymentCredentialsRequest)
 	if err != nil {
 		return "", fmt.Errorf("Error while getting the deployment: %v\n", err)
 	}
