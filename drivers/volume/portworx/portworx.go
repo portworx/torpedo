@@ -2024,7 +2024,9 @@ func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 			parts := strings.Fields(line)
 			wwid := parts[0]
 			// Sometimes wwid will return "-" , removing "-" from the string
-			wwid = strings.Replace(wwid, "-", "", -1)
+			for _, spChar := range []string{"-", "`"} {
+				wwid = strings.Replace(wwid, spChar, "", -1)
+			}
 
 			sizeStr := parts[1]
 			size, err := strconv.ParseUint(sizeStr, 10, 64)
