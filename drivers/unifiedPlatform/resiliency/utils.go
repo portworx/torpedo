@@ -682,7 +682,6 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 	log.Debugf("Initial Capacity of the dataservice is [%s]", initialCapacity)
 	log.Debugf("newResConfigId [%s]", newResConfigId)
 	// Setting scale replica count to the initial replica count
-	ds.ScaleReplicas = ds.Replicas
 	newDeployment, err := dslibs.UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, newResConfigId, stConfigId)
 	if err != nil {
 		if ResiliencyFlag {
