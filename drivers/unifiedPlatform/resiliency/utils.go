@@ -646,11 +646,11 @@ func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 	return conditionError
 }
 
-func ResizeDataServiceStorage(deployment automationModels.V1Deployment, ds dslibs.PDSDataService, namespaceId string, template *pds2.WorkflowPDSTemplates) (bool, error) {
+func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dslibs.PDSDataService, namespaceId string, template *pds2.WorkflowPDSTemplates) (bool, error) {
 	log.Debugf("Starting to resize the storage and UpdateDeploymentResourceConfig")
 
 	//Get required Id's
-	log.Infof("Deployment - [%v]", deployment)
+	log.Infof("Topologies - [%v]", deployment.Config)
 	stConfigId := template.StorageTemplateId
 	appConfigId := template.ServiceConfigTemplateIds[ds.Name]
 	oldResConfigId := template.ResourceTemplateId

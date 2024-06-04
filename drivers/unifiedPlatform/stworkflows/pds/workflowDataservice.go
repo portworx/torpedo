@@ -39,7 +39,6 @@ const (
 )
 
 func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService, image, version string, namespace string) (*automationModels.PDSDeploymentResponse, error) {
-
 	namespaceId := wfDataService.Namespace.Namespaces[namespace]
 	namespaceName := namespace
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId

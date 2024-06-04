@@ -253,7 +253,7 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 
 				pdsResLib.DefineFailureType(failuretype)
 				pdsResLib.AccountID = AccID
-				err = pdsResLib.InduceFailureAfterWaitingForCondition(&WorkflowDataService.DataServiceDeployment[*deployment.Create.Meta.Uid].Deployment, PDS_DEFAULT_NAMESPACE, 1, ds)
+				err = pdsResLib.InduceFailureAfterWaitingForCondition(&deployment.Create, PDS_DEFAULT_NAMESPACE, 1, ds)
 				log.FailOnError(err, fmt.Sprintf("Error happened while executing Kill Agent Pod test for data service %v", *deployment.Create.Status.CustomResourceName))
 			})
 
@@ -282,8 +282,9 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 
 var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 	var (
-		deployment *automationModels.PDSDeploymentResponse
-		err        error
+		deploymentAfterUpdate automationModels.V1Deployment
+		deployment            *automationModels.PDSDeploymentResponse
+		err                   error
 	)
 
 	JustBeforeEach(func() {
@@ -312,7 +313,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				}
 
 				pdsResLib.DefineFailureType(failuretype)
-				err = pdsResLib.InduceFailureAfterWaitingForCondition(&deployment.Create, PDS_DEFAULT_NAMESPACE, int32(ds.ScaleReplicas), ds)
+				err = pdsResLib.InduceFailureAfterWaitingForCondition(&deploymentAfterUpdate, PDS_DEFAULT_NAMESPACE, int32(ds.ScaleReplicas), ds)
 				log.FailOnError(err, fmt.Sprintf("Error happened while executing restarting PX %v", *deployment.Create.Status.CustomResourceName))
 			})
 
