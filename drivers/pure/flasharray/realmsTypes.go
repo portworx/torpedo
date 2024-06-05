@@ -54,12 +54,12 @@ type RealmResponse struct {
 	TotalItemCount     *int     `json:"total_item_count"`
 }
 
-func (r *RealmsServices) CreateRealmPod(params map[string]string, data interface{}) (*PodResponse, error) {
+func (r *RealmsServices) CreateRealmPod(params map[string]string, data interface{}) (*[]PodResponse, error) {
 	req, _ := r.client.NewRequest("POST", "pods", params, data)
-	m := &PodResponse{}
+	m := &[]PodResponse{}
 	_, err := r.client.Do(req, m)
 	if err != nil {
-		return &PodResponse{}, err
+		return nil, err
 	}
 
 	return m, nil
