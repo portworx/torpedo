@@ -1,0 +1,161 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+syntax = "proto3";
+
+package public.portworx.pds.dataservicedeploymenttopology.v1;
+
+import "google/api/field_behavior.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/pds/dataservicedeploymenttopology/apiv1;dataservicedeploymenttopology";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.pds.dataservicedeploymenttopology.v1";
+option java_outer_classname = "DataServiceDeploymentTopologyProto";
+
+// A DataService topology contains a number of nodes that have various attributes as a collective group.
+// This is consumed in a DataService Deployment and the functionality is being controlled by the CRUD APIs of DataService Deployment.
+message DataServiceDeploymentTopology {
+  // Name of the DataServiceDeployment topology.
+  string name = 1;
+
+  // Description of the DataServiceDeployment topology.
+  string description = 2;
+
+  // Number of instances of data services.
+  int64 instances = 3;
+
+  // Service type are standard Kubernetes service types such as clusterIP, NodePort, load balancers, etc.
+  string service_type = 4;
+
+  // Service name is the name of service as provided by user.
+  string service_name = 5 [(google.api.field_behavior) = OPTIONAL];
+
+  // Source IP ranges to use for the deployed Load Balancer.
+  repeated string load_balancer_source_ranges = 6 [(google.api.field_behavior) = OPTIONAL];
+
+  // Resource Settings Template.
+  Template resource_settings = 7;
+
+  // Service Configurations Template.
+  Template service_configurations = 8;
+
+  // Storage Options Template.
+  Template storage_options = 9;
+}
+
+// Template.
+message Template {
+  // UID of the Template.
+  string id = 1;
+
+  // Resource version of the template.
+  string resource_version = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Values required for template.
+  map<string, string> values = 3;
+}
+
+// Status of the data service topology. It is consumed in DataServiceDeployment.
+message DataServiceDeploymentTopologyStatus {
+  // Enum for Health of the data service topology.
+  enum Health {
+    // Health is unknown.
+    UNKNOWN = 0;
+
+    // DataServiceDeployment Topology is Unavailable.
+    UNAVAILABLE = 1;
+
+    // DataServiceDeployment Topology is Partially available.
+    PARTIALLY_AVAILABLE = 2;
+
+    // DataServiceDeployment Topology is available.
+    AVAILABLE = 3;
+  }
+
+  // Health of the data service deployment topology.
+  Health health = 1;
+
+  // Enum for Phase of the DataServiceDeployment Topology.
+  enum Phase {
+    // Unspecified status.
+    PHASE_UNSPECIFIED = 0;
+
+    // In progress Status.
+    IN_PROGRESS = 1;
+
+    // Partial Success Status.
+    PARTIAL_SUCCESS = 2;
+
+    // Successful Status.
+    SUCCESS = 3;
+
+    // Delete is pending Status.
+    DELETE_PENDING = 4;
+
+    // Delete in progress Status.
+    DELETING = 5;
+
+    // Failed Status.
+    FAILED = 6;
+
+    // Timed Out Status.
+    TIMED_OUT = 7;
+  }
+
+  // Phase of the DataServiceDeployment Topology.
+  Phase phase = 2;
+
+  // Number of ready replicas reported by Target Cluster that are up and running.
+  int64 ready_instances = 3;
+
+  // Connection Information for the DataServiceDeployment Topology.
+  ConnectionInfo connection_info = 4;
+}
+
+// Connection Information for the DataServiceDeployment Topology.
+message ConnectionInfo {
+  // Ready instances.
+  repeated InstanceInfo ready_instances = 1;
+
+  // Instances that are not ready.
+  repeated InstanceInfo not_ready_instances = 2;
+
+  // ConnectionDetails of data service deployment.
+  ConnectionDetails connection_details = 3;
+
+  // Stores details about the cluster.
+  google.protobuf.Struct cluster_details = 4;
+}
+
+// InstanceInfo contains information about a instance.
+message InstanceInfo {
+  // The IP of a instance.
+  string ip = 1;
+
+  // Name is the Hostname of a instance.
+  string name = 2;
+
+  // Node that hosts a particular instance.
+  string worker_node = 3;
+}
+
+// ConnectionDetails of data service.
+message ConnectionDetails {
+  // Instances of the data service deployment.
+  repeated string instances = 1;
+
+  // Ports provided by the data service deployment (name and number).
+  map<string, int32> ports = 2;
+}

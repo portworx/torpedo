@@ -160,9 +160,19 @@ message Status {
   // Timestamp of cluster's last status update to control plane.
   google.protobuf.Timestamp last_status_update_time = 3;
   // Status of the platform agent running in the target cluster.
-  public.portworx.platform.targetcluster.application.v1.ApplicationPhase.Phase platform_agent = 4;
+  TargetClusterApplicationStatus platform_agent = 4;
   // Status of applications running in the target cluster eg: BAAS, PDS, MPXE.
-  map<string, public.portworx.platform.targetcluster.application.v1.ApplicationPhase.Phase> applications = 5;
+  map<string, TargetClusterApplicationStatus> applications = 5;
+}
+
+// Status of the Application.
+message TargetClusterApplicationStatus {
+  // current installed version.
+  string version = 1;
+  // current phase of the application.
+  public.portworx.platform.targetcluster.application.v1.ApplicationPhase.Phase phase = 2;
+  // current health of the application.
+  public.portworx.platform.targetcluster.application.v1.ApplicationHealth.Health health = 3;
 }
 
 // TargetClusterPhase represents the phase of target cluster.
@@ -225,4 +235,6 @@ message PXEMetadata {
   string service_namespace = 3;
   // Version of PXE installed on the target cluster.
   string version = 4;
+  // SecurityEnabled flag depicts if px security is enabled on the target cluster.
+  bool security_enabled = 5;
 }

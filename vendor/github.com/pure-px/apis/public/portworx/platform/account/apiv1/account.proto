@@ -21,7 +21,6 @@ import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 import "google/api/field_behavior.proto";
 import "public/portworx/common/apiv1/meta.proto";
-import "public/portworx/common/apiv1/pagination.proto";
 
 option go_package = "github.com/pure-px/apis/public/portworx/platform/account/apiv1;account";
 option java_multiple_files = true;

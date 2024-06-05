@@ -102,6 +102,7 @@ Operator specifies the relationship between the provided (key,value) pairs in th
 | OPERATOR_UNSPECIFIED | 0 | Unspecified, do not use. |
 | IN | 1 | IN specifies that the key should be associated with atleast 1 of the element in value list. |
 | NOT_IN | 2 | NOT_IN specifies that the key should not be associated with any of the element in value list. |
+| LIKE | 3 | LIKE specified that the key should be of a specified pattern |
 
 
  <!-- end Enums -->

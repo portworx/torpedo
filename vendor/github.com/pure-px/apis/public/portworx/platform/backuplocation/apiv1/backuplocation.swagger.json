@@ -405,10 +405,11 @@
                 "enum": [
                     "OPERATOR_UNSPECIFIED",
                     "IN",
-                    "NOT_IN"
+                    "NOT_IN",
+                    "LIKE"
                 ],
                 "default": "OPERATOR_UNSPECIFIED",
-                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list."
+                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list.\n - LIKE: LIKE specified that the key should be of a specified pattern"
             },
             "SortByField": {
                 "type": "string",

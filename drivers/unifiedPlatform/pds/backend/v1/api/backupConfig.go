@@ -24,7 +24,7 @@ func (backupConf *PDS_API_V1) CreateBackupConfig(createBackupConfigRequest *auto
 	}
 	backupCreateRequest := backupClient.BackupConfigServiceCreateBackupConfig(ctx, createBackupConfigRequest.Create.ProjectId)
 	backupCreateRequest = backupCreateRequest.BackupConfigServiceCreateBackupConfigBody(backupConfigV1.BackupConfigServiceCreateBackupConfigBody{
-		DeploymentId: createBackupConfigRequest.Create.DeploymentId,
+		DataServiceDeploymentId: createBackupConfigRequest.Create.DeploymentId,
 		BackupConfig: backupConfigV1.V1BackupConfig{
 			Meta: &backupConfigV1.V1Meta{
 				Name: createBackupConfigRequest.Create.BackupConfig.Meta.Name,

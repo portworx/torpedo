@@ -20,7 +20,7 @@ type PDSDeploymentResponse struct {
 
 type V1DeploymentUpdate struct {
 	Meta   Meta
-	Config DeploymentUpdateConfig
+	Config DataServiceDeploymentUpdateConfig
 	Status DeploymentUpdateStatus
 }
 
@@ -35,9 +35,9 @@ type DeploymentUpdateStatus struct {
 	Phase      *Pdsdeploymentconfigupdatev1StatusPhase `copier:"must,nopanic"`
 }
 
-type DeploymentUpdateConfig struct {
-	DeploymentMeta   Meta      `copier:"must,nopanic"`
-	DeploymentConfig V1Config1 `copier:"must,nopanic"`
+type DataServiceDeploymentUpdateConfig struct {
+	DataServiceDeploymentMeta   Meta      `copier:"must,nopanic"`
+	DataServiceDeploymentConfig V1Config1 `copier:"must,nopanic"`
 }
 
 type V1Deployment struct {
@@ -55,33 +55,33 @@ type Deploymentv1Status struct {
 	// Initialize used to control startup scripts.
 	Initialized *string `copier:"must,nopanic"`
 	// Status of the deployment topology.
-	DeploymentTopologyStatus []V1DeploymentTopologyStatus `copier:"must,nopanic"`
-	CustomResourceName       *string                      `copier:"must,nopanic"`
+	DataServiceDeploymentTopologyStatus []V1DataServiceDeploymentTopologyStatus `copier:"must,nopanic"`
+	CustomResourceName                  *string                                 `copier:"must,nopanic"`
 }
 
 // V1DeploymentTopologyStatus Status of the deployment topology. It is consumed in Deployment.
-type V1DeploymentTopologyStatus struct {
+type V1DataServiceDeploymentTopologyStatus struct {
 	Health *V1DeploymentTopologyStatusHealth `copier:"must,nopanic"`
 	Phase  *V1DeploymentTopologyStatusPhase  `copier:"must,nopanic"`
 	// Number of replicas reported by Target Cluster that are up and running.
-	ReadyReplicas      *string           `copier:"must,nopanic"`
-	ConnectionInfo     *V1ConnectionInfo `copier:"must,nopanic"`
-	CustomResourceName *string
+	ReadyInstances *string           `copier:"must,nopanic"`
+	ConnectionInfo *V1ConnectionInfo `copier:"must,nopanic"`
+	//CustomResourceName *string
 }
 
 // V1ConnectionInfo Connection Information for the Deployment Topology.
 type V1ConnectionInfo struct {
 	// Ready pods.
-	Pods []V1PodInfo `copier:"must,nopanic"`
+	ReadyInstances []V1InstanceInfo `copier:"must,nopanic"`
 	// Pods that are not ready.
-	NotReadyPods      []V1PodInfo          `copier:"must,nopanic"`
+	NotReadyPods      []V1InstanceInfo     `copier:"must,nopanic"`
 	ConnectionDetails *V1ConnectionDetails `copier:"must,nopanic"`
 	// Stores details about the cluster.
 	ClusterDetails map[string]interface{} `copier:"must,nopanic"`
 }
 
 // V1PodInfo PodInfo contains information about a pod.
-type V1PodInfo struct {
+type V1InstanceInfo struct {
 	// The IP of a pod.
 	Ip *string `copier:"must,nopanic"`
 	// Name is the Hostname of a pod.
@@ -93,7 +93,7 @@ type V1PodInfo struct {
 // V1ConnectionDetails ConnectionDetails of data service.
 type V1ConnectionDetails struct {
 	// Nodes of the data service.
-	Nodes []string `copier:"must,nopanic"`
+	Instances []string `copier:"must,nopanic"`
 	// Ports provided by the data service (name and number).
 	Ports *map[string]int32 `copier:"must,nopanic"`
 }
@@ -101,17 +101,25 @@ type V1ConnectionDetails struct {
 type V1Config1 struct {
 	References Reference `copier:"must,nopanic"`
 	// Flag to enable TLS for the Data Service.
-	TlsEnabled *bool `copier:"must,nopanic"`
+	TlsEnabled *V1TLSConfig `copier:"must,nopanic"`
 	// A deployment topology contains a number of nodes that have various attributes as a collective group.
-	DeploymentTopologies []DeploymentTopology `copier:"must,nopanic"`
+	DataServiceDeploymentTopologies []V1DataServiceDeploymentTopology `copier:"must,nopanic"`
 }
 
-type DeploymentTopology struct {
+// V1TLSConfig TLS configuration for the Data Service.
+type V1TLSConfig struct {
+	// Flag to enable TLS for the Data Service.
+	Enabled *bool `json:"enabled,omitempty"`
+	// Issuer (Certificate Authority) name for the TLS certificates.
+	IssuerName *string `json:"issuerName,omitempty"`
+}
+
+type V1DataServiceDeploymentTopology struct {
 	Name *string `copier:"must,nopanic"`
 	// Description of the deployment topology.
 	Description *string `copier:"must,nopanic"`
 	// Number of replicas of data services.
-	Replicas *string `copier:"must,nopanic"`
+	Instances *string `copier:"must,nopanic"`
 	// Service type are standard Kubernetes service types such as clusterIP, NodePort, load balancers, etc.
 	ServiceType *string `copier:"must,nopanic"`
 	// Service name is the name of service as provided by user.

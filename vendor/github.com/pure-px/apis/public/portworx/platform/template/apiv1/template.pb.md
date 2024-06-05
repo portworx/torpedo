@@ -50,6 +50,8 @@ Create API creates a set of templates for a tenant.
 > **rpc** UpdateTemplate([UpdateTemplateRequest](#updatetemplaterequest))
     [Template](#template)
 
+(-- api-linter: core::0134::request-message-name=disabled
+    aip.dev/not-precedent: We need to do this because we have uid in template resource itself. --)
 Update API updates a template.
 ### ListTemplates {#methodpublicportworxplatformtemplatev1templateservicelisttemplates}
 
@@ -181,7 +183,6 @@ Request to update a template instance.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| id | [ string](#string) | ID of the template to be updated. |
 | template | [ Template](#template) | Desired template configuration. |
  <!-- end Fields -->
  <!-- end HasFields -->

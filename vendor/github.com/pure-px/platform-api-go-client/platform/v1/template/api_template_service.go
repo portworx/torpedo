@@ -656,13 +656,12 @@ func (a *TemplateServiceAPIService) TemplateServiceListTemplates2Execute(r ApiTe
 type ApiTemplateServiceUpdateTemplateRequest struct {
 	ctx context.Context
 	ApiService *TemplateServiceAPIService
-	id string
-	v1Template *V1Template
+	templateMetaUid string
+	templateServiceUpdateTemplateBody *TemplateServiceUpdateTemplateBody
 }
 
-// Desired template configuration.
-func (r ApiTemplateServiceUpdateTemplateRequest) V1Template(v1Template V1Template) ApiTemplateServiceUpdateTemplateRequest {
-	r.v1Template = &v1Template
+func (r ApiTemplateServiceUpdateTemplateRequest) TemplateServiceUpdateTemplateBody(templateServiceUpdateTemplateBody TemplateServiceUpdateTemplateBody) ApiTemplateServiceUpdateTemplateRequest {
+	r.templateServiceUpdateTemplateBody = &templateServiceUpdateTemplateBody
 	return r
 }
 
@@ -674,14 +673,14 @@ func (r ApiTemplateServiceUpdateTemplateRequest) Execute() (*V1Template, *http.R
 TemplateServiceUpdateTemplate Update API updates a template.
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @param id ID of the template to be updated.
+ @param templateMetaUid UID of the resource of the format <resource prefix>-<uuid>.
  @return ApiTemplateServiceUpdateTemplateRequest
 */
-func (a *TemplateServiceAPIService) TemplateServiceUpdateTemplate(ctx context.Context, id string) ApiTemplateServiceUpdateTemplateRequest {
+func (a *TemplateServiceAPIService) TemplateServiceUpdateTemplate(ctx context.Context, templateMetaUid string) ApiTemplateServiceUpdateTemplateRequest {
 	return ApiTemplateServiceUpdateTemplateRequest{
 		ApiService: a,
 		ctx: ctx,
-		id: id,
+		templateMetaUid: templateMetaUid,
 	}
 }
 
@@ -700,14 +699,14 @@ func (a *TemplateServiceAPIService) TemplateServiceUpdateTemplateExecute(r ApiTe
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/core/v1/templates/{id}"
-	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
+	localVarPath := localBasePath + "/core/v1/templates/{template.meta.uid}"
+	localVarPath = strings.Replace(localVarPath, "{"+"template.meta.uid"+"}", url.PathEscape(parameterValueToString(r.templateMetaUid, "templateMetaUid")), -1)
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
-	if r.v1Template == nil {
-		return localVarReturnValue, nil, reportError("v1Template is required and must be specified")
+	if r.templateServiceUpdateTemplateBody == nil {
+		return localVarReturnValue, nil, reportError("templateServiceUpdateTemplateBody is required and must be specified")
 	}
 
 	// to determine the Content-Type header
@@ -728,7 +727,7 @@ func (a *TemplateServiceAPIService) TemplateServiceUpdateTemplateExecute(r ApiTe
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
 	// body params
-	localVarPostBody = r.v1Template
+	localVarPostBody = r.templateServiceUpdateTemplateBody
 	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
 	if err != nil {
 		return localVarReturnValue, nil, err

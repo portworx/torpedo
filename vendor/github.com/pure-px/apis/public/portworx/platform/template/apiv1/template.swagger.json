@@ -201,7 +201,9 @@
                 "tags": [
                     "TemplateService"
                 ]
-            },
+            }
+        },
+        "/core/v1/templates/{template.meta.uid}": {
             "put": {
                 "summary": "Update API updates a template.",
                 "operationId": "TemplateService_UpdateTemplate",
@@ -229,8 +231,8 @@
                 },
                 "parameters": [
                     {
-                        "name": "id",
-                        "description": "ID of the template to be updated.",
+                        "name": "template.meta.uid",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -242,11 +244,10 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/v1Template"
+                                "$ref": "#/components/schemas/TemplateServiceUpdateTemplateBody"
                             }
                         }
                     },
-                    "description": "Desired template configuration.",
                     "required": true
                 },
                 "tags": [
@@ -396,10 +397,11 @@
                 "enum": [
                     "OPERATOR_UNSPECIFIED",
                     "IN",
-                    "NOT_IN"
+                    "NOT_IN",
+                    "LIKE"
                 ],
                 "default": "OPERATOR_UNSPECIFIED",
-                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list."
+                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list.\n - LIKE: LIKE specified that the key should be of a specified pattern"
             },
             "SortByField": {
                 "type": "string",
@@ -422,6 +424,81 @@
                 ],
                 "default": "PHASE_UNSPECIFIED",
                 "description": "Different phases of template instance.\n\n - PHASE_UNSPECIFIED: Phase unspecified.\n - ACTIVE: Template instance is active.\n - DEPRECATED: Template instance is deprecated."
+            },
+            "TemplateServiceUpdateTemplateBody": {
+                "type": "object",
+                "properties": {
+                    "template": {
+                        "type": "object",
+                        "properties": {
+                            "meta": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Name of the resource."
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "description": "Description of the resource."
+                                    },
+                                    "resourceVersion": {
+                                        "type": "string",
+                                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                                    },
+                                    "createTime": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "description": "Creation time of the object.",
+                                        "readOnly": true
+                                    },
+                                    "updateTime": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "description": "Update time of the object.",
+                                        "readOnly": true
+                                    },
+                                    "labels": {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                            "type": "string"
+                                        },
+                                        "description": "Labels to apply to the object."
+                                    },
+                                    "annotations": {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                            "type": "string"
+                                        },
+                                        "description": "Annotations for the object."
+                                    },
+                                    "parentReference": {
+                                        "$ref": "#/components/schemas/v1Reference"
+                                    },
+                                    "resourceNames": {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                            "type": "string"
+                                        },
+                                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                                        "readOnly": true
+                                    }
+                                },
+                                "description": "Metadata of the resource.",
+                                "title": "Metadata of the resource."
+                            },
+                            "config": {
+                                "$ref": "#/components/schemas/v1Config"
+                            },
+                            "status": {
+                                "$ref": "#/components/schemas/templatev1Status"
+                            }
+                        },
+                        "description": "Desired template configuration.",
+                        "title": "Desired template configuration."
+                    }
+                },
+                "description": "Request to update a template instance."
             },
             "googlerpcStatus": {
                 "type": "object",

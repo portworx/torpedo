@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
-	deploymentsConfigUpdateV1 "github.com/pure-px/platform-api-go-client/pds/v1/deploymentconfigupdate"
+	deploymentsConfigUpdateV1 "github.com/pure-px/platform-api-go-client/pds/v1/dataservicedeploymentconfigupdate"
 	status "net/http"
 
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
 var (
-	UpdateDeploymentRequest deploymentsConfigUpdateV1.DeploymentConfigUpdateOfTheDeploymentUpdateRequest
+	UpdateDeploymentRequest deploymentsConfigUpdateV1.DataServiceDeploymentConfigUpdateOfTheDataServiceConfigDeploymentUpdateRequest
 )
 
 func (ds *PDS_API_V1) GetDeploymentConfig(updateDeploymentRequest *automationModels.PDSDeploymentRequest) (*automationModels.PDSDeploymentResponse, error) {
@@ -24,7 +24,7 @@ func (ds *PDS_API_V1) GetDeploymentConfig(updateDeploymentRequest *automationMod
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	dsModel, res, err := dsClient.DeploymentConfigUpdateServiceGetDeploymentConfigUpdate(ctx, updateDeploymentRequest.Update.DeploymentConfigId).Execute()
+	dsModel, res, err := dsClient.DataServiceDeploymentConfigUpdateServiceGetDataServiceDeploymentConfigUpdate(ctx, updateDeploymentRequest.Update.DeploymentConfigId).Execute()
 	log.Debugf("updated dsModel [%v]", dsModel)
 	log.Debugf("response [%v]", res)
 	if err != nil || res.StatusCode != status.StatusOK {
@@ -53,7 +53,7 @@ func (ds *PDS_API_V1) UpdateDeployment(updateDeploymentRequest *automationModels
 		return nil, fmt.Errorf("Error occured while copying updateDeploymentRequest %v\n", err)
 	}
 
-	dsModel, res, err := dsClient.DeploymentConfigUpdateServiceCreateDeploymentConfigUpdate(ctx, updateDeploymentRequest.Update.DeploymentID).DeploymentConfigUpdateOfTheDeploymentUpdateRequest(UpdateDeploymentRequest).Execute()
+	dsModel, res, err := dsClient.DataServiceDeploymentConfigUpdateServiceCreateDataServiceDeploymentConfigUpdate(ctx, updateDeploymentRequest.Update.DeploymentID).DataServiceDeploymentConfigUpdateOfTheDataServiceConfigDeploymentUpdateRequest(UpdateDeploymentRequest).Execute()
 	log.Debugf("updated dsModel [%v]", dsModel)
 	log.Debugf("response [%v]", res)
 	if err != nil || res.StatusCode != status.StatusOK {

@@ -361,6 +361,15 @@ func (d *DefaultDriver) GetCloudsnaps(name string, params map[string]string) ([]
 	}
 }
 
+// GetCloudsnapsOfGivenVolume returns cloudsnap backups of given volume.
+// params are the custom volume options passed when creating the volume.
+func (d *DefaultDriver) GetCloudsnapsOfGivenVolume(name string, volumeID string, params map[string]string) ([]*api.SdkCloudBackupInfo, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetCloudsnapsOfGivenVolume()",
+	}
+}
+
 // DeleteAllCloudsnaps deletes all  cloudsnap backups
 // params are the custom volume options passed when creating the volume.
 func (d *DefaultDriver) DeleteAllCloudsnaps(name, sourceVolumeID string, params map[string]string) error {
@@ -1209,4 +1218,20 @@ func (d *DefaultDriver) GetPxctlStatus(n node.Node) (string, error) {
 // IsPxReadyOnNode returns true if px is ready on the node
 func (d *DefaultDriver) IsPxReadyOnNode(n node.Node) bool {
 	return false
+}
+
+// EnableSkinnySnap Enables skinnysnap on the cluster
+func (d *DefaultDriver) EnableSkinnySnap() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "EnableSkinnySnap()",
+	}
+}
+
+// UpdateSkinnySnapReplNum update skinnysnap Repl factor
+func (d *DefaultDriver) UpdateSkinnySnapReplNum(repl string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateSkinnySnapReplNum()",
+	}
 }

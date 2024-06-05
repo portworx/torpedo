@@ -27,6 +27,8 @@ type V1PXEMetadata struct {
 	ServiceNamespace *string `json:"serviceNamespace,omitempty"`
 	// Version of PXE installed on the target cluster.
 	Version *string `json:"version,omitempty"`
+	// SecurityEnabled flag depicts if px security is enabled on the target cluster.
+	SecurityEnabled *bool `json:"securityEnabled,omitempty"`
 }
 
 // NewV1PXEMetadata instantiates a new V1PXEMetadata object
@@ -174,6 +176,38 @@ func (o *V1PXEMetadata) SetVersion(v string) {
 	o.Version = &v
 }
 
+// GetSecurityEnabled returns the SecurityEnabled field value if set, zero value otherwise.
+func (o *V1PXEMetadata) GetSecurityEnabled() bool {
+	if o == nil || IsNil(o.SecurityEnabled) {
+		var ret bool
+		return ret
+	}
+	return *o.SecurityEnabled
+}
+
+// GetSecurityEnabledOk returns a tuple with the SecurityEnabled field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *V1PXEMetadata) GetSecurityEnabledOk() (*bool, bool) {
+	if o == nil || IsNil(o.SecurityEnabled) {
+		return nil, false
+	}
+	return o.SecurityEnabled, true
+}
+
+// HasSecurityEnabled returns a boolean if a field has been set.
+func (o *V1PXEMetadata) HasSecurityEnabled() bool {
+	if o != nil && !IsNil(o.SecurityEnabled) {
+		return true
+	}
+
+	return false
+}
+
+// SetSecurityEnabled gets a reference to the given bool and assigns it to the SecurityEnabled field.
+func (o *V1PXEMetadata) SetSecurityEnabled(v bool) {
+	o.SecurityEnabled = &v
+}
+
 func (o V1PXEMetadata) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -195,6 +229,9 @@ func (o V1PXEMetadata) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.Version) {
 		toSerialize["version"] = o.Version
+	}
+	if !IsNil(o.SecurityEnabled) {
+		toSerialize["securityEnabled"] = o.SecurityEnabled
 	}
 	return toSerialize, nil
 }

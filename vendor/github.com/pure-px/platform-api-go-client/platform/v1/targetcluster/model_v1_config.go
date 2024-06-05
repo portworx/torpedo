@@ -23,6 +23,7 @@ type V1Config struct {
 	Namespace *string `json:"namespace,omitempty"`
 	// desired application chart version.
 	Version *string `json:"version,omitempty"`
+	Pds *V1PDSProperties `json:"pds,omitempty"`
 }
 
 // NewV1Config instantiates a new V1Config object
@@ -106,6 +107,38 @@ func (o *V1Config) SetVersion(v string) {
 	o.Version = &v
 }
 
+// GetPds returns the Pds field value if set, zero value otherwise.
+func (o *V1Config) GetPds() V1PDSProperties {
+	if o == nil || IsNil(o.Pds) {
+		var ret V1PDSProperties
+		return ret
+	}
+	return *o.Pds
+}
+
+// GetPdsOk returns a tuple with the Pds field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *V1Config) GetPdsOk() (*V1PDSProperties, bool) {
+	if o == nil || IsNil(o.Pds) {
+		return nil, false
+	}
+	return o.Pds, true
+}
+
+// HasPds returns a boolean if a field has been set.
+func (o *V1Config) HasPds() bool {
+	if o != nil && !IsNil(o.Pds) {
+		return true
+	}
+
+	return false
+}
+
+// SetPds gets a reference to the given V1PDSProperties and assigns it to the Pds field.
+func (o *V1Config) SetPds(v V1PDSProperties) {
+	o.Pds = &v
+}
+
 func (o V1Config) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -121,6 +154,9 @@ func (o V1Config) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.Version) {
 		toSerialize["version"] = o.Version
+	}
+	if !IsNil(o.Pds) {
+		toSerialize["pds"] = o.Pds
 	}
 	return toSerialize, nil
 }

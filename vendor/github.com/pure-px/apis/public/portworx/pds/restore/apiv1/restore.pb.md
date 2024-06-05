@@ -14,7 +14,6 @@
 - Messages
     - [Config](#config)
     - [CreateRestoreRequest](#createrestorerequest)
-    - [DeleteRestoreRequest](#deleterestorerequest)
     - [DestinationReferences](#destinationreferences)
     - [GetRestoreRequest](#getrestorerequest)
     - [ListRestoresRequest](#listrestoresrequest)
@@ -64,12 +63,6 @@ GetRestore API returns the Restore resource.
     [ListRestoresResponse](#listrestoresresponse)
 
 ListRestore API lists the Restore resources.
-### DeleteRestore {#methodpublicportworxpdsrestorev1restoreservicedeleterestore}
-
-> **rpc** DeleteRestore([DeleteRestoreRequest](#deleterestorerequest))
-    [.google.protobuf.Empty](#googleprotobufempty)
-
-DeleteRestore API deletes the restore.
 ### RecreateRestore {#methodpublicportworxpdsrestorev1restoreservicerecreaterestore}
 
 > **rpc** RecreateRestore([RecreateRestoreRequest](#recreaterestorerequest))
@@ -116,17 +109,6 @@ Request to create a restore.
  <!-- end HasFields -->
 
 
-### DeleteRestoreRequest {#deleterestorerequest}
-Request to delete a restore.
-
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| id | [ string](#string) | UID of the Restore. |
- <!-- end Fields -->
- <!-- end HasFields -->
-
-
 ### DestinationReferences {#destinationreferences}
 Destination references for the restore.
 
@@ -134,7 +116,7 @@ Destination references for the restore.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | target_cluster_id | [ string](#string) | UID of the target cluster where restore will be created. |
-| deployment_id | [ string](#string) | UID of the deployment created by the restore. |
+| data_service_deployment_id | [ string](#string) | UID of the deployment created by the restore. |
 | project_id | [ string](#string) | UID of the project. |
  <!-- end Fields -->
  <!-- end HasFields -->
@@ -157,10 +139,9 @@ Request to list the restores.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.account_id | [ string](#string) | Account ID for which the restore will be listed. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.tenant_id | [ string](#string) | Tenant ID for which the restore will be listed. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.project_id | [ string](#string) | Project ID for which the restore will be listed. |
-| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.deployment_id | [ string](#string) | Deployment ID for which the restore will be listed. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.data_service_deployment_id | [ string](#string) | Deployment ID for which the restore will be listed. |
 | [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) list_by.backup_id | [ string](#string) | Backup ID for which the restore will be listed. |
 | sort | [ public.portworx.common.v1.Sort](#publicportworxcommonv1sort) | Sorting details using which requested list to be sorted. |
 | pagination | [ public.portworx.common.v1.PageBasedPaginationRequest](#publicportworxcommonv1pagebasedpaginationrequest) | Pagination metadata for this response. |
@@ -283,7 +264,7 @@ SourceReferences for the restore.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| deployment_id | [ string](#string) | UID of the deployment which was backed up. |
+| data_service_deployment_id | [ string](#string) | UID of the deployment which was backed up. |
 | backup_id | [ string](#string) | UID of the backup. |
 | backup_location_id | [ string](#string) | UID of the backup location. |
 | cloudsnap_id | [ string](#string) | UID of the cloud snapshot of the backup volume used for restore. |
@@ -302,6 +283,7 @@ Status of the restore.
 | error_code | [ ErrorCode](#errorcode) | Error code of the restore from Target Cluster. |
 | error_message | [ string](#string) | Error message is description of the error in restore. |
 | phase | [ Phase](#phase) | Phase of the restore. |
+| custom_resource_name | [ string](#string) | Custom Resource Name is the kubernetes resource name for the restore that is built from ID. |
  <!-- end Fields -->
  <!-- end HasFields -->
  <!-- end messages -->
@@ -315,16 +297,9 @@ Enums for error codes for restore on the target cluster.
 | Name | Number | Description |
 | ---- | ------ | ----------- |
 | ERROR_CODE_UNSPECIFIED | 0 | Error code not specified. |
-| PX_CLOUD_CREDENTIALS_NOT_FOUND | 1 | Cloud credentials specified in Restore spec were not found by Portworx. |
-| PX_CLOUD_SNAP_RESTORE_TRIGGER_FAILED | 2 | Problem triggering the cloudsnap restore in PX. |
-| PX_CLOUD_SNAP_RESTORE_FAILED | 3 | Problem with finishing the cloudsnap restore in PX. |
-| PX_GET_CLOUD_SNAP_STATUS_FAILED | 4 | Problem with getting the cloudsnap restore status from PX. |
-| PX_GET_VOLUME_FAILED | 5 | Problem with getting the volume from PX. |
-| READ_DATA_SERVICE_MANIFEST_FAILED | 6 | Problem with reading the data service manifest from the busybox pod. |
-| UNMARSHAL_DATA_SERVICE_JSON | 7 | Problem with unmarshalling the JSON with data service manifest. |
-| DEPLOYMENT_NAME_ALREADY_EXIST | 8 | Deployment name already used in the namespace. |
-| TIMEOUT_BUSYBOX_POD_RUNNING | 9 | Timeout while waiting for the BusyBox pod to enter the running state. |
-| BUSYBOX_POD_FAILED | 10 | Busybox pod has failed. |
+| DATA_SERVICE_DEPLOYMENT_NAME_ALREADY_EXIST | 1 | Deployment name already used in the namespace. |
+| FAILED_BACKUP_CREDENTIAL_SYNC | 2 | Failed to sync backup credentials on the target cluster. |
+| RESTORE_INTERNAL_ERROR | 3 | Restore Internal error. |
 
 
 
@@ -338,9 +313,9 @@ Enum for phase of the restore.
 | INITIALIZING | 1 | Restore is initializing. |
 | PENDING | 2 | Restore has not yet started. |
 | RESTORING_CLOUDSNAP | 3 | Waiting for the cloud snap restore to complete. |
-| RESTORING_DATA_SERVICE_CR | 4 | PV and PVC resources are ready and we're waiting to get the data service manifest from the backup. |
-| RESTORING_DEPLOYMENT | 5 | New data service has been created and we're waiting for the restore process to complete. |
-| DEPLOYMENT_ENTERING_NORMAL_MODE | 6 | Restore process in data service has succeeded and we're waiting until it becomes healthy in normal mode. |
+| RESTORING_DATA_SERVICE_DEPLOYMENT_CR | 4 | PV and PVC resources are ready and we're waiting to get the data service deployment manifest from the backup. |
+| RESTORING_DATA_SERVICE_DEPLOYMENT | 5 | New data service deployment has been created and we're waiting for the restore process to complete. |
+| DATA_SERVICE_DEPLOYMENT_ENTERING_NORMAL_MODE | 6 | Restore process in data service deployment has succeeded and we're waiting until it becomes healthy in normal mode. |
 | SUCCESSFUL | 7 | Restore successful. |
 | FAILED | 8 | Restore failed. |
 

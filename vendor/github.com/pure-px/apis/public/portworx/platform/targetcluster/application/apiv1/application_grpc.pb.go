@@ -38,6 +38,7 @@ const (
 	ApplicationService_ListApplications_FullMethodName     = "/public.portworx.platform.targetcluster.application.v1.ApplicationService/ListApplications"
 	ApplicationService_GetApplication_FullMethodName       = "/public.portworx.platform.targetcluster.application.v1.ApplicationService/GetApplication"
 	ApplicationService_InstallApplication_FullMethodName   = "/public.portworx.platform.targetcluster.application.v1.ApplicationService/InstallApplication"
+	ApplicationService_UpdateApplication_FullMethodName    = "/public.portworx.platform.targetcluster.application.v1.ApplicationService/UpdateApplication"
 	ApplicationService_UninstallApplication_FullMethodName = "/public.portworx.platform.targetcluster.application.v1.ApplicationService/UninstallApplication"
 )
 
@@ -51,6 +52,8 @@ type ApplicationServiceClient interface {
 	GetApplication(ctx context.Context, in *GetApplicationRequest, opts ...grpc.CallOption) (*Application, error)
 	// InstallApplication API installs specified application on the target cluster.
 	InstallApplication(ctx context.Context, in *InstallApplicationRequest, opts ...grpc.CallOption) (*Application, error)
+	// UpdateApplication API updates specified application on the target cluster.
+	UpdateApplication(ctx context.Context, in *UpdateApplicationRequest, opts ...grpc.CallOption) (*Application, error)
 	// (-- api-linter: core::0136::http-method=disabled
 	//
 	//	   aip.dev/not-precedent: We need to do this because
@@ -94,6 +97,15 @@ func (c *applicationServiceClient) InstallApplication(ctx context.Context, in *I
 	return out, nil
 }
 
+func (c *applicationServiceClient) UpdateApplication(ctx context.Context, in *UpdateApplicationRequest, opts ...grpc.CallOption) (*Application, error) {
+	out := new(Application)
+	err := c.cc.Invoke(ctx, ApplicationService_UpdateApplication_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *applicationServiceClient) UninstallApplication(ctx context.Context, in *UninstallApplicationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, ApplicationService_UninstallApplication_FullMethodName, in, out, opts...)
@@ -113,6 +125,8 @@ type ApplicationServiceServer interface {
 	GetApplication(context.Context, *GetApplicationRequest) (*Application, error)
 	// InstallApplication API installs specified application on the target cluster.
 	InstallApplication(context.Context, *InstallApplicationRequest) (*Application, error)
+	// UpdateApplication API updates specified application on the target cluster.
+	UpdateApplication(context.Context, *UpdateApplicationRequest) (*Application, error)
 	// (-- api-linter: core::0136::http-method=disabled
 	//
 	//	   aip.dev/not-precedent: We need to do this because
@@ -134,6 +148,9 @@ func (UnimplementedApplicationServiceServer) GetApplication(context.Context, *Ge
 }
 func (UnimplementedApplicationServiceServer) InstallApplication(context.Context, *InstallApplicationRequest) (*Application, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InstallApplication not implemented")
+}
+func (UnimplementedApplicationServiceServer) UpdateApplication(context.Context, *UpdateApplicationRequest) (*Application, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateApplication not implemented")
 }
 func (UnimplementedApplicationServiceServer) UninstallApplication(context.Context, *UninstallApplicationRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UninstallApplication not implemented")
@@ -205,6 +222,24 @@ func _ApplicationService_InstallApplication_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ApplicationService_UpdateApplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateApplicationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApplicationServiceServer).UpdateApplication(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ApplicationService_UpdateApplication_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApplicationServiceServer).UpdateApplication(ctx, req.(*UpdateApplicationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ApplicationService_UninstallApplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UninstallApplicationRequest)
 	if err := dec(in); err != nil {
@@ -241,6 +276,10 @@ var ApplicationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "InstallApplication",
 			Handler:    _ApplicationService_InstallApplication_Handler,
+		},
+		{
+			MethodName: "UpdateApplication",
+			Handler:    _ApplicationService_UpdateApplication_Handler,
 		},
 		{
 			MethodName: "UninstallApplication",

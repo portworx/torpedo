@@ -78,6 +78,7 @@ func (targetCluster *WorkflowTargetCluster) RegisterToControlPlane() (*WorkflowT
 		cmd = fmt.Sprintf("echo '%s' > %s && kubectl apply -f %s && rm -f %s", *manifest.Manifest, ManifestPath, ManifestPath, ManifestPath)
 		log.Infof("Manifest:\n%v\n", cmd)
 		output, _, err := osutils.ExecShell(cmd)
+		log.Infof("Output: %v", output)
 		if err != nil {
 			return targetCluster, fmt.Errorf("Error occured shile installing manifests: %v\n", err)
 		}

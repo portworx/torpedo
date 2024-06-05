@@ -36,7 +36,7 @@ func (backup *PDS_API_V1) ListBackup(listBackupRequest *automationModels.PDSBack
 	}
 	deploymentId := listBackupRequest.List.DeploymentId
 
-	listBkpRequest := bkpClient.BackupServiceListBackups(ctx).DeploymentId(deploymentId)
+	listBkpRequest := bkpClient.BackupServiceListBackups(ctx).DataServiceDeploymentId(deploymentId)
 
 	if listBackupRequest.List.SortSortBy != "" {
 		listBkpRequest = listBkpRequest.SortSortBy(listBackupRequest.List.SortSortBy)

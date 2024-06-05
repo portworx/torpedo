@@ -50,12 +50,14 @@ service TemplateService {
     };
   }
 
+  // (-- api-linter: core::0134::request-message-name=disabled
+//     aip.dev/not-precedent: We need to do this because we have uid in template resource itself. --)
   // Update API updates a template.
   rpc UpdateTemplate(UpdateTemplateRequest)
     returns(Template) {
     option(google.api.http) = {
-      put: "/core/v1/templates/{id}"
-      body: "template"
+      put: "/core/v1/templates/{template.meta.uid}"
+      body: "*"
     };
   }
 
@@ -166,14 +168,6 @@ message ListTemplatesRequest {
   public.portworx.common.v1.Sort sort = 7;
 }
 
-// Request to update a template instance.
-message UpdateTemplateRequest {
-  // ID of the template to be updated.
-  string id = 1;
-  // Desired template configuration.
-  Template template = 2;
-}
-
 // Request to delete a template instance.
 message DeleteTemplateRequest {
   // ID of the template instance.
@@ -188,4 +182,11 @@ message ListTemplatesResponse {
   // (-- api-linter: core::0132::response-unknown-fields=disabled
   //     aip.dev/not-precedent: We need this field for pagination. --)
   public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
+
+
+// Request to update a template instance.
+message UpdateTemplateRequest {
+  // Desired template configuration.
+  Template template = 1;
 }

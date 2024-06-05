@@ -34,6 +34,8 @@ message Selector{
     IN = 1;
     // NOT_IN specifies that the key should not be associated with any of the element in value list.
     NOT_IN = 2;
+    // LIKE specified that the key should be of a specified pattern
+    LIKE = 3;
   }
     
   // Filter for a given key.
