@@ -5048,6 +5048,16 @@ var _ = Describe("{TestRealm}", func() {
 			}
 			log.FailOnError(err, fmt.Sprintf("Failed to get pods from FA [%v]", fa.MgmtEndPoint))
 
+			log.InfoD("create a pod inside a Realm")
+			realmName := "pxe-qa"
+			podName := "pxe-qa-pod"
+			pod, err := pureutils.CreatePodinRealm(faClient, realmName, podName)
+			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] in realm [%v]", podName, realmName))
+			for _, pod := range pod.Items {
+				log.InfoD("Pod Name [%v] and Pod ID [%v]", pod.Name, pod.ID)
+			}
+			log.InfoD("Pod [%v] created in realm [%v]", podName, realmName)
+
 		}
 
 	})

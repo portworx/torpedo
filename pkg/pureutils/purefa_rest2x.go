@@ -1,6 +1,7 @@
 package pureutils
 
 import (
+	"fmt"
 	"github.com/portworx/torpedo/drivers/pure/flasharray"
 )
 
@@ -58,4 +59,14 @@ func ListAllPodsFromFA(faClient *flasharray.Client) ([]flasharray.PodResponse, e
 		return nil, err
 	}
 	return pods, nil
+}
+
+func CreatePodinRealm(faClient *flasharray.Client, realmName string, podName string) (flasharray.PodResponse, error) {
+	queryParams := make(map[string]string)
+	queryParams["names"] = fmt.Sprintf("%s::%s", realmName, podName)
+	podinfo, err := faClient.Realms.CreateRealmPod(queryParams, nil)
+	if err != nil {
+		return flasharray.PodResponse{}, err
+	}
+	return podinfo, nil
 }
