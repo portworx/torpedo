@@ -61,10 +61,10 @@ func ListAllPodsFromFA(faClient *flasharray.Client) ([]flasharray.PodResponse, e
 	return pods, nil
 }
 
-func CreatePodinRealm(faClient *flasharray.Client, podName string) (*[]flasharray.PodResponse, error) {
+func CreatePodinFA(faClient *flasharray.Client, podName string) (*[]flasharray.PodResponse, error) {
 	queryParams := make(map[string]string)
 	queryParams["names"] = fmt.Sprintf("%s", podName)
-	podinfo, err := faClient.Realms.CreateRealmPod(queryParams, nil)
+	podinfo, err := faClient.Pods.CreatePod(queryParams, nil)
 	if err != nil {
 		return nil, err
 	}
