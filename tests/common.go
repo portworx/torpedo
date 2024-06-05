@@ -6690,9 +6690,9 @@ func IsGCPBucketEmpty(bucketName string) (bool, error) {
 // IsAzureBlobEmpty returns true if bucket empty else false
 func IsAzureBlobEmpty(containerName string) (bool, error) {
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
-	azureRegion := os.Getenv("AZURE_ENDPOINT")
+	azureEndpoint := os.Getenv("AZURE_ENDPOINT")
 	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, containerName)
-	if azureRegion == "CHINA" {
+	if azureEndpoint == AzureChinaEndpoint {
 		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, containerName)
 	}
 	u, err := url.Parse(urlStr)
