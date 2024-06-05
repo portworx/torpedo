@@ -5078,6 +5078,11 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 			}
 
 		})
+		stepLog = "get all pods and realms from the FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
