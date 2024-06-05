@@ -109,6 +109,7 @@ ListTenantsRequest  is the request message to the ListTenants API.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | pagination | [ public.portworx.common.v1.PageBasedPaginationRequest](#publicportworxcommonv1pagebasedpaginationrequest) | Pagination parameters for listing tenants. |
+| resource_selector | [ public.portworx.common.v1.ResourceSelector](#publicportworxcommonv1resourceselector) | (-- api-linter: core::0132::response-unknown-fields=disabled aip.dev/not-precedent: We need this field for resource_selector. --) Filtering list of tenants based on the provided resource details.. |
  <!-- end Fields -->
  <!-- end HasFields -->
 

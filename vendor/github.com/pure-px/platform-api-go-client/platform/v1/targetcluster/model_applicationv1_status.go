@@ -22,6 +22,9 @@ type Applicationv1Status struct {
 	// current application chart version.
 	Version *string `json:"version,omitempty"`
 	Phase *ApplicationPhasePhase `json:"phase,omitempty"`
+	Health *ApplicationHealthHealth `json:"health,omitempty"`
+	// conditions of the application.
+	Conditions *map[string]string `json:"conditions,omitempty"`
 }
 
 // NewApplicationv1Status instantiates a new Applicationv1Status object
@@ -32,6 +35,8 @@ func NewApplicationv1Status() *Applicationv1Status {
 	this := Applicationv1Status{}
 	var phase ApplicationPhasePhase = APPLICATIONPHASEPHASE_PHASE_UNSPECIFIED
 	this.Phase = &phase
+	var health ApplicationHealthHealth = APPLICATIONHEALTHHEALTH_HEALTH_UNSPECIFIED
+	this.Health = &health
 	return &this
 }
 
@@ -42,6 +47,8 @@ func NewApplicationv1StatusWithDefaults() *Applicationv1Status {
 	this := Applicationv1Status{}
 	var phase ApplicationPhasePhase = APPLICATIONPHASEPHASE_PHASE_UNSPECIFIED
 	this.Phase = &phase
+	var health ApplicationHealthHealth = APPLICATIONHEALTHHEALTH_HEALTH_UNSPECIFIED
+	this.Health = &health
 	return &this
 }
 
@@ -109,6 +116,70 @@ func (o *Applicationv1Status) SetPhase(v ApplicationPhasePhase) {
 	o.Phase = &v
 }
 
+// GetHealth returns the Health field value if set, zero value otherwise.
+func (o *Applicationv1Status) GetHealth() ApplicationHealthHealth {
+	if o == nil || IsNil(o.Health) {
+		var ret ApplicationHealthHealth
+		return ret
+	}
+	return *o.Health
+}
+
+// GetHealthOk returns a tuple with the Health field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *Applicationv1Status) GetHealthOk() (*ApplicationHealthHealth, bool) {
+	if o == nil || IsNil(o.Health) {
+		return nil, false
+	}
+	return o.Health, true
+}
+
+// HasHealth returns a boolean if a field has been set.
+func (o *Applicationv1Status) HasHealth() bool {
+	if o != nil && !IsNil(o.Health) {
+		return true
+	}
+
+	return false
+}
+
+// SetHealth gets a reference to the given ApplicationHealthHealth and assigns it to the Health field.
+func (o *Applicationv1Status) SetHealth(v ApplicationHealthHealth) {
+	o.Health = &v
+}
+
+// GetConditions returns the Conditions field value if set, zero value otherwise.
+func (o *Applicationv1Status) GetConditions() map[string]string {
+	if o == nil || IsNil(o.Conditions) {
+		var ret map[string]string
+		return ret
+	}
+	return *o.Conditions
+}
+
+// GetConditionsOk returns a tuple with the Conditions field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *Applicationv1Status) GetConditionsOk() (*map[string]string, bool) {
+	if o == nil || IsNil(o.Conditions) {
+		return nil, false
+	}
+	return o.Conditions, true
+}
+
+// HasConditions returns a boolean if a field has been set.
+func (o *Applicationv1Status) HasConditions() bool {
+	if o != nil && !IsNil(o.Conditions) {
+		return true
+	}
+
+	return false
+}
+
+// SetConditions gets a reference to the given map[string]string and assigns it to the Conditions field.
+func (o *Applicationv1Status) SetConditions(v map[string]string) {
+	o.Conditions = &v
+}
+
 func (o Applicationv1Status) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -124,6 +195,12 @@ func (o Applicationv1Status) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.Phase) {
 		toSerialize["phase"] = o.Phase
+	}
+	if !IsNil(o.Health) {
+		toSerialize["health"] = o.Health
+	}
+	if !IsNil(o.Conditions) {
+		toSerialize["conditions"] = o.Conditions
 	}
 	return toSerialize, nil
 }

@@ -144,25 +144,25 @@ func (restore *PdsGrpc) GetRestore(getRestoreRequest *automationModels.PDSRestor
 func (restore *PdsGrpc) DeleteRestore(deleteRestoreRequest *automationModels.PDSRestoreRequest) error {
 	// log.Infof("Backup Delete - [%+v]", deleteBackupConfigRequest.BackupConfig.Delete)
 
-	deleteRequest := &publicRestoreapis.DeleteRestoreRequest{}
+	//deleteRequest := &publicRestoreapis.DeleteRestoreRequest{}
+	//// log.Infof("Restore Delete - [%v]", deleteRequest)
+	//err := utilities.CopyStruct(deleteRestoreRequest.Delete, deleteRequest)
+	//if err != nil {
+	//	return err
+	//}
 	// log.Infof("Restore Delete - [%v]", deleteRequest)
-	err := utilities.CopyStruct(deleteRestoreRequest.Delete, deleteRequest)
-	if err != nil {
-		return err
-	}
-	// log.Infof("Restore Delete - [%v]", deleteRequest)
 
-	ctx, client, _, err := restore.getRestoreClient()
-	if err != nil {
-		return fmt.Errorf("Error while getting grpc client: %v\n", err)
-	}
-
-	ctx = WithAccountIDMetaCtx(ctx, restore.AccountId)
-
-	_, err = client.DeleteRestore(ctx, deleteRequest, grpc.PerRPCCredentials(credentials))
-	if err != nil {
-		return fmt.Errorf("Error while deleting the restore: %v\n", err)
-	}
+	//ctx, client, _, err := restore.getRestoreClient()
+	//if err != nil {
+	//	return fmt.Errorf("Error while getting grpc client: %v\n", err)
+	//}
+	//
+	//ctx = WithAccountIDMetaCtx(ctx, restore.AccountId)
+	//
+	//_, err = client.DeleteRestore(ctx, deleteRequest, grpc.PerRPCCredentials(credentials))
+	//if err != nil {
+	//	return fmt.Errorf("Error while deleting the restore: %v\n", err)
+	//}
 
 	return nil
 }

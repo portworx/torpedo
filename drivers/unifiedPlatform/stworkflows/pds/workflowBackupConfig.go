@@ -6,6 +6,7 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
+	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	"strings"
 	"time"
@@ -25,13 +26,15 @@ const (
 )
 
 type BackupConfigDetails struct {
-	Backup automationModels.V1BackupConfig
-	Md5    string
+	Backup    automationModels.V1BackupConfig
+	Md5       string
+	ChkSumMap map[string]string
 }
 
 // CreateBackupConfig creates a backup config
 func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, deploymentId string) (*automationModels.PDSBackupConfigResponse, error) {
 	var chkSum string
+	chkSumMap := make(map[string]string)
 
 	log.Infof("Backup name - [%s]", name)
 	log.Infof("Deployment Name - [%s]", *backupConfig.WorkflowDataService.DataServiceDeployment[deploymentId].Deployment.Meta.Name)
@@ -46,6 +49,7 @@ func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, depl
 		}
 	} else {
 		var err error
+		backupConfig.WorkflowDataService.WorkloadGenParams.TableName = "bkpwl" + utilities.RandomString(3)
 		chkSum, err = backupConfig.WorkflowDataService.RunDataServiceWorkloads(deploymentId)
 		if err != nil {
 			return nil, fmt.Errorf("unable to run workfload on data service. Error - [%s]", err.Error())
@@ -63,9 +67,14 @@ func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, depl
 		return nil, err
 	}
 
+	//Get the newly created table name
+	log.Debugf("Data Inserted before backup for table:[%s]", backupConfig.WorkflowDataService.WorkloadGenParams.TableName)
+	chkSumMap[*createBackup.Create.Meta.Uid] = backupConfig.WorkflowDataService.WorkloadGenParams.TableName
+
 	backupConfig.BackupConfigs[*createBackup.Create.Meta.Uid] = &BackupConfigDetails{
-		Backup: createBackup.Create,
-		Md5:    chkSum,
+		Backup:    createBackup.Create,
+		Md5:       chkSum,
+		ChkSumMap: chkSumMap,
 	}
 
 	log.Infof("Backup config creates - Name - [%s] - ID - [%s]", *createBackup.Create.Meta.Name, *createBackup.Create.Meta.Uid)

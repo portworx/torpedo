@@ -134,7 +134,7 @@ type SortOrder_Value int32
 
 type SourceReferences struct {
 	// UID of the deployment which was backed up.
-	DeploymentId string `copier:"must,nopanic"`
+	DataServiceDeploymentId string `copier:"must,nopanic"`
 	// UID of the backup.
 	BackupId string `copier:"must,nopanic"`
 	// UID of the backup location.
@@ -147,7 +147,7 @@ type DestinationReferences struct {
 	// UID of the target cluster where restore will be created.
 	TargetClusterId string `copier:"must,nopanic"`
 	// UID of the deployment created by the restore.
-	DeploymentId string `copier:"must,nopanic"`
+	DataServiceDeploymentId string `copier:"must,nopanic"`
 	// UID of the project.
 	ProjectId string `copier:"must,nopanic"`
 }

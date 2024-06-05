@@ -22,6 +22,7 @@ import "google/api/annotations.proto";
 import "google/api/field_behavior.proto";
 import "public/portworx/common/apiv1/meta.proto";
 import "public/portworx/common/apiv1/pagination.proto";
+import "public/portworx/common/apiv1/selector.proto";
 
 option go_package = "github.com/pure-px/apis/public/portworx/platform/targetcluster/application/apiv1;application";
 option java_multiple_files = true;
@@ -59,6 +60,15 @@ service ApplicationService {
     };
   }
 
+  // UpdateApplication API updates specified application on the target cluster.
+  rpc UpdateApplication(UpdateApplicationRequest)
+      returns (Application) {
+    option(google.api.http) = {
+      put: "/core/v1/applications/{application.meta.uid}"
+      body: "application"
+    };
+  }
+
   // (-- api-linter: core::0136::http-method=disabled
   //     aip.dev/not-precedent: We need to do this because
   //     delete method is required for deleting resource. --)
@@ -72,16 +82,16 @@ service ApplicationService {
       }
     };
   }
-
-
 }
 
 // ListApplicationsRequest is the request to the ListApplications API.
 message ListApplicationsRequest {
   // Unique identifier of the cluster whose details needs to be fetched.
   string cluster_id = 1;
-  // Pagination parameters for listing target clusters.
+  // Pagination parameters for listing applications.
   public.portworx.common.v1.PageBasedPaginationRequest pagination = 2;
+  // Field selector is used to filter applications based on the fields in application proto message.
+  public.portworx.common.v1.Selector field_selector = 3 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // ListApplicationsResponse is the response to the ListApplications API.
@@ -113,6 +123,12 @@ message InstallApplicationRequest {
   Application application = 2;
 }
 
+// UpdateApplicationRequest is the request to the update application.
+message UpdateApplicationRequest {
+  // application to be updated.
+  Application application = 1;
+}
+
 // UninstallApplicationRequest is the request to the UninstallApplication API.
 message UninstallApplicationRequest {
   // Unique identifier of the cluster whose details needs to be fetched.
@@ -140,6 +156,26 @@ message Config {
   string namespace = 1[(google.api.field_behavior) = OUTPUT_ONLY];
   // desired application chart version.
   string version = 2[(google.api.field_behavior) = OUTPUT_ONLY];
+  // properties of the application.
+  oneof properties {
+    // pds app properties.
+    PDSProperties pds = 3;
+  }
+}
+
+// PDSProperties are the properties available for PDS.
+message PDSProperties {
+  // Global is the global property block for PDS.
+  message Global {
+    // data_service_tls_enabled enables TLS for dataservices.
+    // This requires cert-manager to be pre-installed.
+    bool data_service_tls_enabled = 1;
+  }
+
+  // global properties for PDS.
+  //  (-- api-linter: core::0140::reserved-words=disabled
+  //  aip.dev/not-precedent: We need to do this to be similar to helm config values. --).
+  Global global = 1;
 }
 
 // Status of the Application.
@@ -148,6 +184,10 @@ message Status {
   string version = 1;
   // current phase of the application.
   ApplicationPhase.Phase phase = 2;
+  // current health of the application.
+  ApplicationHealth.Health health = 3;
+  // conditions of the application.
+  map<string, string> conditions = 4;
 }
 
 // ApplicationPhase represents the phase of an application in target cluster.
@@ -166,5 +206,20 @@ message ApplicationPhase {
     FAILED = 4;
     // Application is being deleted.
     DELETING = 5;
+  }
+}
+
+// ApplicationHealth represents the health of an application in target cluster.
+message ApplicationHealth {
+  // Health determines health of an application.
+  enum Health {
+    // Must be set in the proto file; ignore.
+    HEALTH_UNSPECIFIED = 0;
+    // Application health is unknown.
+    UNKNOWN = 1;
+    // Application is healthy.
+    HEALTHY = 2;
+    // Application is unhealthy.
+    UNHEALTHY = 3;
   }
 }

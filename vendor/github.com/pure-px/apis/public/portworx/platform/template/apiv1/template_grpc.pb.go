@@ -50,6 +50,10 @@ type TemplateServiceClient interface {
 	GetTemplate(ctx context.Context, in *GetTemplateRequest, opts ...grpc.CallOption) (*Template, error)
 	// Create API creates a set of templates for a tenant.
 	CreateTemplate(ctx context.Context, in *CreateTemplateRequest, opts ...grpc.CallOption) (*Template, error)
+	// (-- api-linter: core::0134::request-message-name=disabled
+	//
+	//	aip.dev/not-precedent: We need to do this because we have uid in template resource itself. --)
+	//
 	// Update API updates a template.
 	UpdateTemplate(ctx context.Context, in *UpdateTemplateRequest, opts ...grpc.CallOption) (*Template, error)
 	// (-- api-linter: core::0132::http-body=disabled
@@ -126,6 +130,10 @@ type TemplateServiceServer interface {
 	GetTemplate(context.Context, *GetTemplateRequest) (*Template, error)
 	// Create API creates a set of templates for a tenant.
 	CreateTemplate(context.Context, *CreateTemplateRequest) (*Template, error)
+	// (-- api-linter: core::0134::request-message-name=disabled
+	//
+	//	aip.dev/not-precedent: We need to do this because we have uid in template resource itself. --)
+	//
 	// Update API updates a template.
 	UpdateTemplate(context.Context, *UpdateTemplateRequest) (*Template, error)
 	// (-- api-linter: core::0132::http-body=disabled

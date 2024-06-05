@@ -19,6 +19,7 @@ type Deployment interface {
 	ListDeployment(string) (*PDSDeploymentResponse, error)
 	GetDeployment(string) (*PDSDeploymentResponse, error)
 	DeleteDeployment(string) error
+	GetDeploymentCredentials(string) (string, error)
 }
 
 type DeploymentConfig interface {

@@ -15,7 +15,7 @@ import (
 	"fmt"
 )
 
-// V1Phase Enum for phase of the restore.   - PHASE_UNSPECIFIED: Phase is unspecified.  - INITIALIZING: Restore is initializing.  - PENDING: Restore has not yet started.  - RESTORING_CLOUDSNAP: Waiting for the cloud snap restore to complete.  - RESTORING_DATA_SERVICE_CR: PV and PVC resources are ready and we're waiting to get the data service manifest from the backup.  - RESTORING_DEPLOYMENT: New data service has been created and we're waiting for the restore process to complete.  - DEPLOYMENT_ENTERING_NORMAL_MODE: Restore process in data service has succeeded and we're waiting until it becomes healthy in normal mode.  - SUCCESSFUL: Restore successful.  - FAILED: Restore failed.
+// V1Phase Enum for phase of the restore.   - PHASE_UNSPECIFIED: Phase is unspecified.  - INITIALIZING: Restore is initializing.  - PENDING: Restore has not yet started.  - RESTORING_CLOUDSNAP: Waiting for the cloud snap restore to complete.  - RESTORING_DATA_SERVICE_DEPLOYMENT_CR: PV and PVC resources are ready and we're waiting to get the data service deployment manifest from the backup.  - RESTORING_DATA_SERVICE_DEPLOYMENT: New data service deployment has been created and we're waiting for the restore process to complete.  - DATA_SERVICE_DEPLOYMENT_ENTERING_NORMAL_MODE: Restore process in data service deployment has succeeded and we're waiting until it becomes healthy in normal mode.  - SUCCESSFUL: Restore successful.  - FAILED: Restore failed.
 type V1Phase string
 
 // List of v1Phase
@@ -24,9 +24,9 @@ const (
 	V1PHASE_INITIALIZING V1Phase = "INITIALIZING"
 	V1PHASE_PENDING V1Phase = "PENDING"
 	V1PHASE_RESTORING_CLOUDSNAP V1Phase = "RESTORING_CLOUDSNAP"
-	V1PHASE_RESTORING_DATA_SERVICE_CR V1Phase = "RESTORING_DATA_SERVICE_CR"
-	V1PHASE_RESTORING_DEPLOYMENT V1Phase = "RESTORING_DEPLOYMENT"
-	V1PHASE_DEPLOYMENT_ENTERING_NORMAL_MODE V1Phase = "DEPLOYMENT_ENTERING_NORMAL_MODE"
+	V1PHASE_RESTORING_DATA_SERVICE_DEPLOYMENT_CR V1Phase = "RESTORING_DATA_SERVICE_DEPLOYMENT_CR"
+	V1PHASE_RESTORING_DATA_SERVICE_DEPLOYMENT V1Phase = "RESTORING_DATA_SERVICE_DEPLOYMENT"
+	V1PHASE_DATA_SERVICE_DEPLOYMENT_ENTERING_NORMAL_MODE V1Phase = "DATA_SERVICE_DEPLOYMENT_ENTERING_NORMAL_MODE"
 	V1PHASE_SUCCESSFUL V1Phase = "SUCCESSFUL"
 	V1PHASE_FAILED V1Phase = "FAILED"
 )
@@ -37,9 +37,9 @@ var AllowedV1PhaseEnumValues = []V1Phase{
 	"INITIALIZING",
 	"PENDING",
 	"RESTORING_CLOUDSNAP",
-	"RESTORING_DATA_SERVICE_CR",
-	"RESTORING_DEPLOYMENT",
-	"DEPLOYMENT_ENTERING_NORMAL_MODE",
+	"RESTORING_DATA_SERVICE_DEPLOYMENT_CR",
+	"RESTORING_DATA_SERVICE_DEPLOYMENT",
+	"DATA_SERVICE_DEPLOYMENT_ENTERING_NORMAL_MODE",
 	"SUCCESSFUL",
 	"FAILED",
 }

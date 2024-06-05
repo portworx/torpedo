@@ -209,8 +209,10 @@ func populateDisruptiveTriggers() {
 		RebootManyNodes:                 true,
 		RestartKvdbVolDriver:            true,
 		NodeDecommission:                true,
+		DetachDrives:                    true,
 		CsiSnapShot:                     false,
 		CsiSnapRestore:                  false,
+		DeleteCloudsnaps:                false,
 		KVDBFailover:                    true,
 		HAIncreaseAndReboot:             true,
 		AddDiskAndReboot:                true,
@@ -218,6 +220,7 @@ func populateDisruptiveTriggers() {
 		VolumeCreatePxRestart:           true,
 		OCPStorageNodeRecycle:           true,
 		CrashPXDaemon:                   true,
+		PowerOffAllVMs:                  true,
 	}
 }
 
@@ -560,10 +563,12 @@ func populateIntervals() {
 	triggerInterval[UpgradeVolumeDriver] = make(map[int]time.Duration)
 	triggerInterval[UpgradeVolumeDriverFromCatalog] = make(map[int]time.Duration)
 	triggerInterval[UpgradeCluster] = make(map[int]time.Duration)
+	triggerInterval[PowerOffAllVMs] = make(map[int]time.Duration)
 	triggerInterval[AppTasksDown] = make(map[int]time.Duration)
 	triggerInterval[AutoFsTrim] = make(map[int]time.Duration)
 	triggerInterval[UpdateVolume] = make(map[int]time.Duration)
 	triggerInterval[UpdateIOProfile] = make(map[int]time.Duration)
+	triggerInterval[DetachDrives] = make(map[int]time.Duration)
 	triggerInterval[RestartManyVolDriver] = make(map[int]time.Duration)
 	triggerInterval[RebootManyNodes] = make(map[int]time.Duration)
 	triggerInterval[NodeDecommission] = make(map[int]time.Duration)
@@ -618,9 +623,10 @@ func populateIntervals() {
 	triggerInterval[VolumeDriverDownVCluster] = make(map[int]time.Duration)
 	triggerInterval[SetDiscardMounts] = make(map[int]time.Duration)
 	triggerInterval[ResetDiscardMounts] = make(map[int]time.Duration)
+	triggerInterval[ScaleFADAVolumeAttach] = map[int]time.Duration{}
+	triggerInterval[DeleteCloudsnaps] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
-
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
 	triggerInterval[BackupScaleMongo][9] = 2 * baseInterval
 	triggerInterval[BackupScaleMongo][8] = 3 * baseInterval
@@ -937,7 +943,6 @@ func populateIntervals() {
 	triggerInterval[StorkAppBkpPoolResize][3] = 21 * baseInterval
 	triggerInterval[StorkAppBkpPoolResize][2] = 24 * baseInterval
 	triggerInterval[StorkAppBkpPoolResize][1] = 27 * baseInterval
-
 	baseInterval = 60 * time.Minute
 
 	triggerInterval[AppTasksDown][10] = 1 * baseInterval
@@ -994,6 +999,17 @@ func populateIntervals() {
 	triggerInterval[CrashPXDaemon][3] = 21 * baseInterval
 	triggerInterval[CrashPXDaemon][2] = 24 * baseInterval
 	triggerInterval[CrashPXDaemon][1] = 27 * baseInterval
+
+	triggerInterval[PowerOffAllVMs][10] = 1 * baseInterval
+	triggerInterval[PowerOffAllVMs][9] = 3 * baseInterval
+	triggerInterval[PowerOffAllVMs][8] = 6 * baseInterval
+	triggerInterval[PowerOffAllVMs][7] = 9 * baseInterval
+	triggerInterval[PowerOffAllVMs][6] = 12 * baseInterval
+	triggerInterval[PowerOffAllVMs][5] = 15 * baseInterval
+	triggerInterval[PowerOffAllVMs][4] = 18 * baseInterval
+	triggerInterval[PowerOffAllVMs][3] = 21 * baseInterval
+	triggerInterval[PowerOffAllVMs][2] = 24 * baseInterval
+	triggerInterval[PowerOffAllVMs][1] = 27 * baseInterval
 
 	triggerInterval[NodeMaintenanceCycle][10] = 1 * baseInterval
 	triggerInterval[NodeMaintenanceCycle][9] = 3 * baseInterval
@@ -1189,6 +1205,17 @@ func populateIntervals() {
 	triggerInterval[CloudSnapShotRestore][2] = 24 * baseInterval
 	triggerInterval[CloudSnapShotRestore][1] = 27 * baseInterval
 
+	triggerInterval[DeleteCloudsnaps][10] = 1 * baseInterval
+	triggerInterval[DeleteCloudsnaps][9] = 3 * baseInterval
+	triggerInterval[DeleteCloudsnaps][8] = 6 * baseInterval
+	triggerInterval[DeleteCloudsnaps][7] = 9 * baseInterval
+	triggerInterval[DeleteCloudsnaps][6] = 12 * baseInterval
+	triggerInterval[DeleteCloudsnaps][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[DeleteCloudsnaps][4] = 18 * baseInterval
+	triggerInterval[DeleteCloudsnaps][3] = 21 * baseInterval
+	triggerInterval[DeleteCloudsnaps][2] = 24 * baseInterval
+	triggerInterval[DeleteCloudsnaps][1] = 27 * baseInterval
+
 	triggerInterval[LocalSnapShot][10] = 1 * baseInterval
 	triggerInterval[LocalSnapShot][9] = 3 * baseInterval
 	triggerInterval[LocalSnapShot][8] = 6 * baseInterval
@@ -1320,6 +1347,17 @@ func populateIntervals() {
 	triggerInterval[UpdateIOProfile][3] = 21 * baseInterval
 	triggerInterval[UpdateIOProfile][2] = 24 * baseInterval
 	triggerInterval[UpdateIOProfile][1] = 27 * baseInterval
+
+	triggerInterval[DetachDrives][10] = 1 * baseInterval
+	triggerInterval[DetachDrives][9] = 3 * baseInterval
+	triggerInterval[DetachDrives][8] = 6 * baseInterval
+	triggerInterval[DetachDrives][7] = 9 * baseInterval
+	triggerInterval[DetachDrives][6] = 12 * baseInterval
+	triggerInterval[DetachDrives][5] = 15 * baseInterval
+	triggerInterval[DetachDrives][4] = 18 * baseInterval
+	triggerInterval[DetachDrives][3] = 21 * baseInterval
+	triggerInterval[DetachDrives][2] = 24 * baseInterval
+	triggerInterval[DetachDrives][1] = 27 * baseInterval
 
 	triggerInterval[NodeDecommission][10] = 1 * baseInterval
 	triggerInterval[NodeDecommission][9] = 3 * baseInterval
@@ -1617,6 +1655,17 @@ func populateIntervals() {
 	triggerInterval[OCPStorageNodeRecycle][2] = 24 * baseInterval
 	triggerInterval[OCPStorageNodeRecycle][1] = 30 * baseInterval
 
+	triggerInterval[ScaleFADAVolumeAttach][10] = 1 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][9] = 3 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][8] = 6 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][7] = 9 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][6] = 12 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][5] = 15 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][4] = 18 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][3] = 21 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][2] = 24 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][1] = 30 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -1687,14 +1736,17 @@ func populateIntervals() {
 	triggerInterval[AutopilotRebalance][0] = 0
 	triggerInterval[VolumeCreatePxRestart][0] = 0
 	triggerInterval[CloudSnapShotRestore][0] = 0
+	triggerInterval[DeleteCloudsnaps][0] = 0
 	triggerInterval[LocalSnapShotRestore][0] = 0
 	triggerInterval[UpdateIOProfile][0] = 0
 	triggerInterval[AggrVolDepReplResizeOps][0] = 0
 	triggerInterval[UpdateIOProfile][0] = 0
+	triggerInterval[DetachDrives][0] = 0
 	triggerInterval[AddStorageNode][0] = 0
 	triggerInterval[AddStoragelessNode][0] = 0
 	triggerInterval[OCPStorageNodeRecycle][0] = 0
 	triggerInterval[NodeDecommission][0] = 0
+	triggerInterval[PowerOffAllVMs][0] = 0
 	triggerInterval[HAIncreaseAndRestartPX][0] = 0
 	triggerInterval[HAIncreaseAndCrashPX][0] = 0
 	triggerInterval[CrashPXDaemon][0] = 0
@@ -1705,6 +1757,7 @@ func populateIntervals() {
 	triggerInterval[ReallocateSharedMount][0] = 0
 	triggerInterval[SetDiscardMounts][0] = 0
 	triggerInterval[ResetDiscardMounts][0] = 0
+	triggerInterval[ScaleFADAVolumeAttach][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

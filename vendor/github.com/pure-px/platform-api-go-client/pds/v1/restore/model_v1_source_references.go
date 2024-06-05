@@ -22,7 +22,7 @@ var _ MappedNullable = &V1SourceReferences{}
 // V1SourceReferences SourceReferences for the restore.
 type V1SourceReferences struct {
 	// UID of the deployment which was backed up.
-	DeploymentId *string `json:"deploymentId,omitempty"`
+	DataServiceDeploymentId *string `json:"dataServiceDeploymentId,omitempty"`
 	// UID of the backup.
 	BackupId string `json:"backupId"`
 	// UID of the backup location.
@@ -51,36 +51,36 @@ func NewV1SourceReferencesWithDefaults() *V1SourceReferences {
 	return &this
 }
 
-// GetDeploymentId returns the DeploymentId field value if set, zero value otherwise.
-func (o *V1SourceReferences) GetDeploymentId() string {
-	if o == nil || IsNil(o.DeploymentId) {
+// GetDataServiceDeploymentId returns the DataServiceDeploymentId field value if set, zero value otherwise.
+func (o *V1SourceReferences) GetDataServiceDeploymentId() string {
+	if o == nil || IsNil(o.DataServiceDeploymentId) {
 		var ret string
 		return ret
 	}
-	return *o.DeploymentId
+	return *o.DataServiceDeploymentId
 }
 
-// GetDeploymentIdOk returns a tuple with the DeploymentId field value if set, nil otherwise
+// GetDataServiceDeploymentIdOk returns a tuple with the DataServiceDeploymentId field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *V1SourceReferences) GetDeploymentIdOk() (*string, bool) {
-	if o == nil || IsNil(o.DeploymentId) {
+func (o *V1SourceReferences) GetDataServiceDeploymentIdOk() (*string, bool) {
+	if o == nil || IsNil(o.DataServiceDeploymentId) {
 		return nil, false
 	}
-	return o.DeploymentId, true
+	return o.DataServiceDeploymentId, true
 }
 
-// HasDeploymentId returns a boolean if a field has been set.
-func (o *V1SourceReferences) HasDeploymentId() bool {
-	if o != nil && !IsNil(o.DeploymentId) {
+// HasDataServiceDeploymentId returns a boolean if a field has been set.
+func (o *V1SourceReferences) HasDataServiceDeploymentId() bool {
+	if o != nil && !IsNil(o.DataServiceDeploymentId) {
 		return true
 	}
 
 	return false
 }
 
-// SetDeploymentId gets a reference to the given string and assigns it to the DeploymentId field.
-func (o *V1SourceReferences) SetDeploymentId(v string) {
-	o.DeploymentId = &v
+// SetDataServiceDeploymentId gets a reference to the given string and assigns it to the DataServiceDeploymentId field.
+func (o *V1SourceReferences) SetDataServiceDeploymentId(v string) {
+	o.DataServiceDeploymentId = &v
 }
 
 // GetBackupId returns the BackupId field value
@@ -181,8 +181,8 @@ func (o V1SourceReferences) MarshalJSON() ([]byte, error) {
 
 func (o V1SourceReferences) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.DeploymentId) {
-		toSerialize["deploymentId"] = o.DeploymentId
+	if !IsNil(o.DataServiceDeploymentId) {
+		toSerialize["dataServiceDeploymentId"] = o.DataServiceDeploymentId
 	}
 	toSerialize["backupId"] = o.BackupId
 	if !IsNil(o.BackupLocationId) {

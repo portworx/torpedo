@@ -194,12 +194,12 @@ func ValidateDataServiceDeploymentHealth(deploymentId string, expectedHealth aut
 			return false, nil
 		}
 		if *res.Get.Status.Phase == stworkflows.FAILED {
-			log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Replicas, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
+			log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DataServiceDeploymentTopologies[0].Instances, *res.Get.Status.DataServiceDeploymentTopologyStatus[0].ReadyInstances)
 			return true, fmt.Errorf("Deployment [%s] is [%s]", *res.Get.Meta.Name, *res.Get.Status.Phase)
 		}
 		log.Debugf("Health status - [%v]", *res.Get.Status.Health)
 		if *res.Get.Status.Health == expectedHealth {
-			log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Replicas, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
+			log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DataServiceDeploymentTopologies[0].Instances, *res.Get.Status.DataServiceDeploymentTopologyStatus[0].ReadyInstances)
 			if ResiFlag {
 				ResiliencyCondition <- true
 				log.InfoD("Resiliency Condition Met")
@@ -228,10 +228,10 @@ func ValidateDeploymentIsDeleted(deploymentId string) error {
 			return true, nil
 		}
 		log.Debugf("Health status -  %v", *res.Get.Status.Health)
-		if *res.Get.Config.DeploymentTopologies[0].Replicas != *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas || *res.Get.Status.Health != PDS_DEPLOYMENT_AVAILABLE {
+		if *res.Get.Config.DataServiceDeploymentTopologies[0].Instances != *res.Get.Status.DataServiceDeploymentTopologyStatus[0].ReadyInstances || *res.Get.Status.Health != PDS_DEPLOYMENT_AVAILABLE {
 			return false, nil
 		}
-		log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DeploymentTopologies[0].Replicas, *res.Get.Status.DeploymentTopologyStatus[0].ReadyReplicas)
+		log.Infof("Deployment details: Health status -  %v, Replicas - %v, Ready replicas - %v", *res.Get.Status.Health, *res.Get.Config.DataServiceDeploymentTopologies[0].Instances, *res.Get.Status.DataServiceDeploymentTopologyStatus[0].ReadyInstances)
 		return false, nil
 	})
 
@@ -316,6 +316,11 @@ func GenerateWorkload(deploymentName, dataServiceName, crdName string, wkloadGen
 	log.Debugf("DeploymentName [%s]", deploymentName)
 	log.Debugf("dataServiceName [%s]", dataServiceName)
 	log.Debugf("CrdName [%s]", crdName)
+	log.Debugf("workloadDepName [%s]", workloadDepName)
+	log.Debugf("tableName [%s]", seed)
+	log.Debugf("namespace [%s]", namespace)
+	log.Debugf("mode [%s]", mode)
+	log.Debugf("counts [%s], iterations [%s]", counts, iterations)
 
 	serviceAccount, err := pds.CreatePolicies(namespace, crdName)
 	if err != nil {

@@ -35,7 +35,8 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	WhoAmIService_WhoAmI_FullMethodName = "/public.portworx.platform.whoami.v1.WhoAmIService/WhoAmI"
+	WhoAmIService_WhoAmI_FullMethodName            = "/public.portworx.platform.whoami.v1.WhoAmIService/WhoAmI"
+	WhoAmIService_InvitationsWhoAmI_FullMethodName = "/public.portworx.platform.whoami.v1.WhoAmIService/InvitationsWhoAmI"
 )
 
 // WhoAmIServiceClient is the client API for WhoAmIService service.
@@ -44,6 +45,8 @@ const (
 type WhoAmIServiceClient interface {
 	// WhoAmI API returns the current actor accounts.
 	WhoAmI(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*WhoAmIResponse, error)
+	// InvitationsWhoAmI API returns the current actor pending invitations cross accounts.
+	InvitationsWhoAmI(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*WhoAmIResponse, error)
 }
 
 type whoAmIServiceClient struct {
@@ -63,12 +66,23 @@ func (c *whoAmIServiceClient) WhoAmI(ctx context.Context, in *emptypb.Empty, opt
 	return out, nil
 }
 
+func (c *whoAmIServiceClient) InvitationsWhoAmI(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*WhoAmIResponse, error) {
+	out := new(WhoAmIResponse)
+	err := c.cc.Invoke(ctx, WhoAmIService_InvitationsWhoAmI_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WhoAmIServiceServer is the server API for WhoAmIService service.
 // All implementations must embed UnimplementedWhoAmIServiceServer
 // for forward compatibility
 type WhoAmIServiceServer interface {
 	// WhoAmI API returns the current actor accounts.
 	WhoAmI(context.Context, *emptypb.Empty) (*WhoAmIResponse, error)
+	// InvitationsWhoAmI API returns the current actor pending invitations cross accounts.
+	InvitationsWhoAmI(context.Context, *emptypb.Empty) (*WhoAmIResponse, error)
 	mustEmbedUnimplementedWhoAmIServiceServer()
 }
 
@@ -78,6 +92,9 @@ type UnimplementedWhoAmIServiceServer struct {
 
 func (UnimplementedWhoAmIServiceServer) WhoAmI(context.Context, *emptypb.Empty) (*WhoAmIResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WhoAmI not implemented")
+}
+func (UnimplementedWhoAmIServiceServer) InvitationsWhoAmI(context.Context, *emptypb.Empty) (*WhoAmIResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InvitationsWhoAmI not implemented")
 }
 func (UnimplementedWhoAmIServiceServer) mustEmbedUnimplementedWhoAmIServiceServer() {}
 
@@ -110,6 +127,24 @@ func _WhoAmIService_WhoAmI_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WhoAmIService_InvitationsWhoAmI_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WhoAmIServiceServer).InvitationsWhoAmI(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WhoAmIService_InvitationsWhoAmI_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WhoAmIServiceServer).InvitationsWhoAmI(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WhoAmIService_ServiceDesc is the grpc.ServiceDesc for WhoAmIService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -120,6 +155,10 @@ var WhoAmIService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "WhoAmI",
 			Handler:    _WhoAmIService_WhoAmI_Handler,
+		},
+		{
+			MethodName: "InvitationsWhoAmI",
+			Handler:    _WhoAmIService_InvitationsWhoAmI_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

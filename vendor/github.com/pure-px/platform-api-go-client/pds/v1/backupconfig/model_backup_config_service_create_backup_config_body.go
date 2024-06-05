@@ -21,8 +21,8 @@ var _ MappedNullable = &BackupConfigServiceCreateBackupConfigBody{}
 
 // BackupConfigServiceCreateBackupConfigBody Request to create a backup configuration.
 type BackupConfigServiceCreateBackupConfigBody struct {
-	//  Deployment id associated with the backup configuration.
-	DeploymentId string `json:"deploymentId"`
+	//  Data service Deployment id associated with the backup configuration.
+	DataServiceDeploymentId string `json:"dataServiceDeploymentId"`
 	BackupConfig V1BackupConfig `json:"backupConfig"`
 }
 
@@ -32,9 +32,9 @@ type _BackupConfigServiceCreateBackupConfigBody BackupConfigServiceCreateBackupC
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewBackupConfigServiceCreateBackupConfigBody(deploymentId string, backupConfig V1BackupConfig) *BackupConfigServiceCreateBackupConfigBody {
+func NewBackupConfigServiceCreateBackupConfigBody(dataServiceDeploymentId string, backupConfig V1BackupConfig) *BackupConfigServiceCreateBackupConfigBody {
 	this := BackupConfigServiceCreateBackupConfigBody{}
-	this.DeploymentId = deploymentId
+	this.DataServiceDeploymentId = dataServiceDeploymentId
 	this.BackupConfig = backupConfig
 	return &this
 }
@@ -47,28 +47,28 @@ func NewBackupConfigServiceCreateBackupConfigBodyWithDefaults() *BackupConfigSer
 	return &this
 }
 
-// GetDeploymentId returns the DeploymentId field value
-func (o *BackupConfigServiceCreateBackupConfigBody) GetDeploymentId() string {
+// GetDataServiceDeploymentId returns the DataServiceDeploymentId field value
+func (o *BackupConfigServiceCreateBackupConfigBody) GetDataServiceDeploymentId() string {
 	if o == nil {
 		var ret string
 		return ret
 	}
 
-	return o.DeploymentId
+	return o.DataServiceDeploymentId
 }
 
-// GetDeploymentIdOk returns a tuple with the DeploymentId field value
+// GetDataServiceDeploymentIdOk returns a tuple with the DataServiceDeploymentId field value
 // and a boolean to check if the value has been set.
-func (o *BackupConfigServiceCreateBackupConfigBody) GetDeploymentIdOk() (*string, bool) {
+func (o *BackupConfigServiceCreateBackupConfigBody) GetDataServiceDeploymentIdOk() (*string, bool) {
 	if o == nil {
 		return nil, false
 	}
-	return &o.DeploymentId, true
+	return &o.DataServiceDeploymentId, true
 }
 
-// SetDeploymentId sets field value
-func (o *BackupConfigServiceCreateBackupConfigBody) SetDeploymentId(v string) {
-	o.DeploymentId = v
+// SetDataServiceDeploymentId sets field value
+func (o *BackupConfigServiceCreateBackupConfigBody) SetDataServiceDeploymentId(v string) {
+	o.DataServiceDeploymentId = v
 }
 
 // GetBackupConfig returns the BackupConfig field value
@@ -105,7 +105,7 @@ func (o BackupConfigServiceCreateBackupConfigBody) MarshalJSON() ([]byte, error)
 
 func (o BackupConfigServiceCreateBackupConfigBody) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	toSerialize["deploymentId"] = o.DeploymentId
+	toSerialize["dataServiceDeploymentId"] = o.DataServiceDeploymentId
 	toSerialize["backupConfig"] = o.BackupConfig
 	return toSerialize, nil
 }
@@ -115,7 +115,7 @@ func (o *BackupConfigServiceCreateBackupConfigBody) UnmarshalJSON(data []byte) (
 	// by unmarshalling the object into a generic map with string keys and checking
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
-		"deploymentId",
+		"dataServiceDeploymentId",
 		"backupConfig",
 	}
 

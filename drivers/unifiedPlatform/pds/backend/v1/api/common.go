@@ -7,8 +7,8 @@ import (
 	backupV1 "github.com/pure-px/platform-api-go-client/pds/v1/backup"
 	backupConfigV1 "github.com/pure-px/platform-api-go-client/pds/v1/backupconfig"
 	catalogV1 "github.com/pure-px/platform-api-go-client/pds/v1/catalog"
-	deploymentV1 "github.com/pure-px/platform-api-go-client/pds/v1/deployment"
-	deploymentsConfigUpdateV1 "github.com/pure-px/platform-api-go-client/pds/v1/deploymentconfigupdate"
+	deploymentV1 "github.com/pure-px/platform-api-go-client/pds/v1/dataservicedeployment"
+	deploymentsConfigUpdateV1 "github.com/pure-px/platform-api-go-client/pds/v1/dataservicedeploymentconfigupdate"
 	restoreV1 "github.com/pure-px/platform-api-go-client/pds/v1/restore"
 )
 
@@ -62,25 +62,25 @@ func (restore *PDS_API_V1) getRestoreClient() (context.Context, *restoreV1.Resto
 }
 
 // GetClient updates the header with bearer token and returns the new client
-func (ds *PDS_API_V1) getDeploymentClient() (context.Context, *deploymentV1.DeploymentServiceAPIService, error) {
+func (ds *PDS_API_V1) getDeploymentClient() (context.Context, *deploymentV1.DataServiceDeploymentServiceAPIService, error) {
 	ctx, token, err := utils.GetBearerToken()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
 	ds.DeploymentV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, ds.AccountID)
-	client := ds.DeploymentV1APIClient.DeploymentServiceAPI
+	client := ds.DeploymentV1APIClient.DataServiceDeploymentServiceAPI
 
 	return ctx, client, nil
 }
 
 // GetDeploymentConfigClient updates the header with bearer token and returns the new client
-func (ds *PDS_API_V1) getDeploymentConfigClient() (context.Context, *deploymentsConfigUpdateV1.DeploymentConfigUpdateServiceAPIService, error) {
+func (ds *PDS_API_V1) getDeploymentConfigClient() (context.Context, *deploymentsConfigUpdateV1.DataServiceDeploymentConfigUpdateServiceAPIService, error) {
 	ctx, token, err := utils.GetBearerToken()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
 	ds.DeploymentsConfigUpdateV1APIClient.GetConfig().DefaultHeader = utils.GetDefaultHeader(token, ds.AccountID)
-	client := ds.DeploymentsConfigUpdateV1APIClient.DeploymentConfigUpdateServiceAPI
+	client := ds.DeploymentsConfigUpdateV1APIClient.DataServiceDeploymentConfigUpdateServiceAPI
 
 	return ctx, client, nil
 }

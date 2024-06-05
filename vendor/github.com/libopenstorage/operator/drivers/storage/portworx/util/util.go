@@ -84,6 +84,8 @@ const (
 	EnvKeyKubeletDir = "KUBELET_DIR"
 	// OS name for windows node
 	WindowsOsName = "windows"
+	// Dummy Secret value for authentication when Security is disabled
+	DummySecretValue = "dummy-secret-value"
 
 	// AnnotationIsPKS annotation indicating whether it is a PKS cluster
 	AnnotationIsPKS = pxAnnotationPrefix + "/is-pks"
@@ -833,7 +835,7 @@ func GetStorageNodes(
 	}
 
 	nodeClient := api.NewOpenStorageNodeClient(sdkConn)
-	ctx, err := SetupContextWithToken(context.Background(), cluster, k8sClient)
+	ctx, err := SetupContextWithToken(context.Background(), cluster, k8sClient, false)
 	if err != nil {
 		return sdkConn, nil, err
 	}
@@ -1151,16 +1153,25 @@ func AuthEnabled(spec *corev1.StorageClusterSpec) bool {
 }
 
 // SetupContextWithToken Gets token or from secret for authenticating with the SDK server
-func SetupContextWithToken(ctx context.Context, cluster *corev1.StorageCluster, k8sClient client.Client) (context.Context, error) {
+func SetupContextWithToken(ctx context.Context, cluster *corev1.StorageCluster, k8sClient client.Client, skipSecurityCheck bool) (context.Context, error) {
 	// auth not declared in cluster spec
-	if !AuthEnabled(&cluster.Spec) {
+	// if security enabled check is skipped, proceed without returning context
+	if !AuthEnabled(&cluster.Spec) && !skipSecurityCheck {
 		return ctx, nil
 	}
 
 	pxAppsSecret, err := GetSecretValue(ctx, cluster, k8sClient, SecurityPXSystemSecretsSecretName, SecurityAppsSecretKey)
 	if err != nil {
-		return ctx, fmt.Errorf("failed to get portworx apps secret: %v", err.Error())
+		if !skipSecurityCheck {
+			return ctx, fmt.Errorf("failed to get portworx apps secret: %v", err.Error())
+		}
+		// if security enabled check is skipped and secret is not present, proceed with dummy secret value
+		// this is case of fresh install where security was never enabled
+		if errors.IsNotFound(err) && skipSecurityCheck {
+			pxAppsSecret = DummySecretValue
+		}
 	}
+
 	if pxAppsSecret == "" {
 		return ctx, nil
 	}
@@ -1387,7 +1398,7 @@ func CountStorageNodes(
 	k8sClient client.Client,
 ) (int, error) {
 	nodeClient := api.NewOpenStorageNodeClient(sdkConn)
-	ctx, err := SetupContextWithToken(context.Background(), cluster, k8sClient)
+	ctx, err := SetupContextWithToken(context.Background(), cluster, k8sClient, false)
 	if err != nil {
 		return -1, err
 	}
@@ -1415,23 +1426,23 @@ func CountStorageNodes(
 		if node.Status == api.Status_STATUS_DECOMMISSION {
 			continue
 		}
-		v := node.NodeLabels[NodeLabelPortworxVersion]
-		nodeVersion, err := version.NewVersion(v)
+		useQuorumFlag, err = ShouldUseQuorumFlag(node)
 		if err != nil {
-			logrus.Warnf("Failed to parse node version %s for node %s: %v", v, node.Id, err)
+			logrus.Errorf("failed to determine if quorum flag should be used: %v", err)
 			useQuorumFlag = false
 			useClusterDomain = false
 			break
 		}
-		if nodeVersion.LessThan(MinimumPxVersionQuorumFlag) {
-			logrus.Tracef("Node %s is older than %s. Not using quorum member flag", node.Id, MinimumPxVersionQuorumFlag.String())
-			useQuorumFlag = false
+
+		if !useQuorumFlag {
 			useClusterDomain = false
 			break
 		}
-		if nodeVersion.LessThan(MinimumPxVersionClusterDomain) {
-			logrus.Tracef("Node %s is older than %s. Cannot using cluster domain field", node.Id, MinimumPxVersionClusterDomain.String())
-			useClusterDomain = false
+
+		useClusterDomain, err = ShouldUseClusterDomain(node)
+		if err != nil {
+			logrus.Errorf("failed to determine if cluster domain should be used: %v", err)
+			break
 		}
 	}
 
@@ -1523,7 +1534,7 @@ func getStorageNodeMappingFromRPC(
 	k8sClient client.Client,
 ) (map[string]string, map[string]string, error) {
 	nodeClient := api.NewOpenStorageNodeClient(sdkConn)
-	ctx, err := SetupContextWithToken(context.Background(), cluster, k8sClient)
+	ctx, err := SetupContextWithToken(context.Background(), cluster, k8sClient, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1903,6 +1914,37 @@ func isVersionSupported(current, target string) bool {
 	return currentVersion.Core().GreaterThanOrEqual(targetVersion)
 }
 
-func IsK3sClusterExt(ext string) bool {
-	return strings.HasPrefix(ext[1:], "k3s")
+func IsK3sOrRke2ClusterExt(ext string) bool {
+	return strings.HasPrefix(ext[1:], "k3s") || strings.HasPrefix(ext[1:], "rke2")
+}
+
+// ShouldUseQuorumFlag checks if the node should use the quorum member flag to decide storage status
+func ShouldUseQuorumFlag(node *api.StorageNode) (bool, error) {
+	v := node.NodeLabels[NodeLabelPortworxVersion]
+	nodeVersion, err := version.NewVersion(v)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse node version %s for node %s: %v", v, node.Id, err)
+	}
+
+	// Check if the node is older than the minimum version that supports quorum member flag
+	if nodeVersion.LessThan(MinimumPxVersionQuorumFlag) {
+		logrus.Tracef("Node %s is older than %s. Not using quorum member flag", node.Id, MinimumPxVersionQuorumFlag.String())
+		return false, nil
+	}
+	return true, nil
+}
+
+// ShouldUseClusterDomain checks if the node should use the cluster domain field to decide storage status
+func ShouldUseClusterDomain(node *api.StorageNode) (bool, error) {
+	v := node.NodeLabels[NodeLabelPortworxVersion]
+	nodeVersion, err := version.NewVersion(v)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse node version %s for node %s: %v", v, node.Id, err)
+	}
+	// Check if the node is older than the minimum version that supports cluster domain field
+	if nodeVersion.LessThan(MinimumPxVersionClusterDomain) {
+		logrus.Tracef("Node %s is older than %s. Cannot using cluster domain field", node.Id, MinimumPxVersionClusterDomain.String())
+		return false, nil
+	}
+	return true, nil
 }

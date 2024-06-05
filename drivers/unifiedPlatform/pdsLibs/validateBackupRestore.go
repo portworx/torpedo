@@ -55,24 +55,24 @@ func ValidateRestoreDeployment(restoreId, namespace string) error {
 	}
 
 	newDeployment := make(map[string]string)
-	newDeployment[*restore.Get.Meta.Name] = restore.Get.Config.DestinationReferences.DeploymentId
+	newDeployment[*restore.Get.Meta.Name] = restore.Get.Config.DestinationReferences.DataServiceDeploymentId
 
-	err = ValidateDataServiceDeploymentHealth(restore.Get.Config.DestinationReferences.DeploymentId, PDS_DEPLOYMENT_AVAILABLE)
+	err = ValidateDataServiceDeploymentHealth(restore.Get.Config.DestinationReferences.DataServiceDeploymentId, PDS_DEPLOYMENT_AVAILABLE)
 	if err != nil {
 		return fmt.Errorf("error while validating restored deployment readiness")
 	}
 
-	sourceDeployment, err := GetDeployment(restore.Get.Config.SourceReferences.DeploymentId)
+	sourceDeployment, err := GetDeployment(restore.Get.Config.SourceReferences.DataServiceDeploymentId)
 	if err != nil {
 		return fmt.Errorf("error while fetching source deployment object")
 	}
 
-	destinationDeployment, err := GetDeployment(restore.Get.Config.DestinationReferences.DeploymentId)
+	destinationDeployment, err := GetDeployment(restore.Get.Config.DestinationReferences.DataServiceDeploymentId)
 	if err != nil {
 		return fmt.Errorf("error while fetching destination deployment object")
 	}
 
-	err = ValidateRestore(sourceDeployment.Get.Config.DeploymentTopologies[0], destinationDeployment.Get.Config.DeploymentTopologies[0])
+	err = ValidateRestore(sourceDeployment.Get.Config.DataServiceDeploymentTopologies[0], destinationDeployment.Get.Config.DataServiceDeploymentTopologies[0])
 	if err != nil {
 		return fmt.Errorf("error while validation data service entities(i.e App config, resource etc). Err: %v", err)
 	}
@@ -81,23 +81,23 @@ func ValidateRestoreDeployment(restoreId, namespace string) error {
 }
 
 // ValidateRestoreAfterSourceDeploymentUpgrade Validates the restored deployment config with source deployment config before upgrade
-func ValidateRestoreAfterSourceDeploymentUpgrade(restoreId string, sourceDeploymentConfig automationModels.DeploymentTopology) error {
+func ValidateRestoreAfterSourceDeploymentUpgrade(restoreId string, sourceDeploymentConfig automationModels.V1DataServiceDeploymentTopology) error {
 	restore, err := ValidateRestoreStatus(restoreId)
 	if err != nil {
 		return err
 	}
 
-	err = ValidateDataServiceDeploymentHealth(restore.Get.Config.DestinationReferences.DeploymentId, PDS_DEPLOYMENT_AVAILABLE)
+	err = ValidateDataServiceDeploymentHealth(restore.Get.Config.DestinationReferences.DataServiceDeploymentId, PDS_DEPLOYMENT_AVAILABLE)
 	if err != nil {
 		return fmt.Errorf("error while validating restored deployment readiness")
 	}
 
-	destinationDeployment, err := GetDeployment(restore.Get.Config.DestinationReferences.DeploymentId)
+	destinationDeployment, err := GetDeployment(restore.Get.Config.DestinationReferences.DataServiceDeploymentId)
 	if err != nil {
 		return fmt.Errorf("error while fetching destination deployment object")
 	}
 
-	err = ValidateRestore(sourceDeploymentConfig, destinationDeployment.Get.Config.DeploymentTopologies[0])
+	err = ValidateRestore(sourceDeploymentConfig, destinationDeployment.Get.Config.DataServiceDeploymentTopologies[0])
 	if err != nil {
 		return fmt.Errorf("error while validation data service entities(i.e App config, resource etc). Err: %v", err)
 	}
@@ -106,7 +106,7 @@ func ValidateRestoreAfterSourceDeploymentUpgrade(restoreId string, sourceDeploym
 }
 
 // ValidateRestore validates the Resource, App and Storage configurations of source and destination deployments
-func ValidateRestore(sourceDep, destDep automationModels.DeploymentTopology) error {
+func ValidateRestore(sourceDep, destDep automationModels.V1DataServiceDeploymentTopology) error {
 
 	//TODO : This validation needs to be revisited once we have the working pds templates api
 
@@ -145,8 +145,8 @@ func ValidateRestore(sourceDep, destDep automationModels.DeploymentTopology) err
 	}
 
 	// Validate the replicas
-	sourceReplicas := sourceDep.Replicas
-	destReplicas := destDep.Replicas
+	sourceReplicas := sourceDep.Instances
+	destReplicas := destDep.Instances
 	log.Debugf("source replicas [%d], dest repicas [%d]", *sourceReplicas, *destReplicas)
 	if *sourceReplicas != *destReplicas {
 		return fmt.Errorf("restored replicas are not same as backed up resource config")

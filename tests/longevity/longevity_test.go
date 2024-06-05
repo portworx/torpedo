@@ -2,13 +2,14 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/iks"
 	"math"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/scheduler/iks"
 
 	"github.com/portworx/torpedo/pkg/log"
 
@@ -29,18 +30,17 @@ var _ = Describe("{Longevity}", func() {
 	var populateDone bool
 	triggerEventsChan := make(chan *EventRecord, 100)
 	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-		DeployApps:       TriggerDeployNewApps,
-		RebootNode:       TriggerRebootNodes,
-		ValidatePdsApps:  TriggerValidatePdsApps,
-		CrashNode:        TriggerCrashNodes,
-		CrashPXDaemon:    TriggerCrashPXDaemon,
-		RestartVolDriver: TriggerRestartVolDriver,
-		CrashVolDriver:   TriggerCrashVolDriver,
-		HAIncrease:       TriggerHAIncrease,
-		HADecrease:       TriggerHADecrease,
-		VolumeClone:      TriggerVolumeClone,
-		VolumeResize:     TriggerVolumeResize,
-		//EmailReporter:        TriggerEmailReporter,
+		DeployApps:                        TriggerDeployNewApps,
+		RebootNode:                        TriggerRebootNodes,
+		ValidatePdsApps:                   TriggerValidatePdsApps,
+		CrashNode:                         TriggerCrashNodes,
+		CrashPXDaemon:                     TriggerCrashPXDaemon,
+		RestartVolDriver:                  TriggerRestartVolDriver,
+		CrashVolDriver:                    TriggerCrashVolDriver,
+		HAIncrease:                        TriggerHAIncrease,
+		HADecrease:                        TriggerHADecrease,
+		VolumeClone:                       TriggerVolumeClone,
+		VolumeResize:                      TriggerVolumeResize,
 		AppTaskDown:                       TriggerAppTaskDown,
 		AppTasksDown:                      TriggerAppTasksDown,
 		AddDrive:                          TriggerAddDrive,
@@ -74,6 +74,7 @@ var _ = Describe("{Longevity}", func() {
 		MongoAsyncDR:                      TriggerMongoAsyncDR,
 		AsyncDRVolumeOnly:                 TriggerAsyncDRVolumeOnly,
 		AutoFsTrimAsyncDR:                 TriggerAutoFsTrimAsyncDR,
+		DetachDrives:                      TriggerDetachDrives,
 		IopsBwAsyncDR:                     TriggerIopsBwAsyncDR,
 		StorkApplicationBackup:            TriggerStorkApplicationBackup,
 		StorkAppBkpVolResize:              TriggerStorkAppBkpVolResize,
@@ -85,8 +86,8 @@ var _ = Describe("{Longevity}", func() {
 		AddDiskAndReboot:                  TriggerPoolAddDiskAndReboot,
 		ResizeDiskAndReboot:               TriggerPoolResizeDiskAndReboot,
 		AutopilotRebalance:                TriggerAutopilotPoolRebalance,
-		VolumeCreatePxRestart:             TriggerVolumeCreatePXRestart,
 		DeleteOldNamespaces:               TriggerDeleteOldNamespaces,
+		DeleteCloudsnaps:                  TriggerDeleteCloudsnaps,
 		MetroDRMigrationSchedule:          TriggerMetroDRMigrationSchedule,
 		CloudSnapShotRestore:              TriggerCloudSnapshotRestore,
 		LocalSnapShotRestore:              TriggerLocalSnapshotRestore,
@@ -105,7 +106,9 @@ var _ = Describe("{Longevity}", func() {
 		CreateAndRunMultipleFioOnVcluster: TriggerCreateAndRunMultipleFioOnVcluster,
 		VolumeDriverDownVCluster:          TriggerVolumeDriverDownVCluster,
 		SetDiscardMounts:                  TriggerSetDiscardMounts,
+		PowerOffAllVMs:                    TriggerPowerOffAllVMs,
 		ResetDiscardMounts:                TriggerResetDiscardMounts,
+		ScaleFADAVolumeAttach:             TriggerScaleFADAVolumeAttach,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){

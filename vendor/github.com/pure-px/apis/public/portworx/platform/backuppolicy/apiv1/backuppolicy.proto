@@ -139,6 +139,9 @@ message ListBackupPoliciesRequest {
 
   // Sorting details using which requested list of backup policies to be sorted.
   public.portworx.common.v1.Sort sort = 6;
+
+  // Response data flags for listing backup policies.
+  public.portworx.common.v1.RespData resp_data = 7;
 }
 
 // Response of list backup policies.
@@ -218,7 +221,33 @@ message DailyPolicy {
 message WeeklyPolicy {
   // Day of the week when the policy should be triggered.
   // For example, sunday or sun.
-  string day = 1;
+  enum Weekday {
+    // (-- api-linter: core::0126::unspecified=disabled
+    //     aip.dev/not-precedent: We need to do this because reasons. --)
+    // Sunday
+    SUNDAY = 0;
+
+    // Monday
+    MONDAY = 1;
+
+    // Tuesday
+    TUESDAY = 2;
+
+    // Wednesday
+    WEDNESDAY = 3;
+
+    // Thursday
+    THURSDAY = 4;
+
+    // Friday
+    FRIDAY = 5;
+
+    // Saturday
+    SATURDAY = 6;
+  }
+
+  // day of Weekday
+  Weekday day = 1;
 
   // Time, when the policy should be triggered. Expected format is time. Eg 12:04PM or 12:04pm.
   // (-- api-linter: core::0142::time-field-type=disabled

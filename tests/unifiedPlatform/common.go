@@ -3,6 +3,7 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/units"
 	"io/ioutil"
@@ -185,6 +186,17 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 		WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
 		WorkflowDataService.PDSParams = NewPdsParams
 
+		//Initializing the parameters required for workload generation
+		WorkflowDataService.WorkloadGenParams = &dslibs.LoadGenParams{
+			LoadGenDepName: NewPdsParams.LoadGen.LoadGenDepName,
+			Namespace:      PDS_DEFAULT_NAMESPACE,
+			NumOfRows:      NewPdsParams.LoadGen.NumOfRows,
+			Timeout:        NewPdsParams.LoadGen.Timeout,
+			Replicas:       NewPdsParams.LoadGen.Replicas,
+			Iterations:     NewPdsParams.LoadGen.Iterations,
+			FailOnError:    NewPdsParams.LoadGen.FailOnError,
+		}
+
 		log.Infof("Creating backup config struct")
 		WorkflowPDSBackupConfig.WorkflowBackupLocation = WorkflowbkpLoc
 		WorkflowPDSBackupConfig.WorkflowDataService = &WorkflowDataService
@@ -207,6 +219,15 @@ func StartPDSTorpedoTest(testName string, testDescription string, tags map[strin
 			Namespace:    &WorkflowNamespace,
 			Dash:         Inst().Dash,
 			PDSTemplates: WorkflowPDSTemplate,
+			WorkloadGenParams: &dslibs.LoadGenParams{
+				LoadGenDepName: NewPdsParams.LoadGen.LoadGenDepName,
+				Namespace:      PDS_DEFAULT_NAMESPACE,
+				NumOfRows:      NewPdsParams.LoadGen.NumOfRows,
+				Timeout:        NewPdsParams.LoadGen.Timeout,
+				Replicas:       NewPdsParams.LoadGen.Replicas,
+				Iterations:     NewPdsParams.LoadGen.Iterations,
+				FailOnError:    NewPdsParams.LoadGen.FailOnError,
+			},
 		}
 		WorkflowPDSRestore.RestoredDeployments.DataServiceDeployment = make(map[string]*dslibs.DataServiceDetails)
 
@@ -498,4 +519,29 @@ func GetVolumeUsage(namespace string, deploymentName string) (float64, error) {
 	}
 	log.InfoD("Amount of PVC consumed is- [%v]", pvcUsage)
 	return pvcUsage, nil
+}
+
+// Check the DS related PV usage and resize in case of 90% full
+func CheckStorageFullCondition(namespace, deploymentName string, thresholdPercentage float64) error {
+	log.Infof("Check PVC Usage")
+	f := func() (interface{}, bool, error) {
+		initialCapacity, err := GetVolumeCapacityInGB(namespace, deploymentName)
+		if err != nil {
+			return nil, false, err
+		}
+		floatCapacity := float64(initialCapacity)
+		consumedCapacity, err := GetVolumeUsage(namespace, deploymentName)
+		if err != nil {
+			return nil, false, err
+		}
+		threshold := thresholdPercentage * (floatCapacity / 100)
+		log.InfoD("threshold value calculated is- [%v]", threshold)
+		if consumedCapacity >= threshold {
+			log.Infof("The PVC capacity was %v , the consumed PVC in floating point value is- %v", initialCapacity, consumedCapacity)
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("threshold not achieved for the PVC, ")
+	}
+	_, err := task.DoRetryWithTimeout(f, 35*time.Minute, 20*time.Second)
+	return err
 }

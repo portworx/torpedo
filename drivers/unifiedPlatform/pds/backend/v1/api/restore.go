@@ -139,7 +139,7 @@ func (restore *PDS_API_V1) ListRestore(listRestoresRequest *automationModels.PDS
 	}
 
 	restoreRequest := restoreClient.RestoreServiceListRestores(ctx)
-	restoreRequest = restoreRequest.DeploymentId(listRestoresRequest.List.DeploymentId)
+	restoreRequest = restoreRequest.DataServiceDeploymentId(listRestoresRequest.List.DeploymentId)
 	restoreRequest = restoreRequest.BackupId(listRestoresRequest.List.BackupId)
 	restoreRequest = restoreRequest.ProjectId(listRestoresRequest.List.ProjectId)
 	restoreRequest = restoreRequest.TenantId(listRestoresRequest.List.TenantId)

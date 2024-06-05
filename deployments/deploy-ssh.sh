@@ -238,6 +238,11 @@ if [ -n "$ANTHOS_INST_PATH" ]; then
     ANTHOS_INST_PATH="${ANTHOS_INST_PATH}"
 fi
 
+if [ -n "$ANTHOS_HOST_PATH" ]; then
+    ANTHOS_HOST_PATH="${ANTHOS_HOST_PATH}"
+fi
+
+
 for i in $@
 do
 case $i in
@@ -249,7 +254,7 @@ case $i in
 esac
 done
 
-echo "checking if we need to override test suite: ${TEST_SUITE}"
+echo "Checking if we need to override test suite: ${TEST_SUITE}"
 
 # TODO: Remove this after all longevity jobs switch to 'bin/longevity.test' for TEST_SUITE.
 case $FOCUS_TESTS in
@@ -317,6 +322,9 @@ TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\"
 AWS_VOLUME="{ \"name\": \"aws-volume\", \"configMap\": { \"name\": \"aws-cm\", \"items\": [{\"key\": \"credentials\", \"path\": \"credentials\"}, {\"key\": \"config\", \"path\": \"config\"}]} }"
 AWS_VOLUME_MOUNT="{ \"name\": \"aws-volume\", \"mountPath\": \"/root/.aws/\" }"
 
+ANTHOS_VOLUME="{ \"name\": \"anthosdir\", \"hostPath\": { \"path\": \"${ANTHOS_HOST_PATH}\", \"type\": \"Directory\" } }"
+ANTHOS_VOLUME_MOUNT="{ \"name\": \"anthosdir\", \"mountPath\": \"/anthosdir\" }"
+
 VOLUMES="${TESTRESULTS_VOLUME}"
 
 if [ "${STORAGE_DRIVER}" == "aws" ]; then
@@ -363,6 +371,11 @@ fi
 
 if [ -n "${TORPEDO_CUSTOM_PARAM_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_CUSTOM_PARAM_MOUNT}"
+fi
+
+if [ -n "${ANTHOS_HOST_PATH}" ]; then
+  VOLUMES="${VOLUMES},${ANTHOS_VOLUME}"
+  VOLUME_MOUNTS="${VOLUME_MOUNTS},${ANTHOS_VOLUME_MOUNT}"
 fi
 
 BUSYBOX_IMG="busybox"
@@ -497,7 +510,7 @@ spec:
     args: [ "--trace",
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
-            "--poll-progress-after", "10m",
+            "--poll-progress-after", "20m",
             --junit-report=$JUNIT_REPORT_PATH,
             "$FOCUS_ARG",
             "$SKIP_ARG",
@@ -568,6 +581,7 @@ spec:
             "--torpedo-job-name=$TORPEDO_JOB_NAME",
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
+            "--fa-secret=${FA_SECRET}",
             "$APP_DESTROY_TIMEOUT_ARG",
             "$SCALE_APP_TIMEOUT_ARG",
     ]
@@ -796,6 +810,59 @@ spec:
 
 
 EOF
+
+if [ "${RUN_GINKGO_COMMAND}" = "true" ]; then
+    torpedo_pod_command="ginkgo"
+    torpedo_pod_args=$(yq e '.spec.containers[] | select(.name == "torpedo") | .args[]' torpedo.yaml | sed 's/,$//')
+
+	# This code removes the comma if the line ends with it.
+	# If the line is an empty string, it is quoted.
+	# Otherwise, the line is printed normally.
+    formatted_torpedo_pod_args=$(echo "$torpedo_pod_args" | awk '{
+        if ($0 ~ /,$/) {
+            gsub(/,$/, "", $0);
+            printf "%s ", $0;
+        } else {
+            if ($0 == "") {
+                printf "\"\" ";
+            } else {
+                printf "%s ", $0;
+            }
+        }
+    }')
+
+    torpedo_pod_ginkgo_command="$torpedo_pod_command $formatted_torpedo_pod_args"
+    echo "Formatted Ginkgo Command: $torpedo_pod_ginkgo_command"
+
+    # This code skips a flag followed by an empty string ("") if the next token is another flag or if it is the end of the command.
+    # This is necessary because Torpedo does not handle empty strings as expected.
+    # Example: In the input ginkgo --trace --timeout "" --fail-fast ... --fa-secret ""
+    # --timeout "" is skipped because it is immediately followed by another flag --fail-fast
+    # --fa-secret "" is also skipped because it is the last token and followed by no other arguments.
+    cleaned_torpedo_pod_ginkgo_command=$(echo "$torpedo_pod_ginkgo_command" | awk '
+	{
+	   output = "";
+	   i = 1;
+	   while (i <= NF) {
+		   if ($(i) ~ /^--/ && $(i+1) == "\"\"") {
+			   if (i+2 <= NF && $(i+2) ~ /^--/) {
+				   i += 2;
+				   continue;
+			   } else if (i+2 > NF) {
+				   i += 2;
+				   continue;
+			   }
+		   }
+		   output = output (output ? " " : "") $(i);
+		   i++;
+	   }
+	   print output;
+	}')
+    echo "Cleaned Ginkgo Command: $cleaned_torpedo_pod_ginkgo_command"
+
+    $cleaned_torpedo_pod_ginkgo_command
+    exit $?
+fi
 
 # If these are passed, we will create a docker config secret to use to pull images
 if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then

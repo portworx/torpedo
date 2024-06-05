@@ -16,6 +16,7 @@ import (
 	utils "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -28,6 +29,7 @@ type WorkflowDataService struct {
 	PDSParams                 *parameters.NewPDSParams
 	ValidateStorageIncrease   dslibs.ValidateStorageIncrease
 	UpdateDeploymentTemplates bool
+	WorkloadGenParams         *dslibs.LoadGenParams
 }
 
 const (
@@ -36,6 +38,7 @@ const (
 	PlatformNamespace          = "px-system"
 	ValidateDeploymentDeletion = "VALIDATE_DELETE_DEPLOYMENT"
 	PDS_DEPLOYMENT_AVAILABLE   = "AVAILABLE"
+	postgresql                 = "PostgreSQL"
 )
 
 func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService, image, version string, namespace string) (*automationModels.PDSDeploymentResponse, error) {
@@ -93,6 +96,7 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		log.Infof("Sleeping for 1 minutes to make sure deployment gets healthy")
 		time.Sleep(1 * time.Minute)
 
+		wfDataService.WorkloadGenParams.TableName = "wltesting" + utils.RandomString(3)
 		_, err := wfDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
 		if err != nil {
 			return deployment, fmt.Errorf("unable to run workfload on the data service. Error - [%s]", err.Error())
@@ -142,7 +146,7 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 			return nil, err
 		}
 
-		err = wfDataService.ValidatePdsDataServiceDeployments(*deployment.Update.Config.DeploymentMeta.Uid, ds, ds.ScaleReplicas, resConfigId, stConfigId, namespaceName, version, image)
+		err = wfDataService.ValidatePdsDataServiceDeployments(*deployment.Update.Config.DataServiceDeploymentMeta.Uid, ds, ds.ScaleReplicas, resConfigId, stConfigId, namespaceName, version, image)
 		if err != nil {
 			return nil, err
 		}
@@ -206,13 +210,13 @@ func (wfDataService *WorkflowDataService) GetDsDeploymentResources(deploymentId 
 		return resourceTemp, storageOp, dbConfig, err
 	}
 
-	log.Debugf("Resource Template Id After Update [%s]", *deployment.Get.Config.DeploymentTopologies[0].ResourceSettings.Id)
-	resourceTemp, err = dslibs.GetResourceTemplateConfigs(*deployment.Get.Config.DeploymentTopologies[0].ResourceSettings.Id)
+	log.Debugf("Resource Template Id After Update [%s]", *deployment.Get.Config.DataServiceDeploymentTopologies[0].ResourceSettings.Id)
+	resourceTemp, err = dslibs.GetResourceTemplateConfigs(*deployment.Get.Config.DataServiceDeploymentTopologies[0].ResourceSettings.Id)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
 
-	storageOp, err = dslibs.GetStorageTemplateConfigs(*deployment.Get.Config.DeploymentTopologies[0].StorageOptions.Id)
+	storageOp, err = dslibs.GetStorageTemplateConfigs(*deployment.Get.Config.DataServiceDeploymentTopologies[0].StorageOptions.Id)
 	if err != nil {
 		return resourceTemp, storageOp, dbConfig, err
 	}
@@ -270,19 +274,8 @@ func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(deploymentId s
 		log.Warnf("Workload is not enabled for this - [%s] - data service", wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)
 		return "", nil
 	}
-	//Initializing the parameters required for workload generation
-	wkloadParams := dslibs.LoadGenParams{
-		LoadGenDepName: wfDataService.PDSParams.LoadGen.LoadGenDepName,
-		Namespace:      wfDataService.DataServiceDeployment[deploymentId].Namespace,
-		NumOfRows:      wfDataService.PDSParams.LoadGen.NumOfRows,
-		Timeout:        wfDataService.PDSParams.LoadGen.Timeout,
-		Replicas:       wfDataService.PDSParams.LoadGen.Replicas,
-		TableName:      wfDataService.PDSParams.LoadGen.TableName,
-		Iterations:     wfDataService.PDSParams.LoadGen.Iterations,
-		FailOnError:    wfDataService.PDSParams.LoadGen.FailOnError,
-	}
 
-	chkSum, wlDep, err := dslibs.InsertDataAndReturnChecksum(*wfDataService.DataServiceDeployment[deploymentId], wkloadParams)
+	chkSum, wlDep, err := dslibs.InsertDataAndReturnChecksum(*wfDataService.DataServiceDeployment[deploymentId], *wfDataService.WorkloadGenParams)
 	if err != nil {
 		return "", err
 	}
@@ -299,22 +292,12 @@ func (wfDataService *WorkflowDataService) ReadAndUpdateDataServiceDataHash(deplo
 		log.Warnf("Workload is not enabled for this - [%s] - data service", wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)
 		return nil
 	}
-	wkloadParams := dslibs.LoadGenParams{
-		LoadGenDepName: wfDataService.PDSParams.LoadGen.LoadGenDepName,
-		Namespace:      wfDataService.DataServiceDeployment[deploymentId].Namespace,
-		NumOfRows:      wfDataService.PDSParams.LoadGen.NumOfRows,
-		Timeout:        wfDataService.PDSParams.LoadGen.Timeout,
-		Replicas:       wfDataService.PDSParams.LoadGen.Replicas,
-		TableName:      wfDataService.PDSParams.LoadGen.TableName,
-		Iterations:     wfDataService.PDSParams.LoadGen.Iterations,
-		FailOnError:    wfDataService.PDSParams.LoadGen.FailOnError,
-	}
-
+	
 	chkSum, _, err := dslibs.ReadDataAndReturnChecksum(
 		*wfDataService.DataServiceDeployment[deploymentId],
 		wfDataService.DataServiceDeployment[deploymentId].DSParams.Name,
 		dslibs.CrdMap[strings.ToLower(wfDataService.DataServiceDeployment[deploymentId].DSParams.Name)],
-		wkloadParams,
+		*wfDataService.WorkloadGenParams,
 	)
 
 	if err != nil {
@@ -548,4 +531,72 @@ func (wfDataService *WorkflowDataService) Purge(ignoreError bool) error {
 	}
 
 	return nil
+}
+
+func (wfDataService *WorkflowDataService) RunStress(deploymentID, deploymentName, dsName, namespace string) (*corev1.Pod, *appsv1.Deployment, error) {
+	var (
+		pod *corev1.Pod
+		dep *appsv1.Deployment
+		err error
+	)
+	params := &dslibs.WorkloadGenerationParams{
+		DataServiceName: dsName,
+		DeploymentID:    deploymentID,
+		DeploymentName:  deploymentName,
+		Namespace:       namespace,
+	}
+
+	//params.DataServiceName = wfDataService.DataServiceDeployment[deploymentID].DSParams.Name
+
+	log.Infof("Dataservice Name : %s", params.DataServiceName)
+
+	if params.DataServiceName == postgresql {
+		params.DeploymentName = "pgload"
+		params.ScaleFactor = "100"
+		params.Iterations = "1"
+
+		log.Infof("Running Workloads on DataService %v ", params.DataServiceName)
+		pod, dep, err = wfDataService.CreateDataServiceWorkloads(params)
+	}
+	return pod, dep, err
+}
+
+// CreateDataServiceWorkloads generates workloads for the given data services
+func (wfDataService *WorkflowDataService) CreateDataServiceWorkloads(params *dslibs.WorkloadGenerationParams) (*corev1.Pod, *appsv1.Deployment, error) {
+	var dep *appsv1.Deployment
+	var pod *corev1.Pod
+
+	dnsEndPoint := ""
+	deployment, err := dslibs.GetDeployment(params.DeploymentID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	connectionDetails := deployment.Get.Status.ConnectionInfo["connectionDetails"]
+	dnsEndPoint, err = utils.ParseInterfaceAndGetDetails(connectionDetails, params.DataServiceName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = dslibs.ValidateDNSEndPoint(dnsEndPoint)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error occured while validating connection info, Err: %v", err)
+	}
+	log.Infof("DNS endpoints are reachable...")
+
+	pdsPassword, err := dslibs.GetDeploymentCredentials(params.DeploymentID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error occured while getting credentials info, Err: %v", err)
+	}
+
+	switch params.DataServiceName {
+	case postgresql:
+		endPoint := strings.Split(dnsEndPoint, ":")[0]
+		dep, err = utils.CreatePostgresqlWorkload(endPoint, pdsPassword, params.ScaleFactor, params.Iterations, params.DeploymentName, params.Namespace)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error occured while creating postgresql workload, Err: %v", err)
+		}
+
+	}
+	return pod, dep, nil
 }

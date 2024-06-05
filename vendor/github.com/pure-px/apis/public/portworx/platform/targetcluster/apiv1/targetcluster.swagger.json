@@ -375,6 +375,17 @@
     },
     "components": {
         "schemas": {
+            "ApplicationHealthHealth": {
+                "type": "string",
+                "enum": [
+                    "HEALTH_UNSPECIFIED",
+                    "UNKNOWN",
+                    "HEALTHY",
+                    "UNHEALTHY"
+                ],
+                "default": "HEALTH_UNSPECIFIED",
+                "description": "Health determines health of an application.\n\n - HEALTH_UNSPECIFIED: Must be set in the proto file; ignore.\n - UNKNOWN: Application health is unknown.\n - HEALTHY: Application is healthy.\n - UNHEALTHY: Application is unhealthy."
+            },
             "ResourceSelectorResourceFilter": {
                 "type": "object",
                 "properties": {
@@ -419,10 +430,11 @@
                 "enum": [
                     "OPERATOR_UNSPECIFIED",
                     "IN",
-                    "NOT_IN"
+                    "NOT_IN",
+                    "LIKE"
                 ],
                 "default": "OPERATOR_UNSPECIFIED",
-                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list."
+                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list.\n - LIKE: LIKE specified that the key should be of a specified pattern"
             },
             "SortByField": {
                 "type": "string",
@@ -473,12 +485,12 @@
                         "description": "Timestamp of cluster's last status update to control plane."
                     },
                     "platformAgent": {
-                        "$ref": "#/components/schemas/v1ApplicationPhasePhase"
+                        "$ref": "#/components/schemas/v1TargetClusterApplicationStatus"
                     },
                     "applications": {
                         "type": "object",
                         "additionalProperties": {
-                            "$ref": "#/components/schemas/v1ApplicationPhasePhase"
+                            "$ref": "#/components/schemas/v1TargetClusterApplicationStatus"
                         },
                         "description": "Status of applications running in the target cluster eg: BAAS, PDS, MPXE."
                     }
@@ -678,6 +690,10 @@
                     "version": {
                         "type": "string",
                         "description": "Version of PXE installed on the target cluster."
+                    },
+                    "securityEnabled": {
+                        "type": "boolean",
+                        "description": "SecurityEnabled flag depicts if px security is enabled on the target cluster."
                     }
                 },
                 "description": "PX Enterprise metadata on the target cluster."
@@ -825,6 +841,22 @@
                     }
                 },
                 "description": "TargetCluster is a high level entity that represents one large company(e.g. a Pure)."
+            },
+            "v1TargetClusterApplicationStatus": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string",
+                        "description": "current installed version."
+                    },
+                    "phase": {
+                        "$ref": "#/components/schemas/v1ApplicationPhasePhase"
+                    },
+                    "health": {
+                        "$ref": "#/components/schemas/ApplicationHealthHealth"
+                    }
+                },
+                "description": "Status of the Application."
             },
             "v1TargetClusterPhasePhase": {
                 "type": "string",

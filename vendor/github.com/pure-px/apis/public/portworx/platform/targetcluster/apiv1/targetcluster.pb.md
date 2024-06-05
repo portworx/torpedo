@@ -23,6 +23,7 @@
     - [Status](#status)
     - [Status.ApplicationsEntry](#statusapplicationsentry)
     - [TargetCluster](#targetcluster)
+    - [TargetClusterApplicationStatus](#targetclusterapplicationstatus)
     - [TargetClusterPhase](#targetclusterphase)
     - [UpdateTargetClusterRequest](#updatetargetclusterrequest)
   
@@ -159,6 +160,7 @@ PX Enterprise metadata on the target cluster.
 | service_name | [ string](#string) | Name of portworx api service on the target cluster. |
 | service_namespace | [ string](#string) | Namespace of portworx api service on the target cluster. |
 | version | [ string](#string) | Version of PXE installed on the target cluster. |
+| security_enabled | [ bool](#bool) | SecurityEnabled flag depicts if px security is enabled on the target cluster. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -172,7 +174,7 @@ Status of the Target Cluster.
 | metadata | [ Metadata](#metadata) | Target Cluster Metadata. |
 | phase | [ TargetClusterPhase.Phase](#targetclusterphasephase) | Phase of target cluster. |
 | last_status_update_time | [ google.protobuf.Timestamp](#googleprotobuftimestamp) | Timestamp of cluster's last status update to control plane. |
-| platform_agent | [ public.portworx.platform.targetcluster.application.v1.ApplicationPhase.Phase](#publicportworxplatformtargetclusterapplicationv1applicationphasephase) | Status of the platform agent running in the target cluster. |
+| platform_agent | [ TargetClusterApplicationStatus](#targetclusterapplicationstatus) | Status of the platform agent running in the target cluster. |
 | applications | [map Status.ApplicationsEntry](#statusapplicationsentry) | Status of applications running in the target cluster eg: BAAS, PDS, MPXE. |
  <!-- end Fields -->
  <!-- end HasFields -->
@@ -185,7 +187,7 @@ Status of the Target Cluster.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | key | [ string](#string) | none |
-| value | [ public.portworx.platform.targetcluster.application.v1.ApplicationPhase.Phase](#publicportworxplatformtargetclusterapplicationv1applicationphasephase) | none |
+| value | [ TargetClusterApplicationStatus](#targetclusterapplicationstatus) | none |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -199,6 +201,19 @@ TargetCluster is a high level entity that represents one large company(e.g. a Pu
 | meta | [ public.portworx.common.v1.Meta](#publicportworxcommonv1meta) | Metadata of the target cluster(Resource Meta). |
 | config | [ Config](#config) | Desired configuration of the Target Cluster. |
 | status | [ Status](#status) | Current status of the Target Cluster. |
+ <!-- end Fields -->
+ <!-- end HasFields -->
+
+
+### TargetClusterApplicationStatus {#targetclusterapplicationstatus}
+Status of the Application.
+
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| version | [ string](#string) | current installed version. |
+| phase | [ public.portworx.platform.targetcluster.application.v1.ApplicationPhase.Phase](#publicportworxplatformtargetclusterapplicationv1applicationphasephase) | current phase of the application. |
+| health | [ public.portworx.platform.targetcluster.application.v1.ApplicationHealth.Health](#publicportworxplatformtargetclusterapplicationv1applicationhealthhealth) | current health of the application. |
  <!-- end Fields -->
  <!-- end HasFields -->
 

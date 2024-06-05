@@ -24,6 +24,7 @@ const (
 
 var (
 	k8sCore = core.Instance()
+	k8sApps = apps.Instance()
 )
 
 var (

@@ -254,7 +254,7 @@ func (a *BackupServiceAPIService) BackupServiceGetBackupExecute(r ApiBackupServi
 type ApiBackupServiceListBackupsRequest struct {
 	ctx context.Context
 	ApiService *BackupServiceAPIService
-	deploymentId *string
+	dataServiceDeploymentId *string
 	backupConfigId *string
 	paginationPageNumber *string
 	paginationPageSize *string
@@ -262,9 +262,9 @@ type ApiBackupServiceListBackupsRequest struct {
 	sortSortOrder *string
 }
 
-// Deployment ID for which the backups will be listed.
-func (r ApiBackupServiceListBackupsRequest) DeploymentId(deploymentId string) ApiBackupServiceListBackupsRequest {
-	r.deploymentId = &deploymentId
+// Data service Deployment ID for which the backups will be listed.
+func (r ApiBackupServiceListBackupsRequest) DataServiceDeploymentId(dataServiceDeploymentId string) ApiBackupServiceListBackupsRequest {
+	r.dataServiceDeploymentId = &dataServiceDeploymentId
 	return r
 }
 
@@ -336,8 +336,8 @@ func (a *BackupServiceAPIService) BackupServiceListBackupsExecute(r ApiBackupSer
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
-	if r.deploymentId != nil {
-		parameterAddToHeaderOrQuery(localVarQueryParams, "deploymentId", r.deploymentId, "")
+	if r.dataServiceDeploymentId != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "dataServiceDeploymentId", r.dataServiceDeploymentId, "")
 	}
 	if r.backupConfigId != nil {
 		parameterAddToHeaderOrQuery(localVarQueryParams, "backupConfigId", r.backupConfigId, "")

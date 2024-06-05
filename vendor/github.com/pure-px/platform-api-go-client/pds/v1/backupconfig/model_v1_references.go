@@ -21,8 +21,8 @@ var _ MappedNullable = &V1References{}
 
 // V1References References to the associated resources for backup configuration.
 type V1References struct {
-	// UID of the deployment to which the backup configuration belong.
-	DeploymentId string `json:"deploymentId"`
+	// UID of the data service deployment to which the backup configuration belong.
+	DataServiceDeploymentId string `json:"dataServiceDeploymentId"`
 	// UID of the backup target to which the backup configuration belong.
 	BackupLocationId string `json:"backupLocationId"`
 	// UID of the data service to which the backup configuration belong.
@@ -35,9 +35,9 @@ type _V1References V1References
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewV1References(deploymentId string, backupLocationId string) *V1References {
+func NewV1References(dataServiceDeploymentId string, backupLocationId string) *V1References {
 	this := V1References{}
-	this.DeploymentId = deploymentId
+	this.DataServiceDeploymentId = dataServiceDeploymentId
 	this.BackupLocationId = backupLocationId
 	return &this
 }
@@ -50,28 +50,28 @@ func NewV1ReferencesWithDefaults() *V1References {
 	return &this
 }
 
-// GetDeploymentId returns the DeploymentId field value
-func (o *V1References) GetDeploymentId() string {
+// GetDataServiceDeploymentId returns the DataServiceDeploymentId field value
+func (o *V1References) GetDataServiceDeploymentId() string {
 	if o == nil {
 		var ret string
 		return ret
 	}
 
-	return o.DeploymentId
+	return o.DataServiceDeploymentId
 }
 
-// GetDeploymentIdOk returns a tuple with the DeploymentId field value
+// GetDataServiceDeploymentIdOk returns a tuple with the DataServiceDeploymentId field value
 // and a boolean to check if the value has been set.
-func (o *V1References) GetDeploymentIdOk() (*string, bool) {
+func (o *V1References) GetDataServiceDeploymentIdOk() (*string, bool) {
 	if o == nil {
 		return nil, false
 	}
-	return &o.DeploymentId, true
+	return &o.DataServiceDeploymentId, true
 }
 
-// SetDeploymentId sets field value
-func (o *V1References) SetDeploymentId(v string) {
-	o.DeploymentId = v
+// SetDataServiceDeploymentId sets field value
+func (o *V1References) SetDataServiceDeploymentId(v string) {
+	o.DataServiceDeploymentId = v
 }
 
 // GetBackupLocationId returns the BackupLocationId field value
@@ -140,7 +140,7 @@ func (o V1References) MarshalJSON() ([]byte, error) {
 
 func (o V1References) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	toSerialize["deploymentId"] = o.DeploymentId
+	toSerialize["dataServiceDeploymentId"] = o.DataServiceDeploymentId
 	toSerialize["backupLocationId"] = o.BackupLocationId
 	if !IsNil(o.DataServiceId) {
 		toSerialize["dataServiceId"] = o.DataServiceId
@@ -153,7 +153,7 @@ func (o *V1References) UnmarshalJSON(data []byte) (err error) {
 	// by unmarshalling the object into a generic map with string keys and checking
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
-		"deploymentId",
+		"dataServiceDeploymentId",
 		"backupLocationId",
 	}
 

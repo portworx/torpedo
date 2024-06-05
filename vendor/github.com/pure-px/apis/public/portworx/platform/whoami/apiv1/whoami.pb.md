@@ -32,6 +32,12 @@ WhoAmIService service provides API to get the current actor accounts.
     [WhoAmIResponse](#whoamiresponse)
 
 WhoAmI API returns the current actor accounts.
+### InvitationsWhoAmI {#methodpublicportworxplatformwhoamiv1whoamiserviceinvitationswhoami}
+
+> **rpc** InvitationsWhoAmI([.google.protobuf.Empty](#googleprotobufempty))
+    [WhoAmIResponse](#whoamiresponse)
+
+InvitationsWhoAmI API returns the current actor pending invitations cross accounts.
  <!-- end methods -->
  <!-- end services -->
 
