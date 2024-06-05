@@ -5027,6 +5027,9 @@ var _ = Describe("{TestRealm}", func() {
 		for _, fa := range flashArrays {
 			faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
 			log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
+			volumes, err := pureutils.ListAllVolumesFromFA(faClient)
+			log.FailOnError(err, "Failed to list all volumes from FA")
+			fmt.Println("Volumes in FA", volumes)
 			realms, err := pureutils.ListAllRealmsFromFA(faClient)
 			log.FailOnError(err, fmt.Sprintf("Failed to get realms from FA [%v]", fa.MgmtEndPoint))
 			for _, realm := range realms {
