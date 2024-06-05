@@ -264,16 +264,11 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 			})
 
 			Step("Deploy multiple dataservice", func() {
+				WorkflowDataService.WorkloadGenParams.Namespace = deploymentNamespace
 				currDeployment, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, deploymentNamespace)
 				log.FailOnError(err, "Error while deploying ds")
 				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
 				deployments = append(deployments, currDeployment)
-
-				//stepLog := "Running Workloads on deployment"
-				//Step(stepLog, func() {
-				//	err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
-				//	log.FailOnError(err, "Error while running workloads on ds")
-				//})
 			})
 		}
 
@@ -694,7 +689,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 						log.InfoD("Starting deployment in [%s] namespace", deploymentNamespace)
 
 						WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
-
+						WorkflowDataService.WorkloadGenParams.Namespace = deploymentNamespace
 						currDeployment, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, deploymentNamespace)
 						if err != nil {
 							log.Errorf("Error occured while creating deployment on [%s] - [%s]", deploymentNamespace, err.Error())

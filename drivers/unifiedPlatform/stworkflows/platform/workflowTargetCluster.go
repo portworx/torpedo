@@ -75,7 +75,7 @@ func (targetCluster *WorkflowTargetCluster) RegisterToControlPlane() (*WorkflowT
 
 	if !isRegistered {
 		log.InfoD("Installing Manifests..")
-		cmd = fmt.Sprintf("echo '%s' > %s && kubectl apply -f %s && rm -f %s", *manifest.Manifest, ManifestPath, ManifestPath, ManifestPath)
+		cmd = fmt.Sprintf("echo \"%s\" > %s && kubectl apply -f %s && rm -f %s", *manifest.Manifest, ManifestPath, ManifestPath, ManifestPath)
 		log.Infof("Manifest:\n%v\n", cmd)
 		output, _, err := osutils.ExecShell(cmd)
 		log.Infof("Output: %v", output)

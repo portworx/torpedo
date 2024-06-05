@@ -709,6 +709,8 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 		return false, err
 	}
 
+	time.Sleep(30 * time.Second)
+
 	newResourceTemp, err := dslibs.GetResourceTemplateConfigs(*UpdatedDeployment.Get.Config.DataServiceDeploymentTopologies[0].ResourceSettings.Id)
 	if err != nil {
 		if ResiliencyFlag {
@@ -726,7 +728,13 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 		log.InfoD("Initial PVC Capacity is- %v and Updated PVC Capacity is- %v", initialCapacity, updatedCapacity)
 		log.InfoD("Storage is Successfully increased to  [%v]", updatedCapacity)
 	} else {
-		log.FailOnError(fmt.Errorf("Failed to verify Storage Resize at PV/PVC level \n"), "updatedCapacity should be higher than the initial capacity")
+		log.Warnf("Updated Capacity is not higher than initial capacity")
+		if ResiliencyFlag {
+			ResiliencyCondition <- false
+			CapturedErrors <- fmt.Errorf(("Failed to verify Storage Resize at PV/PVC level\n"), "updatedCapacity should be higher than the initial capacity")
+		}
+		return false, err
+
 	}
 	return true, nil
 }
