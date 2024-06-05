@@ -5021,8 +5021,16 @@ var _ = Describe("{TestRealm}", func() {
 	itLog := "testrealm"
 	It(itLog, func() {
 		log.InfoD(itLog)
+		var RealmName string
 
 		flashArrays, err := GetFADetailsUsed()
+		for _, fa := range flashArrays {
+			if fa.Realm != "" {
+				log.InfoD("Realm Name [%v]", fa.Realm)
+				RealmName = fa.Realm
+			}
+		}
+
 		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
 		for _, fa := range flashArrays {
 			faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
@@ -5050,7 +5058,7 @@ var _ = Describe("{TestRealm}", func() {
 
 			log.InfoD("create a pod inside a Realm")
 
-			podName := "pxe-qa::pxe-qa-pod1"
+			podName := RealmName + "::" + "testpod"
 			podinfo, err := pureutils.CreatePodinFA(faClient, podName)
 			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podName))
 			for _, pod := range *podinfo {
