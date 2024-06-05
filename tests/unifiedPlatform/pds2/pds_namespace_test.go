@@ -378,6 +378,7 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 
 				log.Debugf("Deploying DataService [%s]", ds.Name)
 				log.InfoD("Deploying dataservice in [%s] namespace", evenNamespaces[0])
+				WorkflowDataService.WorkloadGenParams.Namespace = evenNamespaces[0]
 				_, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, evenNamespaces[0])
 				// TODO: Error message needs to be changed once https://purestorage.atlassian.net/browse/DS-9607 is resolved
 				dash.VerifyFatal(err, "not allowed", "Verifying disable namespace usage")

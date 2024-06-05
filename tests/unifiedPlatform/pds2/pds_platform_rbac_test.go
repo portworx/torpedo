@@ -544,6 +544,7 @@ var _ = Describe("{DeployDsOnMultipleNSAndProjects}", func() {
 			//working deployment with all associations
 			WorkflowDataService.Namespace.TargetCluster.Project = &WorkflowProject
 			for _, ds := range NewPdsParams.DataServiceToTest {
+				WorkflowDataService.WorkloadGenParams.Namespace = namespaces[0]
 				deployment, err := WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, namespaces[0])
 				log.FailOnError(err, "Error while deploying ds")
 				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
