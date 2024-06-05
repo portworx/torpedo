@@ -2,9 +2,11 @@ package resiliency
 
 import (
 	"fmt"
+	"math/rand"
+	"time"
+
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
-	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -645,6 +647,10 @@ func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 }
 
 func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dslibs.PDSDataService, namespaceId, newResConfigId string) (bool, error) {
+
+	var newDeployment *automationModels.PDSDeploymentResponse
+	var err error
+
 	log.Debugf("Starting to resize the storage and UpdateDeploymentResourceConfig")
 
 	//Get required Id's
@@ -652,10 +658,19 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 	appConfigId := *deployment.Config.DataServiceDeploymentTopologies[0].ServiceConfigurations.Id
 	oldResConfigId := *deployment.Config.DataServiceDeploymentTopologies[0].ResourceSettings.Id
 	projectId := *deployment.Config.References.ProjectId
+	log.Infof("Project Id - [%s]", projectId)
 	imageId := *deployment.Config.References.ImageId
+	log.Infof("Image Id - [%s]", imageId)
 	deploymentId := *deployment.Meta.Uid
+	log.Infof("Deployment Id - [%s]", deploymentId)
+	log.Infof("Namespace Id - [%s]", namespaceId)
 
 	resourceTemp, err := dslibs.GetResourceTemplateConfigs(oldResConfigId)
+	// Get the initial capacity of the DataService
+	initialCapacity := resourceTemp.Resources.Requests.Storage
+
+	log.Infof("Resource Temp Id - [%s]", resourceTemp)
+
 	if err != nil {
 		if ResiliencyFlag {
 			ResiliencyCondition <- false
@@ -664,12 +679,13 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 		return false, err
 	}
 
-	// Get the initial capacity of the DataService
-	initialCapacity := resourceTemp.Resources.Requests.Storage
-	log.Debugf("Initial Capacity of the dataservice is [%s]", initialCapacity)
-	log.Debugf("newResConfigId [%s]", newResConfigId)
-
-	newDeployment, err := dslibs.UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, newResConfigId, stConfigId)
+	if len(UpdateTemplate) > 0 {
+		log.Debugf("Initial Capacity of the dataservice is [%s]", initialCapacity)
+		log.Debugf("newResConfigId [%s]", newResConfigId)
+		newDeployment, err = dslibs.UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, newResConfigId, stConfigId)
+	} else {
+		newDeployment, err = dslibs.UpdateDataService(ds, deploymentId, namespaceId, projectId, imageId, appConfigId, oldResConfigId, stConfigId)
+	}
 	if err != nil {
 		if ResiliencyFlag {
 			ResiliencyCondition <- false
@@ -724,17 +740,47 @@ func ResizeDataServiceStorage(deployment *automationModels.V1Deployment, ds dsli
 	updatedCapacity := newResourceTemp.Resources.Requests.Storage
 	log.Debugf("Updated Capacity of the dataservice is [%s]", updatedCapacity)
 
-	if updatedCapacity > initialCapacity {
-		log.InfoD("Initial PVC Capacity is- %v and Updated PVC Capacity is- %v", initialCapacity, updatedCapacity)
-		log.InfoD("Storage is Successfully increased to  [%v]", updatedCapacity)
-	} else {
-		log.Warnf("Updated Capacity is not higher than initial capacity")
-		if ResiliencyFlag {
-			ResiliencyCondition <- false
-			CapturedErrors <- fmt.Errorf(("Failed to verify Storage Resize at PV/PVC level\n"), "updatedCapacity should be higher than the initial capacity")
+	if len(UpdateTemplate) > 0 {
+		if updatedCapacity > initialCapacity {
+			log.InfoD("Initial PVC Capacity is- %v and Updated PVC Capacity is- %v", initialCapacity, updatedCapacity)
+			log.InfoD("Storage is Successfully increased to  [%v]", updatedCapacity)
+		} else {
+			if ResiliencyFlag {
+				ResiliencyCondition <- false
+				CapturedErrors <- fmt.Errorf("Failed to verify Storage Resize at PV/PVC level \n", "updatedCapacity should be higher than the initial capacity")
+			}
+			return false, err
 		}
-		return false, err
-
 	}
 	return true, nil
+}
+
+func RestartApplicationDuringResourceUpdate(ns string, deploymentName string) error {
+	var ss *v1.StatefulSet
+	ss, testError := k8sApps.GetStatefulSet(deploymentName, ns)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	// Get Pods of this StatefulSet
+	pods, testError := k8sApps.GetStatefulSetPods(ss)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	rand.Seed(time.Now().Unix())
+	pod := pods[rand.Intn(len(pods))]
+	// Delete the deployment Pods during update.
+	testError = DeleteK8sPods(pod.Name, ns)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	return testError
+}
+
+// DeleteK8sPods deletes the pods in given namespace
+func DeleteK8sPods(pod string, namespace string) error {
+	err := k8sCore.DeletePod(pod, namespace, true)
+	return err
 }
