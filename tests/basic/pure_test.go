@@ -5014,8 +5014,8 @@ var _ = Describe("{TestRealm}", func() {
 				6. Delete the pvc and volume and check if volumes got deleted in backend as well
 	*/
 	JustBeforeEach(func() {
-		StartTorpedoTest("CreateAndValidatePVCWithIopsAndBandwidth",
-			"Create PVCs with updated MaxBandwidth / Max IOPS ( update the storage class )",
+		StartTorpedoTest("testrealm",
+			"testing realms and pods",
 			nil, 0)
 	})
 	itLog := "testrealm"

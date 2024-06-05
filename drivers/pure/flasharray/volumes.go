@@ -23,13 +23,13 @@ func (vols *VolumeServices) ListAllAvailableVolumes(params map[string]string, da
 	return m, nil
 }
 
-func (vols *RealmsServices) ListAllAvailableRealms(params map[string]string, data interface{}) ([]RealmResponse, error) {
-	req, err := vols.client.NewRequest("GET", "realms", params, data)
+func (realm *RealmsServices) ListAllAvailableRealms(params map[string]string, data interface{}) ([]RealmResponse, error) {
+	req, err := realm.client.NewRequest("GET", "realms", params, data)
 	if err != nil {
 		return nil, err
 	}
 	m := []RealmResponse{}
-	_, err = vols.client.Do(req, &m)
+	_, err = realm.client.Do(req, &m)
 	if err != nil {
 		return nil, err
 	}

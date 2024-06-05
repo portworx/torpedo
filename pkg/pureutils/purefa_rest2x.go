@@ -41,8 +41,7 @@ func ListAllDestroyedVolumesFromFA(faClient *flasharray.Client) ([]flasharray.Vo
 }
 
 func ListAllRealmsFromFA(faClient *flasharray.Client) ([]flasharray.RealmResponse, error) {
-	params := make(map[string]string)
-	realms, err := faClient.Realms.ListAllAvailableRealms(params, nil)
+	realms, err := faClient.Realms.ListAllAvailableRealms(nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -50,8 +49,7 @@ func ListAllRealmsFromFA(faClient *flasharray.Client) ([]flasharray.RealmRespons
 }
 
 func ListAllPodsFromFA(faClient *flasharray.Client) ([]flasharray.PodResponse, error) {
-	params := make(map[string]string)
-	pods, err := faClient.Pods.ListAllAvailablePods(params, nil)
+	pods, err := faClient.Pods.ListAllAvailablePods(nil, nil)
 	if err != nil {
 		return nil, err
 	}
