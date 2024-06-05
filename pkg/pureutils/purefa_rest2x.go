@@ -1,11 +1,12 @@
 package pureutils
 
 import (
+	"fmt"
 	"github.com/portworx/torpedo/drivers/pure/flasharray"
 )
 
 const (
-	RestAPI = "2.4"
+	RestAPI = "2.x"
 )
 
 // PureCreateClientAndConnect Create FA Client and Connect
@@ -42,9 +43,30 @@ func ListAllDestroyedVolumesFromFA(faClient *flasharray.Client) ([]flasharray.Vo
 
 func ListAllRealmsFromFA(faClient *flasharray.Client) ([]flasharray.RealmResponse, error) {
 	params := make(map[string]string)
+	params["destroyed"] = "false"
 	realms, err := faClient.Realms.ListAllAvailableRealms(params, nil)
 	if err != nil {
 		return nil, err
 	}
 	return realms, nil
+}
+
+func ListAllPodsFromFA(faClient *flasharray.Client) ([]flasharray.PodResponse, error) {
+	params := make(map[string]string)
+	params["destroyed"] = "false"
+	pods, err := faClient.Pods.ListAllAvailablePods(params, nil)
+	if err != nil {
+		return nil, err
+	}
+	return pods, nil
+}
+
+func CreatePodinFA(faClient *flasharray.Client, podName string) (*[]flasharray.PodResponse, error) {
+	queryParams := make(map[string]string)
+	queryParams["names"] = fmt.Sprintf("%s", podName)
+	podinfo, err := faClient.Pods.CreatePod(queryParams, nil)
+	if err != nil {
+		return nil, err
+	}
+	return podinfo, nil
 }
