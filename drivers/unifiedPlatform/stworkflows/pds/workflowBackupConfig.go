@@ -6,7 +6,6 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
-	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	"strings"
 	"time"
@@ -33,7 +32,12 @@ type BackupConfigDetails struct {
 
 // CreateBackupConfig creates a backup config
 func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, deploymentId string) (*automationModels.PDSBackupConfigResponse, error) {
-	var chkSum string
+	var (
+		actualChkSum map[string]string
+		chkSum       string
+		tableName    string
+	)
+
 	chkSumMap := make(map[string]string)
 
 	log.Infof("Backup name - [%s]", name)
@@ -49,11 +53,15 @@ func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, depl
 		}
 	} else {
 		var err error
-		backupConfig.WorkflowDataService.WorkloadGenParams.TableName = "bkpwl" + utilities.RandomString(3)
-		chkSum, err = backupConfig.WorkflowDataService.RunDataServiceWorkloads(deploymentId)
+		actualChkSum, err = backupConfig.WorkflowDataService.RunDataServiceWorkloads(deploymentId)
 		if err != nil {
 			return nil, fmt.Errorf("unable to run workfload on data service. Error - [%s]", err.Error())
 		}
+	}
+
+	for tName, cSum := range actualChkSum {
+		chkSum = cSum
+		tableName = tName
 	}
 
 	log.Infof("Backup [%s] started at [%s]", name, time.Now().Format("2006-01-02 15:04:05"))
@@ -68,8 +76,8 @@ func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, depl
 	}
 
 	//Get the newly created table name
-	log.Debugf("Data Inserted before backup for table:[%s]", backupConfig.WorkflowDataService.WorkloadGenParams.TableName)
-	chkSumMap[*createBackup.Create.Meta.Uid] = backupConfig.WorkflowDataService.WorkloadGenParams.TableName
+	log.Debugf("Data Inserted before backup for table:[%s]", tableName)
+	chkSumMap[*createBackup.Create.Meta.Uid] = tableName
 
 	backupConfig.BackupConfigs[*createBackup.Create.Meta.Uid] = &BackupConfigDetails{
 		Backup:    createBackup.Create,
