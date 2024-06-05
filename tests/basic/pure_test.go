@@ -5002,3 +5002,54 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{TestRealm}", func() {
+	/*
+				https://purestorage.atlassian.net/browse/PTX-23995
+		                1. Create storage class with max iops and max bandwidth for Normal Portworx Volumes , FADA and FBDA Pvc Deployment
+				2. Create 10 PVC each with respective storage class parallely
+				3. Validate if PVC are created and bounded
+				4. Validate if corresponding portworx volumes are created in FA backend
+				5. Validate if corresponding portworx volumes are created in FB backend
+				6. Delete the pvc and volume and check if volumes got deleted in backend as well
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateAndValidatePVCWithIopsAndBandwidth",
+			"Create PVCs with updated MaxBandwidth / Max IOPS ( update the storage class )",
+			nil, 0)
+	})
+	itLog := "testrealm"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
+		for _, fa := range flashArrays {
+			faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+			log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
+			realms, err := pureutils.ListAllRealmsFromFA(faClient)
+			log.FailOnError(err, fmt.Sprintf("Failed to get realms from FA [%v]", fa.MgmtEndPoint))
+			for _, realm := range realms {
+				for _, realmitem := range realm.Items {
+					log.InfoD("Realm Name [%v] and Realm ID [%v]", realmitem.Name, realmitem.ID)
+				}
+			}
+			if len(realms) == 0 {
+				log.FailOnError(fmt.Errorf("No realms found in FA [%v]", fa.MgmtEndPoint), "No realms found in FA")
+			}
+			pods, err := pureutils.ListAllPodsFromFA(faClient)
+			for _, pod := range pods {
+				for _, poditem := range pod.Items {
+					log.InfoD("Pod Name [%v] and Pod ID [%v]", poditem.Name, poditem.ID)
+				}
+			}
+			log.FailOnError(err, fmt.Sprintf("Failed to get pods from FA [%v]", fa.MgmtEndPoint))
+
+		}
+
+	})
+	AfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})

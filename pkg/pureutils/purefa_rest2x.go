@@ -48,3 +48,12 @@ func ListAllRealmsFromFA(faClient *flasharray.Client) ([]flasharray.RealmRespons
 	}
 	return realms, nil
 }
+
+func ListAllPodsFromFA(faClient *flasharray.Client) ([]flasharray.PodResponse, error) {
+	params := make(map[string]string)
+	pods, err := faClient.Pods.ListAllAvailablePods(params, nil)
+	if err != nil {
+		return nil, err
+	}
+	return pods, nil
+}
