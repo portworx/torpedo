@@ -2,7 +2,7 @@ package flasharray
 
 type Spaces struct {
 	DataReduction    float64 `json:"data_reduction"`
-	Shared           *string `json:"shared"`
+	Shared           int     `json:"shared"`
 	Snapshots        int     `json:"snapshots"`
 	System           *string `json:"system"`
 	ThinProvisioning float64 `json:"thin_provisioning"`
