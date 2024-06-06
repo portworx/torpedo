@@ -5027,7 +5027,7 @@ var _ = Describe("{TestRealm}", func() {
 		for _, fa := range flashArrays {
 			if fa.Realm != "" {
 				log.InfoD("Realm Name [%v]", fa.Realm)
-				RealmName = fa.Realm
+				RealmName = "pxe-qa"
 			}
 		}
 
@@ -5051,7 +5051,7 @@ var _ = Describe("{TestRealm}", func() {
 
 			log.InfoD("create a pod inside a Realm")
 
-			podName := RealmName + "::" + "test-automation-pod"
+			podName := RealmName + "::" + "test-automation-pod1"
 			podinfo, err := pureutils.CreatePodinFA(faClient, podName)
 			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podName))
 			for _, pod := range *podinfo {
