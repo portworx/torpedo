@@ -600,6 +600,8 @@ spec:
       value: "${TORPEDO_SSH_PASSWORD}"
     - name: TORPEDO_SSH_KEY
       value: "${TORPEDO_SSH_KEY}"
+    - name: AZURE_ENDPOINT
+      value: "${AZURE_ENDPOINT}"
     - name: AZURE_TENANT_ID
       value: "${AZURE_TENANTID}"
     - name: VOLUME_PROVIDER
@@ -794,6 +796,12 @@ spec:
       value: "${IKS_CLUSTER_REGION}"
     - name: LONGEVITY_UPGRADE_EXECUTION_THRESHOLD
       value: "${LONGEVITY_UPGRADE_EXECUTION_THRESHOLD}"
+    - name: GKE_UPGRADE_STRATEGY
+      value: "${GKE_UPGRADE_STRATEGY}"
+    - name: GKE_SURGE_VALUE
+      value: "${GKE_SURGE_VALUE}"
+    - name: GOOGLE_APPLICATION_CREDENTIALS
+      value: "${GOOGLE_APPLICATION_CREDENTIALS}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
