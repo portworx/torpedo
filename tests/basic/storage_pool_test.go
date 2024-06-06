@@ -3082,7 +3082,7 @@ var _ = Describe("{AddDiskNodeMaintenanceCycle}", func() {
 	It(stepLog, func() {
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
-			dash.VerifyFatal(false, true, "Add disk operation is not supported for DMThin Setup")
+			Skip("Pool Add disk is not supported on DMThin Cluster")
 		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
