@@ -5024,15 +5024,13 @@ var _ = Describe("{TestRealm}", func() {
 		var RealmName string
 
 		flashArrays, err := GetFADetailsUsed()
-		for _, fa := range flashArrays {
-			if fa.Realm != "" {
-				log.InfoD("Realm Name [%v]", fa.Realm)
-				RealmName = "pxe-qa"
-			}
-		}
+		RealmName = "pxe-qa"
 
 		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
 		for _, fa := range flashArrays {
+			if fa.Realm != "pxe-qa" {
+				continue
+			}
 			faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
 			log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
 			volumes, err := pureutils.ListAllVolumesFromFA(faClient)
