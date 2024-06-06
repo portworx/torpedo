@@ -1,7 +1,6 @@
 package pureutils
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/portworx/torpedo/drivers/pure/flasharray"
 )
@@ -76,15 +75,12 @@ func DeletePodinFA(faClient *flasharray.Client, podName string) error {
 	queryParams["names"] = fmt.Sprintf("%s", podName)
 	queryParams["destroy_contents"] = "true"
 	data := map[string]bool{"destroyed": true}
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
+
 	deleteParams := make(map[string]string)
 	deleteParams["names"] = fmt.Sprintf("%s", podName)
 	deleteParams["eradicate_contents"] = "true"
 
-	err = faClient.Pods.DeletePod(queryParams, deleteParams, string(jsonData))
+	err := faClient.Pods.DeletePod(queryParams, deleteParams, data)
 	if err != nil {
 		return err
 	}
