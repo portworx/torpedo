@@ -5048,17 +5048,10 @@ var _ = Describe("{TestRealm}", func() {
 			if len(realms) == 0 {
 				log.FailOnError(fmt.Errorf("No realms found in FA [%v]", fa.MgmtEndPoint), "No realms found in FA")
 			}
-			pods, err := pureutils.ListAllPodsFromFA(faClient)
-			for _, pod := range pods {
-				for _, poditem := range pod.Items {
-					log.InfoD("Pod Name [%v] and Pod ID [%v]", poditem.Name, poditem.ID)
-				}
-			}
-			log.FailOnError(err, fmt.Sprintf("Failed to get pods from FA [%v]", fa.MgmtEndPoint))
 
 			log.InfoD("create a pod inside a Realm")
 
-			podName := RealmName + "::" + "testpod"
+			podName := RealmName + "::" + "test-automation-pod"
 			podinfo, err := pureutils.CreatePodinFA(faClient, podName)
 			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podName))
 			for _, pod := range *podinfo {
@@ -5068,6 +5061,22 @@ var _ = Describe("{TestRealm}", func() {
 
 			}
 			log.InfoD("Pod [%v] created ", podName)
+
+			pods, err := pureutils.ListAllPodsFromFA(faClient)
+			for _, pod := range pods {
+				for _, poditem := range pod.Items {
+					log.InfoD("Pod Name [%v] and Pod ID [%v]", poditem.Name, poditem.ID)
+				}
+			}
+			log.FailOnError(err, fmt.Sprintf("Failed to get pods from FA [%v]", fa.MgmtEndPoint))
+
+			stepLog := "Delete the pod created in the realm"
+			Step(stepLog, func() {
+				err := pureutils.DeletePodinFA(faClient, podName)
+				log.FailOnError(err, fmt.Sprintf("Failed to delete pod [%v] ", podName))
+				log.InfoD("Pod [%v] deleted ", podName)
+
+			})
 
 		}
 
