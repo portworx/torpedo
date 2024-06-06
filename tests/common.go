@@ -15,7 +15,6 @@ import (
 	"github.com/devans10/pugo/flasharray"
 
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -29,6 +28,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"cloud.google.com/go/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
@@ -679,6 +680,7 @@ func InitInstance() {
 		VaultToken:                       Inst().VaultToken,
 		PureVolumes:                      Inst().PureVolumes,
 		PureSANType:                      Inst().PureSANType,
+		PureFADAPod:                      Inst().PureFADAPod,
 		RunCSISnapshotAndRestoreManyTest: Inst().RunCSISnapshotAndRestoreManyTest,
 		HelmValuesConfigMapName:          Inst().HelmValuesConfigMap,
 		SecureApps:                       Inst().SecureAppList,
@@ -6895,6 +6897,7 @@ type Torpedo struct {
 	SecretType                          string
 	PureVolumes                         bool
 	PureSANType                         string
+	PureFADAPod                         string
 	RunCSISnapshotAndRestoreManyTest    bool
 	VaultAddress                        string
 	VaultToken                          string
@@ -6958,6 +6961,7 @@ func ParseFlags() {
 	var secretType string
 	var pureVolumes bool
 	var pureSANType string
+	var pureFADAPod string
 	var runCSISnapshotAndRestoreManyTest bool
 	var vaultAddress string
 	var vaultToken string
@@ -7013,6 +7017,7 @@ func ParseFlags() {
 	flag.StringVar(&secretType, "secret-type", scheduler.SecretK8S, "Path to custom configuration files")
 	flag.BoolVar(&pureVolumes, "pure-volumes", false, "To enable using Pure backend for shared volumes")
 	flag.StringVar(&pureSANType, "pure-san-type", "ISCSI", "If using Pure volumes, which SAN type is being used. ISCSI, FC, and NVMEOF-RDMA are all valid values.")
+	flag.StringVar(&pureFADAPod, "pure-fada-pod", "", "If using Pure FADA volumes, what FA Pod to place the volumes in. This Pod must already exist, and be in the same Realm matching the px-pure-secret")
 	flag.BoolVar(&runCSISnapshotAndRestoreManyTest, "pure-fa-snapshot-restore-to-many-test", false, "If using Pure volumes, to enable Pure clone many tests")
 	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
 	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
@@ -7266,6 +7271,7 @@ func ParseFlags() {
 				SecretType:                          secretType,
 				PureVolumes:                         pureVolumes,
 				PureSANType:                         pureSANType,
+				PureFADAPod:                         pureFADAPod,
 				RunCSISnapshotAndRestoreManyTest:    runCSISnapshotAndRestoreManyTest,
 				VaultAddress:                        vaultAddress,
 				VaultToken:                          vaultToken,
@@ -8113,6 +8119,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	tags["storageProvisioner"] = Inst().Provisioner
 	tags["pureVolume"] = fmt.Sprintf("%t", Inst().PureVolumes)
 	tags["pureSANType"] = Inst().PureSANType
+	tags["pureFADAPod"] = Inst().PureFADAPod
 	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
 	if TestRailSetupSuccessful && testRepoID != 0 {
 		RunIdForSuite = testrailuttils.AddRunsToMilestone(testRepoID)
