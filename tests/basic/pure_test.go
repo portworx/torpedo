@@ -5134,7 +5134,7 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 				}
 
 			}
-			log.InfoD("Pod [%v] created ", podNameinSC)
+			log.InfoD("Pod [%v] created ", PodNameinFA)
 
 			pods, err := pureutils.ListAllPodsFromFA(faClient)
 			for _, pod := range pods {
