@@ -5084,3 +5084,111 @@ var _ = Describe("{TestRealm}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{ValidatePodNameinVolume}", func() {
+	/*
+		https://purestorage.atlassian.net/browse/PWX-37369
+		As part of Mulitenancy feature, we are deploying a app which has "pure_fa_pod_name" in the storage class
+		1. Deploy an app which uses FADA volume( uses csi provisioner and a pure_block backend) and validate the pod name in the volume
+		2. Check if the pod name in the volume is same as the pod name in the storage class
+		3.If the pod name in the volume is not same as the pod name in the storage class, fail the test and even fail the t
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidatePodNameinVolume", "Validate the pod name in the volume", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	itLog := "ValidatePodNameinVolume"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var origCustomAppConfigs map[string]scheduler.AppConfig
+		testName := "validate-pod-name-in-volume"
+		//flashArrays, err := GetFADetailsUsed()
+		RealmName := "pxe-qa"
+		podNameinSC := RealmName + "::" + "Torpedo-Test" + Inst().InstanceID
+		//applist := Inst().AppList
+		//defer func() {
+		//	Inst().AppList = applist
+		//}()
+		//Inst().AppList = []string{"fio-fada-realm"}
+		customConfigAppName := skipTestIfNoRequiredCustomAppConfigFound()
+
+		// save the original custom app configs
+		origCustomAppConfigs = make(map[string]scheduler.AppConfig)
+		for appName, customAppConfig := range Inst().CustomAppConfig {
+			origCustomAppConfigs[appName] = customAppConfig
+		}
+
+		// update the custom app config with empty string for Pure NFS endpoint
+		// So that app uses NFS endpoint from pure.json secret.
+		Inst().CustomAppConfig[customConfigAppName] = scheduler.AppConfig{
+			PureFaPodName: podNameinSC,
+		}
+
+		log.Infof("JustBeforeEach using Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
+
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		log.FailOnError(err, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
+
+		contexts = ScheduleApplications(testName)
+		//ValidateApplicationsPureSDK(contexts)
+		//stepLog := "Deploy Applications with a storage class that has pure_fa_pod_name "
+		//Step(stepLog, func() {
+		//	log.InfoD(stepLog)
+		//	taskName := "validate-pod-name-in-volume"
+		//	context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+		//		AppKeys:            Inst().AppList,
+		//		StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
+		//		PvcSize:            6 * units.GiB,
+		//		Namespace:          taskName,
+		//	})
+		//	log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+		//	contexts = append(contexts, context...)
+		//})
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+		stepLog = "Fetch the pod name from the storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//var storageclassObj storageApi.StorageClass
+			//var podNameinSC string
+			for _, ctx := range contexts {
+				//	for _, specObj := range ctx.App.SpecList {
+				//		if specObj, ok := specObj.(*storageApi.StorageClass); ok {
+				//			log.InfoD("Storage class [%v] is present in the context", specObj.Name)
+				//			storageclassObj = *specObj
+				//		}
+				//		storageclassParams := storageclassObj.Parameters
+				//		log.InfoD("Check for the pod name in the storageclass parameters")
+				//		for key, value := range storageclassParams {
+				//			if key == "pure_fa_pod_name" {
+				//				log.InfoD("Pod Name in the storage class is [%v]", value)
+				//				podNameinSC = value
+				//			}
+				//		}
+				//		if podNameinSC == "" {
+				//			log.FailOnError(fmt.Errorf("pure_fa_pod_name is not present in the storage class"), "is pure_fa_pod_name present in the storage class?")
+				//		}
+				volumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes")
+				for _, volume := range volumes {
+					inspectedVolume, err := Inst().V.InspectVolume(volume.ID)
+					log.FailOnError(err, "Failed to inspect volume")
+					PodName := inspectedVolume.Locator.VolumeLabels["pure_fa_pod_name"]
+					if PodName == "" {
+						log.FailOnError(fmt.Errorf("Pod Name is not present in the volume labels"), "is pod name present in volume labels?")
+					} else if PodName != podNameinSC {
+						log.FailOnError(fmt.Errorf("Pod Name [%v] in the volume is not same as Pod Name [%v] in the storage class", PodName, podNameinSC), "is pod name in volume same as pod name in storage class?")
+					} else {
+						log.InfoD("Pod Name [%v] in the volume is same as Pod Name [%v] in the storage class", PodName, podNameinSC)
+					}
+				}
+			}
+
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
