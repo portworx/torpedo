@@ -5192,7 +5192,7 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 			//	contexts = append(contexts, context...)
 			//})
 			ValidateApplications(contexts)
-			defer DestroyApps(contexts, nil)
+			//defer DestroyApps(contexts, nil)
 			stepLog = "Fetch the pod name from the storage class"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
