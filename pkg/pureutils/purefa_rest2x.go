@@ -3,6 +3,7 @@ package pureutils
 import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/pure/flasharray"
+	"strings"
 )
 
 const (
@@ -85,4 +86,46 @@ func DeletePodinFA(faClient *flasharray.Client, podName string) error {
 		return err
 	}
 	return nil
+}
+func GetFARealmFromMgmtEndpoint(secret PXPureSecret, mgmtEndPoint string) string {
+	for _, faDetails := range secret.Arrays {
+		if faDetails.MgmtEndPoint == mgmtEndPoint {
+			return faDetails.Realm
+		}
+	}
+	return ""
+}
+func IsFARealmExistsOnMgmtEndpoint(faClient *flasharray.Client, realm string) (bool, error) {
+	params := make(map[string]string)
+	params["destroyed"] = "false"
+	realms, err := faClient.Realms.ListAllAvailableRealms(params, nil)
+	if err != nil {
+		return false, err
+	}
+	for _, eachRealmItems := range realms {
+		for _, eachRealm := range eachRealmItems.Items {
+			if strings.Contains(eachRealm.Name, realm) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func IsPodExistsOnMgmtEndpoint(faClient *flasharray.Client, podName string) (bool, error) {
+	params := make(map[string]string)
+	params["destroyed"] = "false"
+	pods, err := faClient.Pods.ListAllAvailablePods(params, nil)
+	if err != nil {
+		return false, err
+	}
+	for _, eachPodItems := range pods {
+		for _, eachPod := range eachPodItems.Items {
+			if strings.Contains(eachPod.Name, podName) {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }
