@@ -2023,7 +2023,7 @@ func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 			}
 			parts := strings.Fields(line)
 			wwid := parts[0]
-			// Sometimes wwid will return "-" , removing "-" from the string
+			// If we see a pipe or a tick, we are trimming WWID
 			for _, spChar := range []string{"-", "`"} {
 				wwid = strings.Replace(wwid, spChar, "", -1)
 			}
