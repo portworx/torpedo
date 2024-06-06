@@ -5112,9 +5112,6 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 			}
 			faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
 			log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
-			volumes, err := pureutils.ListAllVolumesFromFA(faClient)
-			log.FailOnError(err, "Failed to list all volumes from FA")
-			fmt.Println("Volumes in FA", volumes)
 			realms, err := pureutils.ListAllRealmsFromFA(faClient)
 			log.FailOnError(err, fmt.Sprintf("Failed to get realms from FA [%v]", fa.MgmtEndPoint))
 			for _, realm := range realms {
@@ -5128,16 +5125,15 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 
 			log.InfoD("create a pod inside a Realm")
 
-			podName := "pxe-qa" + "::" + "test-automation-pod4"
 			podinfo, err := pureutils.CreatePodinFA(faClient, podNameinSC)
-			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podName))
+			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podNameinSC))
 			for _, pod := range *podinfo {
 				for _, poditem := range pod.Items {
 					log.InfoD("Pod Name [%v] and Pod ID [%v]", poditem.Name, poditem.ID)
 				}
 
 			}
-			log.InfoD("Pod [%v] created ", podName)
+			log.InfoD("Pod [%v] created ", podNameinSC)
 
 			pods, err := pureutils.ListAllPodsFromFA(faClient)
 			for _, pod := range pods {
@@ -5230,9 +5226,9 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 
 			stepLog := "Delete the pod created in the realm"
 			Step(stepLog, func() {
-				err := pureutils.DeletePodinFA(faClient, podName)
-				log.FailOnError(err, fmt.Sprintf("Failed to delete pod [%v] ", podName))
-				log.InfoD("Pod [%v] deleted ", podName)
+				err := pureutils.DeletePodinFA(faClient, podNameinSC)
+				log.FailOnError(err, fmt.Sprintf("Failed to delete pod [%v] ", podNameinSC))
+				log.InfoD("Pod [%v] deleted ", podNameinSC)
 
 			})
 		}
