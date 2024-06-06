@@ -5049,7 +5049,7 @@ var _ = Describe("{TestRealm}", func() {
 
 			log.InfoD("create a pod inside a Realm")
 
-			podName := RealmName + "::" + "test-automation-pod3"
+			podName := RealmName + "::" + "test-automation-pod4"
 			podinfo, err := pureutils.CreatePodinFA(faClient, podName)
 			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podName))
 			for _, pod := range *podinfo {
