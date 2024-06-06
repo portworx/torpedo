@@ -5102,8 +5102,7 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		log.InfoD(itLog)
 		var origCustomAppConfigs map[string]scheduler.AppConfig
 		testName := "validate-pod-name-in-volume"
-		RealmName := "pxe-qa"
-		podNameinSC := RealmName + "::" + "Torpedo-Test" + Inst().InstanceID
+		podNameinSC := "Torpedo-Test" + Inst().InstanceID
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
 		for _, fa := range flashArrays {
