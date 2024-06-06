@@ -5167,7 +5167,15 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 			err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
 			log.FailOnError(err, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
 
-			contexts = ScheduleApplications(testName)
+			//contexts = ScheduleApplications(testName)
+			context, err := Inst().S.Schedule(testName, scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
+				PvcSize:            6 * units.GiB,
+				Namespace:          testName,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", testName)
+			contexts = append(contexts, context...)
 			//ValidateApplicationsPureSDK(contexts)
 			//stepLog := "Deploy Applications with a storage class that has pure_fa_pod_name "
 			//Step(stepLog, func() {
