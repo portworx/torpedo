@@ -5102,7 +5102,9 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		log.InfoD(itLog)
 		var origCustomAppConfigs map[string]scheduler.AppConfig
 		testName := "validate-pod-name-in-volume"
+		RealmName := "pxe-qa"
 		podNameinSC := "Torpedo-Test" + Inst().InstanceID
+		PodNameinFA := RealmName + "::" + podNameinSC
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
 		for _, fa := range flashArrays {
@@ -5124,8 +5126,8 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 
 			log.InfoD("create a pod inside a Realm")
 
-			podinfo, err := pureutils.CreatePodinFA(faClient, podNameinSC)
-			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podNameinSC))
+			podinfo, err := pureutils.CreatePodinFA(faClient, PodNameinFA)
+			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", PodNameinFA))
 			for _, pod := range *podinfo {
 				for _, poditem := range pod.Items {
 					log.InfoD("Pod Name [%v] and Pod ID [%v]", poditem.Name, poditem.ID)
