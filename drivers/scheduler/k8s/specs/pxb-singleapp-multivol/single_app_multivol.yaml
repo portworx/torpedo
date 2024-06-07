@@ -58,6 +58,7 @@ metadata:
   name: mysql-cephfs-pvc
   labels:
     backupVolumeType : csi
+
 spec:
   accessModes:
     - ReadWriteMany
@@ -71,11 +72,11 @@ kind: PersistentVolumeClaim
 metadata:
   name: mysql-thincsi-pvc
   labels:
-    backupVolumeType: kdmp
+    backupVolumeType: csi
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 5Gi
-  storageClassName: thin
+  storageClassName: thin-csi
