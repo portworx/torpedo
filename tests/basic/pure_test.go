@@ -5235,6 +5235,8 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 
 			stepLog := "Delete the pod created in the realm"
 			Step(stepLog, func() {
+				faClient, err = pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+				log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
 				err := pureutils.DeletePodinFA(faClient, podNameinSC)
 				log.FailOnError(err, fmt.Sprintf("Failed to delete pod [%v] ", podNameinSC))
 				log.InfoD("Pod [%v] deleted ", podNameinSC)
