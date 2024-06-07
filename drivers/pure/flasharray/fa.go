@@ -131,10 +131,16 @@ func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	//if resp.StatusCode != http.StatusOK {
-	//	return nil, fmt.Errorf("error getting auth-token,response status is [%d]", resp.StatusCode)
-	//
-	//}
+	ResponseBodyBytes, _ := ioutil.ReadAll(resp.Body)
+	RespBodyString := string(ResponseBodyBytes)
+
+	if strings.Contains(RespBodyString, "retention-locked") {
+		return resp, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("error getting auth-token,response status is [%d]", resp.StatusCode)
+
+	}
 	if err := validateResponse(resp); err != nil {
 		return resp, err
 	}
@@ -312,6 +318,7 @@ func validateResponse(r *http.Response) error {
 
 	bodyBytes, _ := ioutil.ReadAll(r.Body)
 	bodyString := string(bodyBytes)
+
 	return fmt.Errorf("Response code: %d, ResponeBody: %s", r.StatusCode, bodyString)
 }
 
