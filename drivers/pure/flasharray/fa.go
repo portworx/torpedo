@@ -134,7 +134,7 @@ func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 	ResponseBodyBytes, _ := ioutil.ReadAll(resp.Body)
 	RespBodyString := string(ResponseBodyBytes)
 
-	if strings.Contains(RespBodyString, "retention-locked") {
+	if strings.Contains(RespBodyString, "retention-locked") && strings.Contains(RespBodyString, "Cannot eradicate pod") {
 		return resp, nil
 	}
 	if resp.StatusCode != http.StatusOK {
