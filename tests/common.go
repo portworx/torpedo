@@ -10,6 +10,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"k8s.io/utils/strings/slices"
+	"math"
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/devans10/pugo/flasharray"
@@ -5057,7 +5059,7 @@ func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, buc
 	case drivers.ProviderAws:
 		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx, validate)
+		err = CreateAzureBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx, validate)
 	case drivers.ProviderGke:
 		err = CreateGCPBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, ctx, validate)
 	case drivers.ProviderNfs:
@@ -5430,6 +5432,11 @@ func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred str
 func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, validate bool) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
+	environmentType := api.S3Config_AzureEnvironmentType_AZURE_GLOBAL // Default value
+	if azureRegion == "CHINA" {
+		environmentType = api.S3Config_AzureEnvironmentType_AZURE_CHINA
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -5445,6 +5452,13 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 				Uid:  cloudCredUID,
 			},
 			Type: api.BackupLocationInfo_Azure,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					AzureEnvironment: &api.S3Config_AzureEnvironmentType{
+						Type: environmentType,
+					},
+				},
+			},
 		},
 	}
 	ctx, err := backup.GetAdminCtxFromSecret()
@@ -5461,6 +5475,11 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 // CreateAzureBackupLocationWithContext creates backup location for Azure using the given context
 func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context, validate bool) error {
 	backupDriver := Inst().Backup
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
+	environmentType := api.S3Config_AzureEnvironmentType_AZURE_GLOBAL // Default value
+	if azureRegion == "CHINA" {
+		environmentType = api.S3Config_AzureEnvironmentType_AZURE_CHINA
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -5476,6 +5495,13 @@ func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred str
 				Uid:  cloudCredUID,
 			},
 			Type: api.BackupLocationInfo_Azure,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					AzureEnvironment: &api.S3Config_AzureEnvironmentType{
+						Type: environmentType,
+					},
+				},
+			},
 		},
 	}
 	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
@@ -6034,8 +6060,11 @@ func DeleteGcpBucket(bucketName string) {
 func DeleteAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
-
-	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName)
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName) // Default value
+	if azureRegion == "CHINA" {
+		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, bucketName)
+	}
 	log.Infof("Delete container url %s", urlStr)
 	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
 	u, _ := url.Parse(urlStr)
@@ -6581,6 +6610,9 @@ func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 	case drivers.ProviderGke:
 		result, err := IsGCPBucketEmpty(bucketName)
 		return result, err
+	case drivers.ProviderAzure:
+		result, err := IsAzureBlobEmpty(bucketName)
+		return result, err
 	default:
 		return false, fmt.Errorf("function does not support %s provider", provider)
 	}
@@ -6683,6 +6715,42 @@ func IsGCPBucketEmpty(bucketName string) (bool, error) {
 	}
 
 	// Iterator didn't finish, bucket is not empty
+	return false, nil
+}
+
+// IsAzureBlobEmpty returns true if bucket empty else false
+func IsAzureBlobEmpty(containerName string) (bool, error) {
+	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
+	azureEndpoint := os.Getenv("AZURE_ENDPOINT")
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, containerName)
+	if azureEndpoint == AzureChinaEndpoint {
+		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, containerName)
+	}
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse URL [%v]: %v", urlStr, err)
+	}
+
+	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to create shared key credential [%v]", err))
+
+	containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
+	ctx := context1.Background() // This example uses a never-expiring context
+	listBlobsSegmentOptions := azblob.ListBlobsSegmentOptions{
+		MaxResults: 1,
+	}
+
+	listBlob, err := containerURL.ListBlobsFlatSegment(ctx, azblob.Marker{}, listBlobsSegmentOptions)
+	if err != nil {
+		return false, fmt.Errorf("failed to list blobs in container [%v]: %v", containerName, err)
+	}
+
+	if len(listBlob.Segment.BlobItems) == 0 {
+		// No blobs found, container is empty
+		return true, nil
+	}
+	// Blobs found, container is not empty
 	return false, nil
 }
 
@@ -6802,8 +6870,11 @@ func RemoveS3BucketPolicy(bucketName string) error {
 func CreateAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
-
-	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName)
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName) // Default value
+	if azureRegion == "CHINA" {
+		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, bucketName)
+	}
 	log.Infof("Create container url %s", urlStr)
 	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
 	u, _ := url.Parse(urlStr)
@@ -8284,7 +8355,7 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 
 // GetPoolsInUse lists all persistent volumes and returns the pool IDs
 func GetPoolsInUse() ([]string, error) {
-	var poolUuids []string
+	var poolsInUse []string
 	pvlist, err := k8sCore.GetPersistentVolumes()
 	if err != nil || pvlist == nil || len(pvlist.Items) == 0 {
 		return nil, fmt.Errorf("no persistent volume found. Error: %v", err)
@@ -8292,38 +8363,39 @@ func GetPoolsInUse() ([]string, error) {
 
 	for _, pv := range pvlist.Items {
 		volumeID := pv.GetName()
-		poolUuids, err = GetPoolIDsFromVolName(volumeID)
+		poolUuids, err := GetPoolIDsFromVolName(volumeID)
 		//Needed this logic as a workaround for PWX-35637
 		if err != nil && strings.Contains(err.Error(), "not found") {
 			continue
 		}
-		break
+		poolsInUse = append(poolsInUse, poolUuids...)
 	}
 
-	return poolUuids, err
+	return poolsInUse, err
 }
 
 // GetPoolIDWithIOs returns the pools with IOs happening
-func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
+func GetPoolIDWithIOs(contexts []*scheduler.Context) ([]string, error) {
 	// pick a  pool doing some IOs from a pools list
 	var err error
 	var isIOsInProgress bool
 	err = Inst().V.RefreshDriverEndpoints()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
+	poolIdsWithIOs := make([]string, 0)
 	for _, ctx := range contexts {
 		vols, err := Inst().S.GetVolumes(ctx)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		node := node.GetStorageDriverNodes()[0]
 		for _, vol := range vols {
 			appVol, err := Inst().V.InspectVolume(vol.ID)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 
 			t := func() (interface{}, bool, error) {
@@ -8336,23 +8408,15 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 
 			_, err = task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 
 			if isIOsInProgress {
 				log.Infof("IOs are in progress for [%v]", vol.Name)
 				poolUuids := appVol.ReplicaSets[0].PoolUuids
 				for _, p := range poolUuids {
-					n, err := GetNodeWithGivenPoolID(p)
-					if err != nil {
-						return "", err
-					}
-					eligibilityMap, err := GetPoolExpansionEligibility(n)
-					if err != nil {
-						return "", err
-					}
-					if eligibilityMap[n.Id] && eligibilityMap[p] {
-						return p, nil
+					if !slices.Contains(poolIdsWithIOs, p) {
+						poolIdsWithIOs = append(poolIdsWithIOs, p)
 					}
 
 				}
@@ -8360,14 +8424,17 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 		}
 
 	}
+	if len(poolIdsWithIOs) > 0 {
+		return poolIdsWithIOs, nil
+	}
 
-	return "", fmt.Errorf("no pools have IOs running,Err: %v", err)
+	return nil, fmt.Errorf("no pools have IOs running,Err: %v", err)
 }
 
 // GetPoolWithIOsInGivenNode returns the poolID in the given node with IOs happening
-func GetPoolWithIOsInGivenNode(stNode node.Node, contexts []*scheduler.Context) (*opsapi.StoragePool, error) {
+func GetPoolWithIOsInGivenNode(stNode node.Node, contexts []*scheduler.Context, expandType opsapi.SdkStoragePool_ResizeOperationType, targetSizeGiB uint64) (*opsapi.StoragePool, error) {
 
-	eligibilityMap, err := GetPoolExpansionEligibility(&stNode)
+	eligibilityMap, err := GetPoolExpansionEligibility(&stNode, expandType, targetSizeGiB)
 	if err != nil {
 		return nil, err
 	}
@@ -8470,7 +8537,7 @@ func GetNodeFromPoolUUID(poolUUID string) (*node.Node, error) {
 }
 
 // GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
-func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
+func GetPoolExpansionEligibility(stNode *node.Node, expandType opsapi.SdkStoragePool_ResizeOperationType, targetIncrementInGiB uint64) (map[string]bool, error) {
 	var err error
 
 	namespace, err := Inst().V.GetVolumeDriverNamespace()
@@ -8480,9 +8547,6 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 
 	var maxCloudDrives int
 
-	if _, err = core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
-		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
-	}
 	if _, err = core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
 		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
 	} else if _, err = core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
@@ -8518,13 +8582,52 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 
 		d := drvM[fmt.Sprintf("%d", pool.ID)]
 		log.Infof("pool %s has %d drives", pool.Uuid, len(d))
-		if len(d) == POOL_MAX_CLOUD_DRIVES {
-			eligibilityMap[pool.Uuid] = false
-		}
-
 		if nodePoolStatus[pool.Uuid] == "Offline" {
 			eligibilityMap[pool.Uuid] = false
+		} else {
+			if expandType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+				if len(d) == POOL_MAX_CLOUD_DRIVES {
+					log.Infof("pool %s has reached max drives", pool.Uuid)
+					eligibilityMap[pool.Uuid] = false
+				} else {
+					baseDiskSizeInGib := d[0].SizeInGib
+					poolSize := uint64(0)
+					for _, drive := range d {
+						poolSize += drive.SizeInGib
+					}
+					if targetIncrementInGiB == 0 {
+						targetIncrementInGiB = baseDiskSizeInGib
+					}
+					targetSizeGiB := poolSize + targetIncrementInGiB
+					expectedPoolDrivesAfterExpansion := int(math.Ceil(float64(targetSizeGiB) / float64(baseDiskSizeInGib)))
+					if expectedPoolDrivesAfterExpansion > POOL_MAX_CLOUD_DRIVES {
+						log.Infof("pool %s will reach max drives if expanded to size [%v] using add-drive", pool.Uuid, targetSizeGiB)
+						eligibilityMap[pool.Uuid] = false
+					} else {
+						currentPoolDrives := len(d)
+						expectedNodeDrivesAfterExpansion := currentNodeDrives + (expectedPoolDrivesAfterExpansion - currentPoolDrives)
+						stc, err := Inst().V.GetDriver()
+						if err != nil {
+							return nil, err
+						}
+						if stc.Spec.CloudStorage.JournalDeviceSpec != nil {
+							expectedNodeDrivesAfterExpansion++
+						}
+						if stc.Spec.CloudStorage.KvdbDeviceSpec != nil || stc.Spec.CloudStorage.SystemMdDeviceSpec != nil {
+							expectedNodeDrivesAfterExpansion++
+						}
+						if expectedNodeDrivesAfterExpansion > maxCloudDrives {
+							log.Infof("node %s  will reach max drives if pool %s expanded to size [%v] using add-drive", stNode.Id, pool.Uuid, targetSizeGiB)
+							eligibilityMap[pool.Uuid] = false
+							eligibilityMap[stNode.Id] = false
+						}
+
+					}
+
+				}
+			}
 		}
+
 	}
 
 	return eligibilityMap, nil
@@ -12853,19 +12956,6 @@ func IsPureCloudProvider() bool {
 	return false
 }
 
-// GetDrivesFromSpecificPoolOnNode returns List of Drives On Specific Node
-func GetDrivesFromSpecificPoolOnNode(n *node.Node, poolId string) ([]string, error) {
-	allPools, err := Inst().V.GetPoolDrives(n)
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("All Pool IDs [%v]", allPools)
-	if val, ok := allPools[poolId]; ok {
-		return val, nil
-	}
-	return nil, fmt.Errorf("Failed to get details of Drive on Pool [%v]", poolId)
-}
-
 // GetMultipathDeviceOnPool Returns list of multipath devices on Pool
 func GetMultipathDeviceOnPool(n *node.Node) (map[string][]string, error) {
 	multipathMap := make(map[string][]string)
@@ -12884,7 +12974,7 @@ func GetMultipathDeviceOnPool(n *node.Node) (map[string][]string, error) {
 	for eachPoolId, eachDev := range allPools {
 		for _, dev := range eachDev {
 			for _, multiDev := range allMultipathDev {
-				if strings.Contains(dev, multiDev) {
+				if strings.Contains(dev.Device, multiDev) {
 					multipathMap[eachPoolId] = append(multipathMap[eachPoolId], multiDev)
 				}
 			}
@@ -13065,6 +13155,7 @@ func CheckIopsandBandwidthinFA(flashArrays []pureutils.FlashArrayEntry, listofFa
 		}
 	}
 	return nil
+
 }
 
 // RunCmdsOnAllMasterNodes Runs a set of commands on all the master nodes
@@ -13194,5 +13285,66 @@ func VerifyClusterlevelPSA() error {
 		return fmt.Errorf("PSA settings not reflecting in pod!")
 	}
 
+	return nil
+}
+
+// DeleteFilesFromS3Bucket deletes any supplied file from the supplied bucket
+func DeleteFilesFromS3Bucket(bucketName string, fileName string) error {
+	id, secret, endpoint, s3Region, disableSslBool := s3utils.GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSslBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	if err != nil {
+		return fmt.Errorf("Failed to get S3 session to remove specific files: [%v]", err)
+	}
+
+	s3Client := s3.New(sess)
+
+	// List objects in the bucket.
+	listInput := &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+	}
+	listOutput, err := s3Client.ListObjectsV2(listInput)
+	if err != nil {
+		return fmt.Errorf("Failed to list objects in S3 bucket: [%v]", err)
+	}
+
+	// Filter objects that contain the fileName in their key.
+	var objectsToDelete []*s3.ObjectIdentifier
+	for _, item := range listOutput.Contents {
+		if strings.Contains(*item.Key, fileName) {
+			objectsToDelete = append(objectsToDelete, &s3.ObjectIdentifier{
+				Key: item.Key,
+			})
+		}
+	}
+	if len(objectsToDelete) == 0 {
+		return nil
+	}
+
+	// Create a batch delete request.
+	deleteInput := &s3.DeleteObjectsInput{
+		Bucket: aws.String(bucketName),
+		Delete: &s3.Delete{
+			Objects: objectsToDelete,
+		},
+	}
+	keys := make([]string, len(deleteInput.Delete.Objects))
+	for i, obj := range deleteInput.Delete.Objects {
+		keys[i] = *obj.Key
+	}
+	bucket := *deleteInput.Bucket
+
+	// Delete the filtered objects.
+	_, err = s3Client.DeleteObjects(deleteInput)
+	if err != nil {
+		return fmt.Errorf("Failed to delete objects from S3 bucket: [%v]", err)
+	}
+	log.Infof("The files %v are successfully deleted from the bucket [%s]", keys, bucket)
 	return nil
 }
