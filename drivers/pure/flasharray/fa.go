@@ -125,6 +125,7 @@ func (c *Client) login() error {
 func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 	log.Infof("\nRequest [%v]\n", req)
 	resp, err := c.client.Do(req)
+	log.Infof("\nResponse [%v]\n", resp)
 	if err != nil {
 		log.Infof("Do request failed")
 		return nil, err
