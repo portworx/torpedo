@@ -897,6 +897,9 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			if strings.Contains(ctx.App.Key, "tektoncd") {
 				ctx.SkipVolumeValidation = true
 			}
+			if strings.Contains(ctx.App.Key, "pxb-singleapp-multivol") {
+				ctx.SkipVolumeValidation = true
+			}
 			if !ctx.SkipVolumeValidation {
 				log.InfoD(fmt.Sprintf("Validating %s app's volumes", ctx.App.Key))
 				ValidateVolumes(ctx, errChan...)
