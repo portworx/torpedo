@@ -125,31 +125,27 @@ func (c *Client) login() error {
 func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 	log.Infof("\nRequest [%v]\n", req)
 	resp, err := c.client.Do(req)
-	log.Infof("\nResponse [%v]\n", resp)
 	if err != nil {
 		log.Infof("Do request failed")
 		return nil, err
 	}
 	defer resp.Body.Close()
-	ResponseBodyBytes, _ := ioutil.ReadAll(resp.Body)
-	RespBodyString := string(ResponseBodyBytes)
 
-	if strings.Contains(RespBodyString, "retention-locked") && strings.Contains(RespBodyString, "Cannot eradicate pod") {
-		return resp, nil
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error getting auth-token,response status is [%d]", resp.StatusCode)
-
-	}
-	if err := validateResponse(resp); err != nil {
-		return resp, err
-	}
+	//if resp.StatusCode != http.StatusOK {
+	//	return nil, fmt.Errorf("error getting auth-token,response status is [%d]", resp.StatusCode)
+	//
+	//}
+	//if err := validateResponse(resp); err != nil {
+	//	return resp, err
+	//}
 
 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
 	bodyString := string(bodyBytes)
+
+	if strings.Contains(bodyString, "retention-locked") && strings.Contains(bodyString, "Cannot eradicate pod") {
+		return resp, nil
+	}
 	err = json.Unmarshal([]byte(fmt.Sprintf("[%v]", bodyString)), v)
-	log.Infof("body string [%v]", bodyString)
-	log.Infof("body bytes [%v]", err)
 
 	if err != nil {
 		return nil, err
