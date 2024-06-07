@@ -5233,6 +5233,11 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 				}
 
 			})
+			stepLog = "Validate and Delete the applications"
+			Step(stepLog, func() {
+				ValidateApplications(contexts)
+				DestroyApps(contexts, nil)
+			})
 
 			stepLog := "Delete the pod created in the realm"
 			Step(stepLog, func() {
