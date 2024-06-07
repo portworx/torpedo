@@ -131,10 +131,10 @@ func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error getting auth-token,response status is [%d]", resp.StatusCode)
-
-	}
+	//if resp.StatusCode != http.StatusOK {
+	//	return nil, fmt.Errorf("error getting auth-token,response status is [%d]", resp.StatusCode)
+	//
+	//}
 	if err := validateResponse(resp); err != nil {
 		return resp, err
 	}
