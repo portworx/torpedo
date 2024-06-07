@@ -142,6 +142,8 @@ func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
 	bodyString := string(bodyBytes)
 	err = json.Unmarshal([]byte(fmt.Sprintf("[%v]", bodyString)), v)
+	log.Infof("body string [%v]", bodyString)
+	log.Infof("body bytes [%v]", err)
 
 	if err != nil {
 		return nil, err
