@@ -5238,9 +5238,9 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 			Step(stepLog, func() {
 				faClient, err = pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
 				log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
-				err := pureutils.DeletePodinFA(faClient, podNameinSC)
-				log.FailOnError(err, fmt.Sprintf("Failed to delete pod [%v] ", podNameinSC))
-				log.InfoD("Pod [%v] deleted ", podNameinSC)
+				err := pureutils.DeletePodinFA(faClient, PodNameinFA)
+				log.FailOnError(err, fmt.Sprintf("Failed to delete pod [%v] ", PodNameinFA))
+				log.InfoD("Pod [%v] deleted ", PodNameinFA)
 
 			})
 		}
