@@ -131,10 +131,6 @@ func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	examplebytes, _ := ioutil.ReadAll(resp.Body)
-	exampleString := string(examplebytes)
-	err = json.Unmarshal([]byte(fmt.Sprintf("[%v]", exampleString)), v)
-	log.Infof("Respone Body error [%v]", err)
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("error getting auth-token,response status is [%d]", resp.StatusCode)
 
