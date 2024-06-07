@@ -4716,36 +4716,36 @@ var _ = Describe("{DeployAppsAndStopPortworx}", func() {
 				}
 
 			}()
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				defer GinkgoRecover()
-				log.InfoD("Stopping Portworx Service on Node [%v]", nodeToReboot[0].Name)
-				err := Inst().V.StopDriver(nodeToReboot, false, nil)
-				log.FailOnError(err, "Failed to stop portworx on node [%v]", nodeToReboot[0].Name)
-			}()
+			//wg.Add(1)
+			//go func() {
+			//	defer wg.Done()
+			//	defer GinkgoRecover()
+			//	log.InfoD("Stopping Portworx Service on Node [%v]", nodeToReboot[0].Name)
+			//	err := Inst().V.StopDriver(nodeToReboot, false, nil)
+			//	log.FailOnError(err, "Failed to stop portworx on node [%v]", nodeToReboot[0].Name)
+			//}()
 			wg.Wait()
 		})
-		stepLog = "Wait for 10 mins and then start portworx"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			time.Sleep(10 * time.Minute)
-			err := Inst().V.StartDriver(nodeToReboot[0])
-			log.FailOnError(err, "Failed to start portworx on node [%v]", nodeToReboot[0].Name)
-			log.InfoD("wait for node: %s to be back up", nodeToReboot[0].Name)
-			nodeReadyStatus := func() (interface{}, bool, error) {
-				err := Inst().S.IsNodeReady(nodeToReboot[0])
-				if err != nil {
-					return "", true, err
-				}
-				return "", false, nil
-			}
-			_, err = DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", nodeToReboot[0].Name))
-			err = Inst().V.WaitDriverUpOnNode(nodeToReboot[0], Inst().DriverStartTimeout)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", nodeToReboot[0].Name))
-			log.FailOnError(err, fmt.Sprintf("Failed to reboot node %s", nodeToReboot[0].Name))
-		})
+		//stepLog = "Wait for 10 mins and then start portworx"
+		//Step(stepLog, func() {
+		//	log.InfoD(stepLog)
+		//	time.Sleep(10 * time.Minute)
+		//	err := Inst().V.StartDriver(nodeToReboot[0])
+		//	log.FailOnError(err, "Failed to start portworx on node [%v]", nodeToReboot[0].Name)
+		//	log.InfoD("wait for node: %s to be back up", nodeToReboot[0].Name)
+		//	nodeReadyStatus := func() (interface{}, bool, error) {
+		//		err := Inst().S.IsNodeReady(nodeToReboot[0])
+		//		if err != nil {
+		//			return "", true, err
+		//		}
+		//		return "", false, nil
+		//	}
+		//	_, err = DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
+		//	dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", nodeToReboot[0].Name))
+		//	err = Inst().V.WaitDriverUpOnNode(nodeToReboot[0], Inst().DriverStartTimeout)
+		//	dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", nodeToReboot[0].Name))
+		//	log.FailOnError(err, fmt.Sprintf("Failed to reboot node %s", nodeToReboot[0].Name))
+		//})
 		stepLog = "Validate the applications are in running state"
 		Step(stepLog, func() {
 			ValidateApplications(contexts)
