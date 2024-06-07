@@ -176,6 +176,11 @@ const (
 	storkControllerConfigMapRetry             = 30 * time.Second
 	BackupLocationValidationTimeout           = 10 * time.Minute
 	BackupLocationValidationRetryTime         = 30 * time.Second
+	RestrictedPSA                             = "restricted"
+	RestrictedPSAVersion                      = "latest"
+	CustomRestrictedPSADescription            = "Custom Restricted PSA"
+	DummyPSATestcase                          = "DummyPSATestcase"
+	RancherRestricted                         = "rancher-restricted"
 )
 
 var (
@@ -211,6 +216,9 @@ var (
 	IsBackupLongevityRun       = false
 	PvcListBeforeRun           []string
 	PvcListAfterRun            []string
+	RestrictedPSALabel         = map[string]string{"pod-security.kubernetes.io/enforce": "restricted"}
+	BaselinePSALabel           = map[string]string{"pod-security.kubernetes.io/enforce": "baseline"}
+	PsaAppMap                  = map[string]string{"postgres-backup": "postgres-restricted-psa", "mysql-backup": "mysql-psa-restricted"}
 )
 
 type UserRoleAccess struct {
