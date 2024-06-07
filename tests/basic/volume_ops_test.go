@@ -1478,7 +1478,6 @@ var _ = Describe("{LocalsnapAndRestore}", func() {
 				ctx.ReadinessTimeout = 15 * time.Minute
 				ValidateContext(ctx)
 				opts := make(map[string]bool)
-				opts[SkipClusterScopedObjects] = true
 				DestroyApps(contexts, opts)
 			}
 		})

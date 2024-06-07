@@ -9156,6 +9156,25 @@ func ExitPoolMaintenance(stNode node.Node) error {
 
 // DeleteGivenPoolInNode deletes pool with given ID in the given node
 func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) (err error) {
+
+	nodeVols, err := GetVolumesOnNode(stNode.VolDriverNodeID)
+	if err != nil {
+		return fmt.Errorf("error getting volumes node [%s],Err: %v ", stNode.Name, err)
+	}
+
+	for _, vol := range nodeVols {
+		newReplicaNode, err := GetNodeIdToMoveReplica(vol)
+		log.Infof("New Replica node is [%s]", newReplicaNode)
+		if err != nil {
+			return fmt.Errorf("error getting replica node for volume [%s],Err: %v ", vol, err)
+		}
+
+		err = MoveReplica(vol, stNode.VolDriverNodeID, newReplicaNode)
+		if err != nil {
+			return fmt.Errorf("error moving replica from node [%s] to volume [%s],Err: %v ", stNode.VolDriverNodeID, newReplicaNode, err)
+		}
+	}
+
 	if err := EnterPoolMaintenance(stNode); err != nil {
 		return err
 	}
