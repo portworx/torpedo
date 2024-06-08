@@ -1,5 +1,7 @@
 package flasharray
 
+import "github.com/portworx/torpedo/pkg/log"
+
 type PodServices struct {
 	client *Client
 }
@@ -25,4 +27,31 @@ func (p *PodServices) ListAllAvailablePods(params map[string]string, data interf
 		return nil, err
 	}
 	return m, nil
+}
+func (p *PodServices) PatchPod(Patchparams map[string]string, data interface{}) ([]PodResponse, error) {
+	req, err := p.client.NewRequest("PATCH", "pods", Patchparams, data)
+	if err != nil {
+		return nil, err
+	}
+	m := []PodResponse{}
+	_, err = p.client.Do(req, &m)
+	if err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+func (p *PodServices) DeletePod(Patchparams, deleteParams map[string]string, data interface{}) error {
+	podResp, err := p.PatchPod(Patchparams, data)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Pod [%v] Patched Successfully", podResp[0].Items[0].Name)
+	req, _ := p.client.NewRequest("DELETE", "pods", deleteParams, nil)
+	m := &[]PodResponse{}
+	_, err = p.client.Do(req, m)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

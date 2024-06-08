@@ -130,6 +130,12 @@ func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	bodyBytes, _ := ioutil.ReadAll(resp.Body)
+	bodyString := string(bodyBytes)
+	// This is for Deletepod where we are returning nil if we are retention-lock  which is expected error
+	if strings.Contains(bodyString, "retention-locked") && strings.Contains(bodyString, "Cannot eradicate pod") {
+		return resp, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("error getting auth-token,response status is [%d]", resp.StatusCode)
 
@@ -138,8 +144,6 @@ func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 		return resp, err
 	}
 
-	bodyBytes, _ := ioutil.ReadAll(resp.Body)
-	bodyString := string(bodyBytes)
 	err = json.Unmarshal([]byte(fmt.Sprintf("[%v]", bodyString)), v)
 
 	if err != nil {
@@ -306,7 +310,6 @@ func validateResponse(r *http.Response) error {
 	if c := r.StatusCode; 200 <= c && c <= 299 {
 		return nil
 	}
-
 	bodyBytes, _ := ioutil.ReadAll(r.Body)
 	bodyString := string(bodyBytes)
 	return fmt.Errorf("Response code: %d, ResponeBody: %s", r.StatusCode, bodyString)
