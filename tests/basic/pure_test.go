@@ -6,6 +6,7 @@ import (
 
 	"github.com/devans10/pugo/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
+	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
 
 	"math/rand"
 	"sort"
@@ -5089,10 +5090,12 @@ var _ = Describe("{TestRealm}", func() {
 var _ = Describe("{ValidatePodNameinVolume}", func() {
 	/*
 		https://purestorage.atlassian.net/browse/PWX-37369
-		As part of Mulitenancy feature, we are deploying a app which has "pure_fa_pod_name" in the storage class
-		1. Deploy an app which uses FADA volume( uses csi provisioner and a pure_block backend) and validate the pod name in the volume
-		2. Check if the pod name in the volume is same as the pod name in the storage class
-		3.If the pod name in the volume is not same as the pod name in the storage class, fail the test and even fail the t
+		As part of Mulitenancy feature, we are deploying an app which has "pure_fa_pod_name" in the storage class
+		1. Loop Through pure.json file and pick an FA endpoint which has Realm, if FA is not accessible go through next FA, if none accessible Fail the Test
+		2. Create a pod inside the Realm which we got from first step
+		3. Create a volume using the same pod name that is created in the FA ,The pod name should be mentioned as pure_fa_pod_name in the storage class
+		4. Validate Application and Check if the pod name in the volume is same as the pod name in the storage class
+		5. Delete the Application and the pod created in the FA (Right now we only destroy the pod , as delete pod will not happen because eradication is blocked by SafeMode in FA)
 	*/
 	JustBeforeEach(func() {
 		StartTorpedoTest("ValidatePodNameinVolume", "Validate the pod name in the volume", nil, 0)
@@ -5102,54 +5105,51 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var origCustomAppConfigs map[string]scheduler.AppConfig
+		var RealmName string
+		var faClient *newFlashArray.Client
+		var isFAaccessible bool
 		testName := "validate-pod-name-in-volume"
-		RealmName := "pxe-qa"
-		podNameinSC := "Torpedo-Test" + Inst().InstanceID
-		PodNameinFA := RealmName + "::" + podNameinSC
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
 		for _, fa := range flashArrays {
-			if fa.Realm != "pxe-qa" {
-				continue
-			}
-			faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
-			log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
-			realms, err := pureutils.ListAllRealmsFromFA(faClient)
-			log.FailOnError(err, fmt.Sprintf("Failed to get realms from FA [%v]", fa.MgmtEndPoint))
-			for _, realm := range realms {
-				for _, realmitem := range realm.Items {
-					log.InfoD("Realm Name [%v] and Realm ID [%v]", realmitem.Name, realmitem.ID)
+			if fa.Realm != "" {
+				RealmName = fa.Realm
+				faClient, err = pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+				if err != nil {
+					log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+					continue
 				}
+				isFAaccessible = true
+				break
 			}
-			if len(realms) == 0 {
-				log.FailOnError(fmt.Errorf("No realms found in FA [%v]", fa.MgmtEndPoint), "No realms found in FA")
-			}
+		}
+		if !isFAaccessible {
+			log.FailOnError(fmt.Errorf("No FA with realm found in pure.json"), "No FA with realm found in pure.json")
+		}
+		isRealmExists, err := pureutils.IsFARealmExistsOnMgmtEndpoint(faClient, RealmName)
+		log.FailOnError(err, fmt.Sprintf("Failed to check if realm [%v] exists ", RealmName))
+		if !isRealmExists {
+			log.FailOnError(fmt.Errorf("Realm [%v] is not created in FA", RealmName), "is realm created in FA?")
+		}
+		podNameinSC := "Torpedo-Test" + Inst().InstanceID
+		PodNameinFA := RealmName + "::" + podNameinSC
 
-			log.InfoD("create a pod inside a Realm")
-
-			podinfo, err := pureutils.CreatePodinFA(faClient, PodNameinFA)
+		stepLog := "Create A pod inside Realm"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err = pureutils.CreatePodinFA(faClient, PodNameinFA)
 			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", PodNameinFA))
-			for _, pod := range *podinfo {
-				for _, poditem := range pod.Items {
-					log.InfoD("Pod Name [%v] and Pod ID [%v]", poditem.Name, poditem.ID)
-				}
-
+			isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faClient, PodNameinFA)
+			log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", PodNameinFA))
+			if !isPodExists {
+				log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", PodNameinFA), "is pod created in FA?")
 			}
 			log.InfoD("Pod [%v] created ", PodNameinFA)
 
-			pods, err := pureutils.ListAllPodsFromFA(faClient)
-			for _, pod := range pods {
-				for _, poditem := range pod.Items {
-					log.InfoD("Pod Name [%v] and Pod ID [%v]", poditem.Name, poditem.ID)
-				}
-			}
-			log.FailOnError(err, fmt.Sprintf("Failed to get pods from FA [%v]", fa.MgmtEndPoint))
-
-			//applist := Inst().AppList
-			//defer func() {
-			//	Inst().AppList = applist
-			//}()
-			//Inst().AppList = []string{"fio-fada-realm"}
+		})
+		stepLog = "Assign the pod name to pure_fa_pod_name in the storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			customConfigAppName := skipTestIfNoRequiredCustomAppConfigFound()
 
 			// save the original custom app configs
@@ -5158,97 +5158,54 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 				origCustomAppConfigs[appName] = customAppConfig
 			}
 
-			// update the custom app config with empty string for Pure NFS endpoint
-			// So that app uses NFS endpoint from pure.json secret.
+			// update the custom app config with pod name
 			Inst().CustomAppConfig[customConfigAppName] = scheduler.AppConfig{
 				PureFaPodName: podNameinSC,
 			}
 
 			log.Infof("JustBeforeEach using Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
-
 			err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
 			log.FailOnError(err, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
 
-			//contexts = ScheduleApplications(testName)
 			context, err := Inst().S.Schedule(testName, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
 				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
-				PvcSize:            6 * units.GiB,
 				Namespace:          testName,
 			})
 			log.FailOnError(err, "Failed to schedule application of %v namespace", testName)
 			contexts = append(contexts, context...)
-			//ValidateApplicationsPureSDK(contexts)
-			//stepLog := "Deploy Applications with a storage class that has pure_fa_pod_name "
-			//Step(stepLog, func() {
-			//	log.InfoD(stepLog)
-			//	taskName := "validate-pod-name-in-volume"
-			//	context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-			//		AppKeys:            Inst().AppList,
-			//		StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
-			//		PvcSize:            6 * units.GiB,
-			//		Namespace:          taskName,
-			//	})
-			//	log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
-			//	contexts = append(contexts, context...)
-			//})
 			ValidateApplications(contexts)
-			//defer DestroyApps(contexts, nil)
-			stepLog = "Fetch the pod name from the storage class"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				//var storageclassObj storageApi.StorageClass
-				//var podNameinSC string
-				for _, ctx := range contexts {
-					//	for _, specObj := range ctx.App.SpecList {
-					//		if specObj, ok := specObj.(*storageApi.StorageClass); ok {
-					//			log.InfoD("Storage class [%v] is present in the context", specObj.Name)
-					//			storageclassObj = *specObj
-					//		}
-					//		storageclassParams := storageclassObj.Parameters
-					//		log.InfoD("Check for the pod name in the storageclass parameters")
-					//		for key, value := range storageclassParams {
-					//			if key == "pure_fa_pod_name" {
-					//				log.InfoD("Pod Name in the storage class is [%v]", value)
-					//				podNameinSC = value
-					//			}
-					//		}
-					//		if podNameinSC == "" {
-					//			log.FailOnError(fmt.Errorf("pure_fa_pod_name is not present in the storage class"), "is pure_fa_pod_name present in the storage class?")
-					//		}
-					volumes, err := Inst().S.GetVolumes(ctx)
-					log.FailOnError(err, "Failed to get volumes")
-					for _, volume := range volumes {
-						inspectedVolume, err := Inst().V.InspectVolume(volume.ID)
-						log.FailOnError(err, "Failed to inspect volume")
-						PodName := inspectedVolume.Locator.VolumeLabels["pure_fa_pod_name"]
-						if PodName == "" {
-							log.FailOnError(fmt.Errorf("Pod Name is not present in the volume labels"), "is pod name present in volume labels?")
-						} else if PodName != podNameinSC {
-							log.FailOnError(fmt.Errorf("Pod Name [%v] in the volume is not same as Pod Name [%v] in the storage class", PodName, podNameinSC), "is pod name in volume same as pod name in storage class?")
-						} else {
-							log.InfoD("Pod Name [%v] in the volume is same as Pod Name [%v] in the storage class", PodName, podNameinSC)
-						}
+			defer DestroyApps(contexts, nil)
+
+		})
+		stepLog = "Fetch the pod name from the storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				volumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes")
+				for _, volume := range volumes {
+					inspectedVolume, err := Inst().V.InspectVolume(volume.ID)
+					log.FailOnError(err, "Failed to inspect volume")
+					PodName := inspectedVolume.Locator.VolumeLabels["pure_fa_pod_name"]
+					if PodName == "" {
+						log.FailOnError(fmt.Errorf("Pod Name is not present in the volume labels"), "is pod name present in volume labels?")
+					} else if PodName != podNameinSC {
+						log.FailOnError(fmt.Errorf("Pod Name [%v] in the volume is not same as Pod Name [%v] in the storage class", PodName, podNameinSC), "is pod name in volume same as pod name in storage class?")
+					} else {
+						log.InfoD("Pod Name [%v] in the volume is same as Pod Name [%v] in the storage class", PodName, podNameinSC)
 					}
 				}
+			}
 
-			})
-			stepLog = "Validate and Delete the applications"
-			Step(stepLog, func() {
-				ValidateApplications(contexts)
-				DestroyApps(contexts, nil)
-			})
+		})
+		stepLog = "Delete the pod created in the realm"
+		Step(stepLog, func() {
+			err := pureutils.DeletePodinFA(faClient, PodNameinFA)
+			log.FailOnError(err, fmt.Sprintf("Failed to destroy pod [%v] ", PodNameinFA))
+			log.InfoD("Pod [%v] destroyed ", PodNameinFA)
 
-			stepLog := "Delete the pod created in the realm"
-			Step(stepLog, func() {
-				faClient, err = pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
-				log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
-				err := pureutils.DeletePodinFA(faClient, PodNameinFA)
-				log.FailOnError(err, fmt.Sprintf("Failed to delete pod [%v] ", PodNameinFA))
-				log.InfoD("Pod [%v] deleted ", PodNameinFA)
-
-			})
-		}
+		})
 
 	})
 	JustAfterEach(func() {
