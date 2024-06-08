@@ -5255,6 +5255,7 @@ var _ = Describe("{DisableTopologyandDeletePool}", func() {
 		defer appsValidateAndDestroy(contexts)
 		stepLog := "Disable the csi topology in stc"
 		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			stc.Spec.CSI.Topology.Enabled = true
 			pxOperator := operator.Instance()
 			_, err = pxOperator.UpdateStorageCluster(stc)
@@ -5285,6 +5286,7 @@ var _ = Describe("{DisableTopologyandDeletePool}", func() {
 		})
 		stepLog = "Delete the pool on a particular node and check validate if it is Deleted Successfully"
 		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			nodeToReboot = append(nodeToReboot, stNodes[rand.Intn(len(stNodes))])
 			log.InfoD("Deleting the pool on the node [%v]", nodeToReboot[0].Name)
 			deletePoolAndValidate(nodeSelected, fmt.Sprintf("%d", nodePool.ID))
