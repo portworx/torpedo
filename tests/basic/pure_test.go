@@ -5175,7 +5175,6 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 			log.FailOnError(err, "Failed to schedule application of %v namespace", testName)
 			contexts = append(contexts, context...)
 			ValidateApplications(contexts)
-			defer DestroyApps(contexts, nil)
 
 		})
 		stepLog = "Fetch the pod name from the storage class"
@@ -5198,6 +5197,10 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 				}
 			}
 
+		})
+		stepLog = "Destroy the Applications before deleting the pod"
+		Step(stepLog, func() {
+			DestroyApps(contexts, nil)
 		})
 		stepLog = "Delete the pod created in the realm"
 		Step(stepLog, func() {
