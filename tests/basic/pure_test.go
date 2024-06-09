@@ -5231,11 +5231,11 @@ var _ = Describe("{DisableTopologyandDeletePool}", func() {
 	It(itLog, func() {
 		log.InfoD(itLog)
 		log.InfoD("Check if the cluster is DMTHIN")
-		isDmthin, err := IsDMthin()
-		log.FailOnError(err, "Failed to check if the cluster is DMTHIN")
-		if !isDmthin {
-			Skip("Cluster is not DMTHIN so skipping the test")
-		}
+		//isDmthin, err := IsDMthin()
+		//log.FailOnError(err, "Failed to check if the cluster is DMTHIN")
+		//if !isDmthin {
+		//	Skip("Cluster is not DMTHIN so skipping the test")
+		//}
 		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
 		var nodeToReboot []node.Node
