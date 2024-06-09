@@ -5246,9 +5246,9 @@ var _ = Describe("{DisableTopologyandDeletePool}", func() {
 		stc, err := Inst().V.GetDriver()
 		log.FailOnError(err, "Failed to get driver")
 		log.InfoD("Check if the topology is enabled in the stc")
-		if stc.Spec.CSI.Topology.Enabled == false {
-			Skip("Topology is Disabled so skipping the test")
-		}
+		//if stc.Spec.CSI.Topology.Enabled == false {
+		//	Skip("Topology is Disabled so skipping the test")
+		//}
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("disablecsitopologyandpooldelete-%d", i))...)
 		}
