@@ -5250,14 +5250,14 @@ var _ = Describe("{DisableTopologyandDeletePool}", func() {
 			Skip("Topology is Disabled so skipping the test")
 		}
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resiznoqr-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("disablecsitopologyandpooldelete-%d", i))...)
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 		stepLog := "Disable the csi topology in stc"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			stc.Spec.CSI.Topology.Enabled = false
+			stc.Spec.CSI.Topology.Enabled = true
 			pxOperator := operator.Instance()
 			_, err = pxOperator.UpdateStorageCluster(stc)
 			log.FailOnError(err, "Failed to update the storage cluster")
