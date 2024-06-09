@@ -5245,6 +5245,7 @@ var _ = Describe("{DisableTopologyandDeletePool}", func() {
 		nodePool := nodeSelected.StoragePools[0]
 		stc, err := Inst().V.GetDriver()
 		log.FailOnError(err, "Failed to get driver")
+		log.InfoD("Check if the topology is enabled in the stc")
 		if stc.Spec.CSI.Topology.Enabled == false {
 			Skip("Topology is Disabled so skipping the test")
 		}
@@ -5256,7 +5257,7 @@ var _ = Describe("{DisableTopologyandDeletePool}", func() {
 		stepLog := "Disable the csi topology in stc"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			stc.Spec.CSI.Topology.Enabled = true
+			stc.Spec.CSI.Topology.Enabled = false
 			pxOperator := operator.Instance()
 			_, err = pxOperator.UpdateStorageCluster(stc)
 			log.FailOnError(err, "Failed to update the storage cluster")
