@@ -16,8 +16,8 @@ func (p *PodServices) CreatePod(params map[string]string, data interface{}) (*[]
 	return m, nil
 }
 
-func (p *PodServices) ListAllAvailablePods(params map[string]string, data interface{}) ([]PodResponse, error) {
-	req, err := p.client.NewRequest("GET", "pods", params, data)
+func (p *PodServices) ListAllAvailablePods(params map[string]string) ([]PodResponse, error) {
+	req, err := p.client.NewRequest("GET", "pods", params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -28,8 +28,8 @@ func (p *PodServices) ListAllAvailablePods(params map[string]string, data interf
 	}
 	return m, nil
 }
-func (p *PodServices) PatchPod(Patchparams map[string]string, data interface{}) ([]PodResponse, error) {
-	req, err := p.client.NewRequest("PATCH", "pods", Patchparams, data)
+func (p *PodServices) PatchPod(patchParams map[string]string, data interface{}) ([]PodResponse, error) {
+	req, err := p.client.NewRequest("PATCH", "pods", patchParams, data)
 	if err != nil {
 		return nil, err
 	}
@@ -40,8 +40,8 @@ func (p *PodServices) PatchPod(Patchparams map[string]string, data interface{}) 
 	}
 	return m, nil
 }
-func (p *PodServices) DeletePod(Patchparams, deleteParams map[string]string, data interface{}) error {
-	podResp, err := p.PatchPod(Patchparams, data)
+func (p *PodServices) DeletePod(patchParams, deleteParams map[string]string, data interface{}) error {
+	podResp, err := p.PatchPod(patchParams, data)
 	if err != nil {
 		return err
 	}

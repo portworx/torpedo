@@ -45,7 +45,7 @@ func ListAllDestroyedVolumesFromFA(faClient *flasharray.Client) ([]flasharray.Vo
 func ListAllRealmsFromFA(faClient *flasharray.Client) ([]flasharray.RealmResponse, error) {
 	params := make(map[string]string)
 	params["destroyed"] = "false"
-	realms, err := faClient.Realms.ListAllAvailableRealms(params, nil)
+	realms, err := faClient.Realms.ListAllAvailableRealms(params)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func ListAllRealmsFromFA(faClient *flasharray.Client) ([]flasharray.RealmRespons
 func ListAllPodsFromFA(faClient *flasharray.Client) ([]flasharray.PodResponse, error) {
 	params := make(map[string]string)
 	params["destroyed"] = "false"
-	pods, err := faClient.Pods.ListAllAvailablePods(params, nil)
+	pods, err := faClient.Pods.ListAllAvailablePods(params)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func GetFARealmFromMgmtEndpoint(secret PXPureSecret, mgmtEndPoint string) string
 func IsFARealmExistsOnMgmtEndpoint(faClient *flasharray.Client, realm string) (bool, error) {
 	params := make(map[string]string)
 	params["destroyed"] = "false"
-	realms, err := faClient.Realms.ListAllAvailableRealms(params, nil)
+	realms, err := faClient.Realms.ListAllAvailableRealms(params)
 	if err != nil {
 		return false, err
 	}
@@ -116,7 +116,7 @@ func IsFARealmExistsOnMgmtEndpoint(faClient *flasharray.Client, realm string) (b
 func IsPodExistsOnMgmtEndpoint(faClient *flasharray.Client, podName string) (bool, error) {
 	params := make(map[string]string)
 	params["destroyed"] = "false"
-	pods, err := faClient.Pods.ListAllAvailablePods(params, nil)
+	pods, err := faClient.Pods.ListAllAvailablePods(params)
 	if err != nil {
 		return false, err
 	}

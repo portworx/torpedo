@@ -4,8 +4,8 @@ type RealmsServices struct {
 	client *Client
 }
 
-func (realms *RealmsServices) ListAllAvailableRealms(params map[string]string, data interface{}) ([]RealmResponse, error) {
-	req, err := realms.client.NewRequest("GET", "realms", params, data)
+func (realms *RealmsServices) ListAllAvailableRealms(params map[string]string) ([]RealmResponse, error) {
+	req, err := realms.client.NewRequest("GET", "realms", params, nil)
 	if err != nil {
 		return nil, err
 	}
