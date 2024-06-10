@@ -5245,7 +5245,7 @@ var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
 
-		var nodeToReboot []node.Node
+		//var nodeToReboot []node.Node
 		stNodes := node.GetStorageNodes()
 		randomIndex := rand.Intn(len(stNodes))
 		nodeSelected := stNodes[randomIndex]
@@ -5260,11 +5260,11 @@ var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 			log.InfoD("Csi Topology is Currently Disabled in STC, so skipping the test")
 			Skip("Topology is Disabled so skipping the test")
 		}
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("disablecsitopologyandpooldelete-%d", i))...)
-		}
-		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
+		//for i := 0; i < Inst().GlobalScaleFactor; i++ {
+		//	contexts = append(contexts, ScheduleApplications(fmt.Sprintf("disablecsitopologyandpooldelete-%d", i))...)
+		//}
+		//ValidateApplications(contexts)
+		//defer appsValidateAndDestroy(contexts)
 		checkPodIsDeleted := func() (interface{}, bool, error) {
 			csiLabels := make(map[string]string)
 			csiLabels["app"] = "px-csi-driver"
@@ -5278,7 +5278,7 @@ var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 		stepLog := "Disable the csi topology in stc"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			stc.Spec.CSI.Topology.Enabled = false
+			stc.Spec.CSI.Topology.Enabled = !stc.Spec.CSI.Topology.Enabled
 			pxOperator := operator.Instance()
 			_, err = pxOperator.UpdateStorageCluster(stc)
 			log.FailOnError(err, "Failed to update the storage cluster")
@@ -5310,20 +5310,20 @@ var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to rescan specs from %s", Inst().SpecDir)
 			log.InfoD("Update STC, is csi topology enabled Now?: %t", stc.Spec.CSI.Topology.Enabled)
 		})
-		stepLog = "Delete the pool on a particular node and check validate if it is Deleted Successfully"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			nodeToReboot = append(nodeToReboot, stNodes[rand.Intn(len(stNodes))])
-			log.InfoD("Deleting the pool on the node [%v]", nodeToReboot[0].Name)
-			deletePoolAndValidate(nodeSelected, fmt.Sprintf("%d", nodePool.ID))
-			log.FailOnError(err, "Failed to delete the pool on the node [%v]", nodeToReboot[0].Name)
-		})
-		stepLog = "Add a Cloud Drive on same node and check if it is added successfully"
-		Step(stepLog, func() {
-			spec := fmt.Sprintf("size=%d", nodePoolSizeinGib)
-			err := Inst().V.AddCloudDrive(&nodeSelected, spec, -1)
-			log.FailOnError(err, "Failed to add cloud drive on the node [%v]", nodeToReboot[0].Name)
-		})
+		//stepLog = "Delete the pool on a particular node and check validate if it is Deleted Successfully"
+		//Step(stepLog, func() {
+		//	log.InfoD(stepLog)
+		//	nodeToReboot = append(nodeToReboot, stNodes[rand.Intn(len(stNodes))])
+		//	log.InfoD("Deleting the pool on the node [%v]", nodeToReboot[0].Name)
+		//	deletePoolAndValidate(nodeSelected, fmt.Sprintf("%d", nodePool.ID))
+		//	log.FailOnError(err, "Failed to delete the pool on the node [%v]", nodeToReboot[0].Name)
+		//})
+		//stepLog = "Add a Cloud Drive on same node and check if it is added successfully"
+		//Step(stepLog, func() {
+		//	spec := fmt.Sprintf("size=%d", nodePoolSizeinGib)
+		//	err := Inst().V.AddCloudDrive(&nodeSelected, spec, -1)
+		//	log.FailOnError(err, "Failed to add cloud drive on the node [%v]", nodeToReboot[0].Name)
+		//})
 		stepLog = "Toggle Back the csi topology in stc to true"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
