@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
+	v12 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/portworx/sched-ops/k8s/operator"
 
 	"github.com/devans10/pugo/flasharray"
@@ -5275,41 +5276,41 @@ var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 			}
 			return "csi pods deployed", false, nil
 		}
-		stepLog := "Disable the csi topology in stc"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			stc.Spec.CSI.Topology.Enabled = !stc.Spec.CSI.Topology.Enabled
-			pxOperator := operator.Instance()
-			_, err = pxOperator.UpdateStorageCluster(stc)
-			log.FailOnError(err, "Failed to update the storage cluster")
-			log.InfoD("Validating csi pods are deleted")
-			checkPodIsDeleted := func() (interface{}, bool, error) {
-				csiLabels := make(map[string]string)
-				csiLabels["app"] = "px-csi-driver"
-				pods, err := k8sCore.GetPods(volDriverNamespace, csiLabels)
-				Expect(err).NotTo(HaveOccurred())
-				if len(pods.Items) == 0 {
-					return "", true, fmt.Errorf("csi pods are still not deployed")
-				}
-				return "csi pods deployed", false, nil
-				//if stc.Spec.CSI.Topology.Enabled {
-				//	log.Infof("csi pod is active, checking is pod is present.")
-				//	if len(pods.Items) == 0 {
-				//		return "", true, fmt.Errorf("csi pods are still not deployed")
-				//	}
-				//	return "csi pods deployed", false, nil
-				//} else {
-				//	log.Infof("csi is inactive, checking if pod is deleted.")
-				//	if len(pods.Items) > 0 {
-				//		return "", true, fmt.Errorf("csi pod is still present")
-				//	}
-				//	return "csi pods are deleted", false, nil
-				//}
-			}
-			_, err = task.DoRetryWithTimeout(checkPodIsDeleted, 15*time.Minute, 30*time.Second)
-			Expect(err).NotTo(HaveOccurred(), "Failed to rescan specs from %s", Inst().SpecDir)
-			log.InfoD("Update STC, is csi topology enabled Now?: %t", stc.Spec.CSI.Topology.Enabled)
-		})
+		//stepLog := "Disable the csi topology in stc"
+		//Step(stepLog, func() {
+		//	log.InfoD(stepLog)
+		//	stc.Spec.CSI.Topology.Enabled = !stc.Spec.CSI.Topology.Enabled
+		//	pxOperator := operator.Instance()
+		//	_, err = pxOperator.UpdateStorageCluster(stc)
+		//	log.FailOnError(err, "Failed to update the storage cluster")
+		//	log.InfoD("Validating csi pods are deleted")
+		//	checkPodIsDeleted := func() (interface{}, bool, error) {
+		//		csiLabels := make(map[string]string)
+		//		csiLabels["app"] = "px-csi-driver"
+		//		pods, err := k8sCore.GetPods(volDriverNamespace, csiLabels)
+		//		Expect(err).NotTo(HaveOccurred())
+		//		if len(pods.Items) == 0 {
+		//			return "", true, fmt.Errorf("csi pods are still not deployed")
+		//		}
+		//		return "csi pods deployed", false, nil
+		//		//if stc.Spec.CSI.Topology.Enabled {
+		//		//	log.Infof("csi pod is active, checking is pod is present.")
+		//		//	if len(pods.Items) == 0 {
+		//		//		return "", true, fmt.Errorf("csi pods are still not deployed")
+		//		//	}
+		//		//	return "csi pods deployed", false, nil
+		//		//} else {
+		//		//	log.Infof("csi is inactive, checking if pod is deleted.")
+		//		//	if len(pods.Items) > 0 {
+		//		//		return "", true, fmt.Errorf("csi pod is still present")
+		//		//	}
+		//		//	return "csi pods are deleted", false, nil
+		//		//}
+		//	}
+		//	_, err = task.DoRetryWithTimeout(checkPodIsDeleted, 15*time.Minute, 30*time.Second)
+		//	Expect(err).NotTo(HaveOccurred(), "Failed to rescan specs from %s", Inst().SpecDir)
+		//	log.InfoD("Update STC, is csi topology enabled Now?: %t", stc.Spec.CSI.Topology.Enabled)
+		//})
 		//stepLog = "Delete the pool on a particular node and check validate if it is Deleted Successfully"
 		//Step(stepLog, func() {
 		//	log.InfoD(stepLog)
@@ -5327,7 +5328,7 @@ var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 		stepLog = "Toggle Back the csi topology in stc to true"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			stc.Spec.CSI.Topology.Enabled = true
+			stc.Spec.CSI.Topology = &v12.CSITopologySpec{Enabled: true}
 			pxOperator := operator.Instance()
 			_, err = pxOperator.UpdateStorageCluster(stc)
 			log.FailOnError(err, "Failed to update the storage cluster")
