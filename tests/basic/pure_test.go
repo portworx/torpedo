@@ -5215,29 +5215,35 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		AfterEachTest(contexts)
 	})
 })
-var _ = Describe("{DisableTopologyandDeletePool}", func() {
+var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 	/*
 	   https://purestorage.atlassian.net/browse/PTX-37400
-	   1. Toggle the topology as false in stc and wait for few minutes before px-csi pods come up and check if the pods are running
-	   2. Delete the pool
-	   3. Check if the pool is deleted
+	   1. Check if DMThin is enabled on the cluster , if not skip the test (Right now for FACD delete pool option is not available on BTRFS)
+	   2. Check if the CSI topology is enabled in the STC , if not enabled then skip the test
+	   3. Toggle the CSI topology as false in stc and wait for px-csi pods to restart  and check if the pods are running
+	   4. Deploy Applications
+	   5. While Apps are Running,Select a Random Node and Delete the pool in that node
+	   6. Check if the pool is deleted
 	*/
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
-		StartTorpedoTest("DisableTopologyandDeletePool",
+		StartTorpedoTest("DisableCsiTopologyandDeletePool",
 			"Disable the topology for the pool and delete the pool", nil, 0)
 	})
-	itLog := "DisableTopologyandDeletePool"
+	itLog := "DisableCsiTopologyandDeletePool"
 	It(itLog, func() {
 		log.InfoD(itLog)
 		log.InfoD("Check if the cluster is DMTHIN")
 		isDmthin, err := IsDMthin()
 		log.FailOnError(err, "Failed to check if the cluster is DMTHIN")
 		if !isDmthin {
+			log.InfoD("Currently the cluster is not DMTHIN , so skipping the test")
 			Skip("Cluster is not DMTHIN so skipping the test")
 		}
+		log.InfoD("Get the Namespace in which portworx is Deployed")
 		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+
 		var nodeToReboot []node.Node
 		stNodes := node.GetStorageNodes()
 		randomIndex := rand.Intn(len(stNodes))
@@ -5247,6 +5253,7 @@ var _ = Describe("{DisableTopologyandDeletePool}", func() {
 		log.FailOnError(err, "Failed to get driver")
 		log.InfoD("Check if the topology is enabled in the stc")
 		if stc.Spec.CSI.Topology.Enabled == false {
+			log.InfoD("Csi Topology is Currently Disabled in STC, so skipping the test")
 			Skip("Topology is Disabled so skipping the test")
 		}
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -5267,19 +5274,23 @@ var _ = Describe("{DisableTopologyandDeletePool}", func() {
 				csiLabels["app"] = "px-csi-driver"
 				pods, err := k8sCore.GetPods(volDriverNamespace, csiLabels)
 				Expect(err).NotTo(HaveOccurred())
-				if stc.Spec.CSI.Topology.Enabled {
-					log.Infof("csi pod is active, checking is pod is present.")
-					if len(pods.Items) == 0 {
-						return "", true, fmt.Errorf("csi pods are still not deployed")
-					}
-					return "csi pods deployed", false, nil
-				} else {
-					log.Infof("csi is inactive, checking if pod is deleted.")
-					if len(pods.Items) > 0 {
-						return "", true, fmt.Errorf("csi pod is still present")
-					}
-					return "csi pods are deleted", false, nil
+				if len(pods.Items) == 0 {
+					return "", true, fmt.Errorf("csi pods are still not deployed")
 				}
+				return "csi pods deployed", false, nil
+				//if stc.Spec.CSI.Topology.Enabled {
+				//	log.Infof("csi pod is active, checking is pod is present.")
+				//	if len(pods.Items) == 0 {
+				//		return "", true, fmt.Errorf("csi pods are still not deployed")
+				//	}
+				//	return "csi pods deployed", false, nil
+				//} else {
+				//	log.Infof("csi is inactive, checking if pod is deleted.")
+				//	if len(pods.Items) > 0 {
+				//		return "", true, fmt.Errorf("csi pod is still present")
+				//	}
+				//	return "csi pods are deleted", false, nil
+				//}
 			}
 			_, err = task.DoRetryWithTimeout(checkPodIsDeleted, 15*time.Minute, 30*time.Second)
 			Expect(err).NotTo(HaveOccurred(), "Failed to rescan specs from %s", Inst().SpecDir)
