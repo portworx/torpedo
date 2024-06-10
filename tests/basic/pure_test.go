@@ -5224,6 +5224,7 @@ var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 	   4. Deploy Applications
 	   5. While Apps are Running,Select a Random Node and Delete the pool in that node
 	   6. Check if the pool is deleted
+	   7. Add a Cloud Drive on the same node and check if it is added successfully
 	*/
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
@@ -5249,6 +5250,9 @@ var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 		randomIndex := rand.Intn(len(stNodes))
 		nodeSelected := stNodes[randomIndex]
 		nodePool := nodeSelected.StoragePools[0]
+		nodePoolSize := nodePool.TotalSize
+		nodePoolSizeinGib := nodePoolSize / units.GiB
+		log.InfoD("Pool size is [%v] GiB", nodePoolSizeinGib)
 		stc, err := Inst().V.GetDriver()
 		log.FailOnError(err, "Failed to get driver")
 		log.InfoD("Check if the topology is enabled in the stc")
@@ -5303,6 +5307,12 @@ var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 			log.InfoD("Deleting the pool on the node [%v]", nodeToReboot[0].Name)
 			deletePoolAndValidate(nodeSelected, fmt.Sprintf("%d", nodePool.ID))
 			log.FailOnError(err, "Failed to delete the pool on the node [%v]", nodeToReboot[0].Name)
+		})
+		stepLog = "Add a Cloud Drive on same node and check if it is added successfully"
+		Step(stepLog, func() {
+			spec := fmt.Sprintf("size=%d", nodePoolSizeinGib)
+			err := Inst().V.AddCloudDrive(&nodeSelected, spec, -1)
+			log.FailOnError(err, "Failed to add cloud drive on the node [%v]", nodeToReboot[0].Name)
 		})
 
 	})
