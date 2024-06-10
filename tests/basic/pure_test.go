@@ -5265,6 +5265,16 @@ var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
+		checkPodIsDeleted := func() (interface{}, bool, error) {
+			csiLabels := make(map[string]string)
+			csiLabels["app"] = "px-csi-driver"
+			pods, err := k8sCore.GetPods(volDriverNamespace, csiLabels)
+			Expect(err).NotTo(HaveOccurred())
+			if len(pods.Items) == 0 {
+				return "", true, fmt.Errorf("csi pods are still not deployed")
+			}
+			return "csi pods deployed", false, nil
+		}
 		stepLog := "Disable the csi topology in stc"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -5313,6 +5323,19 @@ var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 			spec := fmt.Sprintf("size=%d", nodePoolSizeinGib)
 			err := Inst().V.AddCloudDrive(&nodeSelected, spec, -1)
 			log.FailOnError(err, "Failed to add cloud drive on the node [%v]", nodeToReboot[0].Name)
+		})
+		stepLog = "Toggle Back the csi topology in stc to true"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			stc.Spec.CSI.Topology.Enabled = true
+			pxOperator := operator.Instance()
+			_, err = pxOperator.UpdateStorageCluster(stc)
+			log.FailOnError(err, "Failed to update the storage cluster")
+			log.InfoD("Validating csi pods are deployed")
+			_, err = task.DoRetryWithTimeout(checkPodIsDeleted, 15*time.Minute, 30*time.Second)
+			Expect(err).NotTo(HaveOccurred(), "Failed to rescan specs from %s", Inst().SpecDir)
+			log.InfoD("Update STC, is csi topology enabled Now?: %t", stc.Spec.CSI.Topology.Enabled)
+
 		})
 
 	})
