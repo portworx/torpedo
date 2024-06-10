@@ -14,6 +14,7 @@ import (
 	rancherClientBase "github.com/rancher/norman/clientbase"
 	"github.com/rancher/norman/types"
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
+
 	"os"
 	"strings"
 	"time"
@@ -80,7 +81,8 @@ func (r *Rancher) GetRancherClusterParametersValue() (*RancherClusterParameters,
 	// TODO Rancher URL for cloud cluster will not be fetched from master node IP
 	masterNodeName := node.GetMasterNodes()[0].Name
 	log.Infof("The master node here is %v", masterNodeName)
-	endpoint := "https://" + masterNodeName + "/v3"
+	endpoint := "https://ip-10-13-230-247.pwx.purestorage.com/v3"
+
 	rkeParameters.Endpoint = endpoint
 	rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
 	if rkeToken == "" {
@@ -97,8 +99,8 @@ func (r *Rancher) UpdateRancherClient(clusterName string) error {
 	var rkeParametersValue RancherClusterParameters
 	var err error
 	var rkeToken string
-	masterNodeName := node.GetMasterNodes()[0].Name
-	endpoint := "https://" + masterNodeName + "/v3"
+	//masterNodeName := node.GetMasterNodes()[0].Name
+	endpoint := "https://ip-10-13-230-247.pwx.purestorage.com/v3"
 	if clusterName == "destination-config" {
 		rkeToken = os.Getenv("DESTINATION_RKE_TOKEN")
 		if rkeToken == "" {
@@ -514,22 +516,100 @@ func (r *Rancher) GetPodSecurityAdmissionConfigurationTemplateList() (*rancherCl
 
 // UpdateClusterWidePSA add the cluster wide PSA to the given cluster
 func (r *Rancher) UpdateClusterWidePSA(clusterName string, psaName string) error {
+	var clusterId string
 	clusterCollection, err := r.client.Cluster.List(nil)
 	if err != nil {
 		return err
 	}
-	log.InfoD("Updating cluster wide PSA %v for cluster %v", psaName, clusterName)
 	for _, cluster := range clusterCollection.Data {
 		if cluster.Name == clusterName {
-			clusterInterface := &rancherClient.Cluster{
-				Name: cluster.Name,
-				DefaultPodSecurityAdmissionConfigurationTemplateName: psaName,
-			}
-			_, err = r.client.Cluster.Update(&cluster, clusterInterface)
-			return err
+			log.InfoD("Inside Cluster ID is %v", clusterId)
+			clusterId = cluster.ID
+			break
 		}
 	}
-	return fmt.Errorf("cluster with cluster name %s is not present", clusterName)
+	log.InfoD("Cluster ID is %v", clusterId)
+	existingCluster, err := r.client.Cluster.ByID(clusterId)
+	updatedCluster := rancherClient.Cluster{
+		Name: existingCluster.Name,
+		DefaultPodSecurityAdmissionConfigurationTemplateName: psaName,
+	}
+	newCluster, err := r.client.Cluster.Update(existingCluster, updatedCluster)
+	log.InfoD("The new cluster is 1 %v", newCluster.Name)
+	log.InfoD("The new cluster is 2 %v", newCluster.DefaultPodSecurityAdmissionConfigurationTemplateName)
+	log.InfoD("The new cluster is 3 %v", newCluster)
+	if err != nil {
+		return err
+	}
+
+	clusterCollection, err = r.client.Cluster.List(nil)
+
+	for _, cluster := range clusterCollection.Data {
+		log.InfoD(" Inside cluster is %v", cluster)
+		if cluster.Name == clusterName {
+			log.InfoD(" Version inside loop %v", cluster.Version)
+			log.InfoD(" Cluster name in loop %v", cluster.Name)
+			log.InfoD("The cluster wide PSA for cluster %v is %v", clusterName, cluster.DefaultPodSecurityAdmissionConfigurationTemplateName)
+		}
+	}
+
+	//// Value is update in response but not reflected in UI
+	//log.InfoD("Updating cluster wide PSA %v for cluster %v", psaName, clusterName)
+	//for _, cluster := range clusterCollection.Data {
+	//
+	//	if cluster.Name == clusterName {
+	//		log.InfoD(" Version before update %v", cluster.Version)
+	//		clusterInterface := &rancherClient.Cluster{
+	//			Name: cluster.Name,
+	//			DefaultPodSecurityAdmissionConfigurationTemplateName: psaName,
+	//		}
+	//
+	//		log.InfoD("The cluster object selected is %v", cluster)
+	//		clusterTemp, err := r.client.Cluster.Update(&cluster, clusterInterface)
+	//		log.InfoD("New PSA is %v", clusterTemp.DefaultPodSecurityAdmissionConfigurationTemplateName)
+	//		log.InfoD("The cluster name is %v", clusterTemp.Name)
+	//		log.InfoD(" Version after update %v", cluster.Version)
+	//		log.InfoD("\n \n \n The cluster is %v", clusterTemp)
+	//		if err != nil {
+	//			return err
+	//		}
+	//		break
+	//	}
+	//}
+
+	//Temporary code
+
+	//// Value is update in response but not reflected in UI
+	//log.InfoD("Updating cluster wide PSA %v for cluster %v", psaName, clusterName)
+	//for _, cluster := range clusterCollection.Data {
+	//	if cluster.Name == clusterName {
+	//		clusterInterface := &rancherClient.Cluster{
+	//			FleetWorkspaceName: "fleet-default",
+	//			Name:               cluster.Name,
+	//			APIEndpoint:        "https://ip-10-13-228-218.pwx.purestorage.com/v3",
+	//			DefaultPodSecurityAdmissionConfigurationTemplateName: psaName,
+	//		}
+	//		log.InfoD("The cluster object selected is %v", cluster)
+	//		_, err = r.client.Cluster.Update(&cluster, clusterInterface)
+	//		return err
+	//	}
+	//}
+	//
+	//// With below, it does not give correct value in response also. It shows the previous value after update also
+	//log.InfoD("Updating cluster wide PSA %v for cluster spec %v", psaName, clusterName)
+	//for _, cluster := range clusterCollection.Data {
+	//	if cluster.Name == clusterName {
+	//		clusterInterface := &rancherClient.ClusterSpec{
+	//			FleetWorkspaceName: "fleet-default",
+	//			DefaultPodSecurityAdmissionConfigurationTemplateName: psaName,
+	//		}
+	//		log.InfoD("The cluster object selected is %v", cluster)
+	//		_, err = r.client.Cluster.Update(&cluster, clusterInterface)
+	//		return err
+	//	}
+	//}
+
+	return nil
 }
 
 func init() {
