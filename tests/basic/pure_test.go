@@ -5231,11 +5231,11 @@ var _ = Describe("{DisableTopologyandDeletePool}", func() {
 	It(itLog, func() {
 		log.InfoD(itLog)
 		log.InfoD("Check if the cluster is DMTHIN")
-		//isDmthin, err := IsDMthin()
-		//log.FailOnError(err, "Failed to check if the cluster is DMTHIN")
-		//if !isDmthin {
-		//	Skip("Cluster is not DMTHIN so skipping the test")
-		//}
+		isDmthin, err := IsDMthin()
+		log.FailOnError(err, "Failed to check if the cluster is DMTHIN")
+		if !isDmthin {
+			Skip("Cluster is not DMTHIN so skipping the test")
+		}
 		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
 		var nodeToReboot []node.Node
@@ -5246,9 +5246,9 @@ var _ = Describe("{DisableTopologyandDeletePool}", func() {
 		stc, err := Inst().V.GetDriver()
 		log.FailOnError(err, "Failed to get driver")
 		log.InfoD("Check if the topology is enabled in the stc")
-		//if stc.Spec.CSI.Topology.Enabled == false {
-		//	Skip("Topology is Disabled so skipping the test")
-		//}
+		if stc.Spec.CSI.Topology.Enabled == false {
+			Skip("Topology is Disabled so skipping the test")
+		}
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("disablecsitopologyandpooldelete-%d", i))...)
 		}
@@ -5257,7 +5257,7 @@ var _ = Describe("{DisableTopologyandDeletePool}", func() {
 		stepLog := "Disable the csi topology in stc"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			stc.Spec.CSI.Topology.Enabled = true
+			stc.Spec.CSI.Topology.Enabled = false
 			pxOperator := operator.Instance()
 			_, err = pxOperator.UpdateStorageCluster(stc)
 			log.FailOnError(err, "Failed to update the storage cluster")
