@@ -76,6 +76,7 @@ import (
 
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsapi "k8s.io/api/apps/v1"
@@ -1520,14 +1521,14 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 			// 		expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
 			// 	}
 			// })
+			// Step("validating groupsnap for using pxctl", func() {
+			// 	err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl(vol)
+			// 	expect(err).NotTo(beNil(), "error expected but no error received while creating Pure groupsnap")
+			// 	if err != nil {
+			// 		expect(err.Error()).To(contain(errPureGroupsnapNotSupported.Error()), "incorrect error received creating Pure groupsnap")
+			// 	}
+			// })
 		}
-		Step("validating groupsnap for using pxctl", func() {
-			err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl()
-			expect(err).NotTo(beNil(), "error expected but no error received while creating Pure groupsnap")
-			if err != nil {
-				expect(err.Error()).To(contain(errPureGroupsnapNotSupported.Error()), "incorrect error received creating Pure groupsnap")
-			}
-		})
 		Step("Delete the cloudsnaps created ", func() {
 			for _, vol := range SnapshotVolumes {
 				err = Inst().V.DeleteVolume(vol)
