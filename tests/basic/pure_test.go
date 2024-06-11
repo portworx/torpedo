@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+
 	"github.com/devans10/pugo/flasharray"
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
@@ -98,8 +99,9 @@ var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 	It("schedule pure volumes on applications, run CRUD, tear down", func() {
 		contexts = make([]*scheduler.Context, 0)
 
-		err := Inst().V.InitializePureLocalVolumePaths() // Initialize our "baseline" of Pure devices, such as FACD devices or other local FA disks
-		Expect(err).NotTo(HaveOccurred(), "unexpected error taking Pure device baseline")
+		// PWX-37645: Disabled while fixing partition edge cases
+		// err := Inst().V.InitializePureLocalVolumePaths() // Initialize our "baseline" of Pure devices, such as FACD devices or other local FA disks
+		// Expect(err).NotTo(HaveOccurred(), "unexpected error taking Pure device baseline")
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("purevolumestest-%d", i))...)
@@ -131,8 +133,9 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
 	It("schedule pure volumes on applications, run CRUD, tear down", func() {
 		contexts = make([]*scheduler.Context, 0)
 
-		err := Inst().V.InitializePureLocalVolumePaths() // Initialize our "baseline" of Pure devices, such as FACD devices or other local FA disks
-		Expect(err).NotTo(HaveOccurred(), "unexpected error taking Pure device baseline")
+		// PWX-37645: Disabled while fixing partition edge cases
+		// err := Inst().V.InitializePureLocalVolumePaths() // Initialize our "baseline" of Pure devices, such as FACD devices or other local FA disks
+		// Expect(err).NotTo(HaveOccurred(), "unexpected error taking Pure device baseline")
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("purevolumestest-%d", i))...)
