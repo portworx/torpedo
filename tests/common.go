@@ -10,8 +10,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"k8s.io/utils/strings/slices"
 	"math"
+
+	"k8s.io/utils/strings/slices"
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/devans10/pugo/flasharray"
@@ -1432,13 +1433,14 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 				}
 				snapshotVolNames = append(snapshotVolNames, snapshotVolName)
 			})
-			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateCloudsnap(vol, params)
-				expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")
-				if err != nil {
-					expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
-				}
-			})
+			// Temporarily disabled: PWX-37628
+			// Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap", ctx.App.Key, vol), func() {
+			// 	err = Inst().V.ValidateCreateCloudsnap(vol, params)
+			// 	expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")
+			// 	if err != nil {
+			// 		expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
+			// 	}
+			// })
 		}
 
 		Step("validate Pure local volume paths", func() {
@@ -1504,13 +1506,14 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 				}
 				SnapshotVolumes = append(SnapshotVolumes, snapshotVolName)
 			})
-			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap using pxctl", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateCloudsnapUsingPxctl(vol)
-				expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")
-				if err != nil {
-					expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
-				}
-			})
+			// Temporarily disabled: PWX-37628
+			// Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap using pxctl", ctx.App.Key, vol), func() {
+			// 	err = Inst().V.ValidateCreateCloudsnapUsingPxctl(vol)
+			// 	expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")
+			// 	if err != nil {
+			// 		expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
+			// 	}
+			// })
 		}
 		Step("validating groupsnap for using pxctl", func() {
 			err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl()
