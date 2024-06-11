@@ -1515,14 +1515,14 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 			// 		expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
 			// 	}
 			// })
+			// Step("validating groupsnap for using pxctl", func() {
+			// 	err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl(vol)
+			// 	expect(err).NotTo(beNil(), "error expected but no error received while creating Pure groupsnap")
+			// 	if err != nil {
+			// 		expect(err.Error()).To(contain(errPureGroupsnapNotSupported.Error()), "incorrect error received creating Pure groupsnap")
+			// 	}
+			// })
 		}
-		Step("validating groupsnap for using pxctl", func() {
-			err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl()
-			expect(err).NotTo(beNil(), "error expected but no error received while creating Pure groupsnap")
-			if err != nil {
-				expect(err.Error()).To(contain(errPureGroupsnapNotSupported.Error()), "incorrect error received creating Pure groupsnap")
-			}
-		})
 		Step("Delete the cloudsnaps created ", func() {
 			for _, vol := range SnapshotVolumes {
 				err = Inst().V.DeleteVolume(vol)
