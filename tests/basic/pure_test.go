@@ -4712,7 +4712,16 @@ var _ = Describe("{DeployAppsAndStopPortworx}", func() {
 				defer wg.Done()
 				defer GinkgoRecover()
 				for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("stopportworx-%d", i))...)
+					appNamespace := "deploy-portworx-stop-apps"
+					Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+					context, err := Inst().S.Schedule(appNamespace, scheduler.ScheduleOptions{
+						AppKeys:            Inst().AppList,
+						StorageProvisioner: Provisioner,
+						Namespace:          appNamespace,
+					})
+
+					log.FailOnError(err, "Failed to schedule application of %v namespace", appNamespace)
+					contexts = append(contexts, context...)
 				}
 
 			}()
@@ -5339,6 +5348,101 @@ var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 
 		})
 
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{RestartPxandRestartNode}", func() {
+	/*
+
+		https://purestorage.atlassian.net/browse/PTX-24483
+		1.Deploy Applications
+		2.Validate Applications are Deployed
+		3.Restart Portworx service on few nodes
+		4.once portworx is up on the node,immediately reboot the node
+		5.Make sure Both portworx and node are up.
+		6.Validate the Applications are running
+	*/
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPxandRestartNode",
+			"Restart Portworx and Restart Node", nil, 0)
+	})
+	itLog := "RestartPxandRestartNode"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		stNodes := node.GetStorageNodes()
+		selectedNodesForReboot := stNodes[:len(stNodes)/2]
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := "restartPxandRestartNode"
+			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				StorageProvisioner: Provisioner,
+				Namespace:          taskName,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+			contexts = append(contexts, context...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+		stepLog := "Restart Portworx Service on few nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, nodeToReboot := range selectedNodesForReboot {
+				log.InfoD("Stopping Portworx Service on Node [%v]", nodeToReboot.Name)
+				err := Inst().V.StopDriver([]node.Node{nodeToReboot}, false, nil)
+				log.FailOnError(err, "Failed to stop portworx on node [%v]", nodeToReboot.Name)
+				err = Inst().V.WaitDriverDownOnNode(nodeToReboot)
+				log.FailOnError(err, fmt.Sprintf("Driver is up on node [%s]", nodeToReboot.Name))
+				err = Inst().V.StartDriver(nodeToReboot)
+				log.FailOnError(err, fmt.Sprintf("Failed to start portworx on node [%s]", nodeToReboot.Name))
+				err = Inst().V.WaitDriverUpOnNode(nodeToReboot, addDriveUpTimeOut)
+				log.FailOnError(err, fmt.Sprintf("Driver is down on node [%s]", nodeToReboot.Name))
+				dash.VerifyFatal(err == nil, true,
+					fmt.Sprintf("PX is up after restarting on node [%s]", nodeToReboot.Name))
+			}
+
+		})
+		stepLog = "Restart the nodes and check if the Nodes are coming back up and validate px service"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, selectedNode := range selectedNodesForReboot {
+				log.InfoD("Stopping node %s", selectedNode.Name)
+				err := Inst().N.RebootNode(selectedNode,
+					node.RebootNodeOpts{
+						Force: true,
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         defaultCommandTimeout,
+							TimeBeforeRetry: defaultCommandRetry,
+						},
+					})
+				log.FailOnError(err, "Failed to reboot node %v", selectedNode.Name)
+			}
+			for _, selectedNode := range selectedNodesForReboot {
+				log.InfoD("wait for node: %s to be back up", selectedNode.Name)
+				nodeReadyStatus := func() (interface{}, bool, error) {
+					err := Inst().S.IsNodeReady(selectedNode)
+					if err != nil {
+						return "", true, err
+					}
+					return "", false, nil
+				}
+				_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
+				err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
+				log.FailOnError(err, fmt.Sprintf("Failed to reboot node [%s]", selectedNode.Name))
+			}
+		})
+		stepLog = "Validate the applications are in running state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
 	})
 	JustAfterEach(func() {
 		EndTorpedoTest()
