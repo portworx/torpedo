@@ -42,6 +42,7 @@ func ListAllDestroyedVolumesFromFA(faClient *flasharray.Client) ([]flasharray.Vo
 	return volumes, nil
 }
 
+// ListAllRealmsFromFA returns list of all Available Realms present in FA
 func ListAllRealmsFromFA(faClient *flasharray.Client) ([]flasharray.RealmResponse, error) {
 	params := make(map[string]string)
 	params["destroyed"] = "false"
@@ -52,6 +53,7 @@ func ListAllRealmsFromFA(faClient *flasharray.Client) ([]flasharray.RealmRespons
 	return realms, nil
 }
 
+// ListAllPodsFromFA returns list of all Available Pods present in FA
 func ListAllPodsFromFA(faClient *flasharray.Client) ([]flasharray.PodResponse, error) {
 	params := make(map[string]string)
 	params["destroyed"] = "false"
@@ -62,6 +64,7 @@ func ListAllPodsFromFA(faClient *flasharray.Client) ([]flasharray.PodResponse, e
 	return pods, nil
 }
 
+// CreatePodinFA creates Pod in FA
 func CreatePodinFA(faClient *flasharray.Client, podName string) (*[]flasharray.PodResponse, error) {
 	queryParams := make(map[string]string)
 	queryParams["names"] = fmt.Sprintf("%s", podName)
@@ -72,6 +75,7 @@ func CreatePodinFA(faClient *flasharray.Client, podName string) (*[]flasharray.P
 	return podinfo, nil
 }
 
+// DeletePodinFA deletes Pod in FA
 func DeletePodinFA(faClient *flasharray.Client, podName string) error {
 	queryParams := make(map[string]string)
 	queryParams["names"] = fmt.Sprintf("%s", podName)
@@ -88,6 +92,8 @@ func DeletePodinFA(faClient *flasharray.Client, podName string) error {
 	}
 	return nil
 }
+
+// GetFARealmFromMgmtEndpoint returns Realm Name from FA Secret
 func GetFARealmFromMgmtEndpoint(secret PXPureSecret, mgmtEndPoint string) string {
 	for _, faDetails := range secret.Arrays {
 		if faDetails.MgmtEndPoint == mgmtEndPoint {
@@ -96,6 +102,8 @@ func GetFARealmFromMgmtEndpoint(secret PXPureSecret, mgmtEndPoint string) string
 	}
 	return ""
 }
+
+// IsFARealmExistsOnMgmtEndpoint checks if realm is present in FA
 func IsFARealmExistsOnMgmtEndpoint(faClient *flasharray.Client, realm string) (bool, error) {
 	params := make(map[string]string)
 	params["destroyed"] = "false"
@@ -113,6 +121,7 @@ func IsFARealmExistsOnMgmtEndpoint(faClient *flasharray.Client, realm string) (b
 	return false, nil
 }
 
+// IsPodExistsOnMgmtEndpoint checks if pod is present in FA
 func IsPodExistsOnMgmtEndpoint(faClient *flasharray.Client, podName string) (bool, error) {
 	params := make(map[string]string)
 	params["destroyed"] = "false"
