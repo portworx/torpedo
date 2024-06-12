@@ -5149,7 +5149,7 @@ var _ = Describe("{LocalSkinnySnapAndRestore}", func() {
 			log.Infof("Skinnysnap enabled on Cluster")
 			repl := "1"
 			err = Inst().V.SetClusterOpts(nodes[0], map[string]string{
-				"--skinnysnap": repl})
+				"--skinnysnap-num-repls": repl})
 			log.FailOnError(err, "Failed to set snap replication factor for skinny snaps")
 			log.Infof("Skinnysnap repl factor successfully updated")
 		})
