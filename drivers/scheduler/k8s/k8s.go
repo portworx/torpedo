@@ -4330,10 +4330,6 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				log.Debugf("PVC [%s] in namespace: [%s] is labeled for kubevirt, skipping...", obj.Name, obj.Namespace)
 				continue
 			}
-			if value, exists := obj.Labels["isMultiProvisioner"]; exists && value == "true" {
-				log.Debugf("PVC [%s] in namespace: [%s] is labeled for multi provisioner, skipping...", obj.Name, obj.Namespace)
-				continue
-			}
 			if value, exists := obj.Labels["app"]; exists && value == "containerized-data-importer" {
 				log.Debugf("PVC [%s] in namespace: [%s] is a data vol template, skipping...", obj.Name, obj.Namespace)
 				continue

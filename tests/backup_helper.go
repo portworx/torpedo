@@ -3065,11 +3065,8 @@ func ValidateBackupWithPartialSuccess(ctx context1.Context, backupName string, o
 		return err
 	}
 	Volumes := resp.GetBackup().GetVolumes()
-	log.Infof("Volumes are %v", Volumes)
 	if len(Volumes) > 0 {
 		for _, volume := range Volumes {
-			log.Infof("Volume is %v", volume)
-
 			// Check if the volume's PVC is in the failedVolumes slice
 			skipValidation := false
 			for _, failed := range failedVolumes {
@@ -3099,18 +3096,14 @@ func ValidateBackupWithPartialSuccess(ctx context1.Context, backupName string, o
 	resourceInfos := theBackup.GetResources()
 	backedUpVolumes := theBackup.GetVolumes()
 	volDrivers := make(map[string]struct{})
+	backupNamespaces := theBackup.GetNamespaces()
 
 	for _, vol := range backedUpVolumes {
 		driver := vol.GetDriverName()
 		volDrivers[driver] = struct{}{}
 	}
 
-	log.Infof("Backed up volumes are", backedUpVolumes)
-	backupNamespaces := theBackup.GetNamespaces()
-	log.Infof("Back up namespaces are", backupNamespaces)
-
 	for _, scheduledAppContext := range scheduledAppContexts {
-
 		scheduledAppContextNamespace := scheduledAppContext.ScheduleOptions.Namespace
 		log.InfoD("Validating specs for the namespace (scheduledAppContext) [%s] in backup [%s]", scheduledAppContextNamespace, backupName)
 
@@ -3226,32 +3219,17 @@ func ValidateBackupWithPartialSuccess(ctx context1.Context, backupName string, o
 				namespacedBackedUpVolumes = append(namespacedBackedUpVolumes, vol)
 			}
 		}
-		log.Infof("Namespaced Backed up volumes are", namespacedBackedUpVolumes)
 
 		// Collect all volumes belonging to a context
 		log.Infof("getting the volumes bounded to the PVCs in the namespace (scheduledAppContext) [%s]", scheduledAppContextNamespace)
 		volumeMap := make(map[string]*volume.Volume)
-		pvcList, err := k8sCore.GetPersistentVolumeClaims(scheduledAppContextNamespace, nil)
-		log.Infof("PVC list is %v", pvcList)
+		pvcList, _ := k8sCore.GetPersistentVolumeClaims(scheduledAppContextNamespace, nil)
 		var scheduledVolumes []*volume.Volume
 		for _, pvc := range pvcList.Items {
-			log.Infof("PVC is %v", pvc)
-			if pvc.Spec.VolumeName == "" {
-				log.Warnf("PVC %s has an empty VolumeName", pvc.Name)
-			} else {
-				log.Infof("VolumeName for PVC %s is %s", pvc.Name, pvc.Spec.VolumeName)
-				vol := &volume.Volume{
-					Name: pvc.Spec.VolumeName,
-				}
-				log.Infof("Appending volume: %v", vol)
-				scheduledVolumes = append(scheduledVolumes, vol)
+			vol := &volume.Volume{
+				Name: pvc.Spec.VolumeName,
 			}
-		}
-		log.Infof("SCHEDULED VOLUMES ARE %v", scheduledVolumes)
-		if err != nil {
-			err := fmt.Errorf("error in Inst().S.GetVolumes: [%s] in namespace (appCtx) [%s]", err, scheduledAppContextNamespace)
-			errors = append(errors, err)
-			continue
+			scheduledVolumes = append(scheduledVolumes, vol)
 		}
 
 		for _, scheduledVol := range scheduledVolumes {
@@ -3291,9 +3269,7 @@ func ValidateBackupWithPartialSuccess(ctx context1.Context, backupName string, o
 				}
 				// Finding the volume in the backup
 				for _, backedupVol := range namespacedBackedUpVolumes {
-					log.InfoD("Entered the loop to find the volume in the backup")
 					if backedupVol.GetName() == scheduledVol.Name {
-						log.InfoD("Entered the if condition")
 						if backedupVol.Pvc != pvcObj.Name {
 							err := fmt.Errorf("the PVC of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.Pvc, pvcObj.Name)
 							errors = append(errors, err)
@@ -3331,11 +3307,9 @@ func ValidateBackupWithPartialSuccess(ctx context1.Context, backupName string, o
 								errors = append(errors, err)
 							}
 						}
-
 						continue volloop
 					}
 				}
-
 				// The following error means that something WAS not backed up, OR it wasn't supposed to be backed up, and we forgot to exclude the check.
 				err = fmt.Errorf("the volume [%s] corresponding to PVC(name: [%s], namespace: [%s]) was present in the cluster with the namespace containing that PVC, but the volume was not in the backup [%s]", pvcObj.Spec.VolumeName, pvcObj.GetName(), pvcObj.GetNamespace(), backupName)
 				errors = append(errors, err)
@@ -3355,9 +3329,7 @@ func ValidateBackupWithPartialSuccess(ctx context1.Context, backupName string, o
 	if len(errStrings) > 0 {
 		return fmt.Errorf("ValidateBackup Errors: {%s}", strings.Join(errStrings, "}\n{"))
 	}
-
 	err = validateCRCleanup(theBackup, ctx)
-
 	return err
 }
 
