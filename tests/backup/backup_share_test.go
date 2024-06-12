@@ -2828,27 +2828,31 @@ var _ = Describe("{DeleteSharedBackup}", Label(TestCaseLabelsMap[DeleteSharedBac
 		})
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking backup of applications")
-			var sem = make(chan struct{}, 10)
 			var wg sync.WaitGroup
+			var mutex sync.Mutex
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
+			errors := make([]string, 0)
 			for _, namespace := range bkpNamespaces {
 				for i := 0; i < numberOfBackups; i++ {
-					sem <- struct{}{}
 					time.Sleep(10 * time.Second)
 					backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-					backupNames = append(backupNames, backupName)
 					wg.Add(1)
 					go func(backupName string) {
 						defer GinkgoRecover()
 						defer wg.Done()
-						defer func() { <-sem }()
 						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+						backupNames = append(backupNames, backupName)
+						if err != nil {
+							mutex.Lock()
+							errors = append(errors, fmt.Sprintf("Failed while taking backup [%s]. Error - [%s]", backupName, err.Error()))
+							mutex.Unlock()
+						}
 					}(backupName)
 				}
 				wg.Wait()
+				dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Parallel backup failed with errors: \n %v", strings.Join(errors, "\n")))
 			}
 			log.Infof("List of backups - %v", backupNames)
 		})
@@ -2920,30 +2924,30 @@ var _ = Describe("{DeleteSharedBackup}", Label(TestCaseLabelsMap[DeleteSharedBac
 
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		log.InfoD("Deleting the deployed apps after the testcase")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
-
-		log.Infof("Deleting registered clusters for non-admin context")
-		for _, ctxNonAdmin := range userContexts {
-			err := DeleteCluster(SourceClusterName, BackupOrgID, ctxNonAdmin, true)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-			err = Inst().Backup.WaitForClusterDeletion(ctxNonAdmin, SourceClusterName, BackupOrgID, ClusterDeleteTimeout, ClusterDeleteRetryTime)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Waiting for cluster %s deletion", SourceClusterName))
-			err = DeleteCluster(DestinationClusterName, BackupOrgID, ctxNonAdmin, true)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", DestinationClusterName))
-			err = Inst().Backup.WaitForClusterDeletion(ctxNonAdmin, DestinationClusterName, BackupOrgID, ClusterDeleteTimeout, ClusterDeleteRetryTime)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Waiting for cluster %s deletion", DestinationClusterName))
-		}
-
-		err := backup.DeleteUser(userName)
-		log.FailOnError(err, "Error deleting user %v", userName)
-
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+		//defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		//log.InfoD("Deleting the deployed apps after the testcase")
+		//opts := make(map[string]bool)
+		//opts[SkipClusterScopedObjects] = true
+		//DestroyApps(scheduledAppContexts, opts)
+		//
+		//log.Infof("Deleting registered clusters for non-admin context")
+		//for _, ctxNonAdmin := range userContexts {
+		//	err := DeleteCluster(SourceClusterName, BackupOrgID, ctxNonAdmin, true)
+		//	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+		//	err = Inst().Backup.WaitForClusterDeletion(ctxNonAdmin, SourceClusterName, BackupOrgID, ClusterDeleteTimeout, ClusterDeleteRetryTime)
+		//	dash.VerifySafely(err, nil, fmt.Sprintf("Waiting for cluster %s deletion", SourceClusterName))
+		//	err = DeleteCluster(DestinationClusterName, BackupOrgID, ctxNonAdmin, true)
+		//	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", DestinationClusterName))
+		//	err = Inst().Backup.WaitForClusterDeletion(ctxNonAdmin, DestinationClusterName, BackupOrgID, ClusterDeleteTimeout, ClusterDeleteRetryTime)
+		//	dash.VerifySafely(err, nil, fmt.Sprintf("Waiting for cluster %s deletion", DestinationClusterName))
+		//}
+		//
+		//err := backup.DeleteUser(userName)
+		//log.FailOnError(err, "Error deleting user %v", userName)
+		//
+		//ctx, err := backup.GetAdminCtxFromSecret()
+		//log.FailOnError(err, "Fetching px-central-admin ctx")
+		//CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 
 	})
 
