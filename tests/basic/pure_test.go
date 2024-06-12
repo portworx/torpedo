@@ -5171,7 +5171,7 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 			log.Infof("JustBeforeEach using Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
 			err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
 			log.FailOnError(err, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
-
+			//Inst().S.(*k8s.K8s).setFadaVol
 			context, err := Inst().S.Schedule(testName, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
 				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
@@ -5193,9 +5193,9 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 					log.FailOnError(err, "Failed to inspect volume")
 					PodName := inspectedVolume.Locator.VolumeLabels["pure_fa_pod_name"]
 					if PodName == "" {
-						log.FailOnError(fmt.Errorf("Pod Name is not present in the volume labels"), "is pod name present in volume labels?")
+						dash.VerifyFatal(PodName == "", PodName != "", fmt.Sprintf("is pod name present in volume labels?"))
 					} else if PodName != podNameinSC {
-						log.FailOnError(fmt.Errorf("Pod Name [%v] in the volume is not same as Pod Name [%v] in the storage class", PodName, podNameinSC), "is pod name in volume same as pod name in storage class?")
+						dash.VerifyFatal(PodName != podNameinSC, PodName == podNameinSC, fmt.Sprintf("is pod name in volume same as pod name in storage class?"))
 					} else {
 						log.InfoD("Pod Name [%v] in the volume is same as Pod Name [%v] in the storage class", PodName, podNameinSC)
 					}
