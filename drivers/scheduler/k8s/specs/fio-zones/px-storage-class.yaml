@@ -8,9 +8,9 @@ parameters:
   max_iops: "1000"
   max_bandwidth: "1G"
   fs: "ext4"
-  { { if .PureFaPodName } }
+  {{ if .PureFaPodName }}
   pure_fa_pod_name: "{{ .PureFaPodName }}"
-  { { end } }
+  {{ end }}
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 allowedTopologies:
@@ -33,9 +33,9 @@ parameters:
   max_iops: "1000"
   max_bandwidth: "1G"
   fs: "ext4"
-  { { if .PureFaPodName } }
+  {{ if .PureFaPodName }}
   pure_fa_pod_name: "{{ .PureFaPodName }}"
-  { { end } }
+  {{ end }}
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 allowedTopologies:
