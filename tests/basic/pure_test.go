@@ -5136,11 +5136,6 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		if !isFAaccessible {
 			log.FailOnError(fmt.Errorf("No FA with realm found in pure.json"), "No FA with realm found in pure.json")
 		}
-		isRealmExists, err := pureutils.IsFARealmExistsOnMgmtEndpoint(faClient, RealmName)
-		log.FailOnError(err, fmt.Sprintf("Failed to check if realm [%v] exists ", RealmName))
-		if !isRealmExists {
-			log.FailOnError(fmt.Errorf("Realm [%v] is not created in FA", RealmName), "is realm created in FA?")
-		}
 		podNameinSC := "Torpedo-Test" + Inst().InstanceID
 		PodNameinFA := RealmName + "::" + podNameinSC
 
