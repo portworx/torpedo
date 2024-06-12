@@ -5907,7 +5907,7 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 				}
 			}
 			if !stringMatch {
-				driveAddFlag = fmt.Sprintf("%s %s", driveAddFlag, "--newpool")
+				driveAddFlag = fmt.Sprintf("%s %s", driveAddFlag, "--newpool --drives-count 1")
 			}
 
 		}
