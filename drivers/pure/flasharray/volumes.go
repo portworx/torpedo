@@ -10,8 +10,8 @@ type PodServices struct {
 	client *Client
 }
 
-func (vols *VolumeServices) ListAllAvailableVolumes(params map[string]string, data interface{}) ([]VolResponse, error) {
-	req, err := vols.client.NewRequest("GET", "volumes", params, data)
+func (vols *VolumeServices) ListAllAvailableVolumes(params map[string]string) ([]VolResponse, error) {
+	req, err := vols.client.NewRequest("GET", "volumes", params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -23,8 +23,8 @@ func (vols *VolumeServices) ListAllAvailableVolumes(params map[string]string, da
 	return m, nil
 }
 
-func (realms *RealmsServices) ListAllAvailableRealms(params map[string]string, data interface{}) ([]RealmResponse, error) {
-	req, err := realms.client.NewRequest("GET", "realms", params, data)
+func (realms *RealmsServices) ListAllAvailableRealms(params map[string]string) ([]RealmResponse, error) {
+	req, err := realms.client.NewRequest("GET", "realms", params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -36,8 +36,8 @@ func (realms *RealmsServices) ListAllAvailableRealms(params map[string]string, d
 	return m, nil
 }
 
-func (vols *PodServices) ListAllAvailablePods(params map[string]string, data interface{}) ([]PodResponse, error) {
-	req, err := vols.client.NewRequest("GET", "pods", params, data)
+func (vols *PodServices) ListAllAvailablePods(params map[string]string) ([]PodResponse, error) {
+	req, err := vols.client.NewRequest("GET", "pods", params, nil)
 	if err != nil {
 		return nil, err
 	}
