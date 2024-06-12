@@ -10,11 +10,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"k8s.io/utils/strings/slices"
+	"math"
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/devans10/pugo/flasharray"
+
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -28,6 +30,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"cloud.google.com/go/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
@@ -81,7 +85,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
@@ -679,6 +682,7 @@ func InitInstance() {
 		VaultToken:                       Inst().VaultToken,
 		PureVolumes:                      Inst().PureVolumes,
 		PureSANType:                      Inst().PureSANType,
+		PureFADAPod:                      Inst().PureFADAPod,
 		RunCSISnapshotAndRestoreManyTest: Inst().RunCSISnapshotAndRestoreManyTest,
 		HelmValuesConfigMapName:          Inst().HelmValuesConfigMap,
 		SecureApps:                       Inst().SecureAppList,
@@ -3925,7 +3929,7 @@ func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	}
 
 	// Create namespace for the cluster pair on source cluster
-	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+	_, err = core.Instance().CreateNamespace(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cpNamespace,
 			Labels: map[string]string{
@@ -3959,7 +3963,7 @@ func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 	}
 
 	// Create namespace for the cluster pair on destination cluster
-	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+	_, err = core.Instance().CreateNamespace(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cpNamespace,
 			Labels: map[string]string{
@@ -5055,7 +5059,7 @@ func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, buc
 	case drivers.ProviderAws:
 		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx, validate)
+		err = CreateAzureBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx, validate)
 	case drivers.ProviderGke:
 		err = CreateGCPBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, ctx, validate)
 	case drivers.ProviderNfs:
@@ -5428,6 +5432,11 @@ func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred str
 func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, validate bool) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
+	environmentType := api.S3Config_AzureEnvironmentType_AZURE_GLOBAL // Default value
+	if azureRegion == "CHINA" {
+		environmentType = api.S3Config_AzureEnvironmentType_AZURE_CHINA
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -5443,6 +5452,13 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 				Uid:  cloudCredUID,
 			},
 			Type: api.BackupLocationInfo_Azure,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					AzureEnvironment: &api.S3Config_AzureEnvironmentType{
+						Type: environmentType,
+					},
+				},
+			},
 		},
 	}
 	ctx, err := backup.GetAdminCtxFromSecret()
@@ -5459,6 +5475,11 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 // CreateAzureBackupLocationWithContext creates backup location for Azure using the given context
 func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context, validate bool) error {
 	backupDriver := Inst().Backup
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
+	environmentType := api.S3Config_AzureEnvironmentType_AZURE_GLOBAL // Default value
+	if azureRegion == "CHINA" {
+		environmentType = api.S3Config_AzureEnvironmentType_AZURE_CHINA
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -5474,6 +5495,13 @@ func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred str
 				Uid:  cloudCredUID,
 			},
 			Type: api.BackupLocationInfo_Azure,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					AzureEnvironment: &api.S3Config_AzureEnvironmentType{
+						Type: environmentType,
+					},
+				},
+			},
 		},
 	}
 	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
@@ -6032,8 +6060,11 @@ func DeleteGcpBucket(bucketName string) {
 func DeleteAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
-
-	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName)
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName) // Default value
+	if azureRegion == "CHINA" {
+		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, bucketName)
+	}
 	log.Infof("Delete container url %s", urlStr)
 	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
 	u, _ := url.Parse(urlStr)
@@ -6579,6 +6610,9 @@ func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 	case drivers.ProviderGke:
 		result, err := IsGCPBucketEmpty(bucketName)
 		return result, err
+	case drivers.ProviderAzure:
+		result, err := IsAzureBlobEmpty(bucketName)
+		return result, err
 	default:
 		return false, fmt.Errorf("function does not support %s provider", provider)
 	}
@@ -6681,6 +6715,42 @@ func IsGCPBucketEmpty(bucketName string) (bool, error) {
 	}
 
 	// Iterator didn't finish, bucket is not empty
+	return false, nil
+}
+
+// IsAzureBlobEmpty returns true if bucket empty else false
+func IsAzureBlobEmpty(containerName string) (bool, error) {
+	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
+	azureEndpoint := os.Getenv("AZURE_ENDPOINT")
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, containerName)
+	if azureEndpoint == AzureChinaEndpoint {
+		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, containerName)
+	}
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse URL [%v]: %v", urlStr, err)
+	}
+
+	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to create shared key credential [%v]", err))
+
+	containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
+	ctx := context1.Background() // This example uses a never-expiring context
+	listBlobsSegmentOptions := azblob.ListBlobsSegmentOptions{
+		MaxResults: 1,
+	}
+
+	listBlob, err := containerURL.ListBlobsFlatSegment(ctx, azblob.Marker{}, listBlobsSegmentOptions)
+	if err != nil {
+		return false, fmt.Errorf("failed to list blobs in container [%v]: %v", containerName, err)
+	}
+
+	if len(listBlob.Segment.BlobItems) == 0 {
+		// No blobs found, container is empty
+		return true, nil
+	}
+	// Blobs found, container is not empty
 	return false, nil
 }
 
@@ -6800,8 +6870,11 @@ func RemoveS3BucketPolicy(bucketName string) error {
 func CreateAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
-
-	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName)
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName) // Default value
+	if azureRegion == "CHINA" {
+		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, bucketName)
+	}
 	log.Infof("Create container url %s", urlStr)
 	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
 	u, _ := url.Parse(urlStr)
@@ -6895,6 +6968,7 @@ type Torpedo struct {
 	SecretType                          string
 	PureVolumes                         bool
 	PureSANType                         string
+	PureFADAPod                         string
 	RunCSISnapshotAndRestoreManyTest    bool
 	VaultAddress                        string
 	VaultToken                          string
@@ -6958,6 +7032,7 @@ func ParseFlags() {
 	var secretType string
 	var pureVolumes bool
 	var pureSANType string
+	var pureFADAPod string
 	var runCSISnapshotAndRestoreManyTest bool
 	var vaultAddress string
 	var vaultToken string
@@ -7013,6 +7088,7 @@ func ParseFlags() {
 	flag.StringVar(&secretType, "secret-type", scheduler.SecretK8S, "Path to custom configuration files")
 	flag.BoolVar(&pureVolumes, "pure-volumes", false, "To enable using Pure backend for shared volumes")
 	flag.StringVar(&pureSANType, "pure-san-type", "ISCSI", "If using Pure volumes, which SAN type is being used. ISCSI, FC, and NVMEOF-RDMA are all valid values.")
+	flag.StringVar(&pureFADAPod, "pure-fada-pod", "", "If using Pure FADA volumes, what FA Pod to place the volumes in. This Pod must already exist, and be in the same Realm matching the px-pure-secret")
 	flag.BoolVar(&runCSISnapshotAndRestoreManyTest, "pure-fa-snapshot-restore-to-many-test", false, "If using Pure volumes, to enable Pure clone many tests")
 	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
 	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
@@ -7266,6 +7342,7 @@ func ParseFlags() {
 				SecretType:                          secretType,
 				PureVolumes:                         pureVolumes,
 				PureSANType:                         pureSANType,
+				PureFADAPod:                         pureFADAPod,
 				RunCSISnapshotAndRestoreManyTest:    runCSISnapshotAndRestoreManyTest,
 				VaultAddress:                        vaultAddress,
 				VaultToken:                          vaultToken,
@@ -8113,6 +8190,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	tags["storageProvisioner"] = Inst().Provisioner
 	tags["pureVolume"] = fmt.Sprintf("%t", Inst().PureVolumes)
 	tags["pureSANType"] = Inst().PureSANType
+	tags["pureFADAPod"] = Inst().PureFADAPod
 	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
 	if TestRailSetupSuccessful && testRepoID != 0 {
 		RunIdForSuite = testrailuttils.AddRunsToMilestone(testRepoID)
@@ -8277,7 +8355,7 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 
 // GetPoolsInUse lists all persistent volumes and returns the pool IDs
 func GetPoolsInUse() ([]string, error) {
-	var poolUuids []string
+	var poolsInUse []string
 	pvlist, err := k8sCore.GetPersistentVolumes()
 	if err != nil || pvlist == nil || len(pvlist.Items) == 0 {
 		return nil, fmt.Errorf("no persistent volume found. Error: %v", err)
@@ -8285,38 +8363,39 @@ func GetPoolsInUse() ([]string, error) {
 
 	for _, pv := range pvlist.Items {
 		volumeID := pv.GetName()
-		poolUuids, err = GetPoolIDsFromVolName(volumeID)
+		poolUuids, err := GetPoolIDsFromVolName(volumeID)
 		//Needed this logic as a workaround for PWX-35637
 		if err != nil && strings.Contains(err.Error(), "not found") {
 			continue
 		}
-		break
+		poolsInUse = append(poolsInUse, poolUuids...)
 	}
 
-	return poolUuids, err
+	return poolsInUse, err
 }
 
 // GetPoolIDWithIOs returns the pools with IOs happening
-func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
+func GetPoolIDWithIOs(contexts []*scheduler.Context) ([]string, error) {
 	// pick a  pool doing some IOs from a pools list
 	var err error
 	var isIOsInProgress bool
 	err = Inst().V.RefreshDriverEndpoints()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
+	poolIdsWithIOs := make([]string, 0)
 	for _, ctx := range contexts {
 		vols, err := Inst().S.GetVolumes(ctx)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		node := node.GetStorageDriverNodes()[0]
 		for _, vol := range vols {
 			appVol, err := Inst().V.InspectVolume(vol.ID)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 
 			t := func() (interface{}, bool, error) {
@@ -8329,23 +8408,15 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 
 			_, err = task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 
 			if isIOsInProgress {
 				log.Infof("IOs are in progress for [%v]", vol.Name)
 				poolUuids := appVol.ReplicaSets[0].PoolUuids
 				for _, p := range poolUuids {
-					n, err := GetNodeWithGivenPoolID(p)
-					if err != nil {
-						return "", err
-					}
-					eligibilityMap, err := GetPoolExpansionEligibility(n)
-					if err != nil {
-						return "", err
-					}
-					if eligibilityMap[n.Id] && eligibilityMap[p] {
-						return p, nil
+					if !slices.Contains(poolIdsWithIOs, p) {
+						poolIdsWithIOs = append(poolIdsWithIOs, p)
 					}
 
 				}
@@ -8353,14 +8424,17 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 		}
 
 	}
+	if len(poolIdsWithIOs) > 0 {
+		return poolIdsWithIOs, nil
+	}
 
-	return "", fmt.Errorf("no pools have IOs running,Err: %v", err)
+	return nil, fmt.Errorf("no pools have IOs running,Err: %v", err)
 }
 
 // GetPoolWithIOsInGivenNode returns the poolID in the given node with IOs happening
-func GetPoolWithIOsInGivenNode(stNode node.Node, contexts []*scheduler.Context) (*opsapi.StoragePool, error) {
+func GetPoolWithIOsInGivenNode(stNode node.Node, contexts []*scheduler.Context, expandType opsapi.SdkStoragePool_ResizeOperationType, targetSizeGiB uint64) (*opsapi.StoragePool, error) {
 
-	eligibilityMap, err := GetPoolExpansionEligibility(&stNode)
+	eligibilityMap, err := GetPoolExpansionEligibility(&stNode, expandType, targetSizeGiB)
 	if err != nil {
 		return nil, err
 	}
@@ -8463,7 +8537,7 @@ func GetNodeFromPoolUUID(poolUUID string) (*node.Node, error) {
 }
 
 // GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
-func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
+func GetPoolExpansionEligibility(stNode *node.Node, expandType opsapi.SdkStoragePool_ResizeOperationType, targetIncrementInGiB uint64) (map[string]bool, error) {
 	var err error
 
 	namespace, err := Inst().V.GetVolumeDriverNamespace()
@@ -8473,9 +8547,6 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 
 	var maxCloudDrives int
 
-	if _, err = core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
-		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
-	}
 	if _, err = core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
 		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
 	} else if _, err = core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
@@ -8511,13 +8582,52 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 
 		d := drvM[fmt.Sprintf("%d", pool.ID)]
 		log.Infof("pool %s has %d drives", pool.Uuid, len(d))
-		if len(d) == POOL_MAX_CLOUD_DRIVES {
-			eligibilityMap[pool.Uuid] = false
-		}
-
 		if nodePoolStatus[pool.Uuid] == "Offline" {
 			eligibilityMap[pool.Uuid] = false
+		} else {
+			if expandType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+				if len(d) == POOL_MAX_CLOUD_DRIVES {
+					log.Infof("pool %s has reached max drives", pool.Uuid)
+					eligibilityMap[pool.Uuid] = false
+				} else {
+					baseDiskSizeInGib := d[0].SizeInGib
+					poolSize := uint64(0)
+					for _, drive := range d {
+						poolSize += drive.SizeInGib
+					}
+					if targetIncrementInGiB == 0 {
+						targetIncrementInGiB = baseDiskSizeInGib
+					}
+					targetSizeGiB := poolSize + targetIncrementInGiB
+					expectedPoolDrivesAfterExpansion := int(math.Ceil(float64(targetSizeGiB) / float64(baseDiskSizeInGib)))
+					if expectedPoolDrivesAfterExpansion > POOL_MAX_CLOUD_DRIVES {
+						log.Infof("pool %s will reach max drives if expanded to size [%v] using add-drive", pool.Uuid, targetSizeGiB)
+						eligibilityMap[pool.Uuid] = false
+					} else {
+						currentPoolDrives := len(d)
+						expectedNodeDrivesAfterExpansion := currentNodeDrives + (expectedPoolDrivesAfterExpansion - currentPoolDrives)
+						stc, err := Inst().V.GetDriver()
+						if err != nil {
+							return nil, err
+						}
+						if stc.Spec.CloudStorage.JournalDeviceSpec != nil {
+							expectedNodeDrivesAfterExpansion++
+						}
+						if stc.Spec.CloudStorage.KvdbDeviceSpec != nil || stc.Spec.CloudStorage.SystemMdDeviceSpec != nil {
+							expectedNodeDrivesAfterExpansion++
+						}
+						if expectedNodeDrivesAfterExpansion > maxCloudDrives {
+							log.Infof("node %s  will reach max drives if pool %s expanded to size [%v] using add-drive", stNode.Id, pool.Uuid, targetSizeGiB)
+							eligibilityMap[pool.Uuid] = false
+							eligibilityMap[stNode.Id] = false
+						}
+
+					}
+
+				}
+			}
 		}
+
 	}
 
 	return eligibilityMap, nil
@@ -9053,6 +9163,26 @@ func ExitPoolMaintenance(stNode node.Node) error {
 
 // DeleteGivenPoolInNode deletes pool with given ID in the given node
 func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) (err error) {
+
+	// Moving repls on the node before deletion
+	nodeVols, err := GetVolumesOnNode(stNode.VolDriverNodeID)
+	if err != nil {
+		return fmt.Errorf("error getting volumes node [%s],Err: %v ", stNode.Name, err)
+	}
+
+	for _, vol := range nodeVols {
+		newReplicaNode, err := GetNodeIdToMoveReplica(vol)
+		log.Infof("New Replica node is [%s]", newReplicaNode)
+		if err != nil {
+			return fmt.Errorf("error getting replica node for volume [%s],Err: %v ", vol, err)
+		}
+
+		err = MoveReplica(vol, stNode.VolDriverNodeID, newReplicaNode)
+		if err != nil {
+			return fmt.Errorf("error moving replica from node [%s] to volume [%s],Err: %v ", stNode.VolDriverNodeID, newReplicaNode, err)
+		}
+	}
+
 	if err := EnterPoolMaintenance(stNode); err != nil {
 		return err
 	}
@@ -9339,11 +9469,13 @@ func GetAllKvdbNodes() ([]KvdbNode, error) {
 	var allKvdbNodes []KvdbNode
 	// Execute the command and check the alerts of type POOL
 	command := "pxctl service kvdb members list -j"
-	out, err := Inst().N.RunCommandWithNoRetry(randomNode, command, node.ConnectionOpts{
+	out, err := Inst().N.RunCommand(randomNode, command, node.ConnectionOpts{
 		Timeout:         2 * time.Minute,
 		TimeBeforeRetry: 10 * time.Second,
 	})
-	//log.FailOnError(err, "Unable to get KVDB members from the command [%s]", command)
+	if err != nil {
+		return nil, err
+	}
 	log.InfoD("List of KVDBMembers in the cluster [%v]", out)
 
 	// Convert KVDB members to map
@@ -10595,7 +10727,7 @@ func IsVolumeExits(volName string) bool {
 	return isVolExist
 }
 
-func ValidateCRMigration(pods *v1.PodList, appData *asyncdr.AppData) error {
+func ValidateCRMigration(pods *corev1.PodList, appData *asyncdr.AppData) error {
 	pods_created_len := len(pods.Items)
 	log.InfoD("Num of Pods on source: %v", pods_created_len)
 	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
@@ -11264,7 +11396,7 @@ func KillPxStorageUsingPid(memberNode node.Node) error {
 }
 
 // GetAllPodsInNameSpace Returns list of pods running in the namespace
-func GetAllPodsInNameSpace(nameSpace string) ([]v1.Pod, error) {
+func GetAllPodsInNameSpace(nameSpace string) ([]corev1.Pod, error) {
 	pods, err := k8sCore.GetPods(nameSpace, nil)
 	if err != nil {
 		return nil, err
@@ -11431,7 +11563,7 @@ func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
 	v1obj := metav1.ObjectMeta{
 		Name: scName,
 	}
-	reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+	reclaimPolicyDelete := corev1.PersistentVolumeReclaimDelete
 	bindMode := storageapi.VolumeBindingImmediate
 	allowWxpansion := true
 	scObj := storageapi.StorageClass{
@@ -11446,80 +11578,6 @@ func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
 	k8sStorage := k8sStorage.Instance()
 	_, err := k8sStorage.CreateStorageClass(&scObj)
 	return err
-}
-
-func GetClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
-	stNodes := node.GetStorageNodes()
-
-	nodeSchedulableStatus := make(map[string]string)
-	stNodeNames := make(map[string]bool)
-
-	for _, stNode := range stNodes {
-		stNodeNames[stNode.Name] = true
-	}
-
-	//Handling case where we have storageless node as kvdb node with dedicated kvdb device attached.
-	kvdbNodes, _ := GetAllKvdbNodes()
-	for _, kvdbNode := range kvdbNodes {
-		sNode, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
-		if err == nil {
-			stNodeNames[sNode.Name] = true
-		} else {
-			log.Errorf("got error while getting with id [%s]", kvdbNode.ID)
-		}
-	}
-
-	log.Infof("stnodes are %#v", stNodeNames)
-	itr := 1
-	for {
-		log.Infof("K8s node validation. iteration: #%d", itr)
-		select {
-		case <-stopSignal:
-			log.Infof("Exiting node validations routine")
-			return
-		default:
-			nodeList, err := core.Instance().GetNodes()
-			if err != nil {
-				log.Errorf("Got error : %s", err.Error())
-				*mError = err
-				return
-			}
-
-			nodeNotReadyeCount := 0
-			for _, k8sNode := range nodeList.Items {
-				for _, status := range k8sNode.Status.Conditions {
-					if status.Type == v1.NodeReady {
-						nodeSchedulableStatus[k8sNode.Name] = string(status.Status)
-						if status.Status != v1.ConditionTrue && stNodeNames[k8sNode.Name] {
-							nodeNotReadyeCount += 1
-						}
-						break
-					}
-				}
-
-			}
-			if nodeNotReadyeCount > 1 {
-				err = fmt.Errorf("multiple  nodes are Unschedulable at same time,"+
-					"node status:%#v", nodeSchedulableStatus)
-				log.Errorf("Got error : %s", err.Error())
-				log.Infof("Node Details: %#v", nodeList.Items)
-				output, err := Inst().N.RunCommand(stNodes[0], "pxctl status", node.ConnectionOpts{
-					IgnoreError:     false,
-					TimeBeforeRetry: defaultRetryInterval,
-					Timeout:         defaultTimeout,
-					Sudo:            true,
-				})
-				if err != nil {
-					log.Errorf("failed to get pxctl status, Err: %v", err)
-				}
-				log.Infof(output)
-				*mError = err
-				return
-			}
-		}
-		itr++
-		time.Sleep(30 * time.Second)
-	}
 }
 
 // PrintK8sClusterInfo prints info about K8s cluster nodes
@@ -12323,7 +12381,7 @@ func RefreshIscsiSession(n node.Node) error {
 }
 
 // GetPVCObjFromVol Returns pvc object from Volume
-func GetPVCObjFromVol(vol *volume.Volume) (*v1.PersistentVolumeClaim, error) {
+func GetPVCObjFromVol(vol *volume.Volume) (*corev1.PersistentVolumeClaim, error) {
 	return k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
 }
 
@@ -12726,14 +12784,14 @@ func GetMultipathDeviceIDsOnNode(n *node.Node) ([]string, error) {
 // volumeBinding storageapi.VolumeBindingImmediate, storageapi.VolumeBindingWaitForFirstConsumer
 func CreateFlashStorageClass(scName string,
 	scType string,
-	ReclaimPolicy v1.PersistentVolumeReclaimPolicy,
+	ReclaimPolicy corev1.PersistentVolumeReclaimPolicy,
 	params map[string]string,
 	MountOptions []string,
 	AllowVolumeExpansion *bool,
 	VolumeBinding storageapi.VolumeBindingMode,
 	AllowedTopologies map[string][]string) error {
 
-	var reclaimPolicy v1.PersistentVolumeReclaimPolicy
+	var reclaimPolicy corev1.PersistentVolumeReclaimPolicy
 	param := make(map[string]string)
 	for key, value := range params {
 		param[key] = value
@@ -12752,20 +12810,20 @@ func CreateFlashStorageClass(scName string,
 
 	// Declare Reclaim Policies
 	switch ReclaimPolicy {
-	case v1.PersistentVolumeReclaimDelete:
-		reclaimPolicy = v1.PersistentVolumeReclaimDelete
-	case v1.PersistentVolumeReclaimRetain:
-		reclaimPolicy = v1.PersistentVolumeReclaimRetain
-	case v1.PersistentVolumeReclaimRecycle:
-		reclaimPolicy = v1.PersistentVolumeReclaimRecycle
+	case corev1.PersistentVolumeReclaimDelete:
+		reclaimPolicy = corev1.PersistentVolumeReclaimDelete
+	case corev1.PersistentVolumeReclaimRetain:
+		reclaimPolicy = corev1.PersistentVolumeReclaimRetain
+	case corev1.PersistentVolumeReclaimRecycle:
+		reclaimPolicy = corev1.PersistentVolumeReclaimRecycle
 	}
 
-	var allowedTopologies []v1.TopologySelectorTerm = nil
+	var allowedTopologies []corev1.TopologySelectorTerm = nil
 	if AllowedTopologies != nil {
-		topologySelector := v1.TopologySelectorTerm{}
-		topologyList := []v1.TopologySelectorLabelRequirement{}
+		topologySelector := corev1.TopologySelectorTerm{}
+		topologyList := []corev1.TopologySelectorLabelRequirement{}
 		for key, value := range AllowedTopologies {
-			topology := v1.TopologySelectorLabelRequirement{}
+			topology := corev1.TopologySelectorLabelRequirement{}
 			topology.Key = key
 			topology.Values = value
 			topologyList = append(topologyList, topology)
@@ -12793,17 +12851,17 @@ func CreateFlashStorageClass(scName string,
 // CreateFlashPVCOnCluster Creates PVC on the Cluster
 func CreateFlashPVCOnCluster(pvcName string, scName string, nameSpace string, sizeGb string) error {
 	log.InfoD("creating PVC [%s] in namespace [%s]", pvcName, nameSpace)
-	pvcObj := &v1.PersistentVolumeClaim{
+	pvcObj := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
 			Namespace: nameSpace,
 		},
-		Spec: v1.PersistentVolumeClaimSpec{
-			AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 			StorageClassName: &scName,
-			Resources: v1.ResourceRequirements{
-				Requests: v1.ResourceList{
-					v1.ResourceStorage: resource.MustParse(sizeGb),
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse(sizeGb),
 				},
 			},
 		},
@@ -12813,7 +12871,7 @@ func CreateFlashPVCOnCluster(pvcName string, scName string, nameSpace string, si
 }
 
 // GetAllPVCFromNs returns all PVC's Created on specific NameSpace
-func GetAllPVCFromNs(nsName string, labelSelector map[string]string) ([]v1.PersistentVolumeClaim, error) {
+func GetAllPVCFromNs(nsName string, labelSelector map[string]string) ([]corev1.PersistentVolumeClaim, error) {
 	pvcList, err := core.Instance().GetPersistentVolumeClaims(nsName, labelSelector)
 	if err != nil {
 		return nil, err
@@ -12918,19 +12976,6 @@ func IsPureCloudProvider() bool {
 	return false
 }
 
-// GetDrivesFromSpecificPoolOnNode returns List of Drives On Specific Node
-func GetDrivesFromSpecificPoolOnNode(n *node.Node, poolId string) ([]string, error) {
-	allPools, err := Inst().V.GetPoolDrives(n)
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("All Pool IDs [%v]", allPools)
-	if val, ok := allPools[poolId]; ok {
-		return val, nil
-	}
-	return nil, fmt.Errorf("Failed to get details of Drive on Pool [%v]", poolId)
-}
-
 // GetMultipathDeviceOnPool Returns list of multipath devices on Pool
 func GetMultipathDeviceOnPool(n *node.Node) (map[string][]string, error) {
 	multipathMap := make(map[string][]string)
@@ -12949,7 +12994,7 @@ func GetMultipathDeviceOnPool(n *node.Node) (map[string][]string, error) {
 	for eachPoolId, eachDev := range allPools {
 		for _, dev := range eachDev {
 			for _, multiDev := range allMultipathDev {
-				if strings.Contains(dev, multiDev) {
+				if strings.Contains(dev.Device, multiDev) {
 					multipathMap[eachPoolId] = append(multipathMap[eachPoolId], multiDev)
 				}
 			}
@@ -12958,7 +13003,7 @@ func GetMultipathDeviceOnPool(n *node.Node) (map[string][]string, error) {
 	return multipathMap, nil
 }
 
-func CreatePortworxStorageClass(scName string, ReclaimPolicy v1.PersistentVolumeReclaimPolicy, VolumeBinding storageapi.VolumeBindingMode, params map[string]string) (*storageapi.StorageClass, error) {
+func CreatePortworxStorageClass(scName string, ReclaimPolicy corev1.PersistentVolumeReclaimPolicy, VolumeBinding storageapi.VolumeBindingMode, params map[string]string) (*storageapi.StorageClass, error) {
 	v1obj := metav1.ObjectMeta{
 		Name: scName,
 	}
@@ -13130,6 +13175,7 @@ func CheckIopsandBandwidthinFA(flashArrays []pureutils.FlashArrayEntry, listofFa
 		}
 	}
 	return nil
+
 }
 
 // RunCmdsOnAllMasterNodes Runs a set of commands on all the master nodes
@@ -13258,6 +13304,66 @@ func VerifyClusterlevelPSA() error {
 	if !strings.Contains(strings.Join(command, ""), commandOpt) {
 		return fmt.Errorf("PSA settings not reflecting in pod!")
 	}
+	return nil
+}
 
+// DeleteFilesFromS3Bucket deletes any supplied file from the supplied bucket
+func DeleteFilesFromS3Bucket(bucketName string, fileName string) error {
+	id, secret, endpoint, s3Region, disableSslBool := s3utils.GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSslBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	if err != nil {
+		return fmt.Errorf("Failed to get S3 session to remove specific files: [%v]", err)
+	}
+
+	s3Client := s3.New(sess)
+
+	// List objects in the bucket.
+	listInput := &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+	}
+	listOutput, err := s3Client.ListObjectsV2(listInput)
+	if err != nil {
+		return fmt.Errorf("Failed to list objects in S3 bucket: [%v]", err)
+	}
+
+	// Filter objects that contain the fileName in their key.
+	var objectsToDelete []*s3.ObjectIdentifier
+	for _, item := range listOutput.Contents {
+		if strings.Contains(*item.Key, fileName) {
+			objectsToDelete = append(objectsToDelete, &s3.ObjectIdentifier{
+				Key: item.Key,
+			})
+		}
+	}
+	if len(objectsToDelete) == 0 {
+		return nil
+	}
+
+	// Create a batch delete request.
+	deleteInput := &s3.DeleteObjectsInput{
+		Bucket: aws.String(bucketName),
+		Delete: &s3.Delete{
+			Objects: objectsToDelete,
+		},
+	}
+	keys := make([]string, len(deleteInput.Delete.Objects))
+	for i, obj := range deleteInput.Delete.Objects {
+		keys[i] = *obj.Key
+	}
+	bucket := *deleteInput.Bucket
+
+	// Delete the filtered objects.
+	_, err = s3Client.DeleteObjects(deleteInput)
+	if err != nil {
+		return fmt.Errorf("Failed to delete objects from S3 bucket: [%v]", err)
+	}
+	log.Infof("The files %v are successfully deleted from the bucket [%s]", keys, bucket)
 	return nil
 }

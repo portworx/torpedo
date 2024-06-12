@@ -132,6 +132,7 @@ const (
 	GlobalAWSLockedBucketPrefix               = "global-aws-locked"
 	GlobalAzureLockedBucketPrefix             = "global-azure-locked"
 	GlobalGCPLockedBucketPrefix               = "global-gcp-locked"
+	AzureChinaEndpoint                        = "CHINA"
 	MongodbStatefulset                        = "pxc-backup-mongodb"
 	PxBackupDeployment                        = "px-backup"
 	BackupDeleteTimeout                       = 60 * time.Minute
@@ -175,6 +176,10 @@ const (
 	storkControllerConfigMapRetry             = 30 * time.Second
 	BackupLocationValidationTimeout           = 10 * time.Minute
 	BackupLocationValidationRetryTime         = 30 * time.Second
+	IncorrectMemoryRequest                    = "2Mi"
+	CorrectMemoryRequest                      = "700Mi"
+	CorrectMemoryLimit                        = "1Gi"
+	IncorrectImageSuffix                      = "-incorrect"
 )
 
 var (
@@ -334,6 +339,18 @@ var (
 				},
 			},
 		},
+		"mysql-backup-psa-restricted": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH TABLES WITH READ LOCK;system ${WAIT_CMD};'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"true"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+			PostRule: backup.PostRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH LOGS; UNLOCK TABLES;'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
 		"postgres": {
 			PreRule: backup.PreRule{
 				Rule: backup.RuleSpec{
@@ -405,6 +422,13 @@ var (
 			},
 		},
 		"postgres-cephfs-csi": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"postgres-backup-psa-restricted": {
 			PreRule: backup.PreRule{
 				Rule: backup.RuleSpec{
 					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
@@ -3760,6 +3784,26 @@ func IsPresent(dataSlice interface{}, data interface{}) bool {
 		}
 	}
 	return false
+}
+
+// AppendList append only unique items of one list into another list
+func AppendList[T comparable](dataSlice1 []T, dataSlice2 []T) []T {
+	totalLength := len(dataSlice1) + len(dataSlice2)
+	map1 := make(map[T]bool, totalLength)
+	list1 := make([]T, 0, totalLength)
+	for _, element := range dataSlice1 {
+		if !map1[element] {
+			map1[element] = true
+			list1 = append(list1, element)
+		}
+	}
+	for _, element := range dataSlice2 {
+		if !map1[element] {
+			map1[element] = true
+			list1 = append(list1, element)
+		}
+	}
+	return list1
 }
 
 func DeleteBackupAndWait(backupName string, ctx context1.Context) error {
@@ -8808,6 +8852,28 @@ func ModifyMaintenanceJobFrequency(backupLocationName string, frequencyInMinutes
 	return nil
 }
 
+// ResetMaintenanceJobFrequency sets the frequency of the cron job to the default value
+func ResetMaintenanceJobFrequency(backupLocationName string, maintenanceJobType MaintenanceJobType) error {
+	k8sBatch := batch.Instance()
+	cronJob, err := GetCronJobByBackupLocation(backupLocationName, maintenanceJobType)
+	if err != nil {
+		return err
+	}
+	if maintenanceJobType == FullMaintenanceJob {
+		cronJob.Spec.Schedule = fmt.Sprintf("1 */23 * * *")
+	} else if maintenanceJobType == QuickMaintenanceJob {
+		cronJob.Spec.Schedule = fmt.Sprintf("1 */3 * * *")
+	} else {
+		return fmt.Errorf("invalid maintenance job type")
+	}
+
+	_, err = k8sBatch.UpdateCronJob(cronJob)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetCronJobByBackupLocation takes the backup location name and the job type and returns the cron job
 func GetCronJobByBackupLocation(backupLocationName string, maintenanceJobType MaintenanceJobType) (*batchv1.CronJob, error) {
 	k8sBatch := batch.Instance()
@@ -8840,4 +8906,75 @@ func GetCronJobByBackupLocation(backupLocationName string, maintenanceJobType Ma
 		}
 	}
 	return nil, fmt.Errorf("backup location with name [%s] not found", backupLocationName)
+}
+
+// MaintenanceJobUpdateStrategy defines the strategy to update the maintenance job
+type MaintenanceJobUpdateStrategy string
+
+const (
+	UpdateIncorrectImage  MaintenanceJobUpdateStrategy = "UpdateIncorrectImage"
+	UpdateCorrectImage    MaintenanceJobUpdateStrategy = "UpdateCorrectImage"
+	UpdateIncorrectMemory MaintenanceJobUpdateStrategy = "UpdateIncorrectMemory"
+	UpdateCorrectMemory   MaintenanceJobUpdateStrategy = "UpdateCorrectMemory"
+)
+
+// UpdateMaintenanceCronJob updates the maintenance cron job based on the strategy provided
+func UpdateMaintenanceCronJob(backupLocation string, maintenanceJobType MaintenanceJobType, strategy MaintenanceJobUpdateStrategy) error {
+	k8sBatch := batch.Instance()
+	cronJob, err := GetCronJobByBackupLocation(backupLocation, maintenanceJobType)
+	if err != nil {
+		return err
+	}
+
+	switch strategy {
+	case UpdateIncorrectImage:
+		log.Infof("Updating the image of the cron job to an incorrect one")
+		// Update the image to an incorrect one iff it does not contain the string "-incorrect"
+		if !strings.Contains(cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image, IncorrectImageSuffix) {
+			cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image = cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image + IncorrectImageSuffix
+		}
+
+	case UpdateCorrectImage:
+		log.Infof("Updating the image of the cron job to the correct one")
+		// Remove the string "-incorrect" from the image name
+		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image = strings.TrimSuffix(cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image, IncorrectImageSuffix)
+
+	case UpdateIncorrectMemory:
+		log.Infof("Updating the memory request of the cron job to an incorrect value")
+		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Requests["memory"], err = resource.ParseQuantity(IncorrectMemoryRequest)
+		if err != nil {
+			return err
+		}
+		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Limits["memory"], err = resource.ParseQuantity(IncorrectMemoryRequest)
+		if err != nil {
+			return err
+		}
+
+	case UpdateCorrectMemory:
+		log.Infof("Updating the memory request of the cron job to the correct value")
+		// Update the memory request to the correct value
+		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Requests["memory"], err = resource.ParseQuantity(CorrectMemoryRequest)
+		if err != nil {
+			return err
+		}
+		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Limits["memory"], err = resource.ParseQuantity(CorrectMemoryLimit)
+		if err != nil {
+			return err
+		}
+	}
+	log.Infof("Cron job image for backup location [%s] - [%s]", backupLocation, cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image)
+	log.Infof("Cron job memory request and limit for backup location [%s] - [%v] & [%v]", backupLocation, cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Requests["memory"], cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Limits["memory"])
+	_, err = k8sBatch.UpdateCronJob(cronJob)
+	return err
+}
+
+// CreateInvalidVolumeSnapshotClass creates invalid VolumeSnapshotClass for given provisioner
+func CreateInvalidVolumeSnapshotClass(snapShotClassName, provisioner string) (*volsnapv1.VolumeSnapshotClass, error) {
+	volumeSnapshotClassParameters := make(map[string]string)
+	volumeSnapshotClassParameters["invalidParameter"] = "invalidValue"
+	volumeSnapshotClass, err := Inst().S.CreateVolumeSnapshotClassesWithParameters(snapShotClassName, provisioner, false, "Delete", volumeSnapshotClassParameters)
+	if err != nil {
+		return nil, err
+	}
+	return volumeSnapshotClass, nil
 }

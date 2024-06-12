@@ -124,6 +124,10 @@ if [ -z "${PURE_SAN_TYPE}" ]; then
     PURE_SAN_TYPE=ISCSI
 fi
 
+if [ -z "${PURE_FADA_POD}" ]; then
+    PURE_FADA_POD=""
+fi
+
 if [ -n "${PROVISIONER}" ]; then
     PROVISIONER="$PROVISIONER"
 fi
@@ -241,7 +245,6 @@ fi
 if [ -n "$ANTHOS_HOST_PATH" ]; then
     ANTHOS_HOST_PATH="${ANTHOS_HOST_PATH}"
 fi
-
 
 for i in $@
 do
@@ -547,6 +550,7 @@ spec:
             "--pure-volumes=$IS_PURE_VOLUMES",
             "--pure-fa-snapshot-restore-to-many-test=$PURE_FA_CLONE_MANY_TEST",
             "--pure-san-type=$PURE_SAN_TYPE",
+            "--pure-fada-pod=$PURE_FADA_POD",
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "--px-runtime-opts=$PX_RUNTIME_OPTS",
@@ -600,6 +604,8 @@ spec:
       value: "${TORPEDO_SSH_PASSWORD}"
     - name: TORPEDO_SSH_KEY
       value: "${TORPEDO_SSH_KEY}"
+    - name: AZURE_ENDPOINT
+      value: "${AZURE_ENDPOINT}"
     - name: AZURE_TENANT_ID
       value: "${AZURE_TENANTID}"
     - name: VOLUME_PROVIDER
@@ -794,6 +800,10 @@ spec:
       value: "${IKS_CLUSTER_REGION}"
     - name: LONGEVITY_UPGRADE_EXECUTION_THRESHOLD
       value: "${LONGEVITY_UPGRADE_EXECUTION_THRESHOLD}"
+    - name: GKE_UPGRADE_STRATEGY
+      value: "${GKE_UPGRADE_STRATEGY}"
+    - name: GKE_SURGE_VALUE
+      value: "${GKE_SURGE_VALUE}"
     - name: GOOGLE_APPLICATION_CREDENTIALS
       value: "${GOOGLE_APPLICATION_CREDENTIALS}"
   volumes: [${VOLUMES}]
@@ -855,6 +865,10 @@ if [ "${RUN_GINKGO_COMMAND}" = "true" ]; then
     $cleaned_torpedo_pod_ginkgo_command
     exit $?
 fi
+
+if [ -z "${ANTHOS_HOST_PATH}" ]; then
+  sed -i  '/GOOGLE_APPLICATION_CREDENTIALS/d' torpedo.yaml
+fi 
 
 # If these are passed, we will create a docker config secret to use to pull images
 if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
