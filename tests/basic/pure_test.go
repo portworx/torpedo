@@ -5067,7 +5067,7 @@ var _ = Describe("{TrashcanRecovery}", func() {
 			ValidateContext(ctx)
 		}
 
-		stepLog := "Scenario: Get volumes for cloudsnap apps in test,update replication factor,delete volumes then restore volumes from trashcan and validate cloudsnaps"
+		stepLog := "Scenario: delete volumes then restore volumes from trashcan and validate"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 
@@ -5142,11 +5142,16 @@ var _ = Describe("{LocalSkinnySnapAndRestore}", func() {
 		log.InfoD(stepLog)
 		stepLog = fmt.Sprintf("Enabling Skinny Snaps and setting the snap repl to 1")
 		Step(stepLog, func() {
-			err = Inst().V.EnableSkinnySnap()
+			nodes := node.GetWorkerNodes()
+			err = Inst().V.SetClusterOpts(nodes[0], map[string]string{
+				"--skinnysnap": "on"})
 			log.FailOnError(err, "Failed to enable skinny snap on cluster")
+			log.Infof("Skinnysnap enabled on Cluster")
 			repl := "1"
-			err = Inst().V.UpdateSkinnySnapReplNum(repl)
+			err = Inst().V.SetClusterOpts(nodes[0], map[string]string{
+				"--skinnysnap": repl})
 			log.FailOnError(err, "Failed to set snap replication factor for skinny snaps")
+			log.Infof("Skinnysnap repl factor successfully updated")
 		})
 		contexts = make([]*scheduler.Context, 0)
 		retain := 8
@@ -5158,7 +5163,6 @@ var _ = Describe("{LocalSkinnySnapAndRestore}", func() {
 
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-
 			schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 			if err != nil {
 
