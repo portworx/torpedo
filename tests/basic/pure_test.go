@@ -4758,7 +4758,7 @@ var _ = Describe("{DeployAppsAndStopPortworx}", func() {
 		stepLog = "Validate the applications are in running state"
 		Step(stepLog, func() {
 			ValidateApplications(contexts)
-			//DestroyApps(contexts, nil)
+			DestroyApps(contexts, nil)
 
 		})
 	})
