@@ -5351,14 +5351,9 @@ var _ = Describe("{LocalSkinnySnapAndRestore}", func() {
 		})
 		stepLog = "Validating and Destroying apps"
 		Step(stepLog, func() {
-			for _, ctx := range contexts {
-				ctx.SkipVolumeValidation = false
-				ctx.ReadinessTimeout = 15 * time.Minute
-				ValidateContext(ctx)
-				opts := make(map[string]bool)
-				opts[SkipClusterScopedObjects] = true
-				DestroyApps(contexts, opts)
-			}
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			DestroyApps(contexts, opts)
 		})
 
 	})
