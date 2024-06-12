@@ -4262,6 +4262,7 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 			}
 		}
 
+		log.Infof("Delete the namespaces while creating new pools")
 		go deleteNamespaces(false)
 		time.Sleep(20 * time.Second)
 		log.FailOnError(CreateNewPoolsOnMultipleNodesInParallel(nodesToUse), "Failed to Create New Pools")
@@ -5120,7 +5121,7 @@ var _ = Describe("{CreateNewPoolsWhenLotsOfFBDAVolumesAreGettingCreatedDeleted}"
 				}
 				// Volume create continuously
 				uuidObj := uuid.New()
-				VolName := fmt.Sprintf("volume_%s", uuidObj.String())
+				VolName := fmt.Sprintf("volume-%s", uuidObj.String())
 				Size := uint64(rand.Intn(100) + 1) // Size of the Volume between 1G to 100G
 				log.Infof("Creating Volume [%v]", VolName)
 				err := CreateFlashPVCOnCluster(VolName, scNameFB, namespace[0], fmt.Sprintf("%v", Size))
