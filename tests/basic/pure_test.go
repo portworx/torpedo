@@ -4544,6 +4544,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 		//Get The Details of Existing FA AND FB in the cluster
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
+
 		stepLog := "Create storage class with max iops and max bandwidth for Normal Portworx Volumes , FADA and FBDA Pvc Deployment"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -4563,6 +4564,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 			faParams["max_iops"] = "1000"
 			faParams["max_bandwidth"] = "1G"
 			faParams["fs"] = "ext4"
+			faParams["pure_fa_pod_name"] = "Torpedo-Test"
 
 			var allowVolExpansionFA bool = true
 			// create storage class for FADA volumes
