@@ -4519,6 +4519,9 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 		var wg sync.WaitGroup
 		var max_bandwidth uint64
 		var max_iops uint64
+		var RealmName string
+		var isFAaccessible bool
+		var faClient *newFlashArray.Client
 
 		//Declaring SC name, namespaces and pvc prefixes and lists which are required for collection of PVC And Volume Names
 		baseScName := "base-portworx-volume-sc"
@@ -4544,8 +4547,39 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 		//Get The Details of Existing FA AND FB in the cluster
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
+		for _, fa := range flashArrays {
+			if fa.Realm != "" {
+				RealmName = fa.Realm
+				faClient, err = pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+				if err != nil {
+					log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+					continue
+				}
+				isFAaccessible = true
+				break
+			}
+		}
+		if !isFAaccessible {
+			log.FailOnError(fmt.Errorf("No FA with realm found in pure.json"), "No FA with realm found in pure.json")
+		}
+		podNameinSC := "Torpedo-Test" + Inst().InstanceID
+		PodNameinFA := RealmName + "::" + podNameinSC
 
-		stepLog := "Create storage class with max iops and max bandwidth for Normal Portworx Volumes , FADA and FBDA Pvc Deployment"
+		stepLog := "Create A pod inside Realm"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err = pureutils.CreatePodinFA(faClient, PodNameinFA)
+			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", PodNameinFA))
+			isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faClient, PodNameinFA)
+			log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", PodNameinFA))
+			if !isPodExists {
+				log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", PodNameinFA), "is pod created in FA?")
+			}
+			log.InfoD("Pod [%v] created ", PodNameinFA)
+
+		})
+
+		stepLog = "Create storage class with max iops and max bandwidth for Normal Portworx Volumes , FADA and FBDA Pvc Deployment"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			BaseParams := make(map[string]string)
@@ -4564,7 +4598,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 			faParams["max_iops"] = "1000"
 			faParams["max_bandwidth"] = "1G"
 			faParams["fs"] = "ext4"
-			faParams["pure_fa_pod_name"] = "Torpedo-Test"
+			faParams["pure_fa_pod_name"] = podNameinSC
 
 			var allowVolExpansionFA bool = true
 			// create storage class for FADA volumes
@@ -5695,18 +5729,4 @@ var _ = Describe("{RestartPxandRestartNode}", func() {
 		EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
-})
-
-var _ = Describe("{ValidateVolumeNameinFA}", func() {
-	/*
-		https://purestorage.atlassian.net/browse/PTX-24562
-		1. Deploy App with pure_block as backend and pure_fa_pod_name as parameter in storage class
-		2. Get the volume name from the PVC created by the app
-		3. Get the Cluster UUID from the px cluster and also the realm name,pod name.
-		4. Now validate the volume name in FA ,it should be in the format <realm_name>::<pod_name>::px_<cluster_uuid_1st_segment>-<pvc_name>
-	*/
-	JustBeforeEach(func() {
-
-	})
-
 })
