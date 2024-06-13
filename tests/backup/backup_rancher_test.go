@@ -1178,7 +1178,7 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", La
 })
 
 // This is a dummy PSA testcase to validate the PSA related methods for RKE
-var _ = Describe("{DummyPSATestcase}", Label(TestCaseLabelsMap[DummyPSATestcase]...), func() {
+var _ = Describe("{DummyPSATestcaseRancher}", Label(TestCaseLabelsMap[DummyPSATestcaseRancher]...), func() {
 	JustBeforeEach(func() {
 		log.InfoD("No pre-configuration needed")
 	})

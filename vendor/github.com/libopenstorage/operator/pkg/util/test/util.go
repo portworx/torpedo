@@ -68,7 +68,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
 	affinityhelper "k8s.io/component-helpers/scheduling/corev1/nodeaffinity"
-	cluster_v1alpha1 "sigs.k8s.io/cluster-api/pkg/apis/deprecated/v1alpha1"
+	clusterBeta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -258,7 +258,7 @@ func FakeK8sClient(initObjects ...runtime.Object) client.Client {
 	if err := monitoringv1.AddToScheme(s); err != nil {
 		logrus.Error(err)
 	}
-	if err := cluster_v1alpha1.AddToScheme(s); err != nil {
+	if err := clusterBeta1.AddToScheme(s); err != nil {
 		logrus.Error(err)
 	}
 	if err := ocp_configv1.AddToScheme(s); err != nil {
