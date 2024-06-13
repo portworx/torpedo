@@ -4691,45 +4691,40 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 var _ = Describe("{DeployAppsAndStopPortworx}", func() {
 	/*
 		https://purestorage.atlassian.net/browse/PTX-37401
-		1.Deploy Apps and parallely and stop portworx for 10 mins
+		1.Deploy Apps
+		2.Stop portworx for 10 mins to test node failovers
 		2.After 10 mins make it up and check if the pods are running
 		3.Destroy the apps
 	*/
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeployAppsAndStopPortworx",
-			"Deploy Apps and parallely stop portworx for 10 mins and after 10 min make it up and check if the pods are running",
+			"Deploy Apps and then stop portworx for 10 mins, and after 10 min make it up and check if the pods are running",
 			nil, 0)
 	})
 	itLog := "DeployAppsAndStopPortworx"
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var contexts []*scheduler.Context
-		var wg sync.WaitGroup
 		var nodeToReboot []node.Node
 		stNodes := node.GetStorageNodes()
 		nodeToReboot = append(nodeToReboot, stNodes[rand.Intn(len(stNodes))])
 		defer DestroyApps(contexts, nil)
+
 		stepLog := "Schedule apps on the cluster"
 		Step(stepLog, func() {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				defer GinkgoRecover()
-				for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("stopportworx-%d", i))...)
-				}
-
-			}()
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				defer GinkgoRecover()
-				log.InfoD("Stopping Portworx Service on Node [%v]", nodeToReboot[0].Name)
-				err := Inst().V.StopDriver(nodeToReboot, false, nil)
-				log.FailOnError(err, "Failed to stop portworx on node [%v]", nodeToReboot[0].Name)
-			}()
-			wg.Wait()
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("stopportworx-%d", i))...)
+			}
+			ValidateApplications(contexts)
 		})
+		stepLog = fmt.Sprintf("Stop Portworx Service on Node [%v]", nodeToReboot[0].Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().V.StopDriver(nodeToReboot, false, nil)
+			log.FailOnError(err, "Failed to stop portworx on node [%v]", nodeToReboot[0].Name)
+		})
+
 		stepLog = "Wait for 10 mins and then start portworx"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
