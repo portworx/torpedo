@@ -5001,3 +5001,158 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{PoolDeleteWhenMultipleVolDelete}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolDeleteWhenMultipleVolDelete",
+			"Pool Delete when multiple volumes are deleted", nil, 0)
+	})
+
+	itLog := "PoolDeleteWhenMultipleVolDelete"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var wgfada, wgfbda sync.WaitGroup
+
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+		pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+		log.FailOnError(err, "failed to get secret [%s]  in namespace [%s]", PureSecretName, volDriverNamespace)
+		listFB := pxPureSecret.Blades
+		listFA := pxPureSecret.Arrays
+
+		// Create Namespace on the cluster
+		nsuuid := uuid.New()
+		nsName := fmt.Sprintf("fbda-ns-%s", nsuuid.String())
+
+		log.Infof("Create Namespace with Name [%v]", nsName)
+		namespace, err := CreateNamespaces(nsName, 1)
+		log.FailOnError(err, "Failed to create Namespace")
+
+		if isDmthin, err := IsDMthin(); !isDmthin && err == nil {
+			log.InfoD("Skipping the test as it is not DMthin setup")
+			return
+		} else if err != nil {
+			log.FailOnError(err, "Failed to check if it is DMthin setup")
+		}
+
+		stepLog := "Create lot of FADA/FBDA volumes and delete them"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if len(listFA) > 1 {
+				// Create Storage Class for FA
+				scNameFA := fmt.Sprintf("fada-sc-%s", nsuuid.String())
+				log.Infof("Create Storage class with Name [%v]", scNameFA)
+				var allowVolExpansionFA bool = true
+				err = CreateFlashStorageClass(scNameFA,
+					"pure_block",
+					v1.PersistentVolumeReclaimDelete,
+					nil, nil, &allowVolExpansionFA,
+					storageApi.VolumeBindingImmediate,
+					nil)
+				log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", scNameFA))
+
+				// Create Continuous FADA Volumes on the cluster
+
+				createFADAVolumes := func(wg *sync.WaitGroup) {
+					defer GinkgoRecover()
+					wg.Done()
+					for _, eachNs := range namespace {
+						// Create 100 PVCs on the Namespace
+						for i := 0; i < 100; i++ {
+							log.InfoD("Creating FADA Volume")
+							pvcName := fmt.Sprintf("fada-pvc-%d-%s", i, nsuuid.String())
+							log.FailOnError(CreateFlashPVCOnCluster(pvcName, scNameFA, eachNs, "100"),
+								"Failed to create PVC on the cluster")
+
+							log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs, 15),
+								"Errored occured while checking if PVC Bounded")
+						}
+					}
+				}
+				wgfada.Add(1)
+				go createFADAVolumes(&wgfada)
+			}
+
+			if len(listFB) > 1 {
+				// Create Storage Class FB
+				scNameFB := fmt.Sprintf("fbda-sc-%s", nsuuid.String())
+				log.Infof("Create Storage class with Name [%v]", scNameFB)
+
+				params := make(map[string]string)
+				params["pure_export_rules"] = "*(rw)"
+
+				mountOptions := []string{"nfsvers=4.1", "tcp"}
+				var allowVolExpansion bool = true
+				err = CreateFlashStorageClass(scNameFB,
+					"pure_file",
+					v1.PersistentVolumeReclaimDelete,
+					nil, mountOptions, &allowVolExpansion,
+					storageApi.VolumeBindingImmediate,
+					nil)
+				log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", scNameFB))
+				createFBDAVolumes := func(wg *sync.WaitGroup) {
+					defer GinkgoRecover()
+					wg.Done()
+					for _, eachNs := range namespace {
+						// Create 100 PVCs on the Namespace
+						for i := 0; i < 100; i++ {
+							pvcName := fmt.Sprintf("fbda-pvc-%d-%s", i, nsuuid.String())
+							log.FailOnError(CreateFlashPVCOnCluster(pvcName, scNameFB, eachNs, "100"),
+								"Failed to create PVC on the cluster")
+							log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs, 15),
+								"Errored occured while checking if PVC Bounded")
+						}
+					}
+				}
+				wgfbda.Add(1)
+				go createFBDAVolumes(&wgfbda)
+			}
+			wgfada.Wait()
+			wgfbda.Wait()
+
+		})
+
+		stepLog = "Pool delete when multiple volumes are deleted"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				log.Infof("Deleting Namespaces created during test [%v]", namespace)
+				err := DeleteNamespaces(namespace)
+				log.FailOnError(err, fmt.Sprintf("Failed to Delete namespaces [%v]", namespace))
+			}()
+			// delete the one pool from all the nodes
+			var deletePoolWg sync.WaitGroup
+			nodes, err := SelectPoolDeletableNodes()
+			log.FailOnError(err, "Failed to select pool deletable nodes")
+			for _, n := range nodes {
+				deletePoolWg.Add(1)
+				go func() {
+					defer deletePoolWg.Done()
+					defer GinkgoRecover()
+					nodePools := n.Pools
+					if len(nodePools) > 1 {
+						pool := nodePools[0]
+						log.Infof("Deleting pool [%v] from node [%v]", pool, n.Name)
+						poolID := fmt.Sprintf("%v", pool.GetID())
+						deletePoolAndValidate(n, poolID)
+						log.FailOnError(err, fmt.Sprintf("Failed to delete pool [%v] from node [%v]", pool, n.Name))
+					}
+				}()
+			}
+			deletePoolWg.Wait()
+			wg.Wait()
+		})
+
+	})
+
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})
