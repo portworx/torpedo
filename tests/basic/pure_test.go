@@ -4955,39 +4955,30 @@ var _ = Describe("{DeployAppsAndStopPortworx}", func() {
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var contexts []*scheduler.Context
-		var wg sync.WaitGroup
 		var nodeToReboot []node.Node
 		stNodes := node.GetStorageNodes()
 		nodeToReboot = append(nodeToReboot, stNodes[rand.Intn(len(stNodes))])
 		stepLog := "Schedule apps on the cluster"
 		Step(stepLog, func() {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				defer GinkgoRecover()
-				for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					appNamespace := "deploy-portworx-stop-apps"
-					Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
-					context, err := Inst().S.Schedule(appNamespace, scheduler.ScheduleOptions{
-						AppKeys:            Inst().AppList,
-						StorageProvisioner: Provisioner,
-						Namespace:          appNamespace,
-					})
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				appNamespace := "deploy-portworx-stop-apps"
+				Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+				context, err := Inst().S.Schedule(appNamespace, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Provisioner,
+					Namespace:          appNamespace,
+				})
 
-					log.FailOnError(err, "Failed to schedule application of %v namespace", appNamespace)
-					contexts = append(contexts, context...)
-				}
+				log.FailOnError(err, "Failed to schedule application of %v namespace", appNamespace)
+				contexts = append(contexts, context...)
+			}
+		})
+		stepLog = "stop portworx"
+		Step(stepLog, func() {
+			log.InfoD("Stopping Portworx Service on Node [%v]", nodeToReboot[0].Name)
+			err := Inst().V.StopDriver(nodeToReboot, false, nil)
+			log.FailOnError(err, "Failed to stop portworx on node [%v]", nodeToReboot[0].Name)
 
-			}()
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				defer GinkgoRecover()
-				log.InfoD("Stopping Portworx Service on Node [%v]", nodeToReboot[0].Name)
-				err := Inst().V.StopDriver(nodeToReboot, false, nil)
-				log.FailOnError(err, "Failed to stop portworx on node [%v]", nodeToReboot[0].Name)
-			}()
-			wg.Wait()
 		})
 		stepLog = "Wait for 10 mins and then start portworx"
 		Step(stepLog, func() {
