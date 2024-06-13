@@ -5400,15 +5400,8 @@ var _ = Describe("{RestartPxandRestartNode}", func() {
 				log.FailOnError(err, fmt.Sprintf("Driver is down on node [%s]", nodeToReboot.Name))
 				dash.VerifyFatal(err == nil, true,
 					fmt.Sprintf("PX is up after restarting on node [%s]", nodeToReboot.Name))
-			}
-
-		})
-		stepLog = "Restart the nodes and check if the Nodes are coming back up and validate px service"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			for _, selectedNode := range selectedNodesForReboot {
-				log.InfoD("Stopping node %s", selectedNode.Name)
-				err := Inst().N.RebootNode(selectedNode,
+				log.InfoD("Stopping node %s", nodeToReboot.Name)
+				err = Inst().N.RebootNode(nodeToReboot,
 					node.RebootNodeOpts{
 						Force: true,
 						ConnectionOpts: node.ConnectionOpts{
@@ -5416,23 +5409,22 @@ var _ = Describe("{RestartPxandRestartNode}", func() {
 							TimeBeforeRetry: defaultCommandRetry,
 						},
 					})
-				log.FailOnError(err, "Failed to reboot node %v", selectedNode.Name)
-			}
-			for _, selectedNode := range selectedNodesForReboot {
-				log.InfoD("wait for node: %s to be back up", selectedNode.Name)
+				log.FailOnError(err, "Failed to reboot node %v", nodeToReboot.Name)
 				nodeReadyStatus := func() (interface{}, bool, error) {
-					err := Inst().S.IsNodeReady(selectedNode)
+					err := Inst().S.IsNodeReady(nodeToReboot)
 					if err != nil {
 						return "", true, err
 					}
 					return "", false, nil
 				}
-				_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
-				err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
-				log.FailOnError(err, fmt.Sprintf("Failed to reboot node [%s]", selectedNode.Name))
+				log.InfoD("wait for node: %s to be back up", nodeToReboot.Name)
+				_, err = DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", nodeToReboot.Name))
+				err = Inst().V.WaitDriverUpOnNode(nodeToReboot, Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", nodeToReboot.Name))
+				log.FailOnError(err, fmt.Sprintf("Failed to reboot node [%s]", nodeToReboot.Name))
 			}
+
 		})
 		stepLog = "Validate the applications are in running state"
 		Step(stepLog, func() {
