@@ -5203,6 +5203,45 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 			}
 
 		})
+		stepLog = "Validate the volume name in the FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes := node.GetStorageNodes()
+			opts := node.ConnectionOpts{
+				IgnoreError:     false,
+				TimeBeforeRetry: defaultRetryInterval,
+				Timeout:         defaultTimeout,
+				Sudo:            true,
+			}
+			clusterUUID, err := Inst().V.GetClusterUUID(storageNodes[0], opts, "/etc/pwx")
+			log.FailOnError(err, "Failed to get cluster UUID")
+			log.InfoD("Cluster UUID [%v]", clusterUUID)
+			parts := strings.Split(clusterUUID, "-")
+			clusterUUIDfirstPart := parts[0]
+			log.InfoD("the cluster first part is [%v]", clusterUUIDfirstPart)
+			GetVolumeNameFromPvc := func(namespace string, pvclist []string) []string {
+				allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+				log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
+				for _, p := range allPvcList.Items {
+					pvclist = append(pvclist, p.Spec.VolumeName)
+				}
+				return pvclist
+			}
+			listofPvcNames := make([]string, 0)
+			for _, ctx := range contexts {
+				listofPvcNames = GetVolumeNameFromPvc(ctx.App.NameSpace, listofPvcNames)
+			}
+			log.InfoD("List of PVC names [%v]", listofPvcNames)
+			for _, pvcName := range listofPvcNames {
+				expectedVolName := RealmName + "::" + PodNameinFA + "::" + clusterUUIDfirstPart + "-" + pvcName
+				log.InfoD("Expected Volume Name [%v]", expectedVolName)
+				volName, err := pureutils.GetCompleteVolumeNameFromFA(faClient, pvcName)
+				log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v]", pvcName))
+				log.InfoD("Volume Name in FA [%v]", volName)
+				dash.VerifyFatal(volName, expectedVolName, fmt.Sprintf("is volume name in FA same as expected format <realm_name>::<pod_name>::px_<cluster_uuid_1st_segment>-<pvc_name> ?"))
+			}
+
+		})
 		stepLog = "Destroy the Applications before deleting the pod"
 		Step(stepLog, func() {
 			DestroyApps(contexts, nil)
@@ -5436,4 +5475,18 @@ var _ = Describe("{RestartPxandRestartNode}", func() {
 		EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
+})
+
+var _ = Describe("{ValidateVolumeNameinFA}", func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-24562
+		1. Deploy App with pure_block as backend and pure_fa_pod_name as parameter in storage class
+		2. Get the volume name from the PVC created by the app
+		3. Get the Cluster UUID from the px cluster and also the realm name,pod name.
+		4. Now validate the volume name in FA ,it should be in the format <realm_name>::<pod_name>::px_<cluster_uuid_1st_segment>-<pvc_name>
+	*/
+	JustBeforeEach(func() {
+
+	})
+
 })

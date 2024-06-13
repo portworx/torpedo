@@ -31,6 +31,23 @@ func ListAllVolumesFromFA(faClient *flasharray.Client) ([]flasharray.VolResponse
 	return volumes, nil
 }
 
+func GetCompleteVolumeNameFromFA(faClient *flasharray.Client, volumeName string) (string, error) {
+	vols, err := ListAllVolumesFromFA(faClient)
+	if err != nil {
+		return "", err
+
+	}
+	for _, eachVolItems := range vols {
+		for _, eachVol := range eachVolItems.Items {
+			if strings.Contains(eachVol.Name, volumeName) {
+				return eachVol.Name, nil
+			}
+		}
+
+	}
+	return "", nil
+}
+
 // ListAllDestroyedVolumesFromFA Returns list of all Destroyed FA Volumes (Function should be used with RestAPI 2.x)
 func ListAllDestroyedVolumesFromFA(faClient *flasharray.Client) ([]flasharray.VolResponse, error) {
 	params := make(map[string]string)
