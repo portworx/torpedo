@@ -5384,8 +5384,8 @@ var _ = Describe("{RestartPxandRestartNode}", func() {
 			contexts = append(contexts, context...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
-		stepLog := "Restart Portworx Service on few nodes"
+		defer DestroyApps(contexts, nil)
+		stepLog := "Restart Portworx Service on few nodes and once portworx is up, immediately reboot the node"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for _, nodeToReboot := range selectedNodesForReboot {
