@@ -52,6 +52,7 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
@@ -339,6 +340,18 @@ var (
 				},
 			},
 		},
+		"mysql-backup-psa-restricted": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH TABLES WITH READ LOCK;system ${WAIT_CMD};'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"true"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+			PostRule: backup.PostRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH LOGS; UNLOCK TABLES;'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
 		"postgres": {
 			PreRule: backup.PreRule{
 				Rule: backup.RuleSpec{
@@ -410,6 +423,13 @@ var (
 			},
 		},
 		"postgres-cephfs-csi": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"postgres-backup-psa-restricted": {
 			PreRule: backup.PreRule{
 				Rule: backup.RuleSpec{
 					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
@@ -5385,6 +5405,7 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest) error
 	case string(DirectKDMP):
 		log.Infof("Detected backup type - %s", DirectKDMP)
 		backupRequest.BackupType = api.BackupCreateRequest_Generic
+		backupRequest.DirectKdmp = true
 	default:
 		log.Infof("Environment variable BACKUP_TYPE is not provided")
 	}
@@ -8946,5 +8967,41 @@ func UpdateMaintenanceCronJob(backupLocation string, maintenanceJobType Maintena
 	log.Infof("Cron job image for backup location [%s] - [%s]", backupLocation, cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image)
 	log.Infof("Cron job memory request and limit for backup location [%s] - [%v] & [%v]", backupLocation, cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Requests["memory"], cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Limits["memory"])
 	_, err = k8sBatch.UpdateCronJob(cronJob)
+	return err
+}
+
+// CreateInvalidVolumeSnapshotClass creates invalid VolumeSnapshotClass for given provisioner
+func CreateInvalidVolumeSnapshotClass(snapShotClassName, provisioner string) (*volsnapv1.VolumeSnapshotClass, error) {
+	volumeSnapshotClassParameters := make(map[string]string)
+	volumeSnapshotClassParameters["invalidParameter"] = "invalidValue"
+	volumeSnapshotClass, err := Inst().S.CreateVolumeSnapshotClassesWithParameters(snapShotClassName, provisioner, false, "Delete", volumeSnapshotClassParameters)
+	if err != nil {
+		return nil, err
+	}
+	return volumeSnapshotClass, nil
+}
+
+// DeleteAllDataExportCRs deletes the data export CR as soon as it is found in the given namespace
+func DeleteAllDataExportCRs(namespace string) error {
+	var filterOptions = metav1.ListOptions{}
+	kdmpClient := kdmp.Instance()
+	t := func() (interface{}, bool, error) {
+		dataExportCrList, err := kdmpClient.ListDataExport(namespace, filterOptions)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to list data export CRs in namespace [%s]: %w", namespace, err)
+		}
+		if len(dataExportCrList.Items) == 0 {
+			return "", true, fmt.Errorf("no data export CRs found in namespace [%s]", namespace)
+		}
+		for _, dataExportCr := range dataExportCrList.Items {
+			log.Infof("Deleting data export CR [%s] in namespace [%s]", dataExportCr.Name, namespace)
+			err := kdmpClient.DeleteDataExport(dataExportCr.Name, namespace)
+			if err != nil {
+				return nil, false, fmt.Errorf("failed to delete data export CR [%s] in namespace [%s]: %w", dataExportCr.Name, namespace, err)
+			}
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
 	return err
 }

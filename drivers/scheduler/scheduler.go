@@ -83,6 +83,7 @@ type AppConfig struct {
 	Journal                     string   `yaml:"journal"`
 	DataSize                    string   `yaml:"data_size"`
 	VmID                        string   `yaml:"vm_id"`
+	PureFaPodName               string   `yaml:"pure_fa_pod_name"`
 }
 
 // InitOptions initialization options
@@ -394,6 +395,9 @@ type Driver interface {
 
 	// CreateVolumeSnapshotClasses creates a volume snapshot class
 	CreateVolumeSnapshotClasses(snapClassName string, provisioner string, isDefault bool, deletePolicy string) (*volsnapv1.VolumeSnapshotClass, error)
+
+	// CreateVolumeSnapshotClassesWithParameters creates a volume snapshot class with additional parameters
+	CreateVolumeSnapshotClassesWithParameters(snapClassName string, provisioner string, isDefault bool, deletePolicy string, parameters map[string]string) (*volsnapv1.VolumeSnapshotClass, error)
 
 	// CreateCsiSnapshot create csi snapshot for given pvc
 	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.
