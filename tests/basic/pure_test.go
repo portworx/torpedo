@@ -5373,7 +5373,7 @@ var _ = Describe("{RestartPxandRestartNode}", func() {
 		stNodes := node.GetStorageNodes()
 		selectedNodesForReboot := stNodes[:len(stNodes)/2]
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			taskName := "restartPxandRestartNode"
+			taskName := "restartpxandrebootnode"
 			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
