@@ -91,9 +91,6 @@ type Driver interface {
 	// CreateVolumeUsingPxctlCmd resizes a pool of a given UUID using CLI command
 	CreateVolumeUsingPxctlCmd(n node.Node, volName string, size uint64, haLevel int64) error
 
-	// GetClusterUUID returns the cluster UUID of a px cluster
-	GetClusterUUID(n node.Node, opts node.ConnectionOpts, pxDir string) (string, error)
-
 	// ResizeVolume resizes Volume to specific size provided
 	ResizeVolume(volName string, size uint64) error
 

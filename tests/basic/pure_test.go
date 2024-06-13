@@ -5213,7 +5213,8 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 				Timeout:         defaultTimeout,
 				Sudo:            true,
 			}
-			clusterUUID, err := Inst().V.GetClusterUUID(storageNodes[0], opts, "/etc/pwx")
+			cmd := "cat /etc/pwx/cluster_uuid"
+			clusterUUID, err := Inst().N.RunCommand(storageNodes[0], cmd, opts)
 			log.FailOnError(err, "Failed to get cluster UUID")
 			log.InfoD("Cluster UUID [%v]", clusterUUID)
 			parts := strings.Split(clusterUUID, "-")
