@@ -5234,7 +5234,7 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 			}
 			log.InfoD("List of PVC names [%v]", listofPvcNames)
 			for _, pvcName := range listofPvcNames {
-				expectedVolName := RealmName + "::" + PodNameinFA + "::" + clusterUUIDfirstPart + "-" + pvcName
+				expectedVolName := PodNameinFA + "::" + clusterUUIDfirstPart + "-" + pvcName
 				log.InfoD("Expected Volume Name [%v]", expectedVolName)
 				volName, err := pureutils.GetCompleteVolumeNameFromFA(faClient, pvcName)
 				log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v]", pvcName))
