@@ -64,6 +64,24 @@ func ListAllPodsFromFA(faClient *flasharray.Client) ([]flasharray.PodResponse, e
 	return pods, nil
 }
 
+// GetCompleteVolumeNameFromFA returns complete volume name from FA
+func GetCompleteVolumeNameFromFA(faClient *flasharray.Client, volumeName string) (string, error) {
+	vols, err := ListAllVolumesFromFA(faClient)
+	if err != nil {
+		return "", err
+
+	}
+	for _, eachVolItems := range vols {
+		for _, eachVol := range eachVolItems.Items {
+			if strings.Contains(eachVol.Name, volumeName) {
+				return eachVol.Name, nil
+			}
+		}
+
+	}
+	return "", nil
+}
+
 // CreatePodinFA creates Pod in FA
 func CreatePodinFA(faClient *flasharray.Client, podName string) (*[]flasharray.PodResponse, error) {
 	queryParams := make(map[string]string)
