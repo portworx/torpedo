@@ -7,7 +7,7 @@ import (
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/storkctl"
+	// "github.com/libopenstorage/stork/pkg/storkctl"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
@@ -18,8 +18,8 @@ import (
 var dash *aetosutil.Dashboard
 
 const (
-	drPrefix = "automation-"
-	actionRetryTimeout = 10 * time.Minute
+	drPrefix            = "automation-"
+	actionRetryTimeout  = 10 * time.Minute
 	actionRetryInterval = 10 * time.Second
 )
 
@@ -29,11 +29,11 @@ var (
 
 func ScheduleStorkctlMigrationSched(schedName, clusterPair, namespace string, extraArgs map[string]string) error {
 	if namespace != "" {
-		migSchedNs = namespace 
+		migSchedNs = namespace
 	}
 	cmdArgs := map[string]string{
 		"cluster-pair": clusterPair,
-		"namespace":   migSchedNs,
+		"namespace":    migSchedNs,
 	}
 	err := createMigrationScheduleCli(schedName, cmdArgs, extraArgs)
 	return err
@@ -73,7 +73,7 @@ func createMigrationScheduleCli(schedName string, cmdArgs map[string]string, ext
 func PerformFailoverOrFailback(action, namespace, migSchdRef string, skipSourceOp bool, extraArgs map[string]string) (error, string) {
 	failoverFailbackCmdArgs := []string{"perform", action, "--migration-reference", migSchdRef, "--namespace", migSchedNs}
 	if namespace != "" {
-		migSchedNs = namespace 
+		migSchedNs = namespace
 	}
 
 	factory := storkctl.NewFactory()

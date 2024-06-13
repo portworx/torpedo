@@ -30,7 +30,7 @@ import (
 	"github.com/libopenstorage/openstorage/cluster"
 	pxapi "github.com/libopenstorage/operator/api/px"
 	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	optest "github.com/libopenstorage/operator/pkg/util/test"
+	//optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"

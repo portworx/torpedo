@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/devans10/pugo/flasharray"
-	oputil "github.com/libopenstorage/operator/pkg/util/test"
+	//oputil "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
 	"github.com/portworx/torpedo/drivers/scheduler/eks"
 	"github.com/portworx/torpedo/drivers/scheduler/gke"

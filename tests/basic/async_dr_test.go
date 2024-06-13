@@ -3,6 +3,7 @@ package tests
 import (
 	//"context"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/storkctlcli"
 	"os"
 	"strings"
 	"time"
@@ -22,7 +23,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/asyncdr"
 	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/storkctlcli"
+	//"github.com/portworx/torpedo/pkg/storkctlcli"
 
 	//"github.com/portworx/torpedo/driver	"github.com/portworx/torpedo/drivers/scheduler"
 	//"github.com/portworx/torpedo/drivers/scheduler/spec"
@@ -47,20 +48,20 @@ const (
 )
 
 var (
-	kubeConfigWritten   bool
+	kubeConfigWritten bool
 )
 
 type failoverFailbackParam struct {
-	action string
-	failoverOrFailbackNs string
-	migrationSchedName string
-	configPath string
-	single bool
-	skipSourceOp bool
-	includeNs bool
-	excludeNs bool
+	action                    string
+	failoverOrFailbackNs      string
+	migrationSchedName        string
+	configPath                string
+	single                    bool
+	skipSourceOp              bool
+	includeNs                 bool
+	excludeNs                 bool
 	extraArgsFailoverFailback map[string]string
-	contexts []*scheduler.Context
+	contexts                  []*scheduler.Context
 }
 
 // This test performs basic test of starting an application, creating cluster pair,
@@ -478,7 +479,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroMultiple}", func()
 
 func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSourceOp, includeNs, excludeNs bool) {
 	defaultNs := "kube-system"
-    migrationNamespaces, contexts := initialSetupApps(taskNamePrefix, single)
+	migrationNamespaces, contexts := initialSetupApps(taskNamePrefix, single)
 	migNamespaces := strings.Join(migrationNamespaces, ",")
 	kubeConfigPathSrc, err := GetCustomClusterConfigPath(asyncdr.FirstCluster)
 	log.FailOnError(err, "Failed to get source configPath: %v", err)
@@ -515,21 +516,21 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 		extraArgsFailoverFailback["exclude-namespaces"] = migrationNamespaces[0]
 	}
 	failoverParam := failoverFailbackParam{
-		action: "failover",
-		failoverOrFailbackNs: defaultNs,
-		migrationSchedName: migrationSchedName,
-		configPath: kubeConfigPathDest,
-		single: single,
-		skipSourceOp: skipSourceOp,
-		includeNs: includeNs,
-		excludeNs: excludeNs,
+		action:                    "failover",
+		failoverOrFailbackNs:      defaultNs,
+		migrationSchedName:        migrationSchedName,
+		configPath:                kubeConfigPathDest,
+		single:                    single,
+		skipSourceOp:              skipSourceOp,
+		includeNs:                 includeNs,
+		excludeNs:                 excludeNs,
 		extraArgsFailoverFailback: extraArgsFailoverFailback,
-		contexts: contexts,
+		contexts:                  contexts,
 	}
 	performFailoverFailback(failoverParam)
 	if skipSourceOp {
 		err = hardSetConfig(kubeConfigPathSrc)
-	    log.FailOnError(err, "Error setting source config: %v", err)
+		log.FailOnError(err, "Error setting source config: %v", err)
 		for _, ctx := range contexts {
 			waitForPodsToBeRunning(ctx, false)
 		}
@@ -547,16 +548,16 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 		}
 		createMigSchdAndValidateMigration(newMigSched, cpName, defaultNs, kubeConfigPathDest, extraArgs)
 		failoverback := failoverFailbackParam{
-			action: "failback",
-			failoverOrFailbackNs: defaultNs,
-			migrationSchedName: newMigSched,
-			configPath: kubeConfigPathDest,
-			single: single,
-			skipSourceOp: false,
-			includeNs: includeNs,
-			excludeNs: excludeNs,
+			action:                    "failback",
+			failoverOrFailbackNs:      defaultNs,
+			migrationSchedName:        newMigSched,
+			configPath:                kubeConfigPathDest,
+			single:                    single,
+			skipSourceOp:              false,
+			includeNs:                 includeNs,
+			excludeNs:                 excludeNs,
 			extraArgsFailoverFailback: extraArgsFailoverFailback,
-			contexts: contexts,
+			contexts:                  contexts,
 		}
 		performFailoverFailback(failoverback)
 	}
@@ -750,7 +751,7 @@ func performFailoverFailback(foFbParams failoverFailbackParam) {
 	actionName := getStatusCmdArgs[3]
 	err = storkctlcli.WaitForActionSuccessful(actionName, foFbParams.failoverOrFailbackNs, Inst().GlobalScaleFactor)
 	log.FailOnError(err, "Error in performing %v: %v", foFbParams.action, err)
-	validatePodsRunning(foFbParams.action, foFbParams.single, foFbParams.includeNs, foFbParams.excludeNs, foFbParams.contexts) 
+	validatePodsRunning(foFbParams.action, foFbParams.single, foFbParams.includeNs, foFbParams.excludeNs, foFbParams.contexts)
 }
 
 func validatePodsRunning(action string, single, includeNs, excludeNs bool, contexts []*scheduler.Context) {
@@ -817,7 +818,7 @@ func hardSetConfig(configPath string) error {
 
 func waitForPodsToBeRunning(context *scheduler.Context, expectedFail bool) {
 	log.Infof("Verifying Context [%v]", context.App.Key)
-	err := Inst().S.WaitForRunning(context, 5 * time.Minute, 10 * time.Second)
+	err := Inst().S.WaitForRunning(context, 5*time.Minute, 10*time.Second)
 	if expectedFail {
 		log.FailOnNoError(err, "Pods are up on destination, they shouldn't be up")
 	} else {

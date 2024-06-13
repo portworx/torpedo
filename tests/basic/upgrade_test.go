@@ -16,7 +16,7 @@ import (
 
 	"github.com/portworx/torpedo/pkg/log"
 
-	optest "github.com/libopenstorage/operator/pkg/util/test"
+	// github.com/libopenstorage/operator/pkg/util/testoptest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"

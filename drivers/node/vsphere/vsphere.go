@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	pxutil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
+	//pxutil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	coreops "github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"

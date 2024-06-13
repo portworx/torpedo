@@ -10,7 +10,7 @@ import (
 	"time"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
-	oputil "github.com/libopenstorage/operator/pkg/util/test"
+	//oputil "github.com/libopenstorage/operator/pkg/util/test"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/node"

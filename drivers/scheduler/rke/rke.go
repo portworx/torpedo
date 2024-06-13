@@ -14,6 +14,9 @@ import (
 	rancherClientBase "github.com/rancher/norman/clientbase"
 	"github.com/rancher/norman/types"
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
+	r1 "github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/clusters"
+	rbac "github.com/rancher/shepherd/extensions/rbac"
 
 	"os"
 	"strings"
@@ -31,8 +34,14 @@ var RancherMap = make(map[string]*RancherClusterParameters)
 
 type Rancher struct {
 	kube.K8s
-	client *rancherClient.Client
+	client  *rancherClient.Client
+	client1 *r1.Client
 }
+
+//type Rancher1 struct {
+//	kube.K8s
+//	client1 *rancher1.Client
+//}
 
 type RancherClusterParameters struct {
 	Token     string
@@ -516,42 +525,55 @@ func (r *Rancher) GetPodSecurityAdmissionConfigurationTemplateList() (*rancherCl
 
 // UpdateClusterWidePSA add the cluster wide PSA to the given cluster
 func (r *Rancher) UpdateClusterWidePSA(clusterName string, psaName string) error {
-	var clusterId string
-	clusterCollection, err := r.client.Cluster.List(nil)
+	log.InfoD(" Here 1")
+	clusterObj, existingSteveAPIObj, err := clusters.GetProvisioningClusterByName(r.client1, clusterName, rbac.DefaultNamespace)
 	if err != nil {
+		log.InfoD(" Here 2")
 		return err
 	}
-	for _, cluster := range clusterCollection.Data {
-		if cluster.Name == clusterName {
-			log.InfoD("Inside Cluster ID is %v", clusterId)
-			clusterId = cluster.ID
-			break
-		}
-	}
-	log.InfoD("Cluster ID is %v", clusterId)
-	existingCluster, err := r.client.Cluster.ByID(clusterId)
-	updatedCluster := rancherClient.Cluster{
-		Name: existingCluster.Name,
-		DefaultPodSecurityAdmissionConfigurationTemplateName: psaName,
-	}
-	newCluster, err := r.client.Cluster.Update(existingCluster, updatedCluster)
-	log.InfoD("The new cluster is 1 %v", newCluster.Name)
-	log.InfoD("The new cluster is 2 %v", newCluster.DefaultPodSecurityAdmissionConfigurationTemplateName)
-	log.InfoD("The new cluster is 3 %v", newCluster)
+	log.InfoD(" Here 3")
+	clusterObj.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName = psaName
+	_, err = clusters.UpdateK3SRKE2Cluster(r.client1, existingSteveAPIObj, clusterObj)
 	if err != nil {
+		log.InfoD(" Here 4")
 		return err
 	}
-
-	clusterCollection, err = r.client.Cluster.List(nil)
-
-	for _, cluster := range clusterCollection.Data {
-		log.InfoD(" Inside cluster is %v", cluster)
-		if cluster.Name == clusterName {
-			log.InfoD(" Version inside loop %v", cluster.Version)
-			log.InfoD(" Cluster name in loop %v", cluster.Name)
-			log.InfoD("The cluster wide PSA for cluster %v is %v", clusterName, cluster.DefaultPodSecurityAdmissionConfigurationTemplateName)
-		}
-	}
+	
+	//clusterCollection, err := r.client.Cluster.List(nil)
+	//if err != nil {
+	//	return err
+	//}
+	//for _, cluster := range clusterCollection.Data {
+	//	if cluster.Name == clusterName {
+	//		log.InfoD("Inside Cluster ID is %v", clusterId)
+	//		clusterId = cluster.ID
+	//		break
+	//	}
+	//}
+	//log.InfoD("Cluster ID is %v", clusterId)
+	//existingCluster, err := r.client.Cluster.ByID(clusterId)
+	//updatedCluster := rancherClient.Cluster{
+	//	Name: existingCluster.Name,
+	//	DefaultPodSecurityAdmissionConfigurationTemplateName: psaName,
+	//}
+	//newCluster, err := r.client.Cluster.Update(existingCluster, updatedCluster)
+	//log.InfoD("The new cluster is 1 %v", newCluster.Name)
+	//log.InfoD("The new cluster is 2 %v", newCluster.DefaultPodSecurityAdmissionConfigurationTemplateName)
+	//log.InfoD("The new cluster is 3 %v", newCluster)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//clusterCollection, err = r.client.Cluster.List(nil)
+	//
+	//for _, cluster := range clusterCollection.Data {
+	//	log.InfoD(" Inside cluster is %v", cluster)
+	//	if cluster.Name == clusterName {
+	//		log.InfoD(" Version inside loop %v", cluster.Version)
+	//		log.InfoD(" Cluster name in loop %v", cluster.Name)
+	//		log.InfoD("The cluster wide PSA for cluster %v is %v", clusterName, cluster.DefaultPodSecurityAdmissionConfigurationTemplateName)
+	//	}
+	//}
 
 	//// Value is update in response but not reflected in UI
 	//log.InfoD("Updating cluster wide PSA %v for cluster %v", psaName, clusterName)
@@ -614,5 +636,6 @@ func (r *Rancher) UpdateClusterWidePSA(clusterName string, psaName string) error
 
 func init() {
 	r := &Rancher{}
+
 	scheduler.Register(schedulerName, r)
 }

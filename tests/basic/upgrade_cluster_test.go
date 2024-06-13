@@ -2,7 +2,7 @@ package tests
 
 import (
 	"fmt"
-	oputil "github.com/libopenstorage/operator/pkg/util/test"
+	//oputil "github.com/libopenstorage/operator/pkg/util/test"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/core"

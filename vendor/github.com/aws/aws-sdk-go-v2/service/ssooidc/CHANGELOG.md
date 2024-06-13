@@ -1,3 +1,25 @@
+# v1.23.4 (2024-03-29)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.23.3 (2024-03-18)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.23.2 (2024-03-07)
+
+* **Bug Fix**: Remove dependency on go-cmp.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.23.1 (2024-02-23)
+
+* **Bug Fix**: Move all common, SDK-side middleware stack ops into the service client module to prevent cross-module compatibility issues in the future.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.23.0 (2024-02-22)
+
+* **Feature**: Add middleware stack snapshot tests.
+
 # v1.22.2 (2024-02-21)
 
 * **Dependency Update**: Updated to the latest SDK module versions

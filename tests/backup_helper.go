@@ -29,7 +29,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/k8s/storage"
 
-	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
+	// migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup/portworx"
 
