@@ -588,8 +588,8 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	return nil
 }
 
-// CreateBackupWithPartialSuccess creates backup and checks for success
-func CreateBackupWithPartialSuccess(backupName string, clusterName string, bLocation string, bLocationUID string,
+// CreateBackupWithPartialSuccessCheck creates backup and checks for partial success
+func CreateBackupWithPartialSuccessCheck(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context) error {
 	_, err := CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
@@ -809,7 +809,7 @@ func CreateBackupWithPartialSuccessValidation(ctx context1.Context, backupName s
 		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
 	}
 
-	err = CreateBackupWithPartialSuccess(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
+	err = CreateBackupWithPartialSuccessCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
 	if err != nil {
 		return err
 	}
@@ -3066,26 +3066,33 @@ func ValidateBackupWithPartialSuccess(ctx context1.Context, backupName string, o
 	}
 	Volumes := resp.GetBackup().GetVolumes()
 	if len(Volumes) > 0 {
+		// Create a map for failed volumes
+		failedVolumeMap := make(map[string]bool)
+		for _, failedVol := range failedVolumes {
+			failedVolumeMap[failedVol] = true
+		}
 		for _, volume := range Volumes {
-			// Check if the volume's PVC is in the failedVolumes slice
-			skipValidation := false
-			for _, failed := range failedVolumes {
-				if volume.Pvc == failed {
+			isFailedVolume := failedVolumeMap[volume.Pvc]
+
+			if isFailedVolume {
+				if volume.Status.Status != api.BackupInfo_StatusInfo_Failed {
+					log.Errorf("Volume PVC: %s is in failedVolumes but not actually failed", volume.Pvc)
+				} else {
 					log.Infof("Skipping validation for failed volume PVC: %s", volume.Pvc)
-					skipValidation = true
-					break
+					continue
 				}
+			} else if volume.Status.Status != api.BackupInfo_StatusInfo_Success {
+				log.Errorf("Volume PVC: %s is not in failedVolumes and does not have success status", volume.Pvc)
+				return fmt.Errorf("volume PVC: %s is not in failedVolumes and does not have success status", volume.Pvc)
 			}
-			if skipValidation {
-				continue
-			}
+
 			size := volume.GetTotalSize()
 			log.Infof("size is %v", size)
 			actualSize := volume.GetActualSize()
 			log.Infof("actualSize is %v", actualSize)
 
 			if !(size > 0 || actualSize > 0) {
-				return fmt.Errorf("backup size for [%s] is [%d] and actual size is [%d] which is not greater than 0", backupName, size, actualSize)
+				return fmt.Errorf("backup size for [%s] is [%d] and actual size is [%d] which is not greater than 0", volume.Pvc, size, actualSize)
 			}
 		}
 	}
@@ -3274,6 +3281,7 @@ func ValidateBackupWithPartialSuccess(ctx context1.Context, backupName string, o
 							err := fmt.Errorf("the PVC of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.Pvc, pvcObj.Name)
 							errors = append(errors, err)
 						}
+						// the custom apps created for partial backups have multiple volume drivers, so we are skipping the driver validation
 						if len(volDrivers) > 1 {
 							continue volloop
 						} else {
