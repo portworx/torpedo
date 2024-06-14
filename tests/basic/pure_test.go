@@ -5022,7 +5022,6 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		log.InfoD(itLog)
 		var origCustomAppConfigs map[string]scheduler.AppConfig
 		var realmName string
-		var faClient *newFlashArray.Client
 		var accessibleFA *newFlashArray.Client
 		var isRealmFAAccessible bool
 		testName := "validate-pod-name-in-volume"
@@ -5057,12 +5056,12 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		stepLog := "Create A pod inside Realm"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faClient, PodNameinFA)
+			isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(accessibleFA, PodNameinFA)
 			log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", PodNameinFA))
 			if !isPodExists {
-				_, err = pureutils.CreatePodinFA(faClient, PodNameinFA)
+				_, err = pureutils.CreatePodinFA(accessibleFA, PodNameinFA)
 				log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", PodNameinFA))
-				podCreatedinFA, err := pureutils.IsPodExistsOnMgmtEndpoint(faClient, PodNameinFA)
+				podCreatedinFA, err := pureutils.IsPodExistsOnMgmtEndpoint(accessibleFA, PodNameinFA)
 				log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", PodNameinFA))
 				if !podCreatedinFA {
 					log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", PodNameinFA), "is pod created in FA?")
@@ -5150,7 +5149,7 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 			for _, pvcName := range listofPvcNames {
 				expectedVolName := PodNameinFA + "::" + "px_" + clusterUUIDfirstPart + "-" + pvcName
 				log.InfoD("Expected Volume Name [%v]", expectedVolName)
-				volName, err := pureutils.GetCompleteVolumeNameFromFA(faClient, pvcName)
+				volName, err := pureutils.GetCompleteVolumeNameFromFA(accessibleFA, pvcName)
 				log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v]", pvcName))
 				log.InfoD("Volume Name in FA [%v]", volName)
 				dash.VerifyFatal(volName, expectedVolName, fmt.Sprintf("is volume name in FA same as expected format <realm_name>::<pod_name>::px_<cluster_uuid_1st_segment>-<pvc_name> ?"))
@@ -5165,7 +5164,7 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		stepLog = "Delete the pod created in the realm"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			err := pureutils.DeletePodinFA(faClient, PodNameinFA)
+			err := pureutils.DeletePodinFA(accessibleFA, PodNameinFA)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete pod [%v] in FA", PodNameinFA))
 			log.InfoD("Pod [%v] destroyed ", PodNameinFA)
 
