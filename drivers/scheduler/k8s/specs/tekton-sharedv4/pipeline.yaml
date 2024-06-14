@@ -1,0 +1,102 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  labels:
+    app: tekton-tests
+  name: tekton-tests-pipeline
+spec:
+  description: A sample pipeline
+  params:
+  - description: Passing some parameter
+    name: DEBUG
+    default: "false"
+  workspaces:
+  - description: |
+      This workspace will receive the cloned git repo and be passed
+      to the next Task for verifying, building, and pushing files
+    name: workspace
+  tasks:
+  - params:
+    - value: size=10MB;echo "Creating ${size} file";head -c ${size} /dev/urandom > ${size}.txt
+      name: COMMAND
+    taskRef:
+      kind: Task
+      name: bash-command
+    workspaces:
+    - workspace: workspace
+      name: status
+    name: task1
+  - params:
+    - value: size=20MB;echo "Creating ${size} file";head -c ${size} /dev/urandom > ${size}.txt
+      name: COMMAND
+    taskRef:
+      kind: Task
+      name: bash-command
+    workspaces:
+    - workspace: workspace
+      name: status
+    name: task2
+    runAfter:
+    - task1
+  - params:
+    - value: size=50MB;echo "Creating ${size} file";head -c ${size} /dev/urandom > ${size}.txt
+      name: COMMAND
+    taskRef:
+      kind: Task
+      name: bash-command
+    workspaces:
+    - workspace: workspace
+      name: status
+    name: task3
+    runAfter:
+    - task1
+  - params:
+    - value: ls -la
+      name: COMMAND
+    taskRef:
+      kind: Task
+      name: bash-command
+    workspaces:
+    - workspace: workspace
+      name: status
+    name: task4
+    runAfter:
+    - task2
+    - task3
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: bash-command
+  labels:
+    app.kubernetes.io/version: "0.1"
+  annotations:
+    tekton.dev/pipelines.minVersion: 0.22.0
+    tekton.dev/tags: bash
+    tekton.dev/categories: Debug
+    tekton.dev/displayName: Command
+spec:
+  description: This `task` can be used to run a simple command.
+  params:
+  - name: COMMAND
+    default: echo "Hello World"
+    description: Command to run
+    type: string
+  workspaces:
+  - name: status
+    description: |
+      The folder used to share information with other tasks
+    optional: true
+  steps:
+  - name: command
+    image: registry.access.redhat.com/ubi8:8.7-1026
+    script: |
+      #! /usr/bin/bash
+      set -e
+
+      if [[ "$(workspaces.status.bound)" == "true" ]] ; then
+       cd $(workspaces.status.path)
+      fi
+
+      # Run this command
+      $(params.COMMAND)
