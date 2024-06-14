@@ -5202,7 +5202,6 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 		var realmName string
 		var accessibleFA *newFlashArray.Client
 		var isRealmFAAccessible bool
-		var faClient *newFlashArray.Client
 
 		//Declaring SC name, namespaces and pvc prefixes and lists which are required for collection of PVC And Volume Names
 		baseScName := "base-portworx-volume-sc"
@@ -5258,9 +5257,9 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 		stepLog := "Create A pod inside Realm"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			_, err = pureutils.CreatePodinFA(faClient, PodNameinFA)
+			_, err = pureutils.CreatePodinFA(accessibleFA, PodNameinFA)
 			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", PodNameinFA))
-			isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faClient, PodNameinFA)
+			isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(accessibleFA, PodNameinFA)
 			log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", PodNameinFA))
 			if !isPodExists {
 				log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", PodNameinFA), "is pod created in FA?")
@@ -5431,6 +5430,14 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 			log.InfoD("Check if the volumes are deleted in FA and FB backend")
 			err := CheckVolumesExistinFA(flashArrays, listofFadaPvc, true)
 			log.FailOnError(err, "Failed to check if volumes which needed to be deleted still exist in FA")
+		})
+		stepLog = "Delete the pod created in the realm"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := pureutils.DeletePodinFA(accessibleFA, PodNameinFA)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete pod [%v] in FA", PodNameinFA))
+			log.InfoD("Pod [%v] destroyed ", PodNameinFA)
+
 		})
 	})
 	AfterEach(func() {
