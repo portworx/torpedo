@@ -43,7 +43,7 @@ type Item struct {
 	ID                      string      `json:"id"`
 	Serial                  string      `json:"serial"`
 	Destroyed               bool        `json:"destroyed"`
-	TimeRemaining           *string     `json:"time_remaining"`
+	TimeRemaining           int         `json:"time_remaining"`
 	HostEncryptionKeyStatus string      `json:"host_encryption_key_status"`
 	RequestedPromotionState string      `json:"requested_promotion_state"`
 	PromotionStatus         string      `json:"promotion_status"`
@@ -63,7 +63,7 @@ type Total struct {
 	ID                      *string     `json:"id"`
 	Serial                  *string     `json:"serial"`
 	Destroyed               *bool       `json:"destroyed"`
-	TimeRemaining           *string     `json:"time_remaining"`
+	TimeRemaining           int         `json:"time_remaining"`
 	HostEncryptionKeyStatus *string     `json:"host_encryption_key_status"`
 	RequestedPromotionState *string     `json:"requested_promotion_state"`
 	PromotionStatus         *string     `json:"promotion_status"`

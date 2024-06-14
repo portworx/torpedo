@@ -30,7 +30,7 @@ type Items struct {
 	Name              string            `json:"name"`
 	ID                string            `json:"id"`
 	Destroyed         bool              `json:"destroyed"`
-	TimeRemaining     *string           `json:"time_remaining"`
+	TimeRemaining     int               `json:"time_remaining"`
 	EradicationConfig EradicationConfig `json:"eradication_config"`
 	QoS               Qos               `json:"qos"`
 }
@@ -41,7 +41,7 @@ type Totals struct {
 	Name              string            `json:"name"`
 	ID                string            `json:"id"`
 	Destroyed         bool              `json:"destroyed"`
-	TimeRemaining     *string           `json:"time_remaining"`
+	TimeRemaining     int               `json:"time_remaining"`
 	EradicationConfig EradicationConfig `json:"eradication_config"`
 	QoS               Qos               `json:"qos"`
 }
