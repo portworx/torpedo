@@ -5021,31 +5021,39 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var origCustomAppConfigs map[string]scheduler.AppConfig
-		var RealmName string
+		var realmName string
 		var faClient *newFlashArray.Client
-		var isFAaccessible bool
+		var accessibleFA *newFlashArray.Client
+		var isRealmFAAccessible bool
 		testName := "validate-pod-name-in-volume"
 
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
 		for _, fa := range flashArrays {
+			faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+			if err != nil {
+				log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+				continue
+			}
 			if fa.Realm != "" {
-				RealmName = fa.Realm
-				faClient, err = pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
-				if err != nil {
-					log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
-					continue
-				}
-				isFAaccessible = true
+				realmName = fa.Realm
+				isRealmFAAccessible = true
+				accessibleFA = faClient
 				break
 			}
+			if accessibleFA == nil {
+				accessibleFA = faClient
+			}
 		}
-		if !isFAaccessible {
-			log.FailOnError(fmt.Errorf("No FA with realm found in pure.json"), "No FA with realm found in pure.json")
+		if accessibleFA == nil {
+			log.FailOnError(fmt.Errorf("No accessible FA found in pure.json"), "No accessible FA found in pure.json")
 		}
-		podNameinSC := "Torpedo-Test" + Inst().InstanceID
-		PodNameinFA := RealmName + "::" + podNameinSC
 
+		podNameinSC := "Torpedo-Test" + Inst().InstanceID
+		PodNameinFA := podNameinSC
+		if isRealmFAAccessible {
+			PodNameinFA = realmName + "::" + podNameinSC
+		}
 		stepLog := "Create A pod inside Realm"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -5192,8 +5200,9 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 		var wg sync.WaitGroup
 		var max_bandwidth uint64
 		var max_iops uint64
-		var RealmName string
-		var isFAaccessible bool
+		var realmName string
+		var accessibleFA *newFlashArray.Client
+		var isRealmFAAccessible bool
 		var faClient *newFlashArray.Client
 
 		//Declaring SC name, namespaces and pvc prefixes and lists which are required for collection of PVC And Volume Names
@@ -5217,27 +5226,36 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 			fadaScName: FadaAppNameSpace,
 		}
 
-		//Get The Details of Existing FA AND FB in the cluster
+		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
+		log.InfoD(itLog)
+		//Get The Details of Existing FA from pure.json
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
 		for _, fa := range flashArrays {
+			faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+			if err != nil {
+				log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+				continue
+			}
 			if fa.Realm != "" {
-				RealmName = fa.Realm
-				faClient, err = pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
-				if err != nil {
-					log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
-					continue
-				}
-				isFAaccessible = true
+				realmName = fa.Realm
+				isRealmFAAccessible = true
+				accessibleFA = faClient
 				break
 			}
+			if accessibleFA == nil {
+				accessibleFA = faClient
+			}
 		}
-		if !isFAaccessible {
-			log.FailOnError(fmt.Errorf("No FA with realm found in pure.json"), "No FA with realm found in pure.json")
+		if accessibleFA == nil {
+			log.FailOnError(fmt.Errorf("No accessible FA found in pure.json"), "No accessible FA found in pure.json")
 		}
-		podNameinSC := "Torpedo-Test" + Inst().InstanceID
-		PodNameinFA := RealmName + "::" + podNameinSC
 
+		podNameinSC := "Torpedo-Test" + Inst().InstanceID
+		PodNameinFA := podNameinSC
+		if isRealmFAAccessible {
+			PodNameinFA = realmName + "::" + podNameinSC
+		}
 		stepLog := "Create A pod inside Realm"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -5251,7 +5269,6 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 			log.InfoD("Pod [%v] created ", PodNameinFA)
 
 		})
-
 		stepLog = "Create storage class with max iops and max bandwidth for Normal Portworx Volumes , FADA and FBDA Pvc Deployment"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
