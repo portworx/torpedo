@@ -157,6 +157,8 @@ type ScheduleOptions struct {
 	Namespace string
 	// TopoLogy Labels
 	TopologyLabels []map[string]string
+
+	PureFAPodName string
 }
 
 // Driver must be implemented to provide test support to various schedulers.

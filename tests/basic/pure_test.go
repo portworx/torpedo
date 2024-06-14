@@ -5020,7 +5020,7 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 	itLog := "ValidatePodNameinVolume"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		var origCustomAppConfigs map[string]scheduler.AppConfig
+		//var origCustomAppConfigs map[string]scheduler.AppConfig
 		var realmName string
 		var accessibleFA *newFlashArray.Client
 		var isRealmFAAccessible bool
@@ -5073,27 +5073,28 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		stepLog = "Assign the pod name to pure_fa_pod_name in the storage class"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			customConfigAppName := skipTestIfNoRequiredCustomAppConfigFound()
-
-			// save the original custom app configs
-			origCustomAppConfigs = make(map[string]scheduler.AppConfig)
-			for appName, customAppConfig := range Inst().CustomAppConfig {
-				origCustomAppConfigs[appName] = customAppConfig
-			}
-
-			// update the custom app config with pod name
-			Inst().CustomAppConfig[customConfigAppName] = scheduler.AppConfig{
-				PureFaPodName: podNameinSC,
-			}
-
-			log.Infof("JustBeforeEach using Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
-			err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
-			log.FailOnError(err, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
+			//customConfigAppName := skipTestIfNoRequiredCustomAppConfigFound()
+			//
+			//// save the original custom app configs
+			//origCustomAppConfigs = make(map[string]scheduler.AppConfig)
+			//for appName, customAppConfig := range Inst().CustomAppConfig {
+			//	origCustomAppConfigs[appName] = customAppConfig
+			//}
+			//
+			//// update the custom app config with pod name
+			//Inst().CustomAppConfig[customConfigAppName] = scheduler.AppConfig{
+			//	PureFaPodName: podNameinSC,
+			//}
+			//
+			//log.Infof("JustBeforeEach using Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
+			//err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+			//log.FailOnError(err, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
 
 			context, err := Inst().S.Schedule(testName, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
 				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
 				Namespace:          testName,
+				PureFAPodName:      podNameinSC,
 			})
 			log.FailOnError(err, "Failed to schedule application of %v namespace", testName)
 			contexts = append(contexts, context...)

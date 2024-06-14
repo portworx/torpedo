@@ -1957,6 +1957,11 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 					obj.Parameters["pure_fa_pod_name"] = k.PureFADAPod
 				}
 			}
+			if options.PureFAPodName != "" {
+				if backend, ok := obj.Parameters["backend"]; ok && backend == "pure_block" {
+					obj.Parameters["pure_fa_pod_name"] = options.PureFAPodName
+				}
+			}
 		}
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if k8serrors.IsAlreadyExists(err) {
