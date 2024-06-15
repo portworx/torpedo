@@ -13367,3 +13367,21 @@ func DeleteFilesFromS3Bucket(bucketName string, fileName string) error {
 	log.Infof("The files %v are successfully deleted from the bucket [%s]", keys, bucket)
 	return nil
 }
+
+func GetPvcFromNamespace(namespace string, pvclist []string) []string {
+	allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
+	for _, p := range allPvcList.Items {
+		pvclist = append(pvclist, p.Name)
+	}
+	return pvclist
+}
+
+func GetVolumeNamefromPVC(namespace string, pvclist []string) []string {
+	allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
+	for _, p := range allPvcList.Items {
+		pvclist = append(pvclist, p.Spec.VolumeName)
+	}
+	return pvclist
+}

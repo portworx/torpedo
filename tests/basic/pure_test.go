@@ -5446,3 +5446,128 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
+	/*
+			https://purestorage.atlassian.net/browse/PTX-24561
+			This Test Requires Pure.json with the following requirements:
+			-> Pure.json should have multiple FA's ,one with realm and one without realm.
+		 	Following Steps are executed by the test:
+			1.Deploys FADA applications in below combinations (for every APP provided in APP_LIST):
+			Storage Class having pure_fa_pod_name - this pod is under a realm in one of the arrays in pure.json
+			Storage Class having pure_fa_pod_name - this pod is not under a realm in one of the arrays in pure.json
+			Storage Class not having pure_fa_pod_name - legacy way of FADA Apps
+			2. Validates the application and checks if the volumes are created in the respective FA's
+			3. Deletes the application and checks if the volumes are deleted in the respective FA's
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("MultiTenancyFATestWithPodRealm",
+			"MultiTenancy FATest with Pod Realm",
+			nil, 0)
+	})
+	var contexts []*scheduler.Context
+	itLog := "MultiTenancyFATestWithPodRealm"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var realmName string
+		var faWithRealm *newFlashArray.Client
+		var faWithoutRealm *newFlashArray.Client
+		var isRealmFAAccessible bool
+		var pvcList []string
+		applist := Inst().AppList
+		defer func() {
+			Inst().AppList = applist
+		}()
+		Inst().AppList = []string{"fio-fa-davol"}
+		//Get The Details of Existing FA from pure.json
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
+		for _, fa := range flashArrays {
+			faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+			if err != nil {
+				log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+				continue
+			}
+			if fa.Realm != "" {
+				realmName = fa.Realm
+				isRealmFAAccessible = true
+				faWithRealm = faClient
+			} else {
+				faWithoutRealm = faClient
+			}
+
+		}
+		if faWithRealm == nil || faWithoutRealm == nil {
+			log.FailOnError(fmt.Errorf("No accessible FA found in pure.json"), "No accessible FA found in pure.json")
+		}
+
+		podNameinSC := "Torpedo-Test" + Inst().InstanceID
+		PodNameinFA := podNameinSC
+		if isRealmFAAccessible {
+			PodNameinFA = realmName + "::" + podNameinSC
+		}
+		podCreate := func(faclient *newFlashArray.Client, podName string, taskName string) []*scheduler.Context {
+			_, err = pureutils.CreatePodinFA(faclient, podName)
+			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podName))
+			isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faclient, podName)
+			log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", podName))
+			if !isPodExists {
+				log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", podName), "is pod created in FA?")
+			}
+			log.InfoD("Pod [%v] created ", podName)
+			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				StorageProvisioner: Provisioner,
+				PureFAPodName:      podName,
+				Namespace:          taskName,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+			contexts = append(contexts, context...)
+			ValidateApplications(contexts)
+
+			return contexts
+		}
+		stepLog = "Deploy FADA application with storage class having pure_fa_pod_name - this pod is under a realm in one of the arrays in pure.json"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = podCreate(faWithRealm, PodNameinFA, "fada-app-with-pod-realm")
+		})
+		stepLog = "Deploy FADA application with storage class not having pure_fa_pod_name"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			taskName := "fada-app-without-pod-realm"
+			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				StorageProvisioner: Provisioner,
+				Namespace:          taskName,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+			contexts = append(contexts, context...)
+			ValidateApplications(contexts)
+		})
+		stepLog = "Deploy FADA application with storage class having pure_fa_pod_name - this pod is not under a realm in one of the arrays in pure.json"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = podCreate(faWithoutRealm, podNameinSC, "fada-app-with-pod")
+		})
+		stepLog = "Collect the PVC from all the contexts and check if all the volumes are present in FA"
+		Step(stepLog, func() {
+			for _, ctx := range contexts {
+				pvcList = GetVolumeNamefromPVC(ctx.App.NameSpace, pvcList)
+			}
+			faErr := CheckVolumesExistinFA(flashArrays, pvcList, false)
+			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+		})
+		stepLog = "Delete the application and check if the volumes are deleted in the respective FA's"
+		Step(stepLog, func() {
+			DestroyApps(contexts, nil)
+			faErr := CheckVolumesExistinFA(flashArrays, pvcList, true)
+			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+
+		})
+
+	})
+
+})
