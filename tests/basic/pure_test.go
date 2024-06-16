@@ -5492,10 +5492,18 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 				realmName = fa.Realm
 				isRealmFAAccessible = true
 				faWithRealm = faClient
+				log.Infof("Assigned faWithRealm with Mgmt IP [%v]", fa.MgmtEndPoint)
 			} else {
 				faWithoutRealm = faClient
+				log.Infof("Assigned faWithoutRealm with Mgmt IP [%v]", fa.MgmtEndPoint)
 			}
+		}
 
+		if faWithRealm == nil {
+			log.Error("faWithRealm is nil after processing all FlashArrays")
+		}
+		if faWithoutRealm == nil {
+			log.Error("faWithoutRealm is nil after processing all FlashArrays")
 		}
 		if faWithRealm == nil || faWithoutRealm == nil {
 			log.FailOnError(fmt.Errorf("No accessible FA found in pure.json"), "No accessible FA found in pure.json")
