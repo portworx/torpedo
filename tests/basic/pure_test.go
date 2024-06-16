@@ -5484,6 +5484,7 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
 		for _, fa := range flashArrays {
+
 			faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
 			if err != nil {
 				log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
