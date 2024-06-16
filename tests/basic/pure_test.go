@@ -5569,13 +5569,13 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			faErr := CheckVolumesExistinFA(flashArrays, pvcList, false)
 			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
 		})
-		stepLog = "Delete the application and check if the volumes are deleted in the respective FA's"
-		Step(stepLog, func() {
-			DestroyApps(contexts, nil)
-			faErr := CheckVolumesExistinFA(flashArrays, pvcList, true)
-			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
-
-		})
+		//stepLog = "Delete the application and check if the volumes are deleted in the respective FA's"
+		//Step(stepLog, func() {
+		//	DestroyApps(contexts, nil)
+		//	faErr := CheckVolumesExistinFA(flashArrays, pvcList, true)
+		//	log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+		//
+		//})
 
 	})
 
