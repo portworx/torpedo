@@ -5491,6 +5491,7 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			}
 			checkFA := reflect.TypeOf(fa)
 			_, realmExists := checkFA.FieldByName("Realm")
+			log.InfoD("Realm Exists [%v] on fa [%v]", realmExists, fa.MgmtEndPoint)
 			if realmExists {
 				realmName = fa.Realm
 				isRealmFAAccessible = true
