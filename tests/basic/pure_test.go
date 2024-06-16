@@ -5,6 +5,7 @@ import (
 	"github.com/devans10/pugo/flasharray"
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
+	"reflect"
 
 	"github.com/portworx/sched-ops/k8s/storage"
 
@@ -5488,7 +5489,9 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 				log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
 				continue
 			}
-			if fa.Realm != "" {
+			checkFA := reflect.TypeOf(fa)
+			_, realmExists := checkFA.FieldByName("Realm")
+			if realmExists {
 				realmName = fa.Realm
 				isRealmFAAccessible = true
 				faWithRealm = faClient
