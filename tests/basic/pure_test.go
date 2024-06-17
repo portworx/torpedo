@@ -5482,21 +5482,17 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
 		for _, fa := range flashArrays {
-
 			faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
 			if err != nil {
 				log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
 				continue
 			}
-
 			if fa.Realm != "" {
 				realmName = fa.Realm
 				isRealmFAAccessible = true
 				faWithRealm = faClient
-				log.Infof("Assigned faWithRealm with Mgmt IP [%v]", fa.MgmtEndPoint)
 			} else {
 				faWithoutRealm = faClient
-				log.Infof("Assigned faWithoutRealm with Mgmt IP [%v]", fa.MgmtEndPoint)
 			}
 		}
 
@@ -5523,7 +5519,7 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
 				StorageProvisioner: Provisioner,
-				PureFAPodName:      "Torpedo-Test",
+				PureFAPodName:      podName,
 				Namespace:          taskName,
 			})
 			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
