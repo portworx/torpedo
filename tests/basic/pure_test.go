@@ -5468,13 +5468,14 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 	itLog := "MultiTenancyFATestWithPodRealm"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		var realmName string
-		var faWithRealm *newFlashArray.Client
-		var faWithoutRealm *newFlashArray.Client
-		var isRealmFAAccessible bool
-		var pvcList []string
-		var podNameinSC string
-		var PodNameinFA string
+		var (
+			realmName           string
+			faWithRealm         *newFlashArray.Client
+			faWithoutRealm      *newFlashArray.Client
+			isRealmFAAccessible bool
+			podNameinSC         string
+			PodNameinFA         string
+		)
 		applist := Inst().AppList
 		defer func() {
 			Inst().AppList = applist
@@ -5508,6 +5509,7 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 		}
 		podCreateandAppDeploy := func(faclient *newFlashArray.Client, podNameinFA string, podNameinSC string, taskName string, isMultiTenancy bool) {
 			var contexts []*scheduler.Context
+			var pvcList []string
 			if isMultiTenancy {
 				_, err = pureutils.CreatePodinFA(faclient, podNameinFA)
 				log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podNameinFA))
@@ -5528,6 +5530,7 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
 			contexts = append(contexts, context...)
 			ValidateApplications(contexts)
+			log.InfoD("waiting for a minute for volume name to populate")
 			for _, ctx := range contexts {
 				pvcList = GetVolumeNamefromPVC(ctx.App.NameSpace, pvcList)
 			}
