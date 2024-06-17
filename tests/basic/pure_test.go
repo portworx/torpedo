@@ -5500,12 +5500,6 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			}
 		}
 
-		if faWithRealm == nil {
-			log.Error("faWithRealm is nil after processing all FlashArrays")
-		}
-		if faWithoutRealm == nil {
-			log.Error("faWithoutRealm is nil after processing all FlashArrays")
-		}
 		if faWithRealm == nil || faWithoutRealm == nil {
 			log.FailOnError(fmt.Errorf("No accessible FA found in pure.json"), "No accessible FA found in pure.json")
 		}
@@ -5515,7 +5509,7 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 		if isRealmFAAccessible {
 			PodNameinFA = realmName + "::" + podNameinSC
 		}
-		podCreate := func(faclient *newFlashArray.Client, podName string, taskName string) []*scheduler.Context {
+		podCreate := func(faclient *newFlashArray.Client, podName string, taskName string) {
 			_, err = pureutils.CreatePodinFA(faclient, podName)
 			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podName))
 			isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faclient, podName)
@@ -5534,13 +5528,20 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
 			contexts = append(contexts, context...)
 			ValidateApplications(contexts)
+			for _, ctx := range contexts {
+				pvcList = GetVolumeNamefromPVC(ctx.App.NameSpace, pvcList)
+			}
+			faErr := CheckVolumesExistinFA(flashArrays, pvcList, false)
+			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+			DestroyApps(contexts, nil)
+			faErr = CheckVolumesExistinFA(flashArrays, pvcList, true)
+			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
 
-			return contexts
 		}
 		stepLog = "Deploy FADA application with storage class having pure_fa_pod_name - this pod is under a realm in one of the arrays in pure.json"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			contexts = podCreate(faWithRealm, PodNameinFA, "fada-app-with-pod-realm")
+			podCreate(faWithRealm, PodNameinFA, "fada-app-with-pod-realm")
 		})
 		stepLog = "Deploy FADA application with storage class not having pure_fa_pod_name"
 		Step(stepLog, func() {
@@ -5555,27 +5556,13 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
 			contexts = append(contexts, context...)
 			ValidateApplications(contexts)
+			DestroyApps(contexts, nil)
 		})
 		stepLog = "Deploy FADA application with storage class having pure_fa_pod_name - this pod is not under a realm in one of the arrays in pure.json"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			contexts = podCreate(faWithoutRealm, podNameinSC, "fada-app-with-pod")
+			podCreate(faWithoutRealm, podNameinSC, "fada-app-with-pod")
 		})
-		stepLog = "Collect the PVC from all the contexts and check if all the volumes are present in FA"
-		Step(stepLog, func() {
-			for _, ctx := range contexts {
-				pvcList = GetVolumeNamefromPVC(ctx.App.NameSpace, pvcList)
-			}
-			faErr := CheckVolumesExistinFA(flashArrays, pvcList, false)
-			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
-		})
-		//stepLog = "Delete the application and check if the volumes are deleted in the respective FA's"
-		//Step(stepLog, func() {
-		//	DestroyApps(contexts, nil)
-		//	faErr := CheckVolumesExistinFA(flashArrays, pvcList, true)
-		//	log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
-		//
-		//})
 
 	})
 
