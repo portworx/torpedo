@@ -5532,7 +5532,8 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			ValidateApplications(contexts)
 			log.InfoD("waiting for a minute for volume name to populate")
 			for _, ctx := range contexts {
-				pvcList = GetVolumeNamefromPVC(ctx.App.NameSpace, pvcList)
+				pvcList, err = GetVolumeNamefromPVC(ctx.App.NameSpace, pvcList)
+				log.FailOnError(err, "Failed to get volume name from PVC")
 			}
 			faErr := CheckVolumesExistinFA(flashArrays, pvcList, false)
 			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
@@ -5545,18 +5546,21 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			podNameinSC = "Torpedo-Test" + time.Now().Format("01-02-15h04m05s")
+			// In order to create a pod inside a realm , the pod name should be prefixed with realm, eg: <realm name>::<pod name>
 			PodNameinFA = realmName + "::" + podNameinSC
 			podCreateandAppDeploy(faWithRealm, PodNameinFA, podNameinSC, "fada-app-with-pod-realm", true)
 		})
 		stepLog = "Deploy FADA application with storage class not having pure_fa_pod_name"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			// Here we dont want to create any pod and create pure_fa_pod_name in storage class ,as this is standard way of Deploying Apps
 			podCreateandAppDeploy(faWithRealm, "", "", "fada-app-without-pod-realm", false)
 		})
 		stepLog = "Deploy FADA application with storage class having pure_fa_pod_name - this pod is not under a realm in one of the arrays in pure.json"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			podNameinSC = "Torpedo-Test" + time.Now().Format("01-02-15h04m05s")
+			// pod name will not contain any realm , so we just create pod with same naming convention in FA
 			PodNameinFA = podNameinSC
 			podCreateandAppDeploy(faWithoutRealm, PodNameinFA, podNameinSC, "fada-app-with-pod", true)
 		})
