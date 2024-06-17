@@ -157,7 +157,7 @@ type ScheduleOptions struct {
 	Namespace string
 	// TopoLogy Labels
 	TopologyLabels []map[string]string
-
+	// PureFAPodName is the pod name which resides in FlashArray
 	PureFAPodName string
 }
 
