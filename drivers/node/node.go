@@ -165,6 +165,12 @@ type Driver interface {
 	// Systemctl runs a systemctl command for the given service on the node
 	Systemctl(node Node, service string, options SystemctlOpts) error
 
+	// StartKubelet runs a  command to start service on the node
+	StartKubelet(node Node, options SystemctlOpts) error
+
+	// StopKubelet runs a  command to start service on the node
+	StopKubelet(node Node, options SystemctlOpts) error
+
 	// TestConnection tests connection to given node. returns nil if driver can connect to given node
 	TestConnection(node Node, options ConnectionOpts) error
 
@@ -547,5 +553,19 @@ func (d *notSupportedDriver) RemoveNonRootDisks(node Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RemoveNonRootDisks()",
+	}
+}
+
+func (d *notSupportedDriver) StartKubelet(node Node, options SystemctlOpts) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StartKubelet()",
+	}
+}
+
+func (d *notSupportedDriver) StopKubelet(node Node, options SystemctlOpts) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StopKubelet()",
 	}
 }

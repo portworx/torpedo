@@ -2511,8 +2511,8 @@ func RestartKubelet(appNodes []node.Node, errChan ...*chan error) {
 	for _, appNode := range appNodes {
 
 		log.InfoD("Stopping kubelet service on node %s", appNode.Name)
-		err := Inst().N.Systemctl(appNode, "kubelet", node.SystemctlOpts{
-			Action: "stop",
+
+		err := Inst().N.StopKubelet(appNode, node.SystemctlOpts{
 			ConnectionOpts: node.ConnectionOpts{
 				Timeout:         1 * time.Minute,
 				TimeBeforeRetry: 10 * time.Second,
@@ -2556,19 +2556,15 @@ func RestartKubelet(appNodes []node.Node, errChan ...*chan error) {
 	log.Infof("waiting for 5 mins before starting kubelet")
 	time.Sleep(5 * time.Minute)
 
-	if Inst().N.String() == ssh.DriverName || Inst().N.String() == vsphere.DriverName {
+	for _, appNode := range appNodes {
 
-		for _, appNode := range appNodes {
-
-			log.InfoD("Starting kubelet service on node %s", appNode.Name)
-			err := Inst().N.Systemctl(appNode, "kubelet", node.SystemctlOpts{
-				Action: "start",
-				ConnectionOpts: node.ConnectionOpts{
-					Timeout:         1 * time.Minute,
-					TimeBeforeRetry: 10 * time.Second,
-				}})
-			processError(err, errChan...)
-		}
+		log.InfoD("Starting kubelet service on node %s", appNode.Name)
+		err := Inst().N.StartKubelet(appNode, node.SystemctlOpts{
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         1 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			}})
+		processError(err, errChan...)
 	}
 
 	log.InfoD("Waiting for kubelet service to start on nodes %v", appNodes)
