@@ -5131,7 +5131,7 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 	})
 })
 
-var _ = Describe("{LabelNodesAndVerifyPoolCreate}", func() {
+var _ = Describe("{VerifyPoolCreateInProperZones}", func() {
 	/*
 		This test case assumes that it is being run on a setup with FACD topology enabled.
 		There are at least two different zones, each using a different flash array.
@@ -5144,11 +5144,11 @@ var _ = Describe("{LabelNodesAndVerifyPoolCreate}", func() {
 
 	*/
 	JustBeforeEach(func() {
-		StartTorpedoTest("LabelNodesAndVerifyPoolCreate", "Label Nodes and Verify Pool Creation", nil, 0)
+		StartTorpedoTest("VerifyPoolCreateInProperZones", "Label Nodes and Verify Pool Creation", nil, 0)
 	})
 
 	var contexts []*scheduler.Context
-	itLog := "LabelNodesAndVerifyPoolCreate"
+	itLog := "VerifyPoolCreateInProperZones"
 	It(itLog, func() {
 		log.InfoD(itLog)
 		selectedNodesForTopology := node.GetStorageNodes()[0 : len(node.GetStorageNodes())/2]
