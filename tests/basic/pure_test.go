@@ -5523,7 +5523,7 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
 				StorageProvisioner: Provisioner,
-				PureFAPodName:      podName,
+				PureFAPodName:      "Torpedo-Test",
 				Namespace:          taskName,
 			})
 			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
