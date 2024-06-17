@@ -5510,6 +5510,7 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			PodNameinFA = realmName + "::" + podNameinSC
 		}
 		podCreate := func(faclient *newFlashArray.Client, podName string, taskName string) {
+			log.InfoD("Creating pod [%v] in FA", podName)
 			_, err = pureutils.CreatePodinFA(faclient, podName)
 			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podName))
 			isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faclient, podName)
