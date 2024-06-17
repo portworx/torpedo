@@ -5473,6 +5473,8 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 		var faWithoutRealm *newFlashArray.Client
 		var isRealmFAAccessible bool
 		var pvcList []string
+		var podNameinSC string
+		var PodNameinFA string
 		applist := Inst().AppList
 		defer func() {
 			Inst().AppList = applist
@@ -5496,25 +5498,26 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			}
 		}
 
-		if faWithRealm == nil || faWithoutRealm == nil {
-			log.FailOnError(fmt.Errorf("No accessible FA found in pure.json"), "No accessible FA found in pure.json")
+		switch {
+		case faWithRealm == nil:
+			log.FailOnError(fmt.Errorf("No FA with realm found in pure.json"), "No  FA with realm found in pure.json")
+		case faWithoutRealm == nil:
+			log.FailOnError(fmt.Errorf("No  FA without realm found in pure.json"), "No  FA without realm found in pure.json")
+		case !isRealmFAAccessible:
+			log.FailOnError(fmt.Errorf("No accessible realm FA found in pure.json"), "No accessible realm FA found in pure.json")
 		}
-
-		podNameinSC := "Torpedo-Test" + Inst().InstanceID
-		PodNameinFA := podNameinSC
-		if isRealmFAAccessible {
-			PodNameinFA = realmName + "::" + podNameinSC
-		}
-		podCreateandAppDeploy := func(faclient *newFlashArray.Client, podNameinFA string, podNameinSC string, taskName string) {
+		podCreateandAppDeploy := func(faclient *newFlashArray.Client, podNameinFA string, podNameinSC string, taskName string, isMultiTenancy bool) {
 			var contexts []*scheduler.Context
-			_, err = pureutils.CreatePodinFA(faclient, podNameinFA)
-			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podNameinFA))
-			isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faclient, podNameinFA)
-			log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", podNameinFA))
-			if !isPodExists {
-				log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", podNameinFA), "is pod created in FA?")
+			if isMultiTenancy {
+				_, err = pureutils.CreatePodinFA(faclient, podNameinFA)
+				log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podNameinFA))
+				isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faclient, podNameinFA)
+				log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", podNameinFA))
+				if !isPodExists {
+					log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", podNameinFA), "is pod created in FA?")
+				}
+				log.InfoD("Pod [%v] created ", podNameinFA)
 			}
-			log.InfoD("Pod [%v] created ", podNameinFA)
 			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
@@ -5538,27 +5541,21 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 		stepLog = "Deploy FADA application with storage class having pure_fa_pod_name - this pod is under a realm in one of the arrays in pure.json"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			podCreateandAppDeploy(faWithRealm, PodNameinFA, podNameinSC, "fada-app-with-pod-realm")
+			podNameinSC = "Torpedo-Test" + time.Now().Format("01-02-15h04m05s")
+			PodNameinFA = realmName + "::" + podNameinSC
+			podCreateandAppDeploy(faWithRealm, PodNameinFA, podNameinSC, "fada-app-with-pod-realm", true)
 		})
 		stepLog = "Deploy FADA application with storage class not having pure_fa_pod_name"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			taskName := "fada-app-without-pod-realm"
-			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
-			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-				AppKeys:            Inst().AppList,
-				StorageProvisioner: Provisioner,
-				Namespace:          taskName,
-			})
-			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
-			contexts = append(contexts, context...)
-			ValidateApplications(contexts)
-			DestroyApps(contexts, nil)
+			podCreateandAppDeploy(faWithRealm, "", "", "fada-app-without-pod-realm", false)
 		})
 		stepLog = "Deploy FADA application with storage class having pure_fa_pod_name - this pod is not under a realm in one of the arrays in pure.json"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			podCreateandAppDeploy(faWithoutRealm, PodNameinFA, podNameinSC, "fada-app-with-pod")
+			podNameinSC = "Torpedo-Test" + time.Now().Format("01-02-15h04m05s")
+			PodNameinFA = podNameinSC
+			podCreateandAppDeploy(faWithoutRealm, PodNameinFA, podNameinSC, "fada-app-with-pod", true)
 		})
 
 	})
