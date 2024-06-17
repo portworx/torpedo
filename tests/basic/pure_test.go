@@ -5464,7 +5464,7 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			"MultiTenancy FATest with Pod Realm",
 			nil, 0)
 	})
-	var contexts []*scheduler.Context
+
 	itLog := "MultiTenancyFATestWithPodRealm"
 	It(itLog, func() {
 		log.InfoD(itLog)
@@ -5506,6 +5506,7 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			PodNameinFA = realmName + "::" + podNameinSC
 		}
 		podCreateandAppDeploy := func(faclient *newFlashArray.Client, podNameinFA string, podNameinSC string, taskName string) {
+			var contexts []*scheduler.Context
 			_, err = pureutils.CreatePodinFA(faclient, podNameinFA)
 			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podNameinFA))
 			isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faclient, podNameinFA)
