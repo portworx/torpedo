@@ -1,11 +1,12 @@
 package tests
 
 import (
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -22,6 +23,7 @@ const (
 	destinationClusterName   = "destination-cluster"
 	backupLocationName       = "tp-blocation"
 	appReadinessTimeout      = 10 * time.Minute
+	kubevirtReadinessTimeout = 30 * time.Minute
 	defaultTimeout           = 6 * time.Minute
 	defaultRetryInterval     = 10 * time.Second
 )
