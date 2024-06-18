@@ -5131,13 +5131,13 @@ var _ = Describe("{TrashcanRecovery}", func() {
 	})
 })
 
-var _ = Describe("{LocalSkinnySnapAndRestore}", func() {
+var _ = Describe("{LocalSkinnySnap}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("LocalSkinnySnapAndRestore", "Validate local skinny snap creation and restore", nil, 0)
+		StartTorpedoTest("LocalSkinnySnap", "Validate local skinny snap creation", nil, 0)
 	})
 
 	var contexts []*scheduler.Context
-	stepLog := "has to schedule apps, create scheduled local snap and restore it"
+	stepLog := "has to schedule apps, create scheduled local snap"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		skinnyRepl := int64(1)
@@ -5331,13 +5331,13 @@ var _ = Describe("{LocalSkinnySnapAndRestore}", func() {
 	})
 })
 
-var _ = Describe("{SkinnyCloudsnapAndRestore}", func() {
+var _ = Describe("{SkinnyCloudsnap}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("SkinnyCloudsnapAndRestore", "Validate cloudsnap creation and restore", nil, 0)
+		StartTorpedoTest("SkinnyCloudsnap", "Validate skinny cloudsnap creation ", nil, 0)
 	})
 
 	var contexts []*scheduler.Context
-	stepLog := "has to schedule apps, create scheduled cloud snap and restore it"
+	stepLog := "has to schedule apps, create skinny scheduled cloud snap "
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		skinnyRepl := int64(1)
