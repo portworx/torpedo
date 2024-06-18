@@ -2055,17 +2055,9 @@ func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 				currentEntry.SinglePaths = append(currentEntry.SinglePaths, parts[0])
 				continue
 			} else {
-				found := false
-				for wwid, _ := range foundDevices {
-					if strings.Contains(currentEntry.WWID, wwid) {
-						found = true
-					}
-				}
-				if !found {
-					// This is some other path not part of a WWID, ignore it and also finish off any WWID we had going before
-					foundDevices[currentEntry.WWID] = *currentEntry
-					currentEntry = nil
-				}
+				// This is some other path not part of a WWID, ignore it and also finish off any WWID we had going before
+				foundDevices[currentEntry.WWID] = *currentEntry
+				currentEntry = nil
 			}
 		}
 	}
@@ -2098,15 +2090,7 @@ func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEn
 			continue
 		}
 		mapperName := strings.Split(line, "\t")[0]
-		duplicate := false
-		for _, each := range dmsetupFoundMappers {
-			if strings.Contains(mapperName, each) {
-				duplicate = true
-			}
-		}
-		if !duplicate {
-			dmsetupFoundMappers = append(dmsetupFoundMappers, mapperName)
-		}
+		dmsetupFoundMappers = append(dmsetupFoundMappers, mapperName)
 	}
 
 	// Then run `lsblk` to get the WWN and size of each device. Flags:
