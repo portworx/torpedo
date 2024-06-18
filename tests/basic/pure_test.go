@@ -5511,6 +5511,7 @@ var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
 						fmt.Println("PVC Name is ", p.Name)
 						if p.Status.Phase == "Pending" {
 							for _, event := range Inst().S.GetEvents()["PersistentVolumeClaim"] {
+								fmt.Println("Event Message is ", event.Message)
 								if strings.Contains(event.Message, "Pod does not exist") {
 									log.InfoD("This is Expected scenario(Negative test case of creating a pod name outside of realm due to which FADA volume will not be created")
 									DestroyApps(contexts, nil)
