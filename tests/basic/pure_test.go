@@ -4283,8 +4283,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		BaseAppNameSpace := "base-app-namespace"
 		FadaAppNameSpace := "fada-app-namespace"
 		FbdaAppNameSpace := "fbda-app-namespace"
-		max_iops = 1000
-		max_bandwidth = 1
+		max_iops = uint64(rand.Intn(99999999) + 1)
+		max_bandwidth = uint64(rand.Intn(511) + 1)
 		//Creating Two lists to collect the volume names of both FA and FB created volumes
 		listofFadaPvc := make([]string, 0)
 		listofFbdaPvc := make([]string, 0)
