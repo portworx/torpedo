@@ -374,6 +374,8 @@ func (o *oke) UpgradeScheduler(version string) error {
 
 	log.Infof("Starting OKE cluster upgrade to [%s]", version)
 
+	initialStorageDriverNodes := node.GetStorageDriverNodes()
+
 	err = o.setControlPlaneVersion(version)
 	if err != nil {
 		return err
@@ -416,6 +418,18 @@ func (o *oke) UpgradeScheduler(version string) error {
 	if err != nil {
 		return fmt.Errorf("error refreshing driver endpoints after creating node pool [%s], err:%v", newPoolName, err)
 	}
+
+	for _, stNode := range initialStorageDriverNodes {
+		err = o.DeleteNode(stNode)
+		if err != nil {
+			return err
+		}
+		log.Infof("Deleted node [%s] from the cluster", stNode.Hostname)
+		log.Infof("Waiting for 15 mins for the upgraded node to be stable")
+		time.Sleep(15 * time.Minute)
+
+	}
+
 	err = o.deleteNodePool(nodePool)
 	if err != nil {
 		return err
