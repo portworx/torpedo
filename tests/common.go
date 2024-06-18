@@ -13369,3 +13369,179 @@ func DeleteFilesFromS3Bucket(bucketName string, fileName string) error {
 	log.Infof("The files %v are successfully deleted from the bucket [%s]", keys, bucket)
 	return nil
 }
+
+// SelectPoolDeletableNodes return a list of pool deletable nodes: prioritize for non-kvdb nodes
+func SelectPoolDeletableNodes() ([]node.Node, error) {
+	testNodes := []node.Node{}
+	log.Info("Select non-kvdb node or node with > 1 pools)")
+	stNodes := node.GetStorageNodes()
+	log.InfoD("storage nodes %+v", stNodes)
+
+	kvdbNodesIDs := []string{}
+	kvdbMembers, err := Inst().V.GetKvdbMembers(stNodes[0])
+	if err != nil {
+		return nil, err
+	}
+	log.InfoD("kvdb members %+v", kvdbMembers)
+
+	for _, n := range kvdbMembers {
+		kvdbNodesIDs = append(kvdbNodesIDs, n.Name)
+	}
+
+	// testNodes for pool deletable: [non-kvdb-nodes] + [kvdb-nodes with >= 2 pools]
+	// collect non-kvdb firsts
+	for _, n := range stNodes {
+		if !Contains(kvdbNodesIDs, n.Id) { // non kvdb node
+			log.InfoD("get non-kvdb node %v", n.Name)
+			poolsMap, err := Inst().V.GetPoolDrives(&n)
+			if err != nil {
+				return nil, err
+			}
+			log.InfoD("non-kvdb node %v has %v pools %+v", n.Name, len(poolsMap), poolsMap)
+			if len(poolsMap) > 0 {
+				testNodes = append(testNodes, n)
+			}
+		}
+	}
+
+	// kvdb nodes, need at least 2 pools
+	for _, n := range stNodes {
+		if Contains(kvdbNodesIDs, n.Id) {
+			log.InfoD("get kvdb node %v", n.Name)
+			poolsMap, err := Inst().V.GetPoolDrives(&n)
+			if err != nil {
+				return nil, err
+			}
+			log.InfoD("kvdb node %v has %v pools %+v", n.Name, len(poolsMap), poolsMap)
+			if len(poolsMap) > 1 {
+				testNodes = append(testNodes, n)
+			}
+		}
+	}
+
+	if len(testNodes) == 0 { // it means all nodes are kvdb-nodes with 1 pools
+		testNode := stNodes[0]
+		log.InfoD("select kvdb node %v for test, the node need to have at least 2 pools", testNode.Name)
+		poolsMap, err := Inst().V.GetPoolDrives(&testNode)
+		if err != nil {
+			return nil, err
+		}
+		log.InfoD("the kvdb node %v has pools %+v", testNode.Name, poolsMap)
+		if len(poolsMap) <= 1 {
+			log.InfoD("try create new pool for test")
+			err = AddCloudDrive(testNode, -1)
+			if err != nil {
+				return nil, err
+			}
+		}
+		testNodes = append(testNodes, testNode)
+	}
+
+	for _, n := range testNodes {
+		log.InfoD("found pool deletable node %v", n.Name)
+	}
+
+	dash.VerifyFatal(len(testNodes) > 0, true, "select test node")
+	return testNodes, nil
+}
+
+func DeletePoolAndValidate(stNode node.Node, poolIDToDelete string) error {
+	isPureBackend := false
+	validateMultipath := []string{}
+	if IsPureCluster() {
+		isPureBackend = true
+	}
+
+	if isPureBackend {
+		// if pure backend , we get the list of all multipath devices used while creating the pool
+		// later check if those multipath devices are still exist post deleting the pool
+		multipathDevBeforeDelete, err := GetMultipathDeviceOnPool(&stNode)
+		if err != nil {
+			return err
+		}
+		validateMultipath = multipathDevBeforeDelete[poolIDToDelete]
+	}
+
+	poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return err
+	}
+
+	poolsMap, err := Inst().V.GetPoolDrives(&stNode)
+	if err != nil {
+		return err
+	}
+
+	err = DeleteGivenPoolInNode(stNode, poolIDToDelete, true)
+	if err != nil {
+		return err
+	}
+
+	poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return err
+	}
+
+	dash.VerifySafely(len(poolsBfr) > len(poolsAfr), true, "verify pools count is updated after pools deletion")
+
+	poolsMap, err = Inst().V.GetPoolDrives(&stNode)
+	if err != nil {
+		return err
+	}
+	_, ok := poolsMap[poolIDToDelete]
+	if ok {
+		return fmt.Errorf("Pool hasn't been deleted from the node")
+	}
+
+	if isPureBackend {
+		// Get list of all Multipath devices after deleting the pool
+		allMultipathDev, err := GetMultipathDeviceIDsOnNode(&stNode)
+		if err != nil {
+			return err
+		}
+		for _, eachMultipath := range allMultipathDev {
+			for _, validateEach := range validateMultipath {
+				if validateEach == eachMultipath {
+					return fmt.Errorf("Multipath device [%v] did not delete on Deleting Pool", validateEach)
+				}
+			}
+		}
+	}
+	return nil
+
+}
+
+// DeletePoolsOnMultipleNodesInParallel delete pools on multiple nodes in parallel
+func DeletePoolsOnMultipleNodesInParallel(poolDeleteNodes []node.Node) error {
+
+	// Delete pools on multiple nodes in parallel
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(poolDeleteNodes))
+	for _, n := range poolDeleteNodes {
+		wg.Add(1)
+		go func(node node.Node) {
+			defer wg.Done()
+			drvMap, err := Inst().V.GetPoolDrives(&node)
+			if err != nil {
+				errCh <- err
+			}
+
+			poolIDs := []string{}
+
+			for poolID := range drvMap {
+				poolIDs = append(poolIDs, poolID)
+			}
+			err = DeletePoolAndValidate(node, poolIDs[1])
+			if err != nil {
+				errCh <- err
+			}
+
+		}(n)
+	}
+	wg.Wait()
+	if errch := <-errCh; errch != nil {
+		return errch
+	}
+
+	return nil
+}
