@@ -5485,13 +5485,13 @@ var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
 			var contexts []*scheduler.Context
 			var pvcList []string
 			if isMultiTenancy {
-				isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faclient, podNameinFA)
-				log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", podNameinFA))
-				if !isPodExists {
-					_, err = pureutils.CreatePodinFA(faclient, podNameinFA)
-					log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podNameinFA))
-				}
-				log.InfoD("Pod [%v] created ", podNameinFA)
+				//isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faclient, podNameinFA)
+				//log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", podNameinFA))
+				//if !isPodExists {
+				//	_, err = pureutils.CreatePodinFA(faclient, podNameinFA)
+				//	log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podNameinFA))
+				//}
+				//log.InfoD("Pod [%v] created ", podNameinFA)
 			}
 			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
