@@ -5208,8 +5208,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 		fadaScName := "fada-volume-sc"
 		BaseAppNameSpace := "base-app-namespace"
 		FadaAppNameSpace := "fada-app-namespace"
-		max_iops = 1000
-		max_bandwidth = 1
+		max_iops = uint64(rand.Intn(99999999) + 1)
+		max_bandwidth = uint64(rand.Intn(511) + 1)
 		//Creating Two lists to collect the volume names of both FA and FB created volumes
 		listofFadaPvc := make([]string, 0)
 		//Creating maps with namespaces as key and list of pvc names as values
@@ -5272,8 +5272,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 			log.InfoD(stepLog)
 			BaseParams := make(map[string]string)
 			BaseParams["repl"] = "1"
-			BaseParams["max_iops"] = "1000"
-			BaseParams["max_bandwidth"] = "1G"
+			BaseParams["max_iops"] = strconv.FormatUint(max_iops, 10)
+			BaseParams["max_bandwidth"] = strconv.FormatUint(max_bandwidth, 10)
 			reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
 			bindMode := storageApi.VolumeBindingImmediate
 			// create storage class for base volumes
@@ -5283,8 +5283,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 
 			faParams := make(map[string]string)
 			faParams["repl"] = "1"
-			faParams["max_iops"] = "1000"
-			faParams["max_bandwidth"] = "1G"
+			faParams["max_iops"] = strconv.FormatUint(max_iops, 10)
+			faParams["max_bandwidth"] = strconv.FormatUint(max_bandwidth, 10)
 			faParams["fs"] = "ext4"
 			faParams["pure_fa_pod_name"] = podNameinSC
 
