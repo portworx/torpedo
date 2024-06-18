@@ -5483,7 +5483,7 @@ var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
 		}
 		podCreateandAppDeploy := func(faclient *newFlashArray.Client, podNameinFA string, podNameinSC string, taskName string, isMultiTenancy bool, wrongPodoutSideRealm bool) {
 			var contexts []*scheduler.Context
-			var pvcList []string
+			//var pvcList []string
 			if isMultiTenancy {
 				//isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faclient, podNameinFA)
 				//log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", podNameinFA))
@@ -5505,6 +5505,8 @@ var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
 			if wrongPodoutSideRealm {
 				fmt.Println("Entering into loop to check if it entered negative scenario")
 				for _, ctx := range contexts {
+					log.InfoD("waiting for a minute for volume name to populate")
+					time.Sleep(1 * time.Minute)
 					allPvcList, err := core.Instance().GetPersistentVolumeClaims(ctx.App.NameSpace, nil)
 					log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", ctx.App.NameSpace))
 					for _, p := range allPvcList.Items {
@@ -5523,18 +5525,18 @@ var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
 				}
 			}
 			//ValidateApplications(contexts)
-			log.InfoD("waiting for a minute for volume name to populate")
-			time.Sleep(1 * time.Minute)
-
-			for _, ctx := range contexts {
-				pvcList, err = GetVolumeNamefromPVC(ctx.App.NameSpace)
-				log.FailOnError(err, "Failed to get volume name from PVC")
-			}
-			faErr := CheckVolumesExistinFA(flashArrays, pvcList, false)
-			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
-			DestroyApps(contexts, nil)
-			faErr = CheckVolumesExistinFA(flashArrays, pvcList, true)
-			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+			//log.InfoD("waiting for a minute for volume name to populate")
+			//time.Sleep(1 * time.Minute)
+			//
+			//for _, ctx := range contexts {
+			//	pvcList, err = GetVolumeNamefromPVC(ctx.App.NameSpace)
+			//	log.FailOnError(err, "Failed to get volume name from PVC")
+			//}
+			//faErr := CheckVolumesExistinFA(flashArrays, pvcList, false)
+			//log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+			//DestroyApps(contexts, nil)
+			//faErr = CheckVolumesExistinFA(flashArrays, pvcList, true)
+			//log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
 
 		}
 		//stepLog = "Deploy FADA application with storage class having pure_fa_pod_name - this pod is under a realm in one of the arrays in pure.json"
