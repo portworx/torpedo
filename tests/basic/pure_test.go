@@ -5523,7 +5523,7 @@ var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
 			time.Sleep(1 * time.Minute)
 
 			for _, ctx := range contexts {
-				pvcList, err = GetVolumeNamefromPVC(ctx.App.NameSpace, pvcList)
+				pvcList, err = GetVolumeNamefromPVC(ctx.App.NameSpace)
 				log.FailOnError(err, "Failed to get volume name from PVC")
 			}
 			faErr := CheckVolumesExistinFA(flashArrays, pvcList, false)

@@ -13382,7 +13382,8 @@ func GetPvcFromNamespace(namespace string, pvclist []string) ([]string, error) {
 	return nil, nil
 }
 
-func GetVolumeNamefromPVC(namespace string, pvclist []string) ([]string, error) {
+func GetVolumeNamefromPVC(namespace string) ([]string, error) {
+	var pvclist []string
 	allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
 	if err != nil {
 		log.InfoD("error getting pvcs from namespace [%s]", namespace)
