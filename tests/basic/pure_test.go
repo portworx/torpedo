@@ -5140,16 +5140,17 @@ var _ = Describe("{LocalSkinnySnapAndRestore}", func() {
 	stepLog := "has to schedule apps, create scheduled local snap and restore it"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		skinnyRepl := int64(1)
 		stepLog = fmt.Sprintf("Enabling Skinny Snaps and setting the snap repl to 1")
 		Step(stepLog, func() {
 			nodes := node.GetWorkerNodes()
-			err = Inst().V.SetClusterOpts(nodes[0], map[string]string{
+			err = Inst().V.SetClusterOptsWithConfirmation(nodes[0], map[string]string{
 				"--skinnysnap": "on"})
 			log.FailOnError(err, "Failed to enable skinny snap on cluster")
 			log.Infof("Skinnysnap enabled on Cluster")
-			repl := "1"
+			skinnyRepl := "1"
 			err = Inst().V.SetClusterOpts(nodes[0], map[string]string{
-				"--skinnysnap-num-repls": repl})
+				"--skinnysnap-num-repls": skinnyRepl})
 			log.FailOnError(err, "Failed to set snap replication factor for skinny snaps")
 			log.Infof("Skinnysnap repl factor successfully updated")
 		})
@@ -5288,6 +5289,14 @@ var _ = Describe("{LocalSkinnySnapAndRestore}", func() {
 
 					snapID := snapData.Spec.PortworxSnapshot.SnapshotID
 					log.Infof("Snapshot ID: %v", snapID)
+					snapInspect, err := Inst().V.InspectVolume(snapID)
+					log.FailOnError(err, "Failed to get Inspect output for snap ID: %v", snapID)
+					if skinnyRepl == snapInspect.Spec.HaLevel {
+						log.Infof("Snap ID : %v is having replication set as per skinny snap repl params", snapID)
+					} else {
+						err = fmt.Errorf("Snap ID: %v is not having replication set as per skinny snap repl params", snapID)
+						log.FailOnError(err, "Failed to adhere to skinny snap repl params")
+					}
 					if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
 						len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
 						err = &scheduler.ErrFailedToGetVolumeParameters{
@@ -5300,54 +5309,6 @@ var _ = Describe("{LocalSkinnySnapAndRestore}", func() {
 				}
 				volSnapMap[appNamespace] = snapMap
 			}
-			log.Infof("waiting for 10 mins to create multiple local snaps")
-			time.Sleep(10 * time.Minute)
-		})
-
-		stepLog = "Update volume io_profiles on all volumes"
-		Step(stepLog, func() {
-			for _, ctx := range contexts {
-
-				appVols, err := Inst().S.GetVolumes(ctx)
-				log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
-
-				for _, v := range appVols {
-					var volumeSpec *api.VolumeSpecUpdate
-					inspectVolume, err := Inst().V.InspectVolume(v.ID)
-					log.FailOnError(err, fmt.Sprintf("error inspecting volume %s", v.ID))
-					newIOProfile := api.IoProfile_IO_PROFILE_JOURNAL
-					if inspectVolume.DerivedIoProfile != api.IoProfile_IO_PROFILE_JOURNAL {
-						volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
-					} else {
-						newIOProfile = api.IoProfile_IO_PROFILE_AUTO
-						volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
-					}
-					err = Inst().V.UpdateVolumeSpec(v, volumeSpec)
-					log.FailOnError(err, fmt.Sprintf("failed to update io profile to %v for volume %s", newIOProfile, v.ID))
-				}
-
-				ctx.SkipVolumeValidation = true
-				ValidateContext(ctx)
-
-			}
-
-		})
-
-		stepLog = "Verify local snap restore"
-		Step(stepLog, func() {
-			for ns, volSnap := range volSnapMap {
-				for vol, snap := range volSnap {
-					restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: metav1.ObjectMeta{
-						Name:      vol.Name,
-						Namespace: vol.Namespace,
-					}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: snap.Name, SourceNamespace: ns, GroupSnapshot: false}}
-					restore, err := storkops.Instance().CreateVolumeSnapshotRestore(restoreSpec)
-					log.FailOnError(err, fmt.Sprintf("error creating volume snapshot restore for %s", snap.Name))
-					err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, time.Duration(5*15)*defaultCommandTimeout, defaultReadynessTimeout)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destination: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
-				}
-			}
-
 		})
 		stepLog = "Validating and Destroying apps"
 		Step(stepLog, func() {
@@ -5358,7 +5319,7 @@ var _ = Describe("{LocalSkinnySnapAndRestore}", func() {
 		stepLog = fmt.Sprintf("Disbling Skinny Snaps")
 		Step(stepLog, func() {
 			nodes := node.GetWorkerNodes()
-			err = Inst().V.SetClusterOpts(nodes[0], map[string]string{
+			err = Inst().V.SetClusterOptsWithConfirmation(nodes[0], map[string]string{
 				"--skinnysnap": "off"})
 			log.FailOnError(err, "Failed to disable skinny snap on cluster")
 			log.Infof("Skinnysnap disabled on Cluster")
@@ -5379,16 +5340,17 @@ var _ = Describe("{SkinnyCloudsnapAndRestore}", func() {
 	stepLog := "has to schedule apps, create scheduled cloud snap and restore it"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		skinnyRepl := int64(1)
 		stepLog = fmt.Sprintf("Enabling Skinny Snaps and setting the snap repl to 1")
 		Step(stepLog, func() {
 			nodes := node.GetWorkerNodes()
-			err = Inst().V.SetClusterOpts(nodes[0], map[string]string{
+			err = Inst().V.SetClusterOptsWithConfirmation(nodes[0], map[string]string{
 				"--skinnysnap": "on"})
 			log.FailOnError(err, "Failed to enable skinny snap on cluster")
 			log.Infof("Skinnysnap enabled on Cluster")
-			repl := "1"
+			skinnyRepl := "1"
 			err = Inst().V.SetClusterOpts(nodes[0], map[string]string{
-				"--skinnysnap-num-repls": repl})
+				"--skinnysnap-num-repls": skinnyRepl})
 			log.FailOnError(err, "Failed to set snap replication factor for skinny snaps")
 			log.Infof("Skinnysnap repl factor successfully updated")
 		})
@@ -5526,6 +5488,14 @@ var _ = Describe("{SkinnyCloudsnapAndRestore}", func() {
 
 								snapID := snapData.Spec.PortworxSnapshot.SnapshotID
 								log.Infof("Snapshot ID: %v", snapID)
+								snapInspect, err := Inst().V.InspectVolume(snapID)
+								log.FailOnError(err, "Failed to get Inspect output for snap ID: %v", snapID)
+								if skinnyRepl == snapInspect.Spec.HaLevel {
+									log.Infof("Snap ID : %v is having replication set as per skinny snap repl params", snapID)
+								} else {
+									err = fmt.Errorf("Snap ID: %v is not having replication set as per skinny snap repl params", snapID)
+									log.FailOnError(err, "Failed to adhere to skinny snap repl params")
+								}
 								if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
 									len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
 									err = &scheduler.ErrFailedToGetVolumeParameters{
@@ -5540,7 +5510,6 @@ var _ = Describe("{SkinnyCloudsnapAndRestore}", func() {
 				}
 			}
 		})
-
 		stepLog = "Validating cloud snapshot backup size values"
 		Step(stepLog, func() {
 			for _, ctx := range contexts {
@@ -5556,96 +5525,10 @@ var _ = Describe("{SkinnyCloudsnapAndRestore}", func() {
 				}
 			}
 		})
-
-		stepLog = "Update volume io_profiles on all volumes"
+		stepLog = "Validating apps"
 		Step(stepLog, func() {
-			for _, ctx := range contexts {
-
-				appVols, err := Inst().S.GetVolumes(ctx)
-				log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
-
-				for _, v := range appVols {
-					var volumeSpec *api.VolumeSpecUpdate
-					inspectVolume, err := Inst().V.InspectVolume(v.ID)
-					log.FailOnError(err, fmt.Sprintf("error inspecting volume %s", v.ID))
-					newIOProfile := api.IoProfile_IO_PROFILE_JOURNAL
-					if inspectVolume.DerivedIoProfile != api.IoProfile_IO_PROFILE_JOURNAL {
-						volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
-					} else {
-						newIOProfile = api.IoProfile_IO_PROFILE_AUTO
-						volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
-					}
-					err = Inst().V.UpdateVolumeSpec(v, volumeSpec)
-					log.FailOnError(err, fmt.Sprintf("failed to update io profile to %v for volume %s", newIOProfile, v.ID))
-				}
-
-				ctx.SkipVolumeValidation = true
-				ValidateContext(ctx)
-
-			}
-
-		})
-
-		stepLog = "Verify cloud snap restore"
-		Step(stepLog, func() {
-			for _, ctx := range contexts {
-
-				if strings.Contains(ctx.App.Key, "cloudsnap") {
-
-					appNamespace := ctx.App.Key + "-" + ctx.UID
-					snapSchedList, err := storkops.Instance().ListSnapshotSchedules(appNamespace)
-					log.FailOnError(err, "error getting snapshot list")
-
-					vols, err := Inst().S.GetVolumes(ctx)
-					log.FailOnError(err, "error getting volumes")
-
-					for _, vol := range vols {
-						var snapshotScheduleName string
-						for _, snap := range snapSchedList.Items {
-							snapshotScheduleName = snap.Name
-							if strings.Contains(snapshotScheduleName, vol.Name) {
-								break
-							}
-						}
-						resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
-						log.FailOnError(err, "error getting snapshot schedule for [%s] in namespace [%s]", snapshotScheduleName, appNamespace)
-						var volumeSnapshotStatus *storkv1.ScheduledVolumeSnapshotStatus
-					outer:
-						for _, snapshotStatuses := range resp.Status.Items {
-							for _, vsStatus := range snapshotStatuses {
-								if vsStatus.Status == snapv1.VolumeSnapshotConditionReady {
-									volumeSnapshotStatus = vsStatus
-									break outer
-								}
-							}
-						}
-						if volumeSnapshotStatus != nil {
-							restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: metav1.ObjectMeta{
-								Name:      vol.Name,
-								Namespace: vol.Namespace,
-							}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: volumeSnapshotStatus.Name, SourceNamespace: appNamespace, GroupSnapshot: false}}
-							restore, err := storkops.Instance().CreateVolumeSnapshotRestore(restoreSpec)
-							log.FailOnError(err, "error CreateVolumeSnapshotRestore")
-							err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
-							dash.VerifySafely(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destnation: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
-							if err == nil {
-								err = storkops.Instance().DeleteVolumeSnapshotRestore(restore.Name, restore.Namespace)
-								log.FailOnError(err, "error deleting volume snapshot restore object")
-							}
-						} else {
-							log.FailOnError(fmt.Errorf("no snapshot with Ready status found for vol[%s] in namespace[%s]", vol.Name, vol.Namespace), "error getting volume snapshot")
-						}
-					}
-				}
-			}
-		})
-
-		stepLog = "Validating apps after cloudsnap restore"
-		Step(stepLog, func() {
-
 			for _, ctx := range contexts {
 				ctx.ReadinessTimeout = 15 * time.Minute
-				//skipping volume validation as ip_profiles are updated
 				ctx.SkipVolumeValidation = true
 				ValidateContext(ctx)
 			}
@@ -5653,12 +5536,11 @@ var _ = Describe("{SkinnyCloudsnapAndRestore}", func() {
 		stepLog = fmt.Sprintf("Disbling Skinny Snaps")
 		Step(stepLog, func() {
 			nodes := node.GetWorkerNodes()
-			err = Inst().V.SetClusterOpts(nodes[0], map[string]string{
+			err = Inst().V.SetClusterOptsWithConfirmation(nodes[0], map[string]string{
 				"--skinnysnap": "off"})
 			log.FailOnError(err, "Failed to disable skinny snap on cluster")
 			log.Infof("Skinnysnap disabled on Cluster")
 		})
-
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
