@@ -5558,6 +5558,14 @@ var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
 			PodNameinFA = podNameinSC
 			podCreateandAppDeploy(faWithoutRealm, PodNameinFA, podNameinSC, "fada-app-with-pod", true)
 		})
+		stepLog = "Deploy FADA application with storage class having pure_fa_pod_name but this pod is not under realm and we will create in fa client where realm is present so that App Deployment should fail(Negative testcase)"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			podNameinSC = "Torpedo-Test" + time.Now().Format("01-02-15h04m05s")
+			// pod name will not contain any realm , so we just create pod with same naming convention in FA
+			PodNameinFA = podNameinSC
+			podCreateandAppDeploy(faWithRealm, PodNameinFA, podNameinSC, "fada-app-with-pod-under-no-realm", true)
+		})
 
 	})
 
