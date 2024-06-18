@@ -1604,22 +1604,22 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 	})
 })
 
-// Volume Driver Plugin has crashed - and the client container should not be impacted.
+// Kubelet stopped on the nodes - and the client container should not be impacted.
 var _ = Describe("{StopKubeletOnNodes}", func() {
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("StopKubeletOnNodes", "Validate PX after volume driver crash", nil, 0)
+		StartTorpedoTest("StopKubeletOnNodes", "Validate PX after kubelet is restarted", nil, 0)
 
 	})
 	var contexts []*scheduler.Context
 
-	stepLog := "has to schedule apps and crash stop kubelet app nodes"
+	stepLog := "has to schedule apps and stop kubelet app nodes"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("voldrivercrash-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("kubeletrsrt-%d", i))...)
 		}
 
 		ValidateApplications(contexts)
@@ -1629,11 +1629,11 @@ var _ = Describe("{StopKubeletOnNodes}", func() {
 			pureCleanupFunction = StartPureBackgroundWriteRoutines()
 		}
 
-		stepLog = "stop kubelet on all storage driver nodes"
+		stepLog = "restart kubelet on all storage driver nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for _, appNode := range node.GetStorageDriverNodes() {
-				stepLog = fmt.Sprintf("crash volume driver %s on node: %v",
+				stepLog = fmt.Sprintf("restart kubelet %s on node: %v",
 					Inst().V.String(), appNode.Name)
 				Step(stepLog,
 					func() {

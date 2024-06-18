@@ -670,50 +670,6 @@ func (s *SSH) Systemctl(n node.Node, service string, options node.SystemctlOpts)
 	return nil
 }
 
-// StopKubelet allows to stop kubelet on a give node
-func (s *SSH) StopKubelet(n node.Node, options node.SystemctlOpts) error {
-	systemctlCmd := fmt.Sprintf("sudo systemctl stop %s", "kubelet")
-	t := func() (interface{}, bool, error) {
-		out, err := s.doCmd(n, options.ConnectionOpts, systemctlCmd, false)
-		if err != nil {
-			return out, true, err
-		}
-		return out, false, nil
-	}
-
-	if _, err := task.DoRetryWithTimeout(t,
-		options.ConnectionOpts.Timeout,
-		options.ConnectionOpts.TimeBeforeRetry); err != nil {
-		return &node.ErrFailedToRunSystemctlOnNode{
-			Node:  n,
-			Cause: err.Error(),
-		}
-	}
-	return nil
-}
-
-// StartKubelet allows to start kubelet on a give node
-func (s *SSH) StartKubelet(n node.Node, options node.SystemctlOpts) error {
-	systemctlCmd := fmt.Sprintf("sudo systemctl start %s", "kubelet")
-	t := func() (interface{}, bool, error) {
-		out, err := s.doCmd(n, options.ConnectionOpts, systemctlCmd, false)
-		if err != nil {
-			return out, true, err
-		}
-		return out, false, nil
-	}
-
-	if _, err := task.DoRetryWithTimeout(t,
-		options.ConnectionOpts.Timeout,
-		options.ConnectionOpts.TimeBeforeRetry); err != nil {
-		return &node.ErrFailedToRunSystemctlOnNode{
-			Node:  n,
-			Cause: err.Error(),
-		}
-	}
-	return nil
-}
-
 // SystemctlUnitExist checks if a given service exists on the node
 func (s *SSH) SystemctlUnitExist(n node.Node, service string, options node.SystemctlOpts) (bool, error) {
 	systemctlCmd := fmt.Sprintf("sudo systemctl list-units --full --all | grep \"%s.service\" || true", service)

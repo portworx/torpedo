@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler/aks"
 	"k8s.io/utils/strings/slices"
 	"math"
 
@@ -2491,6 +2492,9 @@ func CrashPXDaemonAndWait(appNodes []node.Node, errChan ...*chan error) {
 
 // RestartKubelet stops kubelet service on given app nodes and waits till kubelet is back up
 func RestartKubelet(appNodes []node.Node, errChan ...*chan error) {
+	if Inst().S.String() == openshift.SchedName && len(os.Getenv("TORPEDO_SSH_KEY")) == 0 {
+		ginkgo.Skip("Cannot perform kubelet restart on openshift cluster without ssh key")
+	}
 	defer func() {
 		if len(errChan) > 0 {
 			close(*errChan[0])
@@ -2512,7 +2516,7 @@ func RestartKubelet(appNodes []node.Node, errChan ...*chan error) {
 
 		log.InfoD("Stopping kubelet service on node %s", appNode.Name)
 
-		err := Inst().N.StopKubelet(appNode, node.SystemctlOpts{
+		err := Inst().S.StopKubelet(appNode, node.SystemctlOpts{
 			ConnectionOpts: node.ConnectionOpts{
 				Timeout:         1 * time.Minute,
 				TimeBeforeRetry: 10 * time.Second,
@@ -2556,15 +2560,21 @@ func RestartKubelet(appNodes []node.Node, errChan ...*chan error) {
 	log.Infof("waiting for 5 mins before starting kubelet")
 	time.Sleep(5 * time.Minute)
 
-	for _, appNode := range appNodes {
+	waitTime := 3 * time.Minute
 
-		log.InfoD("Starting kubelet service on node %s", appNode.Name)
-		err := Inst().N.StartKubelet(appNode, node.SystemctlOpts{
-			ConnectionOpts: node.ConnectionOpts{
-				Timeout:         1 * time.Minute,
-				TimeBeforeRetry: 10 * time.Second,
-			}})
-		processError(err, errChan...)
+	if Inst().S.String() != aks.SchedName {
+		for _, appNode := range appNodes {
+
+			log.InfoD("Starting kubelet service on node %s", appNode.Name)
+			err := Inst().S.StartKubelet(appNode, node.SystemctlOpts{
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         1 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				}})
+			processError(err, errChan...)
+		}
+	} else {
+		waitTime = 20 * time.Minute
 	}
 
 	log.InfoD("Waiting for kubelet service to start on nodes %v", appNodes)
@@ -2597,7 +2607,7 @@ func RestartKubelet(appNodes []node.Node, errChan ...*chan error) {
 
 		return "", false, nil
 	}
-	_, err = task.DoRetryWithTimeout(t, 3*time.Minute, 10*time.Second)
+	_, err = task.DoRetryWithTimeout(t, waitTime, 10*time.Second)
 	processError(err, errChan...)
 
 }
@@ -12318,7 +12328,12 @@ func PrereqForNodeDecomm(nodeToDecommission node.Node, suspendedScheds []*storka
 
 	credCmd := "cred list -j | grep uuid"
 
-	output, err := Inst().V.GetPxctlCmdOutput(nodeToDecommission, credCmd)
+	output, err := Inst().V.GetPxctlCmdOutputConnectionOpts(nodeToDecommission, credCmd, node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: 5 * time.Second,
+		Timeout:         30 * time.Second,
+	}, false)
+
 	if err == nil && len(output) > 0 {
 		log.InfoD("Cloudsnap is enabled. Checking if backup is active on volumes")
 		for _, vol := range nodeVols {

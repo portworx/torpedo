@@ -221,118 +221,12 @@ func (a *aws) DeleteNode(n node.Node, timeout time.Duration) error {
 	return nil
 }
 
-// StopKubelet allows to stop kubelet on a give node
-func (a *aws) StopKubelet(n node.Node, options node.SystemctlOpts) error {
-	var err error
-	instanceID, err := a.getNodeIDByPrivAddr(n)
-	log.Infof("Got Insatacne id:%v", instanceID)
-	if err != nil {
-		return &node.ErrFailedToTestConnection{
-			Node:  n,
-			Cause: fmt.Sprintf("failed to get instance ID for connection due to: %v", err),
-		}
-	}
-	command := "sudo systemctl stop kubelet"
-	param := make(map[string][]*string)
-	param["commands"] = []*string{
-		aws_pkg.String(command),
-	}
-	sendCommandInput := &ssm.SendCommandInput{
-		Comment:      aws_pkg.String(command),
-		DocumentName: aws_pkg.String("AWS-RunShellScript"),
-		Parameters:   param,
-		InstanceIds: []*string{
-			aws_pkg.String(instanceID),
-		},
-	}
-	log.Infof("sendCommandInput:%+v", sendCommandInput)
-	sendCommandOutput, err := a.svcSsm.SendCommand(sendCommandInput)
-	log.Infof("sendCommandOutput:%+v", sendCommandOutput)
-	if err != nil {
-		log.Infof("sendCommandOutput Err:%+v", err)
-		return &node.ErrFailedToRunCommand{
-			Node:  n,
-			Cause: fmt.Sprintf("failed to send command to instance %s: %v", instanceID, err),
-		}
-	}
-	if sendCommandOutput.Command == nil || sendCommandOutput.Command.CommandId == nil {
-		return fmt.Errorf("no command returned after sending command to %s", instanceID)
-	}
-	listCmdsInput := &ssm.ListCommandInvocationsInput{
-		CommandId: sendCommandOutput.Command.CommandId,
-	}
-	t := func() (interface{}, bool, error) {
-		return "", true, a.connect(n, listCmdsInput)
-	}
-
-	if _, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err != nil {
-		return &node.ErrFailedToRunCommand{
-			Node:  n,
-			Cause: err.Error(),
-		}
-	}
-	return err
-}
-
-// StartKubelet allows to start kubelet on a give node
-func (a *aws) StartKubelet(n node.Node, options node.SystemctlOpts) error {
-	var err error
-	instanceID, err := a.getNodeIDByPrivAddr(n)
-	log.Infof("Got Insatacne id:%v", instanceID)
-	if err != nil {
-		return &node.ErrFailedToTestConnection{
-			Node:  n,
-			Cause: fmt.Sprintf("failed to get instance ID for connection due to: %v", err),
-		}
-	}
-	command := "sudo systemctl start kubelet"
-	param := make(map[string][]*string)
-	param["commands"] = []*string{
-		aws_pkg.String(command),
-	}
-	sendCommandInput := &ssm.SendCommandInput{
-		Comment:      aws_pkg.String(command),
-		DocumentName: aws_pkg.String("AWS-RunShellScript"),
-		Parameters:   param,
-		InstanceIds: []*string{
-			aws_pkg.String(instanceID),
-		},
-	}
-	log.Infof("sendCommandInput:%+v", sendCommandInput)
-	sendCommandOutput, err := a.svcSsm.SendCommand(sendCommandInput)
-	log.Infof("sendCommandOutput:%+v", sendCommandOutput)
-	if err != nil {
-		log.Infof("sendCommandOutput Err:%+v", err)
-		return &node.ErrFailedToRunCommand{
-			Node:  n,
-			Cause: fmt.Sprintf("failed to send command to instance %s: %v", instanceID, err),
-		}
-	}
-	if sendCommandOutput.Command == nil || sendCommandOutput.Command.CommandId == nil {
-		return fmt.Errorf("no command returned after sending command to %s", instanceID)
-	}
-	listCmdsInput := &ssm.ListCommandInvocationsInput{
-		CommandId: sendCommandOutput.Command.CommandId,
-	}
-	t := func() (interface{}, bool, error) {
-		return "", true, a.connect(n, listCmdsInput)
-	}
-
-	if _, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err != nil {
-		return &node.ErrFailedToRunCommand{
-			Node:  n,
-			Cause: err.Error(),
-		}
-	}
-	return err
-}
-
-// TODO add AWS implementation for this
+// FindFiles TODO add AWS implementation for this
 func (a *aws) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
 	return "", nil
 }
 
-// TODO implement for AWS
+// Systemctl TODO implement for AWS
 func (a *aws) Systemctl(n node.Node, service string, options node.SystemctlOpts) error {
 	return nil
 }
@@ -345,7 +239,6 @@ func (a *aws) getAllInstances() ([]*ec2.Instance, error) {
 	if err != nil {
 		return instances, fmt.Errorf("there was an error listing instances in %s. Error: %q", a.region, err.Error())
 	}
-	log.Infof("resp:%+v", resp)
 	reservations := resp.Reservations
 	for _, resv := range reservations {
 		for _, ins := range resv.Instances {
@@ -357,7 +250,6 @@ func (a *aws) getAllInstances() ([]*ec2.Instance, error) {
 
 func (a *aws) getNodeIDByPrivAddr(n node.Node) (string, error) {
 	for _, i := range a.instances {
-		log.Infof("i:%+v", i)
 		for _, addr := range n.Addresses {
 			if aws_pkg.StringValue(i.PrivateIpAddress) == addr {
 				return aws_pkg.StringValue(i.InstanceId), nil
