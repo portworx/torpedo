@@ -5446,7 +5446,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 	})
 })
 
-var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
+var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
 	/*
 			https://purestorage.atlassian.net/browse/PTX-24561
 			This Test Requires Pure.json with the following requirements:
@@ -5460,8 +5460,8 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			3. Deletes the application and checks if the volumes are deleted in the respective FA's
 	*/
 	JustBeforeEach(func() {
-		StartTorpedoTest("MultiTenancyFATestWithPodRealm",
-			"MultiTenancy FATest with Pod Realm",
+		StartTorpedoTest("FAMultiTenancyMultiAppWithPodRealm",
+			"FA MultiTenancy Test with Multi App with Pod Realm Combination",
 			nil, 0)
 	})
 
@@ -5476,11 +5476,6 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			podNameinSC         string
 			PodNameinFA         string
 		)
-		applist := Inst().AppList
-		defer func() {
-			Inst().AppList = applist
-		}()
-		Inst().AppList = []string{"fio-fa-davol"}
 		//Get The Details of Existing FA from pure.json
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
@@ -5511,12 +5506,11 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 			var contexts []*scheduler.Context
 			var pvcList []string
 			if isMultiTenancy {
-				_, err = pureutils.CreatePodinFA(faclient, podNameinFA)
-				log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podNameinFA))
 				isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faclient, podNameinFA)
 				log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", podNameinFA))
 				if !isPodExists {
-					log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", podNameinFA), "is pod created in FA?")
+					_, err = pureutils.CreatePodinFA(faclient, podNameinFA)
+					log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podNameinFA))
 				}
 				log.InfoD("Pod [%v] created ", podNameinFA)
 			}
@@ -5554,7 +5548,7 @@ var _ = Describe("{MultiTenancyFATestWithPodRealm}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			// Here we dont want to create any pod and create pure_fa_pod_name in storage class ,as this is standard way of Deploying Apps
-			podCreateandAppDeploy(faWithRealm, "", "", "fada-app-without-pod-realm", false)
+			podCreateandAppDeploy(faWithoutRealm, "", "", "fada-app-without-pod-realm", false)
 		})
 		stepLog = "Deploy FADA application with storage class having pure_fa_pod_name - this pod is not under a realm in one of the arrays in pure.json"
 		Step(stepLog, func() {
