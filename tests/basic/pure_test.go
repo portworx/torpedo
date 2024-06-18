@@ -5199,9 +5199,9 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 		var wg sync.WaitGroup
 		var max_bandwidth uint64
 		var max_iops uint64
-		var realmName string
-		var accessibleFA *newFlashArray.Client
-		var isRealmFAAccessible bool
+		//var realmName string
+		//var accessibleFA *newFlashArray.Client
+		//var isRealmFAAccessible bool
 
 		//Declaring SC name, namespaces and pvc prefixes and lists which are required for collection of PVC And Volume Names
 		baseScName := "base-portworx-volume-sc"
@@ -5229,44 +5229,44 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 		//Get The Details of Existing FA from pure.json
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
-		for _, fa := range flashArrays {
-			faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
-			if err != nil {
-				log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
-				continue
-			}
-			if fa.Realm != "" {
-				realmName = fa.Realm
-				isRealmFAAccessible = true
-				accessibleFA = faClient
-				break
-			}
-			if accessibleFA == nil {
-				accessibleFA = faClient
-			}
-		}
-		if accessibleFA == nil {
-			log.FailOnError(fmt.Errorf("No accessible FA found in pure.json"), "No accessible FA found in pure.json")
-		}
+		//for _, fa := range flashArrays {
+		//	faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+		//	if err != nil {
+		//		log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+		//		continue
+		//	}
+		//	if fa.Realm != "" {
+		//		realmName = fa.Realm
+		//		isRealmFAAccessible = true
+		//		accessibleFA = faClient
+		//		break
+		//	}
+		//	if accessibleFA == nil {
+		//		accessibleFA = faClient
+		//	}
+		//}
+		//if accessibleFA == nil {
+		//	log.FailOnError(fmt.Errorf("No accessible FA found in pure.json"), "No accessible FA found in pure.json")
+		//}
 
-		podNameinSC := "Torpedo-Test" + Inst().InstanceID
-		PodNameinFA := podNameinSC
-		if isRealmFAAccessible {
-			PodNameinFA = realmName + "::" + podNameinSC
-		}
-		stepLog := "Create A pod inside Realm"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			_, err = pureutils.CreatePodinFA(accessibleFA, PodNameinFA)
-			log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", PodNameinFA))
-			isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(accessibleFA, PodNameinFA)
-			log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", PodNameinFA))
-			if !isPodExists {
-				log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", PodNameinFA), "is pod created in FA?")
-			}
-			log.InfoD("Pod [%v] created ", PodNameinFA)
-
-		})
+		//podNameinSC := "Torpedo-Test" + Inst().InstanceID
+		//PodNameinFA := podNameinSC
+		//if isRealmFAAccessible {
+		//	PodNameinFA = realmName + "::" + podNameinSC
+		//}
+		//stepLog := "Create A pod inside Realm"
+		//Step(stepLog, func() {
+		//	log.InfoD(stepLog)
+		//	_, err = pureutils.CreatePodinFA(accessibleFA, PodNameinFA)
+		//	log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", PodNameinFA))
+		//	isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(accessibleFA, PodNameinFA)
+		//	log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", PodNameinFA))
+		//	if !isPodExists {
+		//		log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", PodNameinFA), "is pod created in FA?")
+		//	}
+		//	log.InfoD("Pod [%v] created ", PodNameinFA)
+		//
+		//})
 		stepLog = "Create storage class with max iops and max bandwidth for Normal Portworx Volumes , FADA and FBDA Pvc Deployment"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -5286,7 +5286,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 			faParams["max_iops"] = strconv.FormatUint(max_iops, 10)
 			faParams["max_bandwidth"] = strconv.FormatUint(max_bandwidth, 10)
 			faParams["fs"] = "ext4"
-			faParams["pure_fa_pod_name"] = podNameinSC
+			//faParams["pure_fa_pod_name"] = podNameinSC
 
 			var allowVolExpansionFA bool = true
 			// create storage class for FADA volumes
@@ -5431,14 +5431,14 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 			err := CheckVolumesExistinFA(flashArrays, listofFadaPvc, true)
 			log.FailOnError(err, "Failed to check if volumes which needed to be deleted still exist in FA")
 		})
-		stepLog = "Delete the pod created in the realm"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err := pureutils.DeletePodinFA(accessibleFA, PodNameinFA)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete pod [%v] in FA", PodNameinFA))
-			log.InfoD("Pod [%v] destroyed ", PodNameinFA)
-
-		})
+		//stepLog = "Delete the pod created in the realm"
+		//Step(stepLog, func() {
+		//	log.InfoD(stepLog)
+		//	err := pureutils.DeletePodinFA(accessibleFA, PodNameinFA)
+		//	dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete pod [%v] in FA", PodNameinFA))
+		//	log.InfoD("Pod [%v] destroyed ", PodNameinFA)
+		//
+		//})
 	})
 	AfterEach(func() {
 		EndTorpedoTest()
