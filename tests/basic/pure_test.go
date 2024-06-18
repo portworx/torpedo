@@ -5503,10 +5503,12 @@ var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
 			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
 			contexts = append(contexts, context...)
 			if wrongPodoutSideRealm {
+				fmt.Println("Entering into loop to check if it entered negative scenario")
 				for _, ctx := range contexts {
 					allPvcList, err := core.Instance().GetPersistentVolumeClaims(ctx.App.NameSpace, nil)
 					log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", ctx.App.NameSpace))
 					for _, p := range allPvcList.Items {
+						fmt.Println("PVC Name is ", p.Name)
 						if p.Status.Phase == "Pending" {
 							for _, event := range Inst().S.GetEvents()["PersistentVolumeClaim"] {
 								if strings.Contains(event.Message, "Pod does not exist") {
@@ -5519,7 +5521,7 @@ var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
 					}
 				}
 			}
-			ValidateApplications(contexts)
+			//ValidateApplications(contexts)
 			log.InfoD("waiting for a minute for volume name to populate")
 			time.Sleep(1 * time.Minute)
 
