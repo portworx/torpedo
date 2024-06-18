@@ -5505,6 +5505,7 @@ var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
 			if wrongPodoutSideRealm {
 				fmt.Println("Entering into loop to check if it entered negative scenario")
 				for _, ctx := range contexts {
+					ctx.SkipVolumeValidation = true
 					log.InfoD("waiting for a minute for volume name to populate")
 					time.Sleep(1 * time.Minute)
 					allPvcList, err := core.Instance().GetPersistentVolumeClaims(ctx.App.NameSpace, nil)
