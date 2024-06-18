@@ -5273,7 +5273,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 			BaseParams := make(map[string]string)
 			BaseParams["repl"] = "1"
 			BaseParams["max_iops"] = strconv.FormatUint(max_iops, 10)
-			BaseParams["max_bandwidth"] = strconv.FormatUint(max_bandwidth, 10)
+			BaseParams["max_bandwidth"] = strconv.FormatUint(max_bandwidth, 10) + "G"
 			reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
 			bindMode := storageApi.VolumeBindingImmediate
 			// create storage class for base volumes
@@ -5284,7 +5284,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidthFA}", func() {
 			faParams := make(map[string]string)
 			faParams["repl"] = "1"
 			faParams["max_iops"] = strconv.FormatUint(max_iops, 10)
-			faParams["max_bandwidth"] = strconv.FormatUint(max_bandwidth, 10)
+			faParams["max_bandwidth"] = strconv.FormatUint(max_bandwidth, 10) + "G"
 			faParams["fs"] = "ext4"
 			//faParams["pure_fa_pod_name"] = podNameinSC
 
