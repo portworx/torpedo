@@ -2125,7 +2125,7 @@ func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEn
 			return nil, fmt.Errorf("found mapper %s in dmsetup but not lsblk on node %s, inconsistent disk state (we didn't clean something up right?)", mapper, n.MgmtIp)
 		}
 		// Ensure there are no WWIDs with empty single paths, as that is a malformed device
-		if len(lsblkEntry.SinglePaths) == 0 {
+		if len(lsblkEntry.SinglePaths) == 0 && !strings.Contains(lsblkEntry.WWID, "p") {
 			return nil, fmt.Errorf("found mapper %s with no single paths on node %s, this should not happen (we didn't clean something up right?)", mapper, n.MgmtIp)
 		}
 	}
@@ -2164,7 +2164,6 @@ func (d *portworx) InitializePureLocalVolumePaths() error {
 
 // ValidatePureLocalVolumePaths checks that the given volumes all have the proper local paths present, *and that no other unexpected ones are present*
 func (d *portworx) ValidatePureLocalVolumePaths() error {
-	return nil
 	t := func() error {
 		currentDevices, err := d.getCurrentPureLocalVolumePaths()
 		if err != nil {
