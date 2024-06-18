@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"github.com/devans10/pugo/flasharray"
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
-
 	"github.com/portworx/sched-ops/k8s/storage"
+	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
 
 	"math/rand"
 	"sort"
@@ -5128,5 +5127,407 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{RandomScheduleResizeAndDestroyVolsAndPools}", func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-23989
+		1. Create pools on multiple nodes, when multiple volumes are created,deleted and being resized
+		2. Delete the pools on multiple nodes, when multiple volumes are created,delete and being resized
+		3. Verify multipath output for the volumes
+	*/
+
+	var (
+		mu                     sync.Mutex
+		wg                     sync.WaitGroup
+		contexts               []*scheduler.Context
+		errChan                chan error
+		namespaceCount         = 0
+		stopAppActivityChan    = make(chan struct{})
+		maxNamespaces          = 2 * len(Inst().AppList)
+		maxResizesPerNamespace = 4
+		maxNamespacesChan      = make(chan struct{}, maxNamespaces)
+		nodesToUse             []node.Node
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("RandomScheduleResizeAndDestroy", "Randomly Schedule, Resize and Destroy Apps", nil, 0)
+		rand.Seed(time.Now().UnixNano())
+		errChan = make(chan error, 10)
+	})
+
+	// getPVCSize returns the requested storage size of the given PVC in bytes
+	getPVCSize := func(pvc *v1.PersistentVolumeClaim) (uint64, error) {
+		storage, ok := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+		if !ok {
+			return 0, fmt.Errorf("failed to get storage resource request from PVC [%v]", pvc)
+		}
+		return uint64(storage.Value()), nil
+	}
+
+	// scheduleApp schedules the given app in the given namespace
+	scheduleApp := func(app string, namespace string, errChan chan error) *scheduler.Context {
+		log.Infof("Scheduling app [%s] in namespace [%s]", app, namespace)
+		options := CreateScheduleOptions(namespace, &errChan)
+		options.AppKeys = []string{app}
+		contexts, err = Inst().S.Schedule(Inst().InstanceID, options)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to schedule app [%s] in namespace [%s]. Err: [%v]", app, namespace, err)
+			return nil
+		}
+		return contexts[0]
+	}
+
+	// resizeARandomDirectAccessVolume resizes a random direct access volume in the given namespace
+	resizeARandomDirectAccessVolume := func(ctx *scheduler.Context, resizePercentage float32, errChan chan error) {
+		log.Infof("Resizing a random direct access volume of app [%s] in namespace [%s]", ctx.App.Key, ctx.App.NameSpace)
+		vols, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to get volumes for app [%s] in namespace [%s]. Err: [%v]", ctx.App.Key, ctx.App.NameSpace, err)
+			return
+		}
+		randomVol := vols[rand.Intn(len(vols))]
+		log.Infof("resizing volume [%s/%s] by [%f]", randomVol.Name, randomVol.Namespace, resizePercentage)
+		pvc, err := core.Instance().GetPersistentVolumeClaim(randomVol.Name, randomVol.Namespace)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to get PVC [%s/%s] spec", randomVol.Name, randomVol.Namespace)
+			return
+		}
+		pvcSize, err := getPVCSize(pvc)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to get pvc [%v] size. Err: [%v]", pvc, err)
+			return
+		}
+		newSize := uint64(1 + resizePercentage/100*float32(pvcSize))
+		adjustedSize := newSize - pvcSize
+		log.Infof("Adjusted size for resizing volume [%s/%s] is [%d]", randomVol.Name, randomVol.Namespace, adjustedSize)
+		_, err = Inst().S.ResizePVC(ctx, pvc, adjustedSize/units.GiB)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to resize volume [%s/%s] from [%d] to [%d]. Err: [%v]", randomVol.Name, randomVol.Namespace, pvcSize, newSize, err)
+		}
+	}
+
+	// destroyApp destroys the given app
+	destroyApp := func(ctx *scheduler.Context, errChan chan error) {
+		defer GinkgoRecover()
+		log.Infof("Destroying app [%s] in namespace [%s]", ctx.App.Key, ctx.App.NameSpace)
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps([]*scheduler.Context{ctx}, opts)
+	}
+
+	It("RandomScheduleResizeAndDestroy", func() {
+		log.Infof("RandomScheduleResizeAndDestroy")
+
+		for _, app := range Inst().AppList {
+			wg.Add(1)
+			log.Infof("Activity for app [%s] has started", app)
+			go func(app string) {
+				defer wg.Done()
+				defer GinkgoRecover()
+				for {
+					log.Infof("[%d] Iteration", namespaceCount)
+					select {
+					case <-stopAppActivityChan:
+						log.Infof("[2] stopAppActivityChan switch case")
+						return
+					case maxNamespacesChan <- struct{}{}:
+						log.Infof("[2] maxNamespacesChan switch case")
+						mu.Lock()
+						namespace := fmt.Sprintf("namespace-%s-%d", app, namespaceCount)
+						namespaceCount++
+						ctx := scheduleApp(app, namespace, errChan)
+						validateContextErrChan := make(chan error, 10)
+						ValidateContext(contexts[0], &validateContextErrChan)
+						for err := range validateContextErrChan {
+							if err != nil {
+								errChan <- fmt.Errorf("failed to validate context [%s/%s]. Err: [%v]", ctx.App.Key, ctx.App.NameSpace, err)
+								return
+							}
+						}
+						contexts = append(contexts, ctx)
+						mu.Unlock()
+						resizeCount := 0
+						maxResizes := rand.Intn(maxResizesPerNamespace) + 1
+						for resizeCount < maxResizes {
+							select {
+							case <-stopAppActivityChan:
+								return
+							default:
+								resizeARandomDirectAccessVolume(ctx, 10, errChan)
+								resizeCount++
+							}
+						}
+						if maxResizes%2 == 0 {
+							mu.Lock()
+							for i, c := range contexts {
+								if c.App.NameSpace == ctx.App.NameSpace {
+									contexts = append(contexts[:i], contexts[i+1:]...)
+									break
+								}
+							}
+							mu.Unlock()
+							destroyApp(ctx, errChan)
+							<-maxNamespacesChan
+						}
+					default:
+						log.Infof("[3] Default switch case")
+						log.Infof("len(maxNamespacesChan) [%d] and cap(maxNamespacesChan) [%d]", len(maxNamespacesChan), cap(maxNamespacesChan))
+						log.Infof("The length of context is [%d]", len(contexts))
+						if len(contexts) == cap(maxNamespacesChan) {
+							for i := 0; i < len(contexts)/2; i++ {
+								mu.Lock()
+								randomIndex := rand.Intn(len(contexts))
+								log.Infof("The randomIndex is [%d]", randomIndex)
+								ctx := contexts[randomIndex]
+								for i, c := range contexts {
+									if c.App.NameSpace == ctx.App.NameSpace {
+										contexts = append(contexts[:i], contexts[i+1:]...)
+										break
+									}
+								}
+								mu.Unlock()
+								destroyApp(ctx, errChan)
+								<-maxNamespacesChan
+							}
+						}
+					}
+					log.Infof("[4] Sleeping for 15 seconds")
+					time.Sleep(15 * time.Second)
+				}
+			}(app)
+		}
+
+		stepLog := "Create a new pool on multiple nodes"
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			getNodes := node.GetNodes()
+			for _, each := range getNodes {
+				if node.IsMasterNode(each) == false {
+					sPools, err := GetPoolsDetailsOnNode(&each)
+					if err != nil {
+						fmt.Printf("[%v]", err)
+					}
+					if len(sPools) < 8 {
+						nodesToUse = append(nodesToUse, each)
+					}
+				}
+			}
+
+			err := CreateNewPoolsOnMultipleNodesInParallel(nodesToUse)
+			log.FailOnError(err, "Failed to create a new pool on multiple nodes")
+		})
+
+		stepLog = "Delete the pools on multiple nodes"
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			poolDeleteNodes, err := SelectPoolDeletableNodes()
+			log.FailOnError(err, "Failed to select pool deletable nodes")
+
+			err = DeletePoolsOnMultipleNodesInParallel(poolDeleteNodes)
+			log.FailOnError(err, "Failed to delete the pools on multiple nodes")
+
+		})
+		wg.Wait()
+
+		go func() {
+			close(errChan)
+		}()
+
+		time.Sleep(10 * time.Minute)
+		close(stopAppActivityChan)
+		log.Infof("Timer reached 10 minutes. Stopping all operations.")
+
+		var errors []string
+		for err := range errChan {
+			if err != nil {
+				errors = append(errors, err.Error())
+			}
+		}
+		if len(errors) > 0 {
+			dash.VerifyFatal(fmt.Errorf(strings.Join(errors, "; ")), nil, "Verifying if any error occurred while scheduling, resizing, or destroying apps")
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{CreateMaxFADAAndFBDAVolumes}", func() {
+	/*
+		PTX: https://purestorage.atlassian.net/browse/PTX-24000
+		1. Create max number of FADA and FBDA volumes and delete them
+		2. Verify volume creation and validate backend
+		3. Delete the volumes
+	*/
+
+	var (
+		maxVolumes = 100
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateMaxFADAAndFBDAVolumes", "Create max number of FADA and FBDA volumes and delete them", nil, 0)
+	})
+
+	itLog := "Create max number of FADA and FBDA volumes and delete them"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver namespace")
+		pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+		log.FailOnError(err, "failed to get secret in namespace")
+		listFA := pxPureSecret.Arrays
+		listFB := pxPureSecret.Blades
+
+		// Get the details of existing FA and FB in the cluster
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "failed to get FA details from pure.json in the cluster")
+		flashBlades, err := GetFBDetailsFromCluster()
+		log.FailOnError(err, "failed to get FB details from pure.json in the cluster")
+
+		var maxFADANamespace, maxFBDANamespace string
+
+		stepLog := "Create max number of FADA volumes"
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			log.Infof("The FA list is [%v] and length [%d]", listFA, len(listFA))
+			if len(listFA) > 0 {
+				randomString := RandomString(4)
+				maxFADANamespace = fmt.Sprintf("max-fada-ns-%v", randomString)
+				log.Infof("Creating namespace [%s] for FADA volumes", maxFADANamespace)
+				_, err = k8sCore.CreateNamespace(&v1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: maxFADANamespace,
+					},
+				})
+				log.FailOnError(err, "failed to create namespace for FADA volumes")
+				maxFADAStorageClassName := fmt.Sprintf("max-fada-sc-%s", randomString)
+				allowVolExpansionFA := true
+				err = CreateFlashStorageClass(maxFADAStorageClassName, "pure_block", v1.PersistentVolumeReclaimDelete, nil, nil, &allowVolExpansionFA, storageApi.VolumeBindingImmediate, nil)
+				log.FailOnError(err, "failed to create storage class for FADA volumes")
+				for i := 0; i < maxVolumes; i++ {
+					pvcName := fmt.Sprintf("fada-pvc-%d-%s", i, randomString)
+					err := CreateFlashPVCOnCluster(pvcName, maxFADAStorageClassName, maxFADANamespace, "1")
+					log.FailOnError(err, "failed to create PVC in namespace")
+					err = Inst().S.WaitForSinglePVCToBound(pvcName, maxFADANamespace, 60)
+					log.FailOnError(err, "failed to wait for PVC to be bound in namespace")
+				}
+
+				pvcList, err := core.Instance().GetPersistentVolumeClaims(maxFADANamespace, nil)
+				log.FailOnError(err, "failed to get PVCs in namespace")
+				pvNameList := make([]string, 0)
+				for _, pvc := range pvcList.Items {
+					pvNameList = append(pvNameList, pvc.Spec.VolumeName)
+				}
+				log.Infof("The PV name list is [%v]", pvNameList)
+
+				// Validate if the FA volumes are created in the backend
+				faErr := CheckVolumesExistinFA(flashArrays, pvNameList, false)
+				log.FailOnError(faErr, "failed to check if volumes created exist in FA")
+			} else {
+				log.Warnf("No FADA client found in the pure.json")
+			}
+		})
+
+		stepLog = "Create max number of FBDA volumes"
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			log.Infof("The FB list is [%v] and length [%d]", listFB, len(listFB))
+			if len(listFB) > 0 {
+				randomString := RandomString(4)
+				maxFBDANamespace = fmt.Sprintf("max-fbda-ns-%v", randomString)
+				log.Infof("Creating namespace [%s] for FBDA volumes", maxFBDANamespace)
+				_, err = k8sCore.CreateNamespace(&v1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: maxFBDANamespace,
+					},
+				})
+				log.FailOnError(err, "failed to create namespace for FBDA volumes")
+				maxFBDAStorageClassName := fmt.Sprintf("max-fbda-sc-%s", randomString)
+				allowVolExpansionFB := true
+				params := map[string]string{
+					"pure_export_rules": "*(rw)",
+				}
+				mountOptions := []string{"nfsvers=4.1", "tcp"}
+				err = CreateFlashStorageClass(maxFBDAStorageClassName, "pure_file", v1.PersistentVolumeReclaimDelete, params, mountOptions, &allowVolExpansionFB, storageApi.VolumeBindingImmediate, nil)
+				log.FailOnError(err, "failed to create storage class for FBDA volumes")
+				for i := 0; i < maxVolumes; i++ {
+					pvcName := fmt.Sprintf("fbda-pvc-%d-%s", i, randomString)
+					err := CreateFlashPVCOnCluster(pvcName, maxFBDAStorageClassName, maxFBDANamespace, "1")
+					log.FailOnError(err, "failed to create PVC in namespace")
+					err = Inst().S.WaitForSinglePVCToBound(pvcName, maxFBDANamespace, 60)
+					log.FailOnError(err, "failed to wait for PVC to be bound in namespace")
+				}
+
+				pvcList, err := core.Instance().GetPersistentVolumeClaims(maxFBDANamespace, nil)
+				log.FailOnError(err, "failed to get PVCs in namespace")
+				pvNameList := make([]string, 0)
+				for _, pvc := range pvcList.Items {
+					pvNameList = append(pvNameList, pvc.Spec.VolumeName)
+				}
+				log.Infof("The PV name list is [%v]", pvNameList)
+
+				// Validate if the FB volumes are created in the backend
+				fbErr := CheckVolumesExistinFB(flashBlades, pvNameList, false)
+				log.FailOnError(fbErr, "failed to check if volumes created exist in FB")
+			} else {
+				log.Warnf("No FBDA client found in the pure.json")
+			}
+		})
+
+		stepLog = "Delete the storageclass, pvc and volume and check if volumes got deleted in backend as well"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			deletePVCAndNamespace := func(pvcList []string, namespace string) {
+				for _, pvcName := range pvcList {
+					err := k8sCore.DeletePersistentVolumeClaim(pvcName, namespace)
+					log.FailOnError(err, fmt.Sprintf("failed to delete pvc [%s] in namespace [%s]", pvcName, namespace))
+				}
+				err = core.Instance().DeleteNamespace(namespace)
+				log.FailOnError(err, fmt.Sprintf("failed to delete namespace [%s]", namespace))
+			}
+
+			// Deleting FADA PVCs and Namespace
+			if len(listFA) > 0 {
+				pvcList, err := core.Instance().GetPersistentVolumeClaims(maxFADANamespace, nil)
+				log.FailOnError(err, "failed to get PVCs in namespace")
+				pvcNameList := make([]string, 0)
+				pvNameList := make([]string, 0)
+				for _, pvc := range pvcList.Items {
+					pvcNameList = append(pvcNameList, pvc.Name)
+					pvNameList = append(pvNameList, pvc.Spec.VolumeName)
+				}
+				deletePVCAndNamespace(pvcNameList, maxFADANamespace)
+
+				// Validate if the FA volumes are deleted in the backend
+				faErr := CheckVolumesExistinFA(flashArrays, pvNameList, true)
+				log.FailOnError(faErr, "failed to check if volumes which needed to be deleted still exist in FA")
+			}
+
+			// Deleting FBDA PVCs and Namespace
+			if len(listFB) > 0 {
+				pvcList, err := core.Instance().GetPersistentVolumeClaims(maxFBDANamespace, nil)
+				log.FailOnError(err, "failed to get PVCs in namespace")
+				pvcNameList := make([]string, 0)
+				pvNameList := make([]string, 0)
+				for _, pvc := range pvcList.Items {
+					pvcNameList = append(pvcNameList, pvc.Name)
+					pvNameList = append(pvNameList, pvc.Spec.VolumeName)
+				}
+				deletePVCAndNamespace(pvcNameList, maxFBDANamespace)
+
+				// Validate if the FB volumes are deleted in the backend
+				fbErr := CheckVolumesExistinFB(flashBlades, pvNameList, true)
+				log.FailOnError(fbErr, "failed to check if volumes which needed to be deleted still exist in FB")
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 })
