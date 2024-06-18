@@ -2098,7 +2098,15 @@ func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEn
 			continue
 		}
 		mapperName := strings.Split(line, "\t")[0]
-		dmsetupFoundMappers = append(dmsetupFoundMappers, mapperName)
+		duplicate := false
+		for _, each := range dmsetupFoundMappers {
+			if strings.Contains(mapperName, each) {
+				duplicate = true
+			}
+		}
+		if !duplicate {
+			dmsetupFoundMappers = append(dmsetupFoundMappers, mapperName)
+		}
 	}
 
 	// Then run `lsblk` to get the WWN and size of each device. Flags:
