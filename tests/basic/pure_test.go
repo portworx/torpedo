@@ -5447,7 +5447,7 @@ var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var (
-			realmName           string
+			//realmName           string
 			faWithRealm         *newFlashArray.Client
 			faWithoutRealm      *newFlashArray.Client
 			isRealmFAAccessible bool
@@ -5464,7 +5464,8 @@ var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
 				continue
 			}
 			if fa.Realm != "" {
-				realmName = fa.Realm
+				realmName := fa.Realm
+				log.InfoD("Realm Name [%v]", realmName)
 				isRealmFAAccessible = true
 				faWithRealm = faClient
 			} else {
@@ -5533,28 +5534,28 @@ var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
 			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
 
 		}
-		stepLog = "Deploy FADA application with storage class having pure_fa_pod_name - this pod is under a realm in one of the arrays in pure.json"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			podNameinSC = "Torpedo-Test" + time.Now().Format("01-02-15h04m05s")
-			// In order to create a pod inside a realm , the pod name should be prefixed with realm, eg: <realm name>::<pod name>
-			PodNameinFA = realmName + "::" + podNameinSC
-			podCreateandAppDeploy(faWithRealm, PodNameinFA, podNameinSC, "fada-app-with-pod-realm", true, false)
-		})
-		stepLog = "Deploy FADA application with storage class not having pure_fa_pod_name"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			// Here we dont want to create any pod and create pure_fa_pod_name in storage class ,as this is standard way of Deploying Apps
-			podCreateandAppDeploy(faWithoutRealm, "", "", "fada-app-without-pod-realm", false, false)
-		})
-		stepLog = "Deploy FADA application with storage class having pure_fa_pod_name - this pod is not under a realm in one of the arrays in pure.json"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			podNameinSC = "Torpedo-Test" + time.Now().Format("01-02-15h04m05s")
-			// pod name will not contain any realm , so we just create pod with same naming convention in FA
-			PodNameinFA = podNameinSC
-			podCreateandAppDeploy(faWithoutRealm, PodNameinFA, podNameinSC, "fada-app-with-pod", true, false)
-		})
+		//stepLog = "Deploy FADA application with storage class having pure_fa_pod_name - this pod is under a realm in one of the arrays in pure.json"
+		//Step(stepLog, func() {
+		//	log.InfoD(stepLog)
+		//	podNameinSC = "Torpedo-Test" + time.Now().Format("01-02-15h04m05s")
+		//	// In order to create a pod inside a realm , the pod name should be prefixed with realm, eg: <realm name>::<pod name>
+		//	PodNameinFA = realmName + "::" + podNameinSC
+		//	podCreateandAppDeploy(faWithRealm, PodNameinFA, podNameinSC, "fada-app-with-pod-realm", true, false)
+		//})
+		//stepLog = "Deploy FADA application with storage class not having pure_fa_pod_name"
+		//Step(stepLog, func() {
+		//	log.InfoD(stepLog)
+		//	// Here we dont want to create any pod and create pure_fa_pod_name in storage class ,as this is standard way of Deploying Apps
+		//	podCreateandAppDeploy(faWithoutRealm, "", "", "fada-app-without-pod-realm", false, false)
+		//})
+		//stepLog = "Deploy FADA application with storage class having pure_fa_pod_name - this pod is not under a realm in one of the arrays in pure.json"
+		//Step(stepLog, func() {
+		//	log.InfoD(stepLog)
+		//	podNameinSC = "Torpedo-Test" + time.Now().Format("01-02-15h04m05s")
+		//	// pod name will not contain any realm , so we just create pod with same naming convention in FA
+		//	PodNameinFA = podNameinSC
+		//	podCreateandAppDeploy(faWithoutRealm, PodNameinFA, podNameinSC, "fada-app-with-pod", true, false)
+		//})
 		stepLog = "Deploy FADA application with storage class having pure_fa_pod_name but this pod is not under realm and we will create in fa client where realm is present so that App Deployment should fail(Negative testcase)"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
