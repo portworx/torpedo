@@ -87,7 +87,9 @@ func GetNonPxPureSecret(namespace string) (PXPureSecret, error) {
 
 func GetPXPureSecret(namespace string) (PXPureSecret, error) {
 	conf := PXPureSecret{}
+	log.Infof("[1] GetPXPureSecret: [%v]", conf)
 	err := GetPureSecret(&conf, PureSecretName, namespace)
+	log.Infof("[2] GetPXPureSecret: [%v]", conf)
 	return conf, err
 }
 
@@ -131,7 +133,14 @@ func GetPureSecret(output interface{}, name, namespace string) error {
 		return fmt.Errorf("secret '%s' is missing field '%s'", name, PureJSONKey)
 	}
 
+	// Print the raw JSON data for debugging
+	log.Infof("Raw JSON data: %s", string(pureConnectionJSON))
+
+	log.Infof("[1] output: [%v]", output)
 	err = json.Unmarshal(pureConnectionJSON, output)
+	log.Infof("[2] output: [%v]", output)
+
+	log.Infof("The length of arrays [%d] and blades [%d]", len(output.(PXPureSecret).Arrays), len(output.(PXPureSecret).Blades))
 	if err != nil {
 		return fmt.Errorf("error unmarshaling pure config file from secret '%s': %v", name, err)
 	}
