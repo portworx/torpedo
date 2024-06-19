@@ -81,6 +81,7 @@ func (r *Rancher) GetRancherClusterParametersValue() (*RancherClusterParameters,
 	masterNodeName := node.GetMasterNodes()[0].Name
 	log.Infof("The master node here is %v", masterNodeName)
 	endpoint := "https://" + masterNodeName + "/v3"
+	endpoint = "https://ip-10-13-233-25.pwx.purestorage.com/v3" // Will be removed this line before merge this PR
 	rkeParameters.Endpoint = endpoint
 	rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
 	if rkeToken == "" {
@@ -99,6 +100,7 @@ func (r *Rancher) UpdateRancherClient(clusterName string) error {
 	var rkeToken string
 	masterNodeName := node.GetMasterNodes()[0].Name
 	endpoint := "https://" + masterNodeName + "/v3"
+	endpoint = "https://ip-10-13-233-25.pwx.purestorage.com/v3" // Will be removed this line before merge this PR
 	if clusterName == "destination-config" {
 		rkeToken = os.Getenv("DESTINATION_RKE_TOKEN")
 		if rkeToken == "" {
