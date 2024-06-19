@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"k8s.io/utils/strings/slices"
 	"math"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/devans10/pugo/flasharray"
@@ -27,7 +28,6 @@ import (
 	"regexp"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -9778,16 +9778,18 @@ func createSecrets(namespaces []string, numberOfSecrets int, numberOfEntries int
 }
 
 // DeleteNamespaces Deletes all the namespaces given in a list of namespaces and return error if any
-func DeleteNamespaces(namespaces []string) error {
+func DeleteNamespaces(namespaces []string, wg *sync.WaitGroup) (*sync.WaitGroup, error) {
+	wg.Add(1)
+	defer wg.Done()
 	// Delete a list of namespaces given
 	k8sCore = core.Instance()
 	for _, namespace := range namespaces {
 		err := k8sCore.DeleteNamespace(namespace)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return wg, nil
 }
 
 // VerifyNilPointerDereferenceError returns true if nil pointer dereference, output of the log messages
@@ -13369,3 +13371,81 @@ func DeleteFilesFromS3Bucket(bucketName string, fileName string) error {
 	log.Infof("The files %v are successfully deleted from the bucket [%s]", keys, bucket)
 	return nil
 }
+
+type volDetails struct {
+	nameSpace string
+	scName    string
+	volNames  []string
+}
+
+// CreatePureVolumesInParallel creates mix of FADA and FBDA volumes and returns the list of volumes
+func CreatePureVolumesInParallel(totalVols int) (*sync.WaitGroup, *volDetails, error) {
+	volDetail := &volDetails{}
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	rand.Seed(time.Now().UnixNano())
+	nsuuid := uuid.New()
+	nsName := fmt.Sprintf("pure-ns-%s", nsuuid)
+	pureTypes := []string{"fada", "fbda"}
+	nfsType := []string{"nfsvers=3", "nfsvers=4.1"}
+	scNameFA := fmt.Sprintf("fada-sc-%s", nsuuid)
+	scNameFB := fmt.Sprintf("fbda-sc-%s", nsuuid)
+	randomIndex := rand.Intn(len(pureTypes))
+	volType := pureTypes[randomIndex]
+
+	if volType == "fbda" {
+		protoType := rand.Intn(len(nfsType))
+		proto := nfsType[protoType]
+
+		// Create Flash Storage Class based on the selected
+		params := make(map[string]string)
+		params["pure_export_rules"] = "*(rw)"
+		mountOptions := []string{proto, "tcp"}
+		var allowVolExpansion bool = true
+		err := CreateFlashStorageClass(scNameFB,
+			"pure_file",
+			corev1.PersistentVolumeReclaimDelete,
+			nil, mountOptions, &allowVolExpansion,
+			storageapi.VolumeBindingImmediate,
+			nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		volDetail.scName = scNameFB
+	} else {
+		var allowVolExpansionFA bool = true
+		var max_iops int
+		maxval := 30000
+		minval := 1000
+		max_iops = rand.Intn(maxval-minval+1) + minval
+		baseParams := make(map[string]string)
+		baseParams["repl"] = "1"
+		baseParams["max_iops"] = fmt.Sprintf("%v", max_iops)
+		baseParams["max_bandwidth"] = "1G"
+		err := CreateFlashStorageClass(scNameFA,
+			"pure_block",
+			corev1.PersistentVolumeReclaimDelete,
+			baseParams, nil, &allowVolExpansionFA,
+			storageapi.VolumeBindingImmediate,
+			nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		volDetail.scName = scNameFA
+	}
+	volDetail.nameSpace = nsName
+
+	for eachCount := 0; eachCount > totalVols; eachCount++ {
+		sc := scNameFA
+		if volType == "fbda" {
+			sc = scNameFB
+		}
+		// Create FADA or FBDA volume
+		pvcName := fmt.Sprintf("%s-pvc-%d-%s", volType, eachCount, nsuuid)
+		log.FailOnError(CreateFlashPVCOnCluster(pvcName, sc, nsName, "100"),
+			"Failed to create PVC on the cluster")
+		volDetail.volNames = append(volDetail.volNames, pvcName)
+	}
+	return wg, volDetail, nil
+}
+

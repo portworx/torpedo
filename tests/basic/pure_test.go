@@ -3908,10 +3908,12 @@ var _ = Describe("{ExpandMultiplePoolsWhenFADAVolumeCreationInProgress}", func()
 		namespace, err := CreateNamespaces(nsName, 1)
 		log.FailOnError(err, "Failed to create Namespace")
 
+		wg := sync.WaitGroup{}
 		deleteNamespaces := func() {
 			log.Infof("Deleting Namespaces created during test [%v]", namespace)
-			err := DeleteNamespaces(namespace)
+			wg, err := DeleteNamespaces(namespace, &wg)
 			log.FailOnError(err, fmt.Sprintf("Failed to Delete namespaces [%v]", namespace))
+			wg.Wait()
 		}
 		defer deleteNamespaces()
 
@@ -3966,10 +3968,10 @@ var _ = Describe("{ExpandMultiplePoolsWhenFADAVolumeCreationInProgress}", func()
 		if !IsPoolAddDiskSupported() {
 			expandType = []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
 		}
-		wg, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
+		wgExpand, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
 		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
 
-		wg.Wait()
+		wgExpand.Wait()
 		wgfada.Wait()
 
 		for ns, eachPvc := range pvcNames {
@@ -4029,10 +4031,12 @@ var _ = Describe("{ExpandMultiplePoolsWhenFBDAVolumeCreationInProgress}", func()
 		namespace, err := CreateNamespaces(nsName, 1)
 		log.FailOnError(err, "Failed to create Namespace")
 
+		wg := sync.WaitGroup{}
 		deleteNamespaces := func() {
 			log.Infof("Deleting Namespaces created during test [%v]", namespace)
-			err := DeleteNamespaces(namespace)
+			wg, err := DeleteNamespaces(namespace, &wg)
 			log.FailOnError(err, fmt.Sprintf("Failed to Delete namespaces [%v]", namespace))
+			wg.Wait()
 		}
 		defer deleteNamespaces()
 
@@ -4101,10 +4105,10 @@ var _ = Describe("{ExpandMultiplePoolsWhenFBDAVolumeCreationInProgress}", func()
 			}
 		}
 
-		wg, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
+		wgExpand, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
 		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
 
-		wg.Wait()
+		wgExpand.Wait()
 		wgfada.Wait()
 
 	})
@@ -4148,14 +4152,18 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 		namespace, err := CreateNamespaces(nsName, 1)
 		log.FailOnError(err, "Failed to create Namespace")
 
-		deleteNamespaces := func() {
+		wg := sync.WaitGroup{}
+		deleteNamespaces := func(waitForDelete bool) {
 			log.Infof("Deleting Namespaces created during test [%v]", namespace)
-			err := DeleteNamespaces(namespace)
+			wg, err := DeleteNamespaces(namespace, &wg)
 			log.FailOnError(err, fmt.Sprintf("Failed to Delete namespaces [%v]", namespace))
+			if waitForDelete {
+				wg.Wait()
+			}
 		}
-		defer deleteNamespaces()
+		defer deleteNamespaces(true)
 
-		var nodesToUse []node.Node
+		nodesToUse := []node.Node{}
 		for _, each := range node.GetStorageNodes() {
 			sPools, err := GetPoolsDetailsOnNode(&each)
 			if err != nil {
@@ -4245,6 +4253,25 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 		if len(listFB) > 1 {
 			wgfbda.Wait()
 		}
+
+		// Create New Pools when Volume deletion in Progress
+		nodesToUse = []node.Node{}
+		for _, each := range node.GetStorageNodes() {
+			sPools, err := GetPoolsDetailsOnNode(&each)
+			if err != nil {
+				fmt.Printf("[%v]", err)
+			}
+			if len(sPools) < 8 {
+				nodesToUse = append(nodesToUse, each)
+			}
+		}
+
+		log.Infof("Delete the namespaces while creating new pools")
+		go deleteNamespaces(false)
+		time.Sleep(20 * time.Second)
+		log.FailOnError(CreateNewPoolsOnMultipleNodesInParallel(nodesToUse), "Failed to Create New Pools")
+
+		wg.Wait()
 
 	})
 
@@ -5006,6 +5033,161 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 	})
 })
 
+var _ = Describe("{CreateNewPoolsWhenLotsOfFBDAVolumesAreGettingCreatedDeleted}", func() {
+	/*
+		Create new pools when lots of FADA volumes are Getting deleted on the cluster
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateNewPoolsWhenLotsOfFBDAVolumesAreGettingCreatedDeleted",
+			"Create new pools when lots of Create / Delete FBDA Volumes are in progress",
+			nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	itLog := "CreateNewPoolsWhenLotsOfFBDAVolumesAreGettingCreatedDeleted"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		var wg sync.WaitGroup
+		numGoroutines := 2
+
+		// Go Routine to create volume continuously
+		volumesCreated := []string{}
+
+		// Create New Pools when Volume deletion in Progress
+		nodesToUse := []node.Node{}
+		for _, each := range node.GetStorageNodes() {
+			sPools, err := GetPoolsDetailsOnNode(&each)
+			if err != nil {
+				fmt.Printf("[%v]", err)
+			}
+			if len(sPools) < 6 {
+				nodesToUse = append(nodesToUse, each)
+			}
+		}
+
+		// Create Namespace on the cluster
+		nsuuid := uuid.New()
+		nsName := fmt.Sprintf("fbda-ns-%s", nsuuid.String())
+
+		log.Infof("Create Namespace with Name [%v]", nsName)
+		namespace, err := CreateNamespaces(nsName, 1)
+		log.FailOnError(err, "Failed to create Namespace")
+
+		// Create Storage Class FB
+		scNameFB := fmt.Sprintf("fbda-sc-%s", nsuuid.String())
+		log.Infof("Create Storage class with Name [%v]", scNameFB)
+
+		params := make(map[string]string)
+		params["pure_export_rules"] = "*(rw)"
+
+		mountOptions := []string{"nfsvers=4.1", "tcp"}
+		var allowVolExpansion bool = true
+		err = CreateFlashStorageClass(scNameFB,
+			"pure_file",
+			v1.PersistentVolumeReclaimDelete,
+			nil, mountOptions, &allowVolExpansion,
+			storageApi.VolumeBindingImmediate,
+			nil)
+		log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", scNameFB))
+
+		wgDel := sync.WaitGroup{}
+		deleteNamespaces := func(waitForDelete bool) {
+			log.Infof("Deleting Namespaces created during test [%v]", namespace)
+			wgDel, err := DeleteNamespaces(namespace, &wgDel)
+			log.FailOnError(err, fmt.Sprintf("Failed to Delete namespaces [%v]", namespace))
+			if waitForDelete {
+				wgDel.Wait()
+			}
+		}
+		defer deleteNamespaces(true)
+
+		wg.Add(numGoroutines)
+		terminate := false
+		stopRoutine := func() {
+			if !terminate {
+				terminate = true
+				for _, each := range volumesCreated {
+					err := core.Instance().DeletePersistentVolumeClaim(each, namespace[0])
+					log.FailOnError(err,
+						"volume deletion failed on the cluster with volume ID [%s]", each)
+				}
+			}
+		}
+		defer stopRoutine()
+
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+			for {
+				if terminate {
+					break
+				}
+				// Volume create continuously
+				uuidObj := uuid.New()
+				VolName := fmt.Sprintf("volume-%s", uuidObj.String())
+				Size := uint64(rand.Intn(100) + 1) // Size of the Volume between 1G to 100G
+				log.Infof("Creating Volume [%v]", VolName)
+				err := CreateFlashPVCOnCluster(VolName, scNameFB, namespace[0], fmt.Sprintf("%v", Size))
+				if err != nil {
+					stopRoutine()
+					log.FailOnError(err, "volume creation failed on the cluster with volume name [%s]", VolName)
+				}
+
+				err = Inst().S.WaitForSinglePVCToBound(VolName, namespace[0], 30)
+				log.FailOnError(err, fmt.Sprintf("error validating PVC [%s] status in namespace [%s]", VolName, namespace))
+
+				volumesCreated = append(volumesCreated, VolName)
+			}
+		}()
+
+		// Go Routine to delete volume continuously in parallel to volume create
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+			for {
+				if terminate {
+					break
+				}
+				if len(volumesCreated) > 5 {
+					deleteVolume := volumesCreated[0]
+
+					log.Infof("Deleting Volume [%v]", deleteVolume)
+					err := core.Instance().DeletePersistentVolumeClaim(deleteVolume, namespace[0])
+					if err != nil {
+						stopRoutine()
+						log.FailOnError(err,
+							"volume deletion failed on the cluster with volume ID [%s]", deleteVolume)
+					}
+
+					// Remove the first element
+					for i := 0; i < len(volumesCreated)-1; i++ {
+						volumesCreated[i] = volumesCreated[i+1]
+					}
+					// Resize the array by truncating the last element
+					volumesCreated = volumesCreated[:len(volumesCreated)-1]
+				}
+			}
+
+		}()
+
+		time.Sleep(20 * time.Second)
+		// Create 2 pools on each node
+		for i := 0; i < 2; i++ {
+			log.FailOnError(CreateNewPoolsOnMultipleNodesInParallel(nodesToUse), "Failed to Create New Pools")
+		}
+
+		terminate = true
+		wg.Wait()
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		DestroyApps(contexts, nil)
+		AfterEachTest(contexts)
+	})
+
+=======
 
 var _ = Describe("{TrashcanRecovery}", func() {
 	/*
@@ -5682,4 +5864,5 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
+
 })
