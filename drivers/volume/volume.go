@@ -468,7 +468,7 @@ type Driver interface {
 	GetNodePureVolumeAttachedCountMap() (map[string]int, error)
 
 	// AddBlockDrives add drives to the node using PXCTL
-	AddBlockDrives(n *node.Node, drivePath []string) error
+	AddBlockDrives(n *node.Node, drivePath []string, params string, newpool bool, drvCnt int) error
 
 	// GetPoolDrives returns the map of poolID and drive name
 	GetPoolDrives(n *node.Node) (map[string][]DiskResource, error)
@@ -476,8 +476,14 @@ type Driver interface {
 	// AddCloudDrive add cloud drives to the node using PXCTL
 	AddCloudDrive(n *node.Node, devcieSpec string, poolID int32) error
 
+	// AddCloudDrive add cloud drives to the node using PXCTL with extra params
+	AddCloudDriveWithParams(n *node.Node, devcieSpec string, poolID int32, params string, skipDrivesCount bool) error
+
 	// GetPoolsUsedSize returns map of pool id and current used size
 	GetPoolsUsedSize(n *node.Node) (map[string]string, error)
+
+	// GetPoolsMaxSize returns map of pool id and max pool size
+	GetPoolsMaxSize(n *node.Node) (map[string]string, error)
 
 	// IsIOsInProgressForTheVolume checks if IOs are happening in the given volume
 	IsIOsInProgressForTheVolume(n *node.Node, volumeNameOrID string) (bool, error)

@@ -8254,7 +8254,7 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 					}
 				}
 
-				err = Inst().V.AddBlockDrives(&storageNode, drvPaths)
+				err = Inst().V.AddBlockDrives(&storageNode, drvPaths, "", false, 0)
 				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
 					log.Warn(err.Error())
 					continue

@@ -1088,7 +1088,7 @@ func (d *DefaultDriver) RejoinNode(n *node.Node) error {
 }
 
 // AddBlockDrives add drives to the node using PXCTL
-func (d *DefaultDriver) AddBlockDrives(n *node.Node, drivePath []string) error {
+func (d *DefaultDriver) AddBlockDrives(n *node.Node, drivePath []string, params string, newpool bool, drvCnt int) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "AddBlockDrives()",
@@ -1111,11 +1111,27 @@ func (d *DefaultDriver) AddCloudDrive(n *node.Node, deviceSpec string, poolID in
 	}
 }
 
+// AddCloudDriveWithParams add drives to the node using PXCTL
+func (d *DefaultDriver) AddCloudDriveWithParams(n *node.Node, deviceSpec string, poolID int32, params string, skipDrivesCount bool) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "AddCloudDriveWithParams()",
+	}
+}
+
 // GetPoolsUsedSize returns map of pool id and current used size
 func (d *DefaultDriver) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetPoolsUsedSize()",
+	}
+}
+
+// GetPoolsMaxSize returns map of pool id and max pool size
+func (d *DefaultDriver) GetPoolsMaxSize(n *node.Node) (map[string]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPoolsMaxSize()",
 	}
 }
 

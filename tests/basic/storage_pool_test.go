@@ -11798,3 +11798,843 @@ var _ = Describe("{PoolDeleteMultiplePools}", func() {
 	})
 
 })
+
+var _ = Describe("{PoolCreateNegative}", func() {
+	/*
+	   Negative inputs to pxctl sv add drive CLI
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolCreateNegative", "Tests cases where pool creation should fail", nil, 0)
+	})
+
+	var selectedNode *node.Node
+	var err error
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "Specify invalid drives count fails"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		err = AddCloudDriveWithParams(*selectedNode, -1, "--drives-count 40", false)
+		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Expect pool create to fail: got [%v]", err))
+	})
+
+	ItLog = "Specify invalid max thin pool size"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		err = AddCloudDriveWithParams(*selectedNode, -1, "--max-pool-size-tb 600", false)
+		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Expect pool create to fail: got [%v]", err))
+	})
+
+	ItLog = "drives count without newpool"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		err = AddCloudDriveWithParams(*selectedNode, 0, "--drives-count 2", false)
+		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Expect pool create to fail: got [%v]", err))
+	})
+
+	ItLog = "max thin pool size without newpool"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		err = AddCloudDriveWithParams(*selectedNode, 0, "--max-pool-size-tb 20", false)
+		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Expect pool create to fail: got [%v]", err))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolCreateNegativeOnPrem}", func() {
+	/*
+	   Negative inputs to pxctl sv add drive CLI
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolCreateNegativeOnPrem", "Tests cases where pool creation should fail", nil, 0)
+	})
+
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "Specify drives count with -d fails"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		err = Inst().V.AddBlockDrives(selectedNode, []string{}, "--newpool --drives-count 5", true, 1)
+		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Expect pool create to fail: got [%v]", err))
+	})
+
+	ItLog = "Specify invalid max thin pool size range"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		err = Inst().V.AddBlockDrives(selectedNode, []string{}, "--newpool --max-pool-size-tb 700", true, 1)
+		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Expect pool create to fail: got [%v]", err))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolValidateMaxThinPoolSizeDefault}", func() {
+	/*
+		1. Validate max thin pool size has a default value
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolValidateMaxThinPoolSizeDefault", "Tests case where pool default max thin pool size is validated", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip validating max pool size for non-dmthin setup")
+	}
+
+	ItLog := "Validate default max thin pool size"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		stNodes := node.GetStorageNodes()
+		for _, stNode := range stNodes {
+			err = VerifyPoolMaxSizeOnNode(&stNode, 45)
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Did not find pools with default max pool size %s", stNode.Name))
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolCreateDefaultMaxThinPoolSizeOnPrem}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolCreateDefaultMaxThinPoolSizeOnPrem", "Tests case where pool created with default max thin pool size", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip test for non-dmthin setup")
+	}
+
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "Create pool with default max thin pool size"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		// deploy applications
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("flexp-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		err = Inst().V.AddBlockDrives(selectedNode, []string{}, "--newpool", true, 1)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Expect pool create to success: got [%v]", err))
+		time.Sleep(time.Second * 15)
+		err = Inst().V.WaitDriverUpOnNode(*selectedNode, addDriveUpTimeOut)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("volume drive down on node %s", selectedNode.Name))
+		err = VerifyPoolMaxSizeOnNode(selectedNode, 45)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Did not find pools with default max pool size %s", selectedNode.Name))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolCreateDriveListOnPrem}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolCreateDriveListOnPrem", "Tests case where pool created with list of drives", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip test for non-dmthin setup")
+	}
+
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "Create pool with list of drives"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		// deploy applications
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("flexp-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		err = Inst().V.AddBlockDrives(selectedNode, []string{}, "--newpool --max-pool-size-tb 75", true, 2)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Expect pool create to success: got [%v]", err))
+		time.Sleep(time.Second * 15)
+		err = Inst().V.WaitDriverUpOnNode(*selectedNode, addDriveUpTimeOut)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("volume drive down on node %s", selectedNode.Name))
+		err = VerifyPoolMaxSizeOnNode(selectedNode, 75)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Did not find pools with default max pool size %s", selectedNode.Name))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolCreateMaxThinPoolSizeOnPrem}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolCreateMaxThinPoolSizeOnPrem", "Tests case where pool created with custom max thin pool size", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip test for non-dmthin setup")
+	}
+
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "Create pool with custom max thin pool size"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		// deploy applications
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("flexp-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		err = Inst().V.AddBlockDrives(selectedNode, []string{}, "--newpool --max-pool-size-tb 480", true, 1)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Expect pool create to success: got [%v]", err))
+		time.Sleep(time.Second * 15)
+		err = Inst().V.WaitDriverUpOnNode(*selectedNode, addDriveUpTimeOut)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("volume drive down on node %s", selectedNode.Name))
+		err = VerifyPoolMaxSizeOnNode(selectedNode, 480)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Did not find pools with default max pool size %s", selectedNode.Name))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolCreateInvalidMaxThinPoolSize}", func() {
+	/*
+		1. Create pools with max thin pool size that cannot be reached on cloud
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolCreateInvalidMaxThinPoolSize", "Tests case where pool cannot reached specified max thin pool size on cloud backends", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip test for non-dmthin setup")
+	}
+
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "Create pool with invalid max thin pool size"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		err = AddCloudDriveWithParams(*selectedNode, -1, "--max-pool-size-tb 240 --drives-count 1", false)
+		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Expect pool create to fail: got [%v]", err))
+		time.Sleep(time.Second * 15)
+		err = Inst().V.WaitDriverUpOnNode(*selectedNode, addDriveUpTimeOut)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("volume drive down on node %s", selectedNode.Name))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolCreateValidMaxThinPoolSize}", func() {
+	/*
+	   1. Create pools with max thin pool size that can be reached on cloud
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolCreateValidMaxThinPoolSize", "Tests case where pool can reach specified max thin pool size on cloud backends", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip test for non-dmthin setup")
+	}
+
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "Create pool with valid max thin pool size"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		// deploy applications
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("flexp-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		err = AddCloudDriveWithParams(*selectedNode, -1, "--max-pool-size-tb 15", false)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Expect pool create to success: got [%v]", err))
+		time.Sleep(time.Second * 15)
+		err = Inst().V.WaitDriverUpOnNode(*selectedNode, addDriveUpTimeOut)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("volume drive down on node %s", selectedNode.Name))
+		err = VerifyPoolMaxSizeOnNode(selectedNode, 15)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Did not find pools with default max pool size %s", selectedNode.Name))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolCreateWithDefaultDriveCount}", func() {
+
+	/*
+	   1. Create pools with default drives count
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolCreateWithDefaultDriveCount", "Tests case where pool can be created without specifying drives count on cloud", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip test for non-dmthin setup")
+	}
+
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "Create pool with invalid max thin pool size"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("flexp-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		err = AddCloudDriveWithParams(*selectedNode, -1, "", true)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Expect pool create to success: got [%v]", err))
+		time.Sleep(time.Second * 15)
+		err = Inst().V.WaitDriverUpOnNode(*selectedNode, addDriveUpTimeOut)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("volume drive down on node %s", selectedNode.Name))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolCreateWithDriveCount}", func() {
+	/*
+	   1. Create pools with valid drives count
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolCreateWithDriveCount", "Tests case where pool can be created with multiple drives on cloud", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip test for non-dmthin setup")
+	}
+
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "Create pool with invalid max thin pool size"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("flexp-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		err = AddCloudDriveWithParams(*selectedNode, -1, "--drives-count 2", false)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Expect pool create to success: got [%v]", err))
+		time.Sleep(time.Second * 15)
+		err = Inst().V.WaitDriverUpOnNode(*selectedNode, addDriveUpTimeOut)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("volume drive down on node %s", selectedNode.Name))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolCreateWithDrivesCountBeyondPerPoolLimit}", func() {
+	/*
+	   1. Create pools with valid drives count that goes beyond per pool limit
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolCreateWithDrivesCountBeyondPerPoolLimit", "Tests case where pool adds multiple drives on cloud beyond the per pool limit", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip test for non-dmthin setup")
+	}
+
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "Update cluster runtime option settings"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		err = Inst().V.SetClusterRunTimeOpts(*selectedNode, map[string]string{
+			"limit_drives_per_pool": "1",
+		})
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("set cluster runtime opts fail: got [%v]", err))
+
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("flexp-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		err = AddCloudDriveWithParams(*selectedNode, -1, "--drives-count 2", false)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Expect pool create to success: got [%v]", err))
+		time.Sleep(time.Second * 15)
+		err = Inst().V.WaitDriverUpOnNode(*selectedNode, addDriveUpTimeOut)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("volume drive down on node %s", selectedNode.Name))
+		err = Inst().V.SetClusterRunTimeOpts(*selectedNode, map[string]string{
+			"limit_drives_per_pool": "6",
+		})
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("set cluster runtime opts fail: got [%v]", err))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolCreateWithMultipleParams}", func() {
+	/*
+	   1. Create pools with valid drives count and valid max thin pool size
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolCreateWithMultipleParams", "Tests case where pool can be created with multiple parameters specified on cloud", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip test for non-dmthin setup")
+	}
+
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "Create pool with invalid max thin pool size"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("flexp-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		err = AddCloudDriveWithParams(*selectedNode, -1, "--drives-count 2 --max-pool-size-tb 30", false)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Expect pool create to success: got [%v]", err))
+		time.Sleep(time.Second * 15)
+		err = Inst().V.WaitDriverUpOnNode(*selectedNode, addDriveUpTimeOut)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("volume drive down on node %s", selectedNode.Name))
+		err = VerifyPoolMaxSizeOnNode(selectedNode, 30)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Did not find pools with default max pool size %s", selectedNode.Name))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolCreateWithMultipleParamsFails}", func() {
+	/*
+	   1. Create pools with valid drives count and valid max thin pool size, but not rechable on cloud
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolCreateWithMultipleParamsFails", "Tests case where pool can be created with multiple parameters specified on cloud results in failure", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip test for non-dmthin setup")
+	}
+
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "Create pool with invalid max thin pool size"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		err = AddCloudDriveWithParams(*selectedNode, -1, "--drives-count 1 --max-pool-size-tb 480", false)
+		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Expect pool create to fail: got [%v]", err))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolExpandBeyondLimit}", func() {
+	BeforeEach(func() {
+		StartTorpedoTest("PoolExpandBeyondLimit", "Tests pool expansion to size beyond limit", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip test for non-dmthin setup")
+	}
+
+	ItLog := "pool attempt expand beyond limit fails"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("flexp-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
+		dash.VerifyFatal(len(poolIDToResize) > 0, true, fmt.Sprintf("Expected poolIDToResize to not be empty, pool id to resize %s", poolIDToResize))
+		poolToResize = getStoragePool(poolIDToResize)
+		originalSizeInBytes = poolToResize.TotalSize
+		targetSizeInBytes = 240 * units.TiB
+		targetSizeGiB := targetSizeInBytes / units.GiB
+
+		log.InfoD("Current size of pool %s is %d GiB. Trying to expand to %v GiB",
+			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+		err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, targetSizeGiB, true)
+		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Pool expansion does not result in error %v", err))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolExpandUptoLimit}", func() {
+	BeforeEach(func() {
+		StartTorpedoTest("PoolExpandUptoLimit", "Tests pool expansion to size upto limit", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip test for non-dmthin setup")
+	}
+
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "pool attempt expand upto limit"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("flexp-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		err = AddCloudDriveWithParams(*selectedNode, -1, "--max-pool-size-tb 15", false)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Expect pool create to success: got [%v]", err))
+		time.Sleep(time.Second * 15)
+		err = Inst().V.WaitDriverUpOnNode(*selectedNode, addDriveUpTimeOut)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("volume drive down on node %s", selectedNode.Name))
+
+		poolIDToResize, err = GetPoolMaxSizeOnNode(selectedNode, 15)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Expected no error %v", err))
+		poolToResize = getStoragePool(poolIDToResize)
+		originalSizeInBytes = poolToResize.TotalSize
+		targetSizeInBytes = 15 * units.TiB
+		targetSizeGiB := targetSizeInBytes / units.GiB
+
+		log.InfoD("Current size of pool %s is %d GiB. Trying to expand to %v GiB",
+			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+		err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, targetSizeGiB, true)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Pool expansion result in error %v", err))
+		resizeErr := waitForPoolToBeResized(targetSizeGiB, poolToResize.Uuid, false)
+		dash.VerifyFatal(resizeErr == nil, true, fmt.Sprintf("Pool expansion success %v", resizeErr))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolCreateUpdateClusterOpAndCreate}", func() {
+	/*
+	   1. Create pool, update cluster op and create pool again
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolCreateUpdateClusterOpAndCreate", "Tests case where pool is created, cluster op max thin pool size updated and pool is created again", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip test for non-dmthin setup")
+	}
+
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "pool is created, cluster op max thin pool size updated and pool is created again"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("flexp-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		err = AddCloudDrive(*selectedNode, -1)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Expect pool create to success: got [%v]", err))
+		time.Sleep(time.Second * 15)
+		err = Inst().V.WaitDriverUpOnNode(*selectedNode, addDriveUpTimeOut)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("volume drive down on node %s", selectedNode.Name))
+		err = Inst().V.SetClusterRunTimeOpts(*selectedNode, map[string]string{
+			"max_pool_size_tb": "15",
+		})
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("set cluster runtime opts fail: got [%v]", err))
+		err = AddCloudDrive(*selectedNode, -1)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Expect pool create to success: got [%v]", err))
+		time.Sleep(time.Second * 15)
+		err = Inst().V.WaitDriverUpOnNode(*selectedNode, addDriveUpTimeOut)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("volume drive down on node %s", selectedNode.Name))
+		err = VerifyPoolMaxSizeOnNode(selectedNode, 15)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Did not find pools with default max pool size %s", selectedNode.Name))
+		err = Inst().V.SetClusterRunTimeOpts(*selectedNode, map[string]string{
+			"max_pool_size_tb": "0",
+		})
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("set cluster runtime opts fail: got [%v]", err))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolCreateMaxThinPoolSizePrecedence}", func() {
+	/*
+	   1. Create pool with max thin pool size specified via cluster op and CLI, CLI takes precedence
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolCreateMaxThinPoolSizePrecedence", "Tests case where pool is created, max pool size is specified via both cluster op and CLI and CLI takes precedence", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip test for non-dmthin setup")
+	}
+
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "pool is created, cluster op max thin pool size updated and pool is created again"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("flexp-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		err = Inst().V.SetClusterRunTimeOpts(*selectedNode, map[string]string{
+			"max_pool_size_tb": "480",
+		})
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("set cluster runtime opts fail: got [%v]", err))
+		err = AddCloudDriveWithParams(*selectedNode, -1, "--drives-count 3 --max-pool-size-tb 45", false)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Expect pool create to success: got [%v]", err))
+		time.Sleep(time.Second * 15)
+		err = Inst().V.WaitDriverUpOnNode(*selectedNode, addDriveUpTimeOut)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("volume drive down on node %s", selectedNode.Name))
+		err = VerifyPoolMaxSizeOnNode(selectedNode, 45)
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("Did not find pools with default max pool size %s", selectedNode.Name))
+		err = Inst().V.SetClusterRunTimeOpts(*selectedNode, map[string]string{
+			"max_pool_size_tb": "0",
+		})
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("set cluster runtime opts fail: got [%v]", err))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PoolCreateWithDrivesCountBeyondPerNodeLimit}", func() {
+	/*
+	   1. Create pools with drives count not reachable on cloud
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolCreateWithDrivesCountBeyondPerNodeLimit", "Tests case where pool creation drives count is beyond per node limit on cloud results in failure", nil, 0)
+	})
+
+	isDMthin, err := IsDMthin()
+	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+	if !isDMthin {
+		Skip("Skip test for non-dmthin setup")
+	}
+
+	var selectedNode *node.Node
+	BeforeEach(func() {
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		selectedNode = &stNodes[randomIndex]
+		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
+	})
+
+	ItLog := "Create pool with invalid max thin pool size"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		err = AddCloudDriveWithParams(*selectedNode, -1, "--drives-count 32", false)
+		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Expect pool create to fail: got [%v]", err))
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})

@@ -10360,7 +10360,15 @@ func RemoveLabelsAllNodes(label string, forStorage, forStorageLess bool) error {
 	return nil
 }
 
+func AddCloudDriveWithParams(stNode node.Node, poolID int32, params string, skipDrivesCount bool) error {
+	return AddCloudDriveInternal(stNode, poolID, params, skipDrivesCount)
+}
+
 func AddCloudDrive(stNode node.Node, poolID int32) error {
+	return AddCloudDriveInternal(stNode, poolID, "", false)
+}
+
+func AddCloudDriveInternal(stNode node.Node, poolID int32, params string, skipDrivesCount bool) error {
 	driveSpecs, err := GetCloudDriveDeviceSpecs()
 	if err != nil {
 		return fmt.Errorf("error getting cloud drive specs, err: %v", err)
@@ -10430,7 +10438,11 @@ func AddCloudDrive(stNode node.Node, poolID int32) error {
 	expectedTotalPoolSize := currentTotalPoolSize + specSize
 
 	log.InfoD("Initiate add cloud drive and validate")
-	err = Inst().V.AddCloudDrive(&stNode, deviceSpec, poolID)
+	if params != "" || skipDrivesCount {
+		err = Inst().V.AddCloudDriveWithParams(&stNode, deviceSpec, poolID, params, skipDrivesCount)
+	} else {
+		err = Inst().V.AddCloudDrive(&stNode, deviceSpec, poolID)
+	}
 	if err != nil {
 		return fmt.Errorf("add cloud drive failed on node %s, err: %v", stNode.Name, err)
 	}
@@ -13857,4 +13869,30 @@ func GetVolumeNamefromPVC(namespace string) ([]string, error) {
 		return pvclist, nil
 	}
 	return nil, fmt.Errorf("No PVCs found in namespace [%s]", namespace)
+}
+
+func VerifyPoolMaxSizeOnNode(stNode *node.Node, maxSizeTb uint64) error {
+	poolsMaxSize, err := Inst().V.GetPoolsMaxSize(stNode)
+	log.FailOnError(err, "Error getting max pool size %s %v", stNode.Name, err)
+	for _, m := range poolsMaxSize {
+		maxSize, _ := strconv.ParseUint(m, 10, 64)
+		if maxSize == uint64(maxSizeTb*units.TiB) {
+			return nil
+		}
+	}
+	// Atleast few pools should exist on node with default setting
+	return fmt.Errorf("No matching pools")
+}
+
+func GetPoolMaxSizeOnNode(stNode *node.Node, maxSizeTb uint64) (string, error) {
+	poolsMaxSize, err := Inst().V.GetPoolsMaxSize(stNode)
+	log.FailOnError(err, "Error getting max pool size %s %v", stNode.Name, err)
+	for p, m := range poolsMaxSize {
+		maxSize, _ := strconv.ParseUint(m, 10, 64)
+		if maxSize == uint64(maxSizeTb*units.TiB) {
+			return p, nil
+		}
+	}
+	// Atleast few pools should exist on node with default setting
+	return "", fmt.Errorf("No matching pools")
 }

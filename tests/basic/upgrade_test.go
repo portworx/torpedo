@@ -125,7 +125,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 
 		if !isCloudDrive {
 			for _, storageNode := range storageNodes {
-				err := Inst().V.AddBlockDrives(&storageNode, nil)
+				err := Inst().V.AddBlockDrives(&storageNode, nil, "", false, 0)
 				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
 					continue
 				}

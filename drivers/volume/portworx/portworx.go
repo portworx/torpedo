@@ -5796,7 +5796,7 @@ func (d *portworx) RecoverNode(n *node.Node) error {
 }
 
 // AddBlockDrives add drives to the node using PXCTL
-func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
+func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string, params string, newpool bool, drvCnt int) error {
 	systemOpts := node.SystemctlOpts{
 		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         startDriverTimeout,
@@ -5829,25 +5829,58 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 		return fmt.Errorf("no block drives available to add")
 	}
 
+	var drvList string
+	var drvSize string
+	firstDrive := true
+	if newpool && (drvCnt > 0) {
+		for _, drv := range eligibleDrives {
+			if firstDrive {
+				firstDrive = false
+				drvSize = drv.Size
+			}
+			if drvSize == drv.Size {
+				drvList = drvList + drv.Path + ","
+				drvCnt--
+				if drvCnt == 0 {
+					break
+				}
+			}
+		}
+		drvList = strings.TrimSuffix(drvList, ",")
+	}
 	if drivePath == nil || len(drivePath) == 0 {
 		log.Infof("Adding all the available drives")
 		for _, drv := range eligibleDrives {
-			if err := addDrive(*n, drv.Path, -1, d); err != nil {
-				return err
-			}
-			if err := waitForAddDriveToComplete(*n, drv.Path, d); err != nil {
-				return err
+			if !newpool {
+				if err := addDrive(*n, drv.Path, params, newpool, -1, d); err != nil {
+					return err
+				}
+				if err := waitForAddDriveToComplete(*n, drv.Path, d); err != nil {
+					return err
+				}
+			} else {
+				if err := addDrive(*n, drvList, params, newpool, -1, d); err != nil {
+					return err
+				}
+				break
 			}
 		}
 	} else {
 		for _, drvPath := range drivePath {
 			drv, ok := eligibleDrives[drvPath]
 			if ok {
-				if err := addDrive(*n, drv.Path, -1, d); err != nil {
-					return err
-				}
-				if err := waitForAddDriveToComplete(*n, drv.Path, d); err != nil {
-					return err
+				if !newpool {
+					if err := addDrive(*n, drv.Path, params, newpool, -1, d); err != nil {
+						return err
+					}
+					if err := waitForAddDriveToComplete(*n, drv.Path, d); err != nil {
+						return err
+					}
+				} else {
+					if err := addDrive(*n, drvList, params, newpool, -1, d); err != nil {
+						return err
+					}
+					break
 				}
 			} else {
 				return fmt.Errorf("block drive path [%s] is not eligible or does not exist to perform drive add", drvPath)
@@ -5933,16 +5966,29 @@ func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]torpedovolume.DiskR
 // AddCloudDrive add cloud drives to the node using PXCTL
 func (d *portworx) AddCloudDrive(n *node.Node, deviceSpec string, poolID int32) error {
 	log.Infof("Adding Cloud drive on node [%s] with spec [%s] on pool ID [%d]", n.Name, deviceSpec, poolID)
-	return addDrive(*n, deviceSpec, poolID, d)
+	return addDrive(*n, deviceSpec, "", false, poolID, d)
 }
 
-func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
+// AddCloudDriveWithParams add cloud drives to the node using PXCTL
+func (d *portworx) AddCloudDriveWithParams(n *node.Node, deviceSpec string, poolID int32, params string, skipDrivesCount bool) error {
+	log.Infof("Adding Cloud drive on node [%s] with spec [%s] on pool ID [%d]", n.Name, deviceSpec, poolID)
+	return addDrive(*n, deviceSpec, params, skipDrivesCount, poolID, d)
+}
+
+func addDrive(n node.Node, drivePath string, params string, skipDrivesCount bool, poolID int32, d *portworx) error {
 	driveAddFlag := fmt.Sprintf("-d %s", drivePath)
+	if !strings.Contains(drivePath, "size") && params != "" {
+		driveAddFlag = fmt.Sprintf("%s %s", driveAddFlag, params)
+	}
 
 	if strings.Contains(drivePath, "size") {
 		driveAddFlag = fmt.Sprintf("-s %s", drivePath)
 		if poolID != -1 {
-			driveAddFlag = fmt.Sprintf("%s -p %d", driveAddFlag, poolID)
+			if params == "" {
+				driveAddFlag = fmt.Sprintf("%s -p %d", driveAddFlag, poolID)
+			} else {
+				driveAddFlag = fmt.Sprintf("%s %s -p %d", driveAddFlag, params, poolID)
+			}
 		} else {
 			stringMatch := false
 			matchType := []string{"metadata", "journal"}
@@ -5954,7 +6000,23 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 				}
 			}
 			if !stringMatch {
-				driveAddFlag = fmt.Sprintf("%s %s", driveAddFlag, "--newpool")
+				if params != "" {
+					if strings.Contains(params, "drives-count") {
+						driveAddFlag = fmt.Sprintf("%s %s %s", driveAddFlag, "--newpool", params)
+					} else {
+						if skipDrivesCount {
+							driveAddFlag = fmt.Sprintf("%s %s %s", driveAddFlag, "--newpool", params)
+						} else {
+							driveAddFlag = fmt.Sprintf("%s %s %s", driveAddFlag, "--newpool --drives-count 1", params)
+						}
+					}
+				} else {
+					if skipDrivesCount {
+						driveAddFlag = fmt.Sprintf("%s %s", driveAddFlag, "--newpool")
+					} else {
+						driveAddFlag = fmt.Sprintf("%s %s", driveAddFlag, "--newpool --drives-count 1")
+					}
+				}
 			}
 
 		}
@@ -6071,6 +6133,54 @@ func (d *portworx) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
 			poolsData[poolId] = usedSize
 			poolId = ""
 			usedSize = ""
+		}
+	}
+	return poolsData, nil
+}
+
+// GetPoolsMaxSize returns map of pool id and max pool size
+func (d *portworx) GetPoolsMaxSize(n *node.Node) (map[string]string, error) {
+	cmd := fmt.Sprintf("%s sv pool show -j | grep -e uuid -e '\"MaxPoolSize\"'", d.getPxctlPath(*n))
+	log.Infof("Running command [%s] on node [%s]", cmd, n.Name)
+
+	t := func() (interface{}, bool, error) {
+		out, err := d.nodeDriver.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		if err != nil {
+			return "", true, err
+		}
+		return out, false, nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+
+	if err != nil {
+		return nil, err
+	}
+	outLines := strings.Split(out.(string), "\n")
+
+	poolsData := make(map[string]string)
+	var poolId string
+	var maxSize string
+	for _, l := range outLines {
+		line := strings.Trim(l, " ")
+		line = strings.Trim(line, ",")
+		if strings.Contains(line, "uuid") {
+			poolId = strings.Split(line, ":")[1]
+			poolId = strings.Trim(poolId, " ")
+			poolId = strings.ReplaceAll(poolId, "\"", "")
+		}
+		if strings.Contains(line, "MaxPoolSize") {
+			maxSize = strings.Split(line, ":")[1]
+			maxSize = strings.Trim(maxSize, " ")
+			maxSize = strings.ReplaceAll(maxSize, "\"", "")
+		}
+		if poolId != "" && maxSize != "" {
+			poolsData[poolId] = maxSize
+			poolId = ""
+			maxSize = ""
 		}
 	}
 	return poolsData, nil
