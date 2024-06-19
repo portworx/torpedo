@@ -1928,8 +1928,12 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
+		// volume.GetStorageProvisioner() returns the corresponding value from the portworx.provisioners map
+		// based on the --provisioner flag, such as "kubernetes.io/portworx-volume", "pxd.portworx.com", or "strict".
 		if volume.GetStorageProvisioner() != PortworxStrict {
-			if options.StorageProvisioner == string(volume.DefaultStorageProvisioner) || options.StorageProvisioner == CsiProvisioner {
+			// options.StorageProvisioner corresponds to the --provisioner flag (portworx or csi).
+			if options.StorageProvisioner == string(volume.DefaultStorageProvisioner) || options.StorageProvisioner == string(volume.CSIStorageProvisioner) {
+				// app.IsCSI is true if the app is in CSI_APP_LIST.
 				if app.IsCSI {
 					obj.Provisioner = CsiProvisioner
 				} else {
@@ -8137,6 +8141,41 @@ func (k *K8s) CreateVolumeSnapshotClasses(snapClassName string, provisioner stri
 		ObjectMeta:     v1obj,
 		Driver:         provisioner,
 		DeletionPolicy: volsnapv1.DeletionPolicy(deletePolicy),
+	}
+
+	log.Infof("Creating volume snapshot class: %v with provisioner %v", snapClassName, provisioner)
+	if volumeSnapClass, err = k8sExternalsnap.CreateSnapshotClass(&snapClass); err != nil {
+		return nil, &scheduler.ErrFailedToCreateSnapshotClass{
+			Name:  snapClassName,
+			Cause: err,
+		}
+	}
+	return volumeSnapClass, nil
+}
+
+// CreateVolumeSnapshotClassesWithParameters creates a volume snapshot class with additional parameters
+func (k *K8s) CreateVolumeSnapshotClassesWithParameters(snapClassName string, provisioner string, isDefault bool, deletePolicy string, parameters map[string]string) (*volsnapv1.VolumeSnapshotClass, error) {
+	var err error
+	var annotation = make(map[string]string)
+	var volumeSnapClass *volsnapv1.VolumeSnapshotClass
+	if isDefault {
+		annotation["snapshot.storage.kubernetes.io/is-default-class"] = "true"
+	} else {
+		annotation = make(map[string]string)
+	}
+
+	v1obj := metav1.ObjectMeta{
+		Name:        snapClassName,
+		Annotations: annotation,
+	}
+	if len(deletePolicy) == 0 {
+		deletePolicy = "Delete"
+	}
+	snapClass := volsnapv1.VolumeSnapshotClass{
+		ObjectMeta:     v1obj,
+		Driver:         provisioner,
+		DeletionPolicy: volsnapv1.DeletionPolicy(deletePolicy),
+		Parameters:     parameters,
 	}
 
 	log.Infof("Creating volume snapshot class: %v with provisioner %v", snapClassName, provisioner)
