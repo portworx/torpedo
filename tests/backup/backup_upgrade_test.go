@@ -258,6 +258,15 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		controlChannel                     chan string
 		errorGroup                         *errgroup.Group
 		vmBackupNames                      []string
+		partialAppNamespaces               []string
+		partialAppScheduleName             string
+		partialSchedulePolicyUid           string
+		partialAppContexts                 []*scheduler.Context
+		partialCloudAccountName            string
+		partialCloudAccountUid             string
+		partialBackupLocationName          string
+		partialBackupLocationUid           string
+		partialBackupLocationMap           map[string]string
 	)
 	updateBackupToContextMapping := func(backupName string, appContextsToBackup []*scheduler.Context) {
 		mutex.Lock()
@@ -347,6 +356,26 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			}
 
 		})
+
+		Step("Provision two apps for partial backup validation", func() {
+			log.InfoD("Provisioning two apps for partial backup validation")
+			numDeployments = 2
+			partialAppContexts = make([]*scheduler.Context, 0)
+			partialAppNamespaces = make([]string, 0)
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+			for i := 0; i < numDeployments; i++ {
+				taskName := fmt.Sprintf("new-app-%d", i)
+				appContexts := ScheduleApplications(taskName)
+				partialAppContexts = append(partialAppContexts, appContexts...)
+				for _, ctx := range appContexts {
+					namespace := GetAppNamespace(ctx, taskName)
+					log.InfoD("Provisioned new app in namespace [%s]", namespace)
+					partialAppNamespaces = append(partialAppNamespaces, namespace)
+				}
+			}
+		})
+
 		Step("Create cloud credentials and backup locations", func() {
 			log.InfoD("Creating cloud credentials and backup locations")
 			providers := GetBackupProviders()
@@ -366,6 +395,27 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				log.Infof("Creating a backup location [%s] with UID [%s] using the [%s] bucket", backupLocationName, backupLocationUid, bucketName)
 				err = CreateBackupLocation(provider, backupLocationName, backupLocationUid, cloudAccountName, cloudAccountUid, bucketName, BackupOrgID, "", true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location [%s] with UID [%s] using the bucket [%s]", backupLocationName, backupLocationUid, bucketName))
+			}
+		})
+		Step("Create cloud credentials and backup locations for partial backup validation", func() {
+			log.InfoD("Create cloud credentials and backup locations for partial backup validation")
+			providers := GetBackupProviders()
+			partialBackupLocationMap = make(map[string]string)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				partialCloudAccountUid = uuid.New()
+				partialCloudAccountName = fmt.Sprintf("%s-%s-%v", "cred-partial-bkp", provider, time.Now().Unix())
+				log.Infof("Creating a cloud credential for partial backup [%s] with UID [%s] using [%s] as the provider", partialCloudAccountUid, partialCloudAccountName, provider)
+				err := CreateCloudCredential(provider, partialCloudAccountName, partialCloudAccountUid, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential [%s] with UID [%s] using [%s] as the provider", partialCloudAccountName, BackupOrgID, provider))
+				partialBackupLocationName = fmt.Sprintf("%s-partial-bl-%v", getGlobalBucketName(provider), time.Now().Unix())
+				partialBackupLocationUid = uuid.New()
+				partialBackupLocationMap[partialBackupLocationUid] = partialBackupLocationName
+				bucketName := getGlobalBucketName(provider)
+				log.Infof("Creating a backup location [%s] with UID [%s] using the [%s] bucket", partialBackupLocationName, partialBackupLocationUid, bucketName)
+				err = CreateBackupLocation(provider, partialBackupLocationName, partialBackupLocationUid, partialCloudAccountName, partialCloudAccountUid, bucketName, BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location [%s] with UID [%s] using the bucket [%s]", partialBackupLocationName, partialBackupLocationUid, bucketName))
 			}
 		})
 		Step("Create source and destination clusters", func() {
@@ -462,6 +512,34 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			}
 			_ = TaskHandler(Inst().AppList, createBackupWithoutRulesTask, Parallel)
 		})
+
+		Step("Create a scheduled backup for partial backup validation", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.InfoD("Creating a new schedule policy for new apps for partial backup validation before the upgrade")
+			partialAppScheduleName = fmt.Sprintf("partial-backup-schedule-%v", RandomString(6))
+			partialSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, int64(15), 5)
+			err = Inst().Backup.BackupSchedulePolicy(partialAppScheduleName, uuid.New(), BackupOrgID, partialSchedulePolicyInfo)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of new schedule policy [%s]", partialAppScheduleName))
+			partialSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, partialAppScheduleName)
+			log.FailOnError(err, "Fetching uid of schedule policy [%s]", schedulePolicyName)
+			log.InfoD("Taking scheduled backup of namespaces [%s] before upgrade", partialAppNamespaces)
+			scheduledBackupName := fmt.Sprintf("scheduled-backup-%s-%v", partialAppNamespaces, time.Now().Unix())
+			_, err = CreateScheduleBackupWithoutCheck(scheduledBackupName, SourceClusterName, partialBackupLocationName, partialBackupLocationUid, partialAppNamespaces, nil, BackupOrgID, "", "", "", "", partialAppScheduleName, partialSchedulePolicyUid, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", partialAppScheduleName))
+
+			// add go routine to delete the Data export CR
+
+			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, partialAppScheduleName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the first schedule backup with schedule [%s]", partialAppScheduleName))
+			log.Infof("Verifying if the first scheduled backup [%s] is Failed", firstScheduleBackupName)
+			bkpStatus, _, err := Inst().Backup.GetBackupStatusWithReason(firstScheduleBackupName, ctx, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching backup status for backup [%s]", firstScheduleBackupName))
+			if bkpStatus != api.BackupInfo_StatusInfo_Failed {
+				log.Errorf("Backup %s was expected to get failed before upgrade, but isn't", firstScheduleBackupName)
+			}
+		})
+
 		Step("Create a schedule policy", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -595,6 +673,33 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				dash.VerifyFatal(b.GetBackupObjectType().Type, api.BackupInfo_BackupObjectType_All, fmt.Sprintf("Verifying backup type of [%s]", b.Name))
 			}
 		})
+		Step("Validate the scheduled backup with partial success after upgrade", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.InfoD("Verifying if the latest scheduled backup is a backup with partial success")
+			latestScheduleBackupName, err := GetLatestScheduleBackupName(ctx, partialAppScheduleName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the latest schedule backup with schedule [%s]", partialAppScheduleName))
+			log.Infof("Validating if the latest scheduled backup [%s] is of Partial Success", latestScheduleBackupName)
+			bkpStatus, _, err := Inst().Backup.GetBackupStatusWithReason(latestScheduleBackupName, ctx, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching backup status for backup [%s]", latestScheduleBackupName))
+			if bkpStatus != api.BackupInfo_StatusInfo_PartialSuccess {
+				log.Errorf("Backup %s was expected to be in partial success after the upgrade, but isn't", latestScheduleBackupName)
+			}
+		})
+		Step("Restore the backup with partial success", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			latestScheduleBackupName, err := GetLatestScheduleBackupName(ctx, partialAppScheduleName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the latest schedule backup with schedule [%s]", partialAppScheduleName))
+			restoreName := fmt.Sprintf("%s-%s", "restore-partial-bkp", RandomString(4))
+			log.InfoD("Restoring the schedule backup with partial success [%s] in cluster [%s] with restore [%s]", latestScheduleBackupName, SourceClusterName, restoreName)
+			namespaceMapping := make(map[string]string)
+			// change it to partial restore with validation
+			err = CreateRestoreWithValidation(ctx, restoreName, latestScheduleBackupName, namespaceMapping, make(map[string]string), SourceClusterName, BackupOrgID, destClusterContexts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of first all namespaces schedule backup [%s] in cluster [%s]", restoreName, latestScheduleBackupName, restoreName))
+			restoreNames = append(restoreNames, restoreName)
+		})
+
 		Step("Restore backups created before px-backup upgrade with and without pre and post exec rules", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -865,6 +970,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		err = DestroyAppsWithData(srcClusterContexts, opts, controlChannel, errorGroup)
 		log.FailOnError(err, "Data validations failed")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUid, ctx)
+		CleanupCloudSettingsAndClusters(partialBackupLocationMap, partialCloudAccountName, partialCloudAccountUid, ctx)
 	})
 })
 
