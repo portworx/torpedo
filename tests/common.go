@@ -545,7 +545,9 @@ var (
 var pxRuntimeOpts string
 var pxClusterOpts string
 var PxBackupVersion string
-
+var PureMgmtIpCounter int
+var PureMgmtIPList []string
+var PureFAMgmtMap map[string]*flasharray.Client
 var (
 	RunIdForSuite             int
 	TestRailSetupSuccessful   bool
@@ -7370,6 +7372,19 @@ func ParseFlags() {
 			}
 		})
 	}
+	if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
+		PureMgmtIpCounter = 0
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+		secret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+		log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
+		PureFAMgmtMap, err = pureutils.GetFAClientMapFromPXPureSecret(secret)
+		log.FailOnError(err, "failed to get FA management map from secret [%s/%s]", PureSecretName, volDriverNamespace)
+		for mgmtIP := range PureFAMgmtMap {
+			PureMgmtIPList = append(PureMgmtIPList, mgmtIP)
+		}
+		log.Infof("PureMgmtIPList: %v", PureMgmtIPList)
+	}
 	printFlags()
 }
 
@@ -8198,6 +8213,31 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 		RunIdForSuite = testrailuttils.AddRunsToMilestone(testRepoID)
 		CurrentTestRailTestCaseId = testRepoID
 	}
+	if PureMgmtIpCounter == 0 {
+		faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
+		faClient := PureFAMgmtMap[faMgmtIP]
+		networkInterfaces, err := pureutils.ListAllNetworkInterfacesOnFA(faClient)
+		log.FailOnError(err, "Failed to list all network interfaces on FA [%v] ", faMgmtIP)
+		for _, networkInterface := range networkInterfaces {
+			for _, service := range networkInterface.Services {
+				if strings.Contains(service, "management") {
+
+				}
+			}
+		}
+		/*
+			disable mgmt interface of ip1
+		*/
+
+	} else {
+		// enable
+		//disable of ip2
+		//decrement of counter
+
+		faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
+		faClient := PureFAMgmtMap[faMgmtIP]
+	}
+
 }
 
 // enableAutoFSTrim on supported PX version.
