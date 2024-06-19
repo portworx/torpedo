@@ -7378,7 +7378,7 @@ func ParseFlags() {
 		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
 		secret, err := pureutils.GetPXPureSecret(volDriverNamespace)
 		log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
-		PureFAMgmtMap, err = pureutils.GetFAClientMapFromPXPureSecret(secret)
+		PureFAMgmtMap, err = pureutils.GetFAMgmtIPFromPXPureSecret(secret)
 		log.FailOnError(err, "failed to get FA management map from secret [%s/%s]", PureSecretName, volDriverNamespace)
 		for mgmtIP := range PureFAMgmtMap {
 			PureMgmtIPList = append(PureMgmtIPList, mgmtIP)
@@ -8213,29 +8213,88 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 		RunIdForSuite = testrailuttils.AddRunsToMilestone(testRepoID)
 		CurrentTestRailTestCaseId = testRepoID
 	}
-	if PureMgmtIpCounter == 0 {
+	var networkInterfaceController1, networkInterfaceController2 string
+	if PureMgmtIpCounter == 1 {
 		faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
 		faClient := PureFAMgmtMap[faMgmtIP]
 		networkInterfaces, err := pureutils.ListAllNetworkInterfacesOnFA(faClient)
-		log.FailOnError(err, "Failed to list all network interfaces on FA [%v] ", faMgmtIP)
+		if err != nil {
+			log.Fatalf("Failed to list all network interfaces on FA [%v] ", faMgmtIP)
+		}
 		for _, networkInterface := range networkInterfaces {
 			for _, service := range networkInterface.Services {
-				if strings.Contains(service, "management") {
+				if strings.Contains(service, "management") && networkInterface.Address == faMgmtIP {
+					if PureMgmtIpCounter == 1 {
+						_, err := pureutils.EnableNetworkInterface(faClient, networkInterfaceController2)
+						if err != nil {
+							log.Infof("Enabled network interface [%v] on FA [%v] ", networkInterfaceController2, faMgmtIP)
+						}
+						_, err = pureutils.DisableNetworkInterface(faClient, networkInterface.Name)
+						if err != nil {
+							log.Fatalf("Failed to disable network interface [%v] on FA [%v] ", networkInterface.Name, faMgmtIP)
+						}
+						networkInterfaceController1 = networkInterface.Name
+						log.Infof("Disabled network interface [%v] on FA [%v] ", networkInterface.Name, faMgmtIP)
+					} else if PureMgmtIpCounter == 0 {
+						// Enable the previously disabled interface
+						_, err := pureutils.EnableNetworkInterface(faClient, networkInterfaceController1)
+						if err != nil {
+							log.Fatalf("Failed to enable network interface [%v] on FA [%v] ", networkInterfaceController1, faMgmtIP)
+						}
+						log.Infof("Enabled network interface [%v] on FA [%v] ", networkInterfaceController1, faMgmtIP)
 
+						// Disable the network interface on the second IP
+						_, err = pureutils.DisableNetworkInterface(faClient, networkInterface.Name)
+						if err != nil {
+							log.Fatalf("Failed to disable network interface [%v] on FA [%v] ", networkInterface.Name, faMgmtIP)
+						}
+						networkInterfaceController2 = networkInterface.Name
+						log.Infof("Disabled network interface [%v] on FA [%v] ", networkInterface.Name, faMgmtIP)
+					}
 				}
 			}
 		}
-		/*
-			disable mgmt interface of ip1
-		*/
 
 	} else {
-		// enable
-		//disable of ip2
-		//decrement of counter
-
 		faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
 		faClient := PureFAMgmtMap[faMgmtIP]
+		networkInterfaces, err := pureutils.ListAllNetworkInterfacesOnFA(faClient)
+		if err != nil {
+			log.Fatalf("Failed to list all network interfaces on FA [%v] ", faMgmtIP)
+		}
+		for _, networkInterface := range networkInterfaces {
+			for _, service := range networkInterface.Services {
+				if strings.Contains(service, "management") && networkInterface.Address == faMgmtIP {
+					if PureMgmtIpCounter == 1 {
+						_, err := pureutils.EnableNetworkInterface(faClient, networkInterfaceController2)
+						if err != nil {
+							log.Infof("Enabled network interface [%v] on FA [%v] ", networkInterfaceController2, faMgmtIP)
+						}
+						_, err = pureutils.DisableNetworkInterface(faClient, networkInterface.Name)
+						if err != nil {
+							log.Fatalf("Failed to disable network interface [%v] on FA [%v] ", networkInterface.Name, faMgmtIP)
+						}
+						networkInterfaceController1 = networkInterface.Name
+						log.Infof("Disabled network interface [%v] on FA [%v] ", networkInterface.Name, faMgmtIP)
+					} else if PureMgmtIpCounter == 0 {
+						// Enable the previously disabled interface
+						_, err := pureutils.EnableNetworkInterface(faClient, networkInterfaceController1)
+						if err != nil {
+							log.Fatalf("Failed to enable network interface [%v] on FA [%v] ", networkInterfaceController1, faMgmtIP)
+						}
+						log.Infof("Enabled network interface [%v] on FA [%v] ", networkInterfaceController1, faMgmtIP)
+
+						// Disable the network interface on the second IP
+						_, err = pureutils.DisableNetworkInterface(faClient, networkInterface.Name)
+						if err != nil {
+							log.Fatalf("Failed to disable network interface [%v] on FA [%v] ", networkInterface.Name, faMgmtIP)
+						}
+						networkInterfaceController2 = networkInterface.Name
+						log.Infof("Disabled network interface [%v] on FA [%v] ", networkInterface.Name, faMgmtIP)
+					}
+				}
+			}
+		}
 	}
 
 }

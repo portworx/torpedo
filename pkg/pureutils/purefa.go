@@ -57,6 +57,23 @@ func GetFAClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flasharray
 	return clientMap, nil
 }
 
+func GetFAMgmtIPFromPXPureSecret(secret PXPureSecret) (map[string]*flasharray.Client, error) {
+	clientMap := make(map[string]*flasharray.Client)
+	for _, fa := range secret.Arrays {
+		//split fa.MgmtEndPoint by , and do pureclientconnect for it and add it to clientMap
+		faMgmtEndPoints := strings.Split(fa.MgmtEndPoint, ",")
+		for _, faMgmtEndPoint := range faMgmtEndPoints {
+			faClient, err := PureCreateClientAndConnect(faMgmtEndPoint, fa.APIToken)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create FA client for [%s]. Err: [%v]", fa.MgmtEndPoint, err)
+			}
+			clientMap[faMgmtEndPoint] = faClient
+		}
+
+	}
+	return clientMap, nil
+}
+
 // GetFAMgmtEndPoints , Get Lists of all management Endpoints from FA Secrets
 func GetFAMgmtEndPoints(secret PXPureSecret) []string {
 	mgmtEndpoints := []string{}
