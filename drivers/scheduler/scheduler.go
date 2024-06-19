@@ -83,6 +83,7 @@ type AppConfig struct {
 	Journal                     string   `yaml:"journal"`
 	DataSize                    string   `yaml:"data_size"`
 	VmID                        string   `yaml:"vm_id"`
+	PureFaPodName               string   `yaml:"pure_fa_pod_name"`
 }
 
 // InitOptions initialization options
@@ -114,6 +115,8 @@ type InitOptions struct {
 	PureVolumes bool
 	// PureSANType identifies which SAN type is being used for Pure volumes
 	PureSANType string
+	// PureFADAPod identifies what FA Pod to place FADA volumes in. This Pod must already exist, and be in the same Realm matching the px-pure-secret
+	PureFADAPod string
 	// RunCSISnapshotAndRestoreManyTest identifies if Pure clone many test is enabled
 	RunCSISnapshotAndRestoreManyTest bool
 	//SecureApps identifies apps to be deployed with secure annotation in storage class
@@ -392,6 +395,9 @@ type Driver interface {
 
 	// CreateVolumeSnapshotClasses creates a volume snapshot class
 	CreateVolumeSnapshotClasses(snapClassName string, provisioner string, isDefault bool, deletePolicy string) (*volsnapv1.VolumeSnapshotClass, error)
+
+	// CreateVolumeSnapshotClassesWithParameters creates a volume snapshot class with additional parameters
+	CreateVolumeSnapshotClassesWithParameters(snapClassName string, provisioner string, isDefault bool, deletePolicy string, parameters map[string]string) (*volsnapv1.VolumeSnapshotClass, error)
 
 	// CreateCsiSnapshot create csi snapshot for given pvc
 	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.

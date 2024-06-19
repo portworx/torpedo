@@ -52,6 +52,7 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
@@ -132,6 +133,7 @@ const (
 	GlobalAWSLockedBucketPrefix               = "global-aws-locked"
 	GlobalAzureLockedBucketPrefix             = "global-azure-locked"
 	GlobalGCPLockedBucketPrefix               = "global-gcp-locked"
+	AzureChinaEndpoint                        = "CHINA"
 	MongodbStatefulset                        = "pxc-backup-mongodb"
 	PxBackupDeployment                        = "px-backup"
 	BackupDeleteTimeout                       = 60 * time.Minute
@@ -175,6 +177,10 @@ const (
 	storkControllerConfigMapRetry             = 30 * time.Second
 	BackupLocationValidationTimeout           = 10 * time.Minute
 	BackupLocationValidationRetryTime         = 30 * time.Second
+	IncorrectMemoryRequest                    = "2Mi"
+	CorrectMemoryRequest                      = "700Mi"
+	CorrectMemoryLimit                        = "1Gi"
+	IncorrectImageSuffix                      = "-incorrect"
 )
 
 var (
@@ -334,6 +340,18 @@ var (
 				},
 			},
 		},
+		"mysql-backup-psa-restricted": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH TABLES WITH READ LOCK;system ${WAIT_CMD};'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"true"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+			PostRule: backup.PostRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH LOGS; UNLOCK TABLES;'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
 		"postgres": {
 			PreRule: backup.PreRule{
 				Rule: backup.RuleSpec{
@@ -405,6 +423,13 @@ var (
 			},
 		},
 		"postgres-cephfs-csi": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"postgres-backup-psa-restricted": {
 			PreRule: backup.PreRule{
 				Rule: backup.RuleSpec{
 					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
@@ -3762,6 +3787,26 @@ func IsPresent(dataSlice interface{}, data interface{}) bool {
 	return false
 }
 
+// AppendList append only unique items of one list into another list
+func AppendList[T comparable](dataSlice1 []T, dataSlice2 []T) []T {
+	totalLength := len(dataSlice1) + len(dataSlice2)
+	map1 := make(map[T]bool, totalLength)
+	list1 := make([]T, 0, totalLength)
+	for _, element := range dataSlice1 {
+		if !map1[element] {
+			map1[element] = true
+			list1 = append(list1, element)
+		}
+	}
+	for _, element := range dataSlice2 {
+		if !map1[element] {
+			map1[element] = true
+			list1 = append(list1, element)
+		}
+	}
+	return list1
+}
+
 func DeleteBackupAndWait(backupName string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	backupEnumerateReq := &api.BackupEnumerateRequest{
@@ -5360,6 +5405,7 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest) error
 	case string(DirectKDMP):
 		log.Infof("Detected backup type - %s", DirectKDMP)
 		backupRequest.BackupType = api.BackupCreateRequest_Generic
+		backupRequest.DirectKdmp = true
 	default:
 		log.Infof("Environment variable BACKUP_TYPE is not provided")
 	}
@@ -8808,6 +8854,28 @@ func ModifyMaintenanceJobFrequency(backupLocationName string, frequencyInMinutes
 	return nil
 }
 
+// ResetMaintenanceJobFrequency sets the frequency of the cron job to the default value
+func ResetMaintenanceJobFrequency(backupLocationName string, maintenanceJobType MaintenanceJobType) error {
+	k8sBatch := batch.Instance()
+	cronJob, err := GetCronJobByBackupLocation(backupLocationName, maintenanceJobType)
+	if err != nil {
+		return err
+	}
+	if maintenanceJobType == FullMaintenanceJob {
+		cronJob.Spec.Schedule = fmt.Sprintf("1 */23 * * *")
+	} else if maintenanceJobType == QuickMaintenanceJob {
+		cronJob.Spec.Schedule = fmt.Sprintf("1 */3 * * *")
+	} else {
+		return fmt.Errorf("invalid maintenance job type")
+	}
+
+	_, err = k8sBatch.UpdateCronJob(cronJob)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetCronJobByBackupLocation takes the backup location name and the job type and returns the cron job
 func GetCronJobByBackupLocation(backupLocationName string, maintenanceJobType MaintenanceJobType) (*batchv1.CronJob, error) {
 	k8sBatch := batch.Instance()
@@ -8840,4 +8908,192 @@ func GetCronJobByBackupLocation(backupLocationName string, maintenanceJobType Ma
 		}
 	}
 	return nil, fmt.Errorf("backup location with name [%s] not found", backupLocationName)
+}
+
+// MaintenanceJobUpdateStrategy defines the strategy to update the maintenance job
+type MaintenanceJobUpdateStrategy string
+
+const (
+	UpdateIncorrectImage  MaintenanceJobUpdateStrategy = "UpdateIncorrectImage"
+	UpdateCorrectImage    MaintenanceJobUpdateStrategy = "UpdateCorrectImage"
+	UpdateIncorrectMemory MaintenanceJobUpdateStrategy = "UpdateIncorrectMemory"
+	UpdateCorrectMemory   MaintenanceJobUpdateStrategy = "UpdateCorrectMemory"
+)
+
+// UpdateMaintenanceCronJob updates the maintenance cron job based on the strategy provided
+func UpdateMaintenanceCronJob(backupLocation string, maintenanceJobType MaintenanceJobType, strategy MaintenanceJobUpdateStrategy) error {
+	k8sBatch := batch.Instance()
+	cronJob, err := GetCronJobByBackupLocation(backupLocation, maintenanceJobType)
+	if err != nil {
+		return err
+	}
+
+	switch strategy {
+	case UpdateIncorrectImage:
+		log.Infof("Updating the image of the cron job to an incorrect one")
+		// Update the image to an incorrect one iff it does not contain the string "-incorrect"
+		if !strings.Contains(cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image, IncorrectImageSuffix) {
+			cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image = cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image + IncorrectImageSuffix
+		}
+
+	case UpdateCorrectImage:
+		log.Infof("Updating the image of the cron job to the correct one")
+		// Remove the string "-incorrect" from the image name
+		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image = strings.TrimSuffix(cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image, IncorrectImageSuffix)
+
+	case UpdateIncorrectMemory:
+		log.Infof("Updating the memory request of the cron job to an incorrect value")
+		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Requests["memory"], err = resource.ParseQuantity(IncorrectMemoryRequest)
+		if err != nil {
+			return err
+		}
+		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Limits["memory"], err = resource.ParseQuantity(IncorrectMemoryRequest)
+		if err != nil {
+			return err
+		}
+
+	case UpdateCorrectMemory:
+		log.Infof("Updating the memory request of the cron job to the correct value")
+		// Update the memory request to the correct value
+		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Requests["memory"], err = resource.ParseQuantity(CorrectMemoryRequest)
+		if err != nil {
+			return err
+		}
+		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Limits["memory"], err = resource.ParseQuantity(CorrectMemoryLimit)
+		if err != nil {
+			return err
+		}
+	}
+	log.Infof("Cron job image for backup location [%s] - [%s]", backupLocation, cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image)
+	log.Infof("Cron job memory request and limit for backup location [%s] - [%v] & [%v]", backupLocation, cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Requests["memory"], cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Limits["memory"])
+	_, err = k8sBatch.UpdateCronJob(cronJob)
+	return err
+}
+
+// CreateInvalidVolumeSnapshotClass creates invalid VolumeSnapshotClass for given provisioner
+func CreateInvalidVolumeSnapshotClass(snapShotClassName, provisioner string) (*volsnapv1.VolumeSnapshotClass, error) {
+	volumeSnapshotClassParameters := make(map[string]string)
+	volumeSnapshotClassParameters["invalidParameter"] = "invalidValue"
+	volumeSnapshotClass, err := Inst().S.CreateVolumeSnapshotClassesWithParameters(snapShotClassName, provisioner, false, "Delete", volumeSnapshotClassParameters)
+	if err != nil {
+		return nil, err
+	}
+	return volumeSnapshotClass, nil
+}
+
+// DeleteAllDataExportCRs deletes the data export CR as soon as it is found in the given namespace
+func DeleteAllDataExportCRs(namespace string) error {
+	var filterOptions = metav1.ListOptions{}
+	kdmpClient := kdmp.Instance()
+	t := func() (interface{}, bool, error) {
+		dataExportCrList, err := kdmpClient.ListDataExport(namespace, filterOptions)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to list data export CRs in namespace [%s]: %w", namespace, err)
+		}
+		if len(dataExportCrList.Items) == 0 {
+			return "", true, fmt.Errorf("no data export CRs found in namespace [%s]", namespace)
+		}
+		for _, dataExportCr := range dataExportCrList.Items {
+			log.Infof("Deleting data export CR [%s] in namespace [%s]", dataExportCr.Name, namespace)
+			err := kdmpClient.DeleteDataExport(dataExportCr.Name, namespace)
+			if err != nil {
+				return nil, false, fmt.Errorf("failed to delete data export CR [%s] in namespace [%s]: %w", dataExportCr.Name, namespace, err)
+			}
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+	return err
+}
+
+// StopCloudsnapBackup stops the cloudsnap for the provided pvc name and namespace
+func StopCloudsnapBackup(pvcName, namespace string) error {
+	var found bool
+
+	t := func() (interface{}, bool, error) {
+		statusMap, err := GetCloudsnapStatus()
+		if err != nil {
+			return "", false, fmt.Errorf("failed to get cloudsnap status from cluster: %w", err)
+		}
+
+		for key, value := range statusMap {
+			if strings.Contains(key, fmt.Sprintf("%s-%s", namespace, pvcName)) {
+				found = true
+				log.Infof("Key - %s", key)
+				log.Infof("Stopping cloudsnap for PVC [%s] in namespace [%s] with id [%s] and status [%s]", pvcName, namespace, value.ID, value.Status)
+
+				switch value.Status {
+				case "Done":
+					return "", false, fmt.Errorf("cloudsnap for PVC [%s] in namespace [%s] is in %s status, not retrying", pvcName, namespace, value.Status)
+				case "Stopped":
+					return "", false, nil
+				default:
+					if value.ID == "" {
+						return "", true, fmt.Errorf("waiting to get the cs id for PVC [%s] in namespace [%s]", pvcName, namespace)
+					}
+					cmd := fmt.Sprintf("pxctl cs stop -n %s", key)
+					workerNode := node.GetWorkerNodes()[0]
+					output, err := runCmdGetOutput(cmd, workerNode)
+					log.Infof("Output of the command [%s]: \n%s", cmd, output)
+					if err != nil {
+						if strings.Contains(err.Error(), "CloudsnapStop: Failed to change state: No active backup/restore for the volume") && value.Status != "Stopped" {
+							return "", true, fmt.Errorf("waiting to get the cs backup name: %w", err)
+						}
+						return "", false, fmt.Errorf("failed to run command %s on %s: %w", cmd, workerNode.Name, err)
+					}
+
+					statusMap, err = GetCloudsnapStatus()
+					if err != nil {
+						return "", false, fmt.Errorf("failed to get cloudsnap status from cluster: %w", err)
+					}
+
+					if statusMap[key].Status != "Stopped" {
+						return "", true, fmt.Errorf("cloudsnap not yet stopped for PVC [%s] in namespace [%s], status: %s", pvcName, namespace, statusMap[key].Status)
+					}
+				}
+			}
+		}
+
+		if !found {
+			return "", true, fmt.Errorf("cloudsnap not found for PVC [%s] in namespace [%s]", pvcName, namespace)
+		}
+		log.Infof("Cloudsnap stopped for PVC [%s] in namespace [%s].", pvcName, namespace)
+		return "", false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 3*time.Second)
+	return err
+}
+
+type CloudsnapStatus struct {
+	ID                 string   `json:"ID"`
+	OpType             string   `json:"OpType"`
+	Status             string   `json:"Status"`
+	BytesDone          int64    `json:"BytesDone"`
+	BytesTotal         int64    `json:"BytesTotal"`
+	EtaSeconds         int64    `json:"EtaSeconds"`
+	StartTime          string   `json:"StartTime"`
+	CompletedTime      string   `json:"CompletedTime"`
+	NodeID             string   `json:"NodeID"`
+	SrcVolumeID        string   `json:"SrcVolumeID"`
+	Info               []string `json:"Info"`
+	CredentialUUID     string   `json:"CredentialUUID"`
+	GroupCloudBackupID string   `json:"GroupCloudBackupID"`
+}
+
+// GetCloudsnapStatus returns the cloudsnap status in the current cluster
+func GetCloudsnapStatus() (map[string]CloudsnapStatus, error) {
+	statusMap := make(map[string]CloudsnapStatus)
+	// Get a worker node
+	workerNode := node.GetWorkerNodes()[0]
+	cmd := "pxctl cs status -j"
+	output, err := runCmdGetOutput(cmd, workerNode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to run command %s on %s: %s", cmd, workerNode.Name, err.Error())
+	}
+	err = json.Unmarshal([]byte(output), &statusMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal the output of the command %s on %s: %s", cmd, workerNode.Name, err.Error())
+	}
+	return statusMap, nil
 }
