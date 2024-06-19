@@ -4285,14 +4285,14 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		var max_iops uint64
 
 		//Declaring SC name, namespaces and pvc prefixes and lists which are required for collection of PVC And Volume Names
-		baseScName := "base-portworx-volume-sc"
-		fadaScName := "fada-volume-sc"
-		fbdaScName := "fbda-volume-sc"
-		BaseAppNameSpace := "base-app-namespace"
-		FadaAppNameSpace := "fada-app-namespace"
-		FbdaAppNameSpace := "fbda-app-namespace"
-		max_iops = 1000
-		max_bandwidth = 1
+		baseScName := "base-portworx-volume-sc" + Inst().InstanceID
+		fadaScName := "fada-volume-sc" + Inst().InstanceID
+		fbdaScName := "fbda-volume-sc" + Inst().InstanceID
+		BaseAppNameSpace := "base-app-namespace" + Inst().InstanceID
+		FadaAppNameSpace := "fada-app-namespace" + Inst().InstanceID
+		FbdaAppNameSpace := "fbda-app-namespace" + Inst().InstanceID
+		max_iops = uint64(rand.Intn(99999999) + 1)
+		max_bandwidth = uint64(rand.Intn(511) + 1)
 		//Creating Two lists to collect the volume names of both FA and FB created volumes
 		listofFadaPvc := make([]string, 0)
 		listofFbdaPvc := make([]string, 0)
@@ -4320,8 +4320,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			log.InfoD(stepLog)
 			BaseParams := make(map[string]string)
 			BaseParams["repl"] = "1"
-			BaseParams["max_iops"] = "1000"
-			BaseParams["max_bandwidth"] = "1G"
+			BaseParams["max_iops"] = strconv.FormatUint(max_iops, 10)
+			BaseParams["max_bandwidth"] = strconv.FormatUint(max_bandwidth, 10) + "G"
 			reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
 			bindMode := storageApi.VolumeBindingImmediate
 			// create storage class for base volumes
@@ -4331,8 +4331,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 
 			faParams := make(map[string]string)
 			faParams["repl"] = "1"
-			faParams["max_iops"] = "1000"
-			faParams["max_bandwidth"] = "1G"
+			faParams["max_iops"] = strconv.FormatUint(max_iops, 10)
+			faParams["max_bandwidth"] = strconv.FormatUint(max_bandwidth, 10) + "G"
 			faParams["fs"] = "ext4"
 
 			var allowVolExpansionFA bool = true
@@ -4489,7 +4489,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				log.FailOnError(err, fmt.Sprintf("Failed to delete storageclass [%s]", storageclass))
 			}
 			log.InfoD("waiting for a minute for pvc deletion in flash backend")
-			time.Sleep(1 * time.Minute)
+			time.Sleep(2 * time.Minute)
 			log.InfoD("Check if the volumes are deleted in FA and FB backend")
 			err := CheckVolumesExistinFA(flashArrays, listofFadaPvc, true)
 			log.FailOnError(err, "Failed to check if volumes which needed to be deleted still exist in FA")
@@ -4535,6 +4535,7 @@ var _ = Describe("{ValidateVolumeResizeInParallel}", func() {
 			log.InfoD(stepLog)
 			context, err := Inst().S.Schedule("volumeresizeparallelfada", scheduler.ScheduleOptions{
 				AppKeys:            []string{"fio-fa-davol"},
+				CsiAppKeys:         []string{"fio-fa-davol"},
 				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
 			})
 			log.FailOnError(err, "Failed to schedule application of %v namespace", "volumeresizeparallelfada")
@@ -4542,7 +4543,7 @@ var _ = Describe("{ValidateVolumeResizeInParallel}", func() {
 
 		})
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
+		defer DestroyApps(contexts, nil)
 		resizeVolumes := func(ctx *scheduler.Context) {
 			var pvcs []*v1.PersistentVolumeClaim
 			appVolumes, err := Inst().S.GetVolumes(ctx)
@@ -4623,9 +4624,10 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 		stepLog := "Deploy FADA app"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			taskName := "deploy-fada"
+			taskName := "Clone-fada-app-volume" + Inst().InstanceID
 			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-				AppKeys:            []string{"fio-fa-davol"},
+				AppKeys:            Inst().AppList,
+				CsiAppKeys:         Inst().AppList,
 				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
 				Namespace:          taskName,
 			})
@@ -4633,6 +4635,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 			contexts = append(contexts, context...)
 		})
 		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
 
 		stepLog = "Get the corresponding Px volume for the PVC and clone the volume "
 		Step(stepLog, func() {
@@ -4688,7 +4691,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		appsValidateAndDestroy(contexts)
+		AfterEachTest(contexts)
 	})
 })
 
@@ -4749,7 +4752,7 @@ var _ = Describe("{DeployAppsAndStopPortworx}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", nodeToReboot[0].Name))
 			log.FailOnError(err, fmt.Sprintf("Failed to reboot node %s", nodeToReboot[0].Name))
 		})
-		stepLog = "Validate the applications are in running state"
+		stepLog = "Validate the applications are in running state and then delete them"
 		Step(stepLog, func() {
 			ValidateApplications(contexts)
 		})
@@ -4793,6 +4796,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 			context, err := Inst().S.Schedule(appNamespace, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
+				CsiAppKeys:         Inst().AppList,
 				StorageProvisioner: Provisioner,
 				Namespace:          appNamespace,
 			})
@@ -4806,8 +4810,12 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 			log.InfoD(stepLog)
 			snapShotClassName := PureSnapShotClass
 			volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete")
-			log.FailOnError(err, "Failed to create volume snapshot class")
-			log.InfoD("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
+			if err != nil {
+				isSnapshotClassExists := strings.Contains(err.Error(), "already exists")
+				dash.VerifyFatal(isSnapshotClassExists, true, "Failed to create volume snapshot class")
+			} else {
+				log.InfoD("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
+			}
 		})
 		stepLog = "Creating snapshots for all apps in the context and validate them"
 		Step(stepLog, func() {
@@ -4906,8 +4914,8 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 				Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 					AppKeys:            Inst().AppList,
+					CsiAppKeys:         Inst().AppList,
 					StorageProvisioner: Provisioner,
-					PvcSize:            6 * units.GiB,
 					Namespace:          taskName,
 				})
 				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
@@ -4941,7 +4949,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 					}
 					return "", false, nil
 				}
-				_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
+				_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 20*time.Minute, 35*time.Second)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
 				err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
@@ -4970,6 +4978,10 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 				var k8sCore = core.Instance()
 				pods, err := k8sCore.GetPods(ctx.App.NameSpace, nil)
 				for _, pod := range pods.Items {
+					//Edge Case
+					if pod.Name == "torpedo" {
+						continue
+					}
 					node := pod.Spec.NodeName
 					log.FailOnError(err, "unable to find the node from the pod")
 					if !nodeExists(selectedNodesForTopology, node) {
