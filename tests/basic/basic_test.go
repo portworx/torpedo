@@ -3,6 +3,7 @@ package tests
 import (
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/pureutils"
 	"os"
 	"testing"
 	"time"
@@ -78,6 +79,14 @@ var _ = AfterSuite(func() {
 				PerformSystemCheck()
 			}
 		}
+	}
+
+	// check if TOGGLE_PURE_MGMT_IP is enabled for the test run and if yes then make the last disabled interface up
+	_, pureMgmtIPExists := os.LookupEnv("TOGGLE_PURE_MGMT_IP")
+	if pureMgmtIPExists {
+		log.InfoD("Make the last disabled interface up")
+		_, err := pureutils.SetInterfaceEnabled(PureFaClientVif, LastDisabledInterface, true)
+		log.FailOnError(err, "Failed to enable interface")
 	}
 })
 

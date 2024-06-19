@@ -3,6 +3,7 @@ package pureutils
 import (
 	"fmt"
 	"github.com/devans10/pugo/flasharray"
+	tpflasharray "github.com/portworx/torpedo/drivers/pure/flasharray"
 	"strings"
 
 	"github.com/portworx/torpedo/pkg/units"
@@ -57,6 +58,24 @@ func GetFAClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flasharray
 	return clientMap, nil
 }
 
+// GetFAMgmtIPFromPXPureSecret create a map with mgmt endpoint as key and FA client as value (Specifically for multiple management endpoints)
+func GetFAMgmtEndPointFromPXPureSecret(secret PXPureSecret) (map[string]*tpflasharray.Client, error) {
+	clientMap := make(map[string]*tpflasharray.Client)
+	for _, fa := range secret.Arrays {
+		//split fa.MgmtEndPoint by , and do pureclientconnect for it and add it to clientMap
+		faMgmtEndPoints := strings.Split(fa.MgmtEndPoint, ",")
+		for _, faMgmtEndPoint := range faMgmtEndPoints {
+			faClient, err := PureCreateClientAndConnectRest2_x(faMgmtEndPoint, fa.APIToken)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create FA client for [%s]. Err: [%v]", fa.MgmtEndPoint, err)
+			}
+			clientMap[faMgmtEndPoint] = faClient
+		}
+
+	}
+	return clientMap, nil
+}
+
 // GetFAMgmtEndPoints , Get Lists of all management Endpoints from FA Secrets
 func GetFAMgmtEndPoints(secret PXPureSecret) []string {
 	mgmtEndpoints := []string{}
@@ -67,13 +86,18 @@ func GetFAMgmtEndPoints(secret PXPureSecret) []string {
 }
 
 // GetApiTokenForMgmtEndpoints Returns API token for Mgmt Endpoints
-func GetApiTokenForMgmtEndpoints(secret PXPureSecret, mgmtEndPoint string) string {
+func GetApiTokenForMgmtEndpoints(secret PXPureSecret, mgmtEndPoint string) (string, error) {
 	for _, faDetails := range secret.Arrays {
-		if faDetails.MgmtEndPoint == mgmtEndPoint {
-			return faDetails.APIToken
+		//split the mgmtEndPoint by , and check if it is present in the faDetails.MgmtEndPoint
+		//if present return the APIToken
+		faMgmtEndPoints := strings.Split(faDetails.MgmtEndPoint, ",")
+		for _, faMgmtEndPoint := range faMgmtEndPoints {
+			if faMgmtEndPoint == mgmtEndPoint {
+				return faDetails.APIToken, nil
+			}
 		}
 	}
-	return ""
+	return "", fmt.Errorf("mgmtEndPoint is invalid or not found in PXPureSecret")
 }
 
 // CreateVolumeOnFABackend Creates Volume on FA Backend
