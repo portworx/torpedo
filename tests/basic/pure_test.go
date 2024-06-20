@@ -5592,7 +5592,7 @@ var _ = Describe("{RestartPxandRestartNode}", func() {
 	itLog := "RestartPxandRestartNode"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		pxNodes := node.GetNodes()
+		pxNodes := node.GetWorkerNodes()
 		selectedNodesForReboot := pxNodes[:len(pxNodes)/2]
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := "restartpxandrebootnode"
