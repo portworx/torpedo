@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	v1alpha1 "sigs.k8s.io/cluster-api/pkg/apis/deprecated/v1alpha1"
+	v1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	clusterResource = schema.GroupVersionResource{Group: "cluster.k8s.io", Version: "v1alpha1", Resource: "clusters"}
+	clusterResource = schema.GroupVersionResource{Group: "cluster.k8s.io", Version: "v1beta1", Resource: "clusters"}
 )
 
 type IpBlock struct {
@@ -58,17 +58,17 @@ type ClusterProviderConfig struct {
 // ClusterOps is an interface to perform k8s cluster operations
 type ClusterOps interface {
 	// ListCluster lists all kubernetes clusters
-	ListCluster(ctx context.Context) (*v1alpha1.ClusterList, error)
+	ListCluster(ctx context.Context) (*v1beta1.ClusterList, error)
 	// GetCluster returns a cluster for the given name
-	GetCluster(ctx context.Context, name, namespace string) (*v1alpha1.Cluster, error)
+	GetCluster(ctx context.Context, name, namespace string) (*v1beta1.Cluster, error)
 	// GetClusterStatus return the given cluster status
-	GetClusterStatus(ctx context.Context, name, namespace string) (*v1alpha1.ClusterStatus, error)
+	GetClusterStatus(ctx context.Context, name, namespace string) (*v1beta1.ClusterStatus, error)
 	// GetClusterProviderSpec return cluster provider spec
 	GetClusterProviderSpec(ctx context.Context, name, namespace string) (*ClusterProviderConfig, error)
 }
 
 // ListCluster lists all kubernetes clusters
-func (c *Client) ListCluster(ctx context.Context) (*v1alpha1.ClusterList, error) {
+func (c *Client) ListCluster(ctx context.Context) (*v1beta1.ClusterList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (c *Client) ListCluster(ctx context.Context) (*v1alpha1.ClusterList, error)
 	if err != nil {
 		return nil, err
 	}
-	clusterList := &v1alpha1.ClusterList{}
+	clusterList := &v1beta1.ClusterList{}
 	if err := json.Unmarshal(jsonData, clusterList); err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func (c *Client) ListCluster(ctx context.Context) (*v1alpha1.ClusterList, error)
 }
 
 // GetCluster returns a cluster for the given name
-func (c *Client) GetCluster(ctx context.Context, name, namespace string) (*v1alpha1.Cluster, error) {
+func (c *Client) GetCluster(ctx context.Context, name, namespace string) (*v1beta1.Cluster, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func (c *Client) GetCluster(ctx context.Context, name, namespace string) (*v1alp
 	if err != nil {
 		return nil, err
 	}
-	cluster := &v1alpha1.Cluster{}
+	cluster := &v1beta1.Cluster{}
 	if err := json.Unmarshal(jsonData, cluster); err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func (c *Client) GetCluster(ctx context.Context, name, namespace string) (*v1alp
 }
 
 // GetClusterStatus return the given cluster status
-func (c *Client) GetClusterStatus(ctx context.Context, name, namespace string) (*v1alpha1.ClusterStatus, error) {
+func (c *Client) GetClusterStatus(ctx context.Context, name, namespace string) (*v1beta1.ClusterStatus, error) {
 	cluster, err := c.GetCluster(ctx, name, namespace)
 	if err != nil {
 		return nil, err

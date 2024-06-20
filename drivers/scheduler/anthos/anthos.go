@@ -30,7 +30,8 @@ import (
 	gkeonprem "google.golang.org/api/gkeonprem/v1"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
-	"sigs.k8s.io/cluster-api/pkg/apis/deprecated/v1alpha1"
+	//"sigs.k8s.io/cluster-api/pkg/apis/deprecated/v1alpha1"
+	"sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 type Gcp struct {
@@ -847,7 +848,7 @@ func (anth *anthos) GetVMwareCluster() (*gkeonprem.VmwareCluster, error) {
 }
 
 // GetCluster return cluster objects
-func (anth *anthos) GetCluster() (*v1alpha1.Cluster, error) {
+func (anth *anthos) GetCluster() (*v1beta1.Cluster, error) {
 	cluster, err := anth.Ops.GetCluster(context.TODO(), anth.clusterName, clusterNameSpace)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get cluster: [%s] in namespace: [%s]. Err: %v", anth.clusterName, clusterNameSpace, err)
@@ -856,7 +857,7 @@ func (anth *anthos) GetCluster() (*v1alpha1.Cluster, error) {
 }
 
 // GetClusterStatus return cluster status
-func (anth *anthos) GetClusterStatus() (*v1alpha1.ClusterStatus, error) {
+func (anth *anthos) GetClusterStatus() (*v1beta1.ClusterStatus, error) {
 	clusterStatus, err := anth.Ops.GetClusterStatus(context.TODO(), anth.clusterName, clusterNameSpace)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get cluster status for cluster: [%s]. Err: %v", anth.clusterName, err)

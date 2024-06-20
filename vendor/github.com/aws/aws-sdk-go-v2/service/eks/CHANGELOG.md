@@ -1,3 +1,33 @@
+# v1.42.1 (2024-03-29)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.42.0 (2024-03-28)
+
+* **Feature**: Add multiple customer error code to handle customer caused failure when managing EKS node groups
+
+# v1.41.2 (2024-03-18)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.41.1 (2024-03-07)
+
+* **Bug Fix**: Remove dependency on go-cmp.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.41.0 (2024-02-29)
+
+* **Feature**: Added support for new AL2023 AMIs to the supported AMITypes.
+
+# v1.40.1 (2024-02-23)
+
+* **Bug Fix**: Move all common, SDK-side middleware stack ops into the service client module to prevent cross-module compatibility issues in the future.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.40.0 (2024-02-22)
+
+* **Feature**: Add middleware stack snapshot tests.
+
 # v1.39.2 (2024-02-21)
 
 * **Dependency Update**: Updated to the latest SDK module versions

@@ -125,6 +125,7 @@ const (
 	MultipleProvisionerCsiKdmpBackupAndRestore                                         TestCaseName = "MultipleProvisionerCsiKdmpBackupAndRestore"
 	KubevirtVMMigrationTest                                                            TestCaseName = "KubevirtVMMigrationTest"
 	DummyPSATestcase                                                                   TestCaseName = "DummyPSATestcase"
+	DummyPSATestcaseRancher                                                            TestCaseName = "DummyPSATestcaseRancher"
 )
 
 // Test case labels

@@ -3,15 +3,13 @@ package anthos
 import (
 	"context"
 	"encoding/json"
-
-	v1alpha1 "sigs.k8s.io/cluster-api/pkg/apis/deprecated/v1alpha1"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	v1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 var (
-	machineResource = schema.GroupVersionResource{Group: "cluster.k8s.io", Version: "v1alpha1", Resource: "machines"}
+	machineResource = schema.GroupVersionResource{Group: "cluster.k8s.io", Version: "v1beta1", Resource: "machines"}
 )
 
 const (
@@ -21,15 +19,15 @@ const (
 // MachinesOps is an interface to perform k8s machines operations
 type MachineOps interface {
 	// ListMachines lists all machines in kubernetes cluster
-	ListMachines(ctx context.Context) (*v1alpha1.MachineList, error)
+	ListMachines(ctx context.Context) (*v1beta1.MachineList, error)
 	// GetMachine returns a machine for the given name
-	GetMachine(ctx context.Context, name string) (*v1alpha1.Machine, error)
+	GetMachine(ctx context.Context, name string) (*v1beta1.Machine, error)
 	// DeleteMachine delete machine for given name
 	DeleteMachine(ctx context.Context, name string) error
 }
 
 // ListMachines lists all machines in kubernetes cluster
-func (c *Client) ListMachines(ctx context.Context) (*v1alpha1.MachineList, error) {
+func (c *Client) ListMachines(ctx context.Context) (*v1beta1.MachineList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -42,7 +40,7 @@ func (c *Client) ListMachines(ctx context.Context) (*v1alpha1.MachineList, error
 	if err != nil {
 		return nil, err
 	}
-	machineList := &v1alpha1.MachineList{}
+	machineList := &v1beta1.MachineList{}
 	if err := json.Unmarshal(jsonData, machineList); err != nil {
 		return nil, err
 	}
@@ -51,7 +49,7 @@ func (c *Client) ListMachines(ctx context.Context) (*v1alpha1.MachineList, error
 }
 
 // GetMachine returns a machine for the given name
-func (c *Client) GetMachine(ctx context.Context, name string) (*v1alpha1.Machine, error) {
+func (c *Client) GetMachine(ctx context.Context, name string) (*v1beta1.Machine, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -63,7 +61,7 @@ func (c *Client) GetMachine(ctx context.Context, name string) (*v1alpha1.Machine
 	if err != nil {
 		return nil, err
 	}
-	machine := &v1alpha1.Machine{}
+	machine := &v1beta1.Machine{}
 	if err := json.Unmarshal(jsonData, machine); err != nil {
 		return nil, err
 	}
