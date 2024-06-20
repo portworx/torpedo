@@ -181,6 +181,14 @@ const (
 	CorrectMemoryRequest                      = "700Mi"
 	CorrectMemoryLimit                        = "1Gi"
 	IncorrectImageSuffix                      = "-incorrect"
+	RestrictedPSA                             = "restricted"
+	RestrictedPSAVersion                      = "latest"
+	CustomRestrictedPSADescription            = "Custom Restricted PSA"
+	PrivilegedPSA                             = "privileged"
+	PrivilegedPSAVersion                      = "latest"
+	CustomPrivilegedPSADescription            = "Custom Privileged PSA"
+	DummyPSATestcase                          = "DummyPSATestcase"
+	RancherRestricted                         = "rancher-restricted"
 )
 
 var (
@@ -216,6 +224,10 @@ var (
 	IsBackupLongevityRun       = false
 	PvcListBeforeRun           []string
 	PvcListAfterRun            []string
+	RestrictedPSALabel         = map[string]string{"pod-security.kubernetes.io/enforce": "restricted"}
+	BaselinePSALabel           = map[string]string{"pod-security.kubernetes.io/enforce": "baseline"}
+	PrivilegePSALabel          = map[string]string{"pod-security.kubernetes.io/enforce": "privileged"}
+	PsaAppMap                  = map[string]string{"postgres-backup": "postgres-psa-restricted", "mysql-backup": "mysql-psa-restricted"}
 )
 
 type UserRoleAccess struct {
