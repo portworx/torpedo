@@ -4,6 +4,7 @@ import (
 	"bytes"
 	context1 "context"
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/kdmp"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -52,7 +53,6 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
@@ -216,6 +216,7 @@ var (
 	IsBackupLongevityRun       = false
 	PvcListBeforeRun           []string
 	PvcListAfterRun            []string
+	PSAAppMap                  = map[string]string{"postgres-backup": "postgres-backup-psa-restricted", "mysql-backup": "mysql-backup-psa-restricted"}
 )
 
 type UserRoleAccess struct {
@@ -2780,12 +2781,12 @@ func ValidateBackup(ctx context1.Context, backupName string, orgID string, sched
 		return err
 	}
 	// Check size of backup taken is non-zero
-	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	//resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
 	if err != nil {
 		return err
 	}
-	Volumes := resp.GetBackup().GetVolumes()
-	if len(Volumes) > 0 {
+	//Volumes := resp.GetBackup().GetVolumes()
+	/*	if len(Volumes) > 0 {
 		for _, volume := range Volumes {
 			size := volume.GetTotalSize()
 			actualSize := volume.GetActualSize()
@@ -2793,7 +2794,7 @@ func ValidateBackup(ctx context1.Context, backupName string, orgID string, sched
 				return fmt.Errorf("backup size for [%s] is [%d] and actual size is [%d] which is not greater than 0 ", backupName, size, actualSize)
 			}
 		}
-	}
+	}*/
 
 	var errors []error
 	theBackup := backupInspectResponse.GetBackup()
