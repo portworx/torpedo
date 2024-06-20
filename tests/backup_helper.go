@@ -4,6 +4,7 @@ import (
 	"bytes"
 	context1 "context"
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/kdmp"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -52,7 +53,6 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
@@ -216,6 +216,10 @@ var (
 	IsBackupLongevityRun       = false
 	PvcListBeforeRun           []string
 	PvcListAfterRun            []string
+	RestrictedPSALabel         = map[string]string{"pod-security.kubernetes.io/enforce": "restricted"}
+	BaselinePSALabel           = map[string]string{"pod-security.kubernetes.io/enforce": "baseline"}
+	PrivilegedPSALabel         = map[string]string{"pod-security.kubernetes.io/enforce": "privileged"}
+	PSAAppMap                  = map[string]string{"postgres-backup": "postgres-backup-psa-restricted", "mysql-backup": "mysql-backup-psa-restricted"}
 )
 
 type UserRoleAccess struct {

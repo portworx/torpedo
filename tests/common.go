@@ -409,6 +409,8 @@ const (
 	podDestroyTimeout           = 5 * time.Minute
 	kubeApiServerBringUpTimeout = 20 * time.Minute
 	KubeApiServerWait           = 2 * time.Minute
+	NSWaitTimeout               = 10 * time.Minute
+	NSWaitTimeoutRetry          = 20 * time.Second
 )
 
 const (
@@ -13532,4 +13534,74 @@ func DeleteFilesFromS3Bucket(bucketName string, fileName string) error {
 	}
 	log.Infof("The files %v are successfully deleted from the bucket [%s]", keys, bucket)
 	return nil
+}
+
+// CreateNamespaceAndAssignLabels Creates a namespace and assigns labels to it
+func CreateNamespaceAndAssignLabels(namespace string, labels map[string]string) error {
+	t := func() (interface{}, bool, error) {
+		nsSpec := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   namespace,
+				Labels: labels,
+			},
+		}
+		ns, err := k8sCore.CreateNamespace(nsSpec)
+
+		if k8serrors.IsAlreadyExists(err) {
+			if ns, err = k8sCore.GetNamespace(namespace); err == nil {
+				return ns, false, nil
+			}
+		}
+		return ns, false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, NSWaitTimeout, NSWaitTimeoutRetry)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteLabelsFromNamespace deletes specified labels from a Kubernetes namespace.
+func DeleteLabelsFromNamespace(namespace string, labelsToDelete []string) error {
+	t := func() (interface{}, bool, error) {
+		// Get existing namespace
+		ns, err := k8sCore.GetNamespace(namespace)
+		if err != nil {
+			return nil, false, err
+		}
+
+		// Check if namespace has labels to delete
+		if ns.Labels == nil {
+			return nil, false, nil // No labels to delete
+		}
+
+		// Delete specified labels from the namespace
+		for _, key := range labelsToDelete {
+			delete(ns.Labels, key)
+		}
+
+		return ns, false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, NSWaitTimeout, NSWaitTimeoutRetry)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetUniqueElementsFromList gets unique elements from a list
+func GetUniqueElementsFromList(input []string) []string {
+	uniqueMap := make(map[string]bool)
+	uniqueSlice := make([]string, 0)
+
+	for _, element := range input {
+		if !uniqueMap[element] {
+			uniqueMap[element] = true
+			uniqueSlice = append(uniqueSlice, element)
+		}
+	}
+
+	return uniqueSlice
 }
