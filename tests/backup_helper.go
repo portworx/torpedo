@@ -142,8 +142,8 @@ const (
 	BackupLocationDeleteRetryTime             = 30 * time.Second
 	RebootNodeTimeout                         = 1 * time.Minute
 	RebootNodeTimeBeforeRetry                 = 5 * time.Second
-	LatestPxBackupVersion                     = "2.7.0"
-	defaultPxBackupHelmBranch                 = "2.7.0"
+	LatestPxBackupVersion                     = "2.7.2"
+	defaultPxBackupHelmBranch                 = "2.7.2"
 	pxCentralPostInstallHookJobName           = "pxcentral-post-install-hook"
 	quickMaintenancePod                       = "quick-maintenance-repo"
 	fullMaintenancePod                        = "full-maintenance-repo"
@@ -4619,7 +4619,7 @@ func UpgradeStorkVersion(storkImageToUpgrade string) error {
 	if internalDockerRegistry != "" {
 		finalImageToUpgrade = fmt.Sprintf("%s/portworx/stork:%s", internalDockerRegistry, storkImageToUpgrade)
 	} else {
-		finalImageToUpgrade = fmt.Sprintf("docker.io/openstorage/stork:%s", storkImageToUpgrade)
+		finalImageToUpgrade = fmt.Sprintf("docker.io/portworx/sb-stork:%s", storkImageToUpgrade)
 	}
 	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
 	if isOpBased {
