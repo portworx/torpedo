@@ -863,6 +863,8 @@ spec:
       value: "${GKE_UPGRADE_STRATEGY}"
     - name: GKE_SURGE_VALUE
       value: "${GKE_SURGE_VALUE}"
+    - name: TOGGLE_PURE_MGMT_IP
+      value: "${TOGGLE_PURE_MGMT_IP}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
