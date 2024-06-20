@@ -8213,6 +8213,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 		RunIdForSuite = testrailuttils.AddRunsToMilestone(testRepoID)
 		CurrentTestRailTestCaseId = testRepoID
 	}
+	log.Infof("TOGGLE_PURE_MGMT_IP: %v", os.Getenv("TOGGLE_PURE_MGMT_IP"))
 	if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
 		if PureMgmtIpCounter == 0 {
 			faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
@@ -8231,7 +8232,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 				}
 			}
 		} else {
-			prevMgmtIPIndex := (PureMgmtIpCounter - 1) % len(PureMgmtIPList)
+			prevMgmtIPIndex := PureMgmtIpCounter % len(PureMgmtIPList)
 			prevMgmtIP := PureMgmtIPList[prevMgmtIPIndex]
 			prevFaClient := PureFAMgmtMap[prevMgmtIP]
 			networkInterfaces, err := pureutils.ListAllNetworkInterfacesOnFA(prevFaClient)
@@ -8241,13 +8242,13 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 					for _, service := range networkInterface.Services {
 						if strings.Contains(service, "management") {
 							log.Infof("Enabling network interface on FA with IP [%s]", prevMgmtIP)
-							//_, err := pureutils.EnableNetworkInterface(prevFaClient, networkInterface.Name)
-							//log.FailOnError(err, "failed to enable network interfaces on FA with IP [%s]", prevMgmtIP)
+							_, err := pureutils.EnableNetworkInterface(prevFaClient, networkInterface.Name)
+							log.FailOnError(err, "failed to enable network interfaces on FA with IP [%s]", prevMgmtIP)
 						}
 					}
 				}
 			}
-			currMgmtIPIndex := prevMgmtIPIndex % len(PureMgmtIPList)
+			currMgmtIPIndex := (PureMgmtIpCounter + 1) % len(PureMgmtIPList)
 			faMgmtIP := PureMgmtIPList[currMgmtIPIndex]
 			faClient := PureFAMgmtMap[faMgmtIP]
 			networkInterfaces, err = pureutils.ListAllNetworkInterfacesOnFA(faClient)
