@@ -7372,19 +7372,19 @@ func ParseFlags() {
 			}
 		})
 	}
-	if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
-		PureMgmtIpCounter = 0
-		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
-		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
-		secret, err := pureutils.GetPXPureSecret(volDriverNamespace)
-		log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
-		PureFAMgmtMap, err = pureutils.GetFAMgmtIPFromPXPureSecret(secret)
-		log.FailOnError(err, "failed to get FA management map from secret [%s/%s]", PureSecretName, volDriverNamespace)
-		for mgmtIP := range PureFAMgmtMap {
-			PureMgmtIPList = append(PureMgmtIPList, mgmtIP)
-		}
-		log.Infof("PureMgmtIPList: %v", PureMgmtIPList)
-	}
+	//if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
+	//	PureMgmtIpCounter = 0
+	//	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	//	log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+	//	secret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+	//	log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
+	//	PureFAMgmtMap, err = pureutils.GetFAMgmtIPFromPXPureSecret(secret)
+	//	log.FailOnError(err, "failed to get FA management map from secret [%s/%s]", PureSecretName, volDriverNamespace)
+	//	for mgmtIP := range PureFAMgmtMap {
+	//		PureMgmtIPList = append(PureMgmtIPList, mgmtIP)
+	//	}
+	//	log.Infof("PureMgmtIPList: %v", PureMgmtIPList)
+	//}
 	printFlags()
 }
 
@@ -8216,6 +8216,19 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	log.Infof("TOGGLE_PURE_MGMT_IP: %v", os.Getenv("TOGGLE_PURE_MGMT_IP"))
 	if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
 		if PureMgmtIpCounter == 0 {
+			if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
+				PureMgmtIpCounter = 0
+				volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+				log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+				secret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+				log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
+				PureFAMgmtMap, err = pureutils.GetFAMgmtIPFromPXPureSecret(secret)
+				log.FailOnError(err, "failed to get FA management map from secret [%s/%s]", PureSecretName, volDriverNamespace)
+				for mgmtIP := range PureFAMgmtMap {
+					PureMgmtIPList = append(PureMgmtIPList, mgmtIP)
+				}
+				log.Infof("PureMgmtIPList: %v", PureMgmtIPList)
+			}
 			faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
 			faClient := PureFAMgmtMap[faMgmtIP]
 			networkInterfaces, err := pureutils.ListAllNetworkInterfacesOnFA(faClient)
