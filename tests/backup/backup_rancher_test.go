@@ -1178,7 +1178,7 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", La
 })
 
 // This is a dummy PSA testcase to validate the PSA related methods for RKE
-var _ = Describe("{DummyPSATestcase}", Label(TestCaseLabelsMap[DummyPSATestcase]...), func() {
+var _ = Describe("{DummyPSATestcaseRancher}", Label(TestCaseLabelsMap[DummyPSATestcaseRancher]...), func() {
 	JustBeforeEach(func() {
 		log.InfoD("No pre-configuration needed")
 	})
@@ -1224,9 +1224,10 @@ var _ = Describe("{DummyPSATestcase}", Label(TestCaseLabelsMap[DummyPSATestcase]
 			psaTemplateExemptions := &rancherClient.PodSecurityAdmissionConfigurationTemplateExemptions{
 				Namespaces: newList,
 			}
-			err = Inst().S.(*rke.Rancher).CreateCustomPodSecurityAdmissionConfigurationTemplate("custom-restricted-psa3", "Added custom PSA with restricted mode", psaTemplateDefaults, psaTemplateExemptions)
+			temp := "custom-" + RandomString(5)
+			err = Inst().S.(*rke.Rancher).CreateCustomPodSecurityAdmissionConfigurationTemplate(temp, "Added custom PSA with restricted mode", psaTemplateDefaults, psaTemplateExemptions)
 			log.FailOnError(err, "Creating new PSA template with restricted mode")
-			Inst().S.(*rke.Rancher).UpdateClusterWidePSA(clusterList[0], "custom-restricted-psa3")
+			Inst().S.(*rke.Rancher).UpdateClusterWidePSA(clusterList[0], temp)
 			log.FailOnError(err, "Adding custom PSA with restricted mode")
 
 			log.InfoD("Verifying if custom PSA is applied to the cluster")

@@ -13,7 +13,9 @@ const (
 	KeyCloakOIDCConfigFieldCreatorID           = "creatorId"
 	KeyCloakOIDCConfigFieldEnabled             = "enabled"
 	KeyCloakOIDCConfigFieldGroupSearchEnabled  = "groupSearchEnabled"
+	KeyCloakOIDCConfigFieldGroupsClaim         = "groupsClaim"
 	KeyCloakOIDCConfigFieldIssuer              = "issuer"
+	KeyCloakOIDCConfigFieldJWKSUrl             = "jwksUrl"
 	KeyCloakOIDCConfigFieldLabels              = "labels"
 	KeyCloakOIDCConfigFieldName                = "name"
 	KeyCloakOIDCConfigFieldOwnerReferences     = "ownerReferences"
@@ -21,8 +23,11 @@ const (
 	KeyCloakOIDCConfigFieldRancherURL          = "rancherUrl"
 	KeyCloakOIDCConfigFieldRemoved             = "removed"
 	KeyCloakOIDCConfigFieldScopes              = "scope"
+	KeyCloakOIDCConfigFieldStatus              = "status"
+	KeyCloakOIDCConfigFieldTokenEndpoint       = "tokenEndpoint"
 	KeyCloakOIDCConfigFieldType                = "type"
 	KeyCloakOIDCConfigFieldUUID                = "uuid"
+	KeyCloakOIDCConfigFieldUserInfoEndpoint    = "userInfoEndpoint"
 )
 
 type KeyCloakOIDCConfig struct {
@@ -37,7 +42,9 @@ type KeyCloakOIDCConfig struct {
 	CreatorID           string            `json:"creatorId,omitempty" yaml:"creatorId,omitempty"`
 	Enabled             bool              `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	GroupSearchEnabled  *bool             `json:"groupSearchEnabled,omitempty" yaml:"groupSearchEnabled,omitempty"`
+	GroupsClaim         string            `json:"groupsClaim,omitempty" yaml:"groupsClaim,omitempty"`
 	Issuer              string            `json:"issuer,omitempty" yaml:"issuer,omitempty"`
+	JWKSUrl             string            `json:"jwksUrl,omitempty" yaml:"jwksUrl,omitempty"`
 	Labels              map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
 	Name                string            `json:"name,omitempty" yaml:"name,omitempty"`
 	OwnerReferences     []OwnerReference  `json:"ownerReferences,omitempty" yaml:"ownerReferences,omitempty"`
@@ -45,6 +52,9 @@ type KeyCloakOIDCConfig struct {
 	RancherURL          string            `json:"rancherUrl,omitempty" yaml:"rancherUrl,omitempty"`
 	Removed             string            `json:"removed,omitempty" yaml:"removed,omitempty"`
 	Scopes              string            `json:"scope,omitempty" yaml:"scope,omitempty"`
+	Status              *AuthConfigStatus `json:"status,omitempty" yaml:"status,omitempty"`
+	TokenEndpoint       string            `json:"tokenEndpoint,omitempty" yaml:"tokenEndpoint,omitempty"`
 	Type                string            `json:"type,omitempty" yaml:"type,omitempty"`
 	UUID                string            `json:"uuid,omitempty" yaml:"uuid,omitempty"`
+	UserInfoEndpoint    string            `json:"userInfoEndpoint,omitempty" yaml:"userInfoEndpoint,omitempty"`
 }
