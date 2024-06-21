@@ -6952,6 +6952,22 @@ func (k *K8s) AddLabelOnNode(n node.Node, lKey string, lValue string) error {
 	return nil
 }
 
+// GetValueOfLabel gets the volue of a label for a given node
+func (k *K8s) GetValueOfLabel(n node.Node, lKey string) (string, error) {
+	k8sOps := k8sCore
+
+	labelValue, err := k8sOps.GetLabelsOnNode(n.Name)
+
+	if err != nil {
+		return "", fmt.Errorf("Failed to get label on node. Err: %v", err)
+	}
+
+	if value, ok := labelValue[lKey]; ok {
+		return value, nil
+	}
+	return "", fmt.Errorf("Failed to get label value on node or the label doesn't exis on the node")
+}
+
 // RemoveLabelOnNode adds label for a given node
 func (k *K8s) RemoveLabelOnNode(n node.Node, lKey string) error {
 	k8sOps := k8sCore

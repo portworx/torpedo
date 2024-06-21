@@ -790,6 +790,14 @@ func (d *dcos) RemoveLabelOnNode(n node.Node, lKey string) error {
 	}
 }
 
+func (d *dcos) GetValueOfLabel(n node.Node, label string) (string, error) {
+	// TODO implement this method
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetValueOfLabel()",
+	}
+}
+
 func (d *dcos) IsAutopilotEnabledForVolume(*volume.Volume) bool {
 	// TODO implement this method
 	return false

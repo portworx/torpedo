@@ -6,9 +6,9 @@ import (
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
 
 	"math/rand"
 	"sort"
@@ -5006,7 +5006,6 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 	})
 })
 
-
 var _ = Describe("{TrashcanRecovery}", func() {
 	/*
 		1) Create volumes and app
@@ -5552,10 +5551,9 @@ var _ = Describe("{SkinnyCloudsnap}", func() {
 		DestroyApps(contexts, opts)
 		err = DeleteCloudSnapBucket(bucketName)
 		log.FailOnError(err, "error deleting cloud snap bucket")
- 		AfterEachTest(contexts)
+		AfterEachTest(contexts)
 	})
 })
-
 
 var _ = Describe("{ValidatePodNameinVolume}", func() {
 	/*
@@ -5727,6 +5725,136 @@ var _ = Describe("{VerifyPoolCreateInProperZones}", func() {
 			err = ValidatePureCloudDriveTopologies()
 			log.FailOnError(err, "Failed to validate cloud drives topologies")
 
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+
+var _ = Describe("{VerifyPoolCreateFailWhenWrongZone}", func() {
+	/*
+		This test case assumes that it is being run on a setup with FACD topology enabled.
+		There are at least two different zones, each using a different flash array.
+		The nodes are labeled according to their respective zone labels.
+
+		https://purestorage.atlassian.net/browse/PTX-23978
+		1. Schedule application
+		2. Create a pool in few worker nodes and verify that the newly created pool is created in the nodes with specific zone
+		3. Destroy the applications
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyPoolCreateFailWhenWrongZone", "Label Nodes and Verify Pool Creation", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	var value string
+	var selectedNode node.Node
+	itLog := "VerifyPoolCreateInProperZones"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		selectedNodesForTopology := node.GetStorageNodes()[0 : len(node.GetStorageNodes())/2]
+
+		stepLog = "Schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("labelnodes-%d", i))...)
+			}
+		})
+
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		stepLog = "Create a pool in the labelled nodes and verify if cloud drive is created on the nodes with specific zone"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := CreateNewPoolsOnMultipleNodesInParallel(selectedNodesForTopology)
+			log.FailOnError(err, "error adding cloud drives in parallel")
+
+			//Verify cloud drives are created on the nodes with specific zone
+			err = ValidatePureCloudDriveTopologies()
+			log.FailOnError(err, "Failed to validate cloud drives topologies")
+		})
+
+		stepLog = "Initiate pool expand on the labelled nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			poolIdsToExpand := []string{}
+			for _, eachNodes := range node.GetStorageNodes() {
+				poolsPresent, err := GetPoolWithIOsInGivenNode(eachNodes, contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
+				if err == nil {
+					poolIdsToExpand = append(poolIdsToExpand, poolsPresent.Uuid)
+				} else {
+					log.InfoD("Errored while getting Pool IDs , ignoring for now ...")
+				}
+			}
+			dash.VerifyFatal(len(poolIdsToExpand) > 0, true,
+				fmt.Sprintf("No pools with IO present ?"))
+
+			expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_ADD_DISK}
+			if !IsPoolAddDiskSupported() {
+				expandType = []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+			}
+			wg, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
+			dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
+
+			wg.Wait()
+		})
+
+		stepLog = "Pick a random node,get the current value of the node and change the zone to wrong value"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			stNodes := node.GetStorageNodes()
+			selectedNode = stNodes[rand.Intn(len(stNodes))]
+			value, err = Inst().S.GetValueOfLabel(selectedNode, k8s.TopologyZoneK8sNodeLabel)
+			log.FailOnError(err, fmt.Sprintf("Failed to get value of label on node %s", selectedNode.Name))
+			log.InfoD("Current value of label on node %s is %s", selectedNode.Name, value)
+
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.TopologyZoneK8sNodeLabel)
+			log.FailOnError(err, fmt.Sprintf("Failed to remove label on node %s", selectedNode.Name))
+			err = Inst().S.AddLabelOnNode(selectedNode, k8s.TopologyZoneK8sNodeLabel, "wrong-zone")
+			log.FailOnError(err, fmt.Sprintf("Failed to add label on node %s", selectedNode.Name))
+		})
+
+		stepLog = "Restart Px,Now Px should go down on this node and pool creation should fail"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.RestartDriver(selectedNode, nil)
+			log.FailOnError(err, fmt.Sprintf("Failed to restart portworx on node %s", selectedNode.Name))
+
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, 2*time.Minute)
+			if err == nil {
+				log.FailOnError(fmt.Errorf("Portworx is up on node %s", selectedNode.Name), "Portworx should not be up since the zone has been changed")
+			}
+			log.InfoD("Portworx is down on node %s as expected", selectedNode.Name)
+			err = AddCloudDrive(selectedNode, -1)
+			if err == nil {
+				log.FailOnError(err, "Pool creation should fail as the zone has been changed")
+			}
+			log.InfoD("Pool creation failed as expected")
+		})
+
+		stepLog = "Change the zone back to original value,restart portworx and px should come up"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.TopologyZoneK8sNodeLabel)
+			log.FailOnError(err, fmt.Sprintf("Failed to remove label on node %s", selectedNode.Name))
+			err = Inst().S.AddLabelOnNode(selectedNode, k8s.TopologyZoneK8sNodeLabel, value)
+			log.FailOnError(err, fmt.Sprintf("Failed to add label on node %s", selectedNode.Name))
+
+			err = Inst().V.RestartDriver(selectedNode, nil)
+			log.FailOnError(err, fmt.Sprintf("Failed to restart portworx on node %s", selectedNode.Name))
+
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, 5*time.Minute)
+			log.FailOnError(err, fmt.Sprintf("Failed to bring up portworx on node %s", selectedNode.Name))
+
+			log.InfoD("Portworx is up on node %s as expected", selectedNode.Name)
 		})
 	})
 
