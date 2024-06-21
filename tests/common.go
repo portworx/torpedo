@@ -8246,7 +8246,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			}
 		} else {
 			fmt.Println("PureMgmtIpCounter: ", PureMgmtIpCounter)
-			prevMgmtIPIndex := PureMgmtIpCounter % len(PureMgmtIPList)
+			prevMgmtIPIndex := (PureMgmtIpCounter - 1) % len(PureMgmtIPList)
 			fmt.Println("prevMgmtIPIndex: ", prevMgmtIPIndex)
 			prevMgmtIP := PureMgmtIPList[prevMgmtIPIndex]
 			prevFaClient := PureFAMgmtMap[prevMgmtIP]
@@ -8263,7 +8263,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 					}
 				}
 			}
-			currMgmtIPIndex := (PureMgmtIpCounter + 1) % len(PureMgmtIPList)
+			currMgmtIPIndex := PureMgmtIpCounter % len(PureMgmtIPList)
 			fmt.Println("currMgmtIPIndex: ", currMgmtIPIndex)
 			faMgmtIP := PureMgmtIPList[currMgmtIPIndex]
 			faClient := PureFAMgmtMap[faMgmtIP]
