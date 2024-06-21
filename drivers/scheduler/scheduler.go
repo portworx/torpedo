@@ -308,6 +308,9 @@ type Driver interface {
 	// RemoveLabelOnNode removes label on the node
 	RemoveLabelOnNode(node.Node, string) error
 
+	//GetValueOfLabel gets the value of the label on the node
+	GetValueOfLabel(node.Node, string) (string, error)
+
 	// IsAutopilotEnabledForVolume checks if autopilot enabled for a given volume
 	IsAutopilotEnabledForVolume(*volume.Volume) bool
 
