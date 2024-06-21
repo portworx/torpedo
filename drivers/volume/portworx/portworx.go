@@ -4980,7 +4980,7 @@ func (d *portworx) EstimatePoolExpandSize(apRule apapi.AutopilotRule, pool node.
 					}
 				}
 			} else {
-				return calculatedTotalSize - (calculatedTotalSize%units.GiB), nil
+				return calculatedTotalSize - (calculatedTotalSize % units.GiB), nil
 			}
 		}
 	}
