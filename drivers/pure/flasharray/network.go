@@ -5,10 +5,24 @@ type NetworkServices struct {
 	client *Client
 }
 
-func (n *NetworkService) EnableNetworkInterface(iface string) (*NetworkInterface, error) {
+// SetNetworkInterface modifies network interface attributes
+func (n *NetworkServices) SetNetworkInterface(params map[string]string, data interface{}) ([]NetworkInterface, error) {
 
+	req, _ := n.client.NewRequest("PATCH", "network-interfaces", params, data)
+	m := []NetworkInterface{}
+	_, err := n.client.Do(req, m)
+	if err != nil {
+		return nil, err
+	}
+
+	return m, nil
+}
+func (n *NetworkServices) EnableNetworkInterface(iface string) ([]NetworkInterface, error) {
+
+	params := make(map[string]string)
+	params["names"] = iface
 	data := map[string]bool{"enabled": true}
-	m, err := n.SetNetworkInterface(iface, data)
+	m, err := n.SetNetworkInterface(params, data)
 	if err != nil {
 		return nil, err
 	}
@@ -17,11 +31,11 @@ func (n *NetworkService) EnableNetworkInterface(iface string) (*NetworkInterface
 }
 
 // ListNetworkInterfaces list the attributes of the network interfaces
-func (n *NetworkService) ListNetworkInterfaces() ([]NetworkInterface, error) {
+func (n *NetworkServices) ListNetworkInterfaces() ([]NetworkInterface, error) {
 
 	req, _ := n.client.NewRequest("GET", "network-interfaces", nil, nil)
 	m := []NetworkInterface{}
-	_, err := n.client.Do(req, &m, false)
+	_, err := n.client.Do(req, m)
 	if err != nil {
 		return nil, err
 	}
@@ -32,10 +46,12 @@ func (n *NetworkService) ListNetworkInterfaces() ([]NetworkInterface, error) {
 // DisableNetworkInterface disables a network interface.
 // param: iface: Name of network interface to be disabled.
 // Returns an object describing the interface.
-func (n *NetworkService) DisableNetworkInterface(iface string) (*NetworkInterface, error) {
+func (n *NetworkServices) DisableNetworkInterface(iface string) ([]NetworkInterface, error) {
 
+	params := make(map[string]string)
+	params["names"] = iface
 	data := map[string]bool{"enabled": false}
-	m, err := n.SetNetworkInterface(iface, data)
+	m, err := n.SetNetworkInterface(params, data)
 	if err != nil {
 		return nil, err
 	}

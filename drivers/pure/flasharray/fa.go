@@ -33,6 +33,7 @@ type Client struct {
 	Volumes *VolumeServices
 	Realms  *RealmsServices
 	Pods    *PodServices
+	Network *NetworkServices
 }
 
 // Type supported is used for retrieving the support API versions from the Flash Array
