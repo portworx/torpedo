@@ -1928,8 +1928,12 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
+		// volume.GetStorageProvisioner() returns the corresponding value from the portworx.provisioners map
+		// based on the --provisioner flag, such as "kubernetes.io/portworx-volume", "pxd.portworx.com", or "strict".
 		if volume.GetStorageProvisioner() != PortworxStrict {
-			if options.StorageProvisioner == string(volume.DefaultStorageProvisioner) || options.StorageProvisioner == CsiProvisioner {
+			// options.StorageProvisioner corresponds to the --provisioner flag (portworx or csi).
+			if options.StorageProvisioner == string(volume.DefaultStorageProvisioner) || options.StorageProvisioner == string(volume.CSIStorageProvisioner) {
+				// app.IsCSI is true if the app is in CSI_APP_LIST.
 				if app.IsCSI {
 					obj.Provisioner = CsiProvisioner
 				} else {
@@ -6984,6 +6988,22 @@ func (k *K8s) SaveSchedulerLogsToFile(n node.Node, location string) error {
 	return err
 }
 
+// StopKubelet allows to stop kubelet on a give node
+func (k *K8s) StopKubelet(n node.Node, options node.SystemctlOpts) error {
+	systemctlCmd := fmt.Sprintf("sudo systemctl stop %s", "kubelet")
+	driver, _ := node.Get(k.NodeDriverName)
+	_, err := driver.RunCommand(n, systemctlCmd, options.ConnectionOpts)
+	return err
+}
+
+// StartKubelet allows to start kubelet on a give node
+func (k *K8s) StartKubelet(n node.Node, options node.SystemctlOpts) error {
+	systemctlCmd := fmt.Sprintf("sudo systemctl start %s", "kubelet")
+	driver, _ := node.Get(k.NodeDriverName)
+	_, err := driver.RunCommand(n, systemctlCmd, options.ConnectionOpts)
+	return err
+}
+
 func (k *K8s) addLabelsToPVC(pvc *corev1.PersistentVolumeClaim, labels map[string]string) {
 	if len(pvc.Labels) == 0 {
 		pvc.Labels = map[string]string{}
@@ -8147,6 +8167,16 @@ func (k *K8s) CreateVolumeSnapshotClasses(snapClassName string, provisioner stri
 		}
 	}
 	return volumeSnapClass, nil
+}
+
+// DeleteCsiSnapshotClass deletes csi snapshot class
+func (k *K8s) DeleteCsiSnapshotClass(snapClassName string) error {
+	log.Infof("Deleting volume snapshot class: %v", snapClassName)
+	err := k8sExternalsnap.DeleteSnapshotClass(snapClassName)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreateVolumeSnapshotClassesWithParameters creates a volume snapshot class with additional parameters
