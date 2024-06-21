@@ -38,6 +38,8 @@ type Context struct {
 	ScheduleOptions ScheduleOptions
 	// SkipVolumeValidation for cases when use volume driver other than portworx
 	SkipVolumeValidation bool
+	// SkipPodValidation for cases when we expect the pods not be ready.
+	SkipPodValidation bool
 	// SkipClusterScopedObject for cases of multi-cluster backup when Storage class does not restored
 	SkipClusterScopedObject bool
 	// RefreshStorageEndpoint force refresh the storage driver endpoint
@@ -399,6 +401,9 @@ type Driver interface {
 	// CreateVolumeSnapshotClassesWithParameters creates a volume snapshot class with additional parameters
 	CreateVolumeSnapshotClassesWithParameters(snapClassName string, provisioner string, isDefault bool, deletePolicy string, parameters map[string]string) (*volsnapv1.VolumeSnapshotClass, error)
 
+	// DeleteCsiSnapshotClass deletes csi snapshot class
+	DeleteCsiSnapshotClass(snapClassName string) error
+
 	// CreateCsiSnapshot create csi snapshot for given pvc
 	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.
 	// At the same time, there's also other validation functions in this interface as well. So we should look into ways
@@ -460,6 +465,11 @@ type Driver interface {
 
 	// SetASGClusterSize sets node count for an asg cluster
 	SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
+
+	// StopKubelet stops kubelet on the given node
+	StopKubelet(appNode node.Node, opts node.SystemctlOpts) error
+	// StartKubelet starts kubelet on the given node
+	StartKubelet(appNode node.Node, opts node.SystemctlOpts) error
 }
 
 var (
