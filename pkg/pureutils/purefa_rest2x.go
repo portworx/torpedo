@@ -75,6 +75,30 @@ func CreatePodinFA(faClient *flasharray.Client, podName string) (*[]flasharray.P
 	return podinfo, nil
 }
 
+func ListAllInterfaces(faClient *flasharray.Client) ([]flasharray.NetworkInterface, error) {
+	interfaces, err := faClient.Network.ListNetworkInterfaces()
+	if err != nil {
+		return nil, err
+	}
+	return interfaces, nil
+}
+func EnableInterfaceOnFA(faClient *flasharray.Client, iface string) ([]flasharray.NetworkInterface, error) {
+	interfaces, err := faClient.Network.EnableNetworkInterface(iface)
+	if err != nil {
+		return nil, err
+	}
+	return interfaces, nil
+
+}
+func DisableInterfaceOnFA(faClient *flasharray.Client, iface string) ([]flasharray.NetworkInterface, error) {
+	interfaces, err := faClient.Network.DisableNetworkInterface(iface)
+	if err != nil {
+		return nil, err
+	}
+	return interfaces, nil
+
+}
+
 // DeletePodinFA deletes Pod in FA
 func DeletePodinFA(faClient *flasharray.Client, podName string) error {
 	queryParams := make(map[string]string)
