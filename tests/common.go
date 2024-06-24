@@ -8235,7 +8235,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			faClient := PureFAMgmtMap[faMgmtIP]
 			networkInterfaces, err := pureutils.ListAllInterfaces(faClient)
 			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
-			for _, networkInterface := range networkInterfaces {
+			for _, networkInterface := range *networkInterfaces {
 				if networkInterface.Eth.Address == faMgmtIP {
 					for _, service := range networkInterface.Services {
 						if strings.Contains(service, "management") {
@@ -8254,7 +8254,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			prevFaClient := PureFAMgmtMap[prevMgmtIP]
 			networkInterfaces, err := pureutils.ListAllInterfaces(prevFaClient)
 			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", prevMgmtIP)
-			for _, networkInterface := range networkInterfaces {
+			for _, networkInterface := range *networkInterfaces {
 				if networkInterface.Eth.Address == prevMgmtIP {
 					for _, service := range networkInterface.Services {
 						if strings.Contains(service, "management") {
@@ -8271,7 +8271,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			faClient := PureFAMgmtMap[faMgmtIP]
 			networkInterfaces, err = pureutils.ListAllInterfaces(faClient)
 			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
-			for _, networkInterface := range networkInterfaces {
+			for _, networkInterface := range *networkInterfaces {
 				if networkInterface.Eth.Address == faMgmtIP {
 					for _, service := range networkInterface.Services {
 						if strings.Contains(service, "management") {
