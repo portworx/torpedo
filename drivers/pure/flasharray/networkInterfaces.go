@@ -26,6 +26,9 @@ type NetworkInterface struct {
 	Speed         int      `json:"speed"`
 }
 
-type NetworkInterfaces struct {
-	Interfaces []NetworkInterface `json:"interfaces"`
+type NetworkInterfaceResponse struct {
+	ContinuationToken  interface{}        `json:"continuation_token"`
+	MoreItemsRemaining bool               `json:"more_items_remaining"`
+	TotalItemCount     *int               `json:"total_item_count"`
+	Items              []NetworkInterface `json:"items"`
 }
