@@ -8235,17 +8235,13 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			}
 			faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
 			apiToken := pureutils.GetApiTokenForMgmtEndpoints(secret, faMgmtIP)
+			log.InfoD("apiToken: %s", apiToken)
 			faClient := PureFAMgmtMap[faMgmtIP]
 			networkInterfaces, err := pureutils.ListAllInterfaces(faClient)
 			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
 			for _, nw := range networkInterfaces {
 				for _, networkInterface := range nw.Items {
-					fmt.Println("netwrok eth subtype", networkInterface.Eth.Subtype)
-					fmt.Println("netwrok eth address", networkInterface.Eth.Address)
-					fmt.Println("netwrok eth enabled", networkInterface.Enabled)
 					if networkInterface.Eth.Subtype == "vif" && networkInterface.Enabled == true {
-						log.InfoD("entered network interface loop")
-						log.InfoD("networkInterface: %+v", networkInterface)
 						PureFaClientVif, err = pureutils.PureCreateClientAndConnectRest2_x(networkInterface.Eth.Address, apiToken)
 						log.FailOnError(err, "failed to create client and connect to FA with IP [%s]", networkInterface.Eth.Address)
 					}

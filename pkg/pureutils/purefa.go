@@ -87,9 +87,15 @@ func GetFAMgmtEndPoints(secret PXPureSecret) []string {
 // GetApiTokenForMgmtEndpoints Returns API token for Mgmt Endpoints
 func GetApiTokenForMgmtEndpoints(secret PXPureSecret, mgmtEndPoint string) string {
 	for _, faDetails := range secret.Arrays {
-		if faDetails.MgmtEndPoint == mgmtEndPoint {
-			return faDetails.APIToken
+		//split the mgmtEndPoint by , and check if it is present in the faDetails.MgmtEndPoint
+		//if present return the APIToken
+		faMgmtEndPoints := strings.Split(faDetails.MgmtEndPoint, ",")
+		for _, faMgmtEndPoint := range faMgmtEndPoints {
+			if faMgmtEndPoint == mgmtEndPoint {
+				return faDetails.APIToken
+			}
 		}
+
 	}
 	return ""
 }
