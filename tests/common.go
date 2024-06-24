@@ -547,9 +547,14 @@ var (
 var pxRuntimeOpts string
 var pxClusterOpts string
 var PxBackupVersion string
-var PureMgmtIpCounter int
-var PureMgmtIPList []string
-var PureFAMgmtMap map[string]*newflasharray.Client
+var (
+	secret            pureutils.PXPureSecret
+	PureFaClientVif   *newflasharray.Client
+	PureMgmtIpCounter int
+	PureMgmtIPList    []string
+	PureFAMgmtMap     map[string]*newflasharray.Client
+)
+
 var (
 	RunIdForSuite             int
 	TestRailSetupSuccessful   bool
@@ -7374,19 +7379,34 @@ func ParseFlags() {
 			}
 		})
 	}
-	//if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
-	//	PureMgmtIpCounter = 0
-	//	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
-	//	log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
-	//	secret, err := pureutils.GetPXPureSecret(volDriverNamespace)
-	//	log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
-	//	PureFAMgmtMap, err = pureutils.GetFAMgmtIPFromPXPureSecret(secret)
-	//	log.FailOnError(err, "failed to get FA management map from secret [%s/%s]", PureSecretName, volDriverNamespace)
-	//	for mgmtIP := range PureFAMgmtMap {
-	//		PureMgmtIPList = append(PureMgmtIPList, mgmtIP)
-	//	}
-	//	log.Infof("PureMgmtIPList: %v", PureMgmtIPList)
-	//}
+	if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
+
+		PureMgmtIpCounter = 0
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+		secret, err = pureutils.GetPXPureSecret(volDriverNamespace)
+		log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
+		PureFAMgmtMap, err = pureutils.GetFAMgmtIPFromPXPureSecret(secret)
+		log.FailOnError(err, "failed to get FA management map from secret [%s/%s]", PureSecretName, volDriverNamespace)
+		for mgmtIP := range PureFAMgmtMap {
+			PureMgmtIPList = append(PureMgmtIPList, mgmtIP)
+		}
+		log.Infof("PureMgmtIPList: %v", PureMgmtIPList)
+		faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
+		faClient := PureFAMgmtMap[faMgmtIP]
+		apiToken := pureutils.GetApiTokenForMgmtEndpoints(secret, faMgmtIP)
+		log.InfoD("apiToken: %s", apiToken)
+		networkInterfaces, err := pureutils.ListAllInterfaces(faClient)
+		log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
+		for _, nw := range networkInterfaces {
+			for _, networkInterface := range nw.Items {
+				if networkInterface.Eth.Subtype == "vif" && networkInterface.Enabled == true {
+					PureFaClientVif, err = pureutils.PureCreateClientAndConnectRest2_x(networkInterface.Eth.Address, apiToken)
+					log.FailOnError(err, "failed to create client and connect to FA with IP [%s]", networkInterface.Eth.Address)
+				}
+			}
+		}
+	}
 	printFlags()
 }
 
@@ -8218,35 +8238,10 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	log.Infof("TOGGLE_PURE_MGMT_IP: %v", os.Getenv("TOGGLE_PURE_MGMT_IP"))
 	if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
 		var lastDisabledInterface string
-		var secret pureutils.PXPureSecret
-		var PureFaClientVif *newflasharray.Client
-		PureMgmtIpCounter = 0
-		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
-		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
-		secret, err = pureutils.GetPXPureSecret(volDriverNamespace)
-		log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
-		PureFAMgmtMap, err = pureutils.GetFAMgmtIPFromPXPureSecret(secret)
-		log.FailOnError(err, "failed to get FA management map from secret [%s/%s]", PureSecretName, volDriverNamespace)
-		for mgmtIP := range PureFAMgmtMap {
-			PureMgmtIPList = append(PureMgmtIPList, mgmtIP)
-		}
-		log.Infof("PureMgmtIPList: %v", PureMgmtIPList)
-		faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
-		faClient := PureFAMgmtMap[faMgmtIP]
-		apiToken := pureutils.GetApiTokenForMgmtEndpoints(secret, faMgmtIP)
-		log.InfoD("apiToken: %s", apiToken)
-		networkInterfaces, err := pureutils.ListAllInterfaces(faClient)
-		log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
-		for _, nw := range networkInterfaces {
-			for _, networkInterface := range nw.Items {
-				if networkInterface.Eth.Subtype == "vif" && networkInterface.Enabled == true {
-					PureFaClientVif, err = pureutils.PureCreateClientAndConnectRest2_x(networkInterface.Eth.Address, apiToken)
-					log.FailOnError(err, "failed to create client and connect to FA with IP [%s]", networkInterface.Eth.Address)
-				}
-			}
-		}
 		if PureMgmtIpCounter == 0 {
-			faMgmtIP = PureMgmtIPList[PureMgmtIpCounter]
+			faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
+			networkInterfaces, err := pureutils.ListAllInterfaces(PureFaClientVif)
+			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
 			for _, nw := range networkInterfaces {
 				for _, networkInterface := range nw.Items {
 					if networkInterface.Eth.Address == faMgmtIP {

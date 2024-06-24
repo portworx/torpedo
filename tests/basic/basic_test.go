@@ -79,6 +79,10 @@ var _ = AfterSuite(func() {
 			}
 		}
 	}
+	_, pureMgmtIPExists := os.LookupEnv("TOGGLE_PURE_MGMT_IP")
+	if pureMgmtIPExists {
+
+	}
 })
 
 func TestMain(m *testing.M) {
