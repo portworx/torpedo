@@ -207,11 +207,7 @@ var _ = Describe(fmt.Sprintf("{%sToggleAutopilot}", testSuiteName), func() {
 	var contexts []*scheduler.Context
 	It("has to, toggle stc to disable autopilot, then enable it back", func() {
 		testName := strings.ToLower(fmt.Sprintf("%sToggleAutopilot", testSuiteName))
-		Step("Toggle autopilot", func() {
-			err := ToggleAutopilotInStc()
-			Expect(err).NotTo(HaveOccurred())
-			time.Sleep(30 * time.Second)
-		})
+
 		Step("schedule applications", func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				for id, apRule := range autopilotPVCRule {
@@ -238,6 +234,11 @@ var _ = Describe(fmt.Sprintf("{%sToggleAutopilot}", testSuiteName), func() {
 			for _, ctx := range contexts {
 				ValidateVolumes(ctx)
 			}
+		})
+		Step("Toggle autopilot", func() {
+			err := ToggleAutopilotInStc()
+			Expect(err).NotTo(HaveOccurred())
+			time.Sleep(30 * time.Second)
 		})
 
 		Step(fmt.Sprintf("wait for unscheduled resize of volume (%s)", unscheduledResizeTimeout), func() {
