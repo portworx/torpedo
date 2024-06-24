@@ -31,11 +31,11 @@ func (n *NetworkServices) EnableNetworkInterface(iface string) ([]NetworkInterfa
 }
 
 // ListNetworkInterfaces list the attributes of the network interfaces
-func (n *NetworkServices) ListNetworkInterfaces() ([]NetworkInterface, error) {
+func (n *NetworkServices) ListNetworkInterfaces() (*[]NetworkInterface, error) {
 
 	req, _ := n.client.NewRequest("GET", "network-interfaces", nil, nil)
-	m := []NetworkInterface{}
-	_, err := n.client.Do(req, m)
+	m := &[]NetworkInterface{}
+	_, err := n.client.Do(req, *m)
 	if err != nil {
 		return nil, err
 	}
