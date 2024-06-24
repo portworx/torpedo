@@ -8220,6 +8220,20 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 		var lastDisabledInterface string
 		var secret pureutils.PXPureSecret
 		var PureFaClientVif *newflasharray.Client
+		faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
+		faClient := PureFAMgmtMap[faMgmtIP]
+		apiToken := pureutils.GetApiTokenForMgmtEndpoints(secret, faMgmtIP)
+		log.InfoD("apiToken: %s", apiToken)
+		networkInterfaces, err := pureutils.ListAllInterfaces(faClient)
+		log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
+		for _, nw := range networkInterfaces {
+			for _, networkInterface := range nw.Items {
+				if networkInterface.Eth.Subtype == "vif" && networkInterface.Enabled == true {
+					PureFaClientVif, err = pureutils.PureCreateClientAndConnectRest2_x(networkInterface.Eth.Address, apiToken)
+					log.FailOnError(err, "failed to create client and connect to FA with IP [%s]", networkInterface.Eth.Address)
+				}
+			}
+		}
 		if PureMgmtIpCounter == 0 {
 			if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
 				PureMgmtIpCounter = 0
@@ -8234,20 +8248,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 				}
 				log.Infof("PureMgmtIPList: %v", PureMgmtIPList)
 			}
-			faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
-			apiToken := pureutils.GetApiTokenForMgmtEndpoints(secret, faMgmtIP)
-			log.InfoD("apiToken: %s", apiToken)
-			faClient := PureFAMgmtMap[faMgmtIP]
-			networkInterfaces, err := pureutils.ListAllInterfaces(faClient)
-			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
-			for _, nw := range networkInterfaces {
-				for _, networkInterface := range nw.Items {
-					if networkInterface.Eth.Subtype == "vif" && networkInterface.Enabled == true {
-						PureFaClientVif, err = pureutils.PureCreateClientAndConnectRest2_x(networkInterface.Eth.Address, apiToken)
-						log.FailOnError(err, "failed to create client and connect to FA with IP [%s]", networkInterface.Eth.Address)
-					}
-				}
-			}
+			faMgmtIP = PureMgmtIPList[PureMgmtIpCounter]
 			for _, nw := range networkInterfaces {
 				for _, networkInterface := range nw.Items {
 					if networkInterface.Eth.Address == faMgmtIP {
