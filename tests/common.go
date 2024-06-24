@@ -8249,6 +8249,10 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 						PureFaClientVif, err = pureutils.PureCreateClientAndConnectRest2_x(networkInterface.Eth.Address, apiToken)
 						log.FailOnError(err, "failed to create client and connect to FA with IP [%s]", networkInterface.Eth.Address)
 					}
+				}
+			}
+			for _, nw := range networkInterfaces {
+				for _, networkInterface := range nw.Items {
 					if networkInterface.Eth.Address == faMgmtIP {
 						for _, service := range networkInterface.Services {
 							if strings.Contains(service, "management") {
@@ -8259,7 +8263,6 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 						}
 					}
 				}
-
 			}
 		} else {
 			fmt.Println("PureMgmtIpCounter: ", PureMgmtIpCounter)
