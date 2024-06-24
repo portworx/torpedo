@@ -3,6 +3,7 @@ package pureutils
 import (
 	"fmt"
 	"github.com/devans10/pugo/flasharray"
+	newflasharray "github.com/portworx/torpedo/drivers/pure/flasharray"
 	"strings"
 
 	"github.com/portworx/torpedo/pkg/units"
@@ -57,13 +58,13 @@ func GetFAClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flasharray
 	return clientMap, nil
 }
 
-func GetFAMgmtIPFromPXPureSecret(secret PXPureSecret) (map[string]*flasharray.Client, error) {
-	clientMap := make(map[string]*flasharray.Client)
+func GetFAMgmtIPFromPXPureSecret(secret PXPureSecret) (map[string]*newflasharray.Client, error) {
+	clientMap := make(map[string]*newflasharray.Client)
 	for _, fa := range secret.Arrays {
 		//split fa.MgmtEndPoint by , and do pureclientconnect for it and add it to clientMap
 		faMgmtEndPoints := strings.Split(fa.MgmtEndPoint, ",")
 		for _, faMgmtEndPoint := range faMgmtEndPoints {
-			faClient, err := PureCreateClientAndConnect(faMgmtEndPoint, fa.APIToken)
+			faClient, err := PureCreateClientAndConnectRest2_x(faMgmtEndPoint, fa.APIToken)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create FA client for [%s]. Err: [%v]", fa.MgmtEndPoint, err)
 			}

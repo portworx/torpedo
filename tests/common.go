@@ -198,6 +198,8 @@ import (
 
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
+
+	newflasharray "github.com/portworx/torpedo/drivers/pure/flasharray"
 )
 
 const (
@@ -547,7 +549,7 @@ var pxClusterOpts string
 var PxBackupVersion string
 var PureMgmtIpCounter int
 var PureMgmtIPList []string
-var PureFAMgmtMap map[string]*flasharray.Client
+var PureFAMgmtMap map[string]*newflasharray.Client
 var (
 	RunIdForSuite             int
 	TestRailSetupSuccessful   bool
@@ -8231,10 +8233,10 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			}
 			faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
 			faClient := PureFAMgmtMap[faMgmtIP]
-			networkInterfaces, err := pureutils.ListAllNetworkInterfacesOnFA(faClient)
+			networkInterfaces, err := pureutils.ListAllInterfaces(faClient)
 			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
 			for _, networkInterface := range networkInterfaces {
-				if networkInterface.Address == faMgmtIP {
+				if networkInterface.Eth.Address == faMgmtIP {
 					for _, service := range networkInterface.Services {
 						if strings.Contains(service, "management") {
 							log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
@@ -8250,14 +8252,14 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			fmt.Println("prevMgmtIPIndex: ", prevMgmtIPIndex)
 			prevMgmtIP := PureMgmtIPList[prevMgmtIPIndex]
 			prevFaClient := PureFAMgmtMap[prevMgmtIP]
-			networkInterfaces, err := pureutils.ListAllNetworkInterfacesOnFA(prevFaClient)
+			networkInterfaces, err := pureutils.ListAllInterfaces(prevFaClient)
 			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", prevMgmtIP)
 			for _, networkInterface := range networkInterfaces {
-				if networkInterface.Address == prevMgmtIP {
+				if networkInterface.Eth.Address == prevMgmtIP {
 					for _, service := range networkInterface.Services {
 						if strings.Contains(service, "management") {
 							log.Infof("Enabling network interface on FA with IP [%s]", prevMgmtIP)
-							_, err := pureutils.EnableNetworkInterface(prevFaClient, networkInterface.Name)
+							_, err := pureutils.EnableInterfaceOnFA(prevFaClient, networkInterface.Name)
 							log.FailOnError(err, "failed to enable network interfaces on FA with IP [%s]", prevMgmtIP)
 						}
 					}
@@ -8267,10 +8269,10 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			fmt.Println("currMgmtIPIndex: ", currMgmtIPIndex)
 			faMgmtIP := PureMgmtIPList[currMgmtIPIndex]
 			faClient := PureFAMgmtMap[faMgmtIP]
-			networkInterfaces, err = pureutils.ListAllNetworkInterfacesOnFA(faClient)
+			networkInterfaces, err = pureutils.ListAllInterfaces(faClient)
 			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
 			for _, networkInterface := range networkInterfaces {
-				if networkInterface.Address == faMgmtIP {
+				if networkInterface.Eth.Address == faMgmtIP {
 					for _, service := range networkInterface.Services {
 						if strings.Contains(service, "management") {
 							log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
