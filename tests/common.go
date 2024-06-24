@@ -2841,6 +2841,11 @@ func ToggleAutopilotInStc() error {
 	if err != nil {
 		return err
 	}
+	if stc.Spec.Autopilot != nil {
+		log.Infof("is autopilot enabled?: %t", stc.Spec.Autopilot.Enabled)
+	} else {
+		log.Errorf("Autopilot specification is not available")
+	}
 	log.Infof("is autopilot enabled?: %t", stc.Spec.Autopilot.Enabled)
 	stc.Spec.Autopilot.Enabled = !stc.Spec.Autopilot.Enabled
 	pxOperator := operator.Instance()
