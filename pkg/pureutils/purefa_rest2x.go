@@ -75,7 +75,7 @@ func CreatePodinFA(faClient *flasharray.Client, podName string) (*[]flasharray.P
 	return podinfo, nil
 }
 
-func ListAllInterfaces(faClient *flasharray.Client) ([]flasharray.NetworkInterface, error) {
+func ListAllInterfaces(faClient *flasharray.Client) ([]flasharray.NetworkInterfaceResponse, error) {
 	interfaces, err := faClient.Network.ListNetworkInterfaces()
 	if err != nil {
 		return nil, err

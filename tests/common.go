@@ -8235,16 +8235,19 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			faClient := PureFAMgmtMap[faMgmtIP]
 			networkInterfaces, err := pureutils.ListAllInterfaces(faClient)
 			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
-			for _, networkInterface := range networkInterfaces {
-				if networkInterface.Eth.Address == faMgmtIP {
-					for _, service := range networkInterface.Services {
-						if strings.Contains(service, "management") {
-							log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
-							//_, err = pureutils.DisableNetworkInterface(faClient, networkInterface.Name)
-							//log.FailOnError(err, "failed to disable network interfaces on FA with IP [%s]", faMgmtIP)
+			for _, nw := range networkInterfaces {
+				for _, networkInterface := range nw.Items {
+					if networkInterface.Eth.Address == faMgmtIP {
+						for _, service := range networkInterface.Services {
+							if strings.Contains(service, "management") {
+								log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
+								//_, err = pureutils.DisableNetworkInterface(faClient, networkInterface.Name)
+								//log.FailOnError(err, "failed to disable network interfaces on FA with IP [%s]", faMgmtIP)
+							}
 						}
 					}
 				}
+
 			}
 		} else {
 			fmt.Println("PureMgmtIpCounter: ", PureMgmtIpCounter)
@@ -8254,16 +8257,18 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			prevFaClient := PureFAMgmtMap[prevMgmtIP]
 			networkInterfaces, err := pureutils.ListAllInterfaces(prevFaClient)
 			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", prevMgmtIP)
-			for _, networkInterface := range networkInterfaces {
-				log.InfoD("networkInterface: %+v", networkInterface)
-				if networkInterface.Eth.Address == prevMgmtIP {
-					for _, service := range networkInterface.Services {
-						if strings.Contains(service, "management") {
-							log.Infof("Enabling network interface on FA with IP [%s]", prevMgmtIP)
-							_, err := pureutils.EnableInterfaceOnFA(prevFaClient, networkInterface.Name)
-							log.FailOnError(err, "failed to enable network interfaces on FA with IP [%s]", prevMgmtIP)
+			for _, nw := range networkInterfaces {
+				for _, networkInterface := range nw.Items {
+					if networkInterface.Eth.Address == prevMgmtIP {
+						for _, service := range networkInterface.Services {
+							if strings.Contains(service, "management") {
+								log.Infof("Enabling network interface on FA with IP [%s]", prevMgmtIP)
+								_, err := pureutils.EnableInterfaceOnFA(prevFaClient, networkInterface.Name)
+								log.FailOnError(err, "failed to enable network interfaces on FA with IP [%s]", prevMgmtIP)
+							}
 						}
 					}
+					log.InfoD("networkInterface: %+v", networkInterface)
 				}
 			}
 			currMgmtIPIndex := PureMgmtIpCounter % len(PureMgmtIPList)
@@ -8272,16 +8277,19 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			faClient := PureFAMgmtMap[faMgmtIP]
 			networkInterfaces, err = pureutils.ListAllInterfaces(faClient)
 			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
-			for _, networkInterface := range networkInterfaces {
-				if networkInterface.Eth.Address == faMgmtIP {
-					for _, service := range networkInterface.Services {
-						if strings.Contains(service, "management") {
-							log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
-							//_, err = pureutils.DisableNetworkInterface(faClient, networkInterface.Name)
-							//log.FailOnError(err, "failed to disable network interfaces on FA with IP [%s]", faMgmtIP)
+			for _, nw := range networkInterfaces {
+				for _, networkInterface := range nw.Items {
+					if networkInterface.Eth.Address == faMgmtIP {
+						for _, service := range networkInterface.Services {
+							if strings.Contains(service, "management") {
+								log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
+								//_, err = pureutils.DisableNetworkInterface(faClient, networkInterface.Name)
+								//log.FailOnError(err, "failed to disable network interfaces on FA with IP [%s]", faMgmtIP)
+							}
 						}
 					}
 				}
+
 			}
 		}
 		PureMgmtIpCounter += 1
