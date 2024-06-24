@@ -8268,8 +8268,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			prevMgmtIPIndex := (PureMgmtIpCounter - 1) % len(PureMgmtIPList)
 			fmt.Println("prevMgmtIPIndex: ", prevMgmtIPIndex)
 			prevMgmtIP := PureMgmtIPList[prevMgmtIPIndex]
-			prevFaClient := PureFAMgmtMap[prevMgmtIP]
-			networkInterfaces, err := pureutils.ListAllInterfaces(prevFaClient)
+			networkInterfaces, err := pureutils.ListAllInterfaces(PureFaClientVif)
 			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", prevMgmtIP)
 			for _, nw := range networkInterfaces {
 				for _, networkInterface := range nw.Items {
@@ -8289,9 +8288,9 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			currMgmtIPIndex := PureMgmtIpCounter % len(PureMgmtIPList)
 			fmt.Println("currMgmtIPIndex: ", currMgmtIPIndex)
 			faMgmtIP := PureMgmtIPList[currMgmtIPIndex]
-			faClient := PureFAMgmtMap[faMgmtIP]
-			networkInterfaces, err = pureutils.ListAllInterfaces(faClient)
-			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
+			//faClient := PureFAMgmtMap[faMgmtIP]
+			networkInterfaces, err = pureutils.ListAllInterfaces(PureFaClientVif)
+			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", PureFaClientVif)
 			for _, nw := range networkInterfaces {
 				for _, networkInterface := range nw.Items {
 					if networkInterface.Eth.Address == faMgmtIP {
