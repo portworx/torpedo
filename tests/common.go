@@ -8217,12 +8217,14 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	}
 	log.Infof("TOGGLE_PURE_MGMT_IP: %v", os.Getenv("TOGGLE_PURE_MGMT_IP"))
 	if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
+		var secret pureutils.PXPureSecret
+		var PureFaClientVif *newflasharray.Client
 		if PureMgmtIpCounter == 0 {
 			if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
 				PureMgmtIpCounter = 0
 				volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 				log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
-				secret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+				secret, err = pureutils.GetPXPureSecret(volDriverNamespace)
 				log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
 				PureFAMgmtMap, err = pureutils.GetFAMgmtIPFromPXPureSecret(secret)
 				log.FailOnError(err, "failed to get FA management map from secret [%s/%s]", PureSecretName, volDriverNamespace)
@@ -8232,16 +8234,21 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 				log.Infof("PureMgmtIPList: %v", PureMgmtIPList)
 			}
 			faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
+			apiToken := pureutils.GetApiTokenForMgmtEndpoints(secret, faMgmtIP)
 			faClient := PureFAMgmtMap[faMgmtIP]
 			networkInterfaces, err := pureutils.ListAllInterfaces(faClient)
 			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
 			for _, nw := range networkInterfaces {
 				for _, networkInterface := range nw.Items {
+					if networkInterface.Eth.Subtype == "vif" && networkInterface.Enabled == true {
+						PureFaClientVif, err = pureutils.PureCreateClientAndConnectRest2_x(networkInterface.Eth.Address, apiToken)
+						log.FailOnError(err, "failed to create client and connect to FA with IP [%s]", networkInterface.Eth.Address)
+					}
 					if networkInterface.Eth.Address == faMgmtIP {
 						for _, service := range networkInterface.Services {
 							if strings.Contains(service, "management") {
 								log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
-								_, err = pureutils.DisableInterfaceOnFA(faClient, networkInterface.Name)
+								_, err = pureutils.DisableInterfaceOnFA(PureFaClientVif, networkInterface.Name)
 								log.FailOnError(err, "failed to disable network interfaces on FA with IP [%s]", faMgmtIP)
 							}
 						}
@@ -8263,7 +8270,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 						for _, service := range networkInterface.Services {
 							if strings.Contains(service, "management") {
 								log.Infof("Enabling network interface on FA with IP [%s]", prevMgmtIP)
-								_, err := pureutils.EnableInterfaceOnFA(prevFaClient, networkInterface.Name)
+								_, err := pureutils.EnableInterfaceOnFA(PureFaClientVif, networkInterface.Name)
 								log.FailOnError(err, "failed to enable network interfaces on FA with IP [%s]", prevMgmtIP)
 							}
 						}
@@ -8283,7 +8290,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 						for _, service := range networkInterface.Services {
 							if strings.Contains(service, "management") {
 								log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
-								_, err = pureutils.DisableInterfaceOnFA(faClient, networkInterface.Name)
+								_, err = pureutils.DisableInterfaceOnFA(PureFaClientVif, networkInterface.Name)
 								log.FailOnError(err, "failed to disable network interfaces on FA with IP [%s]", faMgmtIP)
 							}
 						}
