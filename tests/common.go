@@ -8220,6 +8220,17 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 		var lastDisabledInterface string
 		var secret pureutils.PXPureSecret
 		var PureFaClientVif *newflasharray.Client
+		PureMgmtIpCounter = 0
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+		secret, err = pureutils.GetPXPureSecret(volDriverNamespace)
+		log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
+		PureFAMgmtMap, err = pureutils.GetFAMgmtIPFromPXPureSecret(secret)
+		log.FailOnError(err, "failed to get FA management map from secret [%s/%s]", PureSecretName, volDriverNamespace)
+		for mgmtIP := range PureFAMgmtMap {
+			PureMgmtIPList = append(PureMgmtIPList, mgmtIP)
+		}
+		log.Infof("PureMgmtIPList: %v", PureMgmtIPList)
 		faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
 		faClient := PureFAMgmtMap[faMgmtIP]
 		apiToken := pureutils.GetApiTokenForMgmtEndpoints(secret, faMgmtIP)
@@ -8235,19 +8246,6 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			}
 		}
 		if PureMgmtIpCounter == 0 {
-			if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
-				PureMgmtIpCounter = 0
-				volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
-				log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
-				secret, err = pureutils.GetPXPureSecret(volDriverNamespace)
-				log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
-				PureFAMgmtMap, err = pureutils.GetFAMgmtIPFromPXPureSecret(secret)
-				log.FailOnError(err, "failed to get FA management map from secret [%s/%s]", PureSecretName, volDriverNamespace)
-				for mgmtIP := range PureFAMgmtMap {
-					PureMgmtIPList = append(PureMgmtIPList, mgmtIP)
-				}
-				log.Infof("PureMgmtIPList: %v", PureMgmtIPList)
-			}
 			faMgmtIP = PureMgmtIPList[PureMgmtIpCounter]
 			for _, nw := range networkInterfaces {
 				for _, networkInterface := range nw.Items {
