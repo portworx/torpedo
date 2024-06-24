@@ -205,10 +205,13 @@ var _ = Describe(fmt.Sprintf("{%sToggleAutopilot}", testSuiteName), func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
-	It("has to, toggle stc to disable autopilot, then enable it back", func() {
+	itLog := "has to, toggle stc to disable autopilot, then enable it back"
+	It(itLog, func() {
+		log.InfoD(itLog)
 		testName := strings.ToLower(fmt.Sprintf("%sToggleAutopilot", testSuiteName))
-
-		Step("schedule applications", func() {
+		stepLog := "schedule applications with autopilot label"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				for id, apRule := range autopilotPVCRule {
 					taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
@@ -229,35 +232,42 @@ var _ = Describe(fmt.Sprintf("{%sToggleAutopilot}", testSuiteName), func() {
 				}
 			}
 		})
-
-		Step("validating volumes and verifying size of volumes", func() {
+		stepLog = "validating volumes and verifying size of volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			for _, ctx := range contexts {
 				ValidateVolumes(ctx)
 			}
 		})
-		Step("Toggle autopilot", func() {
+		stepLog = "Toggle autopilot in STC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			err := ToggleAutopilotInStc()
 			Expect(err).NotTo(HaveOccurred())
 			time.Sleep(30 * time.Second)
 		})
-
-		Step(fmt.Sprintf("wait for unscheduled resize of volume (%s)", unscheduledResizeTimeout), func() {
+		stepLog = fmt.Sprintf("wait for unscheduled resize of volume (%s)", unscheduledResizeTimeout)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			time.Sleep(unscheduledResizeTimeout)
 		})
-
-		Step("Toggle autopilot", func() {
+		stepLog = "Toggle autopilot in STC to enable the autopilot to true"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			err := ToggleAutopilotInStc()
 			Expect(err).NotTo(HaveOccurred())
 			time.Sleep(30 * time.Second)
 		})
-
-		Step("validating volumes and verifying size of volumes", func() {
+		stepLog = "validating volumes and verifying size of volumes after enabling the autopilot to true"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			for _, ctx := range contexts {
 				ValidateVolumes(ctx)
 			}
 		})
-
-		Step("destroy apps", func() {
+		stepLog = "destroy apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
