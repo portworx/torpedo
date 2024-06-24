@@ -10,7 +10,7 @@ func (n *NetworkServices) SetNetworkInterface(params map[string]string, data int
 
 	req, _ := n.client.NewRequest("PATCH", "network-interfaces", params, data)
 	m := []NetworkInterface{}
-	_, err := n.client.Do(req, m)
+	_, err := n.client.Do(req, &m)
 	if err != nil {
 		return nil, err
 	}
