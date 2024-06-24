@@ -9,9 +9,12 @@ type Eth struct {
 	Gateway       string `json:"gateway"`
 	Vlan          *int   `json:"vlan"`
 	Netmask       string `json:"netmask"`
-	Subnet        string `json:"subnet"`
+	Subnet        Subnet `json:"subnet"`
 }
-
+type Subnet struct {
+	IP   string `json:"ip"`
+	Mask string `json:"mask"`
+}
 type Fc struct {
 	Wwn *string `json:"wwn"`
 }
