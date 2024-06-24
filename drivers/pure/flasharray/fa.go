@@ -300,6 +300,7 @@ func (c *Client) InitializeServices() *Client {
 	c.Volumes = &VolumeServices{client: c}
 	c.Realms = &RealmsServices{client: c}
 	c.Pods = &PodServices{client: c}
+	c.Network = &NetworkServices{client: c}
 	return c
 }
 
