@@ -8240,6 +8240,9 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
 			for _, nw := range networkInterfaces {
 				for _, networkInterface := range nw.Items {
+					fmt.Println("netwrok eth subtype", networkInterface.Eth.Subtype)
+					fmt.Println("netwrok eth address", networkInterface.Eth.Address)
+					fmt.Println("netwrok eth enabled", networkInterface.Enabled)
 					if networkInterface.Eth.Subtype == "vif" && networkInterface.Enabled == true {
 						log.InfoD("entered network interface loop")
 						log.InfoD("networkInterface: %+v", networkInterface)
