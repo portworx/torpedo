@@ -8256,6 +8256,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 								log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
 								_, err = pureutils.DisableInterfaceOnFA(PureFaClientVif, networkInterface.Name)
 								lastDisabledInterface = networkInterface.Name
+								log.Infof("Last disabled interface: %s", lastDisabledInterface)
 								log.FailOnError(err, "failed to disable network interfaces on FA with IP [%s]", faMgmtIP)
 							}
 						}
@@ -8278,6 +8279,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 								log.Infof("Enabling network interface on FA with IP [%s]", prevMgmtIP)
 								_, err := pureutils.EnableInterfaceOnFA(PureFaClientVif, networkInterface.Name)
 								lastDisabledInterface = networkInterface.Name
+								log.Infof("Last disabled interface: %s", lastDisabledInterface)
 								log.FailOnError(err, "failed to enable network interfaces on FA with IP [%s]", prevMgmtIP)
 							}
 						}
@@ -8298,6 +8300,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 								log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
 								_, err = pureutils.DisableInterfaceOnFA(PureFaClientVif, networkInterface.Name)
 								lastDisabledInterface = networkInterface.Name
+								log.Infof("Last disabled interface: %s", lastDisabledInterface)
 								log.FailOnError(err, "failed to disable network interfaces on FA with IP [%s]", faMgmtIP)
 							}
 						}
