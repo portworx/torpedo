@@ -3,6 +3,7 @@ package tests
 import (
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/pureutils"
 	"os"
 	"testing"
 	"time"
@@ -82,6 +83,8 @@ var _ = AfterSuite(func() {
 	_, pureMgmtIPExists := os.LookupEnv("TOGGLE_PURE_MGMT_IP")
 	if pureMgmtIPExists {
 
+		_, err := pureutils.EnableInterfaceOnFA(PureFaClientVif, LastDisabledInterface)
+		log.FailOnError(err, "Failed to enable interface")
 	}
 })
 
