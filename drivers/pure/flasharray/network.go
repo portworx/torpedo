@@ -35,7 +35,7 @@ func (n *NetworkServices) ListNetworkInterfaces() (*[]NetworkInterface, error) {
 
 	req, _ := n.client.NewRequest("GET", "network-interfaces", nil, nil)
 	m := &[]NetworkInterface{}
-	_, err := n.client.Do(req, *m)
+	_, err := n.client.Do(req, m)
 	if err != nil {
 		return nil, err
 	}
