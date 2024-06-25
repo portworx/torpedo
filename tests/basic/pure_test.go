@@ -4785,11 +4785,6 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 		log.InfoD(itLog)
 		var volSnapshotClass *volsnapv1.VolumeSnapshotClass
 		var volumeSnapshotMap map[string]*volsnapv1.VolumeSnapshot
-		applist := Inst().AppList
-		defer func() {
-			Inst().AppList = applist
-		}()
-		Inst().AppList = []string{"fio-fa-davol"}
 		stepLog := "Deploy application"
 		Step(stepLog, func() {
 			appNamespace := "fada-csi-snapshot-create"
