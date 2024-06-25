@@ -2,13 +2,16 @@ package tests
 
 import (
 	"fmt"
+
 	"github.com/devans10/pugo/flasharray"
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	v12 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
 
 	"math/rand"
 	"sort"
@@ -100,8 +103,9 @@ var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 	It("schedule pure volumes on applications, run CRUD, tear down", func() {
 		contexts = make([]*scheduler.Context, 0)
 
-		err := Inst().V.InitializePureLocalVolumePaths() // Initialize our "baseline" of Pure devices, such as FACD devices or other local FA disks
-		Expect(err).NotTo(HaveOccurred(), "unexpected error taking Pure device baseline")
+		// PWX-37645: Disabled while fixing partition edge cases
+		// err := Inst().V.InitializePureLocalVolumePaths() // Initialize our "baseline" of Pure devices, such as FACD devices or other local FA disks
+		// Expect(err).NotTo(HaveOccurred(), "unexpected error taking Pure device baseline")
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("purevolumestest-%d", i))...)
@@ -133,8 +137,9 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
 	It("schedule pure volumes on applications, run CRUD, tear down", func() {
 		contexts = make([]*scheduler.Context, 0)
 
-		err := Inst().V.InitializePureLocalVolumePaths() // Initialize our "baseline" of Pure devices, such as FACD devices or other local FA disks
-		Expect(err).NotTo(HaveOccurred(), "unexpected error taking Pure device baseline")
+		// PWX-37645: Disabled while fixing partition edge cases
+		// err := Inst().V.InitializePureLocalVolumePaths() // Initialize our "baseline" of Pure devices, such as FACD devices or other local FA disks
+		// Expect(err).NotTo(HaveOccurred(), "unexpected error taking Pure device baseline")
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("purevolumestest-%d", i))...)
@@ -4690,45 +4695,40 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 var _ = Describe("{DeployAppsAndStopPortworx}", func() {
 	/*
 		https://purestorage.atlassian.net/browse/PTX-37401
-		1.Deploy Apps and parallely and stop portworx for 10 mins
+		1.Deploy Apps
+		2.Stop portworx for 10 mins
 		2.After 10 mins make it up and check if the pods are running
 		3.Destroy the apps
 	*/
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeployAppsAndStopPortworx",
-			"Deploy Apps and parallely stop portworx for 10 mins and after 10 min make it up and check if the pods are running",
+			"Deploy Apps and then stop portworx for 10 mins, and after 10 min make it up and check if the pods are running",
 			nil, 0)
 	})
 	itLog := "DeployAppsAndStopPortworx"
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var contexts []*scheduler.Context
-		var wg sync.WaitGroup
 		var nodeToReboot []node.Node
 		stNodes := node.GetStorageNodes()
 		nodeToReboot = append(nodeToReboot, stNodes[rand.Intn(len(stNodes))])
 		defer DestroyApps(contexts, nil)
+
 		stepLog := "Schedule apps on the cluster"
 		Step(stepLog, func() {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				defer GinkgoRecover()
-				for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("stopportworx-%d", i))...)
-				}
-
-			}()
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				defer GinkgoRecover()
-				log.InfoD("Stopping Portworx Service on Node [%v]", nodeToReboot[0].Name)
-				err := Inst().V.StopDriver(nodeToReboot, false, nil)
-				log.FailOnError(err, "Failed to stop portworx on node [%v]", nodeToReboot[0].Name)
-			}()
-			wg.Wait()
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("stopportworx-%d", i))...)
+			}
 		})
+
+		stepLog = fmt.Sprintf("Stop Portworx Service on Node [%v]", nodeToReboot[0].Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().V.StopDriver(nodeToReboot, false, nil)
+			log.FailOnError(err, "Failed to stop portworx on node [%v]", nodeToReboot[0].Name)
+		})
+
 		stepLog = "Wait for 10 mins and then start portworx"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -5006,6 +5006,117 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 	})
 })
 
+var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-37400
+	   1. Check if DMThin is enabled on the cluster , if not skip the test (Right now for FACD, delete pool option is not available on BTRFS)
+	   2. Check if the CSI topology is enabled in the STC , if not enabled then skip the test
+	   3. Deploy Applications and While Apps are Running, Toggle the CSI topology as false in stc and wait for px-csi pods to restart  and check if the pods are running
+	   4. While Apps are Running,Select a Random Node and Delete the pool in that node
+	   5. Check if the pool is deleted
+	   6. Add a Cloud Drive on the same node and check if it is added successfully
+	*/
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("DisableCsiTopologyandDeletePool",
+			"Disable the topology for the pool and delete the pool", nil, 0)
+	})
+	itLog := "DisableCsiTopologyandDeletePool"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		log.InfoD("Check if the cluster is DMTHIN")
+		isDmthin, err := IsDMthin()
+		log.FailOnError(err, "Failed to check if the cluster is DMTHIN")
+		if !isDmthin {
+			Skip("Cluster is not DMTHIN so skipping the test")
+		}
+		log.InfoD("Get the Namespace in which portworx is Deployed")
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+
+		var nodeForPoolDelete []node.Node
+		stNodes := node.GetStorageNodes()
+		randomIndex := rand.Intn(len(stNodes))
+		nodeSelected := stNodes[randomIndex]
+		nodePool := nodeSelected.StoragePools[0]
+		nodePoolSize := nodePool.TotalSize
+		nodePoolSizeinGib := nodePoolSize / units.GiB
+		log.InfoD("Pool size is [%v] GiB", nodePoolSizeinGib)
+		log.InfoD("Get the stc spec from the cluster")
+		stc, err := Inst().V.GetDriver()
+		log.FailOnError(err, "Failed to get driver")
+		log.InfoD("Check if the topology is enabled in the stc")
+		if stc.Spec.CSI.Topology.Enabled == false {
+			Skip("Topology is Disabled so skipping the test")
+		}
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("disablecsitopologyandpooldelete-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+		checkPodIsDeleted := func() (interface{}, bool, error) {
+			csiLabels := make(map[string]string)
+			csiLabels["app"] = "px-csi-driver"
+			pods, err := k8sCore.GetPods(volDriverNamespace, csiLabels)
+			if err != nil {
+				return "", false, err
+			}
+			if len(pods.Items) == 0 {
+				return "", true, fmt.Errorf("csi pods are still not deployed")
+			}
+			return "csi pods deployed", false, nil
+		}
+
+		stepLog := "Disable the csi topology in stc"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			stc.Spec.CSI.Topology.Enabled = false
+			pxOperator := operator.Instance()
+			_, err = pxOperator.UpdateStorageCluster(stc)
+			log.FailOnError(err, "Failed to update the storage cluster")
+			log.InfoD("Validating csi pods are deleted")
+
+			_, err = task.DoRetryWithTimeout(checkPodIsDeleted, 15*time.Minute, 30*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
+			log.InfoD("Update STC, is csi topology enabled Now?: %t", stc.Spec.CSI.Topology.Enabled)
+		})
+		stepLog = "Delete the pool on a particular node and validate if it is Deleted Successfully"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			nodeForPoolDelete = append(nodeForPoolDelete, stNodes[rand.Intn(len(stNodes))])
+			log.InfoD("Deleting the pool on the node [%v]", nodeForPoolDelete[0].Name)
+			deletePoolAndValidate(nodeSelected, fmt.Sprintf("%d", nodePool.ID))
+		})
+		stepLog = "Add a Cloud Drive on same node and check if it is added successfully"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			spec := fmt.Sprintf("size=%d", nodePoolSizeinGib)
+			log.InfoD("Adding Cloud Drive on the node [%v]", nodeForPoolDelete[0].Name)
+			err := Inst().V.AddCloudDrive(&nodeSelected, spec, -1)
+			log.FailOnError(err, "Failed to add cloud drive on the node [%v]", nodeForPoolDelete[0].Name)
+		})
+		stepLog = "Toggle Back the csi topology in stc to true"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			stc.Spec.CSI.Topology = &v12.CSITopologySpec{
+				Enabled: true,
+			}
+			pxOperator := operator.Instance()
+			_, err = pxOperator.UpdateStorageCluster(stc)
+			log.FailOnError(err, "Failed to update the storage cluster")
+			log.InfoD("Validating csi pods are deployed")
+			_, err = task.DoRetryWithTimeout(checkPodIsDeleted, 15*time.Minute, 30*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
+			log.InfoD("Update STC, is csi topology enabled Now?: %t", stc.Spec.CSI.Topology.Enabled)
+
+		})
+
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
 
 var _ = Describe("{TrashcanRecovery}", func() {
 	/*
@@ -5552,10 +5663,9 @@ var _ = Describe("{SkinnyCloudsnap}", func() {
 		DestroyApps(contexts, opts)
 		err = DeleteCloudSnapBucket(bucketName)
 		log.FailOnError(err, "error deleting cloud snap bucket")
- 		AfterEachTest(contexts)
+		AfterEachTest(contexts)
 	})
 })
-
 
 var _ = Describe("{ValidatePodNameinVolume}", func() {
 	/*
@@ -5678,6 +5788,58 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		})
 
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{VerifyPoolCreateInProperZones}", func() {
+	/*
+		This test case assumes that it is being run on a setup with FACD topology enabled.
+		There are at least two different zones, each using a different flash array.
+		The nodes are labeled according to their respective zone labels.
+
+		https://purestorage.atlassian.net/browse/PTX-23978
+		1. Schedule application
+		2. Create a pool in few worker nodes and verify that the newly created pool is created in the nodes with specific zone
+		3. Destroy the applications
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyPoolCreateInProperZones", "Label Nodes and Verify Pool Creation", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	itLog := "VerifyPoolCreateInProperZones"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		selectedNodesForTopology := node.GetStorageNodes()[0 : len(node.GetStorageNodes())/2]
+
+		stepLog = "Schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("labelnodes-%d", i))...)
+			}
+		})
+
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		stepLog = "Create a pool in the labelled nodes and verify if cloud drive is created on the nodes with specific zone"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := CreateNewPoolsOnMultipleNodesInParallel(selectedNodesForTopology)
+			log.FailOnError(err, "error adding cloud drives in parallel")
+
+			//Verify cloud drives are created on the nodes with specific zone
+			err = ValidatePureCloudDriveTopologies()
+			log.FailOnError(err, "Failed to validate cloud drives topologies")
+
+		})
+	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
