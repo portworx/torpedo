@@ -8213,6 +8213,9 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
 		if PureMgmtIpCounter == 0 {
 			// Fetch the pure.json file and  implement methods to store FA multiple management endpoints in a map
+			// PureMgmtIPList consists List of Pure FA MGMT endpoints
+			// PureFAMgmtMap is a map and consists of FA MGMT IP as key and its corresponding client as value
+			// PureMgmtIpCounter is tracker which increments after each test case
 			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
 			secret, err = pureutils.GetPXPureSecret(volDriverNamespace)
@@ -8225,7 +8228,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
 			faClient := PureFAMgmtMap[faMgmtIP]
 			apiToken := pureutils.GetApiTokenForMgmtEndpoints(secret, faMgmtIP)
-			// Loop through Networ interfaces to find the VIF interface which we use in API calls for enabling/disabling interfaces
+			// Loop through Network interfaces to find the VIF interface which we use in API calls for enabling/disabling interfaces
 			networkInterfaces, err := pureutils.ListAllInterfaces(faClient)
 			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
 			for _, nw := range networkInterfaces {
@@ -8238,6 +8241,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 							for _, networkInterface := range nw.Items {
 								if networkInterface.Eth.Address == faMgmtIP {
 									for _, service := range networkInterface.Services {
+										//  Fetch the interface which has address of FA mgmt IP
 										if strings.Contains(service, "management") {
 											log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
 											_, err = pureutils.DisableInterfaceOnFA(PureFaClientVif, networkInterface.Name)
@@ -8269,6 +8273,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 				for _, networkInterface := range nw.Items {
 					if networkInterface.Eth.Address == faMgmtIP {
 						for _, service := range networkInterface.Services {
+							//  Fetch the interface which has address of FA mgmt IP
 							if strings.Contains(service, "management") {
 								log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
 								_, err = pureutils.DisableInterfaceOnFA(PureFaClientVif, networkInterface.Name)
