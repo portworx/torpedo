@@ -58,6 +58,7 @@ func GetFAClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flasharray
 	return clientMap, nil
 }
 
+// GetFAMgmtIPFromPXPureSecret create a map with mgmt endpoint as key and FA client as value (Specifically for multiple management endpoints)
 func GetFAMgmtIPFromPXPureSecret(secret PXPureSecret) (map[string]*newflasharray.Client, error) {
 	clientMap := make(map[string]*newflasharray.Client)
 	for _, fa := range secret.Arrays {

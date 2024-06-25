@@ -75,6 +75,7 @@ func CreatePodinFA(faClient *flasharray.Client, podName string) (*[]flasharray.P
 	return podinfo, nil
 }
 
+// ListAllInterfaces returns list of all Available Interfaces present in FA
 func ListAllInterfaces(faClient *flasharray.Client) ([]flasharray.NetworkInterfaceResponse, error) {
 	interfaces, err := faClient.Network.ListNetworkInterfaces()
 	if err != nil {
@@ -82,6 +83,8 @@ func ListAllInterfaces(faClient *flasharray.Client) ([]flasharray.NetworkInterfa
 	}
 	return interfaces, nil
 }
+
+// EnableInterfaceOnFA enables the given interface on FA
 func EnableInterfaceOnFA(faClient *flasharray.Client, iface string) ([]flasharray.NetworkInterface, error) {
 	interfaces, err := faClient.Network.EnableNetworkInterface(iface)
 	if err != nil {
@@ -90,6 +93,8 @@ func EnableInterfaceOnFA(faClient *flasharray.Client, iface string) ([]flasharra
 	return interfaces, nil
 
 }
+
+// DisableInterfaceOnFA disables the given interface on FA
 func DisableInterfaceOnFA(faClient *flasharray.Client, iface string) ([]flasharray.NetworkInterface, error) {
 	interfaces, err := faClient.Network.DisableNetworkInterface(iface)
 	if err != nil {

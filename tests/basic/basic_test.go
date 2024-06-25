@@ -80,6 +80,8 @@ var _ = AfterSuite(func() {
 			}
 		}
 	}
+
+	// check if TOGGLE_PURE_MGMT_IP is enabled for the test run and if yes then make the last disabled interface up
 	_, pureMgmtIPExists := os.LookupEnv("TOGGLE_PURE_MGMT_IP")
 	if pureMgmtIPExists {
 		log.InfoD("Make the last disabled interface up")

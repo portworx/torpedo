@@ -143,7 +143,6 @@ var _ = Describe(fmt.Sprintf("{%sPVCVolDetached}", testSuiteName), func() {
 		testName := strings.ToLower(fmt.Sprintf("%sPVCVolDetached", testSuiteName))
 
 		Step("schedule applications", func() {
-			log.InfoD("Scheduling applications")
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				for id, apRule := range autopilotPVCRule {
 					taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
