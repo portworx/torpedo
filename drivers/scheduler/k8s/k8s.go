@@ -223,7 +223,8 @@ var (
 	// use underscore to avoid conflicts to text/template from golang
 	namespaceRegex      = regexp.MustCompile("_NAMESPACE_")
 	defaultTorpedoLabel = map[string]string{
-		"creator": "torpedo",
+		"creator":                            "torpedo",
+		"pod-security.kubernetes.io/enforce": "privileged",
 	}
 	k8sCore                  = core.Instance()
 	k8sApps                  = apps.Instance()
