@@ -4860,7 +4860,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 	})
 })
 
-var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", func() {
+var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingNodeAffinity}", func() {
 	/*
 	           	https://purestorage.atlassian.net/browse/PTX-23996
 	           	1.Label Nodes with topology labels
@@ -4869,8 +4869,8 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 	   		4. Reboot the Node while FADA Volume Creation in Progress
 	*/
 	JustBeforeEach(func() {
-		StartTorpedoTest("RebootingNodesWhileFADAvolumeCreationInProgressUsingZones",
-			"Rebooting Nodes while FADA Volume Creation in Progress using Zones",
+		StartTorpedoTest("RebootingNodesWhileFADAvolumeCreationInProgressUsingNodeAffinity",
+			"Rebooting Nodes while FADA Volume Creation in Progress Using Node Affinity",
 			nil, 0)
 	})
 	var contexts []*scheduler.Context
@@ -4910,7 +4910,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 			go func() {
 				defer wg.Done()
 				defer GinkgoRecover()
-				taskName := "rebootnodewhilefadacreationusingzones"
+				taskName := "rebootnodewhilefadacreationusingnodeaffinity"
 				Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 					AppKeys:            Inst().AppList,
@@ -4978,10 +4978,6 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 				var k8sCore = core.Instance()
 				pods, err := k8sCore.GetPods(ctx.App.NameSpace, nil)
 				for _, pod := range pods.Items {
-					//Edge Case
-					if pod.Name == "torpedo" {
-						continue
-					}
 					node := pod.Spec.NodeName
 					log.FailOnError(err, "unable to find the node from the pod")
 					if !nodeExists(selectedNodesForTopology, node) {
