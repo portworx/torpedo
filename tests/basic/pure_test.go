@@ -4448,6 +4448,8 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 					newSpec := "size=100"
 					err = Inst().V.AddCloudDrive(&selectedNode, newSpec, -1)
 					log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", selectedNode.Name))
+					log.Infof("Wait for 2 minutes before adding a new cloud drive until existing cloud drives are created")
+					time.Sleep(2 * time.Minute)
 				}
 			}
 			//Get the newly created cloud drives from the nodes
