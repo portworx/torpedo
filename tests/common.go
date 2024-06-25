@@ -8212,6 +8212,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	log.Infof("TOGGLE_PURE_MGMT_IP: %v", os.Getenv("TOGGLE_PURE_MGMT_IP"))
 	if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
 		if PureMgmtIpCounter == 0 {
+			// Fetch the pure.json file and  implement methods to store FA multiple management endpoints in a map
 			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
 			secret, err = pureutils.GetPXPureSecret(volDriverNamespace)
@@ -8224,6 +8225,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
 			faClient := PureFAMgmtMap[faMgmtIP]
 			apiToken := pureutils.GetApiTokenForMgmtEndpoints(secret, faMgmtIP)
+			// Loop through Networ interfaces to find the VIF interface which we use in API calls for enabling/disabling interfaces
 			networkInterfaces, err := pureutils.ListAllInterfaces(faClient)
 			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
 			for _, nw := range networkInterfaces {
@@ -8231,26 +8233,24 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 					if networkInterface.Eth.Subtype == "vif" && networkInterface.Enabled == true {
 						PureFaClientVif, err = pureutils.PureCreateClientAndConnectRest2_x(networkInterface.Eth.Address, apiToken)
 						log.FailOnError(err, "failed to create client and connect to FA with IP [%s]", networkInterface.Eth.Address)
-					}
-				}
-			}
-
-			faMgmtIP = PureMgmtIPList[PureMgmtIpCounter]
-			networkInterfaces, err = pureutils.ListAllInterfaces(PureFaClientVif)
-			log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
-			for _, nw := range networkInterfaces {
-				for _, networkInterface := range nw.Items {
-					if networkInterface.Eth.Address == faMgmtIP {
-						for _, service := range networkInterface.Services {
-							if strings.Contains(service, "management") {
-								log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
-								_, err = pureutils.DisableInterfaceOnFA(PureFaClientVif, networkInterface.Name)
-								LastDisabledInterface = networkInterface.Name
-								log.Infof("Last disabled interface: %s", LastDisabledInterface)
-								log.FailOnError(err, "failed to disable network interfaces on FA with IP [%s]", faMgmtIP)
+						for _, nw := range networkInterfaces {
+							for _, networkInterface := range nw.Items {
+								if networkInterface.Eth.Address == faMgmtIP {
+									for _, service := range networkInterface.Services {
+										if strings.Contains(service, "management") {
+											log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
+											_, err = pureutils.DisableInterfaceOnFA(PureFaClientVif, networkInterface.Name)
+											LastDisabledInterface = networkInterface.Name
+											log.Infof("Last disabled interface: %s", LastDisabledInterface)
+											log.FailOnError(err, "failed to disable network interfaces on FA with IP [%s]", faMgmtIP)
+										}
+									}
+								}
 							}
 						}
+
 					}
+
 				}
 			}
 		} else {
