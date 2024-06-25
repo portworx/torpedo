@@ -4715,8 +4715,6 @@ var _ = Describe("{DeployAppsAndStopPortworx}", func() {
 		var nodeToReboot []node.Node
 		stNodes := node.GetStorageNodes()
 		nodeToReboot = append(nodeToReboot, stNodes[rand.Intn(len(stNodes))])
-		defer DestroyApps(contexts, nil)
-
 		stepLog := "Schedule apps on the cluster"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -4755,6 +4753,7 @@ var _ = Describe("{DeployAppsAndStopPortworx}", func() {
 		stepLog = "Validate the applications are in running state and then delete them"
 		Step(stepLog, func() {
 			ValidateApplications(contexts)
+			DestroyApps(contexts, nil)
 		})
 	})
 	JustAfterEach(func() {
