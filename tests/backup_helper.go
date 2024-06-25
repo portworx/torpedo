@@ -4619,7 +4619,7 @@ func UpgradeStorkVersion(storkImageToUpgrade string) error {
 	if internalDockerRegistry != "" {
 		finalImageToUpgrade = fmt.Sprintf("%s/portworx/stork:%s", internalDockerRegistry, storkImageToUpgrade)
 	} else {
-		finalImageToUpgrade = fmt.Sprintf("docker.io/portworx/sb-stork:%s", storkImageToUpgrade)
+		finalImageToUpgrade = fmt.Sprintf("docker.io/openstorage/stork:%s", storkImageToUpgrade)
 	}
 	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
 	if isOpBased {

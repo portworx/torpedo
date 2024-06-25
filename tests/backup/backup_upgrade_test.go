@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"github.com/hashicorp/go-version"
 	k8score "github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/kdmp"
-	"k8s.io/apimachinery/pkg/watch"
+	corev1 "k8s.io/api/core/v1"
 	"net/url"
 	"os"
 	"strconv"
@@ -271,7 +270,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		partialBackupLocationName  string
 		partialBackupLocationUid   string
 		partialBackupLocationMap   map[string]string
-		failedVolumes              []string
+		failedVolumes              []*corev1.PersistentVolumeClaim
+		stopChans                  map[int]chan struct{}
 	)
 	//updateBackupToContextMapping := func(backupName string, appContextsToBackup []*scheduler.Context) {
 	//	mutex.Lock()
@@ -364,22 +364,29 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 
 		Step("Provision two apps for partial backup validation", func() {
 			log.InfoD("Provisioning two apps for partial backup validation")
-			numDeployments = 2
+			appList := Inst().AppList
+			defer func() {
+				Inst().AppList = appList
+			}()
+			Inst().AppList = []string{"mysql-backup-data"}
 			partialAppContexts = make([]*scheduler.Context, 0)
 			partialAppNamespaces = make([]string, 0)
+			numDeployments = 2
 			err := SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster failed")
+			log.Infof("Scheduling applications")
 			for i := 0; i < numDeployments; i++ {
-				taskName := fmt.Sprintf("new-app-%d", i)
+				taskName := fmt.Sprintf("partial-app-%d", i)
 				appContexts := ScheduleApplications(taskName)
-				partialAppContexts = append(partialAppContexts, appContexts...)
-				for _, ctx := range appContexts {
-					namespace := GetAppNamespace(ctx, taskName)
-					log.InfoD("Provisioned new app in namespace [%s]", namespace)
+				for _, appCtx := range appContexts {
+					namespace := GetAppNamespace(appCtx, taskName)
 					partialAppNamespaces = append(partialAppNamespaces, namespace)
+					partialAppContexts = append(partialAppContexts, appCtx)
+					appCtx.ReadinessTimeout = AppReadinessTimeout
 				}
 			}
 		})
+
 		//
 		//Step("Create cloud credentials and backup locations", func() {
 		//	log.InfoD("Creating cloud credentials and backup locations")
@@ -423,6 +430,12 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location [%s] with UID [%s] using the bucket [%s]", partialBackupLocationName, partialBackupLocationUid, bucketName))
 			}
 		})
+
+		Step("Validating partial backup applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(partialAppContexts)
+		})
+
 		Step("Create source and destination clusters", func() {
 			log.InfoD("Creating source and destination clusters")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -518,73 +531,70 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		//	_ = TaskHandler(Inst().AppList, createBackupWithoutRulesTask, Parallel)
 		//})
 
-		Step("Start a go routine to delete the data export CR", func() {
-			kdmpClient := kdmp.Instance()
-			watcher, err := kdmpClient.WatchDataExport(partialAppNamespaces[0])
-			if err != nil {
-				dash.VerifyFatal(err, nil, "Failed to start the watcher")
-				return
+		Step("Initiate a go routine to stop CR backups for PVCs", func() {
+			// Making a list of PVCs to fail
+			k8sCore := k8score.Instance()
+			pvcList, err := k8sCore.GetPersistentVolumeClaims(partialAppNamespaces[0], make(map[string]string))
+			log.FailOnError(err, fmt.Sprintf("error getting PVC list for namespace %s", partialAppNamespaces[0]))
+			log.Infof("pvc list is %v", pvcList)
+			for _, pvc := range pvcList.Items {
+				log.Infof("pvc %v", pvc)
+				failedVolumes = append(failedVolumes, &pvc)
+			}
+			log.Infof("Failed volumes are %v", failedVolumes)
+			if len(failedVolumes) > 0 {
+				partialAppContexts[0].SkipPodValidation = true
 			}
 
-			// Start the watcher in a goroutine
+			// Channel to signal termination of the go routine
+			stopChans = make(map[int]chan struct{})
+			stopChan := make(chan struct{})
+			stopChans[0] = stopChan // Save the channel in the global map with index 0
+
+			// Go routine to stop backups for the PVCs
 			go func() {
-				defer func() {
-					watcher.Stop()
-					log.InfoD("Watcher stopped")
-				}()
-				ch := watcher.ResultChan()
-				noMatchTimeout := time.NewTimer(30 * time.Minute)
-				oneHourTimeout := time.After(2 * time.Hour)
-				defer noMatchTimeout.Stop()
-
-				log.InfoD("Watcher started")
-
+				defer GinkgoRecover()
+				timeoutChan := time.After(1 * time.Hour) // Create a timeout channel for 1 hour
 				for {
 					select {
-					case event, ok := <-ch:
-						if !ok {
-							log.InfoD("Watcher channel closed")
-							return
-						}
-						log.InfoD("Received event: %v", event)
-						if event.Type == watch.Added {
-							log.InfoD("DataExport CR added. Initiating delete.")
-							err := DeleteAllDataExportCRs(partialAppNamespaces[0])
-							if err != nil {
-								log.Infof("Error deleting DataExport CR: %v", err)
-							} else {
-								log.InfoD("DataExport CR deleted successfully.")
-							}
-							// Reset noMatchTimeout after processing an event
-							if !noMatchTimeout.Stop() {
-								<-noMatchTimeout.C
-							}
-							noMatchTimeout.Reset(30 * time.Minute)
-						}
-					case <-noMatchTimeout.C:
-						log.InfoD("No DataExport CR was found within 30 minutes, resetting counter")
-						noMatchTimeout.Reset(30 * time.Minute)
-					case <-oneHourTimeout:
-						log.InfoD("Watcher timed out after one hour")
+					case <-stopChan:
+						log.InfoD("Received signal to stop the go routine for stopping CR backups")
 						return
+					case <-timeoutChan:
+						log.InfoD("Timeout reached. Stopping the go routine for stopping CR backups")
+						return
+					default:
+						var wg1 sync.WaitGroup
+						wg1.Add(len(failedVolumes))
+						for _, pvc := range failedVolumes {
+							go func(pvc *corev1.PersistentVolumeClaim) {
+								defer GinkgoRecover()
+								defer wg1.Done()
+								log.Infof("Stopping all cs backups for %s [%s] in namespace %s", pvc.Name, pvc.Spec.VolumeName, pvc.Namespace)
+								err = StopCloudsnapBackup(pvc.Name, pvc.Namespace)
+								log.FailOnError(err, fmt.Sprintf("error stopping all cs backups for %s [%s] in namespace %s", pvc.Name, pvc.Spec.VolumeName, pvc.Namespace))
+							}(pvc)
+						}
+						wg1.Wait()
 					}
 				}
 			}()
 		})
 
+		// Step to create backup
 		Step("Create a scheduled backup for partial backup validation", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD("Creating a new schedule policy for new apps for partial backup validation before the upgrade")
 			partialScheduleName = fmt.Sprintf("partial-backup-schedule-%v", RandomString(6))
-			partialSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, int64(15), 5)
+			partialSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(1, int64(15), 5)
 			err = Inst().Backup.BackupSchedulePolicy(partialScheduleName, uuid.New(), BackupOrgID, partialSchedulePolicyInfo)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of new schedule policy [%s]", partialScheduleName))
 			partialSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, partialScheduleName)
 			log.FailOnError(err, "Fetching uid of schedule policy [%s]", partialScheduleName)
 			log.InfoD("Taking scheduled backup of namespaces [%s] before upgrade", partialAppNamespaces)
 			partialScheduledBackupName = fmt.Sprintf("partial-scheduled-backup-%v", RandomString(5))
-			_, err = CreateScheduleBackupWithoutCheckWithVscMapping(partialScheduledBackupName, SourceClusterName, partialBackupLocationName, partialBackupLocationUid, partialAppNamespaces, nil, BackupOrgID, "", "", "", "", partialScheduleName, partialSchedulePolicyUid, ctx, map[string]string{}, true)
+			_, err = CreateScheduleBackupWithoutCheck(partialScheduledBackupName, SourceClusterName, partialBackupLocationName, partialBackupLocationUid, partialAppNamespaces, nil, BackupOrgID, "", "", "", "", partialScheduleName, partialSchedulePolicyUid, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", partialScheduleName))
 		})
 
@@ -725,37 +735,15 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			log.InfoD("Verifying if the latest scheduled backup is a backup with partial success")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			latestScheduleBackupName, err := GetLatestScheduleBackupName(ctx, partialScheduledBackupName, BackupOrgID)
+			log.InfoD("abrar logssssss")
+			latestScheduleBackupName, err := GetNextScheduleBackupName(partialScheduledBackupName, 15, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the latest schedule backup with schedule [%s]", partialScheduleName))
 			log.Infof("Validating if the latest scheduled backup [%s] is of Partial Success", latestScheduleBackupName)
 			err = BackupWithPartialSuccessCheck(latestScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] is in partial backup state", latestScheduleBackupName))
-		})
-
-		Step("Restore the backup with partial success", func() {
-			time.Sleep(15 * time.Minute)
-			log.InfoD("Restoring the scheduled backup with partial success")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-			namespaceMapping := make(map[string]string)
-			for _, namespace := range partialAppNamespaces {
-				namespaceMapping[namespace] = namespace + RandomString(4)
-			}
-			k8sCore := k8score.Instance()
-			log.FailOnError(err, "Getting the failed PVC list")
-			pvcList, err := k8sCore.GetPersistentVolumeClaims(partialAppNamespaces[0], nil)
-			for _, pvc := range pvcList.Items {
-				failedVolumes = append(failedVolumes, pvc.Name)
-			}
-			if len(failedVolumes) > 0 {
-				partialAppContexts[0].SkipPodValidation = true
-			}
-			log.Infof("Failed volumes are %v", failedVolumes)
-			latestScheduleBackupName, err := GetLatestScheduleBackupName(ctx, partialScheduledBackupName, BackupOrgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the latest schedule backup with schedule [%s]", partialScheduleName))
 			restoreName := fmt.Sprintf("%s-%s", "restore-partial-bkp", RandomString(4))
 			log.InfoD("Restoring the schedule backup with partial success [%s] in cluster [%s] with restore [%s]", latestScheduleBackupName, DestinationClusterName, restoreName)
-			err = CreatePartialRestoreWithValidation(ctx, restoreName, latestScheduleBackupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, partialAppContexts, failedVolumes)
+			err = CreatePartialRestoreWithValidation(ctx, restoreName, latestScheduleBackupName, nil, make(map[string]string), DestinationClusterName, BackupOrgID, partialAppContexts, failedVolumes)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 		})
 
@@ -989,6 +977,13 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		//defer EndPxBackupTorpedoTest(allContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.InfoD("Sending signal to stop the go routine for stopping CR backups")
+		if stopChan, exists := stopChans[0]; exists {
+			close(stopChan) // Signal the go routine to terminate
+			log.InfoD("Go routine for stopping CR backups has been signaled to stop")
+		} else {
+			log.Errorf("No go routine found to stop")
+		}
 		//deleteSingleNSScheduleTask := func(scheduleName string) {
 		//	log.InfoD("Deleting single namespace backup schedule [%s]", scheduleName)
 		//	err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
