@@ -5681,20 +5681,3 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		AfterEachTest(contexts)
 	})
 })
-
-var _ = Describe("{multidummytest}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("ValidatePodNameinVolume", "Validate the pod name in the volume", nil, 0)
-	})
-	It("dummy", func() {
-		fmt.Println("dummy")
-	})
-})
-var _ = Describe("{dummytest}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("ValidatePodNameinVolume", "Validate the pod name in the volume", nil, 0)
-	})
-	It("dummy", func() {
-		fmt.Println("dummy")
-	})
-})
