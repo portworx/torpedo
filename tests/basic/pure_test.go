@@ -4868,7 +4868,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingNodeAffin
 			nil, 0)
 	})
 	var contexts []*scheduler.Context
-	itLog := "RebootingNodesWhileFADAvolumeCreationInProgressUsingZones"
+	itLog := "RebootingNodesWhileFADAvolumeCreationInProgressUsingNodeAffinity"
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var wg sync.WaitGroup
