@@ -5705,3 +5705,15 @@ var _ = Describe("{dummytest1}", func() {
 	})
 
 })
+var _ = Describe("{dummytest2}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("dummy test", "dummy", nil, 0)
+	})
+	It("dummy", func() {
+		fmt.Println("dummy")
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+
+})
