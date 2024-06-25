@@ -8233,6 +8233,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 					if networkInterface.Eth.Subtype == "vif" && networkInterface.Enabled == true {
 						PureFaClientVif, err = pureutils.PureCreateClientAndConnectRest2_x(networkInterface.Eth.Address, apiToken)
 						log.FailOnError(err, "failed to create client and connect to FA with IP [%s]", networkInterface.Eth.Address)
+						//Once we GET the vif interface , now loop through and get the interface name for the MGMT ip that you have provided in pure.json file and disable the interface
 						for _, nw := range networkInterfaces {
 							for _, networkInterface := range nw.Items {
 								if networkInterface.Eth.Address == faMgmtIP {
@@ -8256,27 +8257,10 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 		} else {
 			prevMgmtIPIndex := (PureMgmtIpCounter - 1) % len(PureMgmtIPList)
 			prevMgmtIP := PureMgmtIPList[prevMgmtIPIndex]
-			//networkInterfaces, err := pureutils.ListAllInterfaces(PureFaClientVif)
-			//log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", prevMgmtIP)
-			//for _, nw := range networkInterfaces {
-			//	for _, networkInterface := range nw.Items {
-			//		if networkInterface.Eth.Address == prevMgmtIP {
-			//			for _, service := range networkInterface.Services {
-			//				if strings.Contains(service, "management") {
-			//					log.Infof("Enabling network interface on FA with IP [%s]", prevMgmtIP)
-			//					_, err := pureutils.EnableInterfaceOnFA(PureFaClientVif, networkInterface.Name)
-			//					LastDisabledInterface = networkInterface.Name
-			//					log.Infof("Last disabled interface: %s", LastDisabledInterface)
-			//					log.FailOnError(err, "failed to enable network interfaces on FA with IP [%s]", prevMgmtIP)
-			//				}
-			//			}
-			//		}
-			//	}
-			//}
 			log.InfoD("Enable the Last Disabled Interface")
 			_, err := pureutils.EnableInterfaceOnFA(PureFaClientVif, LastDisabledInterface)
 			log.FailOnError(err, "failed to enable network interfaces on FA with IP [%s]", prevMgmtIP)
-
+			//Disable the other MGMT interface that is provided in pure.json file
 			currMgmtIPIndex := PureMgmtIpCounter % len(PureMgmtIPList)
 			faMgmtIP := PureMgmtIPList[currMgmtIPIndex]
 			networkInterfaces, err := pureutils.ListAllInterfaces(PureFaClientVif)
