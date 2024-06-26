@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/kdmp"
+	"k8s.io/apimachinery/pkg/watch"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -275,5 +277,241 @@ var _ = Describe("{BackupCSIVolumesWithPartialSuccess}", Label(TestCaseLabelsMap
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Volumesnapshot [%s]", invalidVolumeSnapShotClassName))
 		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+var _ = Describe("{PartialSuccessBackupWithStateTransitions}", func() {
+	var (
+		numDeployments       int
+		srcClusterUid        string
+		destClusterUid       string
+		appNamespaces        []string
+		appContexts          []*scheduler.Context
+		scheduleName         string
+		schedulePolicyUid    string
+		scheduledBackupName  string
+		labelSelectors       = make(map[string]string)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		cloudAccountName     string
+		cloudAccountUid      string
+		backupLocationName   string
+		backupLocationUid    string
+		backupLocationMap    map[string]string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("PartialSuccessBackupWithStateTransitions", "Verifies backup transitions from Success to Partial Success to Failed to Success", nil, 0, Sabrarhussaini, Q1FY25)
+		numDeployments = 2
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "Switching context to source cluster failed")
+		log.Infof("Scheduling applications")
+		appContexts = make([]*scheduler.Context, 0)
+		appNamespaces = make([]string, 0)
+		for i := 0; i < numDeployments; i++ {
+			taskName := fmt.Sprintf("new-app-%d", i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+				namespace := GetAppNamespace(appCtx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+			}
+		}
+	})
+
+	It("PartialSuccessBackupWithStateTransitions", func() {
+		Step("Create cloud credentials and backup locations for backup validation", func() {
+			log.InfoD("Create cloud credentials and backup locations for backup validation")
+			providers := GetBackupProviders()
+			backupLocationMap = make(map[string]string)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudAccountUid = uuid.New()
+				cloudAccountName = fmt.Sprintf("%s-%s-%v", "cred-bkp", provider, time.Now().Unix())
+				log.Infof("Creating a cloud credential for backup [%s] with UID [%s] using [%s] as the provider", cloudAccountUid, cloudAccountName, provider)
+				err := CreateCloudCredential(provider, cloudAccountName, cloudAccountUid, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential [%s] with UID [%s] using [%s] as the provider", cloudAccountName, BackupOrgID, provider))
+				backupLocationName = fmt.Sprintf("%s-bl-%v", getGlobalBucketName(provider), time.Now().Unix())
+				backupLocationUid = uuid.New()
+				backupLocationMap[backupLocationUid] = backupLocationName
+				bucketName := getGlobalBucketName(provider)
+				log.Infof("Creating a backup location [%s] with UID [%s] using the [%s] bucket", backupLocationName, backupLocationUid, bucketName)
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUid, cloudAccountName, cloudAccountUid, bucketName, BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location [%s] with UID [%s] using the bucket [%s]", backupLocationName, backupLocationUid, bucketName))
+			}
+		})
+
+		Step("Create source and destination clusters", func() {
+			log.InfoD("Creating source and destination clusters")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.Infof("Creating source [%s] and destination [%s] clusters", SourceClusterName, DestinationClusterName)
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, DestinationClusterName))
+			srcClusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.Infof("Cluster [%s] uid: [%s]", SourceClusterName, srcClusterUid)
+			dstClusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(dstClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+			log.Infof("Cluster [%s] uid: [%s]", DestinationClusterName, destClusterUid)
+		})
+
+		Step("Create a scheduled backup for backup validation", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.InfoD("Creating a new schedule policy for new apps for backup validation")
+			scheduleName = fmt.Sprintf("backup-schedule-%v", RandomString(6))
+			schedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, int64(15), 5)
+			err = Inst().Backup.BackupSchedulePolicy(scheduleName, uuid.New(), BackupOrgID, schedulePolicyInfo)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of new schedule policy [%s]", scheduleName))
+			schedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, scheduleName)
+			log.FailOnError(err, "Fetching uid of schedule policy [%s]", scheduleName)
+			log.InfoD("Taking scheduled backup of namespaces [%s]", appNamespaces)
+			scheduledBackupName = fmt.Sprintf("scheduled-backup-%v", RandomString(6))
+			log.InfoD("Verifying if the first scheduled backup is of Success status")
+			_, err = CreateScheduleBackupWithValidation(ctx, scheduledBackupName, SourceClusterName, backupLocationName, backupLocationUid, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", scheduleName, schedulePolicyUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", scheduleName))
+		})
+
+		Step("Start a watcher to delete the data export CR of the first namespace to create a partial backup", func() {
+			log.InfoD("Starting a watcher to delete the data export CR of the first namespace to create a partial backup")
+			kdmpClient := kdmp.Instance()
+			watcher, err := kdmpClient.WatchDataExport(appNamespaces[0])
+			if err != nil {
+				dash.VerifyFatal(err, nil, "Failed to start the watcher")
+				return
+			}
+			go func() {
+				defer func() {
+					watcher.Stop()
+					log.InfoD("Watcher stopped")
+				}()
+				ch := watcher.ResultChan()
+				oneHourTimeout := time.After(30 * time.Minute)
+
+				log.InfoD("Watcher started")
+
+				for {
+					select {
+					case event, ok := <-ch:
+						if !ok {
+							log.InfoD("Watcher channel closed")
+							return
+						}
+						log.InfoD("Received event: %v", event)
+						if event.Type == watch.Added {
+							log.InfoD("DataExport CR added. Initiating delete for partial success.")
+							err := DeleteAllDataExportCRs(appNamespaces[0])
+							if err != nil {
+								log.Infof("Error deleting DataExport CR: %v", err)
+							} else {
+								log.InfoD("DataExport CR deleted successfully.")
+							}
+						}
+					case <-oneHourTimeout:
+						log.InfoD("Watcher timed out after 30 mins")
+						return
+					}
+				}
+			}()
+		})
+
+		Step("Verify if the next scheduled backup is Partial Success", func() {
+			log.InfoD("Verifying if the next scheduled backup is of Partial-Success status")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			latestScheduleBackupName, err := GetNextScheduleBackupName(scheduledBackupName, 15, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the latest schedule backup with schedule [%s]", scheduleName))
+			log.Infof("Validating if the latest scheduled backup [%s] is of Partial Success", latestScheduleBackupName)
+			err = BackupWithPartialSuccessCheck(latestScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] is in partial backup state", latestScheduleBackupName))
+		})
+
+		Step("Extend watcher to delete DataExport CRs for all namespaces for backup failure", func() {
+			log.InfoD("Extending watcher to delete DataExport CRs for all namespaces to cause failure")
+			kdmpClient := kdmp.Instance()
+			for _, namespace := range appNamespaces {
+				watcher, err := kdmpClient.WatchDataExport(namespace)
+				if err != nil {
+					dash.VerifyFatal(err, nil, "Failed to start the watcher for failure state")
+					return
+				}
+
+				// Start the watcher in a goroutine
+				go func(namespace string) {
+					defer func() {
+						watcher.Stop()
+						log.InfoD("Watcher stopped for namespace [%s]", namespace)
+					}()
+					ch := watcher.ResultChan()
+					oneHourTimeout := time.After(15 * time.Minute)
+
+					log.InfoD("Watcher started for namespace [%s]", namespace)
+
+					for {
+						select {
+						case event, ok := <-ch:
+							if !ok {
+								log.InfoD("Watcher channel closed for namespace [%s]", namespace)
+								return
+							}
+							log.InfoD("Received event for namespace [%s]: %v", namespace, event)
+							if event.Type == watch.Added {
+								log.InfoD("DataExport CR added. Initiating delete for failure state.")
+								err := DeleteAllDataExportCRs(namespace)
+								if err != nil {
+									log.Infof("Error deleting DataExport CR in namespace [%s]: %v", namespace, err)
+								} else {
+									log.InfoD("DataExport CR deleted successfully in namespace [%s].", namespace)
+									// Exit the watcher after deleting the CR
+									return
+								}
+							}
+						case <-oneHourTimeout:
+							log.InfoD("Watcher timed out after 15 mins for namespace [%s]", namespace)
+							return
+						}
+					}
+				}(namespace)
+			}
+		})
+
+		Step("Verify if the next scheduled backup is Failed", func() {
+			log.InfoD("Verifying if the latest scheduled backup is of Failed status")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			latestScheduleBackupName, err := GetNextScheduleBackupName(scheduledBackupName, 15, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the latest schedule backup with schedule [%s]", scheduleName))
+			log.Infof("Validating if the latest scheduled backup [%s] is of Failed state", latestScheduleBackupName)
+			err = BackupFailedCheck(latestScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] is in failed state", latestScheduleBackupName))
+		})
+
+		Step("Verify if the next scheduled backup is a Success", func() {
+			log.InfoD("Verifying if the latest scheduled backup is a Success")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			latestScheduleBackupName, err := GetNextScheduleBackupName(scheduledBackupName, 15, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the latest schedule backup with schedule [%s]", scheduleName))
+			log.Infof("Validating if the latest scheduled backup [%s] is of Success", latestScheduleBackupName)
+			err = BackupSuccessCheck(latestScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] is in success state", latestScheduleBackupName))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(appContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		err = DeleteSchedule(scheduledBackupName, SourceClusterName, BackupOrgID, ctx)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", scheduledBackupName))
+		log.InfoD("Deleting schedule policy [%s]", scheduledBackupName)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUid, ctx)
 	})
 })
