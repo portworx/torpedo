@@ -5681,3 +5681,19 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		AfterEachTest(contexts)
 	})
 })
+var _ = Describe("{dummytest}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("dummy", "dummy", nil, 0)
+	})
+	It("dummy", func() {
+		fmt.Println("dummy")
+	})
+})
+var _ = Describe("{dummytest1}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("dummy", "dummy", nil, 0)
+	})
+	It("dummy", func() {
+		fmt.Println("dummy")
+	})
+})
