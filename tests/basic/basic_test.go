@@ -85,7 +85,7 @@ var _ = AfterSuite(func() {
 	_, pureMgmtIPExists := os.LookupEnv("TOGGLE_PURE_MGMT_IP")
 	if pureMgmtIPExists {
 		log.InfoD("Make the last disabled interface up")
-		_, err := pureutils.EnableInterfaceOnFA(PureFaClientVif, LastDisabledInterface)
+		_, err := pureutils.SetInterfaceEnabled(PureFaClientVif, LastDisabledInterface, true)
 		log.FailOnError(err, "Failed to enable interface")
 	}
 })
