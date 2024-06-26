@@ -5687,6 +5687,7 @@ var _ = Describe("{dummytest}", func() {
 	})
 	It("dummy", func() {
 		fmt.Println("dummy")
+		fmt.Println("sleep for 1 min")
 		time.Sleep(1 * time.Minute)
 	})
 })
@@ -5695,7 +5696,8 @@ var _ = Describe("{dummytest1}", func() {
 		StartTorpedoTest("dummy", "dummy", nil, 0)
 	})
 	It("dummy", func() {
-		fmt.Println("dummy")
+		fmt.Println("dummy1")
+		fmt.Println("sleep for 1 min")
 		time.Sleep(1 * time.Minute)
 	})
 })
