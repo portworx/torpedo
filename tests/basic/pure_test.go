@@ -5687,6 +5687,7 @@ var _ = Describe("{dummytest}", func() {
 	})
 	It("dummy", func() {
 		fmt.Println("dummy")
+		time.Sleep(1 * time.Minute)
 	})
 })
 var _ = Describe("{dummytest1}", func() {
@@ -5695,5 +5696,6 @@ var _ = Describe("{dummytest1}", func() {
 	})
 	It("dummy", func() {
 		fmt.Println("dummy")
+		time.Sleep(1 * time.Minute)
 	})
 })
