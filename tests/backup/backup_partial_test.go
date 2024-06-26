@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/kdmp"
 	"k8s.io/apimachinery/pkg/watch"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -279,32 +280,32 @@ var _ = Describe("{BackupCSIVolumesWithPartialSuccess}", Label(TestCaseLabelsMap
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
-var _ = Describe("{PartialSuccessBackupWithStateTransitions}", func() {
+
+var _ = Describe("{DifferentBackupStatusValidation}", func() {
 	var (
-		numDeployments       int
-		srcClusterUid        string
-		destClusterUid       string
-		appNamespaces        []string
-		appContexts          []*scheduler.Context
-		scheduleName         string
-		schedulePolicyUid    string
-		scheduledBackupName  string
-		labelSelectors       = make(map[string]string)
-		scheduledAppContexts = make([]*scheduler.Context, 0)
-		cloudAccountName     string
-		cloudAccountUid      string
-		backupLocationName   string
-		backupLocationUid    string
-		backupLocationMap    map[string]string
+		numDeployments              = 2
+		srcClusterUid               string
+		destClusterUid              string
+		appNamespaces               []string
+		schedulePolicyName          string
+		schedulePolicyUid           string
+		scheduledBackups            []string
+		scheduledBackupCount        = 4
+		labelSelectors              = make(map[string]string)
+		scheduledAppContexts        = make([]*scheduler.Context, 0)
+		timeBetweenScheduledBackups = 10 * time.Second
+		cloudAccountName            string
+		cloudAccountUid             string
+		backupLocationName          string
+		backupLocationUid           string
+		backupLocationMap           map[string]string
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("PartialSuccessBackupWithStateTransitions", "Verifies backup transitions from Success to Partial Success to Failed to Success", nil, 0, Sabrarhussaini, Q1FY25)
-		numDeployments = 2
+		StartPxBackupTorpedoTest("DifferentBackupStatusValidation", "Verifies all the different backup status", nil, 0, Sabrarhussaini, Q1FY25)
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster failed")
 		log.Infof("Scheduling applications")
-		appContexts = make([]*scheduler.Context, 0)
 		appNamespaces = make([]string, 0)
 		for i := 0; i < numDeployments; i++ {
 			taskName := fmt.Sprintf("new-app-%d", i)
@@ -318,7 +319,18 @@ var _ = Describe("{PartialSuccessBackupWithStateTransitions}", func() {
 		}
 	})
 
-	It("PartialSuccessBackupWithStateTransitions", func() {
+	It("DifferentBackupStatusValidation", func() {
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
+
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
 		Step("Create cloud credentials and backup locations for backup validation", func() {
 			log.InfoD("Create cloud credentials and backup locations for backup validation")
 			providers := GetBackupProviders()
@@ -362,32 +374,50 @@ var _ = Describe("{PartialSuccessBackupWithStateTransitions}", func() {
 			log.Infof("Cluster [%s] uid: [%s]", DestinationClusterName, destClusterUid)
 		})
 
-		Step("Create a scheduled backup for backup validation", func() {
+		Step("Create scheduled backups for backup validation", func() {
+			log.InfoD("Creating %v scheduled backups for namespaces [%s]", scheduledBackupCount, appNamespaces)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD("Creating a new schedule policy for new apps for backup validation")
-			scheduleName = fmt.Sprintf("backup-schedule-%v", RandomString(6))
+			schedulePolicyName = fmt.Sprintf("backup-schedule-%v", RandomString(6))
 			schedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, int64(15), 5)
-			err = Inst().Backup.BackupSchedulePolicy(scheduleName, uuid.New(), BackupOrgID, schedulePolicyInfo)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of new schedule policy [%s]", scheduleName))
-			schedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, scheduleName)
-			log.FailOnError(err, "Fetching uid of schedule policy [%s]", scheduleName)
-			log.InfoD("Taking scheduled backup of namespaces [%s]", appNamespaces)
-			scheduledBackupName = fmt.Sprintf("scheduled-backup-%v", RandomString(6))
-			log.InfoD("Verifying if the first scheduled backup is of Success status")
-			_, err = CreateScheduleBackupWithoutCheckWithVscMapping(scheduledBackupName, SourceClusterName, backupLocationName, backupLocationUid, appNamespaces, labelSelectors, BackupOrgID, "", "", "", "", scheduleName, schedulePolicyUid, ctx, map[string]string{}, true)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", scheduleName))
+			err = Inst().Backup.BackupSchedulePolicy(schedulePolicyName, uuid.New(), BackupOrgID, schedulePolicyInfo)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of new schedule policy [%s]", schedulePolicyName))
+			schedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, schedulePolicyName)
+			log.FailOnError(err, "Fetching uid of schedule policy [%s]", schedulePolicyName)
+			var wg sync.WaitGroup
+			for i := 1; i <= scheduledBackupCount; i++ {
+				scheduledBackupName := fmt.Sprintf("scheduled-backup-%v-%v", i, RandomString(6))
+				log.Infof("Creating scheduled backup [%s]", scheduledBackupName)
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					_, err = CreateScheduleBackupWithoutCheckWithVscMapping(scheduledBackupName, SourceClusterName, backupLocationName, backupLocationUid, appNamespaces, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, ctx, map[string]string{}, true)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", schedulePolicyName))
+					scheduledBackups = append(scheduledBackups, scheduledBackupName)
+				}(i)
+				time.Sleep(timeBetweenScheduledBackups)
+			}
+			wg.Wait()
 		})
 
 		Step("Verify if the first scheduled backup is Success", func() {
 			log.InfoD("Verifying if the first scheduled backup is of Success status")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduledBackupName, BackupOrgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the first scheduled backup with schedule [%s]", scheduleName))
-			log.Infof("Validating if the first scheduled backup [%s] is a success", firstScheduleBackupName)
-			err = BackupSuccessCheck(firstScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] is a Success", firstScheduleBackupName))
+			var wg sync.WaitGroup
+			for _, schBkpName := range scheduledBackups {
+				wg.Add(1)
+				go func(schBkpName string) {
+					defer wg.Done()
+					firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, schBkpName, BackupOrgID)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the first scheduled backup with schedule [%s]", schBkpName))
+					log.Infof("Validating if the first scheduled backup [%s] of the schedule [%s] is a success", firstScheduleBackupName, schBkpName)
+					err = BackupSuccessCheck(firstScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] of schedule [%s] is a Success", firstScheduleBackupName, schBkpName))
+				}(schBkpName)
+			}
+			wg.Wait()
 		})
 
 		Step("Start a watcher to delete the data export CR of the first namespace to create a partial backup", func() {
@@ -437,11 +467,19 @@ var _ = Describe("{PartialSuccessBackupWithStateTransitions}", func() {
 			log.InfoD("Verifying if the next scheduled backup is of Partial-Success status")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			latestScheduleBackupName, err := GetNextScheduleBackupName(scheduledBackupName, 15, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the latest schedule backup with schedule [%s]", scheduleName))
-			log.Infof("Validating if the latest scheduled backup [%s] is of Partial Success", latestScheduleBackupName)
-			err = BackupWithPartialSuccessCheck(latestScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] is in partial backup state", latestScheduleBackupName))
+			var wg sync.WaitGroup
+			for _, schBkpName := range scheduledBackups {
+				wg.Add(1)
+				go func(schBkpName string) {
+					defer wg.Done()
+					latestScheduleBackupName, err := GetNextScheduleBackupName(schBkpName, 15, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the latest schedule backup with schedule [%s]", schBkpName))
+					log.Infof("Validating if the latest scheduled backup [%s] of schedule [%s] is of Partial Success", latestScheduleBackupName, schBkpName)
+					err = BackupWithPartialSuccessCheck(latestScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] of schedule [%s] is in partial success state", latestScheduleBackupName, schBkpName))
+				}(schBkpName)
+			}
+			wg.Wait()
 		})
 
 		Step("Extend watcher to delete DataExport CRs for all namespaces for backup failure", func() {
@@ -495,32 +533,70 @@ var _ = Describe("{PartialSuccessBackupWithStateTransitions}", func() {
 			log.InfoD("Verifying if the latest scheduled backup is of Failed status")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			latestScheduleBackupName, err := GetNextScheduleBackupName(scheduledBackupName, 15, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the latest schedule backup with schedule [%s]", scheduleName))
-			log.Infof("Validating if the latest scheduled backup [%s] is of Failed state", latestScheduleBackupName)
-			err = BackupFailedCheck(latestScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] is in failed state", latestScheduleBackupName))
+			var wg sync.WaitGroup
+			for _, schBkpName := range scheduledBackups {
+				wg.Add(1)
+				go func(schBkpName string) {
+					defer wg.Done()
+					latestScheduleBackupName, err := GetNextScheduleBackupName(schBkpName, 15, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the latest schedule backup with schedule [%s]", schBkpName))
+					log.Infof("Validating if the latest scheduled backup [%s] of schedule [%s] is Failed", latestScheduleBackupName, schBkpName)
+					err = BackupFailedCheck(latestScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] of schedule [%s] is in failed state", latestScheduleBackupName, schBkpName))
+				}(schBkpName)
+			}
+			wg.Wait()
 		})
 
 		Step("Verify if the next scheduled backup is a Success", func() {
 			log.InfoD("Verifying if the latest scheduled backup is a Success")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			latestScheduleBackupName, err := GetNextScheduleBackupName(scheduledBackupName, 15, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the latest schedule backup with schedule [%s]", scheduleName))
-			log.Infof("Validating if the latest scheduled backup [%s] is of Success", latestScheduleBackupName)
-			err = BackupSuccessCheck(latestScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] is in success state", latestScheduleBackupName))
+			var wg sync.WaitGroup
+			for _, schBkpName := range scheduledBackups {
+				wg.Add(1)
+				go func(schBkpName string) {
+					defer wg.Done()
+					latestScheduleBackupName, err := GetNextScheduleBackupName(schBkpName, 15, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the first scheduled backup with schedule [%s]", schBkpName))
+					log.Infof("Validating if the first scheduled backup [%s] of the schedule [%s] is a success", latestScheduleBackupName, schBkpName)
+					err = BackupSuccessCheck(latestScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] of schedule [%s] is a Success", latestScheduleBackupName, schBkpName))
+					err = SuspendBackupSchedule(schBkpName, schedulePolicyName, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule :[%s]", schBkpName))
+				}(schBkpName)
+			}
+			wg.Wait()
 		})
 	})
 
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(appContexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		err = DeleteSchedule(scheduledBackupName, SourceClusterName, BackupOrgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", scheduledBackupName))
-		log.InfoD("Deleting schedule policy [%s]", scheduledBackupName)
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.Info("Destroying scheduled apps on source cluster")
+		DestroyApps(scheduledAppContexts, opts)
+		log.InfoD("Deleting all the backup schedules")
+		for _, schBkpName := range scheduledBackups {
+			err = DeleteSchedule(schBkpName, SourceClusterName, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", schBkpName))
+		}
+		log.InfoD("Deleting all the backups")
+		allBackups, err := GetAllBackupsAdmin()
+		dash.VerifySafely(err, nil, "Verifying fetching of all backups")
+		for _, backupName := range allBackups {
+			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
+		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUid, ctx)
 	})
 })
