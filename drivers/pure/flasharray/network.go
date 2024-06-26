@@ -17,18 +17,6 @@ func (n *NetworkServices) SetNetworkInterface(params map[string]string, data int
 
 	return m, nil
 }
-func (n *NetworkServices) EnableNetworkInterface(iface string) ([]NetworkInterface, error) {
-
-	params := make(map[string]string)
-	params["names"] = iface
-	data := map[string]bool{"enabled": true}
-	m, err := n.SetNetworkInterface(params, data)
-	if err != nil {
-		return nil, err
-	}
-
-	return m, err
-}
 
 // ListNetworkInterfaces list the attributes of the network interfaces
 func (n *NetworkServices) ListNetworkInterfaces() ([]NetworkInterfaceResponse, error) {
@@ -43,14 +31,15 @@ func (n *NetworkServices) ListNetworkInterfaces() ([]NetworkInterfaceResponse, e
 	return m, nil
 }
 
-// DisableNetworkInterface disables a network interface.
-// param: iface: Name of network interface to be disabled.
+// SetNetworkInterfaceEnabled enables or disables a network interface.
+// Param: Takes interface name and enabled boolean parameter which means if enabled is true then interface will be enabled
+// and if enabled is false then interface will be disabled.
 // Returns an object describing the interface.
-func (n *NetworkServices) DisableNetworkInterface(iface string) ([]NetworkInterface, error) {
+func (n *NetworkServices) SetNetworkInterfaceEnabled(iface string, enabled bool) ([]NetworkInterface, error) {
 
 	params := make(map[string]string)
 	params["names"] = iface
-	data := map[string]bool{"enabled": false}
+	data := map[string]bool{"enabled": enabled}
 	m, err := n.SetNetworkInterface(params, data)
 	if err != nil {
 		return nil, err
