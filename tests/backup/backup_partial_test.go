@@ -375,8 +375,19 @@ var _ = Describe("{PartialSuccessBackupWithStateTransitions}", func() {
 			log.InfoD("Taking scheduled backup of namespaces [%s]", appNamespaces)
 			scheduledBackupName = fmt.Sprintf("scheduled-backup-%v", RandomString(6))
 			log.InfoD("Verifying if the first scheduled backup is of Success status")
-			_, err = CreateScheduleBackupWithValidation(ctx, scheduledBackupName, SourceClusterName, backupLocationName, backupLocationUid, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", scheduleName, schedulePolicyUid)
+			_, err = CreateScheduleBackupWithoutCheckWithVscMapping(scheduledBackupName, SourceClusterName, backupLocationName, backupLocationUid, appNamespaces, labelSelectors, BackupOrgID, "", "", "", "", scheduleName, schedulePolicyUid, ctx, map[string]string{}, true)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", scheduleName))
+		})
+
+		Step("Verify if the first scheduled backup is Success", func() {
+			log.InfoD("Verifying if the first scheduled backup is of Success status")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduledBackupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the first scheduled backup with schedule [%s]", scheduleName))
+			log.Infof("Validating if the first scheduled backup [%s] is a success", firstScheduleBackupName)
+			err = BackupSuccessCheck(firstScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] is a Success", firstScheduleBackupName))
 		})
 
 		Step("Start a watcher to delete the data export CR of the first namespace to create a partial backup", func() {
@@ -469,8 +480,6 @@ var _ = Describe("{PartialSuccessBackupWithStateTransitions}", func() {
 									log.Infof("Error deleting DataExport CR in namespace [%s]: %v", namespace, err)
 								} else {
 									log.InfoD("DataExport CR deleted successfully in namespace [%s].", namespace)
-									// Exit the watcher after deleting the CR
-									return
 								}
 							}
 						case <-oneHourTimeout:
