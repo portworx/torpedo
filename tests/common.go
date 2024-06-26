@@ -8282,7 +8282,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
 			faClient := PureFAMgmtMap[faMgmtIP]
 			apiToken := pureutils.GetApiTokenForMgmtEndpoints(secret, faMgmtIP)
-			PureFaClientVif, err := getVifInterface(faClient, faMgmtIP, apiToken)
+			PureFaClientVif, err = getVifInterface(faClient, faMgmtIP, apiToken)
 			log.FailOnError(err, "failed to get vif interface for FA with IP [%s]", faMgmtIP)
 			LastDisabledInterface, err = toggleManagementInterface(PureFaClientVif, faMgmtIP, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("failed to toggle network interfaces on FA with IP [%s]", faMgmtIP))
