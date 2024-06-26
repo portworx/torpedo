@@ -59,7 +59,7 @@ func GetFAClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flasharray
 }
 
 // GetFAMgmtIPFromPXPureSecret create a map with mgmt endpoint as key and FA client as value (Specifically for multiple management endpoints)
-func GetFAMgmtIPFromPXPureSecret(secret PXPureSecret) (map[string]*tpflasharray.Client, error) {
+func GetFAMgmtEndPointFromPXPureSecret(secret PXPureSecret) (map[string]*tpflasharray.Client, error) {
 	clientMap := make(map[string]*tpflasharray.Client)
 	for _, fa := range secret.Arrays {
 		//split fa.MgmtEndPoint by , and do pureclientconnect for it and add it to clientMap
@@ -86,19 +86,18 @@ func GetFAMgmtEndPoints(secret PXPureSecret) []string {
 }
 
 // GetApiTokenForMgmtEndpoints Returns API token for Mgmt Endpoints
-func GetApiTokenForMgmtEndpoints(secret PXPureSecret, mgmtEndPoint string) string {
+func GetApiTokenForMgmtEndpoints(secret PXPureSecret, mgmtEndPoint string) (string, error) {
 	for _, faDetails := range secret.Arrays {
 		//split the mgmtEndPoint by , and check if it is present in the faDetails.MgmtEndPoint
 		//if present return the APIToken
 		faMgmtEndPoints := strings.Split(faDetails.MgmtEndPoint, ",")
 		for _, faMgmtEndPoint := range faMgmtEndPoints {
 			if faMgmtEndPoint == mgmtEndPoint {
-				return faDetails.APIToken
+				return faDetails.APIToken, nil
 			}
 		}
-
 	}
-	return ""
+	return "", fmt.Errorf("mgmtEndPoint is invalid or not found in PXPureSecret")
 }
 
 // CreateVolumeOnFABackend Creates Volume on FA Backend

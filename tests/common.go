@@ -8274,14 +8274,15 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
 			secret, err = pureutils.GetPXPureSecret(volDriverNamespace)
 			log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
-			PureFAMgmtMap, err = pureutils.GetFAMgmtIPFromPXPureSecret(secret)
+			PureFAMgmtMap, err = pureutils.GetFAMgmtEndPointFromPXPureSecret(secret)
 			log.FailOnError(err, "failed to get FA management map from secret [%s/%s]", PureSecretName, volDriverNamespace)
 			for mgmtIP := range PureFAMgmtMap {
 				PureMgmtIPList = append(PureMgmtIPList, mgmtIP)
 			}
 			faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
 			faClient := PureFAMgmtMap[faMgmtIP]
-			apiToken := pureutils.GetApiTokenForMgmtEndpoints(secret, faMgmtIP)
+			apiToken, err := pureutils.GetApiTokenForMgmtEndpoints(secret, faMgmtIP)
+			log.FailOnError(err, "failed to get api token for FA with IP [%s]", faMgmtIP)
 			PureFaClientVif, err = getVifInterface(faClient, faMgmtIP, apiToken)
 			log.FailOnError(err, "failed to get vif interface for FA with IP [%s]", faMgmtIP)
 			LastDisabledInterface, err = toggleManagementInterface(PureFaClientVif, faMgmtIP, false)
