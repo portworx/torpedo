@@ -8244,7 +8244,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 										//  Fetch the interface which has address of FA mgmt IP
 										if strings.Contains(service, "management") {
 											log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
-											_, err = pureutils.DisableInterfaceOnFA(PureFaClientVif, networkInterface.Name)
+											_, err = pureutils.SetInterfaceEnabled(PureFaClientVif, networkInterface.Name, false)
 											LastDisabledInterface = networkInterface.Name
 											log.Infof("Last disabled interface: %s", LastDisabledInterface)
 											log.FailOnError(err, "failed to disable network interfaces on FA with IP [%s]", faMgmtIP)
@@ -8262,7 +8262,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			prevMgmtIPIndex := (PureMgmtIpCounter - 1) % len(PureMgmtIPList)
 			prevMgmtIP := PureMgmtIPList[prevMgmtIPIndex]
 			log.InfoD("Enable the Last Disabled Interface")
-			_, err := pureutils.EnableInterfaceOnFA(PureFaClientVif, LastDisabledInterface)
+			_, err := pureutils.SetInterfaceEnabled(PureFaClientVif, LastDisabledInterface, true)
 			log.FailOnError(err, "failed to enable network interfaces on FA with IP [%s]", prevMgmtIP)
 			//Disable the other MGMT interface that is provided in pure.json file
 			currMgmtIPIndex := PureMgmtIpCounter % len(PureMgmtIPList)
@@ -8276,7 +8276,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 							//  Fetch the interface which has address of FA mgmt IP
 							if strings.Contains(service, "management") {
 								log.Infof("Disabling network interface on FA with IP [%s]", faMgmtIP)
-								_, err = pureutils.DisableInterfaceOnFA(PureFaClientVif, networkInterface.Name)
+								_, err = pureutils.SetInterfaceEnabled(PureFaClientVif, networkInterface.Name, false)
 								LastDisabledInterface = networkInterface.Name
 								log.Infof("Last disabled interface: %s", LastDisabledInterface)
 								log.FailOnError(err, "failed to disable network interfaces on FA with IP [%s]", faMgmtIP)

@@ -84,19 +84,9 @@ func ListAllInterfaces(faClient *flasharray.Client) ([]flasharray.NetworkInterfa
 	return interfaces, nil
 }
 
-// EnableInterfaceOnFA enables the given interface on FA
-func EnableInterfaceOnFA(faClient *flasharray.Client, iface string) ([]flasharray.NetworkInterface, error) {
-	interfaces, err := faClient.Network.EnableNetworkInterface(iface)
-	if err != nil {
-		return nil, err
-	}
-	return interfaces, nil
-
-}
-
-// DisableInterfaceOnFA disables the given interface on FA
-func DisableInterfaceOnFA(faClient *flasharray.Client, iface string) ([]flasharray.NetworkInterface, error) {
-	interfaces, err := faClient.Network.DisableNetworkInterface(iface)
+// SetInterfaceEnabled enables or disables a network interface.
+func SetInterfaceEnabled(faClient *flasharray.Client, iface string, enabled bool) ([]flasharray.NetworkInterface, error) {
+	interfaces, err := faClient.Network.SetNetworkInterfaceEnabled(iface, enabled)
 	if err != nil {
 		return nil, err
 	}

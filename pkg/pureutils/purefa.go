@@ -3,7 +3,7 @@ package pureutils
 import (
 	"fmt"
 	"github.com/devans10/pugo/flasharray"
-	newflasharray "github.com/portworx/torpedo/drivers/pure/flasharray"
+	tpflasharray "github.com/portworx/torpedo/drivers/pure/flasharray"
 	"strings"
 
 	"github.com/portworx/torpedo/pkg/units"
@@ -59,8 +59,8 @@ func GetFAClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flasharray
 }
 
 // GetFAMgmtIPFromPXPureSecret create a map with mgmt endpoint as key and FA client as value (Specifically for multiple management endpoints)
-func GetFAMgmtIPFromPXPureSecret(secret PXPureSecret) (map[string]*newflasharray.Client, error) {
-	clientMap := make(map[string]*newflasharray.Client)
+func GetFAMgmtIPFromPXPureSecret(secret PXPureSecret) (map[string]*tpflasharray.Client, error) {
+	clientMap := make(map[string]*tpflasharray.Client)
 	for _, fa := range secret.Arrays {
 		//split fa.MgmtEndPoint by , and do pureclientconnect for it and add it to clientMap
 		faMgmtEndPoints := strings.Split(fa.MgmtEndPoint, ",")
