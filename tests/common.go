@@ -8231,7 +8231,7 @@ func toggleManagementInterface(PureFaClientVif *newflasharray.Client, faMgmtIP s
 			if networkInterface.Eth.Address == faMgmtIP {
 				for _, service := range networkInterface.Services {
 					if strings.Contains(service, "management") {
-						log.Infof("Toggling network interface on FA with IP [%s] to [%s]", faMgmtIP, enabled)
+						log.Infof("Toggling network interface on FA with IP [%s] to [%t]", faMgmtIP, enabled)
 						_, err := pureutils.SetInterfaceEnabled(PureFaClientVif, networkInterface.Name, enabled)
 						if err != nil {
 							return "", fmt.Errorf("failed to toggle network interfaces on FA with IP [%s]: %v to [%s]", faMgmtIP, err, enabled)
