@@ -226,8 +226,7 @@ var _ = Describe(fmt.Sprintf("{%sToggleAutopilot}", testSuiteName), func() {
 						AutopilotRule:      apRule,
 						Labels:             labels,
 					})
-					Expect(err).NotTo(HaveOccurred())
-					Expect(context).NotTo(BeEmpty())
+					log.FailOnError(err, "Failed to schedule applications")
 					contexts = append(contexts, context...)
 				}
 			}
@@ -243,7 +242,7 @@ var _ = Describe(fmt.Sprintf("{%sToggleAutopilot}", testSuiteName), func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			err := ToggleAutopilotInStc()
-			Expect(err).NotTo(HaveOccurred())
+			dash.VerifyFatal(err, nil, "Failed to toggle autopilot in STC")
 			time.Sleep(30 * time.Second)
 		})
 		stepLog = fmt.Sprintf("wait for unscheduled resize of volume (%s)", unscheduledResizeTimeout)
@@ -255,7 +254,7 @@ var _ = Describe(fmt.Sprintf("{%sToggleAutopilot}", testSuiteName), func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			err := ToggleAutopilotInStc()
-			Expect(err).NotTo(HaveOccurred())
+			dash.VerifyFatal(err, nil, "Failed to toggle autopilot in STC")
 			time.Sleep(30 * time.Second)
 		})
 		stepLog = "validating volumes and verifying size of volumes after enabling the autopilot to true"
