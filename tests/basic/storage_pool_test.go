@@ -1379,7 +1379,9 @@ var _ = Describe("{AddDriveMaintenanceMode}", func() {
 			err = AddCloudDrive(stNode, -1)
 			if err != nil {
 				errStr := err.Error()
-				res := strings.Contains(errStr, "node in maintenance mode") || strings.Contains(errStr, "couldn't get: /adddrive")
+				res := strings.Contains(errStr, "node in maintenance mode") ||
+					strings.Contains(errStr, "couldn't get: /adddrive") ||
+					strings.Contains(errStr, "Failed to get /adddrive: Requires pool maintenance mode")
 				dash.VerifySafely(res, true, fmt.Sprintf("Add drive failed when node [%s] is in maintenance mode. Error: %s", stNode.Name, errStr))
 			} else {
 				dash.VerifyFatal(err == nil, false, fmt.Sprintf("Add drive succeeded whien node [%s] is in maintenance mode", stNode.Name))
