@@ -4351,6 +4351,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				log.FailOnError(fmt.Errorf("No accessible FA found in pure.json"), "No accessible FA found in pure.json")
 			}
 			if isRealmExists {
+				log.InfoD("Realm [%v] found in FA", realmName)
 				podNameinSC = "Torpedo-Test" + Inst().InstanceID
 				PodNameinFA = realmName + "::" + podNameinSC
 
