@@ -4279,41 +4279,111 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 	It(itLog, func() {
 		log.InfoD(itLog)
 		numberOfPvc := 10
-		var k8sCore = core.Instance()
-		var wg sync.WaitGroup
-		var max_bandwidth uint64
-		var max_iops uint64
-
+		var (
+			k8sCore       = core.Instance()
+			wg            sync.WaitGroup
+			max_bandwidth uint64
+			max_iops      uint64
+			realmName     string
+			accessibleFA  *newFlashArray.Client
+			isRealmExists bool
+			podNameinSC   string
+			PodNameinFA   string
+			isFAexists    bool = false
+			isFBexists    bool = false
+			flashArrays   []pureutils.FlashArrayEntry
+			flashBlades   []pureutils.FlashBladeEntry
+		)
 		//Declaring SC name, namespaces and pvc prefixes and lists which are required for collection of PVC And Volume Names
 		baseScName := "base-portworx-volume-sc" + Inst().InstanceID
 		fadaScName := "fada-volume-sc" + Inst().InstanceID
 		fbdaScName := "fbda-volume-sc" + Inst().InstanceID
-		BaseAppNameSpace := "base-app-namespace" + Inst().InstanceID
-		FadaAppNameSpace := "fada-app-namespace" + Inst().InstanceID
-		FbdaAppNameSpace := "fbda-app-namespace" + Inst().InstanceID
+		BaseAppNameSpace := "base-app-namespace"
+		FadaAppNameSpace := "fada-app-namespace"
+		FbdaAppNameSpace := "fbda-app-namespace"
 		max_iops = uint64(rand.Intn(99999999) + 1)
 		max_bandwidth = uint64(rand.Intn(511) + 1)
 		//Creating Two lists to collect the volume names of both FA and FB created volumes
 		listofFadaPvc := make([]string, 0)
 		listofFbdaPvc := make([]string, 0)
 		//Creating maps with namespaces as key and list of pvc names as values
-		namespaces := []string{FadaAppNameSpace, FbdaAppNameSpace, BaseAppNameSpace}
+		namespaces := []string{BaseAppNameSpace}
+
+		//Creating map with storage class as key and namespace as value
+		scNamespaceMap := make(map[string]string)
+		scNamespaceMap[baseScName] = BaseAppNameSpace
+
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+		pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+		log.FailOnError(err, "failed to get secret [%s]  in namespace [%s]", PureSecretName, volDriverNamespace)
+		if len(pxPureSecret.Arrays) == 0 && len(pxPureSecret.Blades) == 0 {
+			log.FailOnError(fmt.Errorf("No FA and FB found in pure.json"), "No FA and FB found in pure.json")
+		}
+		if len(pxPureSecret.Arrays) > 0 {
+			isFAexists = true
+			scNamespaceMap[fadaScName] = FadaAppNameSpace
+			namespaces = append(namespaces, FadaAppNameSpace)
+		}
+		if len(pxPureSecret.Blades) > 0 {
+			isFBexists = true
+			scNamespaceMap[fbdaScName] = FbdaAppNameSpace
+			namespaces = append(namespaces, FbdaAppNameSpace)
+		}
 		namespacePVCMap := make(map[string][]string)
 		for _, ns := range namespaces {
 			namespacePVCMap[ns] = []string{}
 		}
-		//Creating map with storage class as key and namespace as value
-		scNamespaceMap := map[string]string{
-			baseScName: BaseAppNameSpace,
-			fadaScName: FadaAppNameSpace,
-			fbdaScName: FbdaAppNameSpace,
-		}
 
 		//Get The Details of Existing FA AND FB in the cluster
-		flashArrays, err := GetFADetailsUsed()
-		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
-		flashBlades, err := GetFBDetailsFromCluster()
-		log.FailOnError(err, "Failed to get FB details from pure.json in the cluster")
+		if isFAexists {
+			flashArrays, err = GetFADetailsUsed()
+			log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
+			for _, fa := range flashArrays {
+				faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+				if err != nil {
+					log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+					continue
+				}
+				if fa.Realm != "" {
+					realmName = fa.Realm
+					isRealmExists = true
+					accessibleFA = faClient
+					break
+				}
+				if accessibleFA == nil {
+					accessibleFA = faClient
+				}
+			}
+			if accessibleFA == nil {
+				log.FailOnError(fmt.Errorf("No accessible FA found in pure.json"), "No accessible FA found in pure.json")
+			}
+			if isRealmExists {
+				log.InfoD("Realm [%v] found in FA", realmName)
+				podNameinSC = "Torpedo-Test" + Inst().InstanceID
+				PodNameinFA = realmName + "::" + podNameinSC
+
+				stepLog := "Create A pod inside Realm"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					_, err = pureutils.CreatePodinFA(accessibleFA, PodNameinFA)
+					log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", PodNameinFA))
+					isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(accessibleFA, PodNameinFA)
+					log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", PodNameinFA))
+					if !isPodExists {
+						log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", PodNameinFA), "is pod created in FA?")
+					}
+					log.InfoD("Pod [%v] created ", PodNameinFA)
+
+				})
+			}
+
+		}
+
+		if isFBexists {
+			flashBlades, err = GetFBDetailsFromCluster()
+			log.FailOnError(err, "Failed to get FB details from pure.json in the cluster")
+		}
 
 		stepLog := "Create storage class with max iops and max bandwidth for Normal Portworx Volumes , FADA and FBDA Pvc Deployment"
 		Step(stepLog, func() {
@@ -4334,29 +4404,35 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			faParams["max_iops"] = strconv.FormatUint(max_iops, 10)
 			faParams["max_bandwidth"] = strconv.FormatUint(max_bandwidth, 10) + "G"
 			faParams["fs"] = "ext4"
-
+			if isRealmExists {
+				faParams["pure_fa_pod_name"] = podNameinSC
+			}
 			var allowVolExpansionFA bool = true
-			// create storage class for FADA volumes
-			err = CreateFlashStorageClass(fadaScName,
-				"pure_block",
-				v1.PersistentVolumeReclaimDelete,
-				faParams, nil, &allowVolExpansionFA,
-				storageApi.VolumeBindingImmediate,
-				nil)
-			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", fadaScName))
-			log.InfoD("Storage class [%s] for FADA is created", fadaScName)
+			if isFAexists {
+				// create storage class for FADA volumes
+				err = CreateFlashStorageClass(fadaScName,
+					"pure_block",
+					v1.PersistentVolumeReclaimDelete,
+					faParams, nil, &allowVolExpansionFA,
+					storageApi.VolumeBindingImmediate,
+					nil)
+				log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", fadaScName))
+				log.InfoD("Storage class [%s] for FADA is created", fadaScName)
+			}
+			if isFBexists {
+				fbParams := make(map[string]string)
+				fbParams["pure_export_rules"] = "*(rw)"
+				// create storage class for FADA volumes
+				err = CreateFlashStorageClass(fbdaScName,
+					"pure_file",
+					v1.PersistentVolumeReclaimDelete,
+					fbParams, nil, &allowVolExpansionFA,
+					storageApi.VolumeBindingImmediate,
+					nil)
+				log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", fbdaScName))
+				log.InfoD("Storage class [%s] for FBDA is created", fbdaScName)
+			}
 
-			fbParams := make(map[string]string)
-			fbParams["pure_export_rules"] = "*(rw)"
-			// create storage class for FADA volumes
-			err = CreateFlashStorageClass(fbdaScName,
-				"pure_file",
-				v1.PersistentVolumeReclaimDelete,
-				fbParams, nil, &allowVolExpansionFA,
-				storageApi.VolumeBindingImmediate,
-				nil)
-			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", fbdaScName))
-			log.InfoD("Storage class [%s] for FBDA is created", fbdaScName)
 		})
 
 		//CreatePVC will create a pvc with given name, storage class, size and namespace
@@ -4455,11 +4531,15 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		stepLog = "check if the FA and FB volumes are created in the backend"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			faErr := CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
-			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
-			fbErr := CheckVolumesExistinFB(flashBlades, listofFbdaPvc, false)
-			log.FailOnError(fbErr, "Failed to check if volumes created  exist in FB")
+			if isFAexists {
+				faErr := CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
+				log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+			}
+			if isFBexists {
+				fbErr := CheckVolumesExistinFB(flashBlades, listofFbdaPvc, false)
+				log.FailOnError(fbErr, "Failed to check if volumes created  exist in FB")
 
+			}
 		})
 		DeletePvcGroup := func(pvclist []string, namespace string) {
 			for _, pvcName := range pvclist {
@@ -4489,13 +4569,27 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				log.FailOnError(err, fmt.Sprintf("Failed to delete storageclass [%s]", storageclass))
 			}
 			log.InfoD("waiting for a minute for pvc deletion in flash backend")
-			time.Sleep(2 * time.Minute)
+			time.Sleep(1 * time.Minute)
 			log.InfoD("Check if the volumes are deleted in FA and FB backend")
-			err := CheckVolumesExistinFA(flashArrays, listofFadaPvc, true)
-			log.FailOnError(err, "Failed to check if volumes which needed to be deleted still exist in FA")
-			fbErr := CheckVolumesExistinFB(flashBlades, listofFbdaPvc, true)
-			log.FailOnError(fbErr, "Failed to check if volumes created  which needed to be deleted still exist in FB")
+			if isFAexists {
+				err := CheckVolumesExistinFA(flashArrays, listofFadaPvc, true)
+				log.FailOnError(err, "Failed to check if volumes which needed to be deleted still exist in FA")
+			}
+			if isFBexists {
+				fbErr := CheckVolumesExistinFB(flashBlades, listofFbdaPvc, true)
+				log.FailOnError(fbErr, "Failed to check if volumes created  which needed to be deleted still exist in FB")
+			}
 		})
+		if isRealmExists {
+			stepLog = "Delete the pod created in the realm"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err := pureutils.DeletePodinFA(accessibleFA, PodNameinFA)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete pod [%v] in FA", PodNameinFA))
+				log.InfoD("Pod [%v] destroyed ", PodNameinFA)
+
+			})
+		}
 	})
 	AfterEach(func() {
 		EndTorpedoTest()
