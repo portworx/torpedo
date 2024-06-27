@@ -5408,6 +5408,12 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				}
 			}
 
+			// Some times if context has FADA Volume pool UUIDs willnot be fetched from volumes ,
+			// In that case we skip the context and go to next context
+			if len(volIds) == 0 {
+				continue
+			}
+
 			// Select Random Volumes for pool Expand
 			randomIndex := rand.Intn(len(volIds))
 			randomVolIDs := volIds[randomIndex]
