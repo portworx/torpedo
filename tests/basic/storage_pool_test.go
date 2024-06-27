@@ -5400,7 +5400,12 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 
 			// Appending all the volume IDs to array so that one random volume can be picked for resizeing
 			for _, vol := range Volumes {
-				volIds = append(volIds, vol.ID)
+				volDetails, err := Inst().V.InspectVolume(vol.ID)
+				log.FailOnError(err, "Failed while inspecting Volume [%v]", volDetails)
+
+				if !volDetails.Spec.IsPureVolume() {
+					volIds = append(volIds, vol.ID)
+				}
 			}
 
 			// Select Random Volumes for pool Expand
