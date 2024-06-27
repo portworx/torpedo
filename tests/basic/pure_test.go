@@ -4277,7 +4277,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		var max_iops uint64
 		var realmName string
 		var accessibleFA *newFlashArray.Client
-		var isRealmFAAccessible bool
+		var isRealmExists bool
 		var podNameinSC string
 		var PodNameinFA string
 
@@ -4317,7 +4317,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			}
 			if fa.Realm != "" {
 				realmName = fa.Realm
-				isRealmFAAccessible = true
+				isRealmExists = true
 				accessibleFA = faClient
 				break
 			}
@@ -4328,12 +4328,10 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		if accessibleFA == nil {
 			log.FailOnError(fmt.Errorf("No accessible FA found in pure.json"), "No accessible FA found in pure.json")
 		}
-		if isRealmFAAccessible {
+		if isRealmExists {
 			podNameinSC = "Torpedo-Test" + Inst().InstanceID
-			PodNameinFA := podNameinSC
-			if isRealmFAAccessible {
-				PodNameinFA = realmName + "::" + podNameinSC
-			}
+			PodNameinFA = realmName + "::" + podNameinSC
+
 			stepLog := "Create A pod inside Realm"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
@@ -4348,6 +4346,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 
 			})
 		}
+
 		flashBlades, err := GetFBDetailsFromCluster()
 		log.FailOnError(err, "Failed to get FB details from pure.json in the cluster")
 
@@ -4370,7 +4369,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			faParams["max_iops"] = strconv.FormatUint(max_iops, 10)
 			faParams["max_bandwidth"] = strconv.FormatUint(max_bandwidth, 10) + "G"
 			faParams["fs"] = "ext4"
-			if isRealmFAAccessible {
+			if isRealmExists {
 				faParams["pure_fa_pod_name"] = podNameinSC
 			}
 			var allowVolExpansionFA bool = true
@@ -4534,7 +4533,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			fbErr := CheckVolumesExistinFB(flashBlades, listofFbdaPvc, true)
 			log.FailOnError(fbErr, "Failed to check if volumes created  which needed to be deleted still exist in FB")
 		})
-		if isRealmFAAccessible {
+		if isRealmExists {
 			stepLog = "Delete the pod created in the realm"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
