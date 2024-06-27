@@ -1,42 +1,127 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Service
 metadata:
-  name: mysql-deployment
+  name: mysql
   labels:
     app: mysql
 spec:
-  replicas: 1
+  ports:
+    - port: 3306
+  selector:
+    app: mysql
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+spec:
   selector:
     matchLabels:
       app: mysql
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 1
   template:
     metadata:
       labels:
         app: mysql
     spec:
+      initContainers:
+        - name: init-mysql-1
+          image: busybox
+          command:
+            [
+              "sh",
+              "-c",
+              "dd if=/dev/urandom of=/var/lib/mysql-aggr/mysql-test-dd-2 bs=1M count=100",
+            ]
+          volumeMounts:
+            - name: mysql-persistent-storage-aggr
+              mountPath: /var/lib/mysql-aggr
+        - name: init-mysql-2
+          image: busybox
+          command:
+            [
+              "sh",
+              "-c",
+              "dd if=/dev/urandom of=/var/lib/mysql-seq/mysql-test-dd-2 bs=1M count=100",
+            ]
+          volumeMounts:
+            - name: mysql-persistent-storage-seq
+              mountPath: /var/lib/mysql-seq
       containers:
-        - name: mysql
-          image: mysql:5.7
+        - image: mysql:5.6
+          name: mysql
           env:
             - name: MYSQL_ROOT_PASSWORD
-              value: rootpassword
+              value: password
+          ports:
+            - containerPort: 3306
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "mysqladmin -u root -p$MYSQL_ROOT_PASSWORD ping"]
+            initialDelaySeconds: 70
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "mysql -u root -p$MYSQL_ROOT_PASSWORD -e \"select 1\""]
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
           volumeMounts:
-            - name: mysql-portworx
+            - name: mysql-persistent-storage
               mountPath: /var/lib/mysql
-            - name: mysql-cephfs
-              mountPath: /etc/mysql/conf.d
-            - name: mysql-thincsi
-              mountPath: /var/lib/mysql-aggr
+            - mountPath: /var/lib/mysql-aggr
+              name: mysql-persistent-storage-aggr
+            - mountPath: /var/lib/mysql-seq
+              name: mysql-persistent-storage-seq
       volumes:
-        - name: mysql-portworx
+        - name: mysql-persistent-storage
           persistentVolumeClaim:
             claimName: mysql-portworx-pvc
-        - name: mysql-cephfs
+        - name: mysql-persistent-storage-aggr
           persistentVolumeClaim:
             claimName: mysql-cephfs-pvc
-        - name: mysql-thincsi
+        - name: mysql-persistent-storage-seq
           persistentVolumeClaim:
-            claimName:  mysql-thincsi-pvc
+            claimName: mysql-cephfs-pvc-seq
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysqlslap
+  labels:
+    app: mysqlslap
+spec:
+  selector:
+    matchLabels:
+      app: mysqlslap
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mysqlslap
+    spec:
+      containers:
+        - name: mysqlslap
+          image: adityadani/mysqlslap
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: password
+            - name: MYSQL_SERVICE_PORT
+              value: "3306"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -69,13 +154,13 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: mysql-thincsi-pvc
+  name: mysql-cephfs-pvc-seq
   labels:
-    backupVolumeType: kdmp
+    backupVolumeType: csi
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 5Gi
-  storageClassName: thin
+  storageClassName: ocs-storagecluster-cephfs
