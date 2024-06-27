@@ -2745,6 +2745,56 @@ func BackupWithPartialSuccessCheck(backupName string, orgID string, retryDuratio
 	return nil
 }
 
+// BackupFailedCheck inspects backup task
+func BackupFailedCheck(backupName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context1.Context) error {
+	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
+	}
+	statusesExpected := [...]api.BackupInfo_StatusInfo_Status{
+		api.BackupInfo_StatusInfo_Failed,
+	}
+	statusesUnexpected := [...]api.BackupInfo_StatusInfo_Status{
+		api.BackupInfo_StatusInfo_Success,
+		api.BackupInfo_StatusInfo_PartialSuccess,
+		api.BackupInfo_StatusInfo_Invalid,
+		api.BackupInfo_StatusInfo_Aborted,
+		api.BackupInfo_StatusInfo_Failed,
+	}
+	backupFailCheckFunc := func() (interface{}, bool, error) {
+		resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+		if err != nil {
+			return "", false, err
+		}
+		actual := resp.GetBackup().GetStatus().Status
+		reason := resp.GetBackup().GetStatus().Reason
+		for _, status := range statusesExpected {
+			if actual == status {
+				return "", false, nil
+			}
+		}
+		for _, status := range statusesUnexpected {
+			if actual == status {
+				return "", false, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
+			}
+		}
+
+		return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
+
+	}
+	_, err = task.DoRetryWithTimeout(backupFailCheckFunc, retryDuration, retryInterval)
+	log.InfoD("Backup fail check for backup %s finished at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // BackupSuccessCheckWithValidation checks if backup is Success and then validates the backup
 func BackupSuccessCheckWithValidation(ctx context1.Context, backupName string, scheduledAppContextsToBackup []*scheduler.Context, orgID string, retryDuration time.Duration, retryInterval time.Duration, resourceTypeFilter ...string) error {
 	err := BackupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
