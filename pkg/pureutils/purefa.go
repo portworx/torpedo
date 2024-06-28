@@ -86,19 +86,23 @@ func GetFAMgmtEndPoints(secret PXPureSecret) []string {
 }
 
 // GetApiTokenForMgmtEndpoints Returns API token for Mgmt Endpoints
-func GetApiTokenForMgmtEndpoints(secret PXPureSecret, mgmtEndPoint string) string {
+func GetApiTokenForFAMgmtEndpoint(secret PXPureSecret, mgmtEndPoint string) (string, error) {
+	if mgmtEndPoint == "" {
+		return "", fmt.Errorf("Management Endpoint provided is Empty")
+
+	}
 	for _, faDetails := range secret.Arrays {
 		//split the mgmtEndPoint by , and check if it is present in the faDetails.MgmtEndPoint
 		//if present return the APIToken
 		faMgmtEndPoints := strings.Split(faDetails.MgmtEndPoint, ",")
 		for _, faMgmtEndPoint := range faMgmtEndPoints {
 			if faMgmtEndPoint == mgmtEndPoint {
-				return faDetails.APIToken
+				return faDetails.APIToken, nil
 			}
 		}
 
 	}
-	return ""
+	return "", fmt.Errorf("mgmtEndPoint is not found in pure.json")
 }
 
 // CreateVolumeOnFABackend Creates Volume on FA Backend
