@@ -3,10 +3,7 @@ package tests
 import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/kdmp"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/watch"
 	"os"
 	"sync"
 	"time"
@@ -654,7 +651,7 @@ var _ = Describe("{PartialBackupSuccessWithPxAndKDMPVolumes}", func() {
 
 		Step("Start watchers to kill the DE CR", func() {
 			log.InfoD("Starting watchers to kill the DE CR")
-			err := WatchAndKillDataExportCR(backedUpNamespaces)
+			err := WatchAndKillDataExportCR(backedUpNamespaces, 1*time.Hour)
 			log.FailOnError(err, "Watching and killing DE CR")
 		})
 
@@ -748,7 +745,7 @@ var _ = Describe("{PartialBackupSuccessWithPxAndKDMPVolumes}", func() {
 	})
 })
 
-var _ = Describe("{DifferentBackupStatusValidation}", Label(TestCaseLabelsMap[DifferentBackupStatusValidation]...), func() {
+var _ = Describe("{BackupStateTransitionForScheduledBackups}", Label(TestCaseLabelsMap[BackupStateTransitionForScheduledBackups]...), func() {
 	var (
 		numDeployments              = 2
 		srcClusterUid               string
@@ -756,7 +753,7 @@ var _ = Describe("{DifferentBackupStatusValidation}", Label(TestCaseLabelsMap[Di
 		appNamespaces               []string
 		schedulePolicyName          string
 		schedulePolicyUid           string
-		scheduledBackups            []string
+		scheduledNames              []string
 		scheduledBackupCount        = 4
 		labelSelectors              = make(map[string]string)
 		scheduledAppContexts        = make([]*scheduler.Context, 0)
@@ -769,24 +766,24 @@ var _ = Describe("{DifferentBackupStatusValidation}", Label(TestCaseLabelsMap[Di
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("DifferentBackupStatusValidation", "Verifies all the different backup status", nil, 299234, Sabrarhussaini, Q1FY25)
+		StartPxBackupTorpedoTest("BackupStateTransitionForScheduledBackups", "Verifies all the different backup status for scheduled backups", nil, 299234, Sabrarhussaini, Q1FY25)
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster failed")
 		log.Infof("Scheduling applications")
 		appNamespaces = make([]string, 0)
 		for i := 0; i < numDeployments; i++ {
-			taskName := fmt.Sprintf("new-app-%d", i)
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
 			for _, appCtx := range appContexts {
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
-				namespace := GetAppNamespace(appCtx, taskName)
+				namespace := appCtx.ScheduleOptions.Namespace
 				appNamespaces = append(appNamespaces, namespace)
 				appCtx.ReadinessTimeout = AppReadinessTimeout
 			}
 		}
 	})
 
-	It("DifferentBackupStatusValidation", func() {
+	It("BackupStateTransitionForScheduledBackups", func() {
 		defer func() {
 			log.InfoD("switching to default context")
 			err := SetClusterContext("")
@@ -854,14 +851,15 @@ var _ = Describe("{DifferentBackupStatusValidation}", Label(TestCaseLabelsMap[Di
 			log.FailOnError(err, "Fetching uid of schedule policy [%s]", schedulePolicyName)
 			var wg sync.WaitGroup
 			for i := 1; i <= scheduledBackupCount; i++ {
-				scheduledBackupName := fmt.Sprintf("scheduled-backup-%v-%v", i, RandomString(6))
-				log.Infof("Creating scheduled backup [%s]", scheduledBackupName)
+				scheduleName := fmt.Sprintf("scheduled-backup-%v-%v", i, RandomString(6))
+				log.Infof("Creating scheduled backup [%s]", scheduleName)
 				wg.Add(1)
 				go func(i int) {
+					defer GinkgoRecover()
 					defer wg.Done()
-					_, err = CreateScheduleBackupWithoutCheckWithVscMapping(scheduledBackupName, SourceClusterName, backupLocationName, backupLocationUid, appNamespaces, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, ctx, map[string]string{}, true)
+					_, err = CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName, SourceClusterName, backupLocationName, backupLocationUid, appNamespaces, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, ctx, map[string]string{}, true)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", schedulePolicyName))
-					scheduledBackups = append(scheduledBackups, scheduledBackupName)
+					scheduledNames = append(scheduledNames, scheduleName)
 				}(i)
 				time.Sleep(timeBetweenScheduledBackups)
 			}
@@ -873,9 +871,10 @@ var _ = Describe("{DifferentBackupStatusValidation}", Label(TestCaseLabelsMap[Di
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			var wg sync.WaitGroup
-			for _, schBkpName := range scheduledBackups {
+			for _, schBkpName := range scheduledNames {
 				wg.Add(1)
 				go func(schBkpName string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, schBkpName, BackupOrgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the first scheduled backup with schedule [%s]", schBkpName))
@@ -887,47 +886,10 @@ var _ = Describe("{DifferentBackupStatusValidation}", Label(TestCaseLabelsMap[Di
 			wg.Wait()
 		})
 
-		Step("Start a watcher to delete the data export CR of the first namespace to create a partial backup", func() {
-			log.InfoD("Starting a watcher to delete the data export CR of the first namespace to create a partial backup")
-			kdmpClient := kdmp.Instance()
-			watcher, err := kdmpClient.WatchDataExport(appNamespaces[0], metav1.ListOptions{})
-			if err != nil {
-				dash.VerifyFatal(err, nil, "Failed to start the watcher")
-				return
-			}
-			go func() {
-				defer func() {
-					watcher.Stop()
-					log.InfoD("Watcher stopped")
-				}()
-				ch := watcher.ResultChan()
-				oneHourTimeout := time.After(30 * time.Minute)
-
-				log.InfoD("Watcher started")
-
-				for {
-					select {
-					case event, ok := <-ch:
-						if !ok {
-							log.InfoD("Watcher channel closed")
-							return
-						}
-						log.InfoD("Received event: %v", event)
-						if event.Type == watch.Added {
-							log.InfoD("DataExport CR added. Initiating delete for partial success.")
-							err := DeleteAllDataExportCRs(appNamespaces[0])
-							if err != nil {
-								log.Infof("Error deleting DataExport CR: %v", err)
-							} else {
-								log.InfoD("DataExport CR deleted successfully.")
-							}
-						}
-					case <-oneHourTimeout:
-						log.InfoD("Watcher timed out after 30 mins")
-						return
-					}
-				}
-			}()
+		Step("Start watchers to kill the DE CR for the first namespace", func() {
+			log.InfoD("Starting watchers to kill the DE CR")
+			err := WatchAndKillDataExportCR([]string{appNamespaces[0]}, 15*time.Minute)
+			log.FailOnError(err, "Watching and killing DE CR for first namespace [%s]", appNamespaces[0])
 		})
 
 		Step("Verify if the next scheduled backup is Partial Success", func() {
@@ -935,9 +897,10 @@ var _ = Describe("{DifferentBackupStatusValidation}", Label(TestCaseLabelsMap[Di
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			var wg sync.WaitGroup
-			for _, schBkpName := range scheduledBackups {
+			for _, schBkpName := range scheduledNames {
 				wg.Add(1)
 				go func(schBkpName string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					latestScheduleBackupName, err := GetNextScheduleBackupName(schBkpName, 15, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the latest schedule backup with schedule [%s]", schBkpName))
@@ -949,51 +912,10 @@ var _ = Describe("{DifferentBackupStatusValidation}", Label(TestCaseLabelsMap[Di
 			wg.Wait()
 		})
 
-		Step("Extend watcher to delete DataExport CRs for all namespaces for backup failure", func() {
-			log.InfoD("Extending watcher to delete DataExport CRs for all namespaces to cause failure")
-			kdmpClient := kdmp.Instance()
-			for _, namespace := range appNamespaces {
-				watcher, err := kdmpClient.WatchDataExport(namespace, metav1.ListOptions{})
-				if err != nil {
-					dash.VerifyFatal(err, nil, "Failed to start the watcher for failure state")
-					return
-				}
-
-				// Start the watcher in a goroutine
-				go func(namespace string) {
-					defer func() {
-						watcher.Stop()
-						log.InfoD("Watcher stopped for namespace [%s]", namespace)
-					}()
-					ch := watcher.ResultChan()
-					oneHourTimeout := time.After(15 * time.Minute)
-
-					log.InfoD("Watcher started for namespace [%s]", namespace)
-
-					for {
-						select {
-						case event, ok := <-ch:
-							if !ok {
-								log.InfoD("Watcher channel closed for namespace [%s]", namespace)
-								return
-							}
-							log.InfoD("Received event for namespace [%s]: %v", namespace, event)
-							if event.Type == watch.Added {
-								log.InfoD("DataExport CR added. Initiating delete for failure state.")
-								err := DeleteAllDataExportCRs(namespace)
-								if err != nil {
-									log.Infof("Error deleting DataExport CR in namespace [%s]: %v", namespace, err)
-								} else {
-									log.InfoD("DataExport CR deleted successfully in namespace [%s].", namespace)
-								}
-							}
-						case <-oneHourTimeout:
-							log.InfoD("Watcher timed out after 15 mins for namespace [%s]", namespace)
-							return
-						}
-					}
-				}(namespace)
-			}
+		Step("Extend watchers to kill the DE CR for the all namespaces", func() {
+			log.InfoD("Extending watcher to delete DataExport CRs for all namespaces to cause backup failure")
+			err := WatchAndKillDataExportCR(appNamespaces, 15*time.Minute)
+			log.FailOnError(err, "Watching and killing DE CR for all namespaces")
 		})
 
 		Step("Verify if the next scheduled backup is Failed", func() {
@@ -1001,9 +923,10 @@ var _ = Describe("{DifferentBackupStatusValidation}", Label(TestCaseLabelsMap[Di
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			var wg sync.WaitGroup
-			for _, schBkpName := range scheduledBackups {
+			for _, schBkpName := range scheduledNames {
 				wg.Add(1)
 				go func(schBkpName string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					latestScheduleBackupName, err := GetNextScheduleBackupName(schBkpName, 15, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the latest schedule backup with schedule [%s]", schBkpName))
@@ -1020,9 +943,10 @@ var _ = Describe("{DifferentBackupStatusValidation}", Label(TestCaseLabelsMap[Di
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			var wg sync.WaitGroup
-			for _, schBkpName := range scheduledBackups {
+			for _, schBkpName := range scheduledNames {
 				wg.Add(1)
 				go func(schBkpName string) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					latestScheduleBackupName, err := GetNextScheduleBackupName(schBkpName, 15, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the first scheduled backup with schedule [%s]", schBkpName))
@@ -1051,7 +975,7 @@ var _ = Describe("{DifferentBackupStatusValidation}", Label(TestCaseLabelsMap[Di
 		log.Info("Destroying scheduled apps on source cluster")
 		DestroyApps(scheduledAppContexts, opts)
 		log.InfoD("Deleting all the backup schedules")
-		for _, schBkpName := range scheduledBackups {
+		for _, schBkpName := range scheduledNames {
 			err = DeleteSchedule(schBkpName, SourceClusterName, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", schBkpName))
 		}

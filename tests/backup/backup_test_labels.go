@@ -128,7 +128,7 @@ const (
 	DummyPSATestcase                                                                   TestCaseName = "DummyPSATestcase"
 	BackupCSIVolumesWithPartialSuccess                                                 TestCaseName = "BackupCSIVolumesWithPartialSuccess"
 	RestoreFromHigherPrivilegedNamespaceToLower                                        TestCaseName = "RestoreFromHigherPrivilegedNamespaceToLower"
-	DifferentBackupStatusValidation                                                    TestCaseName = "DifferentBackupStatusValidation"
+	BackupStateTransitionForScheduledBackups                                           TestCaseName = "BackupStateTransitionForScheduledBackups"
 )
 
 // Test case labels
@@ -253,7 +253,7 @@ const (
 	MultipleProvisionerCsiKdmpBackupAndRestoreLabel                                         TestCaseLabel = "MultipleProvisionerCsiKdmpBackupAndRestore"
 	KubevirtVMMigrationTestLabel                                                            TestCaseLabel = "KubevirtVMMigrationTest"
 	BackupCSIVolumesWithPartialSuccessLabel                                                 TestCaseLabel = "BackupCSIVolumesWithPartialSuccess"
-	DifferentBackupStatusValidationLabel                                                    TestCaseLabel = "DifferentBackupStatusValidation"
+	BackupStateTransitionForScheduledBackupsLabel                                           TestCaseLabel = "BackupStateTransitionForScheduledBackups"
 	EnableNsAndClusterLevelPSAWithBackupAndRestoreLabel                                     TestCaseLabel = "EnableNsAndClusterLevelPSAWithBackupAndRestore"
 	RestoreFromHigherPrivilegedNamespaceToLowerLabel                                        TestCaseLabel = "RestoreFromHigherPrivilegedNamespaceToLower"
 )
@@ -507,7 +507,7 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	MultipleProvisionerCsiKdmpBackupAndRestore:                       {MultipleProvisionerCsiKdmpBackupAndRestoreLabel},
 	KubevirtVMMigrationTest:                                          {KubevirtVMMigrationTestLabel, KubevirtAppLabel},
 	BackupCSIVolumesWithPartialSuccess:                               {BackupCSIVolumesWithPartialSuccessLabel},
-	DifferentBackupStatusValidation:                                  {DifferentBackupStatusValidationLabel},
+	BackupStateTransitionForScheduledBackups:                         {BackupStateTransitionForScheduledBackupsLabel},
 	EnableNsAndClusterLevelPSAWithBackupAndRestore:                   {EnableNsAndClusterLevelPSAWithBackupAndRestoreLabel},
 	RestoreFromHigherPrivilegedNamespaceToLower:                      {RestoreFromHigherPrivilegedNamespaceToLowerLabel, rkePipelineNightly},
 }

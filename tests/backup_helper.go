@@ -9519,7 +9519,7 @@ func DeleteDataExportCRForVolume(pvc *corev1.PersistentVolumeClaim) error {
 }
 
 // WatchAndKillDataExportCR watches for the data export CRs in the provided namespaces and deletes them as soon as they are created
-func WatchAndKillDataExportCR(namespaces []string) error {
+func WatchAndKillDataExportCR(namespaces []string, timeoutDuration time.Duration) error {
 	kdmpClient := kdmp.Instance()
 	// Map of namespace and watcher
 	var namespaceWatcherMap = make(map[string]watch.Interface)
@@ -9540,9 +9540,7 @@ func WatchAndKillDataExportCR(namespaces []string) error {
 				log.InfoD("Watcher stopped for namespace [%s]", namespace)
 			}()
 			ch := watcher.ResultChan()
-			noMatchTimeout := time.NewTimer(30 * time.Minute)
-			twoHourTimeout := time.After(2 * time.Hour)
-			defer noMatchTimeout.Stop()
+			overallTimeout := time.After(timeoutDuration)
 			log.InfoD("Watcher started for namespace [%s]", namespace)
 			for {
 				select {
@@ -9560,17 +9558,9 @@ func WatchAndKillDataExportCR(namespaces []string) error {
 						} else {
 							log.InfoD("DataExport CR deleted successfully.")
 						}
-						// Reset noMatchTimeout after processing an event
-						if !noMatchTimeout.Stop() {
-							<-noMatchTimeout.C
-						}
-						noMatchTimeout.Reset(30 * time.Minute)
 					}
-				case <-noMatchTimeout.C:
-					log.InfoD("No DataExport CR was found within 30 minutes, resetting counter")
-					noMatchTimeout.Reset(30 * time.Minute)
-				case <-twoHourTimeout:
-					log.InfoD("Watcher timed out after two hours")
+				case <-overallTimeout:
+					log.InfoD("Watcher timed out after the specified overall duration")
 					return
 				}
 			}
