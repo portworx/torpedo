@@ -571,15 +571,13 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 		postRuleNameMultiApplication   string
 		preRuleUidMultiApplication     string
 		postRuleUidMultiApplication    string
+		originalAppList                []string
 	)
 	AppContextsMapping := make(map[string]*scheduler.Context)
 	providers = GetBackupProviders()
 	label = make(map[string]string)
 	backupLocationMap = make(map[string]string)
 	scheduledAppContexts = make([]*scheduler.Context, 0)
-	pipelineAppList := Inst().AppList
-	Inst().AppList = []string{"postgres-backup", "mysql-backup"}
-	originalAppList := Inst().AppList
 	appPrivilegeToBkpMap := make(map[string]string)
 	appPrivilegeToRestoreMap := make(map[string][]string)
 	appPrivilegeToNsMap := make(map[string]string)
@@ -591,6 +589,9 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("RestoreFromHigherPrivilegedNamespaceToLower", "Restore from higher Privileged to lower Privileged namespace", nil, 299239, Sn, Q2FY25)
 
+		pipelineAppList := Inst().AppList
+		Inst().AppList = []string{"postgres-backup", "mysql-backup"}
+		originalAppList := Inst().AppList
 		//Resetting the pipeline app list
 		defer func() {
 			Inst().AppList = pipelineAppList
@@ -904,7 +905,6 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster failed")
 
