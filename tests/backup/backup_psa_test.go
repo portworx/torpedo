@@ -901,7 +901,9 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 
 		//Resetting the pipeline app list
-		Inst().AppList = pipelineAppList
+		defer func() {
+			Inst().AppList = pipelineAppList
+		}()
 
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster failed")
