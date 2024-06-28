@@ -109,6 +109,7 @@ const (
 	defaultStorkDeploymentNamespace           = "kube-system"
 	UpgradeStorkImage                         = "TARGET_STORK_VERSION"
 	LatestStorkImage                          = "23.9.0"
+	LowerStorkImage                           = "24.2.0"
 	restoreNamePrefix                         = "tp-restore"
 	DestinationClusterName                    = "destination-cluster"
 	AppReadinessTimeout                       = 10 * time.Minute
@@ -4627,8 +4628,8 @@ func ValidateAllPodsInPxBackupNamespace() error {
 	return err
 }
 
-// getStorkImageVersion returns current stork image version.
-func getStorkImageVersion() (string, error) {
+// GetStorkImageVersion returns current stork image version.
+func GetStorkImageVersion() (string, error) {
 	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
 	if err != nil {
 		return "", err
@@ -4642,7 +4643,7 @@ func getStorkImageVersion() (string, error) {
 	return storkImageVersion, nil
 }
 
-// upgradeStorkVersion upgrades the stork to the provided version.
+// UpgradeStorkVersion upgrades the stork to the provided version.
 func UpgradeStorkVersion(storkImageToUpgrade string) error {
 	var finalImageToUpgrade string
 	var postUpgradeStorkImageVersionStr string
@@ -4650,7 +4651,7 @@ func UpgradeStorkVersion(storkImageToUpgrade string) error {
 	if err != nil {
 		return err
 	}
-	currentStorkImageStr, err := getStorkImageVersion()
+	currentStorkImageStr, err := GetStorkImageVersion()
 	if err != nil {
 		return err
 	}
@@ -4708,7 +4709,7 @@ func UpgradeStorkVersion(storkImageToUpgrade string) error {
 	}
 	// Wait for upgrade request to go through before validating
 	t := func() (interface{}, bool, error) {
-		postUpgradeStorkImageVersionStr, err = getStorkImageVersion()
+		postUpgradeStorkImageVersionStr, err = GetStorkImageVersion()
 		if err != nil {
 			return "", true, err
 		}
@@ -4734,6 +4735,101 @@ func UpgradeStorkVersion(storkImageToUpgrade string) error {
 
 	log.Infof("Successfully upgraded stork version from %v to %v", currentStorkImageStr, postUpgradeStorkImageVersionStr)
 	return nil
+}
+
+// DowngradeStorkVersion downgrades the stork version to the provided image
+func DowngradeStorkVersion(storkImageToDowngrade string) error {
+	var finalImageToDowngrade string
+	var postDowngradeStorkImageVersionStr string
+	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
+	if err != nil {
+		return err
+	}
+	currentStorkImageStr, err := GetStorkImageVersion()
+	if err != nil {
+		return err
+	}
+	currentStorkVersion, err := version.NewSemver(currentStorkImageStr)
+	if err != nil {
+		return err
+	}
+	storkImageVersionToDowngrade, err := version.NewSemver(storkImageToDowngrade)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Current stork version : %s", currentStorkVersion)
+	log.Infof("Downgrading stork version to : %s", storkImageVersionToDowngrade)
+
+	if currentStorkVersion.LessThanOrEqual(storkImageVersionToDowngrade) {
+		return fmt.Errorf("cannot downgrade stork version from %s to %s as the current version is lower than the provided version", currentStorkVersion, storkImageVersionToDowngrade)
+	}
+	internalDockerRegistry := os.Getenv("INTERNAL_DOCKER_REGISTRY")
+	if internalDockerRegistry != "" {
+		finalImageToDowngrade = fmt.Sprintf("%s/portworx/stork:%s", internalDockerRegistry, storkImageToDowngrade)
+	} else {
+		finalImageToDowngrade = fmt.Sprintf("docker.io/openstorage/stork:%s", storkImageToDowngrade)
+	}
+	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
+	if isOpBased {
+		log.Infof("Operator based Portworx deployment, Downgrading stork via StorageCluster")
+		storageSpec, err := Inst().V.GetDriver()
+		if err != nil {
+			return err
+		}
+		storageSpec.Spec.Stork.Image = finalImageToDowngrade
+
+		// Check to reset customImageRegistry to blank as in case of ibm it'll be icr.io/ext/ and not
+		// docker.io/ which causes issues when we try to install stork which is not pushed to icr.io/ext
+		if GetClusterProviders()[0] == "ibm" {
+			storageSpec.Spec.CustomImageRegistry = ""
+		}
+
+		_, err = operator.Instance().UpdateStorageCluster(storageSpec)
+		if err != nil {
+			return err
+		}
+	} else {
+		log.Infof("Non-Operator based Portworx deployment, Upgrading stork via Deployment")
+		storkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+		if err != nil {
+			return err
+		}
+		storkDeployment.Spec.Template.Spec.Containers[0].Image = finalImageToDowngrade
+		_, err = apps.Instance().UpdateDeployment(storkDeployment)
+		if err != nil {
+			return err
+		}
+	}
+	// Wait for downgrade request to go through before validating
+	t := func() (interface{}, bool, error) {
+		postDowngradeStorkImageVersionStr, err = GetStorkImageVersion()
+		if err != nil {
+			return "", true, err
+		}
+		if !strings.EqualFold(postDowngradeStorkImageVersionStr, storkImageToDowngrade) {
+			return "", true, fmt.Errorf("expected version after upgrade was %s but got %s", storkImageToDowngrade, postDowngradeStorkImageVersionStr)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+
+	// validate stork pods after downgrade
+	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+	if err != nil {
+		return err
+	}
+	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, storkPodReadyTimeout, podReadyRetryTime)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Successfully downgraded stork version from %v to %v", currentStorkImageStr, postDowngradeStorkImageVersionStr)
+	return nil
+
 }
 
 // CreateBackupWithNamespaceLabel creates a backup with Namespace label and checks for success
