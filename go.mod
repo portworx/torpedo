@@ -38,7 +38,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae
 	github.com/portworx/px-backup-api v1.2.2-0.20240513165102-9eda9e2fc169
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20240603144114-c7bdf15376db
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20240613184649-babf5ae406f0
 	github.com/portworx/talisman v1.1.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0
 	github.com/prometheus/client_golang v1.17.0
@@ -364,7 +364,7 @@ require (
 	k8s.io/kubernetes v1.25.1 // indirect
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 	oras.land/oras-go v1.2.0 // indirect
-	sigs.k8s.io/cluster-api v0.2.11
+	sigs.k8s.io/cluster-api v1.6.4
 	sigs.k8s.io/controller-runtime v0.14.5 // indirect
 	sigs.k8s.io/gcp-compute-persistent-disk-csi-driver v0.7.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
