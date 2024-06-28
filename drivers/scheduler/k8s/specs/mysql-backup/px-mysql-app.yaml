@@ -96,15 +96,15 @@ spec:
             - mountPath: /var/lib/mysql-seq
               name: mysql-persistent-storage-seq
       volumes:
-        - name: mysql-persistent-storage
-          persistentVolumeClaim:
-            claimName: mysql-data-db
-        - name: mysql-persistent-storage-aggr
-          persistentVolumeClaim:
-            claimName: mysql-data-aggr
-        - name: mysql-persistent-storage-seq
-          persistentVolumeClaim:
-            claimName: mysql-data-seq
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-data-db
+      - name: mysql-persistent-storage-aggr
+        persistentVolumeClaim:
+          claimName: mysql-data-aggr
+      - name: mysql-persistent-storage-seq
+        persistentVolumeClaim:
+          claimName: mysql-data-seq
 ---
 apiVersion: apps/v1
 kind: Deployment

@@ -553,7 +553,6 @@ var _ = Describe("{EnableNsAndClusterLevelPSAWithBackupAndRestore}", Label(TestC
 var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCaseLabelsMap[RestoreFromHigherPrivilegedNamespaceToLower]...), func() {
 	var (
 		backupNames                    []string
-		restoreNames                   []string
 		scheduledAppContexts           []*scheduler.Context
 		label                          map[string]string
 		providers                      []string
@@ -912,26 +911,6 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
 		log.FailOnError(err, "Data validations failed")
 
-		log.InfoD("switching to destination context")
-		err = SetDestinationKubeConfig()
-		log.FailOnError(err, "failed to switch to context to destination cluster")
-
-		log.InfoD("Destroying restored apps on destination clusters")
-		restoredAppContexts := make([]*scheduler.Context, 0)
-		for _, scheduledAppContext := range scheduledAppContexts {
-			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
-			if err != nil {
-				log.Errorf("TransformAppContextWithMappings: %v", err)
-				continue
-			}
-			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
-		}
-		DestroyApps(restoredAppContexts, opts)
-
-		log.InfoD("switching to default context")
-		err = SetClusterContext("")
-		log.FailOnError(err, "failed to SetClusterContext to default cluster")
-
 		backupDriver := Inst().Backup
 		log.Info("Deleting backups")
 		for _, backupName := range backupNames {
@@ -954,11 +933,6 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting post exec rule %s ", postRuleNameMultiApplication))
 		}
 
-		log.Info("Deleting restored namespaces")
-		for _, restoreName := range restoreNames {
-			err = DeleteRestore(restoreName, BackupOrgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
-		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
