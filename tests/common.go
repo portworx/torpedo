@@ -13285,7 +13285,6 @@ func CheckVolumesExistinFB(flashBlades []pureutils.FlashBladeEntry, listofFbdaPv
 				}
 			}
 			FsFullName, nameErr := pureutils.GetFilesystemFullName(fbClient, volumeName)
-			fmt.Println("fsfullname:", FsFullName)
 			log.FailOnError(nameErr, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
 			if FsFullName != "" {
 				log.Infof("Volume [%v] exists on FB [%v]", volumeName, fb.MgmtEndPoint)
