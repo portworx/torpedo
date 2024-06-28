@@ -591,6 +591,11 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("RestoreFromHigherPrivilegedNamespaceToLower", "Restore from higher Privileged to lower Privileged namespace", nil, 299239, Sn, Q2FY25)
 
+		//Resetting the pipeline app list
+		defer func() {
+			Inst().AppList = pipelineAppList
+		}()
+
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		psaApp := make([]string, 0)
@@ -899,11 +904,6 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-
-		//Resetting the pipeline app list
-		defer func() {
-			Inst().AppList = pipelineAppList
-		}()
 
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster failed")
