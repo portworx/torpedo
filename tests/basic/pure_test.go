@@ -5740,6 +5740,7 @@ var _ = Describe("{RestartPxandRestartNode}", func() {
 			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
+				CsiAppKeys:         Inst().CsiAppList,
 				StorageProvisioner: Provisioner,
 				Namespace:          taskName,
 			})
