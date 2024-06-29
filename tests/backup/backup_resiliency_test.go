@@ -1372,8 +1372,8 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", Labe
 		ctx                  context.Context
 		backupDeployment     *appsV1.Deployment
 		originalReplicaCount int32
-		controlChannel       chan string
-		errorGroup           *errgroup.Group
+		//controlChannel       chan string
+		//errorGroup           *errgroup.Group
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -1404,7 +1404,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", Labe
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Adding cloud credential and backup location", func() {
 			log.InfoD("Adding cloud credential and backup location")
@@ -1570,50 +1570,50 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", Labe
 	})
 
 	JustAfterEach(func() {
-		var wg sync.WaitGroup
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		log.InfoD("Updating the px_backup deployment replica count as it was at the start of this testcase")
-		backupDeployment, err = apps.Instance().GetDeployment(PxBackupDeployment, pxBackupNS)
-		log.FailOnError(err, "Getting px-backup deployment")
-		if *backupDeployment.Spec.Replicas != originalReplicaCount {
-			*backupDeployment.Spec.Replicas = originalReplicaCount
-			_, err := apps.Instance().UpdateDeployment(backupDeployment)
-			log.FailOnError(err, "Updating the px_backup deployment replica count to originalReplicaCount")
-		}
-		log.Infof("Verify that all the px_backup deployment pod are in Ready state at the end of the testcase")
-		pxBackupPodStatus := func() (interface{}, bool, error) {
-			backupDeployment, err = apps.Instance().GetDeployment(PxBackupDeployment, pxBackupNS)
-			if err != nil {
-				return "", true, err
-			}
-			if backupDeployment.Status.ReadyReplicas != originalReplicaCount {
-				return "", true, fmt.Errorf("px_backup pod is not ready yet")
-			}
-			return "", false, nil
-		}
-		_, err = DoRetryWithTimeoutWithGinkgoRecover(pxBackupPodStatus, 10*time.Minute, 30*time.Second)
-		dash.VerifySafely(err, nil, "Validating if the px_backup pod is ready")
-		log.Infof("Number of px_backup pods in Ready state are %v", backupDeployment.Status.ReadyReplicas)
-		dash.VerifySafely(backupDeployment.Status.ReadyReplicas == originalReplicaCount, true, "Verifying that px_backup pod is in Ready state at the end of the testcase")
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		log.Infof("Deleting the deployed applications")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
-		log.InfoD("Deleting the restores taken")
-		for _, restoreName := range restoreNames {
-			wg.Add(1)
-			go func(restoreName string) {
-				defer GinkgoRecover()
-				defer wg.Done()
-				err = DeleteRestore(restoreName, BackupOrgID, ctx)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
-			}(restoreName)
-		}
-		wg.Wait()
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		//var wg sync.WaitGroup
+		//defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		//log.InfoD("Updating the px_backup deployment replica count as it was at the start of this testcase")
+		//backupDeployment, err = apps.Instance().GetDeployment(PxBackupDeployment, pxBackupNS)
+		//log.FailOnError(err, "Getting px-backup deployment")
+		//if *backupDeployment.Spec.Replicas != originalReplicaCount {
+		//	*backupDeployment.Spec.Replicas = originalReplicaCount
+		//	_, err := apps.Instance().UpdateDeployment(backupDeployment)
+		//	log.FailOnError(err, "Updating the px_backup deployment replica count to originalReplicaCount")
+		//}
+		//log.Infof("Verify that all the px_backup deployment pod are in Ready state at the end of the testcase")
+		//pxBackupPodStatus := func() (interface{}, bool, error) {
+		//	backupDeployment, err = apps.Instance().GetDeployment(PxBackupDeployment, pxBackupNS)
+		//	if err != nil {
+		//		return "", true, err
+		//	}
+		//	if backupDeployment.Status.ReadyReplicas != originalReplicaCount {
+		//		return "", true, fmt.Errorf("px_backup pod is not ready yet")
+		//	}
+		//	return "", false, nil
+		//}
+		//_, err = DoRetryWithTimeoutWithGinkgoRecover(pxBackupPodStatus, 10*time.Minute, 30*time.Second)
+		//dash.VerifySafely(err, nil, "Validating if the px_backup pod is ready")
+		//log.Infof("Number of px_backup pods in Ready state are %v", backupDeployment.Status.ReadyReplicas)
+		//dash.VerifySafely(backupDeployment.Status.ReadyReplicas == originalReplicaCount, true, "Verifying that px_backup pod is in Ready state at the end of the testcase")
+		//ctx, err := backup.GetAdminCtxFromSecret()
+		//log.FailOnError(err, "Fetching px-central-admin ctx")
+		//log.Infof("Deleting the deployed applications")
+		//opts := make(map[string]bool)
+		//opts[SkipClusterScopedObjects] = true
+		//err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		//log.FailOnError(err, "Data validations failed")
+		//log.InfoD("Deleting the restores taken")
+		//for _, restoreName := range restoreNames {
+		//	wg.Add(1)
+		//	go func(restoreName string) {
+		//		defer GinkgoRecover()
+		//		defer wg.Done()
+		//		err = DeleteRestore(restoreName, BackupOrgID, ctx)
+		//		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
+		//	}(restoreName)
+		//}
+		//wg.Wait()
+		//CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 

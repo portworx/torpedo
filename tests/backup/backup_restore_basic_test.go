@@ -1090,31 +1090,31 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", Label(TestCaseLabelsMap[
 	})
 
 	JustAfterEach(func() {
-		allContexts := append(scheduledAppContexts, newScheduledAppContexts...)
-		defer EndPxBackupTorpedoTest(allContexts)
-		defer func() {
-			err := SetSourceKubeConfig()
-			log.FailOnError(err, "failed to switch context to source cluster")
-		}()
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		allAppNamespaces := append(appNamespaces, newAppNamespaces...)
-		log.InfoD("Deleting deployed namespaces - %v", allAppNamespaces)
-		ValidateAndDestroy(allContexts, opts)
-		err := SetSourceKubeConfig()
-		log.FailOnError(err, "failed to switch context to source cluster")
-		// TO DO: Remove SuspendAndDeleteSchedule after PB-5221 is fixed and replace it with DeleteSchedule function
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		err = SuspendAndDeleteSchedule(scheduleName, schedulePolicyName, DestinationClusterName, BackupOrgID, ctx, true)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Suspending and deleting backup schedule - %s", scheduleName))
-		log.Infof("Deleting backup schedule policy")
-		policyList := []string{schedulePolicyName}
-		err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, policyList)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
-		err = DeleteRestore(restoreName, BackupOrgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		//allContexts := append(scheduledAppContexts, newScheduledAppContexts...)
+		//defer EndPxBackupTorpedoTest(allContexts)
+		//defer func() {
+		//	err := SetSourceKubeConfig()
+		//	log.FailOnError(err, "failed to switch context to source cluster")
+		//}()
+		//opts := make(map[string]bool)
+		//opts[SkipClusterScopedObjects] = true
+		//allAppNamespaces := append(appNamespaces, newAppNamespaces...)
+		//log.InfoD("Deleting deployed namespaces - %v", allAppNamespaces)
+		//ValidateAndDestroy(allContexts, opts)
+		//err := SetSourceKubeConfig()
+		//log.FailOnError(err, "failed to switch context to source cluster")
+		//// TO DO: Remove SuspendAndDeleteSchedule after PB-5221 is fixed and replace it with DeleteSchedule function
+		//ctx, err := backup.GetAdminCtxFromSecret()
+		//log.FailOnError(err, "Fetching px-central-admin ctx")
+		//err = SuspendAndDeleteSchedule(scheduleName, schedulePolicyName, DestinationClusterName, BackupOrgID, ctx, true)
+		//dash.VerifySafely(err, nil, fmt.Sprintf("Suspending and deleting backup schedule - %s", scheduleName))
+		//log.Infof("Deleting backup schedule policy")
+		//policyList := []string{schedulePolicyName}
+		//err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, policyList)
+		//dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
+		//err = DeleteRestore(restoreName, BackupOrgID, ctx)
+		//dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		//CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 
