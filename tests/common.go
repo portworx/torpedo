@@ -8214,7 +8214,7 @@ func getVifInterface(faClient *newflasharray.Client, faMgmtIP, apiToken string) 
 	return nil, fmt.Errorf("no enabled vif interface found")
 }
 
-// toggleManagementInterface is a function that enables or disables the management interface on a FlashArray.
+// DisableManagementInterface is a function that enables or disables the management interface on a FlashArray.
 // It takes a FlashArray client, a management IP address, and a boolean value to indicate whether to enable or disable the interface.
 // It returns the name of the last interface that was toggled and an error if any occurred during the process.
 func DisableManagementInterface(PureFaClientVif *newflasharray.Client, faMgmtIP string, enabled bool) (string, error) {
@@ -8321,6 +8321,18 @@ func EnableAutoFSTrim() {
 	}
 	dash.VerifyFatal(isPXNodeAvailable, true, "No PX node available in the cluster")
 }
+
+// ToggleMgmtNetworkInterfaces is a function that toggles the management network interfaces on a FlashArray.
+// It enables the last disabled interface and disables the current management interface.
+//
+// Parameters:
+// PureMgmtIpCounter: An integer representing the counter for the management IP.
+// PureMgmtIPList: A slice of strings representing the list of management IP addresses.
+// PureFaClientVif: A pointer to a newflasharray.Client object representing the FlashArray client.
+// LastDisabledInterface: A string representing the last disabled interface.
+//
+// Returns:
+// A string representing the last disabled interface and an error if any occurred during the process.
 func ToggleMgmtNetworkInterfaces(PureMgmtIpCounter int, PureMgmtIPList []string, PureFaClientVif *newflasharray.Client, LastDisabledInterface string) (string, error) {
 	prevMgmtIPIndex := (PureMgmtIpCounter - 1) % len(PureMgmtIPList)
 	prevMgmtIP := PureMgmtIPList[prevMgmtIPIndex]
