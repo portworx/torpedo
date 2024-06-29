@@ -2841,7 +2841,11 @@ func ToggleAutopilotInStc() error {
 	if err != nil {
 		return err
 	}
-	log.Infof("is autopilot enabled?: %t", stc.Spec.Autopilot.Enabled)
+	if stc.Spec.Autopilot != nil {
+		log.Infof("is autopilot enabled?: %t", stc.Spec.Autopilot.Enabled)
+	} else {
+		log.FailOnError(fmt.Errorf("Autopilot is not enabled in STC"), "Autopilot is not enabled in STC")
+	}
 	stc.Spec.Autopilot.Enabled = !stc.Spec.Autopilot.Enabled
 	pxOperator := operator.Instance()
 	_, err = pxOperator.UpdateStorageCluster(stc)
@@ -13580,4 +13584,33 @@ func GetClusterName(kubeConfigFile string) (string, error) {
 		return "", err
 	}
 	return output, nil
+}
+
+// GetUniqueElementsFromList gets unique elements from a list
+func GetUniqueElementsFromList(input []string) []string {
+	uniqueMap := make(map[string]bool)
+	uniqueSlice := make([]string, 0)
+
+	for _, element := range input {
+		if !uniqueMap[element] {
+			uniqueMap[element] = true
+			uniqueSlice = append(uniqueSlice, element)
+		}
+	}
+
+	return uniqueSlice
+}
+
+func GetVolumeNamefromPVC(namespace string) ([]string, error) {
+	var pvclist []string
+	allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	if err != nil {
+		log.InfoD("error getting pvcs from namespace [%s]", namespace)
+		return nil, err
+	}
+	for _, p := range allPvcList.Items {
+		pvclist = append(pvclist, p.Spec.VolumeName)
+		return pvclist, nil
+	}
+	return nil, fmt.Errorf("No PVCs found in namespace [%s]", namespace)
 }

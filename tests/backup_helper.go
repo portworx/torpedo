@@ -5,6 +5,7 @@ import (
 	context1 "context"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/watch"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -216,7 +217,10 @@ var (
 	IsBackupLongevityRun       = false
 	PvcListBeforeRun           []string
 	PvcListAfterRun            []string
-	PSAAppMap                  = map[string]string{"postgres-backup": "postgres-backup-psa-restricted", "mysql-backup": "mysql-backup-psa-restricted"}
+	RestrictedPSALabel         = map[string]string{"pod-security.kubernetes.io/enforce": "restricted"}
+	BaselinePSALabel           = map[string]string{"pod-security.kubernetes.io/enforce": "baseline"}
+	PrivilegedPSALabel         = map[string]string{"pod-security.kubernetes.io/enforce": "privileged"}
+	PSAAppMap                  = map[string]string{"postgres-backup": "postgres-restricted", "mysql-backup": "mysql-restricted"}
 )
 
 type UserRoleAccess struct {
@@ -2735,6 +2739,56 @@ func BackupWithPartialSuccessCheck(backupName string, orgID string, retryDuratio
 	}
 	_, err = task.DoRetryWithTimeout(backupSuccessCheckFunc, retryDuration, retryInterval)
 	log.InfoD("Partial success check for backup %s finished at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// BackupFailedCheck inspects backup task
+func BackupFailedCheck(backupName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context1.Context) error {
+	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
+	}
+	statusesExpected := [...]api.BackupInfo_StatusInfo_Status{
+		api.BackupInfo_StatusInfo_Failed,
+	}
+	statusesUnexpected := [...]api.BackupInfo_StatusInfo_Status{
+		api.BackupInfo_StatusInfo_Success,
+		api.BackupInfo_StatusInfo_PartialSuccess,
+		api.BackupInfo_StatusInfo_Invalid,
+		api.BackupInfo_StatusInfo_Aborted,
+		api.BackupInfo_StatusInfo_Failed,
+	}
+	backupFailCheckFunc := func() (interface{}, bool, error) {
+		resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+		if err != nil {
+			return "", false, err
+		}
+		actual := resp.GetBackup().GetStatus().Status
+		reason := resp.GetBackup().GetStatus().Reason
+		for _, status := range statusesExpected {
+			if actual == status {
+				return "", false, nil
+			}
+		}
+		for _, status := range statusesUnexpected {
+			if actual == status {
+				return "", false, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
+			}
+		}
+
+		return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
+
+	}
+	_, err = task.DoRetryWithTimeout(backupFailCheckFunc, retryDuration, retryInterval)
+	log.InfoD("Backup fail check for backup %s finished at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
 	if err != nil {
 		return err
 	}
@@ -9429,6 +9483,90 @@ func DeleteAllDataExportCRs(namespace string) error {
 	}
 	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
 	return err
+}
+
+// DeleteDataExportCRForVolume deletes the data export CR for the provided PVC
+func DeleteDataExportCRForVolume(pvc *corev1.PersistentVolumeClaim) error {
+	var found bool
+	var filterOptions = metav1.ListOptions{}
+	namespace := pvc.Namespace
+	kdmpClient := kdmp.Instance()
+	t := func() (interface{}, bool, error) {
+		dataExportCrList, err := kdmpClient.ListDataExport(namespace, filterOptions)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to list data export CRs in namespace [%s]: %w", namespace, err)
+		}
+		if len(dataExportCrList.Items) == 0 {
+			return "", true, fmt.Errorf("no data export CRs found in namespace [%s]", namespace)
+		}
+		for _, dataExportCr := range dataExportCrList.Items {
+			if dataExportCr.Spec.Source.Namespace == namespace && dataExportCr.Spec.Source.Name == pvc.Name {
+				found = true
+				log.Infof("Deleting data export CR [%s] in namespace [%s]", dataExportCr.Name, namespace)
+				err := kdmpClient.DeleteDataExport(dataExportCr.Name, namespace)
+				if err != nil {
+					return nil, false, fmt.Errorf("failed to delete data export CR [%s] in namespace [%s]: %w", dataExportCr.Name, namespace, err)
+				}
+			}
+		}
+		if !found {
+			return "", true, fmt.Errorf("no data export CR found for PVC [%s] in namespace [%s]", pvc.Name, namespace)
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+	return err
+}
+
+// WatchAndKillDataExportCR watches for the data export CRs in the provided namespaces and deletes them as soon as they are created
+func WatchAndKillDataExportCR(namespaces []string, timeoutDuration time.Duration) error {
+	kdmpClient := kdmp.Instance()
+	// Map of namespace and watcher
+	var namespaceWatcherMap = make(map[string]watch.Interface)
+	for _, namespace := range namespaces {
+		watcher, err := kdmpClient.WatchDataExport(namespace, metav1.ListOptions{})
+		if err != nil {
+			return err
+		}
+		namespaceWatcherMap[namespace] = watcher
+		log.Infof("Watcher created for namespace [%s]", namespace)
+	}
+
+	for namespace, watcher := range namespaceWatcherMap {
+		go func(namespace string, watcher watch.Interface) {
+			defer GinkgoRecover()
+			defer func() {
+				watcher.Stop()
+				log.InfoD("Watcher stopped for namespace [%s]", namespace)
+			}()
+			ch := watcher.ResultChan()
+			overallTimeout := time.After(timeoutDuration)
+			log.InfoD("Watcher started for namespace [%s]", namespace)
+			for {
+				select {
+				case event, ok := <-ch:
+					if !ok {
+						log.InfoD("Watcher channel closed")
+						return
+					}
+					log.InfoD("Received event: %v", event)
+					if event.Type == watch.Added {
+						log.InfoD("DataExport CR added. Initiating delete.")
+						err := DeleteAllDataExportCRs(namespace)
+						if err != nil {
+							log.Infof("Error deleting DataExport CR: %v", err)
+						} else {
+							log.InfoD("DataExport CR deleted successfully.")
+						}
+					}
+				case <-overallTimeout:
+					log.InfoD("Watcher timed out after the specified overall duration")
+					return
+				}
+			}
+		}(namespace, watcher)
+	}
+	return nil
 }
 
 // StopCloudsnapBackup stops the cloudsnap for the provided pvc name and namespace
