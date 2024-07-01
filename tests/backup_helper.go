@@ -2096,6 +2096,7 @@ func CreateRestoreWithValidation(ctx context1.Context, restoreName, backupName s
 	}
 
 	log.Infof("Namespace mapping from CreateRestoreWithValidation [%v]", namespaceMapping)
+	time.Sleep(4 * time.Minute)
 	err = ValidateDataAfterRestore(expectedRestoredAppContexts, restoreName, ctx, backupName, namespaceMapping, startTime)
 
 	return err
