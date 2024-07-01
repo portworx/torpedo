@@ -5961,7 +5961,7 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 			}
 			log.InfoD("Portworx is up on all nodes")
 		})
-		stepLog = "Validate Volumes"
+		stepLog = "Validate Volumes After PX restart and compare the state ,status of the volumes before the Restart of the PX"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			faErr = CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
@@ -5971,13 +5971,11 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 				if value2, found := volMapAfterRestart[key]; found {
 					if value1 != value2 {
 						log.FailOnError(fmt.Errorf("Volume [%s] state or status changed after restart Before Restart : [%v] ,After Restart [%v]", key, value1, value2), "Volume state or status changed after restart")
-
 					}
 				} else {
 					log.FailOnError(fmt.Errorf("Volume [%s] not found in the map after restart", key), "Volume not found in the map after restart")
 				}
 			}
-
 		})
 
 	})
@@ -5986,4 +5984,49 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 		AfterEachTest(contexts)
 	})
 
+})
+
+var _ = Describe("{RestartPXAfterPureSecretRecreation}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPXAfterPureSecretRecreation",
+			"Delete the Pure Secret and Add it Back and restart the PX and check if PX is up", nil, 0)
+	})
+	var pureSecretJSON string
+	itLog := "RebootAllWorkerNodesandCheckPXWithMgmtInterfaceDown"
+	It(itLog, func() {
+		pxNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		Step("Fetch and store Pure secret", func() {
+			var err error
+			pureSecretJSON, err = Inst().S.GetSecretData(pxNamespace, PureSecretName, pureSecretDataField)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to fetch secret [%s] in [%s] namespace", PureSecretName, pxNamespace))
+		})
+		Step("Delete Pure secret", func() {
+			err := Inst().S.DeleteSecret(pxNamespace, PureSecretName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete secret [%s] in [%s] namespace", PureSecretName, pxNamespace))
+
+		})
+		Step("Re-create Pure secret", func() {
+			err := Inst().S.CreateSecret(pxNamespace, PureSecretName, pureSecretDataField, pureSecretJSON)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to create secret [%s] in [%s] namespace", PureSecretName, pxNamespace))
+		})
+		stepLog := "Restart PX and check if PX is up"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pxNodes := node.GetStorageDriverNodes()
+			log.InfoD("Starting portworx  Service on Nodes")
+			for _, node := range pxNodes {
+				err := Inst().V.RestartDriver(node, nil)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to restart portworx on node [%v]", node.Name))
+			}
+			for _, node := range pxNodes {
+				err := Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", node.Name))
+			}
+			log.InfoD("Portworx is up on all nodes")
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
