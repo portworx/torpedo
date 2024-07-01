@@ -5913,11 +5913,9 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 			for _, p := range allPvcList.Items {
 				scForPvc, err := k8sCore.GetStorageClassForPVC(&p)
 				log.FailOnError(err, "Failed to get storage class for pvc [%s]", p.Name)
-				backend, ok := scForPvc.Parameters["backend"]
-				if ok {
-					if backend == "pure_block" {
-						pvclist = append(pvclist, p.Spec.VolumeName)
-					}
+				backend, _ := scForPvc.Parameters["backend"]
+				if backend == "pure_block" {
+					pvclist = append(pvclist, p.Spec.VolumeName)
 				}
 
 			}
