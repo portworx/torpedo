@@ -9,7 +9,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
-
 	"math/rand"
 	"sort"
 	"strconv"
@@ -5886,6 +5885,14 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 	var contexts []*scheduler.Context
 	itLog := "RebootAllWorkerNodesandCheckPX"
 	It(itLog, func() {
+		var listofFadaPvc []string
+		// Define a struct to hold the tuple of two strings
+		type VolStruct struct {
+			State  string
+			Status string
+		}
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "Failed to get FA details used")
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := "restartpxandrebootnodewithmgmtinterfacedown"
 			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
@@ -5899,6 +5906,37 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 			contexts = append(contexts, context...)
 		}
 		ValidateApplications(contexts)
+		//GetVolumeNameFromPvc will collect volume name from pvc which indirect will be the px volume name and this name is suffix to the volumes created in FA backend
+		GetVolumeNameFromPvc := func(namespace string, pvclist []string) []string {
+			allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+			log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
+			for _, p := range allPvcList.Items {
+				pvclist = append(pvclist, p.Spec.VolumeName)
+			}
+			return pvclist
+		}
+		log.InfoD("waiting for a minute for volume name to populate")
+		time.Sleep(1 * time.Minute)
+		//collect volumes names which are required to find out the volumes in FA and FB backend
+		for _, ctx := range contexts {
+			listofFadaPvc = GetVolumeNameFromPvc(ctx.App.NameSpace, listofFadaPvc)
+		}
+		faErr := CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
+		log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+		inspectVolumes := func(contexts []*scheduler.Context) map[string]VolStruct {
+			volMap := make(map[string]VolStruct)
+			for _, ctx := range contexts {
+				volumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes for context [%s]", ctx.App.Key)
+				for _, vol := range volumes {
+					apiVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "Failed to inspect the volume [%v]", vol.ID)
+					volMap[apiVol.Id] = VolStruct{apiVol.State.String(), apiVol.Status.String()}
+				}
+			}
+			return volMap
+		}
+		volMap := inspectVolumes(contexts)
 		defer DestroyApps(contexts, nil)
 		stepLog := "Stop portworx on all Nodes"
 		Step(stepLog, func() {
@@ -5926,8 +5964,26 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 		stepLog = "Validate Volumes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			ValidateApplications(contexts)
+			faErr = CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
+			log.FailOnError(faErr, "Failed to check if volumes created exist in FA")
+			volMapAfterRestart := inspectVolumes(contexts)
+			for key, value1 := range volMap {
+				if value2, found := volMapAfterRestart[key]; found {
+					if value1 != value2 {
+						log.FailOnError(fmt.Errorf("Volume [%s] state or status changed after restart Before Restart : [%v] ,After Restart [%v]", key, value1, value2), "Volume state or status changed after restart")
+
+					}
+				} else {
+					log.FailOnError(fmt.Errorf("Volume [%s] not found in the map after restart", key), "Volume not found in the map after restart")
+				}
+			}
+
 		})
 
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
 })
