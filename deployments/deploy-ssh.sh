@@ -618,10 +618,10 @@ spec:
       value: "${AZURE_CLIENTSECRET}"
     - name: AZURE_ACCOUNT_NAME
       value: "${AZURE_ACCOUNT_NAME}"
-    - name: SOURCE_RKE_TOKEN
-      value: "${SOURCE_RKE_TOKEN}"
-    - name: DESTINATION_RKE_TOKEN
-      value: "${DESTINATION_RKE_TOKEN}"
+    - name: RANCHER_TOKEN
+      value: "${RANCHER_TOKEN}"
+    - name: RANCHER_URL
+      value: "${RANCHER_URL}"
     - name: AZURE_ACCOUNT_KEY
       value: "${AZURE_ACCOUNT_KEY}"
     - name: AZURE_SUBSCRIPTION_ID

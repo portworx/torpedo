@@ -27,6 +27,8 @@ const (
 )
 
 var RancherMap = make(map[string]*RancherClusterParameters)
+var DestinationClusterName string
+var SourceClusterName string
 
 type Rancher struct {
 	kube.K8s
@@ -78,13 +80,15 @@ func (r *Rancher) GetRancherClusterParametersValue() (*RancherClusterParameters,
 	var rkeParameters RancherClusterParameters
 	var rkeToken string
 	// TODO Rancher URL for cloud cluster will not be fetched from master node IP
-	masterNodeName := node.GetMasterNodes()[0].Name
-	log.Infof("The master node here is %v", masterNodeName)
-	endpoint := "https://" + masterNodeName + "/v3"
+	endpoint := os.Getenv("RANCHER_URL")
+	if endpoint == "" {
+		return nil, fmt.Errorf("env variable RANCHER_URL should not be empty")
+	}
+	log.InfoD("The Rancher Endpoint is %v", endpoint)
 	rkeParameters.Endpoint = endpoint
-	rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
+	rkeToken = os.Getenv("RANCHER_TOKEN")
 	if rkeToken == "" {
-		return nil, fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
+		return nil, fmt.Errorf("env variable RANCHER_TOKEN should not be empty")
 	}
 	rkeParameters.Token = rkeToken
 	rkeParameters.AccessKey = strings.Split(rkeToken, ":")[0]
@@ -97,20 +101,13 @@ func (r *Rancher) UpdateRancherClient(clusterName string) error {
 	var rkeParametersValue RancherClusterParameters
 	var err error
 	var rkeToken string
-	masterNodeName := node.GetMasterNodes()[0].Name
-	endpoint := "https://" + masterNodeName + "/v3"
-	if clusterName == "destination-config" {
-		rkeToken = os.Getenv("DESTINATION_RKE_TOKEN")
-		if rkeToken == "" {
-			return fmt.Errorf("env variable DESTINATION_RKE_TOKEN should not be empty")
-		}
-	} else if clusterName == "source-config" {
-		rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
-		if rkeToken == "" {
-			return fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
-		}
-	} else {
-		return fmt.Errorf("cluster name is not correct")
+	endpoint := os.Getenv("RANCHER_URL")
+	if endpoint == "" {
+		return fmt.Errorf("env variable RANCHER_URL should not be empty")
+	}
+	rkeToken = os.Getenv("RANCHER_TOKEN")
+	if rkeToken == "" {
+		return fmt.Errorf("env variable RANCHER_TOKEN should not be empty")
 	}
 	accessKey := strings.Split(rkeToken, ":")[0]
 	secretKey := strings.Split(rkeToken, ":")[1]
@@ -137,10 +134,12 @@ func (r *Rancher) UpdateRancherClient(clusterName string) error {
 func (r *Rancher) GetActiveRancherClusterID(clusterName string) (string, error) {
 	var clusterId string
 	clusterCollection, err := r.client.Cluster.List(nil)
+	log.InfoD("The cluster collection is %v", clusterCollection)
 	if err != nil {
 		return "", err
 	}
 	for _, cluster := range clusterCollection.Data {
+		log.InfoD("The cluster name is %v", cluster.Name)
 		if cluster.Name == clusterName {
 			clusterId = cluster.ID
 			return clusterId, nil
@@ -480,10 +479,12 @@ func (r *Rancher) GetRKEClusterList() ([]string, error) {
 	var clusterList []string
 	log.InfoD("Getting list of RKE clusters added to Rancher")
 	clusterCollection, err := r.client.Cluster.List(nil)
+	log.InfoD("The cluster collection is %v", clusterCollection)
 	if err != nil {
 		return clusterList, err
 	}
 	for _, cluster := range clusterCollection.Data {
+		log.InfoD("The cluster name is %v", cluster.Name)
 		clusterList = append(clusterList, cluster.Name)
 	}
 	return clusterList, nil
