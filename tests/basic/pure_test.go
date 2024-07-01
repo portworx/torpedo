@@ -5894,7 +5894,7 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "Failed to get FA details used")
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			taskName := "restartpxandrebootnodewithmgmtinterfacedown"
+			taskName := "rebootallworkernodesandcheckpx"
 			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
@@ -5911,7 +5911,15 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 			allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
 			log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
 			for _, p := range allPvcList.Items {
-				pvclist = append(pvclist, p.Spec.VolumeName)
+				scForPvc, err := k8sCore.GetStorageClassForPVC(&p)
+				log.FailOnError(err, "Failed to get storage class for pvc [%s]", p.Name)
+				backend, ok := scForPvc.Parameters["backend"]
+				if ok {
+					if backend == "pure_block" {
+						pvclist = append(pvclist, p.Spec.VolumeName)
+					}
+				}
+
 			}
 			return pvclist
 		}
