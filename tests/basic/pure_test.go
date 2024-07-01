@@ -6026,11 +6026,20 @@ var _ = Describe("{RestartPXAfterPureSecretRecreation}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pxNodes := node.GetStorageDriverNodes()
-			log.InfoD("Starting portworx  Service on all Storage Driver Nodes")
+			log.InfoD("Stop portworx Service on all Storage Driver Nodes")
+			err := Inst().V.StopDriver(pxNodes, false, nil)
+			dash.VerifyFatal(err, nil, "Failed to stop portworx on nodes")
+			log.InfoD("stopped portworx on all nodes")
 			for _, node := range pxNodes {
-				err := Inst().V.RestartDriver(node, nil)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to restart portworx on node [%v]", node.Name))
+				err = Inst().V.WaitDriverDownOnNode(node)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of node %s", node.Name))
 			}
+			log.InfoD("Starting portworx Service on all Storage Driver Nodes")
+			for _, node := range pxNodes {
+				err := Inst().V.StartDriver(node)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to start portworx on node %s", node.Name))
+			}
+
 			for _, node := range pxNodes {
 				err := Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", node.Name))
