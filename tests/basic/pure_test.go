@@ -5987,6 +5987,12 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 })
 
 var _ = Describe("{RestartPXAfterPureSecretRecreation}", func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-24004
+	   1.Delete the Pure Secret and Add it Back
+	   2.Restart PX and check if PX is up
+
+	*/
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestartPXAfterPureSecretRecreation",
 			"Delete the Pure Secret and Add it Back and restart the PX and check if PX is up", nil, 0)
@@ -5996,21 +6002,27 @@ var _ = Describe("{RestartPXAfterPureSecretRecreation}", func() {
 	It(itLog, func() {
 		pxNamespace, err := Inst().V.GetVolumeDriverNamespace()
 		log.FailOnError(err, "Failed to get volume driver namespace")
-		Step("Fetch and store Pure secret", func() {
+		stepLog := "Fetch and store Pure secret"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			var err error
 			pureSecretJSON, err = Inst().S.GetSecretData(pxNamespace, PureSecretName, pureSecretDataField)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to fetch secret [%s] in [%s] namespace", PureSecretName, pxNamespace))
 		})
-		Step("Delete Pure secret", func() {
+		stepLog = "Delete Pure secret"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			err := Inst().S.DeleteSecret(pxNamespace, PureSecretName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete secret [%s] in [%s] namespace", PureSecretName, pxNamespace))
 
 		})
-		Step("Re-create Pure secret", func() {
+		stepLog = "Re-create Pure secret"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			err := Inst().S.CreateSecret(pxNamespace, PureSecretName, pureSecretDataField, pureSecretJSON)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to create secret [%s] in [%s] namespace", PureSecretName, pxNamespace))
 		})
-		stepLog := "Restart PX and check if PX is up"
+		stepLog = "Restart PX and check if PX is up"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pxNodes := node.GetStorageDriverNodes()
