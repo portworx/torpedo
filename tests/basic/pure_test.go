@@ -5950,7 +5950,7 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			time.Sleep(1 * time.Minute)
-			log.InfoD("Starting portworx  Service on Nodes")
+			log.InfoD("Starting portworx Service on Nodes")
 			for _, node := range node.GetStorageDriverNodes() {
 				err := Inst().V.StartDriver(node)
 				log.FailOnError(err, "Failed to start portworx on node [%s]", node.Name)
@@ -6026,7 +6026,7 @@ var _ = Describe("{RestartPXAfterPureSecretRecreation}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pxNodes := node.GetStorageDriverNodes()
-			log.InfoD("Starting portworx  Service on Nodes")
+			log.InfoD("Starting portworx  Service on all Storage Driver Nodes")
 			for _, node := range pxNodes {
 				err := Inst().V.RestartDriver(node, nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to restart portworx on node [%v]", node.Name))
