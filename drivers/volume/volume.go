@@ -529,6 +529,12 @@ type Driver interface {
 
 	// ValidatePureFBDAMountSource checks that, on all the given nodes, all the provided FBDA volumes are mounted using the expected IP
 	ValidatePureFBDAMountSource(nodes []node.Node, vols []*Volume, expectedIP string) error
+
+	// UpdateVolumeOptions updates volume options using pxctl
+	UpdateVolumeOptions(n node.Node, volumeName string, options map[string]string) error
+
+	// StartFstrim starts fstrim on the given volume
+	StartFstrim(n node.Node, volumeName string) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

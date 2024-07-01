@@ -6306,3 +6306,40 @@ func (d *portworx) UpdateSkinnySnapReplNum(repl string) error {
 	}
 	return nil
 }
+
+// UpdateVolumeOptions updates volume options
+func (d *portworx) UpdateVolumeOptions(n node.Node, volumeID string, options map[string]string) error {
+	optionsStr := ""
+	for k, v := range options {
+		if strings.Contains(k, "--") {
+			optionsStr = fmt.Sprintf("%s %s=%s", optionsStr, k, v)
+		} else if strings.Contains(k, "-") {
+			optionsStr = fmt.Sprintf("%s %s %s", optionsStr, k, v)
+		}
+	}
+
+	cmd := fmt.Sprintf("volume update %s %s", volumeID, optionsStr)
+	_, err := d.GetPxctlCmdOutputConnectionOpts(n, cmd, node.ConnectionOpts{
+		Timeout:         defaultTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	}, true)
+	if err != nil {
+		return fmt.Errorf("failed to update volume options, Err: %v", err)
+	}
+	return nil
+}
+
+// StartFstrim starts fstrim on the given volume
+func (d *portworx) StartFstrim(n node.Node, volumeID string) error {
+	cmd := fmt.Sprintf("v trim start %s", volumeID)
+
+	_, err := d.GetPxctlCmdOutputConnectionOpts(n, cmd, node.ConnectionOpts{
+		Timeout:         defaultTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	}, true)
+	if err != nil {
+		return fmt.Errorf("failed to update volume options, Err: %v", err)
+	}
+	return nil
+
+}

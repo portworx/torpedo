@@ -1235,3 +1235,19 @@ func (d *DefaultDriver) UpdateSkinnySnapReplNum(repl string) error {
 		Operation: "UpdateSkinnySnapReplNum()",
 	}
 }
+
+// UpdateVolumeOptions updates the volume options
+func (d *DefaultDriver) UpdateVolumeOptions(n node.Node, volumeName string, options map[string]string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateVolumeOptions()",
+	}
+}
+
+// StartFstrim starts fstrim on the given volume
+func (d *DefaultDriver) StartFstrim(n node.Node, volName string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StartFstrim()",
+	}
+}

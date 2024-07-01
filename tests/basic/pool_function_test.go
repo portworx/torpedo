@@ -1933,3 +1933,110 @@ var _ = Describe("{DriveAddDifferentTypesAndResize}", func() {
 
 	})
 })
+
+var _ = Describe("{FillPoolWhileFstrimAndVolNotCleanState}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("FillPoolWhileFstrimAndVolNotCleanState", "Fill the pool while fstrim is running and volume is not in clean state", nil, 59010)
+	})
+
+	var contexts []*scheduler.Context
+
+	itLog := "Fill the pool while fstrim is running and volume is not in clean state"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		stepLog := "Schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fill-pool-%d", i))...)
+			}
+
+		})
+		ValidateApplications(contexts)
+
+		stepLog = "Start fstrim on the volumes and put the volumes in unclean state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//Get all volumes of the apps
+			volumes := make([]*volume.Volume, 0)
+			for _, c := range contexts {
+				volList, err := Inst().S.GetVolumes(c)
+				log.FailOnError(err, "Failed to get volumes of the apps")
+				volumes = append(volumes, volList...)
+			}
+			// Update volume
+			opts := map[string]string{
+				"--nodiscard":   "off",
+				"--auto_fstrim": "off",
+				"-l":            "allowNodiscardOnXFS=true,allowAutoFstrimOnXFS=true",
+			}
+			n := node.GetStorageDriverNodes()[0]
+			for _, v := range volumes {
+				err := Inst().V.UpdateVolumeOptions(n, v.ID, opts)
+				log.FailOnError(err, "Failed to update volume")
+			}
+
+			// Start fstrim on the volumes
+			for _, v := range volumes {
+				err := Inst().V.StartFstrim(n, v.ID)
+				log.FailOnError(err, "Failed to start fstrim on the volume")
+			}
+
+			// Put volumes in unclean state
+			err := PutVolumesInUncleanState(volumes)
+			log.FailOnError(err, "Failed to put volumes in unclean state")
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+// Put volumes in unclean state
+func PutVolumesInUncleanState(volList []*volume.Volume) error {
+	for _, v := range volList {
+		// Check replication factor of the volume
+		repFactor, err := Inst().V.GetReplicationFactor(v)
+		log.FailOnError(err, "Failed to get replication factor of the volume")
+
+		if repFactor == 3 {
+			// Decrease replication factor of the volume
+			err = Inst().V.SetReplicationFactor(v, 2, nil, nil, true, volume.Options{})
+			if err != nil {
+				log.InfoD("Failed to increase replication factor of the volume")
+				return err
+			}
+
+			err = ValidateReplFactorUpdate(v, 2)
+			if err != nil {
+				log.InfoD("Failed to increase replication factor of the volume")
+				return err
+			}
+
+			// Increase replication factor of the volume
+			err = Inst().V.SetReplicationFactor(v, 3, nil, nil, true, volume.Options{})
+			if err != nil {
+				log.InfoD("Failed to increase replication factor of the volume")
+				return err
+			}
+		} else {
+			// Increase replication factor of the volume
+			err = Inst().V.SetReplicationFactor(v, 3, nil, nil, true, volume.Options{})
+			if err != nil {
+				log.InfoD("Failed to increase replication factor of the volume")
+				return err
+			}
+		}
+		//Check if volume is in resync state
+		if inResync(v.ID) {
+			log.InfoD("Volume is in resync state")
+			continue
+		}
+	}
+	return nil
+}
