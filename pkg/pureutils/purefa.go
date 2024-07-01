@@ -77,12 +77,16 @@ func GetFAMgmtIPFromPXPureSecret(secret PXPureSecret) (map[string]*tpflasharray.
 }
 
 // GetFAMgmtEndPoints , Get Lists of all management Endpoints from FA Secrets
-func GetFAMgmtEndPoints(secret PXPureSecret) []string {
+func GetFAMgmtEndPoints(secret PXPureSecret) ([]string, error) {
+	if secret.Arrays == nil || len(secret.Arrays) == 0 {
+		return nil, fmt.Errorf("no management endpoints available")
+	}
+
 	mgmtEndpoints := []string{}
 	for _, faDetails := range secret.Arrays {
 		mgmtEndpoints = append(mgmtEndpoints, faDetails.MgmtEndPoint)
 	}
-	return mgmtEndpoints
+	return mgmtEndpoints, nil
 }
 
 // GetApiTokenForMgmtEndpoints Returns API token for Mgmt Endpoints

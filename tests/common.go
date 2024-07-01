@@ -8192,9 +8192,9 @@ func GetCloudDriveDeviceSpecs() ([]string, error) {
 	return deviceSpecs, nil
 }
 
-// getVifInterface is a function that retrieves the VIF (Virtual Interface) from a FlashArray client.
+// GetVifInterface is a function that retrieves the VIF (Virtual Interface) from a FlashArray client.
 // It loops through all network interfaces to find the VIF interface which is used in API calls for enabling/disabling interfaces.
-func getVifInterface(faClient *newflasharray.Client, faMgmtIP, apiToken string) (*newflasharray.Client, error) {
+func GetVifInterface(faClient *newflasharray.Client, faMgmtIP, apiToken string) (*newflasharray.Client, error) {
 	// Loop through Network interfaces to find the VIF interface which we use in API calls for enabling/disabling interfaces
 	networkInterfaces, err := pureutils.ListAllInterfaces(faClient)
 	if err != nil {
@@ -8280,7 +8280,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			faClient := PureFAMgmtMap[faMgmtIP]
 			apiToken, err := pureutils.GetApiTokenForFAMgmtEndpoint(secret, faMgmtIP)
 			log.FailOnError(err, "failed to get API token for FA with IP [%s]", faMgmtIP)
-			PureFaClientVif, err = getVifInterface(faClient, faMgmtIP, apiToken)
+			PureFaClientVif, err = GetVifInterface(faClient, faMgmtIP, apiToken)
 			log.FailOnError(err, "failed to get vif interface for FA with IP [%s]", faMgmtIP)
 			LastDisabledInterface, err = DisableManagementInterface(PureFaClientVif, faMgmtIP, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("failed to toggle network interfaces on FA with IP [%s]", faMgmtIP))
