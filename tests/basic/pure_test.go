@@ -5871,4 +5871,63 @@ var _ = Describe("{RestartPxandRestartNodeWithMgmtInterfaceDown}", func() {
 			ValidateApplications(contexts)
 		})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootAllWorkerNodesandCheckPX",
+			"Stop PX on all nodes at once and then wait for a minute and enable px on all nodes and check if px is up and validate applications", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	itLog := "RebootAllWorkerNodesandCheckPX"
+	It(itLog, func() {
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := "restartpxandrebootnodewithmgmtinterfacedown"
+			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				CsiAppKeys:         Inst().CsiAppList,
+				StorageProvisioner: Provisioner,
+				Namespace:          taskName,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+			contexts = append(contexts, context...)
+		}
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+		stepLog := "Stop portworx on all Nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Stopping portworx  Service on Nodes")
+			err := Inst().V.StopDriver(node.GetStorageDriverNodes(), false, nil)
+			dash.VerifyFatal(err, nil, "Failed to stop portworx on nodes")
+			log.InfoD("stopped portworx on all nodes")
+		})
+		stepLog = " Now wait for a minute and make PX up"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			time.Sleep(1 * time.Minute)
+			log.InfoD("Starting portworx  Service on Nodes")
+			for _, node := range node.GetStorageDriverNodes() {
+				err := Inst().V.StartDriver(node)
+				log.FailOnError(err, "Failed to start portworx on node [%s]", node.Name)
+			}
+			for _, node := range node.GetStorageDriverNodes() {
+				err := Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", node.Name))
+			}
+			log.InfoD("Portworx is up on all nodes")
+		})
+		stepLog = "Validate Volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
+
+	})
 })
