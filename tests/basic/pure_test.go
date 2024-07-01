@@ -6022,7 +6022,7 @@ var _ = Describe("{RestartPXAfterPureSecretRecreation}", func() {
 			err := Inst().S.CreateSecret(pxNamespace, PureSecretName, pureSecretDataField, pureSecretJSON)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to create secret [%s] in [%s] namespace", PureSecretName, pxNamespace))
 		})
-		stepLog = "Restart PX and check if PX is up"
+		stepLog = "Stop PX and start it back and  check if PX is up"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pxNodes := node.GetStorageDriverNodes()
