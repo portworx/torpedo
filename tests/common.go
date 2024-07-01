@@ -8331,7 +8331,7 @@ func GetCloudDriveDeviceSpecs() ([]string, error) {
 
 // getVifInterface is a function that retrieves the VIF (Virtual Interface) from a FlashArray client.
 // It loops through all network interfaces to find the VIF interface which is used in API calls for enabling/disabling interfaces.
-func getVifInterface(faClient *newflasharray.Client, faMgmtIP, apiToken string) (*newflasharray.Client, error) {
+func GetVifInterface(faClient *newflasharray.Client, faMgmtIP, apiToken string) (*newflasharray.Client, error) {
 	// Loop through Network interfaces to find the VIF interface which we use in API calls for enabling/disabling interfaces
 	networkInterfaces, err := pureutils.ListAllInterfaces(faClient)
 	if err != nil {
@@ -8356,12 +8356,41 @@ func getVifInterface(faClient *newflasharray.Client, faMgmtIP, apiToken string) 
 // toggleManagementInterface is a function that enables or disables the management interface on a FlashArray.
 // It takes a FlashArray client, a management IP address, and a boolean value to indicate whether to enable or disable the interface.
 // It returns the name of the last interface that was toggled and an error if any occurred during the process.
-func toggleManagementInterface(PureFaClientVif *newflasharray.Client, faMgmtIP string, enabled bool) (string, error) {
+func ToggleManagementInterface(PureFaClientVif *newflasharray.Client, faMgmtIP string, enabled bool) (string, error) {
 	var LastDisabledInterface string
 	networkInterfaces, err := pureutils.ListAllInterfaces(PureFaClientVif)
 	if err != nil {
 		log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
 		return "", err
+	}
+	for _, nw := range networkInterfaces {
+		for _, networkInterface := range nw.Items {
+			if networkInterface.Eth.Address == faMgmtIP {
+				for _, service := range networkInterface.Services {
+					if strings.Contains(service, "management") {
+						log.Infof("Toggling network interface on FA with IP [%s] to [%t]", faMgmtIP, enabled)
+						_, err := pureutils.SetInterfaceEnabled(PureFaClientVif, networkInterface.Name, enabled)
+						if err != nil {
+							return "", fmt.Errorf("failed to toggle network interfaces on FA with IP [%s]: %v to [%s]", faMgmtIP, err, enabled)
+						}
+						LastDisabledInterface = networkInterface.Name
+						log.Infof("Last disabled interface: %s", LastDisabledInterface)
+					}
+				}
+			}
+		}
+	}
+	return LastDisabledInterface, nil
+}
+
+// DisableManagementInterface is a function that enables or disables the management interface on a FlashArray.
+// It takes a FlashArray client, a management IP address, and a boolean value to indicate whether to enable or disable the interface.
+// It returns the name of the last interface that was toggled and an error if any occurred during the process.
+func DisableManagementInterface(PureFaClientVif *newflasharray.Client, faMgmtIP string, enabled bool) (string, error) {
+	var LastDisabledInterface string
+	networkInterfaces, err := pureutils.ListAllInterfaces(PureFaClientVif)
+	if err != nil {
+		return "", fmt.Errorf("failed to list network interfaces on FA with IP [%s]: %v", faMgmtIP, err)
 	}
 	for _, nw := range networkInterfaces {
 		for _, networkInterface := range nw.Items {
@@ -8411,29 +8440,18 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
 			secret, err = pureutils.GetPXPureSecret(volDriverNamespace)
 			log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
-			PureFAMgmtMap, err = pureutils.GetFAMgmtEndPointFromPXPureSecret(secret)
+			PureFAMgmtMap, err = pureutils.GetFAMgmtIPFromPXPureSecret(secret)
 			log.FailOnError(err, "failed to get FA management map from secret [%s/%s]", PureSecretName, volDriverNamespace)
 			for mgmtIP := range PureFAMgmtMap {
 				PureMgmtIPList = append(PureMgmtIPList, mgmtIP)
 			}
 			faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
 			faClient := PureFAMgmtMap[faMgmtIP]
-			apiToken, err := pureutils.GetApiTokenForMgmtEndpoints(secret, faMgmtIP)
-			log.FailOnError(err, "failed to get api token for FA with IP [%s]", faMgmtIP)
-			PureFaClientVif, err = getVifInterface(faClient, faMgmtIP, apiToken)
+			apiToken, err := pureutils.GetApiTokenForFAMgmtEndpoint(secret, faMgmtIP)
+			log.FailOnError(err, "failed to get API token for FA with IP [%s]", faMgmtIP)
+			PureFaClientVif, err = GetVifInterface(faClient, faMgmtIP, apiToken)
 			log.FailOnError(err, "failed to get vif interface for FA with IP [%s]", faMgmtIP)
-			LastDisabledInterface, err = toggleManagementInterface(PureFaClientVif, faMgmtIP, false)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("failed to toggle network interfaces on FA with IP [%s]", faMgmtIP))
-		} else {
-			prevMgmtIPIndex := (PureMgmtIpCounter - 1) % len(PureMgmtIPList)
-			prevMgmtIP := PureMgmtIPList[prevMgmtIPIndex]
-			log.InfoD("Enable the Last Disabled Interface")
-			_, err := pureutils.SetInterfaceEnabled(PureFaClientVif, LastDisabledInterface, true)
-			log.FailOnError(err, "failed to enable network interfaces on FA with IP [%s]", prevMgmtIP)
-			//Disable the other MGMT interface that is provided in pure.json file
-			currMgmtIPIndex := PureMgmtIpCounter % len(PureMgmtIPList)
-			faMgmtIP := PureMgmtIPList[currMgmtIPIndex]
-			LastDisabledInterface, err = toggleManagementInterface(PureFaClientVif, faMgmtIP, false)
+			LastDisabledInterface, err = DisableManagementInterface(PureFaClientVif, faMgmtIP, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("failed to toggle network interfaces on FA with IP [%s]", faMgmtIP))
 		}
 		PureMgmtIpCounter += 1
@@ -8473,10 +8491,47 @@ func EnableAutoFSTrim() {
 	dash.VerifyFatal(isPXNodeAvailable, true, "No PX node available in the cluster")
 }
 
+// ToggleMgmtNetworkInterfaces is a function that toggles the management network interfaces on a FlashArray.
+// It enables the last disabled interface and disables the current management interface.
+//
+// Parameters:
+// PureMgmtIpCounter: An integer representing the counter for the management IP.
+// PureMgmtIPList: A slice of strings representing the list of management IP addresses.
+// PureFaClientVif: A pointer to a newflasharray.Client object representing the FlashArray client.
+// LastDisabledInterface: A string representing the last disabled interface.
+//
+// Returns:
+// A string representing the last disabled interface and an error if any occurred during the process.
+func ToggleMgmtNetworkInterfaces(PureMgmtIpCounter int, PureMgmtIPList []string, PureFaClientVif *newflasharray.Client, LastDisabledInterface string) (string, error) {
+	prevMgmtIPIndex := (PureMgmtIpCounter - 1) % len(PureMgmtIPList)
+	prevMgmtIP := PureMgmtIPList[prevMgmtIPIndex]
+	log.InfoD("Enable the Last Disabled Interface")
+	_, err := pureutils.SetInterfaceEnabled(PureFaClientVif, LastDisabledInterface, true)
+	if err != nil {
+		return "", fmt.Errorf("failed to enable network interfaces on FA with IP [%s]: %v", prevMgmtIP, err)
+	}
+
+	// Disable the other MGMT interface that is provided in pure.json file
+	currMgmtIPIndex := PureMgmtIpCounter % len(PureMgmtIPList)
+	faMgmtIP := PureMgmtIPList[currMgmtIPIndex]
+	LastDisabledInterface, err = DisableManagementInterface(PureFaClientVif, faMgmtIP, false)
+	if err != nil {
+		return "", fmt.Errorf("failed to toggle network interfaces on FA with IP [%s]: %v", faMgmtIP, err)
+	}
+
+	return LastDisabledInterface, nil
+}
+
 // EndTorpedoTest ends the logging for torpedo test
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
+	if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
+		var err error
+		LastDisabledInterface, err = ToggleMgmtNetworkInterfaces(PureMgmtIpCounter, PureMgmtIPList, PureFaClientVif, LastDisabledInterface)
+		dash.VerifyFatal(err, nil, "Failed to Toggle the Management interface")
+	}
+
 }
 
 // StartPxBackupTorpedoTest starts the logging for Px Backup torpedo test

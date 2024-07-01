@@ -82,8 +82,7 @@ var _ = AfterSuite(func() {
 	}
 
 	// check if TOGGLE_PURE_MGMT_IP is enabled for the test run and if yes then make the last disabled interface up
-	_, pureMgmtIPExists := os.LookupEnv("TOGGLE_PURE_MGMT_IP")
-	if pureMgmtIPExists {
+	if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
 		log.InfoD("Make the last disabled interface up")
 		_, err := pureutils.SetInterfaceEnabled(PureFaClientVif, LastDisabledInterface, true)
 		log.FailOnError(err, "Failed to enable interface")

@@ -59,7 +59,7 @@ func GetFAClientMapFromPXPureSecret(secret PXPureSecret) (map[string]*flasharray
 }
 
 // GetFAMgmtIPFromPXPureSecret create a map with mgmt endpoint as key and FA client as value (Specifically for multiple management endpoints)
-func GetFAMgmtEndPointFromPXPureSecret(secret PXPureSecret) (map[string]*tpflasharray.Client, error) {
+func GetFAMgmtIPFromPXPureSecret(secret PXPureSecret) (map[string]*tpflasharray.Client, error) {
 	clientMap := make(map[string]*tpflasharray.Client)
 	for _, fa := range secret.Arrays {
 		//split fa.MgmtEndPoint by , and do pureclientconnect for it and add it to clientMap
@@ -77,16 +77,24 @@ func GetFAMgmtEndPointFromPXPureSecret(secret PXPureSecret) (map[string]*tpflash
 }
 
 // GetFAMgmtEndPoints , Get Lists of all management Endpoints from FA Secrets
-func GetFAMgmtEndPoints(secret PXPureSecret) []string {
+func GetFAMgmtEndPoints(secret PXPureSecret) ([]string, error) {
+	if secret.Arrays == nil || len(secret.Arrays) == 0 {
+		return nil, fmt.Errorf("no management endpoints available")
+	}
+
 	mgmtEndpoints := []string{}
 	for _, faDetails := range secret.Arrays {
 		mgmtEndpoints = append(mgmtEndpoints, faDetails.MgmtEndPoint)
 	}
-	return mgmtEndpoints
+	return mgmtEndpoints, nil
 }
 
 // GetApiTokenForMgmtEndpoints Returns API token for Mgmt Endpoints
-func GetApiTokenForMgmtEndpoints(secret PXPureSecret, mgmtEndPoint string) (string, error) {
+func GetApiTokenForFAMgmtEndpoint(secret PXPureSecret, mgmtEndPoint string) (string, error) {
+	if mgmtEndPoint == "" {
+		return "", fmt.Errorf("Management Endpoint provided is Empty")
+
+	}
 	for _, faDetails := range secret.Arrays {
 		//split the mgmtEndPoint by , and check if it is present in the faDetails.MgmtEndPoint
 		//if present return the APIToken
@@ -96,8 +104,9 @@ func GetApiTokenForMgmtEndpoints(secret PXPureSecret, mgmtEndPoint string) (stri
 				return faDetails.APIToken, nil
 			}
 		}
+
 	}
-	return "", fmt.Errorf("mgmtEndPoint is invalid or not found in PXPureSecret")
+	return "", fmt.Errorf("mgmtEndPoint is not found in pure.json")
 }
 
 // CreateVolumeOnFABackend Creates Volume on FA Backend
