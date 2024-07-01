@@ -563,8 +563,11 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", Label(TestCaseLabelsM
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, scheduleName := range scheduleNames {
+				log.Infof("The schedule name is %s", scheduleName)
 				latestScheduleBkpName, err := GetLatestScheduleBackupName(ctx, scheduleName, BackupOrgID)
 				log.FailOnError(err, "Error while getting latest schedule backup name")
+				log.Infof("The latest schedule backup name is %s", latestScheduleBkpName)
+				time.Sleep(2 * time.Minute)
 				err = BackupSuccessCheckWithValidation(ctx, latestScheduleBkpName, appContextsToBackupMap[scheduleName], BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of latest schedule backup [%s]", latestScheduleBkpName))
 			}
