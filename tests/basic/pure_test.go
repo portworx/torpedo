@@ -5937,6 +5937,7 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 			return volMap
 		}
 		volMap := inspectVolumes(contexts)
+		log.InfoD("volmap: %v", volMap)
 		defer DestroyApps(contexts, nil)
 		stepLog := "Stop portworx on all Nodes"
 		Step(stepLog, func() {
@@ -5967,6 +5968,7 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 			faErr = CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
 			log.FailOnError(faErr, "Failed to check if volumes created exist in FA")
 			volMapAfterRestart := inspectVolumes(contexts)
+			log.InfoD("volmap after restart : %v", volMapAfterRestart)
 			for key, value1 := range volMap {
 				if value2, found := volMapAfterRestart[key]; found {
 					if value1 != value2 {
