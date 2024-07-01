@@ -4,6 +4,7 @@ import (
 	"bytes"
 	context1 "context"
 	"fmt"
+	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/watch"
 	"math/rand"
@@ -10259,4 +10260,98 @@ func GetApplicationSpecForFeature(feature string) ([]string, error) {
 		return nil, fmt.Errorf("platform %s not found for feature %s", platform, feature)
 	}
 	return nil, fmt.Errorf("feature %s not found", feature)
+}
+
+// GetVSCMapping gets all storageClasses in cluster, retrieves their provisioners, and maps them to their corresponding VolumeSnapshotClass.
+func GetVSCMapping() (map[string]string, error) {
+	// Create a map to store the provisioner and corresponding VolumeSnapshotClass
+	provisionerToSnapshotClassMap := make(map[string]string)
+	k8sStorage := storage.Instance()
+	// Get the list of StorageClasses
+	scList, err := k8sStorage.GetAllStorageClasses()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the list of VolumeSnapshotClasses
+	snapshotClasses, err := Inst().S.GetAllSnapshotClasses()
+	if err != nil {
+		return nil, err
+	}
+
+	snapshotDriverToClassMap := make(map[string]string)
+	for _, snapshotClass := range snapshotClasses.Items {
+		snapshotDriverToClassMap[snapshotClass.Driver] = snapshotClass.Name
+	}
+
+	for _, sc := range scList.Items {
+		scProvisioner := sc.Provisioner
+		if snapshotClassName, exists := snapshotDriverToClassMap[scProvisioner]; exists {
+			provisionerToSnapshotClassMap[scProvisioner] = snapshotClassName
+		}
+	}
+
+	return provisionerToSnapshotClassMap, nil
+}
+
+// UpdateDriverWithEnvVariable updates a driver's environment variables ,If the variables exist, their values are updated; otherwise, they are added.
+func UpdateDriverWithEnvVariable(envVariables map[string]string) error {
+	// Get PX StorageCluster
+	clusterSpec, err := Inst().V.GetDriver()
+	if err != nil {
+		return err
+	}
+	envVarMap := make(map[string]corev1.EnvVar)
+
+	// Add existing environment variables to the map
+	for _, env := range clusterSpec.Spec.Env {
+		envVarMap[env.Name] = env
+	}
+
+	// Update the map with environment variables
+	for k, v := range envVariables {
+		if existingEnvVar, exists := envVarMap[k]; exists {
+			// If the environment variable already exists and ValueFrom is nil, update the value
+			if existingEnvVar.ValueFrom == nil {
+				existingEnvVar.Value = v
+			}
+			envVarMap[k] = existingEnvVar
+		} else {
+			// Otherwise, add the new environment variable
+			envVarMap[k] = corev1.EnvVar{Name: k, Value: v}
+		}
+	}
+
+	// Convert the map back to a slice of environment variables
+	var updatedEnvVarList []corev1.EnvVar
+	for _, envVar := range envVarMap {
+		updatedEnvVarList = append(updatedEnvVarList, envVar)
+	}
+
+	clusterSpec.Spec.Env = updatedEnvVarList
+
+	pxOperator := operator.Instance()
+	_, err = pxOperator.UpdateStorageCluster(clusterSpec)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Deleting PX pods for reloading the runtime Opts")
+	err = DeletePXPods(clusterSpec.Namespace)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Sleeping for 5 minutes for PX cluster to stabilise after deletion of pods")
+	time.Sleep(5 * time.Minute)
+	_, err = optest.ValidateStorageClusterIsOnline(clusterSpec, 10*time.Minute, 3*time.Minute)
+	if err != nil {
+		return err
+	}
+
+	log.InfoD("Waiting for PX Nodes to be up")
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := Inst().V.WaitDriverUpOnNode(n, 15*time.Minute); err != nil {
+			return err
+		}
+	}
+	return nil
 }
