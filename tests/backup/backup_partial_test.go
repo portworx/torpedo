@@ -1286,13 +1286,14 @@ var _ = Describe("{PartialBackupSuccessWithAzureEndpoint}", Label(TestCaseLabels
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
-			backupLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
+			customBucketName := fmt.Sprintf("%s-%s-%v", provider, "custom", RandomString(4))
+			backupLocationName = fmt.Sprintf("%s-bl-%s", customBucketName, RandomString(4))
 			cloudCredUID = uuid.New()
 			backupLocationUID = uuid.New()
 			backupLocationMap[backupLocationUID] = backupLocationName
 			err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
-			err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+			err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, customBucketName, BackupOrgID, "", true)
 			dash.VerifyFatal(err, nil, "Creating backup location")
 		})
 
