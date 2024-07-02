@@ -5830,7 +5830,7 @@ var _ = Describe("{RestartPxandRestartNodeWithMgmtInterfaceDown}", func() {
 			contexts = append(contexts, context...)
 		}
 		ValidateApplications(contexts)
-		defer DestroyApps(contexts, nil)
+		//defer DestroyApps(contexts, nil)
 		//GetVolumeNameFromPvc will collect volume name from pvc which indirect will be the px volume name and this name is suffix to the volumes created in FA backend
 		GetVolumeNameFromPvc := func(namespace string, pvclist []string) []string {
 			allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
