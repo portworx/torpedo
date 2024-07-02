@@ -4779,7 +4779,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 		stepLog := "Deploy FADA app"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			taskName := "Clone-fada-app-volume" + Inst().InstanceID
+			taskName := "clone-fada-app-volume" + Inst().InstanceID
 			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
 				CsiAppKeys:         Inst().AppList,
@@ -6171,6 +6171,134 @@ var _ = Describe("{VerifyPoolCreateInProperZones}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+var _ = Describe("{RestartPXonAllWorkerNodesandCheckVolumes}", func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-24005
+	   1.Deploy Applications
+	   2.Validate Applications are Deployed
+	   3.Collect the existing Volume status (state,status) before stopping the PX
+	   4.Stop portworx on all nodes
+	   5.Restart all the worker nodes
+	   6.Make sure Both portworx and node are up.
+	   7.Collect the  Volume status (state,status) after restarting the PX and compare with the status before stopping the PX
+	   8.Validate the Applications are running
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPXonAllWorkerNodesandCheckVolumes",
+			"Stop PX on all nodes at once and then wait for a minute and enable px on all nodes and check if px is up and validate applications", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	itLog := "RebootAllWorkerNodesandCheckPX"
+	It(itLog, func() {
+		var listofFadaPvc []string
+		// VolStruct consists of Two Values of a particular volume -its state and status
+		type VolStruct struct {
+			State  string
+			Status string
+		}
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "Failed to get FA details used")
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := "restartpxonworkernodes" + Inst().InstanceID
+			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				CsiAppKeys:         Inst().CsiAppList,
+				StorageProvisioner: Provisioner,
+				Namespace:          taskName,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+			contexts = append(contexts, context...)
+		}
+		ValidateApplications(contexts)
+		//GetVolumeNameFromPvc will collect volume name from pvc which indirect will be the px volume name and this name is suffix to the volumes created in FA backend
+		GetPureVolumeNameFromPvc := func(namespace string, pvclist []string) []string {
+			allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+			log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
+			for _, p := range allPvcList.Items {
+				scForPvc, err := k8sCore.GetStorageClassForPVC(&p)
+				log.FailOnError(err, "Failed to get storage class for pvc [%s]", p.Name)
+				backend, _ := scForPvc.Parameters["backend"]
+				if backend == "pure_block" {
+					pvclist = append(pvclist, p.Spec.VolumeName)
+				}
+
+			}
+			return pvclist
+		}
+		log.InfoD("waiting for a minute for volume name to populate")
+		time.Sleep(1 * time.Minute)
+		//collect volumes names which are required to find out the volumes in FA and FB backend
+		for _, ctx := range contexts {
+			listofFadaPvc = GetPureVolumeNameFromPvc(ctx.ScheduleOptions.Namespace, listofFadaPvc)
+		}
+		faErr := CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
+		log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+		//inspectVolumes Collects the state and status of the volumes before and after the restart of the PX
+		inspectVolumes := func(contexts []*scheduler.Context) map[string]VolStruct {
+			volMap := make(map[string]VolStruct)
+			for _, ctx := range contexts {
+				volumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes for context [%s]", ctx.App.Key)
+				for _, vol := range volumes {
+					apiVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "Failed to inspect the volume [%v]", vol.ID)
+					volMap[apiVol.Id] = VolStruct{apiVol.State.String(), apiVol.Status.String()}
+				}
+			}
+			return volMap
+		}
+		volMap := inspectVolumes(contexts)
+		stepLog := "Stop portworx on all Nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Stopping portworx  Service on Nodes")
+			err := Inst().V.StopDriver(node.GetStorageDriverNodes(), false, nil)
+			dash.VerifyFatal(err, nil, "Failed to stop portworx on nodes")
+			log.InfoD("stopped portworx on all nodes")
+		})
+		stepLog = " Now wait for a minute and make PX up"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			time.Sleep(1 * time.Minute)
+			log.InfoD("Starting portworx Service on Nodes")
+			for _, node := range node.GetStorageDriverNodes() {
+				err := Inst().V.StartDriver(node)
+				log.FailOnError(err, "Failed to start portworx on node [%s]", node.Name)
+			}
+			for _, node := range node.GetStorageDriverNodes() {
+				err := Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", node.Name))
+			}
+			log.InfoD("Portworx is up on all nodes")
+		})
+		time.Sleep(1 * time.Minute)
+		log.InfoD("Waiting for a minute for cluster to stablize and volumes to return to their original state before validating")
+		stepLog = "Validate Volumes After PX restart and compare the state ,status of the volumes before the Restart of the PX"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			faErr = CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
+			log.FailOnError(faErr, "Failed to check if volumes created exist in FA")
+			volMapAfterRestart := inspectVolumes(contexts)
+			for volId, volDetailsBeforeRestart := range volMap {
+				if volDetailsAfterRestart, found := volMapAfterRestart[volId]; found {
+					if volDetailsBeforeRestart != volDetailsAfterRestart {
+						log.FailOnError(fmt.Errorf("Volume [%s] state or status changed after restart Before Restart : [%v] ,After Restart [%v]", volId, volDetailsBeforeRestart, volDetailsAfterRestart), "Volume state or status changed after restart")
+					}
+				} else {
+					log.FailOnError(fmt.Errorf("Volume [%s] not found in the map after restart", volId), "Volume not found in the map after restart")
+				}
+			}
+		})
+
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		DestroyApps(contexts, nil)
 		AfterEachTest(contexts)
 	})
 })
