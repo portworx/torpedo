@@ -42,7 +42,7 @@ type PodItems struct {
 	Destroyed               bool              `json:"destroyed"`
 	Arrays                  []Array           `json:"arrays"`
 	Footprint               int64             `json:"footprint"`
-	TimeRemaining           *string           `json:"time_remaining"`
+	TimeRemaining           int64             `json:"time_remaining"`
 	PromotionStatus         string            `json:"promotion_status"`
 	QuotaLimit              int               `json:"quota_limit"`
 	EradicationConfig       EradicationConfig `json:"eradication_config"`
@@ -64,7 +64,7 @@ type PodTotal struct {
 	Destroyed               *bool             `json:"destroyed"`
 	Arrays                  []Array           `json:"arrays"`
 	Footprint               int64             `json:"footprint"`
-	TimeRemaining           *string           `json:"time_remaining"`
+	TimeRemaining           int64             `json:"time_remaining"`
 	PromotionStatus         *string           `json:"promotion_status"`
 	QuotaLimit              *int              `json:"quota_limit"`
 	EradicationConfig       EradicationConfig `json:"eradication_config"`

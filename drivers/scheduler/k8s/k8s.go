@@ -4759,7 +4759,7 @@ func (k *K8s) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName, snapshotNa
 		}
 	}
 
-	log.Infof("[%v] Deleted Snapshot: %v", ctx.App.Key, snapshotName)
+	log.Infof("[%v] Deleted Snapshot: %v on namespace [%v]", ctx.App.Key, snapshotName, snapshotNameSpace)
 
 	return nil
 
