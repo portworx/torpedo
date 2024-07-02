@@ -80,7 +80,7 @@ func (r *Rancher) GetRancherClusterParametersValue() (*RancherClusterParameters,
 	// TODO Rancher URL for cloud cluster will not be fetched from master node IP
 	masterNodeName := node.GetMasterNodes()[0].Name
 	log.Infof("The master node here is %v", masterNodeName)
-	endpoint := "https://" + masterNodeName + "/v3"
+	endpoint := "https://ip-10-13-153-35.pwx.purestorage.com/v3"
 	rkeParameters.Endpoint = endpoint
 	rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
 	if rkeToken == "" {
@@ -97,15 +97,16 @@ func (r *Rancher) UpdateRancherClient(clusterName string) error {
 	var rkeParametersValue RancherClusterParameters
 	var err error
 	var rkeToken string
-	masterNodeName := node.GetMasterNodes()[0].Name
-	endpoint := "https://" + masterNodeName + "/v3"
+	var endpoint string
 	if clusterName == "destination-config" {
 		rkeToken = os.Getenv("DESTINATION_RKE_TOKEN")
+		endpoint = "https://ip-10-13-199-116.pwx.purestorage.com/v3"
 		if rkeToken == "" {
 			return fmt.Errorf("env variable DESTINATION_RKE_TOKEN should not be empty")
 		}
 	} else if clusterName == "source-config" {
 		rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
+		endpoint = "https://ip-10-13-153-35.pwx.purestorage.com/v3"
 		if rkeToken == "" {
 			return fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
 		}
