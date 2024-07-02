@@ -133,6 +133,7 @@ const (
 	PartialBackupSuccessWithPxAndKDMPVolumes                                           TestCaseName = "PartialBackupSuccessWithPxAndKDMPVolumes"
 	PartialBackupWithLowerStorkVersion                                                 TestCaseName = "PartialBackupWithLowerStorkVersion"
 	PartialBackupSuccessWithAzureEndpoint                                              TestCaseName = "PartialBackupSuccessWithAzureEndpoint"
+	PSALowerPrivilegeToHigherPrivilegeWithProjectMapping                               TestCaseName = "PSALowerPrivilegeToHigherPrivilegeWithProjectMapping"
 )
 
 // Test case labels
@@ -264,6 +265,7 @@ const (
 	PartialBackupSuccessWithPxAndKDMPVolumesLabel                                           TestCaseLabel = "PartialBackupSuccessWithPxAndKDMPVolumes"
 	PartialBackupWithLowerStorkVersionLabel                                                 TestCaseLabel = "PartialBackupWithLowerStorkVersion"
 	PartialBackupSuccessWithAzureEndpointLabel                                              TestCaseLabel = "PartialBackupSuccessWithAzureEndpoint"
+	PSALowerPrivilegeToHigherPrivilegeWithProjectMappingLabel                               TestCaseLabel = "PSALowerPrivilegeToHigherPrivilegeWithProjectMapping"
 )
 
 // Common Labels
@@ -528,4 +530,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	PartialBackupSuccessWithPxAndKDMPVolumes:                         {PartialBackupSuccessWithPxAndKDMPVolumesLabel, PartialBackupLabel},
 	PartialBackupWithLowerStorkVersion:                               {PartialBackupWithLowerStorkVersionLabel, PartialBackupLabel},
 	PartialBackupSuccessWithAzureEndpoint:                            {PartialBackupSuccessWithAzureEndpointLabel, PartialBackupLabel, AzureBackupLocationLabel},
+	PSALowerPrivilegeToHigherPrivilegeWithProjectMapping:             {PSALowerPrivilegeToHigherPrivilegeWithProjectMappingLabel, rkePipelineNightly},
 }
