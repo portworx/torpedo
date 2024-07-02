@@ -273,7 +273,7 @@ var _ = Describe("{BackupCSIVolumesWithPartialSuccess}", Label(TestCaseLabelsMap
 })
 
 // This testcase verified the partial backup success when few Px volumes snapshots are successful and few are failed
-var _ = Describe("{PartialBackupSuccessWithPxVolumes}", func() {
+var _ = Describe("{PartialBackupSuccessWithPxVolumes}", Label(TestCaseLabelsMap[PartialBackupSuccessWithPxVolumes]...), func() {
 
 	var (
 		scheduledAppContexts []*scheduler.Context
@@ -464,7 +464,7 @@ var _ = Describe("{PartialBackupSuccessWithPxVolumes}", func() {
 })
 
 // This testcase Verifies partial backup and restore when both Px and KDMP volumes are backed up with failing KDMP backups
-var _ = Describe("{PartialBackupSuccessWithPxAndKDMPVolumes}", func() {
+var _ = Describe("{PartialBackupSuccessWithPxAndKDMPVolumes}", Label(TestCaseLabelsMap[PartialBackupSuccessWithPxAndKDMPVolumes]...), func() {
 
 	var (
 		backupNames            []string
@@ -983,7 +983,7 @@ var _ = Describe("{BackupStateTransitionForScheduledBackups}", Label(TestCaseLab
 })
 
 // This testcase verifies that the restoring from a partial backup with a lower stork version on the destination fails with the correct error message
-var _ = Describe("{PartialBackupWithLowerStorkVersion}", func() {
+var _ = Describe("{PartialBackupWithLowerStorkVersion}", Label(TestCaseLabelsMap[PartialBackupWithLowerStorkVersion]...), func() {
 	var (
 		backupNames          []string
 		scheduledAppContexts []*scheduler.Context
@@ -1217,7 +1217,7 @@ var _ = Describe("{PartialBackupWithLowerStorkVersion}", func() {
 })
 
 // This testcase verifies the partial backup success when few Px volumes backups failed while taking backup to Azure Global Location when env variable is set to non-global location.
-var _ = Describe("{PartialBackupSuccessWithAzureEndpoint}", func() {
+var _ = Describe("{PartialBackupSuccessWithAzureEndpoint}", Label(TestCaseLabelsMap[PartialBackupSuccessWithAzureEndpoint]...), func() {
 
 	var (
 		backupNames                []string
@@ -1240,7 +1240,7 @@ var _ = Describe("{PartialBackupSuccessWithAzureEndpoint}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("PartialBackupSuccessWithAzureEndpoint", "verifies the partial backup success when few Px volumes backups failed while taking backup to Azure Global Location when env variable is set to non-global location", nil, 299236, Ak, Q2FY25)
+		StartPxBackupTorpedoTest("PartialBackupSuccessWithAzureEndpoint", "Verifies the partial backup success when few Px volumes backups failed while taking backup to Azure Global Location when env variable is set to non-global location", nil, 299236, Ak, Q2FY25)
 		// This testcase is specific to Azure provider with Px Volumes
 		provider = "azure"
 		numOfNamespace := 1

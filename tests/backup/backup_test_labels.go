@@ -129,6 +129,10 @@ const (
 	BackupCSIVolumesWithPartialSuccess                                                 TestCaseName = "BackupCSIVolumesWithPartialSuccess"
 	RestoreFromHigherPrivilegedNamespaceToLower                                        TestCaseName = "RestoreFromHigherPrivilegedNamespaceToLower"
 	BackupStateTransitionForScheduledBackups                                           TestCaseName = "BackupStateTransitionForScheduledBackups"
+	PartialBackupSuccessWithPxVolumes                                                  TestCaseName = "PartialBackupSuccessWithPxVolumes"
+	PartialBackupSuccessWithPxAndKDMPVolumes                                           TestCaseName = "PartialBackupSuccessWithPxAndKDMPVolumes"
+	PartialBackupWithLowerStorkVersion                                                 TestCaseName = "PartialBackupWithLowerStorkVersion"
+	PartialBackupSuccessWithAzureEndpoint                                              TestCaseName = "PartialBackupSuccessWithAzureEndpoint"
 )
 
 // Test case labels
@@ -256,6 +260,10 @@ const (
 	BackupStateTransitionForScheduledBackupsLabel                                           TestCaseLabel = "BackupStateTransitionForScheduledBackups"
 	EnableNsAndClusterLevelPSAWithBackupAndRestoreLabel                                     TestCaseLabel = "EnableNsAndClusterLevelPSAWithBackupAndRestore"
 	RestoreFromHigherPrivilegedNamespaceToLowerLabel                                        TestCaseLabel = "RestoreFromHigherPrivilegedNamespaceToLower"
+	PartialBackupSuccessWithPxVolumesLabel                                                  TestCaseLabel = "PartialBackupSuccessWithPxVolumes"
+	PartialBackupSuccessWithPxAndKDMPVolumesLabel                                           TestCaseLabel = "PartialBackupSuccessWithPxAndKDMPVolumes"
+	PartialBackupWithLowerStorkVersionLabel                                                 TestCaseLabel = "PartialBackupWithLowerStorkVersion"
+	PartialBackupSuccessWithAzureEndpointLabel                                              TestCaseLabel = "PartialBackupSuccessWithAzureEndpoint"
 )
 
 // Common Labels
@@ -379,13 +387,19 @@ const (
 
 // Backup location labels
 const (
-	NfsBackupLocationLabel = "nfs"
-	S3BackupLocationLabel  = "s3"
+	NfsBackupLocationLabel   = "nfs"
+	S3BackupLocationLabel    = "s3"
+	AzureBackupLocationLabel = "Azure"
 )
 
 // App labels
 const (
 	KubevirtAppLabel = "kubevirt-app"
+)
+
+// Feature labels
+const (
+	PartialBackupLabel = "PartialBackup"
 )
 
 var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
@@ -506,8 +520,12 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	CloudSnapshotMissingValidationForNFSLocation:                     {CloudSnapshotMissingValidationForNFSLocationLabel},
 	MultipleProvisionerCsiKdmpBackupAndRestore:                       {MultipleProvisionerCsiKdmpBackupAndRestoreLabel},
 	KubevirtVMMigrationTest:                                          {KubevirtVMMigrationTestLabel, KubevirtAppLabel},
-	BackupCSIVolumesWithPartialSuccess:                               {BackupCSIVolumesWithPartialSuccessLabel},
-	BackupStateTransitionForScheduledBackups:                         {BackupStateTransitionForScheduledBackupsLabel},
+	BackupCSIVolumesWithPartialSuccess:                               {BackupCSIVolumesWithPartialSuccessLabel, PartialBackupLabel},
+	BackupStateTransitionForScheduledBackups:                         {BackupStateTransitionForScheduledBackupsLabel, PartialBackupLabel},
 	EnableNsAndClusterLevelPSAWithBackupAndRestore:                   {EnableNsAndClusterLevelPSAWithBackupAndRestoreLabel},
 	RestoreFromHigherPrivilegedNamespaceToLower:                      {RestoreFromHigherPrivilegedNamespaceToLowerLabel, rkePipelineNightly},
+	PartialBackupSuccessWithPxVolumes:                                {PartialBackupSuccessWithPxVolumesLabel, PartialBackupLabel},
+	PartialBackupSuccessWithPxAndKDMPVolumes:                         {PartialBackupSuccessWithPxAndKDMPVolumesLabel, PartialBackupLabel},
+	PartialBackupWithLowerStorkVersion:                               {PartialBackupWithLowerStorkVersionLabel, PartialBackupLabel},
+	PartialBackupSuccessWithAzureEndpoint:                            {PartialBackupSuccessWithAzureEndpointLabel, PartialBackupLabel, AzureBackupLocationLabel},
 }
