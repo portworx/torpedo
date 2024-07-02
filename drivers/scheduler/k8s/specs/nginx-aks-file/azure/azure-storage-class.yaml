@@ -1,0 +1,15 @@
+##### Azure file storage class
+allowVolumeExpansion: true
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nginx-sc
+mountOptions:
+  - mfsymlinks
+  - actimeo=30
+  - nosharesock
+parameters:
+  skuName: Standard_LRS
+provisioner: file.csi.azure.com
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
