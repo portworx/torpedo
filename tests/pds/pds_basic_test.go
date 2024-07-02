@@ -75,31 +75,30 @@ var _ = BeforeSuite(func() {
 		})
 
 		steplog = "Create backup bucket, targets and credentials"
-		Step(steplog, func() {
-			if params.BackUpAndRestore.RunBkpAndRestrTest {
-				credName := targetName + pdsbkp.RandString(8)
-				bkpClient, err = pdsbkp.InitializePdsBackup()
-				log.FailOnError(err, "Failed to initialize backup for pds.")
-				bucketName = strings.ToLower("pds-automation-" + pdsbkp.RandString(5))
-				switch params.BackUpAndRestore.TargetLocation {
-				case "s3":
-					log.InfoD("creating creds on s3")
-					bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), bucketName, deploymentTargetID)
-					log.FailOnError(err, "Failed to create S3 backup target.")
-					log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-					awsBkpTargets = append(awsBkpTargets, bkpTarget)
-				case "s3-comp":
-					log.InfoD("creating creds on s3 compatible - minio")
-					bkpTarget, err = bkpClient.CreateAwsS3MinioBackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), bucketName, deploymentTargetID)
-					log.FailOnError(err, "Failed to create S3 compatible backup target.")
-					log.InfoD("AWS S3 compatible target - %v created successfully", bkpTarget.GetName())
-				case "Azure":
-					log.InfoD("creating creds on azure")
-				default:
-					log.InfoD("creatins creds on s3 compatible - minio by default")
-				}
+		log.InfoD(steplog)
+		if params.BackUpAndRestore.RunBkpAndRestrTest {
+			credName := targetName + pdsbkp.RandString(8)
+			bkpClient, err = pdsbkp.InitializePdsBackup()
+			log.FailOnError(err, "Failed to initialize backup for pds.")
+			bucketName = strings.ToLower("pds-automation-" + pdsbkp.RandString(5))
+			switch params.BackUpAndRestore.TargetLocation {
+			case "s3":
+				log.InfoD("creating creds on s3")
+				bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), bucketName, deploymentTargetID)
+				log.FailOnError(err, "Failed to create S3 backup target.")
+				log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
+				awsBkpTargets = append(awsBkpTargets, bkpTarget)
+			case "s3-comp":
+				log.InfoD("creating creds on s3 compatible - minio")
+				bkpTarget, err = bkpClient.CreateAwsS3MinioBackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), bucketName, deploymentTargetID)
+				log.FailOnError(err, "Failed to create S3 compatible backup target.")
+				log.InfoD("AWS S3 compatible target - %v created successfully", bkpTarget.GetName())
+			case "Azure":
+				log.InfoD("creating creds on azure")
+			default:
+				log.InfoD("creatins creds on s3 compatible - minio by default")
 			}
-		})
+		}
 
 		steplog = "Update deployment target with cluster issuer"
 		Step(steplog, func() {
