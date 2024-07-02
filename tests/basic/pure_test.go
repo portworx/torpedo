@@ -4268,7 +4268,7 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 		wgfada.Add(1)
 		createFADAVolumes := func(wg *sync.WaitGroup) {
 			defer GinkgoRecover()
-			wg.Done()
+			defer wg.Done()
 			for _, eachNs := range namespace {
 				// Create 100 PVCs on the Namespace
 				for i := 0; i < 100; i++ {
@@ -4285,7 +4285,7 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 		var wgfbda sync.WaitGroup
 		createFBDAVolumes := func(wg *sync.WaitGroup) {
 			defer GinkgoRecover()
-			wg.Done()
+			defer wg.Done()
 			for _, eachNs := range namespace {
 				// Create 100 PVCs on the Namespace
 				for i := 0; i < 100; i++ {
