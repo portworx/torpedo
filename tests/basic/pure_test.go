@@ -5804,7 +5804,7 @@ var _ = Describe("{RestartPxandRestartNodeWithMgmtInterfaceDown}", func() {
 		var (
 			LastDisabledInterface string
 			PureFaClientVif       *newFlashArray.Client
-			FadaPvcList           []string
+			//FadaPvcList           []string
 		)
 		pxNodes := node.GetStorageDriverNodes()
 		flashArrays, err := GetFADetailsUsed()
@@ -5823,28 +5823,28 @@ var _ = Describe("{RestartPxandRestartNodeWithMgmtInterfaceDown}", func() {
 		}
 		ValidateApplications(contexts)
 		defer DestroyApps(contexts, nil)
-		//GetVolumeNameFromPvc will collect volume name from pvc which indirect will be the px volume name and this name is suffix to the volumes created in FA backend
-		GetVolumeNameFromPvc := func(namespace string, pvclist []string) []string {
-			allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
-			log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
-			for _, p := range allPvcList.Items {
-				scForPvc, err := k8sCore.GetStorageClassForPVC(&p)
-				log.FailOnError(err, "Failed to get storage class for pvc [%s]", p.Name)
-				backend, _ := scForPvc.Parameters["backend"]
-				if backend == "pure_block" {
-					pvclist = append(pvclist, p.Spec.VolumeName)
-				}
-			}
-			return pvclist
-		}
-		for _, ctx := range contexts {
-			FadaPvcList = GetVolumeNameFromPvc(ctx.App.NameSpace, nil)
-		}
-		for _, volname := range FadaPvcList {
-			FaDetails, err := GetFADetailsFromVolumeName(volname)
-			log.FailOnError(err, "Failed to get FA details from volume name")
-
-		}
+		////GetVolumeNameFromPvc will collect volume name from pvc which indirect will be the px volume name and this name is suffix to the volumes created in FA backend
+		//GetVolumeNameFromPvc := func(namespace string, pvclist []string) []string {
+		//	allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+		//	log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
+		//	for _, p := range allPvcList.Items {
+		//		scForPvc, err := k8sCore.GetStorageClassForPVC(&p)
+		//		log.FailOnError(err, "Failed to get storage class for pvc [%s]", p.Name)
+		//		backend, _ := scForPvc.Parameters["backend"]
+		//		if backend == "pure_block" {
+		//			pvclist = append(pvclist, p.Spec.VolumeName)
+		//		}
+		//	}
+		//	return pvclist
+		//}
+		//for _, ctx := range contexts {
+		//	FadaPvcList = GetVolumeNameFromPvc(ctx.App.NameSpace, nil)
+		//}
+		//for _, volname := range FadaPvcList {
+		//	FaDetails, err := GetFADetailsFromVolumeName(volname)
+		//	log.FailOnError(err, "Failed to get FA details from volume name")
+		//
+		//}
 
 		stepLog := "Stop portworx on all Nodes"
 		Step(stepLog, func() {
