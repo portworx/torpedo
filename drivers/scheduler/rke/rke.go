@@ -80,14 +80,14 @@ func (r *Rancher) GetRancherClusterParametersValue() (*RancherClusterParameters,
 	var rkeParameters RancherClusterParameters
 	var rkeToken string
 	// TODO Rancher URL for cloud cluster will not be fetched from master node IP
-	endpoint := os.Getenv("RANCHER_URL")
+	endpoint := "https://ip-10-13-232-53.pwx.purestorage.com/v3"
 	if endpoint == "" {
 		return nil, fmt.Errorf("env variable RANCHER_URL should not be empty")
 	}
 	rkeParameters.Endpoint = endpoint
 	rkeToken = os.Getenv("RANCHER_TOKEN")
 	if rkeToken == "" {
-		return nil, fmt.Errorf("env variable RANCHER_TOKEN should not be empty")
+		return nil, fmt.Errorf("env variable RANCHER_TOKEN should not be empty 1")
 	}
 	rkeParameters.Token = rkeToken
 	rkeParameters.AccessKey = strings.Split(rkeToken, ":")[0]
@@ -100,13 +100,13 @@ func (r *Rancher) UpdateRancherClient(clusterName string) error {
 	var rkeParametersValue RancherClusterParameters
 	var err error
 	var rkeToken string
-	endpoint := os.Getenv("RANCHER_URL")
+	endpoint := "https://ip-10-13-232-53.pwx.purestorage.com/v3"
 	if endpoint == "" {
 		return fmt.Errorf("env variable RANCHER_URL should not be empty")
 	}
 	rkeToken = os.Getenv("RANCHER_TOKEN")
 	if rkeToken == "" {
-		return fmt.Errorf("env variable RANCHER_TOKEN should not be empty")
+		return fmt.Errorf("env variable RANCHER_TOKEN should not be empty 2")
 	}
 	accessKey := strings.Split(rkeToken, ":")[0]
 	secretKey := strings.Split(rkeToken, ":")[1]
