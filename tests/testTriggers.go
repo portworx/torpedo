@@ -650,8 +650,11 @@ const (
 	// ScaleFADAVolumeAttach create and attach FADA volumes at scale
 	ScaleFADAVolumeAttach = "ScaleFADAVolumeAttach"
 
-	// RestartKubelet restarts kubelet on the nodes
+	// RestartKubeletService restarts kubelet on the nodes
 	RestartKubeletService = "restartKubeletService"
+
+	// PoolDelete deletes the px pool and create new pool
+	PoolDelete = "poolDelete"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -8259,6 +8262,187 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 			}
 		}
 
+	})
+	updateMetrics(*event)
+}
+
+// TriggerPoolDelete performs pool delete operation
+func TriggerPoolDelete(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(PoolDelete)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PoolDelete,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	stepLog := fmt.Sprintf("Perform pool delete on the volume driver node, create new pool and move repls to the new pool")
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		stNodes := node.GetStorageNodes()
+		isCloudDrive, err := IsCloudDriveInitialised(stNodes[0])
+		UpdateOutcome(event, err)
+
+		if isCloudDrive {
+			var nodeSelected node.Node
+			var nodePools []node.StoragePool
+
+			randomIndex := rand.Intn(len(stNodes))
+			nodeSelected = stNodes[randomIndex]
+			nodePools = nodeSelected.StoragePools
+
+			isjournal, err := IsJournalEnabled()
+			UpdateOutcome(event, err)
+			var jrnlPartPoolID string
+
+			//Getting pool journal device
+			if isjournal && len(nodePools) > 1 {
+				jDev, err := Inst().V.GetJournalDevicePath(&nodeSelected)
+				UpdateOutcome(event, fmt.Errorf("error getting journal device path from node %s, Err: %v", nodeSelected.Name, err))
+
+				log.Infof("JournalDev: %s", jDev)
+				if jDev == "" {
+					UpdateOutcome(event, fmt.Errorf("no journal device path found"))
+					return
+				}
+
+				drivesMap, err := Inst().V.GetPoolDrives(&nodeSelected)
+				jPath := jDev[:len(jDev)-1]
+			outer:
+				for k, v := range drivesMap {
+					for _, dv := range v {
+						if strings.Contains(dv.Device, jPath) {
+							jrnlPartPoolID = k
+							break outer
+						}
+					}
+
+				}
+				if len(jrnlPartPoolID) == 0 {
+					log.Infof("No pool is partitioned with journal device")
+				}
+			}
+
+			//Getting pool with no journal partition
+			var poolToDelete node.StoragePool
+			for _, pl := range nodePools {
+				if strconv.Itoa(int(pl.ID)) != jrnlPartPoolID {
+					poolToDelete = pl
+					break
+				}
+			}
+			poolIDToDelete := fmt.Sprintf("%d", poolToDelete.ID)
+
+			poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to list storage pools"))
+				return
+			}
+
+			nodeVols, err := GetVolumesOnNode(nodeSelected.VolDriverNodeID)
+			UpdateOutcome(event, fmt.Errorf("error getting volumes on the node [%s], Err : %v", nodeSelected.Name, err))
+
+			err = DeletePoolAndValidate(nodeSelected, poolIDToDelete)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("error deleting pool [%s] in the node [%s], Err: %v", poolIDToDelete, nodeSelected.Name, err))
+				return
+			}
+
+			//Getting spec for new cloud drive
+			newSpecSize := (poolToDelete.TotalSize / units.GiB) / 2
+			///creating a spec to perform add  drive
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+
+			deviceSpec := driveSpecs[0]
+			deviceSpecParams := strings.Split(deviceSpec, ",")
+
+			paramsArr := make([]string, 0)
+			for _, param := range deviceSpecParams {
+				if strings.Contains(param, "size") {
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", newSpecSize))
+				} else {
+					paramsArr = append(paramsArr, param)
+				}
+			}
+			newSpec := strings.Join(paramsArr, ",")
+			stepLog = fmt.Sprintf("Adding cloud drive to node %s with size %s", nodeSelected.Name, newSpec)
+
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error adding new pool to node [%s],Err: %v", nodeSelected.Name, err))
+					return
+				}
+				err = Inst().V.RefreshDriverEndpoints()
+				UpdateOutcome(event, err)
+				log.InfoD("Validate pool rebalance after drive add to the node %s", nodeSelected.Name)
+				err = ValidateDriveRebalance(nodeSelected)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("pool re-balance failed on node %s, Err: %v", nodeSelected.Name, err))
+				}
+
+				err = Inst().V.WaitDriverUpOnNode(nodeSelected, addDriveUpTimeOut)
+				if err != nil {
+					UpdateOutcome(event, err)
+					return
+				}
+
+				poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("failed to list storage pools after adding new pool to node [%s]", nodeSelected.Name))
+					return
+				}
+				dash.VerifySafely(len(poolsBfr) == len(poolsAfr), true, "verify new pool is created")
+
+			})
+			stepLog = fmt.Sprintf("Expand newly added pool on node [%s]", nodeSelected.Name)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+				log.FailOnError(err, "Failed to list storage pools")
+				var poolIDSelected string
+				for k := range poolsAfr {
+					if _, ok := poolsBfr[k]; !ok {
+						poolIDSelected = k
+						break
+					}
+				}
+				poolToReplAdd, err := GetStoragePoolByUUID(poolIDSelected)
+
+				//moving volume replicas to new pool
+				for _, nodeVol := range nodeVols {
+					appVol, err := Inst().V.InspectVolume(nodeVol)
+					if err != nil {
+						UpdateOutcome(event, fmt.Errorf("error inspecting vol [%s], Err: %v", nodeVol, err))
+						continue
+
+					}
+					log.Infof("Updating replicas for volume [%s/%s]", appVol.Id, nodeVol)
+					replNodes := appVol.GetReplicaSets()[0].GetNodes()
+					tpVol := &volume.Volume{ID: nodeVol, Name: nodeVol}
+					err = Inst().V.SetReplicationFactor(tpVol, int64(len(replNodes)-1), nil, nil, true)
+					if err != nil {
+						UpdateOutcome(event, fmt.Errorf("error increasing repl for volume [%s] to pool [%s]", nodeVol, poolToReplAdd.Uuid))
+					} else {
+						err = Inst().V.SetReplicationFactor(tpVol, int64(len(replNodes)), nil, []string{poolToReplAdd.Uuid}, true)
+						UpdateOutcome(event, err)
+					}
+
+				}
+			})
+		}
 	})
 	updateMetrics(*event)
 }
