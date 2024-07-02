@@ -5793,6 +5793,15 @@ var _ = Describe("{RestartPxandRestartNode}", func() {
 })
 
 var _ = Describe("{RestartPxandRestartNodeWithMgmtInterfaceDown}", func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-24898
+	   1.Deploy Applications
+	   2.Validate Applications are Deployed
+	   3.Stop portworx on all nodes
+	   4.Make the Management Interface Down on the backend FA
+	   5.Start the PX and after that wait for a minute make the management interface up and then check if px is up
+	   6.Validate the Applications are running
+	*/
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestartPxandRestartNodeWithMgmtInterfaceDown",
 			"Restart Portworx and Restart Node with Mgmt Interface of the backend FA being down for few minutes", nil, 0)
@@ -5804,11 +5813,10 @@ var _ = Describe("{RestartPxandRestartNodeWithMgmtInterfaceDown}", func() {
 		var (
 			LastDisabledInterface string
 			PureFaClientVif       *newFlashArray.Client
-			//FadaPvcList           []string
+			FadaPvcList           []string
+			FaDetails             []pureutils.FlashArrayEntry
 		)
 		pxNodes := node.GetStorageDriverNodes()
-		flashArrays, err := GetFADetailsUsed()
-		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := "restartpxandrebootnodewithmgmtinterfacedown"
 			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
@@ -5823,29 +5831,28 @@ var _ = Describe("{RestartPxandRestartNodeWithMgmtInterfaceDown}", func() {
 		}
 		ValidateApplications(contexts)
 		defer DestroyApps(contexts, nil)
-		////GetVolumeNameFromPvc will collect volume name from pvc which indirect will be the px volume name and this name is suffix to the volumes created in FA backend
-		//GetVolumeNameFromPvc := func(namespace string, pvclist []string) []string {
-		//	allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
-		//	log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
-		//	for _, p := range allPvcList.Items {
-		//		scForPvc, err := k8sCore.GetStorageClassForPVC(&p)
-		//		log.FailOnError(err, "Failed to get storage class for pvc [%s]", p.Name)
-		//		backend, _ := scForPvc.Parameters["backend"]
-		//		if backend == "pure_block" {
-		//			pvclist = append(pvclist, p.Spec.VolumeName)
-		//		}
-		//	}
-		//	return pvclist
-		//}
-		//for _, ctx := range contexts {
-		//	FadaPvcList = GetVolumeNameFromPvc(ctx.App.NameSpace, nil)
-		//}
-		//for _, volname := range FadaPvcList {
-		//	FaDetails, err := GetFADetailsFromVolumeName(volname)
-		//	log.FailOnError(err, "Failed to get FA details from volume name")
-		//
-		//}
-
+		//GetVolumeNameFromPvc will collect volume name from pvc which indirect will be the px volume name and this name is suffix to the volumes created in FA backend
+		GetVolumeNameFromPvc := func(namespace string, pvclist []string) []string {
+			allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+			log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
+			for _, p := range allPvcList.Items {
+				scForPvc, err := k8sCore.GetStorageClassForPVC(&p)
+				log.FailOnError(err, "Failed to get storage class for pvc [%s]", p.Name)
+				backend, _ := scForPvc.Parameters["backend"]
+				if backend == "pure_block" {
+					pvclist = append(pvclist, p.Spec.VolumeName)
+				}
+			}
+			return pvclist
+		}
+		for _, ctx := range contexts {
+			FadaPvcList = GetVolumeNameFromPvc(ctx.App.NameSpace, nil)
+		}
+		for _, volname := range FadaPvcList {
+			FaDetails, err = GetFADetailsFromVolumeName(volname)
+			log.FailOnError(err, "Failed to get FA details from volume name")
+			break
+		}
 		stepLog := "Stop portworx on all Nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -5856,11 +5863,12 @@ var _ = Describe("{RestartPxandRestartNodeWithMgmtInterfaceDown}", func() {
 		})
 		stepLog = "Make the Management Interface Down on the backend FA"
 		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
 			secret, err := pureutils.GetPXPureSecret(volDriverNamespace)
 			log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
-			for _, fa := range flashArrays {
+			for _, fa := range FaDetails {
 				faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
 				apiToken, err := pureutils.GetApiTokenForFAMgmtEndpoint(secret, fa.MgmtEndPoint)
 				log.FailOnError(err, "failed to get API token for FA with IP [%s]", fa.MgmtEndPoint)
@@ -5901,6 +5909,17 @@ var _ = Describe("{RestartPxandRestartNodeWithMgmtInterfaceDown}", func() {
 })
 
 var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-24005
+	   1.Deploy Applications
+	   2.Validate Applications are Deployed
+	   3.Collect the existing Volume status (state,status) before stopping the PX
+	   4.Stop portworx on all nodes
+	   5.Restart all the worker nodes
+	   6.Make sure Both portworx and node are up.
+	   7.Collect the  Volume status (state,status) after restarting the PX and compare with the status before stopping the PX
+	   8.Validate the Applications are running
+	*/
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootAllWorkerNodesandCheckPX",
@@ -5910,7 +5929,7 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 	itLog := "RebootAllWorkerNodesandCheckPX"
 	It(itLog, func() {
 		var listofFadaPvc []string
-		// Define a struct to hold the tuple of two strings
+		// VolStruct consists of Two Values of a particular volume -its state and status
 		type VolStruct struct {
 			State  string
 			Status string
@@ -5953,6 +5972,7 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 		}
 		faErr := CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
 		log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+		//inspectVolumes Collects the state and status of the volumes before and after the restart of the PX
 		inspectVolumes := func(contexts []*scheduler.Context) map[string]VolStruct {
 			volMap := make(map[string]VolStruct)
 			for _, ctx := range contexts {
@@ -5967,7 +5987,6 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 			return volMap
 		}
 		volMap := inspectVolumes(contexts)
-		log.InfoD("volmap: %v", volMap)
 		defer DestroyApps(contexts, nil)
 		stepLog := "Stop portworx on all Nodes"
 		Step(stepLog, func() {
@@ -5998,14 +6017,13 @@ var _ = Describe("{RebootAllWorkerNodesandCheckPX}", func() {
 			faErr = CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
 			log.FailOnError(faErr, "Failed to check if volumes created exist in FA")
 			volMapAfterRestart := inspectVolumes(contexts)
-			log.InfoD("volmap after restart : %v", volMapAfterRestart)
-			for key, value1 := range volMap {
-				if value2, found := volMapAfterRestart[key]; found {
-					if value1 != value2 {
-						log.FailOnError(fmt.Errorf("Volume [%s] state or status changed after restart Before Restart : [%v] ,After Restart [%v]", key, value1, value2), "Volume state or status changed after restart")
+			for volId, volDetailsBeforeRestart := range volMap {
+				if volDetailsAfterRestart, found := volMapAfterRestart[volId]; found {
+					if volDetailsBeforeRestart != volDetailsAfterRestart {
+						log.FailOnError(fmt.Errorf("Volume [%s] state or status changed after restart Before Restart : [%v] ,After Restart [%v]", volId, volDetailsBeforeRestart, volDetailsAfterRestart), "Volume state or status changed after restart")
 					}
 				} else {
-					log.FailOnError(fmt.Errorf("Volume [%s] not found in the map after restart", key), "Volume not found in the map after restart")
+					log.FailOnError(fmt.Errorf("Volume [%s] not found in the map after restart", volId), "Volume not found in the map after restart")
 				}
 			}
 		})
@@ -6032,9 +6050,10 @@ var _ = Describe("{RestartPXAfterPureSecretRecreation}", func() {
 	var pureSecretJSON string
 	itLog := "RebootAllWorkerNodesandCheckPXWithMgmtInterfaceDown"
 	It(itLog, func() {
+		log.InfoD(itLog)
 		pxNamespace, err := Inst().V.GetVolumeDriverNamespace()
 		log.FailOnError(err, "Failed to get volume driver namespace")
-		stepLog := "Fetch and store Pure secret"
+		stepLog := "Collect Details of PX-PURE-SECRET"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			var err error
@@ -6071,7 +6090,7 @@ var _ = Describe("{RestartPXAfterPureSecretRecreation}", func() {
 				err := Inst().V.StartDriver(node)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to start portworx on node %s", node.Name))
 			}
-
+			log.InfoD("Started portworx on All Nodes")
 			for _, node := range pxNodes {
 				err := Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", node.Name))
