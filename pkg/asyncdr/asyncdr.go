@@ -15,17 +15,22 @@ import (
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/sched-ops/k8s/stork"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/stats"
+	"github.com/portworx/torpedo/pkg/storkctlcli"
 )
 
 var dash *aetosutil.Dashboard
@@ -641,6 +646,185 @@ func CheckDefaultPxStorageClass(name string) error {
 	_, err = k8sStorage.CreateStorageClass(&scObj)
 	if err != nil {
 		return fmt.Errorf("failed to create storage class: %s.Error: %v", name, err)
+	}
+	return nil
+}
+
+type FailoverFailbackParam struct {
+	Action                    string
+	FailoverOrFailbackNs      string
+	MigrationSchedName        string
+	ConfigPath                string
+	Single                    bool
+	SkipSourceOp              bool
+	IncludeNs                 bool
+	ExcludeNs                 bool
+	ExtraArgsFailoverFailback map[string]string
+	Contexts                  []*scheduler.Context
+}
+
+func CreateMigSchdAndValidateMigration(migSchedName, cpName, migNs, resetConfigPath string, extraArgs map[string]string) error {
+	var migration *storkapi.Migration
+	err := storkctlcli.ScheduleStorkctlMigrationSched(migSchedName, cpName, migNs, extraArgs)
+	if err != nil {
+		return err
+	}
+	err = HardSetConfig(resetConfigPath)
+	if err != nil {
+		return err
+	}
+	time.Sleep(time.Second * 30)
+	migSchedule, err := storkops.Instance().GetMigrationSchedule(migSchedName, migNs)
+	if err != nil {
+		return err
+	}
+	migrations := migSchedule.Status.Items["Interval"]
+	for _, mig := range migrations {
+		migration, err = storkops.Instance().GetMigration(mig.Name, migNs)
+		if err != nil {
+			return err
+		}
+		err = WaitForMigration([]*storkapi.Migration{migration})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func PerfFailoverFailback(foFbParams FailoverFailbackParam, fcPath, scPath string, factor int, driver scheduler.Driver) error {
+	err, output := storkctlcli.PerformFailoverOrFailback(foFbParams.Action, foFbParams.FailoverOrFailbackNs, foFbParams.MigrationSchedName, foFbParams.SkipSourceOp, foFbParams.ExtraArgsFailoverFailback)
+	if err != nil {
+		return err
+	}
+	splitOutput := strings.Split(output, "\n")
+	prefix := fmt.Sprintf("To check %s status use the command : `", foFbParams.Action)
+	getStatusCommand := strings.TrimSpace(strings.TrimPrefix(splitOutput[1], prefix))
+	getStatusCommand = strings.TrimSuffix(getStatusCommand, "`")
+	getStatusCmdArgs := strings.Split(getStatusCommand, " ")
+	// Extract the action Name from the command args
+	actionName := getStatusCmdArgs[3]
+	log.Infof("==========================Action Name and Entered in WFS=============================: %v", actionName)
+	err = storkctlcli.WaitForActionSuccessful(actionName, foFbParams.FailoverOrFailbackNs, factor)
+	if err != nil {
+		return err
+	}
+	log.Infof("==========================Exit from EFS=============================: %v", actionName)
+	log.Infof("==========================Context is %v=============================: %v", foFbParams.Contexts)
+	err = validatePodsRunning(foFbParams.Action, fcPath, scPath, foFbParams.Single, foFbParams.IncludeNs, foFbParams.ExcludeNs, foFbParams.Contexts, driver)
+	if err != nil {
+		return err
+	}
+	log.Infof("==========================Exit from VPR=============================: %v", actionName)
+	return nil
+}
+
+func validatePodsRunning(action, fcPath, scPath string, single, includeNs, excludeNs bool, contexts []*scheduler.Context, driver scheduler.Driver) error {
+	var err error
+	switch action {
+	case "failover":
+		if includeNs {
+			err = waitForPodsToBeRunning(driver, contexts[0], false)
+			if err != nil {
+				return err
+			}
+			for i := 1; i < len(contexts); i++ {
+				ctx := contexts[i]
+				err = waitForPodsToBeRunning(driver, ctx, true)
+				if err != nil {
+					return err
+				}
+			}
+		} else if excludeNs {
+			err = waitForPodsToBeRunning(driver, contexts[0], true)
+			if err != nil {
+				return err
+			}
+			for i := 1; i < len(contexts); i++ {
+				ctx := contexts[i]
+				err = waitForPodsToBeRunning(driver, ctx, false)
+				if err != nil {
+					return err
+				}
+			}
+		} else if single {
+			err = waitForPodsToBeRunning(driver, contexts[0], false)
+			if err != nil {
+				return err
+			}
+		} else {
+			for _, ctx := range contexts {
+				err = waitForPodsToBeRunning(driver, ctx, false)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	case "failback":
+		err = HardSetConfig(fcPath)
+		log.FailOnError(err, "Error setting source config")
+		if includeNs {
+			for _, ctx := range contexts {
+				err = waitForPodsToBeRunning(driver, ctx, false)
+				if err != nil {
+					return err
+				}
+			}
+		} else if excludeNs {
+			for i := 1; i < len(contexts); i++ {
+				ctx := contexts[i]
+				if i == 1 {
+					err = waitForPodsToBeRunning(driver, ctx, true)
+					if err != nil {
+						return err
+					}
+				} else {
+					err = waitForPodsToBeRunning(driver, ctx, false)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		} else if single {
+			err = waitForPodsToBeRunning(driver, contexts[0], false)
+			if err != nil {
+				return err
+			}
+		} else {
+			for _, ctx := range contexts {
+				err = waitForPodsToBeRunning(driver, ctx, false)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func HardSetConfig(configPath string) error {
+	var config *rest.Config
+	config, err := clientcmd.BuildConfigFromFlags("", configPath)
+	if err != nil {
+		return err
+	}
+	core.Instance().SetConfig(config)
+	apps.Instance().SetConfig(config)
+	stork.Instance().SetConfig(config)
+	return nil
+}
+
+func waitForPodsToBeRunning(driver scheduler.Driver, context *scheduler.Context, expectedFail bool) error {
+	log.Infof("Verifying Context [%v]", context.App.Key)
+	err := driver.WaitForRunning(context, 5*time.Minute, 10*time.Second)
+	if expectedFail {
+		if err != nil {
+			return err
+		}
+	} else {
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
