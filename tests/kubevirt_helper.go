@@ -337,6 +337,7 @@ func IsVMBindMounted(virtualMachineCtx *scheduler.Context, wait bool) (bool, err
 	if err != nil {
 		return false, err
 	}
+	log.InfoD("Length of volumes: %d", len(vols))
 
 	// Get the node where pod is scheduled
 	vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{virtualMachineCtx})
@@ -836,4 +837,70 @@ func GetNonReplicaNodesOfVM(virtualMachineCtx *scheduler.Context) ([]string, err
 	}
 
 	return nonReplicaNodes, nil
+}
+
+func FillRootDiskOfVM(virtualMachineCtx *scheduler.Context) error {
+	vols, err := Inst().S.GetVolumes(virtualMachineCtx)
+	if err != nil {
+		return err
+	}
+	vmPod, err := GetVirtLauncherPodForVM(virtualMachineCtx, vols[0])
+	if err != nil {
+		return err
+	}
+	rootDiskPath, err := GetVMRootDiskPath(virtualMachineCtx)
+	if err != nil {
+		return err
+	}
+
+	output, err := core.Instance().RunCommandInPod([]string{"dd", "if=/dev/zero", "of=" + rootDiskPath + "/fill", "bs=100M", "count=100"}, vmPod.Name, "compute", vmPod.Namespace)
+	if err != nil && strings.Contains(output, "No space left on device") {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	log.Infof("Output of dd command: %s", output)
+	return nil
+}
+
+func RestartVM(virtualMachineCtx *scheduler.Context) error {
+	vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{virtualMachineCtx})
+	if err != nil {
+		return err
+	}
+	for _, v := range vms {
+		err = RestartKubevirtVM(v.Name, v.Namespace, true)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func GetVMRootDiskPath(virtualMachineCtx *scheduler.Context) (string, error) {
+	vols, err := Inst().S.GetVolumes(virtualMachineCtx)
+	if err != nil {
+		return "", err
+	}
+	vmPod, err := GetVirtLauncherPodForVM(virtualMachineCtx, vols[0])
+	if err != nil {
+		return "", err
+	}
+	output, err := core.Instance().RunCommandInPod([]string{"lsblk"}, vmPod.Name, "compute", vmPod.Namespace)
+	if err != nil {
+		return "", err
+	}
+	log.Infof("Output of lsblk command: %s", output)
+	// Get the line which has rootdisk as the disk name
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "rootdisk") {
+			// Split the line to get the disk path
+			fields := strings.Fields(line)
+			return fields[len(fields)-1], nil
+		}
+	}
+
+	return "", fmt.Errorf("rootdisk not found in lsblk output")
 }
