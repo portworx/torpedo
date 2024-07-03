@@ -4759,7 +4759,7 @@ func (k *K8s) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName, snapshotNa
 		}
 	}
 
-	log.Infof("[%v] Deleted Snapshot: %v", ctx.App.Key, snapshotName)
+	log.Infof("[%v] Deleted Snapshot: %v on namespace [%v]", ctx.App.Key, snapshotName, snapshotNameSpace)
 
 	return nil
 
@@ -4801,6 +4801,7 @@ func (k *K8s) IsCsiSnapshotExists(ctx *scheduler.Context, snapshotName string, n
 
 // DeleteCsiSnapshotsFromNamespace delete the snapshots from the namespace
 func (k *K8s) DeleteCsiSnapshotsFromNamespace(ctx *scheduler.Context, namespace string) error {
+	log.InfoD("Get the Snapshots for the app [%v] in namespace [%v]", ctx.App.Key, namespace)
 	snaplist, err := k.GetSnapshotsInNameSpace(ctx, namespace)
 	if err != nil {
 		log.InfoD("Failed to get Snapshots for app [%v] in namespace [%v]", ctx.App.Key, namespace)

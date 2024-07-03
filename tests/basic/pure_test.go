@@ -4980,7 +4980,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for _, ctx := range contexts {
-				err := Inst().S.DeleteCsiSnapshotsFromNamespace(ctx, ctx.App.NameSpace)
+				err := Inst().S.DeleteCsiSnapshotsFromNamespace(ctx, ctx.ScheduleOptions.Namespace)
 				log.FailOnError(err, "Failed to delete the snapshots")
 			}
 			log.InfoD("Deleted the snapshots successfully")
@@ -5125,7 +5125,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingNodeAffin
 			log.InfoD(stepLog)
 			for _, ctx := range contexts {
 				var k8sCore = core.Instance()
-				pods, err := k8sCore.GetPods(ctx.App.NameSpace, nil)
+				pods, err := k8sCore.GetPods(ctx.ScheduleOptions.Namespace, nil)
 				for _, pod := range pods.Items {
 					node := pod.Spec.NodeName
 					log.FailOnError(err, "unable to find the node from the pod")
