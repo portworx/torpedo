@@ -9703,7 +9703,7 @@ func StopCloudsnapBackup(pvcName, namespace string) error {
 						return "", true, fmt.Errorf("waiting to get the cs id for PVC [%s] in namespace [%s]", pvcName, namespace)
 					}
 					cmd := fmt.Sprintf("pxctl cs stop -n %s", key)
-					workerNode := node.GetWorkerNodes()[0]
+					workerNode := node.GetStorageNodes()[0]
 					output, err := runCmdGetOutput(cmd, workerNode)
 					log.Infof("Output of the command [%s]: \n%s", cmd, output)
 					if err != nil {
@@ -9756,7 +9756,7 @@ type CloudsnapStatus struct {
 func GetCloudsnapStatus() (map[string]CloudsnapStatus, error) {
 	statusMap := make(map[string]CloudsnapStatus)
 	// Get a worker node
-	workerNode := node.GetWorkerNodes()[0]
+	workerNode := node.GetStorageNodes()[0]
 	cmd := "pxctl cs status -j"
 	output, err := runCmdGetOutput(cmd, workerNode)
 	if err != nil {
@@ -10249,10 +10249,11 @@ type FeaturePlatformMap map[string]map[string][]string
 
 var featureData = FeaturePlatformMap{
 	"PartialBackup": {
-		"openshift": {"postgres-backup", "pxb-multipleapp-multivol"},
-		"GKE":       {"TODO", "TODO"},
-		"AKS":       {"TODO", "TODO"},
-		"Vanilla":   {"TODO", "TODO"},
+		"openshift": {"postgres-backup", "pg-mysql-multiprov-ocp"},
+		"gke":       {"TODO", "TODO"},
+		"azure":     {"postgres-backup", "pg-mysql-multiprov-aks"},
+		"vanilla":   {"TODO", "TODO"},
+		"ibm":       {"postgres-backup", "pg-mysql-multiprov-iks"},
 	},
 }
 
