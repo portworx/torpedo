@@ -4,9 +4,7 @@ import (
 	"bytes"
 	context1 "context"
 	"fmt"
-	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/watch"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -20,6 +18,9 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	optest "github.com/libopenstorage/operator/pkg/util/test"
+	"k8s.io/apimachinery/pkg/watch"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -89,6 +90,7 @@ const (
 	Vpinisetti     TestcaseAuthor = "vpinisetti-px"
 	Sabrarhussaini TestcaseAuthor = "sabrarhussaini"
 	ATrivedi       TestcaseAuthor = "atrivedi-px"
+	Dbinnal        TestcaseAuthor = "dbinnal-px"
 )
 
 // TestcaseQuarter List
@@ -184,6 +186,15 @@ const (
 	CorrectMemoryRequest                      = "700Mi"
 	CorrectMemoryLimit                        = "1Gi"
 	IncorrectImageSuffix                      = "-incorrect"
+	RestrictedPSA                             = "restricted"
+	RestrictedPSAVersion                      = "latest"
+	CustomRestrictedPSADescription            = "Custom Restricted PSA"
+	BaselinePSA                               = "baseline"
+	BaselinePSAVersion                        = "latest"
+	CustomBaselinePSADescription              = "Custom Baseline PSA"
+	PrivilegedPSA                             = "privileged"
+	PrivilegedPSAVersion                      = "latest"
+	CustomPrivilegedPSADescription            = "Custom Privileged PSA"
 )
 
 var (
