@@ -594,7 +594,7 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 
 		pipelineAppList := Inst().AppList
 		Inst().AppList = []string{"postgres-backup", "mysql-backup"}
-		originalAppList := Inst().AppList
+		originalAppList = Inst().AppList
 		//Resetting the pipeline app list
 		defer func() {
 			Inst().AppList = pipelineAppList
@@ -745,7 +745,7 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 			for backupLocationUID, backupLocationName := range backupLocationMap {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, RandomString(10))
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, mulAppScheduledAppContexts, make(map[string]string), BackupOrgID, sourceClusterUid, preRuleNameMultiApplication, preRuleUidMultiApplication, postRuleNameMultiApplication, postRuleUidMultiApplication)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] having multiple application in single namespace", backupName))
 				appPrivilegeToBkpMap["baseline-mul-ns-single-app"] = backupName
 				backupNames = append(backupNames, backupName)
 			}
@@ -759,7 +759,7 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 			for backupLocationUID, backupLocationName := range backupLocationMap {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, RandomString(10))
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, restrictedScheduledAppContexts, make(map[string]string), BackupOrgID, sourceClusterUid, preRuleNameMultiApplication, preRuleUidMultiApplication, postRuleNameMultiApplication, postRuleUidMultiApplication)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] on restricted namespace having multiple application on multiple namespace", backupName))
 				appPrivilegeToBkpMap["restricted"] = backupName
 				backupNames = append(backupNames, backupName)
 			}
@@ -773,13 +773,14 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 			for backupLocationUID, backupLocationName := range backupLocationMap {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, RandomString(10))
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, baselineScheduledAppContexts, make(map[string]string), BackupOrgID, sourceClusterUid, preRuleNameMultiApplication, preRuleUidMultiApplication, postRuleNameMultiApplication, postRuleUidMultiApplication)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] on baseline namespace having multiple application on multiple namespace", backupName))
 				appPrivilegeToBkpMap["baseline"] = backupName
 				backupNames = append(backupNames, backupName)
 			}
 		})
 
 		Step("Create namespace with different privileges for performing restores on destination cluster", func() {
+			log.InfoD("Create namespace with different privileges for performing restores on destination cluster")
 			err := SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			for _, psalevel := range []string{"restricted", "baseline", "privileged"} {
@@ -796,7 +797,7 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 				// Assign psaNameSpaceList to appPrivilegeToRestoreMap[psalevel]
 				appPrivilegeToRestoreMap[psalevel] = psaNameSpaceList
 			}
-
+			log.Infof("Application privilege to restore mapping : [%v]", appPrivilegeToRestoreMap)
 			// Switch context back to source cluster
 			err = SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster failed")
