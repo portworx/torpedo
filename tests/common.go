@@ -9339,6 +9339,71 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) 
 	return nil
 }
 
+func DeletePoolAndValidate(stNode node.Node, poolIDToDelete string) error {
+	isPureBackend := false
+	validateMultipath := []string{}
+	if IsPureCluster() {
+		isPureBackend = true
+	}
+
+	if isPureBackend {
+		// if pure backend , we get the list of all multipath devices used while creating the pool
+		// later check if those multipath devices are still exist post deleting the pool
+		multipathDevBeforeDelete, err := GetMultipathDeviceOnPool(&stNode)
+		log.FailOnError(err, fmt.Sprintf("Failed to get list of Multipath devices on Node [%v]", stNode.Name))
+		validateMultipath = multipathDevBeforeDelete[poolIDToDelete]
+	}
+
+	poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools, Err: %v", err)
+	}
+
+	poolsMap, err := Inst().V.GetPoolDrives(&stNode)
+	if err != nil {
+		return fmt.Errorf("error getting pool drive from the node [%s],Err: %v", stNode.Name, err)
+	}
+
+	log.InfoD(fmt.Sprintf("Delete poolID %s on node %s", poolIDToDelete, stNode.Name))
+	err = DeleteGivenPoolInNode(stNode, poolIDToDelete, true)
+	if err != nil {
+		return fmt.Errorf("error deleting pool [%s] in the node [%s], Err: %v", poolIDToDelete, stNode.Name, err)
+	}
+
+	poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools after pool deletion, Err: %v", err)
+	}
+
+	if len(poolsBfr) <= len(poolsAfr) {
+		return fmt.Errorf("pool count not matching after pool deletion. Pools before deletion:%d, pools after deletion %d", len(poolsBfr), len(poolsAfr))
+	}
+
+	poolsMap, err = Inst().V.GetPoolDrives(&stNode)
+	if err != nil {
+		return fmt.Errorf("error getting pool drive from the node [%s] after pool deletion,Err: %v", stNode.Name, err)
+	}
+	if _, ok := poolsMap[poolIDToDelete]; ok {
+		return fmt.Errorf("pool [%s] still exists on the node [%s]", poolIDToDelete, stNode.Name)
+	}
+
+	if isPureBackend {
+		// Get list of all Multipath devices after deleting the pool
+		allMultipathDev, err := GetMultipathDeviceIDsOnNode(&stNode)
+		if err != nil {
+			return fmt.Errorf("failed to get multipath devices on Node [%v],Err: %v", stNode.Name, err)
+		}
+		for _, eachMultipath := range allMultipathDev {
+			for _, validateEach := range validateMultipath {
+				if validateEach == eachMultipath {
+					return fmt.Errorf("multipath device [%v] did not delete on Deleting Pool", validateEach)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func GetPoolUUIDWithMetadataDisk(stNode node.Node) (string, error) {
 
 	systemOpts := node.SystemctlOpts{

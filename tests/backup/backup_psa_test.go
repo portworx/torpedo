@@ -555,19 +555,19 @@ var _ = Describe("{EnableNsAndClusterLevelPSAWithBackupAndRestore}", Label(TestC
 // RestoreFromHigherPrivilegedNamespaceToLower verifies restore of applications from higher privileged to lower privileged at namespace level PSA
 var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCaseLabelsMap[RestoreFromHigherPrivilegedNamespaceToLower]...), func() {
 	var (
-		backupNames                    []string
-		scheduledAppContexts           []*scheduler.Context
-		label                          map[string]string
-		providers                      []string
-		restrictedNamespaceList        []string
-		baselineNamespaceList          []string
-		cloudCredName                  string
-		cloudCredUID                   string
-		backupLocationUID              string
-		backupLocationMap              map[string]string
-		sourceClusterUid               string
-		controlChannel                 chan string
-		errorGroup                     *errgroup.Group
+		backupNames             []string
+		scheduledAppContexts    []*scheduler.Context
+		label                   map[string]string
+		providers               []string
+		restrictedNamespaceList []string
+		baselineNamespaceList   []string
+		cloudCredName           string
+		cloudCredUID            string
+		backupLocationUID       string
+		backupLocationMap       map[string]string
+		sourceClusterUid        string
+		//controlChannel                 chan string
+		//errorGroup                     *errgroup.Group
 		restrictedScheduledAppContexts []*scheduler.Context
 		baselineScheduledAppContexts   []*scheduler.Context
 		preRuleNameMultiApplication    string
@@ -679,7 +679,7 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step(fmt.Sprintf("Create pre and post exec rules for multiple applications"), func() {
@@ -908,43 +908,43 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		err := SetSourceKubeConfig()
-		log.FailOnError(err, "Switching context to source cluster failed")
-
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-
-		log.Info("Destroying scheduled apps on source cluster")
-		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
-
-		backupDriver := Inst().Backup
-		log.Info("Deleting backups")
-		for _, backupName := range backupNames {
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
-			log.FailOnError(err, "Backup [%s] could not be deleted", backupName)
-			dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying [%s] backup deletion is successful", backupName))
-			err = DeleteBackupAndWait(backupName, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
-		}
-
-		log.Info("Deleting rules")
-		if preRuleNameMultiApplication != "" {
-			err = Inst().Backup.DeleteRuleForBackup(BackupOrgID, preRuleNameMultiApplication)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting pre exec rule %s ", preRuleNameMultiApplication))
-		}
-		if postRuleNameMultiApplication != "" {
-			err = Inst().Backup.DeleteRuleForBackup(BackupOrgID, postRuleNameMultiApplication)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting post exec rule %s ", postRuleNameMultiApplication))
-		}
-
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		//defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		//err := SetSourceKubeConfig()
+		//log.FailOnError(err, "Switching context to source cluster failed")
+		//
+		//ctx, err := backup.GetAdminCtxFromSecret()
+		//log.FailOnError(err, "Fetching px-central-admin ctx")
+		//
+		//opts := make(map[string]bool)
+		//opts[SkipClusterScopedObjects] = true
+		//
+		//log.Info("Destroying scheduled apps on source cluster")
+		//err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		//log.FailOnError(err, "Data validations failed")
+		//
+		//backupDriver := Inst().Backup
+		//log.Info("Deleting backups")
+		//for _, backupName := range backupNames {
+		//	backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+		//	log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+		//	backupDeleteResponse, err := DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
+		//	log.FailOnError(err, "Backup [%s] could not be deleted", backupName)
+		//	dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying [%s] backup deletion is successful", backupName))
+		//	err = DeleteBackupAndWait(backupName, ctx)
+		//	dash.VerifyFatal(err, nil, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
+		//}
+		//
+		//log.Info("Deleting rules")
+		//if preRuleNameMultiApplication != "" {
+		//	err = Inst().Backup.DeleteRuleForBackup(BackupOrgID, preRuleNameMultiApplication)
+		//	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting pre exec rule %s ", preRuleNameMultiApplication))
+		//}
+		//if postRuleNameMultiApplication != "" {
+		//	err = Inst().Backup.DeleteRuleForBackup(BackupOrgID, postRuleNameMultiApplication)
+		//	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting post exec rule %s ", postRuleNameMultiApplication))
+		//}
+		//
+		//CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 

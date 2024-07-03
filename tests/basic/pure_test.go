@@ -5242,7 +5242,8 @@ var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 			log.InfoD(stepLog)
 			nodeForPoolDelete = append(nodeForPoolDelete, stNodes[rand.Intn(len(stNodes))])
 			log.InfoD("Deleting the pool on the node [%v]", nodeForPoolDelete[0].Name)
-			deletePoolAndValidate(nodeSelected, fmt.Sprintf("%d", nodePool.ID))
+			err = DeletePoolAndValidate(nodeSelected, fmt.Sprintf("%d", nodePool.ID))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%d] deletion in the node [%s]", nodePool.ID, nodeSelected.Name))
 		})
 		stepLog = "Add a Cloud Drive on same node and check if it is added successfully"
 		Step(stepLog, func() {
