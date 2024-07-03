@@ -264,6 +264,7 @@ const (
 	PartialBackupSuccessWithPxAndKDMPVolumesLabel                                           TestCaseLabel = "PartialBackupSuccessWithPxAndKDMPVolumes"
 	PartialBackupWithLowerStorkVersionLabel                                                 TestCaseLabel = "PartialBackupWithLowerStorkVersion"
 	PartialBackupSuccessWithAzureEndpointLabel                                              TestCaseLabel = "PartialBackupSuccessWithAzureEndpoint"
+	PsaTakeBackupInLowerPrevilegeRestoreInHigherPrivilege                                   TestCaseLabel = "PsaTakeBackupInLowerPrevilegeRestoreInHigherPrivilege"
 )
 
 // Common Labels
