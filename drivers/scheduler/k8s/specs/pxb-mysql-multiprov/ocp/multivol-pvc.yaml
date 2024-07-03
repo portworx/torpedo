@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-portworx-pvc
+  labels:
+    backupVolumeType : pxd
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: px-csi-db
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-csi-pvc
+  labels:
+    backupVolumeType : csi
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: ocs-storagecluster-cephfs
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-csi-pvc-seq
+  labels:
+    backupVolumeType: csi
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: ocs-storagecluster-cephfs

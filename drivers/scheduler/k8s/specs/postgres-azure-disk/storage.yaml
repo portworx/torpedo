@@ -3,6 +3,8 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: postgres-data
+  labels:
+    backupVolumeType: csi
 spec:
   storageClassName: postgres-sc
   accessModes:

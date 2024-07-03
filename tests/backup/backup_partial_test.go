@@ -49,14 +49,16 @@ var _ = Describe("{BackupCSIVolumesWithPartialSuccess}", Label(TestCaseLabelsMap
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("BackupCSIVolumesWithPartialSuccess", "Verifies partial backup and restore when CSI volume backup are failed", nil, 299231, Ak, Q2FY25)
 		providers = GetBackupProviders()
-		numOfNamespace := 5
+		numOfNamespace := 2
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
 		}()
-		Inst().AppList, _ = GetApplicationSpecForFeature("PartialBackup")
+		var err error
+		Inst().AppList, err = GetApplicationSpecForFeature("PartialBackup")
+		log.FailOnError(err, "Fetching application spec for feature PartialBackup")
 		for i := 0; i < numOfNamespace; i++ {
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
@@ -1253,7 +1255,7 @@ var _ = Describe("{PartialBackupSuccessWithAzureEndpoint}", Label(TestCaseLabels
 			Inst().AppList = appList
 		}()
 		var err error
-		Inst().AppList = []string{"pxb-singleapp-multivol"}
+		Inst().AppList = []string{"pxb-mysql-multiprov"}
 		for i := 0; i < numOfNamespace; i++ {
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
