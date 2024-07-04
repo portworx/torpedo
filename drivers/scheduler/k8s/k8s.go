@@ -1961,6 +1961,14 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 					obj.Parameters["pure_fa_pod_name"] = k.PureFADAPod
 				}
 			}
+			// We can Directly Set Pure fa pod name during runtime in storage class
+			if options.PureFAPodName != "" {
+				if backend, ok := obj.Parameters["backend"]; ok && backend == "pure_block" {
+					log.InfoD("Setting Pure FA Pod Name in Storage Class %s", options.PureFAPodName)
+					obj.Parameters["pure_fa_pod_name"] = options.PureFAPodName
+				}
+			}
+
 		}
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if k8serrors.IsAlreadyExists(err) {
@@ -3939,7 +3947,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				}
 				log.Infof("[%v] Validated PVC: %v size based on Autopilot rules", ctx.App.Key, obj.Name)
 			} else {
-				log.Warnf("[%v] Autopilot is not enabled, PVC: %v size validation is not possible", ctx.App.Key, obj.Name)
+				log.Debugf("[%v] Autopilot is not enabled, Skipping PVC: %v size validation with autopilot rules", ctx.App.Key, obj.Name)
 			}
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sExternalStorage.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,

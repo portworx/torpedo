@@ -788,8 +788,9 @@ func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) 
 	if err != nil {
 		return false, fmt.Errorf("failed to get metadata nodes, Err: %v", err)
 	}
+	log.Infof(fmt.Sprintf("members %v", members))
 
-	ipRegex := regexp.MustCompile(`http://(?P<address>.*):d+`)
+	ipRegex := regexp.MustCompile(`http:\/\/(?P<address>[\d\.]+):(?P<port>\d+)`)
 	for _, value := range members {
 		for _, url := range value.ClientUrls {
 			result := getGroupMatches(ipRegex, url)
@@ -3995,6 +3996,7 @@ func (d *portworx) UpgradeStork(specGenUrl string) error {
 }
 
 func (d *portworx) RestartDriver(n node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	log.Infof(fmt.Sprintf("Restarting volume driver on node [%s]", n.Name))
 	return driver_api.PerformTask(
 		func() error {
 			return d.schedOps.RestartPxOnNode(n)
@@ -4433,6 +4435,7 @@ func (d *portworx) updateNodeID(n *node.Node, nManager ...api.OpenStorageNodeCli
 
 func getGroupMatches(groupRegex *regexp.Regexp, str string) map[string]string {
 	match := groupRegex.FindStringSubmatch(str)
+	log.Infof("matches for url [%s]: %v", str, match)
 	result := make(map[string]string)
 	if len(match) > 0 {
 		for i, name := range groupRegex.SubexpNames() {
