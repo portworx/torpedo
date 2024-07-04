@@ -2856,7 +2856,9 @@ func ToggleAutopilotInStc() error {
 	checkPodIsDeleted := func() (interface{}, bool, error) {
 		autopilotLabels := make(map[string]string)
 		autopilotLabels["name"] = "autopilot"
-		pods, err := k8sCore.GetPods(pxNamespace, autopilotLabels)
+		autoPilotNamespace, err := Inst().S.GetAutopilotNamespace()
+		log.FailOnError(err, "Failed to get autopilot namespace")
+		pods, err := k8sCore.GetPods(autoPilotNamespace, autopilotLabels)
 		expect(err).NotTo(haveOccurred())
 		if stc.Spec.Autopilot.Enabled {
 			log.Infof("autopilot is active, checking is pod is present.")
