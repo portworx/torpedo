@@ -9,6 +9,7 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/rke"
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"
@@ -1548,6 +1549,438 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 		}
 		err = DeleteBackupSchedulePolicyWithContext(BackupOrgID, []string{periodicSchedulePolicyName}, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting schedule policy [%s]", periodicSchedulePolicyName))
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, credUid, ctx)
+	})
+})
+
+// PSALowerPrivilegeToHigherPrivilegeWithProjectMapping verifies different backup and restore operations from lower privileges to higher privileges with project mapping
+var _ = Describe("{PSALowerPrivilegeToHigherPrivilegeWithProjectMapping}", Label(TestCaseLabelsMap[PSALowerPrivilegeToHigherPrivilegeWithProjectMapping]...), func() {
+	var (
+		err                               error
+		wg                                sync.WaitGroup
+		mutex                             sync.Mutex
+		backupLocationUID                 string
+		backupLocationName                string
+		credName                          string
+		credUid                           string
+		srcClusterUid                     string
+		clusterStatus                     api.ClusterInfo_StatusInfo_Status
+		preRuleName                       string
+		postRuleName                      string
+		preRuleUid                        string
+		postRuleUid                       string
+		backupName                        string
+		periodicPolicyName                string
+		schPolicyUid                      string
+		actualAppList                     []string
+		testAppList                       []string
+		bkpNamespaces                     []string
+		allNSScheduleBackup               string
+		baselineScheduleBackup            string
+		restrictedScheduleBackup          string
+		backupList                        []string
+		schBackupList                     []string
+		scheduleNames                     []string
+		restrictedManualBackupName        string
+		baselineManualBackupName          string
+		backupLocationMap                 map[string]string
+		projectLabel                      map[string]string
+		projectAnnotation                 map[string]string
+		sourceNamespaceProjectMapping     map[string]string
+		sourceNamespaceProjectUIDMapping  map[string]string
+		namespaceMapRestrictedToBaseline  map[string]string
+		namespaceMapBaselineToPrivilege   map[string]string
+		namespaceMapRestrictedToPrivilege map[string]string
+		allNamespaceMap                   map[string]string
+		restoreProjectNameMapping         map[string]string
+		restoreProjectUIDMapping          map[string]string
+		scheduledAppContexts              []*scheduler.Context
+		privilegeScheduledAppContexts     []*scheduler.Context
+		baselineScheduledAppContexts      []*scheduler.Context
+		restrictedScheduledAppContexts    []*scheduler.Context
+	)
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Getting admin context from secret")
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("PSALowerPrivilegeToHigherPrivilegeWithProjectMapping", "Verify PSA backup in lower privilege mode and restore in higher privilege mode with project mapping", nil, 299238, Vpinisetti, Q2FY25)
+		AppContextsMapping := make(map[string]*scheduler.Context)
+		nsLabel := make(map[string]string)
+		numOfDeployments := Inst().GlobalScaleFactor
+		backupLocationMap = make(map[string]string)
+		periodicPolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(5))
+		projectLabel = make(map[string]string)
+		projectAnnotation = make(map[string]string)
+		sourceNamespaceProjectMapping = make(map[string]string)
+		sourceNamespaceProjectUIDMapping = make(map[string]string)
+		namespaceMapRestrictedToBaseline = make(map[string]string)
+		namespaceMapBaselineToPrivilege = make(map[string]string)
+		namespaceMapRestrictedToPrivilege = make(map[string]string)
+		allNamespaceMap = make(map[string]string)
+		restoreProjectNameMapping = make(map[string]string)
+		restoreProjectUIDMapping = make(map[string]string)
+		actualAppList = Inst().AppList
+		defer func() {
+			Inst().AppList = actualAppList
+		}()
+		testAppList = []string{"postgres-backup", "mysql-backup"}
+		log.InfoD("Deploy applications")
+		for _, psaLevel := range []string{"restricted", "baseline"} {
+			psaApp := make([]string, 0)
+			if psaLevel == "restricted" {
+				for _, app := range testAppList {
+					psaApp = append(psaApp, PSAAppMap[app])
+				}
+				Inst().AppList = psaApp
+			}
+			nsLabel["pod-security.kubernetes.io/enforce"] = psaLevel
+
+			log.InfoD("Deploying all provided applications in a single namespace")
+			for i := 0; i < numOfDeployments; i++ {
+				taskName := fmt.Sprintf("%s-%d-%d-%v", TaskNamePrefix, 299238, i, RandomString(3))
+				namespace := fmt.Sprintf("%s-ns-multiapp-%v", psaLevel, taskName)
+				err := CreateNamespaceAndAssignLabels(namespace, nsLabel)
+				dash.VerifyFatal(err, nil, "Creating namespace and assigning labels")
+				appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
+				for _, appCtx := range appContexts {
+					appCtx.ReadinessTimeout = AppReadinessTimeout
+					namespace := GetAppNamespace(appCtx, taskName)
+					bkpNamespaces = append(bkpNamespaces, namespace)
+					scheduledAppContexts = append(scheduledAppContexts, appCtx)
+					AppContextsMapping[namespace] = appCtx
+					if strings.Contains(namespace, "restricted") {
+						restrictedScheduledAppContexts = append(restrictedScheduledAppContexts, appCtx)
+					} else if strings.Contains(namespace, "baseline") {
+						baselineScheduledAppContexts = append(baselineScheduledAppContexts, appCtx)
+					} else {
+						privilegeScheduledAppContexts = append(privilegeScheduledAppContexts, appCtx)
+					}
+				}
+			}
+
+			log.InfoD("Deploying all provided applications in individual namespaces")
+			for _, app := range testAppList {
+				Inst().AppList = []string{app}
+				if psaLevel == "restricted" {
+					Inst().AppList = []string{PSAAppMap[app]}
+					log.Infof("The restricted PSA app list is %v", Inst().AppList)
+				}
+				taskName := fmt.Sprintf("%s-%s-%v", TaskNamePrefix, app, RandomString(3))
+				namespace := fmt.Sprintf("%s-ns-singleapp-%v", psaLevel, taskName)
+				err := CreateNamespaceAndAssignLabels(namespace, nsLabel)
+				dash.VerifyFatal(err, nil, "Creating namespace and assigning labels")
+				appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
+				for _, appCtx := range appContexts {
+					appCtx.ReadinessTimeout = AppReadinessTimeout
+					namespace := GetAppNamespace(appCtx, taskName)
+					bkpNamespaces = append(bkpNamespaces, namespace)
+					scheduledAppContexts = append(scheduledAppContexts, appCtx)
+					AppContextsMapping[namespace] = appCtx
+					if strings.Contains(namespace, "restricted") {
+						restrictedScheduledAppContexts = append(restrictedScheduledAppContexts, appCtx)
+					} else if strings.Contains(namespace, "baseline") {
+						baselineScheduledAppContexts = append(baselineScheduledAppContexts, appCtx)
+					} else {
+						privilegeScheduledAppContexts = append(privilegeScheduledAppContexts, appCtx)
+					}
+				}
+			}
+			if psaLevel == "restricted" {
+				log.Infof("The app list at the end of the iteration %s is %v", psaLevel, Inst().AppList)
+				Inst().AppList = testAppList
+			}
+		}
+		projectLabel[RandomString(9)] = RandomString(9)
+		projectAnnotation[RandomString(9)] = RandomString(9)
+	})
+
+	It("Take backup with restricted PSA namespace and restore it in privilege PSA namespace", func() {
+		defer func() {
+			log.InfoD("Switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "Failed to set ClusterContext to default cluster")
+		}()
+
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Create cloud credentials and backup location", func() {
+			log.InfoD("Creating cloud credentials and backup location")
+			backupLocationProviders := GetBackupProviders()
+			for _, provider := range backupLocationProviders {
+				credName = fmt.Sprintf("%s-cred-%v", provider, RandomString(10))
+				credUid = uuid.New()
+				err := CreateCloudCredential(provider, credName, credUid, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s]  as provider %s", credName, BackupOrgID, provider))
+				backupLocationName = fmt.Sprintf("%s-backup-location-%v", provider, RandomString(10))
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, credName, credUid, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocationName))
+			}
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid %s", SourceClusterName, srcClusterUid))
+		})
+
+		Step("Create schedule policies", func() {
+			log.InfoD("Creating schedule policies")
+			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 60, 2)
+			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(periodicPolicyName, uuid.New(), BackupOrgID, periodicSchedulePolicyInfo)
+			dash.VerifyFatal(periodicPolicyStatus, nil, fmt.Sprintf("Creation of periodic schedule policy - %s", periodicPolicyName))
+		})
+
+		Step("Creation of pre and post exec rules for given applications", func() {
+			log.InfoD("Creation of pre and post exec rules for given applications ")
+			preRuleName, postRuleName, err = CreateRuleForBackupWithMultipleApplications(BackupOrgID, Inst().AppList, ctx)
+			dash.VerifyFatal(err, nil, "Verifying creation of pre and post exec rules for given applications from px-admin")
+			if preRuleName != "" {
+				preRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleName)
+				log.FailOnError(err, "Fetching pre backup rule [%s] uid", preRuleName)
+				log.InfoD("Pre backup rule [%s] uid: [%s]", preRuleName, preRuleUid)
+			}
+			if postRuleName != "" {
+				postRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleName)
+				log.FailOnError(err, "Fetching post backup rule [%s] uid", postRuleName)
+				log.InfoD("Post backup rule [%s] uid: [%s]", postRuleName, postRuleUid)
+			}
+		})
+
+		Step("Creating namespaces and adding them to rancher projects on source cluster", func() {
+			log.InfoD("Creating namespaces and adding them to rancher projects on source cluster")
+			for i := 0; i < len(bkpNamespaces); i++ {
+				projectName := fmt.Sprintf("project-%s-%d", RandomString(5), i)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(projectName, RancherProjectDescription, "rke.SourceClusterName", projectLabel, projectAnnotation)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project on source cluster %s", projectName))
+				projectID, err := Inst().S.(*rke.Rancher).GetProjectID(projectName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting Project ID - %s for project %s", projectID, projectName))
+				log.Infof("Adding namespace to source project and taking backup of it")
+				err = Inst().S.(*rke.Rancher).AddNamespacesToProject(projectName, []string{bkpNamespaces[i]})
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Adding namespace %s to project %s", bkpNamespaces[i], projectName))
+				err = Inst().S.(*rke.Rancher).ValidateProjectOfNamespaces(projectName, []string{bkpNamespaces[i]})
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying project %s of namespace %s", projectName, bkpNamespaces[i]))
+				sourceNamespaceProjectMapping[bkpNamespaces[i]] = projectName
+				log.Infof("The source namespace project mapping is %v", sourceNamespaceProjectMapping)
+				sourceNamespaceProjectUIDMapping[bkpNamespaces[i]] = projectID
+				log.Infof("The source namespace project UID mapping is %v", sourceNamespaceProjectUIDMapping)
+			}
+		})
+
+		Step("Creating manual backup with restricted & baseline namespaces", func() {
+			wg.Add(2)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				log.InfoD("Creating manual backup with restricted namespaces")
+				restrictedManualBackupName = fmt.Sprintf("%s-%v", "bkp-restricted", RandomString(5))
+				err = CreateBackupWithValidation(ctx, restrictedManualBackupName, SourceClusterName, backupLocationName, backupLocationUID, restrictedScheduledAppContexts, nil, BackupOrgID, srcClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of manual backup %v with restricted namespaces", restrictedManualBackupName))
+				mutex.Lock()
+				backupList = append(backupList, restrictedManualBackupName)
+				mutex.Unlock()
+				log.InfoD("Backup list after manual restricted backup %v", backupList)
+			}()
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				log.InfoD("Creating manual backup with baseline namespaces")
+				baselineManualBackupName = fmt.Sprintf("%s-%v", "bkp-baseline", RandomString(5))
+				err = CreateBackupWithValidation(ctx, baselineManualBackupName, SourceClusterName, backupLocationName, backupLocationUID, baselineScheduledAppContexts, nil, BackupOrgID, srcClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of manual backup %v with basline namespaces", backupName))
+				mutex.Lock()
+				backupList = append(backupList, baselineManualBackupName)
+				mutex.Unlock()
+				log.InfoD("Backup list after manual baseline backup %v", backupList)
+			}()
+			wg.Wait()
+		})
+
+		Step("Creating namespaces and rancher projects on destination cluster", func() {
+			log.InfoD("Creating namespaces and rancher projects on destination cluster")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			var restoredNamespaceList []string
+			for i := 0; i < len(bkpNamespaces); i++ {
+				log.InfoD("Actual namespaces to be created on destination cluster is %v", bkpNamespaces)
+				namespace := fmt.Sprintf("restore-%v-%v", bkpNamespaces[i], RandomString(3))
+				if strings.Contains(namespace, "restricted") {
+					namespaceMapRestrictedToBaseline[bkpNamespaces[i]] = namespace
+					err1 := CreateNamespaceAndAssignLabels(namespace, BaselinePSALabel)
+					dash.VerifyFatal(err1, nil, fmt.Sprintf("Created namespace %s and assigned PSA label %s", namespace, BaselinePSALabel))
+					log.Infof("Restricted to baseline PSA map is %v", namespaceMapRestrictedToBaseline)
+					namespaceMapRestrictedToPrivilege[bkpNamespaces[i]] = namespace
+					err2 := CreateNamespaceAndAssignLabels(namespace, PrivilegedPSALabel)
+					dash.VerifyFatal(err2, nil, fmt.Sprintf("Created namespace %s and assigned PSA label %s", namespace, PrivilegedPSALabel))
+					log.Infof("Restricted to privilege PSA map is %v", namespaceMapRestrictedToPrivilege)
+				} else if strings.Contains(namespace, "baseline") {
+					namespaceMapBaselineToPrivilege[bkpNamespaces[i]] = namespace
+					err := CreateNamespaceAndAssignLabels(namespace, PrivilegedPSALabel)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating namespace %s", namespace))
+					log.Infof("Baseline to Privilege PSA map %v", namespaceMapBaselineToPrivilege)
+				}
+				allNamespaceMap = make(map[string]string)
+				for key, value := range namespaceMapRestrictedToBaseline {
+					allNamespaceMap[key] = value
+				}
+				for key, value := range namespaceMapBaselineToPrivilege {
+					allNamespaceMap[key] = value
+				}
+				restoredNamespaceList = append(restoredNamespaceList, namespace)
+				log.InfoD("Created namespace list on destination cluster %v", restoredNamespaceList)
+				projectName := fmt.Sprintf("project-%v-%d", RandomString(5), i)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(projectName, RancherProjectDescription, "rke.DestinationClusterName", projectLabel, projectAnnotation)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project on destination cluster %s", projectName))
+				projectID, err := Inst().S.(*rke.Rancher).GetProjectID(projectName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting Project ID - %s for project %s", projectID, projectName))
+				restoreProjectUIDMapping[sourceNamespaceProjectUIDMapping[bkpNamespaces[i]]] = projectID
+				log.Infof("Project UID mapping to restore : %v", restoreProjectUIDMapping)
+				restoreProjectNameMapping[sourceNamespaceProjectMapping[bkpNamespaces[i]]] = projectName
+				log.Infof("Project name mapping to restore : %v", restoreProjectNameMapping)
+				err = Inst().S.(*rke.Rancher).AddNamespacesToProject(projectName, []string{namespace})
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Adding namespace %s to project %s", namespace, projectName))
+				err = Inst().S.(*rke.Rancher).ValidateProjectOfNamespaces(projectName, []string{namespace})
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying project %s of namespace %s", projectName, namespace))
+			}
+		})
+
+		Step("Restore restricted to baseline namespaces with namespace & project mappings", func() {
+			log.InfoD("Restore restricted to baseline namespaces with namespace & project mappings")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.Infof("The restricted backup which is going to restore is %v", restrictedManualBackupName)
+			restoreName := fmt.Sprintf("restore-rtob-%v", RandomString(5))
+			err = CreateRestoreWithProjectMapping(restoreName, restrictedManualBackupName, namespaceMapRestrictedToBaseline, DestinationClusterName, BackupOrgID, ctx, nil, restoreProjectUIDMapping, restoreProjectNameMapping)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore with %s from backup %s", restoreName, restrictedManualBackupName))
+		})
+
+		Step("Restore baseline to privilege namespaces with namespace & project mappings", func() {
+			log.InfoD("Restore baseline to privilege namespaces with namespace & project mappings")
+			log.Infof("The baseline backup which is going to restore is %v", baselineManualBackupName)
+			restoreName := fmt.Sprintf("restore-btop-%v", RandomString(5))
+			err = CreateRestoreWithProjectMapping(restoreName, baselineManualBackupName, namespaceMapBaselineToPrivilege, DestinationClusterName, BackupOrgID, ctx, nil, restoreProjectUIDMapping, restoreProjectNameMapping)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore with %s from backup %s", restoreName, baselineManualBackupName))
+		})
+
+		Step("Creating schedule backup with all restricted & baseline namespaces", func() {
+			log.InfoD("Creating schedule backup with all restricted & baseline namespaces")
+			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, periodicPolicyName)
+			schBackupName := fmt.Sprintf("schbkp-all-ns-%v", RandomString(4))
+			scheduleNames = append(scheduleNames, schBackupName)
+			labelSelectors := make(map[string]string)
+			log.InfoD("Creating a schedule backup [%s] with namespaces [%s]", backupName, bkpNamespaces)
+			allNSScheduleBackup, err = CreateScheduleBackupWithValidation(ctx, schBackupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of schedule backup [%s] with all namespaces contains both restricted and baseline apps.", allNSScheduleBackup))
+			schBackupList = append(schBackupList, allNSScheduleBackup)
+			log.Infof("Schedule backup list after all namespaces backup %v", schBackupList)
+		})
+
+		Step("Creating schedule backup with restricted & baseline namespaces", func() {
+			wg.Add(2)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				log.InfoD("Creating schedule backup with restricted namespaces")
+				schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, periodicPolicyName)
+				schBackupName := fmt.Sprintf("schbkp-restricted-%v", RandomString(5))
+				labelSelectors := make(map[string]string)
+				restrictedScheduleBackup, err = CreateScheduleBackupWithValidation(ctx, schBackupName, SourceClusterName, backupLocationName, backupLocationUID, restrictedScheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of schedule backup %v with restricted namespaces", restrictedScheduleBackup))
+				mutex.Lock()
+				scheduleNames = append(scheduleNames, schBackupName)
+				schBackupList = append(schBackupList, restrictedScheduleBackup)
+				mutex.Unlock()
+				log.Infof("Schedule backup list after schedule backup with restricted namespaces - %v", schBackupList)
+			}()
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				log.InfoD("Creating schedule backup with baseline namespaces")
+				schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, periodicPolicyName)
+				schBackupName := fmt.Sprintf("schbkp-baseline-%v", RandomString(5))
+				labelSelectors := make(map[string]string)
+				baselineScheduleBackup, err = CreateScheduleBackupWithValidation(ctx, schBackupName, SourceClusterName, backupLocationName, backupLocationUID, baselineScheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of schedule backup %v with baseline namespaces", baselineScheduleBackup))
+				mutex.Lock()
+				scheduleNames = append(scheduleNames, schBackupName)
+				schBackupList = append(schBackupList, baselineScheduleBackup)
+				mutex.Unlock()
+				log.Infof("Schedule backup list after schedule backup with baseline namespaces - %v", schBackupList)
+			}()
+			wg.Wait()
+		})
+
+		Step("Custom restore of restricted namespaces to destination cluster", func() {
+			log.InfoD("Custom restore of restricted namespaces to destination cluster")
+			restoreName := fmt.Sprintf("restore-restricted-%v", RandomString(5))
+			err = CreateRestoreWithProjectMapping(restoreName, restrictedScheduleBackup, namespaceMapRestrictedToPrivilege, DestinationClusterName, BackupOrgID, ctx, nil, restoreProjectUIDMapping, restoreProjectNameMapping)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Custom restore %s from restricted namespace backup %s", restoreName, restrictedScheduleBackup))
+		})
+
+		Step("Default restore of baseline namespaces to destination cluster", func() {
+			log.InfoD("Default restore of baseline namespaces to destination cluster")
+			restoreName := fmt.Sprintf("restore-baseline-%v", RandomString(5))
+			err = CreateRestoreWithValidation(ctx, restoreName, baselineScheduleBackup, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, baselineScheduledAppContexts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Default restore %s from baseline namespace backup %s", restoreName, baselineScheduleBackup))
+		})
+
+		Step("Restore all namespace backup to destination cluster with namespace & project mappings", func() {
+			log.InfoD("Restore all namespace backup to destination cluster with namespace & project mappings")
+			log.Infof("All namespace backup which is going to restore is %v", allNSScheduleBackup)
+			restoreName := fmt.Sprintf("restore-all-%v", RandomString(5))
+			err = CreateRestoreOnRancherWithoutCheck(restoreName, allNSScheduleBackup, allNamespaceMap, DestinationClusterName, BackupOrgID, ctx, nil, restoreProjectUIDMapping, restoreProjectNameMapping, 2)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore with replace option %s from backup %s", restoreName, allNSScheduleBackup))
+			err = RestoreSuccessCheck(restoreName, BackupOrgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, RestoreJobProgressRetryTime*time.Minute, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore %s with all namespace backup with project mappings", restoreName))
+		})
+	})
+
+	JustAfterEach(func() {
+		log.InfoD("Cleaning up the resources after the test execution")
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			log.Infof("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "Failed to SetClusterContext to default cluster")
+		}()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.Infof("Deleting the backups as part of clean up")
+		allBackups, err := GetAllBackupsAdmin()
+		dash.VerifySafely(err, nil, "Verifying fetching of all backups")
+		for _, backupName := range allBackups {
+			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
+		}
+		log.Info("Destroying scheduled apps on source cluster")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
+		log.Info("Deleting schedules")
+		for _, scheduleName := range scheduleNames {
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting schedule [%s]", scheduleName))
+		}
+		log.Infof("Deleting pre & post exec rules")
+		allRules, _ := Inst().Backup.GetAllRules(ctx, BackupOrgID)
+		for _, ruleName := range allRules {
+			err := DeleteRule(ruleName, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of rule [%s]", ruleName))
+		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, credUid, ctx)
 	})
 })
