@@ -6174,3 +6174,70 @@ var _ = Describe("{VerifyPoolCreateInProperZones}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{RestartPXAfterPureSecretRecreation}", func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-24004
+	   1.Delete the Pure Secret and Add it Back
+	   2.Restart PX and check if PX is up
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPXAfterPureSecretRecreation",
+			"Delete the Pure Secret and Add it Back and restart the PX and check if PX is up", nil, 0)
+	})
+	var pureSecretJSON string
+	itLog := "RebootAllWorkerNodesandCheckPXWithMgmtInterfaceDown"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		pxNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		stepLog := "Collect Details of PX-PURE-SECRET"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var err error
+			pureSecretJSON, err = Inst().S.GetSecretData(pxNamespace, PureSecretName, pureSecretDataField)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to fetch secret [%s] in [%s] namespace", PureSecretName, pxNamespace))
+		})
+		stepLog = "Delete Pure secret"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().S.DeleteSecret(pxNamespace, PureSecretName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete secret [%s] in [%s] namespace", PureSecretName, pxNamespace))
+
+		})
+		stepLog = "Re-create Pure secret"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().S.CreateSecret(pxNamespace, PureSecretName, pureSecretDataField, pureSecretJSON)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to create secret [%s] in [%s] namespace", PureSecretName, pxNamespace))
+		})
+		stepLog = "Stop PX and start it back and  check if PX is up"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pxNodes := node.GetStorageDriverNodes()
+			log.InfoD("Stop portworx Service on all Storage Driver Nodes")
+			err := Inst().V.StopDriver(pxNodes, false, nil)
+			dash.VerifyFatal(err, nil, "Failed to stop portworx on nodes")
+			log.InfoD("stopped portworx on all nodes")
+			for _, node := range pxNodes {
+				err = Inst().V.WaitDriverDownOnNode(node)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of node %s", node.Name))
+			}
+			log.InfoD("Starting portworx Service on all Storage Driver Nodes")
+			for _, node := range pxNodes {
+				err := Inst().V.StartDriver(node)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to start portworx on node %s", node.Name))
+			}
+			log.InfoD("Started portworx on All Nodes")
+			for _, node := range pxNodes {
+				err := Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", node.Name))
+			}
+			log.InfoD("Portworx is up on all nodes")
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+})
