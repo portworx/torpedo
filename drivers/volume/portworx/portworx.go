@@ -118,7 +118,7 @@ const (
 	podUpRetryInterval                = 30 * time.Second
 	maintenanceOpTimeout              = 1 * time.Minute
 	maintenanceWaitTimeout            = 10 * time.Minute
-	inspectVolumeTimeout              = 2 * time.Minute
+	inspectVolumeTimeout              = 5 * time.Minute
 	inspectVolumeRetryInterval        = 3 * time.Second
 	validateDeleteVolumeTimeout       = 15 * time.Minute
 	validateReplicationUpdateTimeout  = 60 * time.Minute
@@ -1339,9 +1339,6 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		if err != nil {
 			return nil, true, err
 		}
-
-		// Sometimes Px will take longer time to update device path , sleeping for a minute before checking for device path
-		time.Sleep(1 * time.Minute)
 
 		vol := volumeInspectResponse.Volume
 
