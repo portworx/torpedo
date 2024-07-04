@@ -11939,26 +11939,24 @@ func DeleteCloudSnapBucket(bucketName string) error {
 			return err
 		}
 		var sess *session.Session
-		if strings.Contains(endpoint, "minio") {
-
-			sess, err = session.NewSessionWithOptions(session.Options{
-				Config: aws.Config{
-					Endpoint:         aws.String(endpoint),
-					Region:           aws.String(s3Region),
-					Credentials:      credentials.NewStaticCredentials(id, secret, ""),
-					S3ForcePathStyle: aws.Bool(true),
-				},
-			})
-			if err != nil {
-				return fmt.Errorf("failed to initialize new session: %v", err)
-			}
-		}
 
 		if strings.Contains(endpoint, "amazonaws") {
 			sess, err = session.NewSessionWithOptions(session.Options{
 				Config: aws.Config{
 					Region:      aws.String(s3Region),
 					Credentials: credentials.NewStaticCredentials(id, secret, ""),
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to initialize new session: %v", err)
+			}
+		} else {
+			sess, err = session.NewSessionWithOptions(session.Options{
+				Config: aws.Config{
+					Endpoint:         aws.String(endpoint),
+					Region:           aws.String(s3Region),
+					Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+					S3ForcePathStyle: aws.Bool(true),
 				},
 			})
 			if err != nil {
