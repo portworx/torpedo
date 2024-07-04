@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler/rke"
 	"os"
 	"strconv"
 	"strings"
@@ -150,9 +151,21 @@ func BackupInitInstance() {
 		// Switch context to destination cluster to update RancherMap with destination cluster details
 		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
+		log.InfoD("Getting destination cluster name")
+		destClusterConfigPath, err := GetDestinationClusterConfigPath()
+		log.FailOnError(err, "Failed to get destination cluster config path")
+		rke.DestinationClusterName, err = GetClusterName(destClusterConfigPath)
+		log.FailOnError(err, "Failed to get destination cluster name using kubeconfig")
+		log.InfoD("The destination cluster name is %v", rke.DestinationClusterName)
 		// Switch context to destination cluster to update RancherMap with source cluster details
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster failed")
+		log.InfoD("Getting source cluster name")
+		srcClusterConfigPath, err := GetSourceClusterConfigPath()
+		log.FailOnError(err, "Failed to get destination cluster config path")
+		rke.SourceClusterName, err = GetClusterName(srcClusterConfigPath)
+		log.FailOnError(err, "Failed to get source cluster name using kubeconfig")
+		log.InfoD("The source cluster name is %v", rke.SourceClusterName)
 	}
 }
 
