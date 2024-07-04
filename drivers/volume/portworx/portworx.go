@@ -1340,6 +1340,9 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			return nil, true, err
 		}
 
+		// Sometimes Px will take longer time to update device path , sleeping for a minute before checking for device path
+		time.Sleep(1 * time.Minute)
+
 		vol := volumeInspectResponse.Volume
 
 		// Status
