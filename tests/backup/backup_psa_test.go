@@ -1761,7 +1761,7 @@ var _ = Describe("{PSALowerPrivilegeToHigherPrivilegeWithProjectMapping}", Label
 			log.InfoD("Creating namespaces and adding them to rancher projects on source cluster")
 			for i := 0; i < len(bkpNamespaces); i++ {
 				projectName := fmt.Sprintf("project-%s-%d", RandomString(5), i)
-				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(projectName, RancherProjectDescription, "rke.SourceClusterName", projectLabel, projectAnnotation)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(projectName, RancherProjectDescription, rke.SourceClusterName, projectLabel, projectAnnotation)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project on source cluster %s", projectName))
 				projectID, err := Inst().S.(*rke.Rancher).GetProjectID(projectName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting Project ID - %s for project %s", projectID, projectName))
@@ -1839,7 +1839,7 @@ var _ = Describe("{PSALowerPrivilegeToHigherPrivilegeWithProjectMapping}", Label
 				restoredNamespaceList = append(restoredNamespaceList, namespace)
 				log.InfoD("Created namespace list on destination cluster %v", restoredNamespaceList)
 				projectName := fmt.Sprintf("project-%v-%d", RandomString(5), i)
-				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(projectName, RancherProjectDescription, "rke.DestinationClusterName", projectLabel, projectAnnotation)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(projectName, RancherProjectDescription, rke.DestinationClusterName, projectLabel, projectAnnotation)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project on destination cluster %s", projectName))
 				projectID, err := Inst().S.(*rke.Rancher).GetProjectID(projectName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting Project ID - %s for project %s", projectID, projectName))
