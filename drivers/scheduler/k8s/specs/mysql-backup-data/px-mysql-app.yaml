@@ -40,13 +40,13 @@ spec:
               mountPath: /var/lib/mysql
         - name: init-mysql-2
           image: busybox
-          command: [ 'sh', '-c', 'dd if=/dev/urandom of=/var/lib/mysql-aggr/mysql-test-dd-2 bs=1M count=5120' ]
+          command: [ 'sh', '-c', 'dd if=/dev/urandom of=/var/lib/mysql-aggr/mysql-test-dd-2 bs=1M count=10240' ]
           volumeMounts:
             - name: mysql-persistent-storage-aggr
               mountPath: /var/lib/mysql-aggr
         - name: init-mysql-3
           image: busybox
-          command: [ 'sh', '-c', 'dd if=/dev/urandom of=/var/lib/mysql-seq/mysql-test-dd-2 bs=1M count=5120' ]
+          command: [ 'sh', '-c', 'dd if=/dev/urandom of=/var/lib/mysql-seq/mysql-test-dd-2 bs=1M count=10240' ]
           volumeMounts:
             - name: mysql-persistent-storage-seq
               mountPath: /var/lib/mysql-seq
