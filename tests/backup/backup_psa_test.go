@@ -977,7 +977,6 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 		baselineNamespaceInSrcCluster                                         string
 		restrictedNamespaceInSrcCluster                                       string
 		privilegedNamespaceInSrcCluster                                       string
-		appNamespaces                                                         []string
 		backupList                                                            []string
 		restoreList                                                           []string
 		defaultAppList                                                        []string
@@ -1058,20 +1057,6 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 			}
 		})
 
-		Step("Getting storage class of the source cluster", func() {
-			log.InfoD("Getting storage class of the source cluster")
-			for _, appNamespaces := range appNamespaces {
-				pvcs, err := core.Instance().GetPersistentVolumeClaims(appNamespaces, make(map[string]string))
-				log.FailOnError(err, "Getting PVC on source cluster")
-				singlePvc := pvcs.Items[0]
-				tempSc, err := core.Instance().GetStorageClassForPVC(&singlePvc)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting SC %v from PVC in source cluster",
-					tempSc.Name))
-				sourceScNameList = append(sourceScNameList, tempSc)
-			}
-			log.InfoD("The list of storage class in source cluster is %v", sourceScNameList)
-		})
-
 		Step("Deploying applications on namespaces with different PSA set", func() {
 			psaLabelMap := map[string]map[string]string{}
 			psaLabelMap[RestrictedPSA] = RestrictedPSALabel
@@ -1110,6 +1095,20 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 				allScheduledAppContexts = append(allScheduledAppContexts, currentScheduledAppContexts...)
 				scheduledAppContexts = append(scheduledAppContexts, currentScheduledAppContexts...)
 			}
+		})
+
+		Step("Getting storage class of the source cluster", func() {
+			log.InfoD("Getting storage class of the source cluster")
+			for _, appNamespace := range namespaces {
+				pvcs, err := core.Instance().GetPersistentVolumeClaims(appNamespace, make(map[string]string))
+				log.FailOnError(err, "Getting PVC on source cluster")
+				singlePvc := pvcs.Items[0]
+				tempSc, err := core.Instance().GetStorageClassForPVC(&singlePvc)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting SC %v from PVC in source cluster",
+					tempSc.Name))
+				sourceScNameList = append(sourceScNameList, tempSc)
+			}
+			log.InfoD("The list of storage class in source cluster is %v", sourceScNameList)
 		})
 
 		Step("Take backup of multiple namespace with restricted label and restore it to a destination cluster on namespace with baseline label", func() {
