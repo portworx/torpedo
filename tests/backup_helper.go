@@ -7473,12 +7473,12 @@ func GetBackupPodAge() (map[string]nsPodAge, error) {
 	k8sCore := core.Instance()
 	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
 	if err != nil {
-		return podAge, fmt.Errorf("failed to get namespaces list")
+		return podAge, fmt.Errorf("failed to get namespaces list error:[%v]", err)
 	}
 	for _, namespace := range allNamespaces.Items {
 		pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
 		if err != nil {
-			return podAge, fmt.Errorf("failed to get pods for namespace")
+			return podAge, fmt.Errorf("failed to get pods for namespace error:[%v]", err)
 		}
 		for _, pod := range pods.Items {
 			podAge[namespace.ObjectMeta.GetName()] = nsPodAge{pod.ObjectMeta.GetGenerateName(): pod.GetCreationTimestamp().Time}
@@ -7494,7 +7494,7 @@ func ComparePodAge(oldPodAge map[string]nsPodAge) error {
 	k8sCore := core.Instance()
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to get list of services")
+		return fmt.Errorf("failed to get list of services error:[%v]", err)
 	}
 	for _, svc := range allServices.Items {
 		if svc.Name == "portworx-service" {
@@ -7506,7 +7506,7 @@ func ComparePodAge(oldPodAge map[string]nsPodAge) error {
 	for _, namespace := range allNamespaces.Items {
 		pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
 		if err != nil {
-			return fmt.Errorf("failed to get pods for namespace")
+			return fmt.Errorf("failed to get pods for namespace error:[%v]", err)
 		}
 		if IsPresent(namespacesToSkip, namespace.ObjectMeta.GetName()) {
 			for _, pod := range pods.Items {
@@ -10249,11 +10249,11 @@ type FeaturePlatformMap map[string]map[string][]string
 
 var featureData = FeaturePlatformMap{
 	"PartialBackup": {
-		"openshift": {"postgres-backup", "pg-mysql-multiprov-ocp"},
+		"openshift": {"pg-mysql-multiprov-ocp"},
 		"gke":       {"TODO", "TODO"},
-		"azure":     {"postgres-backup", "pg-mysql-multiprov-aks"},
+		"azure":     {"pg-mysql-multiprov-aks"},
 		"vanilla":   {"TODO", "TODO"},
-		"ibm":       {"postgres-backup", "pg-mysql-multiprov-iks"},
+		"ibm":       {"pg-mysql-multiprov-iks"},
 	},
 }
 
