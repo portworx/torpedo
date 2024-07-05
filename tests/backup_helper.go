@@ -10249,9 +10249,9 @@ type FeaturePlatformMap map[string]map[string][]string
 
 var featureData = FeaturePlatformMap{
 	"PartialBackup": {
-		"openshift": {"postgres-backup", "pxb-multipleapp-multivol"},
+		"openshift": {"postgres-backup", "pxb-pg-mysql-multiprov"},
 		"GKE":       {"TODO", "TODO"},
-		"AKS":       {"TODO", "TODO"},
+		"azure":     {"postgres-azure-disk", "pxb-pg-mysql-multiprov"},
 		"Vanilla":   {"TODO", "TODO"},
 	},
 }

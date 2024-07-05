@@ -23,15 +23,15 @@ spec:
           volumeMounts:
             - name: mysql-portworx
               mountPath: /var/lib/mysql
-            - name: mysql-cephfs
+            - name: mysql-csi
               mountPath: /etc/mysql/conf.d
       volumes:
         - name: mysql-portworx
           persistentVolumeClaim:
             claimName: mysql-portworx-pvc
-        - name: mysql-cephfs
+        - name: mysql-csi
           persistentVolumeClaim:
-            claimName: mysql-cephfs-pvc
+            claimName: mysql-csi-pvc
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -60,68 +60,12 @@ spec:
           volumeMounts:
             - name: postgres-portworx
               mountPath: /var/lib/postgresql/data
-            - name: postgres-cephfs
+            - name: postgres-csi
               mountPath: /etc/postgresql/conf.d
       volumes:
         - name: postgres-portworx
           persistentVolumeClaim:
             claimName: postgres-portworx-pvc
-        - name: postgres-cephfs
+        - name: postgres-csi
           persistentVolumeClaim:
-            claimName: postgres-cephfs-pvc
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mysql-portworx-pvc
-  labels:
-    backupVolumeType: pxd
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: px-csi-db
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mysql-cephfs-pvc
-  labels:
-    backupVolumeType: csi
-spec:
-  accessModes:
-    - ReadWriteMany
-  resources:
-    requests:
-      storage: 5Gi
-  storageClassName: ocs-storagecluster-cephfs
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: postgres-portworx-pvc
-  labels:
-    backupVolumeType: pxd
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: px-csi-db
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: postgres-cephfs-pvc
-  labels:
-    backupVolumeType: csi
-spec:
-  accessModes:
-    - ReadWriteMany
-  resources:
-    requests:
-      storage: 5Gi
-  storageClassName: ocs-storagecluster-cephfs
+            claimName: postgres-csi-pvc
