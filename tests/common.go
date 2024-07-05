@@ -2859,7 +2859,7 @@ func ToggleAutopilotInStc() error {
 		autoPilotNamespace, err := Inst().V.GetVolumeDriverNamespace()
 		log.FailOnError(err, "Failed to get volume driver namespace")
 		pods, err := k8sCore.GetPods(autoPilotNamespace, autopilotLabels)
-		expect(err).NotTo(haveOccurred())
+		dash.VerifyFatal(err, nil, "Failed to get pods")
 		if stc.Spec.Autopilot.Enabled {
 			log.Infof("autopilot is active, checking is pod is present.")
 			if len(pods.Items) == 0 {
