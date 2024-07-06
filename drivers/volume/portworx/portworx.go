@@ -2078,7 +2078,7 @@ func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEn
 		if !strings.Contains(line, schedops.PureVolumeOUI) {
 			continue
 		}
-		if strings.Contains(line, "p") && len(line) > 34 { // If this contains either "-part#" or "p#", we want to ignore it. 'p' is not in the hex character set so this is safe.
+		if strings.Contains(line, "p") || len(line) > 34 { // If this contains either "-part#" or "p#", we want to ignore it. 'p' is not in the hex character set so this is safe.
 			continue
 		}
 		mapperName := strings.Split(line, "\t")[0]
