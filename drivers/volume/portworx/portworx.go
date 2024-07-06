@@ -2080,20 +2080,13 @@ func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEn
 		}
 
 		// If this contains either "-part#" or "p#", we want to ignore it. 'p' is not in the hex character set so this is safe.
-		// there will be few instances where device ID ends with digit for Part Numbers , so we ignore lines which is >
-		if strings.Contains(line, "p") {
-			continue
-		}
-
-		re := regexp.MustCompile(`^\S+`)
-		match := re.FindString(line)
-		if match != "" {
-			if len(match) > 34 && strings.Contains(line, schedops.PureVolumeOUI) {
+		mapperName := strings.Split(line, "\t")[0]
+		if strings.Contains(mapperName, schedops.PureVolumeOUI) {
+			if len(mapperName) > 34 || strings.Contains(line, "p") {
 				continue
 			}
 		}
 
-		mapperName := strings.Split(line, "\t")[0]
 		dmsetupFoundMappers = append(dmsetupFoundMappers, mapperName)
 	}
 
