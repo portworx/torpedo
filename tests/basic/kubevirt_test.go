@@ -3,7 +3,11 @@ package tests
 import (
 	context1 "context"
 	"fmt"
+	"github.com/libopenstorage/openstorage/api"
+	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/portworx/sched-ops/task"
 	"net/url"
 	"strings"
 	"sync"
@@ -1958,3 +1962,138 @@ var _ = Describe("{RestartPXAndCheckIfVmBindMount}", func() {
 		AfterEachTest(appCtxs)
 	})
 })
+
+var _ = Describe("{NodeDecomissionAndValidateVM", func() {
+
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-24759
+	   1. Schedule a kubevirt VM
+	   2. Decommission the node where VM is provisioned
+	   3. Verify VM is migrated to different node
+
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("NodeDecomissionAndValidateVM", "Decomission node and validate VM", nil, 0)
+
+	})
+
+	var appCtxs []*scheduler.Context
+
+	itLog := "Decomission node and validate VM"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		namespace := fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+		stepLog := "schedule a kubevirt VM"
+
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("test-%v", i)
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, taskName)...)
+			}
+			ValidateApplications(appCtxs)
+			//validate bind mount
+			for _, appCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			}
+		})
+		//Find the node with highest number of VM's and decomission it
+		nodeToDecommissionName, err := GetNodeWithMaxVMs(appCtxs)
+		log.FailOnError(err, "Failed to get node with max VM's provisioned on it")
+
+		nodeToDecommission, err := node.GetNodeByName(nodeToDecommissionName)
+		log.FailOnError(err, "Failed to get node object for node name: %s", nodeToDecommissionName)
+
+		stepLog = "Decomission the node where VM is provisioned"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//checking node status before decommission
+			status, err := Inst().V.GetNodeStatus(nodeToDecommission)
+			log.FailOnError(err, "error checking node [%s] status", nodeToDecommission.Name)
+			if *status != api.Status_STATUS_OK {
+				log.Infof("Node [%s] status is Not OK", nodeToDecommission.Name)
+			}
+
+			var suspendedScheds []*v1alpha1.VolumeSnapshotSchedule
+			defer func() {
+				if len(suspendedScheds) > 0 {
+					for _, sched := range suspendedScheds {
+						makeSuspend := false
+						sched.Spec.Suspend = &makeSuspend
+						_, err := storkops.Instance().UpdateSnapshotSchedule(sched)
+						log.FailOnError(err, "error resuming volumes snapshot schedule for volume [%s] ", sched.Name)
+					}
+				}
+			}()
+			err = PrereqForNodeDecomm(nodeToDecommission, suspendedScheds)
+			log.FailOnError(err, "error performing prerequisites for node decommission")
+			//After we drain the node the VM's should be successfully migrated to other nodes
+			err = Inst().S.PrepareNodeToDecommission(nodeToDecommission, Inst().Provisioner)
+			dash.VerifyFatal(err, nil, "Validate node decommission preparation")
+			err = Inst().V.DecommissionNode(&nodeToDecommission)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate node [%s] decommission init", nodeToDecommission.Name))
+			stepLog = fmt.Sprintf("check if node %s was decommissioned", nodeToDecommission.Name)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				result := false
+				t := func() (interface{}, bool, error) {
+					status, err := Inst().V.GetNodeStatus(nodeToDecommission)
+					if err != nil {
+						return false, true, err
+					}
+					if *status == api.Status_STATUS_NONE {
+						return true, false, nil
+					}
+					return false, true, fmt.Errorf("node %s not decomissioned yet", nodeToDecommission.Name)
+				}
+				decommissioned, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+				log.FailOnError(err, "Failed to get decommissioned node status")
+				result = decommissioned.(bool)
+
+				dash.VerifyFatal(result, true, fmt.Sprintf("Validate node [%s] is decommissioned", nodeToDecommission.Name))
+
+			})
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+func GetNodeWithMaxVMs(appCtxs []*scheduler.Context) (string, error) {
+	//Find the node with highest number of VM's provisioned on it
+	nodeVMMap := make(map[string]int)
+	for _, appCtx := range appCtxs {
+		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+		if err != nil {
+			return "", err
+		}
+		dash.VerifyFatal(len(vms) > 0, true, "Failed to get VMs from scheduled contexts")
+		for _, vm := range vms {
+			nodeName, err := GetNodeOfVM(vm)
+			if err != nil {
+				return "", err
+			}
+			if _, ok := nodeVMMap[nodeName]; ok {
+				nodeVMMap[nodeName]++
+			} else {
+				nodeVMMap[nodeName] = 1
+			}
+		}
+	}
+
+	//Find the key with highest value in a map
+	var maxNode string
+	var maxVMs int
+	for k, v := range nodeVMMap {
+		if v > maxVMs {
+			maxNode = k
+			maxVMs = v
+		}
+	}
+	return maxNode, nil
+}
