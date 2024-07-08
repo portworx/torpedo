@@ -9560,8 +9560,9 @@ func UpdateMaintenanceCronJob(backupLocation string, maintenanceJobType Maintena
 // CreateInvalidVolumeSnapshotClass creates invalid VolumeSnapshotClass for given provisioner
 func CreateInvalidVolumeSnapshotClass(snapShotClassName, provisioner string) (*volsnapv1.VolumeSnapshotClass, error) {
 	volumeSnapshotClassParameters := make(map[string]string)
+	invalidProvisioner := "invalid-" + provisioner
 	volumeSnapshotClassParameters["invalidParameter"] = "invalidValue"
-	volumeSnapshotClass, err := Inst().S.CreateVolumeSnapshotClassesWithParameters(snapShotClassName, provisioner, false, "Delete", volumeSnapshotClassParameters)
+	volumeSnapshotClass, err := Inst().S.CreateVolumeSnapshotClassesWithParameters(snapShotClassName, invalidProvisioner, false, "Delete", volumeSnapshotClassParameters)
 	if err != nil {
 		return nil, err
 	}

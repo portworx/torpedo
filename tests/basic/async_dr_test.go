@@ -646,7 +646,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackeckEsClusterwide}", func() {
 	})
 })
 
-var _ = Describe("{UpgradeVolumeDriverDuringMigration}", func() {
+var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", func() {
 	BeforeEach(func() {
 		if !kubeConfigWritten {
 			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
@@ -659,23 +659,25 @@ var _ = Describe("{UpgradeVolumeDriverDuringMigration}", func() {
 	JustBeforeEach(func() {
 		upgradeHopsList := make(map[string]string)
 		upgradeHopsList["upgradeHops"] = Inst().UpgradeStorageDriverEndpointList
-		upgradeHopsList["upgradeVolumeDriver"] = "true"
-		StartTorpedoTest("UpgradeVolumeDriver", "Validating volume driver upgrade", upgradeHopsList, 0)
+		upgradeHopsList["UpgradeVolumeDriverDuringMigration"] = "true"
+		StartTorpedoTest("UpgradeVolumeDriverDuringMigration", "Validating volume driver upgrade during migration", upgradeHopsList, 0)
 		log.InfoD("Volume driver upgrade hops list [%s]", upgradeHopsList)
 	})
 	var contexts []*scheduler.Context
 
-	It("upgrade volume driver and ensure everything is running fine", func() {
-		log.InfoD("upgrade volume driver and ensure everything is running fine")
+	It("upgrade volume driver during migration and ensure everything is running fine", func() {
+		log.InfoD("upgrade volume driver during migration and ensure everything is running fine")
 
 		taskNamePrefix := "asyncdr-upgradepx"
 		defaultNs := "kube-system"
 		migrationNamespaces, contexts := initialSetupApps(taskNamePrefix, false)
 		migNamespaces := strings.Join(migrationNamespaces, ",")
-		kubeConfigPathSrc, err := GetCustomClusterConfigPath(asyncdr.FirstCluster)
-		log.FailOnError(err, "Failed to get source configPath: %v", err)
-		kubeConfigPathDest, err := GetCustomClusterConfigPath(asyncdr.SecondCluster)
-		log.FailOnError(err, "Failed to get destination configPath: %v", err)
+		kubeConfigPath := map[int]string{}
+		for _, cluster := range []int{asyncdr.FirstCluster, asyncdr.SecondCluster} {
+			kubeConfigPath[cluster], err = GetCustomClusterConfigPath(cluster)
+			log.FailOnError(err, "Getting error while fetching path for %v cluster, error is %v", cluster, err)
+		}
+		
 		var migrationSchedName string
 		var schdPol *storkapi.SchedulePolicy
 		cpName := defaultClusterPairName + time.Now().Format("15h03m05s")
@@ -688,7 +690,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringMigration}", func() {
 
 		extraArgs := map[string]string{
 			"namespaces":           migNamespaces,
-			"kubeconfig":           kubeConfigPathSrc,
+			"kubeconfig":           kubeConfigPath[asyncdr.FirstCluster],
 			"schedule-policy-name": schdPol.Name,
 		}
 
@@ -699,63 +701,42 @@ var _ = Describe("{UpgradeVolumeDriverDuringMigration}", func() {
 
 			log.InfoD("Start migration schedule and perform failover")
 			migrationSchedName = migrationSchedKey + time.Now().Format("15h03m05s")
-			createMigSchdAndValidateMigration(migrationSchedName, cpName, defaultNs, kubeConfigPathSrc, extraArgs)
+			createMigSchdAndValidateMigration(migrationSchedName, cpName, defaultNs, kubeConfigPath[asyncdr.FirstCluster], extraArgs)
 		})
 
-		storageNodes := node.GetStorageNodes()
-		numOfNodes := len(node.GetStorageDriverNodes())
+		var stNodeClusterMap map[int][]node.Node
 
-		//AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
-		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
-		log.FailOnError(err, "Cloud drive installation failed")
-
-		if !isCloudDrive {
-			for _, storageNode := range storageNodes {
-				err := Inst().V.AddBlockDrives(&storageNode, nil)
-				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
-					continue
+		for cluster, path := range kubeConfigPath {
+			if cluster == asyncdr.SecondCluster {
+				err = hardSetConfig(path)
+				log.FailOnError(err, "Switching context to %v cluster failed", cluster)
+				err = SetCustomKubeConfig(asyncdr.SecondCluster)
+				log.FailOnError(err, "Switching context to %v cluster failed", cluster)
+				err = Inst().S.RefreshNodeRegistry()
+				log.FailOnError(err, "Node registry refresh failed")
+				err = Inst().V.RefreshDriverEndpoints()
+				log.FailOnError(err, "Refresh Driver end points failed")
+				stNodeClusterMap[cluster] = node.GetStorageNodes()
+				Step("Create Schedule Policy", func() {
+					schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, migrationInterval)
+					log.FailOnError(err, "Failed to create schedule policy")
+				})
+			} else {
+				stNodeClusterMap[cluster] = node.GetStorageNodes()
+			}
+			//AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
+			isCloudDrive, err := IsCloudDriveInitialised(stNodeClusterMap[cluster][0])
+			log.FailOnError(err, "Cloud drive installation failed")
+			if !isCloudDrive {
+				for _, storageNode := range stNodeClusterMap[cluster] {
+					err := Inst().V.AddBlockDrives(&storageNode, nil)
+					if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
+						continue
+					}
+					log.FailOnError(err, "Adding block drive(s) failed.")
 				}
-				log.FailOnError(err, "Adding block drive(s) failed.")
 			}
 		}
-
-		err = hardSetConfig(kubeConfigPathDest)
-		log.FailOnError(err, "Switching context to destination cluster failed")
-		err = SetCustomKubeConfig(asyncdr.SecondCluster)
-		log.FailOnError(err, "Switching context to destination cluster failed")
-
-		err = Inst().S.RefreshNodeRegistry()
-		log.FailOnError(err, "Node registry refresh failed")
-		err = Inst().V.RefreshDriverEndpoints()
-		log.FailOnError(err, "Refresh Driver end points failed")
-		storageNodesDest := node.GetStorageNodes()
-		numOfNodesDest := len(node.GetStorageDriverNodes())
-
-		// //AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
-
-		isCloudDriveDest, err := IsCloudDriveInitialised(storageNodesDest[0])
-		log.FailOnError(err, "Cloud drive installation failed")
-
-		if !isCloudDriveDest {
-			for _, storageNodeDest := range storageNodesDest {
-				err := Inst().V.AddBlockDrives(&storageNodeDest, nil)
-				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
-					continue
-				}
-				log.FailOnError(err, "Adding block drive(s) failed.")
-			}
-		}
-		Step("Create Schedule Policy", func() {
-			schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, migrationInterval)
-			log.FailOnError(err, "Failed to create schedule policy")
-		})
-
-		err = SetCustomKubeConfig(asyncdr.FirstCluster)
-		log.FailOnError(err, "Switching context to source cluster failed")
-		err = Inst().S.RefreshNodeRegistry()
-		log.FailOnError(err, "Node registry refresh failed")
-		err = Inst().V.RefreshDriverEndpoints()
-		log.FailOnError(err, "Refresh Driver end points failed")
 
 		Step("start the upgrade of volume driver", func() {
 			log.InfoD("start the upgrade of volume driver")
@@ -763,67 +744,44 @@ var _ = Describe("{UpgradeVolumeDriverDuringMigration}", func() {
 			if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
 				log.Fatalf("Unable to perform volume driver upgrade hops, none were given")
 			}
-
 			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
 			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
-				currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
-				if err != nil {
-					log.Warnf("error getting driver version, Err: %v", err)
+				for _, cluster := range []int{asyncdr.FirstCluster, asyncdr.SecondCluster} {
+					err = SetCustomKubeConfig(cluster)
+					log.FailOnError(err, "Switching context to %v cluster failed", cluster)
+					err = Inst().S.RefreshNodeRegistry()
+					log.FailOnError(err, "Node registry refresh failed")
+					err = Inst().V.RefreshDriverEndpoints()
+					log.FailOnError(err, "Refresh Driver end points failed")
+					currPXVersion, err := Inst().V.GetDriverVersionOnNode(stNodeClusterMap[cluster][0])
+					if err != nil {
+						log.Warnf("error getting driver version, Err: %v", err)
+					}
+					upgradeStatus, updatedPXVersion, durationInMins := upgradePX(upgradeHop, stNodeClusterMap[cluster])
+					log.InfoD("current PX version: %s, no of nodes: %d, upgrade status: %s, updated px version: %s, duration in mins: %d on source cluster",
+						currPXVersion, len(stNodeClusterMap[cluster]), upgradeStatus, updatedPXVersion, durationInMins)
+					majorVersion := strings.Split(currPXVersion, "-")[0]
+					statsData := make(map[string]string)
+					statsData["numOfNodes"] = fmt.Sprintf("%d", len(stNodeClusterMap[cluster]))
+					statsData["fromVersion"] = currPXVersion
+					statsData["toVersion"] = updatedPXVersion
+					statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)
+					statsData["status"] = upgradeStatus
+					dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
 				}
-				upgradeStatus, updatedPXVersion, durationInMins := upgradePX(upgradeHop, storageNodes)
-				log.InfoD("current PX version: %s, no of nodes: %d, upgrade status: %s, updated px version: %s, duration in mins: %d on source cluster",
-					currPXVersion, numOfNodes, upgradeStatus, updatedPXVersion, durationInMins)
-				err = hardSetConfig(kubeConfigPathDest)
-				log.FailOnError(err, "Switching context to destination cluster failed")
-				err = SetCustomKubeConfig(asyncdr.SecondCluster)
-				log.FailOnError(err, "Switching context to destination cluster failed")
-				err = Inst().S.RefreshNodeRegistry()
-				log.FailOnError(err, "Node registry refresh failed")
-				err = Inst().V.RefreshDriverEndpoints()
-				log.FailOnError(err, "Refresh Driver end points failed")
-				currPXVersion, err = Inst().V.GetDriverVersionOnNode(storageNodesDest[0])
-				if err != nil {
-					log.Warnf("error getting driver version, Err: %v", err)
-				}
-				upgradeStatus, updatedPXVersion, durationInMins = upgradePX(upgradeHop, storageNodesDest)
-				log.InfoD("current PX version: %s, no of nodes: %d, upgrade status: %s, updated px version: %s, duration in mins: %d, on dest cluster",
-					currPXVersion, numOfNodesDest, upgradeStatus, updatedPXVersion, durationInMins)
-				err = hardSetConfig(kubeConfigPathSrc)
-				log.FailOnError(err, "Switching context to source cluster failed")
-				err = SetCustomKubeConfig(asyncdr.FirstCluster)
-				log.FailOnError(err, "Switching context to source cluster failed")
-				err = Inst().S.RefreshNodeRegistry()
-				log.FailOnError(err, "Node registry refresh failed")
-				err = Inst().V.RefreshDriverEndpoints()
-				log.FailOnError(err, "Refresh Driver end points failed")
-				majorVersion := strings.Split(currPXVersion, "-")[0]
-				statsData := make(map[string]string)
-				statsData["numOfNodes"] = fmt.Sprintf("%d", numOfNodes)
-				statsData["fromVersion"] = currPXVersion
-				statsData["toVersion"] = updatedPXVersion
-				statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)
-				statsData["status"] = upgradeStatus
-				dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
 			}
 		})
 
 		Step("Perform failover and failback", func() {
 			time.Sleep(2 * time.Duration(migrationInterval) * time.Minute)
-			log.InfoD("Perform failover and failback")
-			err = SetCustomKubeConfig(asyncdr.SecondCluster)
-			log.FailOnError(err, "Switching context to dest cluster failed")
-			err = Inst().S.RefreshNodeRegistry()
-			log.FailOnError(err, "Node registry refresh failed")
-			err = Inst().V.RefreshDriverEndpoints()
-			log.FailOnError(err, "Refresh Driver end points failed")
 			extraArgsFailoverFailback := map[string]string{
-				"kubeconfig": kubeConfigPathDest,
+				"kubeconfig": kubeConfigPath[asyncdr.SecondCluster],
 			}
 			failoverParam := failoverFailbackParam{
 				action:                    "failover",
 				failoverOrFailbackNs:      defaultNs,
 				migrationSchedName:        migrationSchedName,
-				configPath:                kubeConfigPathDest,
+				configPath:                kubeConfigPath[asyncdr.SecondCluster],
 				single:                    false,
 				skipSourceOp:              false,
 				includeNs:                 false,
@@ -834,16 +792,16 @@ var _ = Describe("{UpgradeVolumeDriverDuringMigration}", func() {
 
 			performFailoverFailback(failoverParam)
 
-			err = hardSetConfig(kubeConfigPathDest)
+			err = hardSetConfig(kubeConfigPath[asyncdr.SecondCluster])
 			log.FailOnError(err, "Error setting destination config: %v", err)
-			extraArgs["kubeconfig"] = kubeConfigPathDest
+			extraArgs["kubeconfig"] = kubeConfigPath[asyncdr.SecondCluster]
 			newMigSched := migrationSchedName + "-rev"
-			createMigSchdAndValidateMigration(newMigSched, cpName, defaultNs, kubeConfigPathDest, extraArgs)
+			createMigSchdAndValidateMigration(newMigSched, cpName, defaultNs, kubeConfigPath[asyncdr.SecondCluster], extraArgs)
 			failback := failoverFailbackParam{
 				action:                    "failback",
 				failoverOrFailbackNs:      defaultNs,
 				migrationSchedName:        newMigSched,
-				configPath:                kubeConfigPathDest,
+				configPath:                kubeConfigPath[asyncdr.SecondCluster],
 				single:                    false,
 				skipSourceOp:              false,
 				includeNs:                 false,
