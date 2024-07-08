@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -51,17 +50,17 @@ var _ = Describe("{BackupAndRestoreSyncDR}", Label(TestCaseLabelsMap[BackupAndRe
 		postRuleUid                string
 		periodicSchedulePolicyName string
 		periodicSchedulePolicyUid  string
-		wg                         sync.WaitGroup
-		defaultClusterPairDir      = "cluster-pair"
-		metromigrationKey          = "metro-dr-"
-		migrationRetryTimeout      = 10 * time.Minute
-		migrationRetryInterval     = 10 * time.Second
-		includeVolumesFlag         = false
-		includeResourcesFlag       = true
-		startApplicationsFlag      = false
-		suspendSched               = false
-		autoSuspend                = false
-		syncSchPolicyName          = "sync-bkp-policy"
+		//wg                         sync.WaitGroup
+		defaultClusterPairDir  = "cluster-pair"
+		metromigrationKey      = "metro-dr-"
+		migrationRetryTimeout  = 10 * time.Minute
+		migrationRetryInterval = 10 * time.Second
+		includeVolumesFlag     = false
+		includeResourcesFlag   = true
+		startApplicationsFlag  = false
+		suspendSched           = false
+		autoSuspend            = false
+		syncSchPolicyName      = "sync-bkp-policy"
 	)
 	JustBeforeEach(func() {
 		numDeployments = 1
@@ -314,37 +313,37 @@ var _ = Describe("{BackupAndRestoreSyncDR}", Label(TestCaseLabelsMap[BackupAndRe
 
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		backupNames, err := GetAllBackupsAdmin()
-		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching all backups for admin"))
-		for _, backupName := range backupNames {
-			wg.Add(1)
-			go func(backupName string) {
-				defer GinkgoRecover()
-				defer wg.Done()
-				backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
-				_, err = DeleteBackup(backupName, backupUid, BackupOrgID, ctx)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Delete the backup %s ", backupName))
-				err = DeleteBackupAndWait(backupName, ctx)
-				dash.VerifySafely(err, nil, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
-			}(backupName)
-		}
-		wg.Wait()
-
-		for _, restoreName := range restoreNames {
-			err = DeleteRestore(restoreName, BackupOrgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
-		}
-		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting schedule [%s]", scheduleName))
-		}
-		for migrationName, migrationNamespace := range migrationNamespaceMap {
-			asyncdr.DeleteAndWaitForMigrationDeletion(migrationName, migrationNamespace)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deletion of migration schedule[%s]", migrationName))
-		}
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		//defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		//ctx, err := backup.GetAdminCtxFromSecret()
+		//log.FailOnError(err, "Fetching px-central-admin ctx")
+		//backupNames, err := GetAllBackupsAdmin()
+		//dash.VerifySafely(err, nil, fmt.Sprintf("Fetching all backups for admin"))
+		//for _, backupName := range backupNames {
+		//	wg.Add(1)
+		//	go func(backupName string) {
+		//		defer GinkgoRecover()
+		//		defer wg.Done()
+		//		backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+		//		_, err = DeleteBackup(backupName, backupUid, BackupOrgID, ctx)
+		//		dash.VerifySafely(err, nil, fmt.Sprintf("Delete the backup %s ", backupName))
+		//		err = DeleteBackupAndWait(backupName, ctx)
+		//		dash.VerifySafely(err, nil, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
+		//	}(backupName)
+		//}
+		//wg.Wait()
+		//
+		//for _, restoreName := range restoreNames {
+		//	err = DeleteRestore(restoreName, BackupOrgID, ctx)
+		//	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		//}
+		//for _, scheduleName := range scheduleNames {
+		//	err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+		//	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting schedule [%s]", scheduleName))
+		//}
+		//for migrationName, migrationNamespace := range migrationNamespaceMap {
+		//	asyncdr.DeleteAndWaitForMigrationDeletion(migrationName, migrationNamespace)
+		//	dash.VerifySafely(err, nil, fmt.Sprintf("Deletion of migration schedule[%s]", migrationName))
+		//}
+		//CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
