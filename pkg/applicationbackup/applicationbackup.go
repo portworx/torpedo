@@ -8,8 +8,9 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/pkg/log"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 const (
@@ -19,6 +20,8 @@ const (
 	s3SecretName                           = "s3secret"
 	applicationBackupScheduleRetryInterval = 10 * time.Second
 	applicationBackupScheduleRetryTimeout  = 5 * time.Minute
+	applicationRestoreScheduleRetryInterval = 10 * time.Second
+	applicationRestoreScheduleRetryTimeout  = 5 * time.Minute
 )
 
 func CreateBackupLocation(
@@ -89,6 +92,49 @@ func CreateApplicationBackup(
 	return storkops.Instance().CreateApplicationBackup(appBackup)
 }
 
+func CreateApplicationBackupKs(
+	name string,
+	namespace string,
+	backupLocation *storkv1.BackupLocation,
+	namespaces []string,
+) (*storkv1.ApplicationBackup, error) {
+
+	appBackup := &storkv1.ApplicationBackup{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: storkv1.ApplicationBackupSpec{
+			Namespaces:     namespaces,
+			BackupLocation: backupLocation.Name,
+		},
+	}
+
+	return storkops.Instance().CreateApplicationBackup(appBackup)
+}
+
+func CreateApplicationRestore(
+	name string,
+	namespace string,
+	backupLocation *storkv1.BackupLocation,
+	backupName string,
+	namespaceMapping map[string]string,
+) (*storkv1.ApplicationRestore, error) {
+
+	appRestore := &storkv1.ApplicationRestore{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: storkv1.ApplicationRestoreSpec{
+			BackupName:     backupName,
+			BackupLocation: backupLocation.Name,
+			NamespaceMapping: namespaceMapping,
+		},
+	}
+	return storkops.Instance().CreateApplicationRestore(appRestore)
+}
+
 func WaitForAppBackupCompletion(name, namespace string, timeout time.Duration) error {
 	getAppBackup := func() (interface{}, bool, error) {
 		appBackup, err := storkops.Instance().GetApplicationBackup(name, namespace)
@@ -119,5 +165,38 @@ func WaitForAppBackupToStart(name, namespace string, timeout time.Duration) erro
 		return "", false, nil
 	}
 	_, err := task.DoRetryWithTimeout(getAppBackup, timeout, applicationBackupScheduleRetryInterval)
+	return err
+}
+
+func WaitForAppRestoreCompletion(name, namespace string, timeout time.Duration) error {
+	getAppRestore := func() (interface{}, bool, error) {
+		appRestore, err := storkops.Instance().GetApplicationRestore(name, namespace)
+		if err != nil {
+			return "", false, err
+		}
+
+		if appRestore.Status.Status != storkv1.ApplicationRestoreStatusSuccessful {
+			return "", true, fmt.Errorf("app backups %s in %s not complete yet.Retrying", name, namespace)
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(getAppRestore, timeout, applicationBackupScheduleRetryInterval)
+	return err
+
+}
+
+func WaitForAppRestoreToStart(name, namespace string, timeout time.Duration) error {
+	getAppRestore := func() (interface{}, bool, error) {
+		appRestore, err := storkops.Instance().GetApplicationRestore(name, namespace)
+		if err != nil {
+			return "", false, err
+		}
+
+		if appRestore.Status.Status != storkv1.ApplicationRestoreStatusInProgress {
+			return "", true, fmt.Errorf("app backups %s in %s has not started yet.Retrying Status: %s", name, namespace, appRestore.Status.Status)
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(getAppRestore, timeout, applicationRestoreScheduleRetryInterval)
 	return err
 }

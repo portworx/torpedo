@@ -20,11 +20,13 @@ import (
 	"github.com/portworx/sched-ops/task"
 	v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/applicationbackup"
 	"github.com/portworx/torpedo/pkg/asyncdr"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
@@ -33,7 +35,6 @@ import (
 	//"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -498,18 +499,18 @@ var _ = Describe("{StorkctlPerformFailoverFailbackPostgresql}", func() {
 		StartTorpedoTest("StorkctlPerformFailoverFailbackPostgresql", "Failover and Failback using storkctl for postgresql namespaced operator", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	
+
 	var (
 		appPath = "/torpedo/deployments/customconfigs/pgo.yaml"
-		opPath = "/torpedo/deployments/customconfigs/pgo-operator.yaml"
-		opName = "pgo"
-		crName = "postgrescluster"
-		ns = "post"
+		opPath  = "/torpedo/deployments/customconfigs/pgo-operator.yaml"
+		opName  = "pgo"
+		crName  = "postgrescluster"
+		ns      = "post"
 	)
 
 	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
 		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
-			
+
 			podList, err := createOperatorBasedApp(appPath, opPath, ns, false)
 			log.FailOnError(err, "Failed to create operator based app")
 			log.Infof("PodList is: %v", podList)
@@ -542,10 +543,10 @@ var _ = Describe("{StorkctlPerformFailoverFailbackElasticSearch}", func() {
 
 	var (
 		appPath = "/torpedo/deployments/customconfigs/elasticcr.yaml"
-		opPath = "/torpedo/deployments/customconfigs/elastic-op.yaml"
-		opName = "elastic-operator"
-		crName = "elasticsearch"
-		ns = "esop"
+		opPath  = "/torpedo/deployments/customconfigs/elastic-op.yaml"
+		opName  = "elastic-operator"
+		crName  = "elasticsearch"
+		ns      = "esop"
 	)
 
 	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
@@ -583,10 +584,10 @@ var _ = Describe("{StorkctlPerformFailoverFailbackPostgresqlClusterwide}", func(
 
 	var (
 		appPath = "/torpedo/deployments/customconfigs/pgo.yaml"
-		opPath = "/torpedo/deployments/customconfigs/pgo-operator-clusterwide.yaml"
-		opName = "pgo"
-		crName = "postgrescluster"
-		ns = "pgcw-" + time.Now().Format("15h03m05s")
+		opPath  = "/torpedo/deployments/customconfigs/pgo-operator-clusterwide.yaml"
+		opName  = "pgo"
+		crName  = "postgrescluster"
+		ns      = "pgcw-" + time.Now().Format("15h03m05s")
 	)
 
 	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
@@ -602,6 +603,188 @@ var _ = Describe("{StorkctlPerformFailoverFailbackPostgresqlClusterwide}", func(
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{AppBackupRestoreTest}", func() {
+	// testrailID = 297921
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/297921
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+
+	JustBeforeEach(func() {
+		// StartTorpedoTest("AppBackupRestoreTest", "AppBackupRestore Test", nil, testrailID)
+		// runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var (
+		nsRest             = "apprest-" + time.Now().Format("15h03m05s")
+		restName           = "storkrestore"
+		s3SecretName       = "s3secret"
+		backupLocationName = "storkbackuplocation"
+		backupName         = "storkbackup"
+	)
+
+	It("has to create app backup and restore", func() {
+		Step("Deploy app, Create backup and restore", func() {
+			bkpNs, contexts := initialSetupApps("appbkrt", true)
+			log.Infof("Contexts is: %v", contexts)
+			log.FailOnError(err, "Failed to create app")
+			backupLocation, err := applicationbackup.CreateBackupLocation(backupLocationName, "kube-system", s3SecretName)
+			log.FailOnError(err, "Failed to create backup location")
+			appBackup, bkp_create_err := applicationbackup.CreateApplicationBackupKs(backupName, "kube-system", backupLocation, bkpNs)
+			log.FailOnError(bkp_create_err, "Failed to create backup")
+			log.Infof("Backup is %v", appBackup)
+			namespaceMapping := map[string]string{
+				bkpNs[0]: nsRest,
+			}
+			nsSpec := &v1.Namespace{
+				ObjectMeta: meta_v1.ObjectMeta{
+					Name: nsRest,
+				},
+			}
+			_, err = core.Instance().CreateNamespace(nsSpec)
+			log.FailOnError(err, "Failed to create namespace")
+			appRestore, restore_err := applicationbackup.CreateApplicationRestore(restName, "kube-system", backupLocation, appBackup.Name, namespaceMapping)
+			log.FailOnError(restore_err, "Failed to create restore")
+			log.Infof("Restore is %v", appRestore)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", func() {
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+
+	JustBeforeEach(func() {
+		upgradeHopsList := make(map[string]string)
+		upgradeHopsList["upgradeHops"] = Inst().UpgradeStorageDriverEndpointList
+		upgradeHopsList["UpgradeVolumeDriverDuringAppBkpRestore"] = "true"
+		StartTorpedoTest("UpgradeVolumeDriverDuringAppBkpRestore", "Validating volume driver upgrade during migration", upgradeHopsList, 0)
+		log.InfoD("Volume driver upgrade hops list [%s]", upgradeHopsList)
+	})
+	var contexts []*scheduler.Context
+
+	It("upgrade volume driver during app backup and restore and ensure everything is running fine", func() {
+		log.InfoD("upgrade volume driver during app backup and restore and ensure everything is running fine")
+
+		var (
+			nsRest             = "apprest-" + time.Now().Format("15h03m05s")
+			restName           = "storkrestore"
+			s3SecretName       = "s3secret"
+			backupLocationName = "storkbackuplocation"
+			backupName         = "storkbackup"
+			taskNamePrefix     = "appbkprest-upgradepx"
+			defaultNs          = "kube-system"
+			timeout            = 10 * time.Minute
+		)
+		bkpNs, contexts := initialSetupApps(taskNamePrefix, true)
+		storageNodes := node.GetStorageNodes()
+
+		//AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
+		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
+		log.FailOnError(err, "Cloud drive installation failed")
+		if !isCloudDrive {
+			for _, storageNode := range storageNodes {
+				err := Inst().V.AddBlockDrives(&storageNode, nil)
+				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
+					continue
+				}
+				log.FailOnError(err, "Adding block drive(s) failed.")
+			}
+		}
+
+		Step("Create App Backup", func() {
+			log.Infof("Contexts is: %v", contexts)
+			log.FailOnError(err, "Failed to create app")
+			backupLocation, err := applicationbackup.CreateBackupLocation(backupLocationName, defaultNs, s3SecretName)
+			log.FailOnError(err, "Failed to create backup location")
+			appBackup, bkp_create_err := applicationbackup.CreateApplicationBackupKs(backupName, defaultNs, backupLocation, bkpNs)
+			log.FailOnError(bkp_create_err, "Failed to create backup")
+			log.Infof("Backup is %v", appBackup)
+			bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(backupName, defaultNs, timeout)
+			log.FailOnError(bkp_comp_err, "Backup completion failed")
+			log.InfoD("backup successful, backup name - %v, backup location - %v", backupName, backupLocationName)
+		})
+
+		// Step("start the upgrade of volume driver", func() {
+		//	log.InfoD("start the upgrade of volume driver")
+
+		//	if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
+		//		log.Fatalf("Unable to perform volume driver upgrade hops, none were given")
+		//	}
+		// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
+			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+				currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+				if err != nil {
+					log.Warnf("error getting driver version, Err: %v", err)
+				}
+				upgradeStatus, updatedPXVersion, durationInMins := upgradePX(upgradeHop, storageNodes)
+				log.InfoD("current PX version: %s, no of nodes: %d, upgrade status: %s, updated px version: %s, duration in mins: %d on source cluster",
+					currPXVersion, len(storageNodes), upgradeStatus, updatedPXVersion, durationInMins)
+				majorVersion := strings.Split(currPXVersion, "-")[0]
+				statsData := make(map[string]string)
+				statsData["numOfNodes"] = fmt.Sprintf("%d", len(storageNodes))
+				statsData["fromVersion"] = currPXVersion
+				statsData["toVersion"] = updatedPXVersion
+				statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)
+				statsData["status"] = upgradeStatus
+				dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
+			}
+		})
+
+		Step("Perform Restore to new Ns", func() {
+			nsSpec := &v1.Namespace{
+				ObjectMeta: meta_v1.ObjectMeta{
+					Name: nsRest,
+				},
+			}
+			_, err = core.Instance().CreateNamespace(nsSpec)
+			log.FailOnError(err, "Failed to create namespace")
+			bl, err := storkops.Instance().GetBackupLocation(backupLocationName, defaultNs)
+			log.FailOnError(err, "Failed to get backup location")
+			log.Infof("BackupLocation is %v", bl)
+			ab, err := storkops.Instance().GetApplicationBackup(backupName, defaultNs)
+			log.FailOnError(err, "Failed to get backup location")
+			namespaceMapping := make(map[string]string)
+			namespaceMapping[bkpNs[0]] = nsRest
+			appRestore, restore_err := applicationbackup.CreateApplicationRestore(restName, defaultNs, bl, ab.Name, namespaceMapping)
+			log.FailOnError(restore_err, "Failed to create restore")
+			log.Infof("Restore is %v", appRestore)
+			restr_comp_err := applicationbackup.WaitForAppRestoreCompletion(restName, defaultNs, timeout)
+			log.FailOnError(restr_comp_err, "Restore completion failed")
+			log.InfoD("restore successful, restore name - %v", restName)
+		})
+
+		Step("Destroy apps", func() {
+			log.InfoD("Destroy apps")
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })
 
@@ -624,10 +807,10 @@ var _ = Describe("{StorkctlPerformFailoverFailbackeckEsClusterwide}", func() {
 
 	var (
 		appPath = "/torpedo/deployments/customconfigs/elasticcr.yaml"
-		opPath = "/torpedo/deployments/customconfigs/elastic-op-cw.yaml"
-		opName = "elastic-operator"
-		crName = "elasticsearch"
-		ns = "escw-" + time.Now().Format("15h03m05s")
+		opPath  = "/torpedo/deployments/customconfigs/elastic-op-cw.yaml"
+		opName  = "elastic-operator"
+		crName  = "elasticsearch"
+		ns      = "escw-" + time.Now().Format("15h03m05s")
 	)
 
 	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
@@ -639,7 +822,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackeckEsClusterwide}", func() {
 			validateOperatorMigFailover(ns, "asyncdr", opName, crName, podCount, true)
 		})
 	})
-	
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
@@ -886,7 +1069,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringMigration}", func() {
 		}
 		wantAllAfterSuiteActions = false
 	})
-	
+
 	JustBeforeEach(func() {
 		upgradeHopsList := make(map[string]string)
 		upgradeHopsList["upgradeHops"] = Inst().UpgradeStorageDriverEndpointList
@@ -918,11 +1101,11 @@ var _ = Describe("{UpgradeVolumeDriverDuringMigration}", func() {
 		})
 
 		extraArgs := map[string]string{
-			"namespaces": migNamespaces,
-			"kubeconfig": kubeConfigPathSrc,
+			"namespaces":           migNamespaces,
+			"kubeconfig":           kubeConfigPathSrc,
 			"schedule-policy-name": schdPol.Name,
 		}
-	
+
 		Step("create clusterpair and start migration", func() {
 			log.InfoD("Creating clusterpair between first and second cluster")
 			err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster)
@@ -949,7 +1132,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringMigration}", func() {
 				log.FailOnError(err, "Adding block drive(s) failed.")
 			}
 		}
-		
+
 		err = hardSetConfig(kubeConfigPathDest)
 		log.FailOnError(err, "Switching context to destination cluster failed")
 		err = SetCustomKubeConfig(asyncdr.SecondCluster)
@@ -963,7 +1146,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringMigration}", func() {
 		numOfNodesDest := len(node.GetStorageDriverNodes())
 
 		// //AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
-		
+
 		isCloudDriveDest, err := IsCloudDriveInitialised(storageNodesDest[0])
 		log.FailOnError(err, "Cloud drive installation failed")
 
@@ -1002,12 +1185,12 @@ var _ = Describe("{UpgradeVolumeDriverDuringMigration}", func() {
 					log.Warnf("error getting driver version, Err: %v", err)
 				}
 				upgradeStatus, updatedPXVersion, durationInMins := upgradePX(upgradeHop, storageNodes)
-				log.InfoD("current PX version: %s, no of nodes: %d, upgrade status: %s, updated px version: %s, duration in mins: %d on source cluster", 
-				           currPXVersion, numOfNodes, upgradeStatus, updatedPXVersion, durationInMins)
+				log.InfoD("current PX version: %s, no of nodes: %d, upgrade status: %s, updated px version: %s, duration in mins: %d on source cluster",
+					currPXVersion, numOfNodes, upgradeStatus, updatedPXVersion, durationInMins)
 				err = hardSetConfig(kubeConfigPathDest)
 				log.FailOnError(err, "Switching context to destination cluster failed")
 				err = SetCustomKubeConfig(asyncdr.SecondCluster)
-		        log.FailOnError(err, "Switching context to destination cluster failed")
+				log.FailOnError(err, "Switching context to destination cluster failed")
 				err = Inst().S.RefreshNodeRegistry()
 				log.FailOnError(err, "Node registry refresh failed")
 				err = Inst().V.RefreshDriverEndpoints()
@@ -1017,8 +1200,8 @@ var _ = Describe("{UpgradeVolumeDriverDuringMigration}", func() {
 					log.Warnf("error getting driver version, Err: %v", err)
 				}
 				upgradeStatus, updatedPXVersion, durationInMins = upgradePX(upgradeHop, storageNodesDest)
-				log.InfoD("current PX version: %s, no of nodes: %d, upgrade status: %s, updated px version: %s, duration in mins: %d, on dest cluster", 
-				           currPXVersion, numOfNodesDest, upgradeStatus, updatedPXVersion, durationInMins)
+				log.InfoD("current PX version: %s, no of nodes: %d, upgrade status: %s, updated px version: %s, duration in mins: %d, on dest cluster",
+					currPXVersion, numOfNodesDest, upgradeStatus, updatedPXVersion, durationInMins)
 				err = hardSetConfig(kubeConfigPathSrc)
 				log.FailOnError(err, "Switching context to source cluster failed")
 				err = SetCustomKubeConfig(asyncdr.FirstCluster)
@@ -1081,8 +1264,8 @@ var _ = Describe("{UpgradeVolumeDriverDuringMigration}", func() {
 				excludeNs:                 false,
 				extraArgsFailoverFailback: extraArgsFailoverFailback,
 				contexts:                  contexts,
-		    }
-		    performFailoverFailback(failback)
+			}
+			performFailoverFailback(failback)
 		})
 
 		err = SetCustomKubeConfig(asyncdr.FirstCluster)
@@ -1163,7 +1346,7 @@ var _ = Describe("{DummyClusterDomians}", func() {
 				Active:        false,
 			},
 		})
-		err = storkops.Instance().ValidateClusterDomainUpdate(updateName, 5 * time.Minute, 10 * time.Second)
+		err = storkops.Instance().ValidateClusterDomainUpdate(updateName, 5*time.Minute, 10*time.Second)
 		log.FailOnError(err, "Failed to validate cluster domain update")
 		cds, err := storkops.Instance().ListClusterDomainStatuses()
 		log.FailOnError(err, "Failed to list cluster domains statuses")
@@ -1235,7 +1418,7 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 		log.Infof("Cluster domains are set")
 		cds, err := storkops.Instance().ListClusterDomainStatuses()
 		log.FailOnError(err, "Failed to list cluster domains statuses")
-		log.Infof("Cluster domains are %v, %v", cds.Items[0].Status.ClusterDomainInfos[0].State,  cds.Items[0].Status.ClusterDomainInfos[1].State)
+		log.Infof("Cluster domains are %v, %v", cds.Items[0].Status.ClusterDomainInfos[0].State, cds.Items[0].Status.ClusterDomainInfos[1].State)
 		for _, cd := range cds.Items[0].Status.ClusterDomainInfos {
 			if cd.Name == "dc1" {
 				Expect(cd.State).Should(Equal(storkapi.ClusterDomainInactive), "Cluster domain is not deactivated")
@@ -1273,11 +1456,11 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 					Active:        true,
 				},
 			})
-			err = storkops.Instance().ValidateClusterDomainUpdate(updateName, 5 * time.Minute, 10 * time.Second)
+			err = storkops.Instance().ValidateClusterDomainUpdate(updateName, 5*time.Minute, 10*time.Second)
 			log.FailOnError(err, "Failed to validate cluster domain update")
 			cds, err := storkops.Instance().ListClusterDomainStatuses()
 			log.FailOnError(err, "Failed to list cluster domains statuses")
-			log.Infof("Cluster domains are %v, %v", cds.Items[0].Status.ClusterDomainInfos[0].State,  cds.Items[0].Status.ClusterDomainInfos[1].State)
+			log.Infof("Cluster domains are %v, %v", cds.Items[0].Status.ClusterDomainInfos[0].State, cds.Items[0].Status.ClusterDomainInfos[1].State)
 			for _, cd := range cds.Items[0].Status.ClusterDomainInfos {
 				if cd.Name == "dc1" {
 					Expect(cd.State).Should(Equal(storkapi.ClusterDomainActive), "Cluster domain is not activated")
@@ -1620,7 +1803,7 @@ func validateOperatorMigFailover(namespace, clusterType, opName, crName string, 
 	migrationSchedNameRev := migrationSchedKey + time.Now().Format("15h03m05s") + "-rev"
 	extraArgs["kubeconfig"] = kubeConfigPathDest
 	createMigSchdAndValidateMigration(migrationSchedNameRev, cpName, namespace, kubeConfigPathDest, extraArgs)
-	err = hardSetConfig(kubeConfigPathDest)	
+	err = hardSetConfig(kubeConfigPathDest)
 	log.FailOnError(err, "Failed to set destination kubeconfig")
 	scaleCrApp(namespace, opName, true, clusterwide)
 	err = SetDestinationKubeConfig()
@@ -1732,7 +1915,7 @@ func deployAndWaitForRunning(path, namespace, cluster string) error {
 		if err != nil {
 			return err
 		}
-	}	
+	}
 	log.InfoD("Running command: %v", cmd)
 	_, _, err = osutils.ExecShell(cmd)
 	if err != nil {
