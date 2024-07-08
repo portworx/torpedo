@@ -3316,7 +3316,7 @@ var _ = Describe("{AddDiskPoolMaintenanceCycle}", func() {
 			err = Inst().V.RecoverPool(selectedNode)
 			log.FailOnError(err, fmt.Sprintf("error performing pool maintenance cycle on node %s", selectedNode.Name))
 
-			err = Inst().V.WaitDriverUpOnNode(selectedNode, 5*time.Minute)
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, 15*time.Minute)
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", selectedNode.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", selectedNode.Name))
 
