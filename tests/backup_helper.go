@@ -7473,12 +7473,12 @@ func GetBackupPodAge() (map[string]nsPodAge, error) {
 	k8sCore := core.Instance()
 	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
 	if err != nil {
-		return podAge, fmt.Errorf("failed to get namespaces list")
+		return podAge, fmt.Errorf("failed to get namespaces list error:[%v]", err)
 	}
 	for _, namespace := range allNamespaces.Items {
 		pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
 		if err != nil {
-			return podAge, fmt.Errorf("failed to get pods for namespace")
+			return podAge, fmt.Errorf("failed to get pods for namespace error:[%v]", err)
 		}
 		for _, pod := range pods.Items {
 			podAge[namespace.ObjectMeta.GetName()] = nsPodAge{pod.ObjectMeta.GetGenerateName(): pod.GetCreationTimestamp().Time}
@@ -7494,7 +7494,7 @@ func ComparePodAge(oldPodAge map[string]nsPodAge) error {
 	k8sCore := core.Instance()
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to get list of services")
+		return fmt.Errorf("failed to get list of services error:[%v]", err)
 	}
 	for _, svc := range allServices.Items {
 		if svc.Name == "portworx-service" {
@@ -7506,7 +7506,7 @@ func ComparePodAge(oldPodAge map[string]nsPodAge) error {
 	for _, namespace := range allNamespaces.Items {
 		pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
 		if err != nil {
-			return fmt.Errorf("failed to get pods for namespace")
+			return fmt.Errorf("failed to get pods for namespace error:[%v]", err)
 		}
 		if IsPresent(namespacesToSkip, namespace.ObjectMeta.GetName()) {
 			for _, pod := range pods.Items {
@@ -9560,8 +9560,9 @@ func UpdateMaintenanceCronJob(backupLocation string, maintenanceJobType Maintena
 // CreateInvalidVolumeSnapshotClass creates invalid VolumeSnapshotClass for given provisioner
 func CreateInvalidVolumeSnapshotClass(snapShotClassName, provisioner string) (*volsnapv1.VolumeSnapshotClass, error) {
 	volumeSnapshotClassParameters := make(map[string]string)
+	invalidProvisioner := "invalid-" + provisioner
 	volumeSnapshotClassParameters["invalidParameter"] = "invalidValue"
-	volumeSnapshotClass, err := Inst().S.CreateVolumeSnapshotClassesWithParameters(snapShotClassName, provisioner, false, "Delete", volumeSnapshotClassParameters)
+	volumeSnapshotClass, err := Inst().S.CreateVolumeSnapshotClassesWithParameters(snapShotClassName, invalidProvisioner, false, "Delete", volumeSnapshotClassParameters)
 	if err != nil {
 		return nil, err
 	}
@@ -9703,7 +9704,7 @@ func StopCloudsnapBackup(pvcName, namespace string) error {
 						return "", true, fmt.Errorf("waiting to get the cs id for PVC [%s] in namespace [%s]", pvcName, namespace)
 					}
 					cmd := fmt.Sprintf("pxctl cs stop -n %s", key)
-					workerNode := node.GetWorkerNodes()[0]
+					workerNode := node.GetStorageNodes()[0]
 					output, err := runCmdGetOutput(cmd, workerNode)
 					log.Infof("Output of the command [%s]: \n%s", cmd, output)
 					if err != nil {
@@ -9756,7 +9757,7 @@ type CloudsnapStatus struct {
 func GetCloudsnapStatus() (map[string]CloudsnapStatus, error) {
 	statusMap := make(map[string]CloudsnapStatus)
 	// Get a worker node
-	workerNode := node.GetWorkerNodes()[0]
+	workerNode := node.GetStorageNodes()[0]
 	cmd := "pxctl cs status -j"
 	output, err := runCmdGetOutput(cmd, workerNode)
 	if err != nil {
@@ -10249,10 +10250,11 @@ type FeaturePlatformMap map[string]map[string][]string
 
 var featureData = FeaturePlatformMap{
 	"PartialBackup": {
-		"openshift": {"postgres-backup", "pxb-multipleapp-multivol"},
-		"GKE":       {"TODO", "TODO"},
-		"AKS":       {"TODO", "TODO"},
-		"Vanilla":   {"TODO", "TODO"},
+		"openshift": {"pg-mysql-multiprov-ocp"},
+		"gke":       {"TODO", "TODO"},
+		"azure":     {"pg-mysql-multiprov-aks"},
+		"vanilla":   {"TODO", "TODO"},
+		"ibm":       {"pg-mysql-multiprov-iks"},
 	},
 }
 
@@ -10351,8 +10353,8 @@ func UpdateDriverWithEnvVariable(envVariables map[string]string) error {
 	if err != nil {
 		return err
 	}
-	log.InfoD("Sleeping for 5 minutes for PX cluster to stabilise after deletion of pods")
-	time.Sleep(5 * time.Minute)
+	log.InfoD("Sleeping for 10 minutes for PX cluster to stabilise after deletion of pods")
+	time.Sleep(10 * time.Minute)
 	_, err = optest.ValidateStorageClusterIsOnline(clusterSpec, 10*time.Minute, 3*time.Minute)
 	if err != nil {
 		return err

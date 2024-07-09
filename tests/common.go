@@ -879,7 +879,7 @@ func IsPoolAddDiskSupported() bool {
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	// Apps for which we have to skip volume validation due to various limitations
-	excludeAppContextList := []string{"tektoncd", "pxb-singleapp-multivol", "pxb-multipleapp-multivol"}
+	excludeAppContextList := []string{"tektoncd", "pxb-singleapp-multivol", "pg-mysql-multiprov-ocp", "pg-mysql-multiprov-iks", "pg-mysql-multiprov-aks"}
 	defer func() {
 		if len(errChan) > 0 {
 			close(*errChan[0])
@@ -2856,8 +2856,10 @@ func ToggleAutopilotInStc() error {
 	checkPodIsDeleted := func() (interface{}, bool, error) {
 		autopilotLabels := make(map[string]string)
 		autopilotLabels["name"] = "autopilot"
-		pods, err := k8sCore.GetPods(pxNamespace, autopilotLabels)
-		expect(err).NotTo(haveOccurred())
+		autoPilotNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		pods, err := k8sCore.GetPods(autoPilotNamespace, autopilotLabels)
+		dash.VerifyFatal(err, nil, "Failed to get pods")
 		if stc.Spec.Autopilot.Enabled {
 			log.Infof("autopilot is active, checking is pod is present.")
 			if len(pods.Items) == 0 {

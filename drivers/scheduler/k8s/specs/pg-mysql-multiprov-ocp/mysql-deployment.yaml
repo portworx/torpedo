@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-deployment
+  labels:
+    app: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      initContainers:
+        - name: init-mysql
+          image: busybox
+          command: [ 'sh', '-c', "dd if=/dev/urandom of=/var/lib/mysql/dummyfile bs=1M count=10 && dd if=/dev/urandom of=/etc/mysql/conf.d/dummyfile bs=1M count=10" ]
+          volumeMounts:
+            - name: mysql-portworx
+              mountPath: /var/lib/mysql
+            - name: mysql-cephfs
+              mountPath: /etc/mysql/conf.d
+      containers:
+        - name: mysql
+          image: mysql:5.7
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: rootpassword
+          ports:
+            - containerPort: 3306
+          livenessProbe:
+            exec:
+              command: [ "sh", "-c", "mysqladmin -u root -p$MYSQL_ROOT_PASSWORD ping" ]
+            initialDelaySeconds: 70
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: [ "sh", "-c", "mysql -u root -p$MYSQL_ROOT_PASSWORD -e \"select 1\"" ]
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: mysql-portworx
+              mountPath: /var/lib/mysql
+            - name: mysql-cephfs
+              mountPath: /etc/mysql/conf.d
+      volumes:
+        - name: mysql-portworx
+          persistentVolumeClaim:
+            claimName: mysql-portworx-pvc
+        - name: mysql-cephfs
+          persistentVolumeClaim:
+            claimName: mysql-cephfs-pvc

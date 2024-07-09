@@ -309,7 +309,7 @@ var _ = Describe("{PartialBackupSuccessWithPxVolumes}", Label(TestCaseLabelsMap[
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
 			for _, appCtx := range appContexts {
-				appCtx.ReadinessTimeout = AppReadinessTimeout
+				appCtx.ReadinessTimeout = 20 * time.Minute
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
 			}
 		}
@@ -1253,7 +1253,8 @@ var _ = Describe("{PartialBackupSuccessWithAzureEndpoint}", Label(TestCaseLabels
 			Inst().AppList = appList
 		}()
 		var err error
-		Inst().AppList = []string{"pxb-singleapp-multivol"}
+		Inst().AppList, err = GetApplicationSpecForFeature("PartialBackup")
+		log.FailOnError(err, "Fetching application spec for feature PartialBackup")
 		for i := 0; i < numOfNamespace; i++ {
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
