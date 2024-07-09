@@ -8923,6 +8923,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 	stepLog := "has to schedule apps and update replication factor for attached node"
 	It(stepLog, func() {
 		var wg sync.WaitGroup
+		contexts = make([]*scheduler.Context, 0)
 		numGoroutines := 2
 
 		wg.Add(numGoroutines)
