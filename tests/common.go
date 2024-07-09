@@ -8335,8 +8335,7 @@ func GetVifInterface(faClient *newflasharray.Client, faMgmtIP, apiToken string) 
 	// Loop through Network interfaces to find the VIF interface which we use in API calls for enabling/disabling interfaces
 	networkInterfaces, err := pureutils.ListAllInterfaces(faClient)
 	if err != nil {
-		log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
-		return nil, err
+		return nil, fmt.Errorf("failed to list network interfaces on FA with IP [%s]: %v", faMgmtIP, err)
 	}
 	for _, nw := range networkInterfaces {
 		for _, networkInterface := range nw.Items {
