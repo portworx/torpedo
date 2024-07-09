@@ -10353,8 +10353,8 @@ func UpdateDriverWithEnvVariable(envVariables map[string]string) error {
 	if err != nil {
 		return err
 	}
-	log.InfoD("Sleeping for 5 minutes for PX cluster to stabilise after deletion of pods")
-	time.Sleep(5 * time.Minute)
+	log.InfoD("Sleeping for 10 minutes for PX cluster to stabilise after deletion of pods")
+	time.Sleep(10 * time.Minute)
 	_, err = optest.ValidateStorageClusterIsOnline(clusterSpec, 10*time.Minute, 3*time.Minute)
 	if err != nil {
 		return err
