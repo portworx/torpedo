@@ -1610,6 +1610,10 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 			mountPath, bytesToWrite := pureutils.GetAppDataDir(pods[0].Namespace)
 			mountPath = mountPath + "/myfile"
 
+			if bytesToWrite == 0 {
+				bytesToWrite = units.GiB
+			}
+
 			// write to the Direct Access volume
 			ddCmd := fmt.Sprintf("dd bs=512 count=%d if=/dev/urandom of=%s", bytesToWrite/512, mountPath)
 			cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", ddCmd}
