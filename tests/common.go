@@ -65,6 +65,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/stork"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
+	v1 "k8s.io/api/policy/v1"
 
 	"go.uber.org/multierr"
 	"golang.org/x/sync/errgroup"
@@ -231,9 +232,11 @@ var (
 
 var (
 	// PDBValidationMinOpVersion specifies the minimum PX Operator version required to enable PDB validation in the UpgradeCluster
-	PDBValidationMinOpVersion, _      = version.NewVersion("24.1.0-")
-	ParallelUpgradeOperatorVersion, _ = version.NewVersion("24.2.0-")
-	ParallelUpgradePXVersion, _       = version.NewVersion("3.1.2")
+	PDBValidationMinOpVersion, _ = version.NewVersion("24.1.0-")
+	// ParallelUpgradeMinOpVersion specifies the minimum operator version that supports smart and parallel upgrades
+	ParallelUpgradeMinOpVersion, _ = version.NewVersion("24.2.0-")
+	// ParallelUpgradePxVersion specifies minimum portworx version that supports parallel upgrade
+	ParallelUpgradeMinPxVersion, _ = version.NewVersion("3.1.2")
 )
 
 type OwnershipAccessType int32
@@ -1063,6 +1066,25 @@ func GetPDBValue() (int, int) {
 		return -1, -1
 	}
 	return pdb.Spec.MinAvailable.IntValue(), int(pdb.Status.DisruptionsAllowed)
+}
+
+// Return a list of PodDisruptionBudegts of type PodDisruptionBudget
+func ListNodePDBs() ([]*v1.PodDisruptionBudget, error) {
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		return nil, err
+	}
+	pdbs, err := policyops.Instance().ListPodDisruptionBudget(stc.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	pdbList := make([]*v1.PodDisruptionBudget, 0)
+	for _, pdb := range pdbs.Items {
+		if strings.HasPrefix(pdb.Name, "px") && pdb.Name != "px-storage" && pdb.Name != "px-kvdb" {
+			pdbList = append(pdbList, &pdb)
+		}
+	}
+	return pdbList, nil
 }
 
 func ValidatePureCloudDriveTopologies() error {
@@ -14104,6 +14126,48 @@ func DoVolumeQuorumValidation(volumeQuorumValidationStopSignal chan struct{}, vQ
 		}
 	}
 }
+func DoParallelUpgradePDBValidation(stopSignal <-chan struct{}, mError *error) {
+
+	nodes, err := Inst().V.GetDriverNodes()
+	if err != nil {
+		*mError = multierr.Append(*mError, err)
+		return
+	}
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		*mError = multierr.Append(*mError, err)
+		return
+	}
+	allowedDisruptions := (len(nodes) / 2) + 1
+	if stc.Annotations != nil && stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] != "" {
+		allowedDisruptions, err = strconv.Atoi(stc.Annotations["portworx.io/disable-non-disruptive-upgrade"])
+		if err != nil {
+			*mError = multierr.Append(*mError, err)
+			return
+		}
+	}
+
+	itr := 1
+	for {
+		log.Infof("PDB validation iteration: #%d", itr)
+		select {
+		case <-stopSignal:
+			log.Infof("Exiting PDB validation routine")
+			return
+		default:
+			errorChan := make(chan error, 50)
+			ValidateNodePDB(allowedDisruptions, len(nodes), &errorChan)
+			for err := range errorChan {
+				*mError = multierr.Append(*mError, err)
+			}
+			if *mError != nil {
+				return
+			}
+			itr++
+			time.Sleep(10 * time.Second)
+		}
+	}
+}
 
 func ValidateVolumeQuorum(errChan ...*chan error) {
 	volIDs, err := Inst().V.ListAllVolumes()
@@ -14190,4 +14254,40 @@ func DeleteTorpedoApps() error {
 		}
 	}
 	return nil
+}
+
+func ValidateNodePDB(allowedDisruptions int, totalNodes int, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	t := func() (interface{}, bool, error) {
+		pdblist, err := ListNodePDBs()
+		if pdblist == nil {
+			return nil, true, fmt.Errorf("error listing node PDBs :%s", err)
+		}
+		nodesDown := 0
+		for _, pdb := range pdblist {
+			if pdb.Spec.MinAvailable.IntValue() == 0 {
+				nodesDown++
+			}
+		}
+		nodesDown = nodesDown + (totalNodes - len(pdblist))
+		return nodesDown, false, nil
+	}
+	nodesDown, err := task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
+	if err != nil {
+		processError(err, errChan...)
+	}
+	nodesDownInt := nodesDown.(int)
+
+	Step("Validate PDB minAvailable for px storage", func() {
+		if nodesDownInt > allowedDisruptions {
+			err := fmt.Errorf("nodes down [%d] is more than allowed disruptions [%d]", nodesDownInt, allowedDisruptions)
+			processError(err, errChan...)
+		}
+	})
+
+	// PTX-25027: Validate that volume quorum is maintained here
 }
