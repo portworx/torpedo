@@ -221,6 +221,8 @@ func populateDisruptiveTriggers() {
 		OCPStorageNodeRecycle:           true,
 		CrashPXDaemon:                   true,
 		PowerOffAllVMs:                  true,
+		RestartKubeletService:           true,
+		PoolDelete:                      true,
 	}
 }
 
@@ -362,16 +364,6 @@ func setHyperConvergedType(configData *map[string]string) {
 		}
 		delete(*configData, HyperConvergedTypeField)
 	}
-}
-
-func setSendGridEmailAPIKey(configData *map[string]string) error {
-	if apiKey, ok := (*configData)[SendGridEmailAPIKeyField]; ok {
-		SendGridEmailAPIKey = apiKey
-		delete(*configData, SendGridEmailAPIKeyField)
-		return nil
-	}
-	return fmt.Errorf("Failed to find [%s] field in config-map [%s] in namespace [%s]",
-		SendGridEmailAPIKeyField, testTriggersConfigMap, configMapNS)
 }
 
 func setUpgradeStorageDriverEndpointList(configData *map[string]string) {
@@ -625,6 +617,8 @@ func populateIntervals() {
 	triggerInterval[ResetDiscardMounts] = make(map[int]time.Duration)
 	triggerInterval[ScaleFADAVolumeAttach] = map[int]time.Duration{}
 	triggerInterval[DeleteCloudsnaps] = make(map[int]time.Duration)
+	triggerInterval[RestartKubeletService] = make(map[int]time.Duration)
+	triggerInterval[PoolDelete] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -999,6 +993,17 @@ func populateIntervals() {
 	triggerInterval[CrashPXDaemon][3] = 21 * baseInterval
 	triggerInterval[CrashPXDaemon][2] = 24 * baseInterval
 	triggerInterval[CrashPXDaemon][1] = 27 * baseInterval
+
+	triggerInterval[RestartKubeletService][10] = 1 * baseInterval
+	triggerInterval[RestartKubeletService][9] = 3 * baseInterval
+	triggerInterval[RestartKubeletService][8] = 6 * baseInterval
+	triggerInterval[RestartKubeletService][7] = 9 * baseInterval
+	triggerInterval[RestartKubeletService][6] = 12 * baseInterval
+	triggerInterval[RestartKubeletService][5] = 15 * baseInterval
+	triggerInterval[RestartKubeletService][4] = 18 * baseInterval
+	triggerInterval[RestartKubeletService][3] = 21 * baseInterval
+	triggerInterval[RestartKubeletService][2] = 24 * baseInterval
+	triggerInterval[RestartKubeletService][1] = 27 * baseInterval
 
 	triggerInterval[PowerOffAllVMs][10] = 1 * baseInterval
 	triggerInterval[PowerOffAllVMs][9] = 3 * baseInterval
@@ -1550,6 +1555,17 @@ func populateIntervals() {
 	triggerInterval[KVDBFailover][6] = 5 * baseInterval
 	triggerInterval[KVDBFailover][5] = 6 * baseInterval
 
+	triggerInterval[PoolDelete][10] = 1 * baseInterval
+	triggerInterval[PoolDelete][9] = 2 * baseInterval
+	triggerInterval[PoolDelete][8] = 3 * baseInterval
+	triggerInterval[PoolDelete][7] = 4 * baseInterval
+	triggerInterval[PoolDelete][6] = 5 * baseInterval
+	triggerInterval[PoolDelete][5] = 6 * baseInterval
+	triggerInterval[PoolDelete][4] = 18 * baseInterval
+	triggerInterval[PoolDelete][3] = 21 * baseInterval
+	triggerInterval[PoolDelete][2] = 24 * baseInterval
+	triggerInterval[PoolDelete][1] = 27 * baseInterval
+
 	triggerInterval[VolumesDelete][10] = 1 * baseInterval
 	triggerInterval[VolumesDelete][9] = 3 * baseInterval
 	triggerInterval[VolumesDelete][8] = 6 * baseInterval
@@ -1758,6 +1774,9 @@ func populateIntervals() {
 	triggerInterval[SetDiscardMounts][0] = 0
 	triggerInterval[ResetDiscardMounts][0] = 0
 	triggerInterval[ScaleFADAVolumeAttach][0] = 0
+	triggerInterval[RestartKubeletService][0] = 0
+	triggerInterval[PoolDelete][0] = 0
+
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

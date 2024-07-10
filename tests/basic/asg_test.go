@@ -2,16 +2,18 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
+	"time"
+
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/torpedo/drivers/node/ibm"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
+	"github.com/portworx/torpedo/drivers/scheduler/anthos"
 	"github.com/portworx/torpedo/drivers/scheduler/eks"
 	"github.com/portworx/torpedo/drivers/scheduler/oke"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"github.com/portworx/torpedo/pkg/log"
-	"math/rand"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/task"
@@ -19,6 +21,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
+
 	// https://github.com/kubernetes/client-go/issues/242
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
@@ -214,8 +217,8 @@ var _ = Describe("{ClusterScaleUpIncreasesMaxStorageNodesPerZone}", func() {
 			time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
 			err = Inst().V.RefreshDriverEndpoints()
 			log.FailOnError(err, "Verify driver end points refresh")
-			dash.VerifyFatal(len(node.GetStorageNodes()) > len(initialStorageNodes), true, "verify new storage node is added")
 			PrintPxctlStatus()
+			dash.VerifyFatal(len(node.GetStorageNodes()) > len(initialStorageNodes), true, "verify new storage node is added")
 		})
 
 		opts := make(map[string]bool)
@@ -368,7 +371,7 @@ func asgKillANodeAndValidate(storageDriverNodes []node.Node) {
 	})
 
 	waitTime := 10
-	if Inst().S.String() == oke.SchedName {
+	if Inst().S.String() == oke.SchedName || Inst().S.String() == anthos.SchedName {
 		waitTime = 15 // OKE takes more time to replace the node
 	}
 
@@ -476,7 +479,7 @@ var _ = Describe("{AddStorageNode}", func() {
 				actualPerZoneCount := numOfStorageNodes
 
 				// In multi-zone ASG cluster, node count is per zone
-				if Inst().S.String() != openshift.SchedName {
+				if Inst().S.String() != openshift.SchedName && Inst().S.String() != anthos.SchedName {
 					zones, err = Inst().S.GetZones()
 					dash.VerifyFatal(err, nil, "Verify Get zones")
 
@@ -604,7 +607,7 @@ var _ = Describe("{AddStoragelessNode}", func() {
 				actualPerZoneCount := numOfStorageNodes
 
 				// In multi-zone ASG cluster, node count is per zone
-				if Inst().S.String() != aks.SchedName && Inst().S.String() != openshift.SchedName {
+				if Inst().S.String() != aks.SchedName && Inst().S.String() != openshift.SchedName && Inst().S.String() != anthos.SchedName {
 					zones, err := Inst().S.GetZones()
 					dash.VerifyFatal(err, nil, "Verify Get zones")
 
@@ -709,7 +712,7 @@ var _ = Describe("{RecycleStorageDriverNode}", func() {
 						err := Inst().S.DeleteNode(delNode)
 						log.FailOnError(err, fmt.Sprintf("Failed to recycle a node [%s]. Error: [%v]", delNode.Name, err))
 						waitTime := 10
-						if Inst().S.String() == oke.SchedName {
+						if Inst().S.String() == oke.SchedName || Inst().S.String() == anthos.SchedName {
 							waitTime = 15 // OKE takes more time to replace the node
 						}
 
@@ -752,7 +755,7 @@ var _ = Describe("{RecycleStorageDriverNode}", func() {
 					err := Inst().S.DeleteNode(delNode)
 					log.FailOnError(err, fmt.Sprintf("Failed to recycle a node [%s]. Error: [%v]", delNode.Name, err))
 					waitTime := 10
-					if Inst().S.String() == oke.SchedName {
+					if Inst().S.String() == oke.SchedName || Inst().S.String() == anthos.SchedName {
 						waitTime = 15 // OKE takes more time to replace the node
 					}
 
@@ -820,7 +823,7 @@ var _ = Describe("{RecycleAllStorageDriverNodes}", func() {
 						err := Inst().S.DeleteNode(existingStorageDriverNode)
 						log.FailOnError(err, fmt.Sprintf("Failed to recycle a node [%s]. Error: [%v]", existingStorageDriverNode.Name, err))
 						waitTime := 10
-						if Inst().S.String() == oke.SchedName {
+						if Inst().S.String() == oke.SchedName || Inst().S.String() == anthos.SchedName {
 							waitTime = 15 // OKE takes more time to replace the node
 						}
 
@@ -855,10 +858,14 @@ var _ = Describe("{RecycleAllStorageDriverNodes}", func() {
 					})
 			}
 			// Validating the apps after recycling the Storage driver node
-			ValidateApplications(contexts)
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			ValidateAndDestroy(contexts, opts)
 		})
 	})
 	JustAfterEach(func() {
-		EndTorpedoTest()
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+
 	})
 })

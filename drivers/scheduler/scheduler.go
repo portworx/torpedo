@@ -38,6 +38,8 @@ type Context struct {
 	ScheduleOptions ScheduleOptions
 	// SkipVolumeValidation for cases when use volume driver other than portworx
 	SkipVolumeValidation bool
+	// SkipPodValidation for cases when we expect the pods not be ready.
+	SkipPodValidation bool
 	// SkipClusterScopedObject for cases of multi-cluster backup when Storage class does not restored
 	SkipClusterScopedObject bool
 	// RefreshStorageEndpoint force refresh the storage driver endpoint
@@ -83,6 +85,7 @@ type AppConfig struct {
 	Journal                     string   `yaml:"journal"`
 	DataSize                    string   `yaml:"data_size"`
 	VmID                        string   `yaml:"vm_id"`
+	PureFaPodName               string   `yaml:"pure_fa_pod_name"`
 }
 
 // InitOptions initialization options
@@ -114,6 +117,8 @@ type InitOptions struct {
 	PureVolumes bool
 	// PureSANType identifies which SAN type is being used for Pure volumes
 	PureSANType string
+	// PureFADAPod identifies what FA Pod to place FADA volumes in. This Pod must already exist, and be in the same Realm matching the px-pure-secret
+	PureFADAPod string
 	// RunCSISnapshotAndRestoreManyTest identifies if Pure clone many test is enabled
 	RunCSISnapshotAndRestoreManyTest bool
 	//SecureApps identifies apps to be deployed with secure annotation in storage class
@@ -154,6 +159,8 @@ type ScheduleOptions struct {
 	Namespace string
 	// TopoLogy Labels
 	TopologyLabels []map[string]string
+	// PureFAPodName is the pod name which resides in FlashArray
+	PureFAPodName string
 }
 
 // Driver must be implemented to provide test support to various schedulers.
@@ -393,6 +400,12 @@ type Driver interface {
 	// CreateVolumeSnapshotClasses creates a volume snapshot class
 	CreateVolumeSnapshotClasses(snapClassName string, provisioner string, isDefault bool, deletePolicy string) (*volsnapv1.VolumeSnapshotClass, error)
 
+	// CreateVolumeSnapshotClassesWithParameters creates a volume snapshot class with additional parameters
+	CreateVolumeSnapshotClassesWithParameters(snapClassName string, provisioner string, isDefault bool, deletePolicy string, parameters map[string]string) (*volsnapv1.VolumeSnapshotClass, error)
+
+	// DeleteCsiSnapshotClass deletes csi snapshot class
+	DeleteCsiSnapshotClass(snapClassName string) error
+
 	// CreateCsiSnapshot create csi snapshot for given pvc
 	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.
 	// At the same time, there's also other validation functions in this interface as well. So we should look into ways
@@ -454,6 +467,11 @@ type Driver interface {
 
 	// SetASGClusterSize sets node count for an asg cluster
 	SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
+
+	// StopKubelet stops kubelet on the given node
+	StopKubelet(appNode node.Node, opts node.SystemctlOpts) error
+	// StartKubelet starts kubelet on the given node
+	StartKubelet(appNode node.Node, opts node.SystemctlOpts) error
 }
 
 var (

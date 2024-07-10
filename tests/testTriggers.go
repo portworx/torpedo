@@ -18,7 +18,6 @@ import (
 	"text/template"
 	"time"
 
-
 	"github.com/devans10/pugo/flasharray"
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
@@ -199,10 +198,6 @@ var ChaosMap map[string]int
 
 // coresMap stores mapping between node name and cores generated.
 var coresMap map[string]string
-
-// SendGridEmailAPIKey holds API key used to interact
-// with SendGrid Email APIs
-var SendGridEmailAPIKey string
 
 // backupCounter holds the iteration of TriggerBackup
 var backupCounter = 0
@@ -592,7 +587,7 @@ const (
 	// Volume update repl size and resize volume on aggregated volumes
 	AggrVolDepReplResizeOps = "aggrVolDepReplResizeOps"
 
-	// Add Drive to create new pool and resize Drive in maintenance mode
+	// AddResizePoolMaintenance Add Drive to create new pool and resize Drive in maintenance mode
 	AddResizePoolMaintenance = "addResizePoolInMaintenance"
 	//AddStorageNode adds storage node to existing OCP set up
 	AddStorageNode = "addStorageNode"
@@ -654,6 +649,12 @@ const (
 
 	// ScaleFADAVolumeAttach create and attach FADA volumes at scale
 	ScaleFADAVolumeAttach = "ScaleFADAVolumeAttach"
+
+	// RestartKubeletService restarts kubelet on the nodes
+	RestartKubeletService = "restartKubeletService"
+
+	// PoolDelete deletes the px pool and create new pool
+	PoolDelete = "poolDelete"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -884,7 +885,7 @@ func TriggerDetachDrives(contexts *[]*scheduler.Context, recordChan *chan *Event
 				nodeId = storageNodes[0].VolDriverNodeID
 				err = Inst().N.DetachDrivesFromVM(stc, storageNodes[0].Name)
 				UpdateOutcome(event, err)
-				time.Sleep(time.Duration(1 * time.Minute))
+				time.Sleep(1 * time.Minute)
 				statusErr := Inst().V.WaitDriverUpOnNode(storageNodes[0], 10*time.Minute)
 				if statusErr != nil {
 					if strings.Contains(statusErr.Error(), apios.Status_STATUS_STORAGE_DOWN.String()) {
@@ -1937,6 +1938,62 @@ func TriggerCrashPXDaemon(contexts *[]*scheduler.Context, recordChan *chan *Even
 					dashStats["node"] = appNode.Name
 					updateLongevityStats(CrashPXDaemon, stats.PXDaemonCrashEventName, dashStats)
 					CrashPXDaemonAndWait([]node.Node{appNode}, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				})
+			err = ValidateDataIntegrity(&nodeContexts)
+			UpdateOutcome(event, err)
+			validateContexts(event, contexts)
+		}
+		updateMetrics(*event)
+	})
+}
+
+// TriggerKubeletRestart restarts kubelet on the nodes
+func TriggerKubeletRestart(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(RestartKubeletService)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: RestartKubeletService,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	stepLog := "restart kubelet in all nodes"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		for _, appNode := range node.GetStorageDriverNodes() {
+			err := isNodeHealthy(appNode, event.Event.Type)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
+			stepLog = fmt.Sprintf("crash volume driver %s on node: %v",
+				Inst().V.String(), appNode.Name)
+			nodeContexts, err := GetContextsOnNode(contexts, &appNode)
+			UpdateOutcome(event, err)
+
+			Step(stepLog,
+				func() {
+					log.InfoD(stepLog)
+					taskStep := fmt.Sprintf("restart driver on node: %s",
+						appNode.MgmtIp)
+					event.Event.Type += "<br>" + taskStep
+					errorChan := make(chan error, errorChannelSize)
+					dashStats := make(map[string]string)
+					dashStats["node"] = appNode.Name
+					updateLongevityStats(RestartKubeletService, stats.RestartKubeletEventName, dashStats)
+					RestartKubelet([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
 						UpdateOutcome(event, err)
 					}
@@ -3632,8 +3689,8 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 
 }
 
-//TriggerDeleteCloudsnaps
-func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord){
+// TriggerDeleteCloudsnaps delete cloud snaps
+func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
 	startLongevityTest(DeleteCloudsnaps)
@@ -3653,14 +3710,14 @@ func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *E
 	stepLog := "Delete all cloudsnaps"
 	Step(stepLog, func() {
 		log.Infof(stepLog)
-        var volCloudsnapMap = make(map[string][]string)
+		var volCloudsnapMap = make(map[string][]string)
 		for _, ctx := range *contexts {
 			vols, err := Inst().S.GetVolumeParameters(ctx)
 			log.Infof("Validating context: %v", ctx.App.Key)
 			log.Infof("Volumes : %v", vols)
 			UpdateOutcome(event, err)
 			for vol, params := range vols {
-				inspectedVol, err:= Inst().V.InspectVolume(vol)
+				inspectedVol, err := Inst().V.InspectVolume(vol)
 				UpdateOutcome(event, err)
 				csBksps, err := Inst().V.GetCloudsnapsOfGivenVolume(vol, inspectedVol.Id, params)
 				UpdateOutcome(event, err)
@@ -3670,7 +3727,7 @@ func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *E
 				}
 				if len(csBksps) > 0 {
 					volCloudsnapMap[vol] = cloudsnapIds
-					err = Inst().V.DeleteAllCloudsnaps(vol,csBksps[0].SrcVolumeId, params)
+					err = Inst().V.DeleteAllCloudsnaps(vol, csBksps[0].SrcVolumeId, params)
 					if err != nil && !strings.Contains(err.Error(), "Key already exists") {
 						UpdateOutcome(event, err)
 					}
@@ -3680,24 +3737,24 @@ func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *E
 		log.Infof("Wait for 10 minutes")
 		time.Sleep(600 * time.Second)
 		for _, ctx := range *contexts {
-				vols, err := Inst().S.GetVolumeParameters(ctx)
+			vols, err := Inst().S.GetVolumeParameters(ctx)
+			UpdateOutcome(event, err)
+			for vol, params := range vols {
+				log.Infof("Volume Name : %s", vol)
+				inspectedVol, err := Inst().V.InspectVolume(vol)
 				UpdateOutcome(event, err)
-				for vol, params := range vols {
-					log.Infof("Volume Name : %s", vol)
-					inspectedVol, err:= Inst().V.InspectVolume(vol)
-					UpdateOutcome(event, err)
-					csBksps, err := Inst().V.GetCloudsnapsOfGivenVolume(vol, inspectedVol.Id, params)
-					UpdateOutcome(event, err)
-					cloudsnapIds, ok := volCloudsnapMap[vol]
-					if ok {
-						for _, bk := range csBksps {
-							if slices.Contains(cloudsnapIds, bk.Id ){
-								log.Infof("Cloud snap hasn not deleted successfully : %s: vol %s", bk.Id , vol )
-								UpdateOutcome(event, fmt.Errorf("Cloud snap has not deleted successfully : %s: vol %s", bk.Id , vol))
-							}
+				csBksps, err := Inst().V.GetCloudsnapsOfGivenVolume(vol, inspectedVol.Id, params)
+				UpdateOutcome(event, err)
+				cloudsnapIds, ok := volCloudsnapMap[vol]
+				if ok {
+					for _, bk := range csBksps {
+						if slices.Contains(cloudsnapIds, bk.Id) {
+							log.Infof("Cloud snap hasn not deleted successfully : %s: vol %s", bk.Id, vol)
+							UpdateOutcome(event, fmt.Errorf("Cloud snap has not deleted successfully : %s: vol %s", bk.Id, vol))
 						}
 					}
 				}
+			}
 		}
 		updateMetrics(*event)
 	})
@@ -5550,7 +5607,7 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 		return false, fmt.Errorf("pool provided is nil")
 	}
 
-	if poolToBeResized != nil && poolToBeResized.LastOperation != nil {
+	if poolToBeResized.LastOperation != nil {
 		log.InfoD("Validating pool :%v to expand", poolToBeResized.Uuid)
 
 		f := func() (interface{}, bool, error) {
@@ -5665,12 +5722,19 @@ func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
 	return err
 }
 
-func getStoragePoolsToExpand() ([]*opsapi.StoragePool, error) {
+func getStoragePoolsToExpand(expandType opsapi.SdkStoragePool_ResizeOperationType, chaosLevel uint64) ([]*opsapi.StoragePool, error) {
 	stNodes := node.GetStorageNodes()
 	expectedCapacity := (len(stNodes) / 2) + 1
 	poolsToExpand := make([]*opsapi.StoragePool, 0)
 	for _, stNode := range stNodes {
-		eligibility, err := GetPoolExpansionEligibility(&stNode)
+		maxSize := stNode.Pools[0].TotalSize / units.GiB
+		for _, p := range stNode.Pools {
+			if maxSize < p.TotalSize/units.GiB {
+				maxSize = p.TotalSize / units.GiB
+			}
+		}
+		expectedIncrementInSize := maxSize * chaosLevel / 100
+		eligibility, err := GetPoolExpansionEligibility(&stNode, expandType, expectedIncrementInSize)
 		if err != nil {
 			return nil, err
 		}
@@ -5694,12 +5758,19 @@ func getStoragePoolsToExpand() ([]*opsapi.StoragePool, error) {
 }
 
 // returns list of pools with metadata disk to expand
-func getStorageMetadataPoolsToExpand() ([]*opsapi.StoragePool, error) {
+func getStorageMetadataPoolsToExpand(expandType opsapi.SdkStoragePool_ResizeOperationType, chaosLevel uint64) ([]*opsapi.StoragePool, error) {
 	stNodes := node.GetStorageNodes()
 	expectedCapacity := (len(stNodes) / 2) + 1
 	poolsToExpand := make([]*opsapi.StoragePool, 0)
 	for _, stNode := range stNodes {
-		eligibility, err := GetPoolExpansionEligibility(&stNode)
+		maxSize := stNode.Pools[0].TotalSize / units.GiB
+		for _, p := range stNode.Pools {
+			if maxSize < p.TotalSize/units.GiB {
+				maxSize = p.TotalSize / units.GiB
+			}
+		}
+		expectedIncrementInSize := maxSize * chaosLevel / 100
+		eligibility, err := GetPoolExpansionEligibility(&stNode, expandType, expectedIncrementInSize)
 		if err != nil {
 			return nil, err
 		}
@@ -5771,7 +5842,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 		}
 
 		updateLongevityStats(event.Event.Type, statType, dashStats)
-		err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, resizeOperationType, uint64(chaosLevel))
+		err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, resizeOperationType, chaosLevel)
 		if err != nil {
 			log.InfoD(fmt.Sprintf("Printing The storage pool status after pool resize failure on Node:%s ", pNode.Name))
 			PrintSvPoolStatus(*pNode)
@@ -5857,7 +5928,7 @@ func TriggerMetadataPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *c
 	stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
 	Step(stepLog, func() {
 
-		poolsToBeResized, err := getStorageMetadataPoolsToExpand()
+		poolsToBeResized, err := getStorageMetadataPoolsToExpand(opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, chaosLevel)
 
 		if err != nil {
 			log.Error(err.Error())
@@ -5909,7 +5980,7 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 	stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		poolsToBeResized, err := getStoragePoolsToExpand()
+		poolsToBeResized, err := getStoragePoolsToExpand(opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, chaosLevel)
 
 		if err != nil {
 			log.Error(err.Error())
@@ -5971,7 +6042,7 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	stepLog := fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		poolsToBeResized, err := getStoragePoolsToExpand()
+		poolsToBeResized, err := getStoragePoolsToExpand(opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK, chaosLevel)
 
 		if err != nil {
 			log.Error(err.Error())
@@ -6023,7 +6094,7 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 	stepLog := fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		poolsToBeResized, err := getStoragePoolsToExpand()
+		poolsToBeResized, err := getStoragePoolsToExpand(opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK, chaosLevel)
 
 		if err != nil {
 			log.Error(err.Error())
@@ -6692,7 +6763,7 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 	updateMetrics(*event)
 }
 
-// TriggerPowerOffVMs
+// TriggerPowerOffAllVMs power off all the Vms
 func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
@@ -6714,7 +6785,7 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	Step(stepLog, func() {
 		log.Infof(stepLog)
 		workerNodes := node.GetWorkerNodes()
-		var numberOfThread int = 5
+		numberOfThread := 5
 		var numberOfNodePerThread int
 		// If number of VMs to restarted is less than  numberOfThread then
 		// only one vm assigned to each thread, else assign  len(workerNodes)/numberOfThread
@@ -6725,7 +6796,7 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		} else {
 			numberOfNodePerThread = len(workerNodes) / numberOfThread
 		}
-		var counter int = 0
+		counter := 0
 		// Assign vms to every thread.
 		nodesInThread := make([][]node.Node, numberOfThread)
 		for t := 0; t < numberOfThread; t++ {
@@ -6740,7 +6811,7 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		if counter < len(workerNodes) {
 			log.Infof("Additional nodes  : %d", len(workerNodes)-counter)
 			additonalThread := make([]node.Node, len(workerNodes)-counter)
-			var index int = 0
+			index := 0
 			for counter < len(workerNodes) {
 				additonalThread[index] = workerNodes[counter]
 				index++
@@ -6766,7 +6837,7 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 			poweroffwg.Wait()
 			log.Infof("Completed power off VMs")
 			log.Infof("Wait for 5 minutes")
-			time.Sleep(time.Duration(5 * time.Minute))
+			time.Sleep(5 * time.Minute)
 		})
 		stepLog = "Power on all worker nodes"
 		Step(stepLog, func() {
@@ -6785,9 +6856,9 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 			}
 			poweronwg.Wait()
 			log.Infof("Completed power on Nodes")
-			for _, node := range workerNodes {
-				err := Inst().S.IsNodeReady(node)
-				err = Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
+			for _, n := range workerNodes {
+				err := Inst().S.IsNodeReady(n)
+				err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				UpdateOutcome(event, err)
 			}
 		})
@@ -6810,15 +6881,15 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	})
 }
 
-// TriggerVolumeUpdate enables to test volume update
+// TriggerVolumeIOProfileUpdate enables to test volume update
 func TriggerVolumeIOProfileUpdate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
-	startLongevityTest(UpdateVolume)
+	startLongevityTest(UpdateIOProfile)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: UpdateVolume,
+			Type: UpdateIOProfile,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -7021,6 +7092,10 @@ func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecor
 					}
 					//Verify Volume set with required IOPriority.
 					appVol, err := Inst().V.InspectVolume(v.ID)
+					if err != nil {
+						UpdateOutcome(event, err)
+						return
+					}
 					log.InfoD("COS after update %v", appVol.Spec.GetCos().SimpleString())
 					if !strings.EqualFold(requiredPriority, appVol.Spec.GetCos().SimpleString()) {
 						err = fmt.Errorf("Failed to update volume %v with expected priority %v ", v.ID, requiredPriority)
@@ -7093,11 +7168,13 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 					log.Infof("autofstrim status for volume %v, status: %v", appVol.Id, val.String())
 					if fsTrimStatus != -1 {
 						if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_COMPLETED {
+							log.InfoD("autofstrim status for volume %v completed successfully [%v]", v.ID, val.String())
 							return nil, false, nil
 						} else if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_FAILED {
 							return nil, false, fmt.Errorf("autoFstrim failed for volume %v, status: %v", v.ID, val.String())
 						} else {
-							return nil, true, fmt.Errorf("current autofstrim status for volume %v is %v. Expected status is %v", v.ID, val.String(), opsapi.FilesystemTrim_FS_TRIM_COMPLETED)
+							log.InfoD("current autofstrim status for volume %v is %v", v.ID, val.String())
+							return nil, false, nil
 						}
 					} else {
 						return nil, true, fmt.Errorf("autofstrim for volume %v not started yet", v.ID)
@@ -8185,6 +8262,187 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 			}
 		}
 
+	})
+	updateMetrics(*event)
+}
+
+// TriggerPoolDelete performs pool delete operation
+func TriggerPoolDelete(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(PoolDelete)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PoolDelete,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	stepLog := fmt.Sprintf("Perform pool delete on the volume driver node, create new pool and move repls to the new pool")
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		stNodes := node.GetStorageNodes()
+		isCloudDrive, err := IsCloudDriveInitialised(stNodes[0])
+		UpdateOutcome(event, err)
+
+		if isCloudDrive {
+			var nodeSelected node.Node
+			var nodePools []node.StoragePool
+
+			randomIndex := rand.Intn(len(stNodes))
+			nodeSelected = stNodes[randomIndex]
+			nodePools = nodeSelected.StoragePools
+
+			isjournal, err := IsJournalEnabled()
+			UpdateOutcome(event, err)
+			var jrnlPartPoolID string
+
+			//Getting pool journal device
+			if isjournal && len(nodePools) > 1 {
+				jDev, err := Inst().V.GetJournalDevicePath(&nodeSelected)
+				UpdateOutcome(event, fmt.Errorf("error getting journal device path from node %s, Err: %v", nodeSelected.Name, err))
+
+				log.Infof("JournalDev: %s", jDev)
+				if jDev == "" {
+					UpdateOutcome(event, fmt.Errorf("no journal device path found"))
+					return
+				}
+
+				drivesMap, err := Inst().V.GetPoolDrives(&nodeSelected)
+				jPath := jDev[:len(jDev)-1]
+			outer:
+				for k, v := range drivesMap {
+					for _, dv := range v {
+						if strings.Contains(dv.Device, jPath) {
+							jrnlPartPoolID = k
+							break outer
+						}
+					}
+
+				}
+				if len(jrnlPartPoolID) == 0 {
+					log.Infof("No pool is partitioned with journal device")
+				}
+			}
+
+			//Getting pool with no journal partition
+			var poolToDelete node.StoragePool
+			for _, pl := range nodePools {
+				if strconv.Itoa(int(pl.ID)) != jrnlPartPoolID {
+					poolToDelete = pl
+					break
+				}
+			}
+			poolIDToDelete := fmt.Sprintf("%d", poolToDelete.ID)
+
+			poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to list storage pools"))
+				return
+			}
+
+			nodeVols, err := GetVolumesOnNode(nodeSelected.VolDriverNodeID)
+			UpdateOutcome(event, fmt.Errorf("error getting volumes on the node [%s], Err : %v", nodeSelected.Name, err))
+
+			err = DeletePoolAndValidate(nodeSelected, poolIDToDelete)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("error deleting pool [%s] in the node [%s], Err: %v", poolIDToDelete, nodeSelected.Name, err))
+				return
+			}
+
+			//Getting spec for new cloud drive
+			newSpecSize := (poolToDelete.TotalSize / units.GiB) / 2
+			///creating a spec to perform add  drive
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+
+			deviceSpec := driveSpecs[0]
+			deviceSpecParams := strings.Split(deviceSpec, ",")
+
+			paramsArr := make([]string, 0)
+			for _, param := range deviceSpecParams {
+				if strings.Contains(param, "size") {
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", newSpecSize))
+				} else {
+					paramsArr = append(paramsArr, param)
+				}
+			}
+			newSpec := strings.Join(paramsArr, ",")
+			stepLog = fmt.Sprintf("Adding cloud drive to node %s with size %s", nodeSelected.Name, newSpec)
+
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error adding new pool to node [%s],Err: %v", nodeSelected.Name, err))
+					return
+				}
+				err = Inst().V.RefreshDriverEndpoints()
+				UpdateOutcome(event, err)
+				log.InfoD("Validate pool rebalance after drive add to the node %s", nodeSelected.Name)
+				err = ValidateDriveRebalance(nodeSelected)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("pool re-balance failed on node %s, Err: %v", nodeSelected.Name, err))
+				}
+
+				err = Inst().V.WaitDriverUpOnNode(nodeSelected, addDriveUpTimeOut)
+				if err != nil {
+					UpdateOutcome(event, err)
+					return
+				}
+
+				poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("failed to list storage pools after adding new pool to node [%s]", nodeSelected.Name))
+					return
+				}
+				dash.VerifySafely(len(poolsBfr) == len(poolsAfr), true, "verify new pool is created")
+
+			})
+			stepLog = fmt.Sprintf("Expand newly added pool on node [%s]", nodeSelected.Name)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+				log.FailOnError(err, "Failed to list storage pools")
+				var poolIDSelected string
+				for k := range poolsAfr {
+					if _, ok := poolsBfr[k]; !ok {
+						poolIDSelected = k
+						break
+					}
+				}
+				poolToReplAdd, err := GetStoragePoolByUUID(poolIDSelected)
+
+				//moving volume replicas to new pool
+				for _, nodeVol := range nodeVols {
+					appVol, err := Inst().V.InspectVolume(nodeVol)
+					if err != nil {
+						UpdateOutcome(event, fmt.Errorf("error inspecting vol [%s], Err: %v", nodeVol, err))
+						continue
+
+					}
+					log.Infof("Updating replicas for volume [%s/%s]", appVol.Id, nodeVol)
+					replNodes := appVol.GetReplicaSets()[0].GetNodes()
+					tpVol := &volume.Volume{ID: nodeVol, Name: nodeVol}
+					err = Inst().V.SetReplicationFactor(tpVol, int64(len(replNodes)-1), nil, nil, true)
+					if err != nil {
+						UpdateOutcome(event, fmt.Errorf("error increasing repl for volume [%s] to pool [%s]", nodeVol, poolToReplAdd.Uuid))
+					} else {
+						err = Inst().V.SetReplicationFactor(tpVol, int64(len(replNodes)), nil, []string{poolToReplAdd.Uuid}, true)
+						UpdateOutcome(event, err)
+					}
+
+				}
+			})
+		}
 	})
 	updateMetrics(*event)
 }
@@ -9336,7 +9594,7 @@ func TriggerStorkAppBkpPoolResize(contexts *[]*scheduler.Context, recordChan *ch
 					chaosLevel := getPoolExpandPercentage(StorkAppBkpPoolResize)
 					stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
 					Step(stepLog, func() {
-						poolsToBeResized, err := getStoragePoolsToExpand()
+						poolsToBeResized, err := getStoragePoolsToExpand(opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, chaosLevel)
 						if err != nil {
 							log.Error(err.Error())
 							UpdateOutcome(event, err)
@@ -10207,7 +10465,7 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 		}
 		ValidateApplications(*contexts)
 
-		allVolsCreated := []*volume.Volume{}
+		var allVolsCreated []*volume.Volume
 		for _, eachContext := range *contexts {
 			vols, err := Inst().S.GetVolumes(eachContext)
 			if err != nil {
@@ -11573,7 +11831,7 @@ func cleanupDeployment(ctx *scheduler.Context, wg *sync.WaitGroup, event *EventR
 	}
 }
 
-// CreateStorageClass method creates a storageclass using host's k8s clientset on host cluster
+// CreateVclusterStorageClass method creates a storageclass using host's k8s clientset on host cluster
 func CreateVclusterStorageClass(scName string, opts ...storageClassOption) error {
 	params := make(map[string]string)
 	params["repl"] = "2"

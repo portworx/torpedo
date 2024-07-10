@@ -758,9 +758,7 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 
 					if pxNode.Pools != nil && len(pxNode.Pools) > 0 {
 						log.Infof("Updating node [%s] as storage node", n.Name)
-					}
-
-					if n.StoragePools == nil {
+						n.StoragePools = nil
 						for _, pxNodePool := range pxNode.Pools {
 							storagePool := node.StoragePool{
 								StoragePool:       pxNodePool,
@@ -768,15 +766,8 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 							}
 							n.StoragePools = append(n.StoragePools, storagePool)
 						}
-					} else {
-						for idx, nodeStoragePool := range n.StoragePools {
-							for _, pxNodePool := range pxNode.Pools {
-								if nodeStoragePool.Uuid == pxNodePool.Uuid {
-									n.StoragePools[idx].StoragePool = pxNodePool
-								}
-							}
-						}
 					}
+
 					if err = node.UpdateNode(*n); err != nil {
 						return fmt.Errorf("failed to update node [%s], Err: %v", n.Name, err)
 					}
@@ -797,8 +788,9 @@ func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) 
 	if err != nil {
 		return false, fmt.Errorf("failed to get metadata nodes, Err: %v", err)
 	}
+	log.Infof(fmt.Sprintf("members %v", members))
 
-	ipRegex := regexp.MustCompile(`http://(?P<address>.*):d+`)
+	ipRegex := regexp.MustCompile(`http:\/\/(?P<address>[\d\.]+):(?P<port>\d+)`)
 	for _, value := range members {
 		for _, url := range value.ClientUrls {
 			result := getGroupMatches(ipRegex, url)
@@ -2018,6 +2010,11 @@ func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 			continue
 		}
 
+		// Ignore partitions, skip straight to the parent mapper device
+		if strings.Contains(line, "p") && !strings.Contains(line, "sd") { // "p" covers both "<serial>p<number>" and "<serial>-part<number>", but we don't want to skip "sd*p" devices
+			continue
+		}
+
 		// If we see a WWID, we are starting a new entry
 		if strings.Contains(line, schedops.PureVolumeOUI) {
 			if currentEntry != nil {
@@ -2025,6 +2022,11 @@ func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 			}
 			parts := strings.Fields(line)
 			wwid := parts[0]
+			// If we see a pipe or a tick, we are trimming WWID
+			for _, spChar := range []string{"-", "`"} {
+				wwid = strings.Replace(wwid, spChar, "", -1)
+			}
+
 			sizeStr := parts[1]
 			size, err := strconv.ParseUint(sizeStr, 10, 64)
 			if err != nil {
@@ -2055,6 +2057,8 @@ func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 		foundDevices[currentEntry.WWID] = *currentEntry
 	}
 
+	log.Infof("Found devices [%v]", foundDevices)
+
 	return foundDevices, nil
 }
 
@@ -2074,7 +2078,15 @@ func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEn
 		if !strings.Contains(line, schedops.PureVolumeOUI) {
 			continue
 		}
+
+		// If this contains either "-part#" or "p#", we want to ignore it. 'p' is not in the hex character set so this is safe.
 		mapperName := strings.Split(line, "\t")[0]
+		if strings.Contains(mapperName, schedops.PureVolumeOUI) {
+			if len(mapperName) > 34 || strings.Contains(line, "p") {
+				continue
+			}
+		}
+
 		dmsetupFoundMappers = append(dmsetupFoundMappers, mapperName)
 	}
 
@@ -2096,6 +2108,7 @@ func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEn
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse lsblk output on node %s, Err: %v", n.MgmtIp, err)
 	}
+	log.Infof("lsblk output [%v]", lsblkParsed)
 
 	if len(lsblkParsed) != len(dmsetupFoundMappers) {
 		return nil, fmt.Errorf("found %d mappers in dmsetup but %d devices in lsblk on node %s, inconsistent disk state (we didn't clean something up right?)", len(dmsetupFoundMappers), len(lsblkParsed), n.MgmtIp)
@@ -3988,6 +4001,7 @@ func (d *portworx) UpgradeStork(specGenUrl string) error {
 }
 
 func (d *portworx) RestartDriver(n node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	log.Infof(fmt.Sprintf("Restarting volume driver on node [%s]", n.Name))
 	return driver_api.PerformTask(
 		func() error {
 			return d.schedOps.RestartPxOnNode(n)
@@ -4426,6 +4440,7 @@ func (d *portworx) updateNodeID(n *node.Node, nManager ...api.OpenStorageNodeCli
 
 func getGroupMatches(groupRegex *regexp.Regexp, str string) map[string]string {
 	match := groupRegex.FindStringSubmatch(str)
+	log.Infof("matches for url [%s]: %v", str, match)
 	result := make(map[string]string)
 	if len(match) > 0 {
 		for i, name := range groupRegex.SubexpNames() {
@@ -4964,7 +4979,7 @@ func (d *portworx) EstimatePoolExpandSize(apRule apapi.AutopilotRule, pool node.
 					}
 				}
 			} else {
-				return calculatedTotalSize, nil
+				return calculatedTotalSize - (calculatedTotalSize % units.GiB), nil
 			}
 		}
 	}
@@ -5814,9 +5829,9 @@ func isDiskPartitioned(n node.Node, drivePath string, d *portworx) (bool, error)
 }
 
 // GetPoolDrives returns the map of poolID and drive name
-func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]string, error) {
+func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]torpedovolume.DiskResource, error) {
 
-	poolDrives := make(map[string][]string, 0)
+	poolDrives := make(map[string][]torpedovolume.DiskResource, 0)
 
 	connectionOps := node.ConnectionOpts{
 		IgnoreError:     false,
@@ -5832,25 +5847,38 @@ func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]string, error) {
 	re := regexp.MustCompile(`\b\d+:\d+\b.*`)
 	matches := re.FindAllString(output, -1)
 
+	nodePoolResources := make([]torpedovolume.DiskResource, 0)
+
 	for _, match := range matches {
 		log.Debugf("Extracting pool details from [%s]", match)
-		pVals := make([]string, 0)
+		poolDiskResource := torpedovolume.DiskResource{}
 		tempVals := strings.Fields(match)
+		tempSizeVal := uint64(0)
+
 		for _, tv := range tempVals {
-			if strings.Contains(tv, ":") || strings.Contains(tv, "/") {
-				pVals = append(pVals, tv)
+			if poolDiskResource.PoolId == "" && strings.Contains(tv, ":") {
+				poolDiskResource.PoolId = strings.Split(tv, ":")[0]
+			} else if strings.Contains(tv, "/") {
+				poolDiskResource.Device = tv
+			} else if strings.Contains(tv, "_") {
+				poolDiskResource.MediaType = tv
+			} else if val, err := strconv.ParseUint(tv, 10, 64); err == nil {
+				if tempSizeVal == 0 {
+					tempSizeVal = val
+				}
+			} else if strings.Contains(tv, "GiB") || strings.Contains(tv, "TiB") {
+				if strings.Contains(tv, "TiB") {
+					tempSizeVal = tempSizeVal * 1024
+				}
+				poolDiskResource.SizeInGib = tempSizeVal
 			}
 		}
-
-		if len(pVals) >= 2 {
-			tempPoolId := pVals[0]
-			poolId := strings.Split(tempPoolId, ":")[0]
-			drvPath := pVals[1]
-
-			poolDrives[poolId] = append(poolDrives[poolId], drvPath)
-		}
-
+		nodePoolResources = append(nodePoolResources, poolDiskResource)
 	}
+	for _, res := range nodePoolResources {
+		poolDrives[res.PoolId] = append(poolDrives[res.PoolId], res)
+	}
+	log.Debugf("Pool drives for node [%s]: %#v", n.Name, poolDrives)
 	return poolDrives, nil
 }
 

@@ -18,7 +18,7 @@ RUN mkdir bin && \
 
 # Install IBM Cloud SDK
 RUN curl -fsSL https://clis.cloud.ibm.com/install/linux | sh && \
-    ibmcloud plugin install -f vpc-infrastructure && \
+    ibmcloud plugin install -v 11.3.0 -f vpc-infrastructure && \
     ibmcloud plugin install -f container-service
 
 # Install vCluster binary
