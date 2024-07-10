@@ -6379,3 +6379,158 @@ var _ = Describe("{RestartPXAfterPureSecretRecreation}", func() {
 		EndTorpedoTest()
 	})
 })
+var _ = Describe("{CheckCloudDrivesinFA}", func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-23972
+		1.Collect FA endpoints details from pure.json
+		2.Collect all cloud drives from the nodes
+		3.Collect the Drive ID from drive set configuration from each node
+		4.check in which FA the cloud drive is present and note down in a map
+		5.Check if the cloud drives are distributed across different FA from pure.json file
+	*/
+	BeforeEach(func() {
+		StartTorpedoTest("CheckCloudDrivesinFA", "Check if the cloud drives are present in FA", nil, 0)
+	})
+	itLog := "Check Cloud Drives are present in FA"
+	It(itLog, func() {
+		stNodes := node.GetStorageNodes()
+		log.InfoD(itLog)
+		// A list to store the cloud drives
+		var clouddrives []string
+		//Create a map to track the FA endpoints and the count of cloud drives in each FA
+		faEndPoints := make(map[string]int)
+		NewCloudDrivesFAendpoints := make(map[string]int)
+		//Create a map to track the cloud drives and the FA in which they are present
+		CloudDriveListMap := make(map[string]string)
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "Failed to get FA details used")
+		for _, fa := range flashArrays {
+			log.InfoD("FA EndPoint [%v]", fa.MgmtEndPoint)
+			//Initially Putting count of cloud drives in each Fa endpoint as zero
+			faEndPoints[fa.MgmtEndPoint] = 0
+			NewCloudDrivesFAendpoints[fa.MgmtEndPoint] = 0
+		}
+		stepLog := "Collect all cloud Drives from the nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			cloudData, err := GetCloudDriveList()
+			log.FailOnError(err, "Failed to get cloud drives")
+			log.InfoD("Collect the Drive ID from drive set configuration from each node")
+			for _, cloudDrive := range *cloudData {
+				for _, v := range cloudDrive.Configs {
+					log.InfoD("Cloud Drive ID [%v] in the node [%v]", v.ID, cloudDrive.NodeID)
+					clouddrives = append(clouddrives, v.ID)
+				}
+			}
+		})
+		checkCloudDrivesInFA := func(flashArrays []pureutils.FlashArrayEntry, clouddrives []string) map[string]string {
+			CloudDriveListMap := make(map[string]string)
+			for _, fa := range flashArrays {
+				faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
+				if err != nil {
+					log.Fatalf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+					continue
+				}
+				for _, cloudDrive := range clouddrives {
+					// If the cloud drive is already present in the map then we are skipping the current loop
+					if CloudDriveListMap[cloudDrive] != "" {
+						continue
+					}
+					cloudDrivefullName, err := GetVolumeCompleteNameOnFA(faClient, cloudDrive)
+					log.FailOnError(err, "Failed to get volume name for cloud drive id [%v]", cloudDrive)
+					if cloudDrivefullName != "" {
+						log.Infof("cloud drive [%v] exists in [%v]", cloudDrivefullName, fa.MgmtEndPoint)
+						CloudDriveListMap[cloudDrive] = fa.MgmtEndPoint
+					}
+				}
+			}
+			return CloudDriveListMap
+		}
+
+		stepLog = "Check if the cloud drives are present in FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			CloudDriveListMap = checkCloudDrivesInFA(flashArrays, clouddrives)
+		})
+		stepLog = "Check if all cloud drives are not in single FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//Loop through the cloud drives and increment the count in faEndPoints
+			for _, fa := range CloudDriveListMap {
+				faEndPoints[fa]++
+			}
+			log.InfoD("Check if the cloud drives are distributed across different FA from pure.json file")
+			for endpoint, count := range faEndPoints {
+				//If any of FA mgmt endpoint has zero cloud drives then print the error
+				if count == 0 {
+					log.Errorf("Cloud Drives are not present in FA [%v]", endpoint)
+				}
+			}
+		})
+		var newCloudDrives []string
+		cloudDriveExists := func(cloudDrive string, clouddrivelist []string) bool {
+			for _, clouddrive := range clouddrivelist {
+				if cloudDrive == clouddrive {
+					return true
+				}
+			}
+			return false
+		}
+		stepLog = "Add New cloud Drives on each node and check if they are not in single FA"
+		Step(stepLog, func() {
+			for _, selectedNode := range stNodes {
+				//Add new cloud drive on each node
+				for i := 0; i < 3; i++ {
+					newSpec := "size=100"
+					err = Inst().V.AddCloudDrive(&selectedNode, newSpec, -1)
+					log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", selectedNode.Name))
+					log.InfoD("Check volume Driver is up on the node after adding the cloud drive on the node [%v]", selectedNode.Name)
+					err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+
+				}
+			}
+			//Get the newly created cloud drives from the nodes
+			cloudData, err := GetCloudDriveList()
+			log.FailOnError(err, "Failed to get cloud drives")
+			for _, cloudDrive := range *cloudData {
+				for _, v := range cloudDrive.Configs {
+					iscloudDriveExists := cloudDriveExists(v.ID, clouddrives)
+					if !iscloudDriveExists {
+						newCloudDrives = append(newCloudDrives, v.ID)
+						log.InfoD("Newly created Cloud Drive ID [%v] in the node [%v]", v.ID, cloudDrive.NodeID)
+					}
+				}
+			}
+
+		})
+		var newCloudDriveListMap map[string]string
+		stepLog = "Check if the new cloud drives are present in FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			newCloudDriveListMap = checkCloudDrivesInFA(flashArrays, newCloudDrives)
+			//Loop through the cloud drives and increment the count in faEndPoints and compare the count with the previous count
+
+			for _, fa := range newCloudDriveListMap {
+				NewCloudDrivesFAendpoints[fa]++
+
+			}
+			log.InfoD("Check if the new cloud drives are distributed across different FA from pure.json file")
+			for FAendpoint, count := range faEndPoints {
+				if count == 0 {
+					if newValue, ok := NewCloudDrivesFAendpoints[FAendpoint]; ok {
+						if newValue != count {
+							log.Infof("New Cloud Drives are distributed across different FA from pure.json file")
+						} else {
+							log.FailOnError(fmt.Errorf("New Cloud Drives are not distributed across different FA from pure.json file"), "New Cloud Drives are not distributed across different FA from pure.json file")
+						}
+					}
+				}
+			}
+
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
