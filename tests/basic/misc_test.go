@@ -1667,3 +1667,121 @@ var _ = Describe("{StopKubeletOnNodes}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+// This test restarts master nodes too and hence this test should be enabled where torpedo is ran using
+// ginkgo command on the jenkins agent
+var _ = Describe("{KubeClusterRestart}", func() {
+	var testrailID = 86010
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/86010
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("KubeClusterRestart", "Validate shutdown of all the nodes in the k8s cluster and start after 5 mins", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+
+	It("has to setup, validate and teardown apps", func() {
+
+		namespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver namespace")
+		isVsphereSecretExists := false
+		isPureSecretExists := false
+
+		if _, err = core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
+			isVsphereSecretExists = true
+		}
+
+		if !isVsphereSecretExists {
+			if _, err = core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
+				isPureSecretExists = true
+			}
+		}
+
+		if !isVsphereSecretExists && !isPureSecretExists {
+			log.InfoD("Skipping the test as it is not on-prem cluster")
+			Skip("Skipping the test as it is not on-prem cluster")
+
+		}
+
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-%d", i))...)
+		}
+		ValidateApplications(contexts)
+
+		stepLog = "Powering off all the nodes in cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, vmNode := range node.GetNodes() {
+				log.InfoD("Powering off node [%s]", vmNode.Name)
+				err := Inst().N.PowerOffVM(vmNode)
+				log.FailOnError(err, "error powering off node [%s]", vmNode.Name)
+			}
+		})
+
+		log.InfoD("Waiting for 5 minutes for the cluster to completely shutdown")
+		time.Sleep(5 * time.Minute)
+		err = Inst().S.IsNodeReady(node.GetStorageDriverNodes()[0])
+		if err != nil {
+			log.Infof("Cluster is down as expected")
+		}
+
+		stepLog = "Powering on all the nodes in cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, vmNode := range node.GetNodes() {
+				log.InfoD("Powering on node [%s]", vmNode.Name)
+				err := Inst().N.PowerOnVM(vmNode)
+				log.FailOnError(err, "error powering on node [%s]", vmNode.Name)
+			}
+		})
+
+		masterNodes := node.GetMasterNodes()
+
+		stepLog = "Wait for the master nodes to be back up"
+
+		Step(stepLog, func() {
+			for _, masterNode := range masterNodes {
+				log.InfoD("Waiting for node [%s] to be back up", masterNode.Name)
+				err := Inst().N.TestConnection(masterNode, node.ConnectionOpts{
+					Timeout:         15 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+				log.FailOnError(err, "error while testing node status [%s]", masterNode.Name)
+				err = Inst().S.IsNodeReady(masterNode)
+				log.FailOnError(err, "error while testing node status [%s]", masterNode.Name)
+
+			}
+		})
+
+		stNodes := node.GetStorageDriverNodes()
+
+		stepLog = "Wait for the storage driver nodes to be back up and px ready"
+		Step(stepLog, func() {
+			for _, stNode := range stNodes {
+				log.InfoD("Waiting for node [%s] to be back up", stNode.Name)
+				err := Inst().N.TestConnection(stNode, node.ConnectionOpts{
+					Timeout:         15 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+				log.FailOnError(err, "error while testing node status [%s]", stNode.Name)
+				err = Inst().S.IsNodeReady(stNode)
+				log.FailOnError(err, "error while testing node status [%s]", stNode.Name)
+				log.InfoD(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start on node [%s]",
+					Inst().S.String(), Inst().V.String(), stNode.Name))
+				err = Inst().V.WaitDriverUpOnNode(stNode, Inst().DriverStartTimeout)
+			}
+		})
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		ValidateAndDestroy(contexts, opts)
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
