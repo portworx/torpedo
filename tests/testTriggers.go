@@ -7905,6 +7905,9 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*recordChan <- event
 	}()
 
+	err := Inst().V.RefreshDriverEndpoints()
+	UpdateOutcome(event, err)
+
 	setMetrics(*event)
 	stepLog := "perform kvdb failover in a cyclic manner"
 	Step(stepLog, func() {
@@ -7934,10 +7937,19 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 				nodeMap := node.GetNodesByVoDriverNodeID()
 				nodeContexts := make([]*scheduler.Context, 0)
-				log.Infof("KVDB node map is [%v]", kvdbNodeIDMap)
+				log.InfoD("KVDB node map is [%v]", kvdbNodeIDMap)
 
 				for kvdbID, nodeID := range kvdbNodeIDMap {
 					kvdbNode := nodeMap[nodeID]
+					if len(kvdbNode.Name) == 0 {
+						err = fmt.Errorf("node with id %v not found in the node registry", nodeID)
+						UpdateOutcome(event, err)
+						log.InfoD("current node registary..,")
+						for _, n := range nodeMap {
+							log.InfoD("node id: %v, node name: %v", n.VolDriverNodeID, n.Name)
+						}
+						continue
+					}
 
 					appNodeContexts, err := GetContextsOnNode(contexts, &kvdbNode)
 					nodeContexts = append(nodeContexts, appNodeContexts...)
