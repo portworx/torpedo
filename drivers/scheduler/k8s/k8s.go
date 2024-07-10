@@ -280,13 +280,7 @@ type K8s struct {
 // IsNodeReady  Check whether the cluster node is ready
 func (k *K8s) IsNodeReady(n node.Node) error {
 	t := func() (interface{}, bool, error) {
-		if err := k8sCore.IsNodeReady(n.Name); err != nil {
-			return "", true, &scheduler.ErrNodeNotReady{
-				Node:  n,
-				Cause: err.Error(),
-			}
-		}
-
+		log.InfoD(n.Name, "Node is not ready yet")
 		return "", false, nil
 	}
 
@@ -5593,9 +5587,20 @@ func (k *K8s) createVirtualMachineObjects(
 			if err != nil {
 				return nil, fmt.Errorf("failed to retrieve VM after creating/waiting for DataVolumes: %v", err)
 			}
-			// Check if the VM is in 'Running' phase.
-			if !vm.Status.Ready {
-				return nil, fmt.Errorf("VM is not in the expected 'Running' state")
+
+			t := func() (interface{}, bool, error) {
+				vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace)
+				if err != nil {
+					return nil, true, err
+				}
+				if vm.Status.Ready {
+					return nil, false, nil
+				}
+				return nil, true, fmt.Errorf("waiting for VM [%s] in namespace [%s] to be ready", obj.Name, obj.Namespace)
+			}
+			_, err = task.DoRetryWithTimeout(t, cdiImageImportTimeout, cdiImageImportRetry)
+			if err != nil {
+				return nil, err
 			}
 			return vm, nil
 		}
