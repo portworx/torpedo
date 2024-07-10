@@ -1016,7 +1016,7 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 			log.Infof("Got Cred UUID: %s", credUUID)
 			contexts = make([]*scheduler.Context, 0)
 			policyName := "intervalpolicy"
-			if i > 0 {
+			if i == 0 {
 				stepLog = fmt.Sprintf("create schedule policy %s", policyName)
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
