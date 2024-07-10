@@ -232,9 +232,11 @@ var (
 
 var (
 	// PDBValidationMinOpVersion specifies the minimum PX Operator version required to enable PDB validation in the UpgradeCluster
-	PDBValidationMinOpVersion, _      = version.NewVersion("24.1.0-")
-	ParallelUpgradeOperatorVersion, _ = version.NewVersion("24.2.0-")
-	ParallelUpgradePXVersion, _       = version.NewVersion("3.1.2")
+	PDBValidationMinOpVersion, _ = version.NewVersion("24.1.0-")
+	// ParallelUpgradeMinOpVersion specifies the minimum operator version that supports smart and parallel upgrades
+	ParallelUpgradeMinOpVersion, _ = version.NewVersion("24.2.0-")
+	// ParallelUpgradePxVersion specifies minimum portworx version that supports parallel upgrade
+	ParallelUpgradeMinPxVersion, _ = version.NewVersion("3.1.2")
 )
 
 type OwnershipAccessType int32

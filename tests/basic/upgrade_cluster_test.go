@@ -85,12 +85,12 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 				var mError error
 				opver, err := oputil.GetPxOperatorVersion()
-				if err == nil && opver.GreaterThanOrEqual(ParallelUpgradeOperatorVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradePXVersion) {
+				if err == nil && opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
 					go DoParallelUpgradePDBValidation(stopSignal, &mError)
 					defer func() {
 						close(stopSignal)
 					}()
-				} else if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) && opver.LessThan(ParallelUpgradeOperatorVersion) {
+				} else if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) && opver.LessThan(ParallelUpgradeMinOpVersion) {
 					go DoPDBValidation(stopSignal, &mError)
 					defer func() {
 						close(stopSignal)
@@ -101,15 +101,15 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 				var vQuorumError error
 				// validate volume quorum during upgrade
-				if opver.GreaterThanOrEqual(ParallelUpgradeOperatorVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradePXVersion) {
+				if opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
 					log.Info("Starting volume quorum validation for Portworx upgrade .......")
 					stopVolumeQuorumValidationSignal := make(chan struct{})
 					go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQuorumError)
 					defer close(stopVolumeQuorumValidationSignal)
 				} else {
 					log.Warnf("Skipping volume quorum validation due to version constraints.......")
-					log.Warnf("Required Operator version: %s, actual Operator version: %s", ParallelUpgradeOperatorVersion, opver)
-					log.Warnf("Required PX version: %s, actual PX version: %s", ParallelUpgradePXVersion, pxVersion)
+					log.Warnf("Required Operator version: %s, actual Operator version: %s", PDBValidationMinOpVersion, opver)
+					log.Warnf("Required PX version: %s, actual PX version: %s", ParallelUpgradeMinPxVersion, pxVersion)
 				}
 
 				err = Inst().S.UpgradeScheduler(version)
