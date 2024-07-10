@@ -2,6 +2,11 @@ package tests
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/hashicorp/go-version"
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -17,9 +22,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	corev1 "k8s.io/api/core/v1"
-	"net/url"
-	"strings"
-	"time"
 )
 
 var _ = Describe("{UpgradeCluster}", func() {
@@ -72,14 +74,23 @@ var _ = Describe("{UpgradeCluster}", func() {
 		}
 
 		printDisks(preUpgradeNodeDisksMap)
-
+		pxVersionString, err := Inst().V.GetDriverVersion()
+		var pxVersion *version.Version
+		if err == nil {
+			pxVersion, _ = version.NewVersion(pxVersionString)
+		}
 		for _, version := range versions {
 			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), version), func() {
 				stopSignal := make(chan struct{})
 
 				var mError error
 				opver, err := oputil.GetPxOperatorVersion()
-				if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) {
+				if err == nil && opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
+					go DoParallelUpgradePDBValidation(stopSignal, &mError)
+					defer func() {
+						close(stopSignal)
+					}()
+				} else if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) && opver.LessThan(ParallelUpgradeMinOpVersion) {
 					go DoPDBValidation(stopSignal, &mError)
 					defer func() {
 						close(stopSignal)
