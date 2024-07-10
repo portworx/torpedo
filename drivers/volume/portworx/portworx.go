@@ -789,7 +789,7 @@ func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) 
 		return false, fmt.Errorf("failed to get metadata nodes, Err: %v", err)
 	}
 
-	ipRegex := regexp.MustCompile(`http://(?P<address>.*):d+`)
+	ipRegex := regexp.MustCompile(`http:\/\/(?P<address>[\d\.]+):(?P<port>\d+)`)
 	for _, value := range members {
 		for _, url := range value.ClientUrls {
 			result := getGroupMatches(ipRegex, url)
@@ -1571,8 +1571,13 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				}
 			}
 		case api.SpecSize:
-			if requestedSpec.Size != vol.Spec.Size {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.Size, vol.Spec.Size)
+			pv, err := k8sCore.GetPersistentVolume(volumeName)
+			if err != nil {
+				return fmt.Errorf("failed to get PV [%s], Err: %v", volumeName, err)
+			}
+
+			if uint64(pv.Spec.Capacity.Storage().Value()) != vol.Spec.Size {
+				return fmt.Errorf("failed to validate volume [%s] size, expected: %d, actual: %d", volumeName, pv.Spec.Capacity.Storage().Value(), vol.Spec.Size)
 			}
 		default:
 		}
@@ -2077,10 +2082,15 @@ func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEn
 		if !strings.Contains(line, schedops.PureVolumeOUI) {
 			continue
 		}
-		if strings.Contains(line, "p") { // If this contains either "-part#" or "p#", we want to ignore it. 'p' is not in the hex character set so this is safe.
-			continue
-		}
+
+		// If this contains either "-part#" or "p#", we want to ignore it. 'p' is not in the hex character set so this is safe.
 		mapperName := strings.Split(line, "\t")[0]
+		if strings.Contains(mapperName, schedops.PureVolumeOUI) {
+			if len(mapperName) > 34 || strings.Contains(line, "p") {
+				continue
+			}
+		}
+
 		dmsetupFoundMappers = append(dmsetupFoundMappers, mapperName)
 	}
 
@@ -3995,6 +4005,7 @@ func (d *portworx) UpgradeStork(specGenUrl string) error {
 }
 
 func (d *portworx) RestartDriver(n node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	log.Infof(fmt.Sprintf("Restarting volume driver on node [%s]", n.Name))
 	return driver_api.PerformTask(
 		func() error {
 			return d.schedOps.RestartPxOnNode(n)

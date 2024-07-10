@@ -979,10 +979,11 @@ https://portworx.testrail.net/index.php?/cases/view/93034
 https://portworx.testrail.net/index.php?/cases/view/93035
 
 */
-var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
+var _ = Describe("{StopPXResizePVCDeleteApps}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("StopPXAddDiskDeleteApps", "Test creates multiple FADA volume and stops px on a node,resize pvc and checks if all the pods,pvc's are being deleted gracefully", nil, 93034)
+		StartTorpedoTest("StopPXResizePVCDeleteApps", "Test creates multiple FADA volume and stops px on a node,resize pvc and checks if all the pods,pvc's are being deleted gracefully", nil, 93034)
 	})
+
 	It("schedules multiple nginx fada volumes, stops portworx on a node where volumes are placed,resize pvc's and checks if all the resources created are deleted gracefully", func() {
 		var contexts = make([]*scheduler.Context, 0)
 		requestedVols := make([]*volume.Volume, 0)
@@ -994,7 +995,16 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 		storageNodes := node.GetStorageNodes()
 		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
 
-		var err error
+		cluster, err := Inst().V.InspectCurrentCluster()
+		log.FailOnError(err, "failed to inspect current cluster")
+		log.Infof("Current cluster [%s] UID: [%s]", cluster.Cluster.Name, cluster.Cluster.Id)
+
+		clusterUIDPrefix := strings.Split(cluster.Cluster.Id, "-")[0]
+		// getPureVolName translates the volume name into its equivalent in the pure backend
+		getPureVolName := func(volName string) string {
+			return "px_" + clusterUIDPrefix + "-" + volName
+		}
+
 		defer func() {
 			Inst().AppList = applist
 			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
@@ -1007,7 +1017,7 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 
 		//Number of apps to be deployed
-		NumberOfDeployments := 200
+		NumberOfDeployments := 100
 
 		Step("Schedule applications", func() {
 			log.InfoD("Scheduling applications")
@@ -1030,6 +1040,14 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 		flashArrays := pxPureSecret.Arrays
 		stepLog = fmt.Sprintf("Stop portworx,resize and validate pvc,destroy apps and check if the pvc's are deleted gracefully")
 		Step(stepLog, func() {
+			defer func() {
+				stepLog = fmt.Sprintf("start portworx and wait for it to come up")
+				Step(stepLog, func() {
+					log.Infof("Start volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
+					StartVolDriverAndWait([]node.Node{selectedNode})
+				})
+			}()
+
 			stepLog := fmt.Sprintf("Stop Portworx")
 			Step(stepLog, func() {
 				log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
@@ -1037,7 +1055,6 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 			})
 			for _, ctx := range contexts {
 				var appVolumes []*volume.Volume
-				var err error
 				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
@@ -1066,38 +1083,61 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 							requestedVols = append(requestedVols, resizedVol)
 						}
 					})
+			}
 
-				stepLog = fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
-					ctx.App.Key, appVolumes)
-				Step(stepLog,
-					func() {
-						log.InfoD(stepLog)
-						for _, v := range requestedVols {
-							// Need to pass token before validating volume
-							params := make(map[string]string)
-							if Inst().ConfigMap != "" {
-								params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-								log.FailOnError(err, "didn't get auth token")
-							}
-							err := Inst().V.ValidateUpdateVolume(v, params)
-							log.FailOnError(err, "Could not validate volume resize %v", v.Name)
+			// Validate the volumes are resized
+			stepLog = fmt.Sprintf("validate volumes are resized")
+			Step(stepLog,
+				func() {
+					log.InfoD(stepLog)
+					for _, v := range requestedVols {
+						// Need to pass token before validating volume
+						params := make(map[string]string)
+						if Inst().ConfigMap != "" {
+							params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+							log.FailOnError(err, "didn't get auth token")
+						}
+						err := Inst().V.ValidateUpdateVolume(v, params)
+						log.FailOnError(err, "Could not validate volume resize %v", v.Name)
 
-							gotVol := false
-							for _, fa := range flashArrays {
-								faVol, err := pureutils.GetPureFAVolumeSize(v.Name, fa.MgmtEndPoint, fa.APIToken)
-								log.FailOnError(err, "error getting vol [%s] size", v.Name)
-								if faVol != 0 {
-									dash.VerifyFatal(faVol, v.Size, fmt.Sprintf("validate volume [%s] resize in FA backend", v.Name))
-									gotVol = true
+						// Check which FA the volume is present
+						for _, eachFA := range flashArrays {
+							log.Info("Connecting to FA [%v]", eachFA.MgmtEndPoint)
+							faClient, err := pureutils.PureCreateClientAndConnect(eachFA.MgmtEndPoint, eachFA.APIToken)
+							log.FailOnError(err, "Failed to connect to FA")
+
+							volFound := false
+
+							// List all the Volumes present in FA
+							allVolumes, err := pureutils.ListAllTheVolumesFromSpecificFA(faClient)
+
+							log.FailOnError(err, "Failed to list all volumes from FA: %v", eachFA.MgmtEndPoint)
+							for _, eachVol := range allVolumes {
+								if strings.Contains(eachVol.Name, v.ID) {
+									volFound = true
+									log.Infof("Volume [%v] present on Host [%v]", eachVol.Name, eachFA.MgmtEndPoint)
+									// Now check if the sizes are matching
+
+									PureFAVolName := getPureVolName(v.ID)
+									size, err := pureutils.GetPureFAVolumeSize(PureFAVolName, eachFA.MgmtEndPoint, eachFA.APIToken)
+									log.FailOnError(err, "Failed to get volume size for vol: %v", PureFAVolName)
+
+									volInspect, err := Inst().V.InspectVolume(v.ID)
+
+									//conver to gb
+									volSize := volInspect.Spec.Size / units.GiB
+
+									dash.VerifyFatal(size, volSize, "validate volume size increase")
 									break
 								}
 							}
-							if !gotVol {
-								log.FailOnError(fmt.Errorf("unable to find vol [%s] size", v.Name), "error getting volume size")
+							if volFound {
+								break
 							}
 						}
-					})
-			}
+					}
+				})
+
 			stepLog = fmt.Sprintf("Destroy Application")
 			Step(stepLog, func() {
 				opts := make(map[string]bool)
@@ -1105,14 +1145,9 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 				for j := 0; j < NumberOfDeployments; j++ {
 					TearDownContext(contexts[j], opts)
 				}
+				log.Infof("waiting for 5 mins allowing voals to delete in backend")
+				time.Sleep(5 * time.Minute)
 			})
-			stepLog = fmt.Sprintf("start portworx and wait for it to come up")
-			Step(stepLog, func() {
-				log.Infof("Start volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
-				StartVolDriverAndWait([]node.Node{selectedNode})
-			})
-			log.Infof("waiting for 5 mins allowing voals to delete in backend")
-			time.Sleep(5 * time.Minute)
 
 			var faVolsAfterDel []string
 			for _, fa := range flashArrays {
@@ -2607,13 +2642,13 @@ func LogoutFromController(n node.Node, networkInterface flasharray.NetworkInterf
 
 var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 	/*
-				https://purestorage.atlassian.net/browse/PTX-21440
-			    1. Create a host in the FA whose secret is in pure secret
-		        2. Create a volume and attach it to the host created in step 1
-		        3. using iscsiadm commands run commands to login to the controllers
-		        4. check multipath -ll output
-		        5. Restart portworx
-		        6. The multipath entry for the volume attached from a different FA shouldn't vanish and I/O should be consistent
+					https://purestorage.atlassian.net/browse/PTX-21440
+		  		1. Create a host in the FA whose secret is in pure secret
+			        2. Create a volume and attach it to the host created in step 1
+			        3. using iscsiadm commands run commands to login to the controllers
+			        4. check multipath -ll output
+			        5. Restart portworx
+			        6. The multipath entry for the volume attached from a different FA shouldn't vanish and I/O should be consistent
 	*/
 
 	JustBeforeEach(func() {
@@ -2705,6 +2740,15 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 		})
 		stepLog = "Run iscsiadm commands to login to the controllers"
 		Step(stepLog, func() {
+
+			//Run iscsiadm commands to login to the controllers
+			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
+
+			for _, networkInterface := range networkInterfaces {
+				err = LoginIntoController(n, networkInterface, *FAclient)
+				log.FailOnError(err, "Failed to login into controller")
+				log.InfoD("Successfully logged into controller: %v", networkInterface.Address)
+			}
 
 			//run multipath before refresh
 			cmd := "multipath -ll"
@@ -2820,6 +2864,15 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 			err = RefreshIscsiSession(n)
 			log.FailOnError(err, "Failed to refresh iscsi session")
 			log.InfoD("Successfully refreshed iscsi session")
+
+			//log out of all the controllers
+			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
+
+			for _, networkInterface := range networkInterfaces {
+				err = LogoutFromController(n, networkInterface, *FAclient)
+				log.FailOnError(err, "Failed to login into controller")
+				log.InfoD("Successfully logged out of controller: %v", networkInterface.Address)
+			}
 
 		})
 
@@ -4215,7 +4268,7 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 		wgfada.Add(1)
 		createFADAVolumes := func(wg *sync.WaitGroup) {
 			defer GinkgoRecover()
-			wg.Done()
+			defer wg.Done()
 			for _, eachNs := range namespace {
 				// Create 100 PVCs on the Namespace
 				for i := 0; i < 100; i++ {
@@ -4232,7 +4285,7 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 		var wgfbda sync.WaitGroup
 		createFBDAVolumes := func(wg *sync.WaitGroup) {
 			defer GinkgoRecover()
-			wg.Done()
+			defer wg.Done()
 			for _, eachNs := range namespace {
 				// Create 100 PVCs on the Namespace
 				for i := 0; i < 100; i++ {
@@ -4287,49 +4340,119 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 	It(itLog, func() {
 		log.InfoD(itLog)
 		numberOfPvc := 10
-		var k8sCore = core.Instance()
-		var wg sync.WaitGroup
-		var max_bandwidth uint64
-		var max_iops uint64
-
+		var (
+			k8sCore       = core.Instance()
+			wg            sync.WaitGroup
+			max_bandwidth uint64
+			max_iops      uint64
+			realmName     string
+			accessibleFA  *newFlashArray.Client
+			isRealmExists bool
+			podNameinSC   string
+			PodNameinFA   string
+			isFAexists    bool = false
+			isFBexists    bool = false
+			flashArrays   []pureutils.FlashArrayEntry
+			flashBlades   []pureutils.FlashBladeEntry
+		)
 		//Declaring SC name, namespaces and pvc prefixes and lists which are required for collection of PVC And Volume Names
-		baseScName := "base-portworx-volume-sc"
-		fadaScName := "fada-volume-sc"
-		fbdaScName := "fbda-volume-sc"
+		baseScName := "base-portworx-volume-sc" + Inst().InstanceID
+		fadaScName := "fada-volume-sc" + Inst().InstanceID
+		fbdaScName := "fbda-volume-sc" + Inst().InstanceID
 		BaseAppNameSpace := "base-app-namespace"
 		FadaAppNameSpace := "fada-app-namespace"
 		FbdaAppNameSpace := "fbda-app-namespace"
-		max_iops = 1000
-		max_bandwidth = 1
+		max_iops = uint64(rand.Intn(99999999) + 1)
+		max_bandwidth = uint64(rand.Intn(511) + 1)
 		//Creating Two lists to collect the volume names of both FA and FB created volumes
 		listofFadaPvc := make([]string, 0)
 		listofFbdaPvc := make([]string, 0)
 		//Creating maps with namespaces as key and list of pvc names as values
-		namespaces := []string{FadaAppNameSpace, FbdaAppNameSpace, BaseAppNameSpace}
+		namespaces := []string{BaseAppNameSpace}
+
+		//Creating map with storage class as key and namespace as value
+		scNamespaceMap := make(map[string]string)
+		scNamespaceMap[baseScName] = BaseAppNameSpace
+
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+		pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+		log.FailOnError(err, "failed to get secret [%s]  in namespace [%s]", PureSecretName, volDriverNamespace)
+		if len(pxPureSecret.Arrays) == 0 && len(pxPureSecret.Blades) == 0 {
+			log.FailOnError(fmt.Errorf("No FA and FB found in pure.json"), "No FA and FB found in pure.json")
+		}
+		if len(pxPureSecret.Arrays) > 0 {
+			isFAexists = true
+			scNamespaceMap[fadaScName] = FadaAppNameSpace
+			namespaces = append(namespaces, FadaAppNameSpace)
+		}
+		if len(pxPureSecret.Blades) > 0 {
+			isFBexists = true
+			scNamespaceMap[fbdaScName] = FbdaAppNameSpace
+			namespaces = append(namespaces, FbdaAppNameSpace)
+		}
 		namespacePVCMap := make(map[string][]string)
 		for _, ns := range namespaces {
 			namespacePVCMap[ns] = []string{}
 		}
-		//Creating map with storage class as key and namespace as value
-		scNamespaceMap := map[string]string{
-			baseScName: BaseAppNameSpace,
-			fadaScName: FadaAppNameSpace,
-			fbdaScName: FbdaAppNameSpace,
-		}
 
 		//Get The Details of Existing FA AND FB in the cluster
-		flashArrays, err := GetFADetailsUsed()
-		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
-		flashBlades, err := GetFBDetailsFromCluster()
-		log.FailOnError(err, "Failed to get FB details from pure.json in the cluster")
+		if isFAexists {
+			flashArrays, err = GetFADetailsUsed()
+			log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
+			for _, fa := range flashArrays {
+				faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+				if err != nil {
+					log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+					continue
+				}
+				if fa.Realm != "" {
+					realmName = fa.Realm
+					isRealmExists = true
+					accessibleFA = faClient
+					break
+				}
+				if accessibleFA == nil {
+					accessibleFA = faClient
+				}
+			}
+			if accessibleFA == nil {
+				log.FailOnError(fmt.Errorf("No accessible FA found in pure.json"), "No accessible FA found in pure.json")
+			}
+			if isRealmExists {
+				log.InfoD("Realm [%v] found in FA", realmName)
+				podNameinSC = "Torpedo-Test" + Inst().InstanceID
+				PodNameinFA = realmName + "::" + podNameinSC
+
+				stepLog := "Create A pod inside Realm"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					_, err = pureutils.CreatePodinFA(accessibleFA, PodNameinFA)
+					log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", PodNameinFA))
+					isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(accessibleFA, PodNameinFA)
+					log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", PodNameinFA))
+					if !isPodExists {
+						log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", PodNameinFA), "is pod created in FA?")
+					}
+					log.InfoD("Pod [%v] created ", PodNameinFA)
+
+				})
+			}
+
+		}
+
+		if isFBexists {
+			flashBlades, err = GetFBDetailsFromCluster()
+			log.FailOnError(err, "Failed to get FB details from pure.json in the cluster")
+		}
 
 		stepLog := "Create storage class with max iops and max bandwidth for Normal Portworx Volumes , FADA and FBDA Pvc Deployment"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			BaseParams := make(map[string]string)
 			BaseParams["repl"] = "1"
-			BaseParams["max_iops"] = "1000"
-			BaseParams["max_bandwidth"] = "1G"
+			BaseParams["max_iops"] = strconv.FormatUint(max_iops, 10)
+			BaseParams["max_bandwidth"] = strconv.FormatUint(max_bandwidth, 10) + "G"
 			reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
 			bindMode := storageApi.VolumeBindingImmediate
 			// create storage class for base volumes
@@ -4339,32 +4462,38 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 
 			faParams := make(map[string]string)
 			faParams["repl"] = "1"
-			faParams["max_iops"] = "1000"
-			faParams["max_bandwidth"] = "1G"
+			faParams["max_iops"] = strconv.FormatUint(max_iops, 10)
+			faParams["max_bandwidth"] = strconv.FormatUint(max_bandwidth, 10) + "G"
 			faParams["fs"] = "ext4"
-
+			if isRealmExists {
+				faParams["pure_fa_pod_name"] = podNameinSC
+			}
 			var allowVolExpansionFA bool = true
-			// create storage class for FADA volumes
-			err = CreateFlashStorageClass(fadaScName,
-				"pure_block",
-				v1.PersistentVolumeReclaimDelete,
-				faParams, nil, &allowVolExpansionFA,
-				storageApi.VolumeBindingImmediate,
-				nil)
-			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", fadaScName))
-			log.InfoD("Storage class [%s] for FADA is created", fadaScName)
+			if isFAexists {
+				// create storage class for FADA volumes
+				err = CreateFlashStorageClass(fadaScName,
+					"pure_block",
+					v1.PersistentVolumeReclaimDelete,
+					faParams, nil, &allowVolExpansionFA,
+					storageApi.VolumeBindingImmediate,
+					nil)
+				log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", fadaScName))
+				log.InfoD("Storage class [%s] for FADA is created", fadaScName)
+			}
+			if isFBexists {
+				fbParams := make(map[string]string)
+				fbParams["pure_export_rules"] = "*(rw)"
+				// create storage class for FADA volumes
+				err = CreateFlashStorageClass(fbdaScName,
+					"pure_file",
+					v1.PersistentVolumeReclaimDelete,
+					fbParams, nil, &allowVolExpansionFA,
+					storageApi.VolumeBindingImmediate,
+					nil)
+				log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", fbdaScName))
+				log.InfoD("Storage class [%s] for FBDA is created", fbdaScName)
+			}
 
-			fbParams := make(map[string]string)
-			fbParams["pure_export_rules"] = "*(rw)"
-			// create storage class for FADA volumes
-			err = CreateFlashStorageClass(fbdaScName,
-				"pure_file",
-				v1.PersistentVolumeReclaimDelete,
-				fbParams, nil, &allowVolExpansionFA,
-				storageApi.VolumeBindingImmediate,
-				nil)
-			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", fbdaScName))
-			log.InfoD("Storage class [%s] for FBDA is created", fbdaScName)
 		})
 
 		//CreatePVC will create a pvc with given name, storage class, size and namespace
@@ -4463,11 +4592,15 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		stepLog = "check if the FA and FB volumes are created in the backend"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			faErr := CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
-			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
-			fbErr := CheckVolumesExistinFB(flashBlades, listofFbdaPvc, false)
-			log.FailOnError(fbErr, "Failed to check if volumes created  exist in FB")
+			if isFAexists {
+				faErr := CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
+				log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+			}
+			if isFBexists {
+				fbErr := CheckVolumesExistinFB(flashBlades, listofFbdaPvc, false)
+				log.FailOnError(fbErr, "Failed to check if volumes created  exist in FB")
 
+			}
 		})
 		DeletePvcGroup := func(pvclist []string, namespace string) {
 			for _, pvcName := range pvclist {
@@ -4499,11 +4632,25 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			log.InfoD("waiting for a minute for pvc deletion in flash backend")
 			time.Sleep(1 * time.Minute)
 			log.InfoD("Check if the volumes are deleted in FA and FB backend")
-			err := CheckVolumesExistinFA(flashArrays, listofFadaPvc, true)
-			log.FailOnError(err, "Failed to check if volumes which needed to be deleted still exist in FA")
-			fbErr := CheckVolumesExistinFB(flashBlades, listofFbdaPvc, true)
-			log.FailOnError(fbErr, "Failed to check if volumes created  which needed to be deleted still exist in FB")
+			if isFAexists {
+				err := CheckVolumesExistinFA(flashArrays, listofFadaPvc, true)
+				log.FailOnError(err, "Failed to check if volumes which needed to be deleted still exist in FA")
+			}
+			if isFBexists {
+				fbErr := CheckVolumesExistinFB(flashBlades, listofFbdaPvc, true)
+				log.FailOnError(fbErr, "Failed to check if volumes created  which needed to be deleted still exist in FB")
+			}
 		})
+		if isRealmExists {
+			stepLog = "Delete the pod created in the realm"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err := pureutils.DeletePodinFA(accessibleFA, PodNameinFA)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete pod [%v] in FA", PodNameinFA))
+				log.InfoD("Pod [%v] destroyed ", PodNameinFA)
+
+			})
+		}
 	})
 	AfterEach(func() {
 		EndTorpedoTest()
@@ -4543,6 +4690,7 @@ var _ = Describe("{ValidateVolumeResizeInParallel}", func() {
 			log.InfoD(stepLog)
 			context, err := Inst().S.Schedule("volumeresizeparallelfada", scheduler.ScheduleOptions{
 				AppKeys:            []string{"fio-fa-davol"},
+				CsiAppKeys:         []string{"fio-fa-davol"},
 				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
 			})
 			log.FailOnError(err, "Failed to schedule application of %v namespace", "volumeresizeparallelfada")
@@ -4550,7 +4698,7 @@ var _ = Describe("{ValidateVolumeResizeInParallel}", func() {
 
 		})
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
+		defer DestroyApps(contexts, nil)
 		resizeVolumes := func(ctx *scheduler.Context) {
 			var pvcs []*v1.PersistentVolumeClaim
 			appVolumes, err := Inst().S.GetVolumes(ctx)
@@ -4631,9 +4779,10 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 		stepLog := "Deploy FADA app"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			taskName := "deploy-fada"
+			taskName := "clone-fada-app-volume" + Inst().InstanceID
 			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-				AppKeys:            []string{"fio-fa-davol"},
+				AppKeys:            Inst().AppList,
+				CsiAppKeys:         Inst().AppList,
 				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
 				Namespace:          taskName,
 			})
@@ -4641,6 +4790,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 			contexts = append(contexts, context...)
 		})
 		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
 
 		stepLog = "Get the corresponding Px volume for the PVC and clone the volume "
 		Step(stepLog, func() {
@@ -4696,7 +4846,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		appsValidateAndDestroy(contexts)
+		AfterEachTest(contexts)
 	})
 })
 
@@ -4720,8 +4870,6 @@ var _ = Describe("{DeployAppsAndStopPortworx}", func() {
 		var nodeToReboot []node.Node
 		stNodes := node.GetStorageNodes()
 		nodeToReboot = append(nodeToReboot, stNodes[rand.Intn(len(stNodes))])
-		defer DestroyApps(contexts, nil)
-
 		stepLog := "Schedule apps on the cluster"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -4757,9 +4905,10 @@ var _ = Describe("{DeployAppsAndStopPortworx}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", nodeToReboot[0].Name))
 			log.FailOnError(err, fmt.Sprintf("Failed to reboot node %s", nodeToReboot[0].Name))
 		})
-		stepLog = "Validate the applications are in running state"
+		stepLog = "Validate the applications are in running state and then delete them"
 		Step(stepLog, func() {
 			ValidateApplications(contexts)
+			DestroyApps(contexts, nil)
 		})
 	})
 	JustAfterEach(func() {
@@ -4790,17 +4939,13 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 		log.InfoD(itLog)
 		var volSnapshotClass *volsnapv1.VolumeSnapshotClass
 		var volumeSnapshotMap map[string]*volsnapv1.VolumeSnapshot
-		applist := Inst().AppList
-		defer func() {
-			Inst().AppList = applist
-		}()
-		Inst().AppList = []string{"fio-fa-davol"}
 		stepLog := "Deploy application"
 		Step(stepLog, func() {
 			appNamespace := "fada-csi-snapshot-create"
 			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 			context, err := Inst().S.Schedule(appNamespace, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
+				CsiAppKeys:         Inst().AppList,
 				StorageProvisioner: Provisioner,
 				Namespace:          appNamespace,
 			})
@@ -4814,8 +4959,12 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 			log.InfoD(stepLog)
 			snapShotClassName := PureSnapShotClass
 			volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete")
-			log.FailOnError(err, "Failed to create volume snapshot class")
-			log.InfoD("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
+			if err != nil {
+				isSnapshotClassExists := strings.Contains(err.Error(), "already exists")
+				dash.VerifyFatal(isSnapshotClassExists, true, "Failed to create volume snapshot class")
+			} else {
+				log.InfoD("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
+			}
 		})
 		stepLog = "Creating snapshots for all apps in the context and validate them"
 		Step(stepLog, func() {
@@ -4831,7 +4980,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for _, ctx := range contexts {
-				err := Inst().S.DeleteCsiSnapshotsFromNamespace(ctx, ctx.App.NameSpace)
+				err := Inst().S.DeleteCsiSnapshotsFromNamespace(ctx, ctx.ScheduleOptions.Namespace)
 				log.FailOnError(err, "Failed to delete the snapshots")
 			}
 			log.InfoD("Deleted the snapshots successfully")
@@ -4860,7 +5009,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 	})
 })
 
-var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", func() {
+var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingNodeAffinity}", func() {
 	/*
 	           	https://purestorage.atlassian.net/browse/PTX-23996
 	           	1.Label Nodes with topology labels
@@ -4869,12 +5018,12 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 	   		4. Reboot the Node while FADA Volume Creation in Progress
 	*/
 	JustBeforeEach(func() {
-		StartTorpedoTest("RebootingNodesWhileFADAvolumeCreationInProgressUsingZones",
-			"Rebooting Nodes while FADA Volume Creation in Progress using Zones",
+		StartTorpedoTest("RebootingNodesWhileFADAvolumeCreationInProgressUsingNodeAffinity",
+			"Rebooting Nodes while FADA Volume Creation in Progress Using Node Affinity",
 			nil, 0)
 	})
 	var contexts []*scheduler.Context
-	itLog := "RebootingNodesWhileFADAvolumeCreationInProgressUsingZones"
+	itLog := "RebootingNodesWhileFADAvolumeCreationInProgressUsingNodeAffinity"
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var wg sync.WaitGroup
@@ -4910,12 +5059,12 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 			go func() {
 				defer wg.Done()
 				defer GinkgoRecover()
-				taskName := "rebootnodewhilefadacreationusingzones"
+				taskName := "rebootnodewhilefadacreationusingnodeaffinity"
 				Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 					AppKeys:            Inst().AppList,
+					CsiAppKeys:         Inst().AppList,
 					StorageProvisioner: Provisioner,
-					PvcSize:            6 * units.GiB,
 					Namespace:          taskName,
 				})
 				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
@@ -4949,7 +5098,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 					}
 					return "", false, nil
 				}
-				_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
+				_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 20*time.Minute, 35*time.Second)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
 				err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
@@ -4976,7 +5125,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingZones}", 
 			log.InfoD(stepLog)
 			for _, ctx := range contexts {
 				var k8sCore = core.Instance()
-				pods, err := k8sCore.GetPods(ctx.App.NameSpace, nil)
+				pods, err := k8sCore.GetPods(ctx.ScheduleOptions.Namespace, nil)
 				for _, pod := range pods.Items {
 					node := pod.Spec.NodeName
 					log.FailOnError(err, "unable to find the node from the pod")
@@ -5093,7 +5242,8 @@ var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 			log.InfoD(stepLog)
 			nodeForPoolDelete = append(nodeForPoolDelete, stNodes[rand.Intn(len(stNodes))])
 			log.InfoD("Deleting the pool on the node [%v]", nodeForPoolDelete[0].Name)
-			deletePoolAndValidate(nodeSelected, fmt.Sprintf("%d", nodePool.ID))
+			err = DeletePoolAndValidate(nodeSelected, fmt.Sprintf("%d", nodePool.ID))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%d] deletion in the node [%s]", nodePool.ID, nodeSelected.Name))
 		})
 		stepLog = "Add a Cloud Drive on same node and check if it is added successfully"
 		Step(stepLog, func() {
@@ -5683,7 +5833,8 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 	   2. Create a pod inside the Realm which we got from first step
 	   3. Create a volume using the same pod name that is created in the FA ,The pod name should be mentioned as pure_fa_pod_name in the storage class
 	   4. Validate Application and Check if the pod name in the volume is same as the pod name in the storage class
-	   5. Delete the Application and the pod created in the FA (Right now we only destroy the pod , as delete pod will not happen because eradication is blocked by SafeMode in FA)
+	   5. Validate the volume name in FA , which should be in format <realm_name>::<pod_name>::px_<cluster_uuid_1st_segment>-<pvc_name>
+	   6. Delete the Application and the pod created in the FA (Right now we only destroy the pod , as delete pod will not happen because eradication is blocked by SafeMode in FA)
 	*/
 	JustBeforeEach(func() {
 		StartTorpedoTest("ValidatePodNameinVolume", "Validate the pod name in the volume", nil, 0)
@@ -5692,7 +5843,6 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 	itLog := "ValidatePodNameinVolume"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		var origCustomAppConfigs map[string]scheduler.AppConfig
 		var RealmName string
 		var faClient *newFlashArray.Client
 		var isFAaccessible bool
@@ -5738,27 +5888,11 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		stepLog = "Assign the pod name to pure_fa_pod_name in the storage class"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			customConfigAppName := skipTestIfNoRequiredCustomAppConfigFound()
-
-			// save the original custom app configs
-			origCustomAppConfigs = make(map[string]scheduler.AppConfig)
-			for appName, customAppConfig := range Inst().CustomAppConfig {
-				origCustomAppConfigs[appName] = customAppConfig
-			}
-
-			// update the custom app config with pod name
-			Inst().CustomAppConfig[customConfigAppName] = scheduler.AppConfig{
-				PureFaPodName: podNameinSC,
-			}
-
-			log.Infof("JustBeforeEach using Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
-			err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
-			log.FailOnError(err, fmt.Sprintf("Failed to rescan specs from %s", Inst().SpecDir))
-
 			context, err := Inst().S.Schedule(testName, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
 				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
 				Namespace:          testName,
+				PureFAPodName:      podNameinSC,
 			})
 			log.FailOnError(err, "Failed to schedule application of %v namespace", testName)
 			contexts = append(contexts, context...)
@@ -5781,6 +5915,45 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 			}
 
 		})
+		stepLog = "Validate the volume name in the FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes := node.GetStorageNodes()
+			opts := node.ConnectionOpts{
+				IgnoreError:     false,
+				TimeBeforeRetry: defaultRetryInterval,
+				Timeout:         defaultTimeout,
+				Sudo:            true,
+			}
+			cmd := "cat /etc/pwx/cluster_uuid"
+			clusterUUID, err := Inst().N.RunCommand(storageNodes[0], cmd, opts)
+			log.FailOnError(err, "Failed to get cluster UUID")
+			log.InfoD("Cluster UUID [%v]", clusterUUID)
+			parts := strings.Split(clusterUUID, "-")
+			clusterUUIDfirstPart := parts[0]
+			getVolumeNamesFromPVCs := func(contexts []*scheduler.Context) []string {
+				var volumeNames []string
+				for _, ctx := range contexts {
+					pvcs, err := core.Instance().GetPersistentVolumeClaims(ctx.App.NameSpace, nil)
+					log.FailOnError(err, "error getting pvcs from namespace [%s]", ctx.App.NameSpace)
+
+					for _, pvc := range pvcs.Items {
+						volumeNames = append(volumeNames, pvc.Spec.VolumeName)
+					}
+				}
+				return volumeNames
+			}
+			listofPvcNames := getVolumeNamesFromPVCs(contexts)
+			for _, pvcName := range listofPvcNames {
+				expectedVolName := RealmName + "::" + podNameinSC + "::" + "px_" + clusterUUIDfirstPart + "-" + pvcName
+				log.InfoD("Expected Volume Name [%v]", expectedVolName)
+				isFAVolumeExists, err := pureutils.IsVolumeExistsonFA(faClient, expectedVolName)
+				log.FailOnError(err, fmt.Sprintf("Failed to check if volume [%v] exists in FA", expectedVolName))
+				dash.VerifyFatal(isFAVolumeExists, true, fmt.Sprintf("verify  volume exists in FA same "))
+				log.InfoD("Validated Volume [%v] in FA", expectedVolName)
+			}
+
+		})
 		stepLog = "Destroy the Applications before deleting the pod"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -5800,6 +5973,154 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
+})
+var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
+	/*
+			https://purestorage.atlassian.net/browse/PTX-24561
+			This Test Requires Pure.json with the following requirements:
+			-> Pure.json should have multiple FA's ,one with realm and one without realm.
+		 	Following Steps are executed by the test:
+			1.Deploys FADA applications in below combinations (for every APP provided in APP_LIST):
+			Storage Class having pure_fa_pod_name - this pod is under a realm in one of the arrays in pure.json
+			Storage Class having pure_fa_pod_name - this pod is not under a realm in one of the arrays in pure.json
+			Storage Class not having pure_fa_pod_name - legacy way of FADA Apps
+			2. Validates the application and checks if the volumes are created in the respective FA's
+			3. Deletes the application and checks if the volumes are deleted in the respective FA's
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("FAMultiTenancyMultiAppWithPodRealm",
+			"FA MultiTenancy Test with Multi App with Pod Realm Combination",
+			nil, 0)
+	})
+
+	itLog := "MultiTenancyFATestWithPodRealm"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var (
+			realmName           string
+			faWithRealm         *newFlashArray.Client
+			faWithoutRealm      *newFlashArray.Client
+			isRealmFAAccessible bool
+			podNameinSC         string
+			PodNameinFA         string
+		)
+		//Get The Details of Existing FA from pure.json
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
+		for _, fa := range flashArrays {
+			faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+			if err != nil {
+				log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+				continue
+			}
+			if fa.Realm != "" {
+				realmName = fa.Realm
+				isRealmFAAccessible = true
+				faWithRealm = faClient
+			} else {
+				faWithoutRealm = faClient
+			}
+		}
+
+		switch {
+		case faWithRealm == nil:
+			log.FailOnError(fmt.Errorf("No FA with realm found in pure.json"), "No  FA with realm found in pure.json")
+		case faWithoutRealm == nil:
+			log.FailOnError(fmt.Errorf("No  FA without realm found in pure.json"), "No  FA without realm found in pure.json")
+		case !isRealmFAAccessible:
+			log.FailOnError(fmt.Errorf("No accessible realm FA found in pure.json"), "No accessible realm FA found in pure.json")
+		}
+		podCreateandAppDeploy := func(faclient *newFlashArray.Client, podNameinFA string, podNameinSC string, taskName string, isMultiTenancy bool, wrongPodoutSideRealm bool) {
+			var contexts []*scheduler.Context
+			var pvcList []string
+			if isMultiTenancy {
+				isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faclient, podNameinFA)
+				log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", podNameinFA))
+				if !isPodExists {
+					_, err = pureutils.CreatePodinFA(faclient, podNameinFA)
+					log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podNameinFA))
+				}
+				log.InfoD("Pod [%v] created ", podNameinFA)
+			}
+			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				StorageProvisioner: Provisioner,
+				PureFAPodName:      podNameinSC,
+				Namespace:          taskName,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+			contexts = append(contexts, context...)
+			if wrongPodoutSideRealm {
+				fmt.Println("Entering into loop to check if it entered negative scenario")
+				for _, ctx := range contexts {
+					ctx.SkipVolumeValidation = true
+					log.InfoD("waiting for a minute for volume name to populate")
+					time.Sleep(1 * time.Minute)
+					allPvcList, err := core.Instance().GetPersistentVolumeClaims(ctx.App.NameSpace, nil)
+					log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", ctx.App.NameSpace))
+					for _, p := range allPvcList.Items {
+						if p.Status.Phase == "Pending" {
+							for _, event := range Inst().S.GetEvents()["PersistentVolumeClaim"] {
+								if strings.Contains(event.Message, "Pod does not exist") {
+									log.InfoD("This is Expected scenario(Negative test case of creating a pod name outside of realm due to which FADA volume will not be created")
+									DestroyApps(contexts, nil)
+									return
+								}
+							}
+						}
+					}
+				}
+			}
+			ValidateApplications(contexts)
+			log.InfoD("waiting for a minute for volume name to populate")
+			time.Sleep(1 * time.Minute)
+
+			for _, ctx := range contexts {
+				pvcList, err = GetVolumeNamefromPVC(ctx.App.NameSpace)
+				log.FailOnError(err, "Failed to get volume name from PVC")
+			}
+			faErr := CheckVolumesExistinFA(flashArrays, pvcList, false)
+			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+			DestroyApps(contexts, nil)
+			faErr = CheckVolumesExistinFA(flashArrays, pvcList, true)
+			log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+
+		}
+		stepLog = "Deploy FADA application with storage class having pure_fa_pod_name - this pod is under a realm in one of the arrays in pure.json"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			podNameinSC = "Torpedo-Test" + time.Now().Format("01-02-15h04m05s")
+			// In order to create a pod inside a realm , the pod name should be prefixed with realm, eg: <realm name>::<pod name>
+			PodNameinFA = realmName + "::" + podNameinSC
+			podCreateandAppDeploy(faWithRealm, PodNameinFA, podNameinSC, "fada-app-with-pod-realm", true, false)
+		})
+		stepLog = "Deploy FADA application with storage class not having pure_fa_pod_name"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Here we dont want to create any pod and create pure_fa_pod_name in storage class ,as this is standard way of Deploying Apps
+			podCreateandAppDeploy(faWithoutRealm, "", "", "fada-app-without-pod-realm", false, false)
+		})
+		stepLog = "Deploy FADA application with storage class having pure_fa_pod_name - this pod is not under a realm in one of the arrays in pure.json"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			podNameinSC = "Torpedo-Test" + time.Now().Format("01-02-15h04m05s")
+			// pod name will not contain any realm , so we just create pod with same naming convention in FA
+			PodNameinFA = podNameinSC
+			podCreateandAppDeploy(faWithoutRealm, PodNameinFA, podNameinSC, "fada-app-with-pod", true, false)
+		})
+		stepLog = "Deploy FADA application with storage class having pure_fa_pod_name but this pod is not under realm and we will create in fa client where realm is present so that App Deployment should fail(Negative testcase)"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			podNameinSC = "Torpedo-Test" + time.Now().Format("01-02-15h04m05s")
+			// pod name will not contain any realm , so we just create pod with same naming convention in FA
+			PodNameinFA = podNameinSC
+			podCreateandAppDeploy(faWithRealm, PodNameinFA, podNameinSC, "fada-app-with-pod-under-no-realm", true, true)
+
+		})
+
+	})
+
 })
 
 var _ = Describe("{VerifyPoolCreateInProperZones}", func() {
@@ -5851,5 +6172,210 @@ var _ = Describe("{VerifyPoolCreateInProperZones}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+})
+var _ = Describe("{RestartPXonAllWorkerNodesandCheckVolumes}", func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-24005
+	   1.Deploy Applications
+	   2.Validate Applications are Deployed
+	   3.Collect the existing Volume status (state,status) before stopping the PX
+	   4.Stop portworx on all nodes
+	   5.Restart all the worker nodes
+	   6.Make sure Both portworx and node are up.
+	   7.Collect the  Volume status (state,status) after restarting the PX and compare with the status before stopping the PX
+	   8.Validate the Applications are running
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPXonAllWorkerNodesandCheckVolumes",
+			"Stop PX on all nodes at once and then wait for a minute and enable px on all nodes and check if px is up and validate applications", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	itLog := "RebootAllWorkerNodesandCheckPX"
+	It(itLog, func() {
+		var listofFadaPvc []string
+		// VolStruct consists of Two Values of a particular volume -its state and status
+		type VolStruct struct {
+			State  string
+			Status string
+		}
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "Failed to get FA details used")
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := "restartpxonworkernodes" + Inst().InstanceID
+			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				CsiAppKeys:         Inst().CsiAppList,
+				StorageProvisioner: Provisioner,
+				Namespace:          taskName,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+			contexts = append(contexts, context...)
+		}
+		ValidateApplications(contexts)
+		//GetVolumeNameFromPvc will collect volume name from pvc which indirect will be the px volume name and this name is suffix to the volumes created in FA backend
+		GetPureVolumeNameFromPvc := func(namespace string, pvclist []string) []string {
+			allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+			log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
+			for _, p := range allPvcList.Items {
+				scForPvc, err := k8sCore.GetStorageClassForPVC(&p)
+				log.FailOnError(err, "Failed to get storage class for pvc [%s]", p.Name)
+				backend, _ := scForPvc.Parameters["backend"]
+				if backend == "pure_block" {
+					pvclist = append(pvclist, p.Spec.VolumeName)
+				}
+
+			}
+			return pvclist
+		}
+		log.InfoD("waiting for a minute for volume name to populate")
+		time.Sleep(1 * time.Minute)
+		//collect volumes names which are required to find out the volumes in FA and FB backend
+		for _, ctx := range contexts {
+			listofFadaPvc = GetPureVolumeNameFromPvc(ctx.ScheduleOptions.Namespace, listofFadaPvc)
+		}
+		faErr := CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
+		log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+		//inspectVolumes Collects the state and status of the volumes before and after the restart of the PX
+		inspectVolumes := func(contexts []*scheduler.Context) map[string]VolStruct {
+			volMap := make(map[string]VolStruct)
+			for _, ctx := range contexts {
+				volumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes for context [%s]", ctx.App.Key)
+				for _, vol := range volumes {
+					apiVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "Failed to inspect the volume [%v]", vol.ID)
+					volMap[apiVol.Id] = VolStruct{apiVol.State.String(), apiVol.Status.String()}
+				}
+			}
+			return volMap
+		}
+		volMap := inspectVolumes(contexts)
+		stepLog := "Stop portworx on all Nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Stopping portworx  Service on Nodes")
+			err := Inst().V.StopDriver(node.GetStorageDriverNodes(), false, nil)
+			dash.VerifyFatal(err, nil, "Failed to stop portworx on nodes")
+			log.InfoD("stopped portworx on all nodes")
+		})
+		stepLog = " Now wait for a minute and make PX up"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			time.Sleep(1 * time.Minute)
+			log.InfoD("Starting portworx Service on Nodes")
+			for _, node := range node.GetStorageDriverNodes() {
+				err := Inst().V.StartDriver(node)
+				log.FailOnError(err, "Failed to start portworx on node [%s]", node.Name)
+			}
+			for _, node := range node.GetStorageDriverNodes() {
+				err := Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", node.Name))
+			}
+			log.InfoD("Portworx is up on all nodes")
+		})
+		time.Sleep(1 * time.Minute)
+		log.InfoD("Waiting for a minute for cluster to stablize and volumes to return to their original state before validating")
+		stepLog = "Validate Volumes After PX restart and compare the state ,status of the volumes before the Restart of the PX"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			faErr = CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
+			log.FailOnError(faErr, "Failed to check if volumes created exist in FA")
+			volMapAfterRestart := inspectVolumes(contexts)
+			for volId, volDetailsBeforeRestart := range volMap {
+				if volDetailsAfterRestart, found := volMapAfterRestart[volId]; found {
+					if volDetailsBeforeRestart != volDetailsAfterRestart {
+						log.FailOnError(fmt.Errorf("Volume [%s] state or status changed after restart Before Restart : [%v] ,After Restart [%v]", volId, volDetailsBeforeRestart, volDetailsAfterRestart), "Volume state or status changed after restart")
+					}
+				} else {
+					log.FailOnError(fmt.Errorf("Volume [%s] not found in the map after restart", volId), "Volume not found in the map after restart")
+				}
+			}
+		})
+
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		DestroyApps(contexts, nil)
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{RestartPXAfterPureSecretRecreation}", func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-24004
+	   1.Take the Existing px-pure secret as backup
+	   2.Delete the px-pure secret
+	   3.Restart the PX
+	   4. Add the px-pure secret back
+	   5. Validate if PX is up on all nodes
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPXAfterPureSecretRecreation",
+			"Delete the Pure Secret and Add it Back and restart the PX and check if PX is up", nil, 0)
+	})
+	var pureSecretJSON string
+	itLog := "RebootAllWorkerNodesandCheckPXWithMgmtInterfaceDown"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		pxNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		pxNodes := node.GetStorageDriverNodes()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		stepLog := "Collect Details of PX-PURE-SECRET"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var err error
+			pureSecretJSON, err = Inst().S.GetSecretData(pxNamespace, PureSecretName, pureSecretDataField)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to fetch secret [%s] in [%s] namespace", PureSecretName, pxNamespace))
+		})
+		stepLog = "Delete Pure secret"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().S.DeleteSecret(pxNamespace, PureSecretName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete secret [%s] in [%s] namespace", PureSecretName, pxNamespace))
+
+		})
+		stepLog = "Stop PX and wait for driver to be down"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Stop portworx Service on all Storage Driver Nodes")
+			err := Inst().V.StopDriver(pxNodes, false, nil)
+			dash.VerifyFatal(err, nil, "Failed to stop portworx on nodes")
+			log.InfoD("stopped portworx on all nodes")
+			for _, node := range pxNodes {
+				err = Inst().V.WaitDriverDownOnNode(node)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of node %s", node.Name))
+			}
+		})
+		stepLog = "Start PX without Pure Secret"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Starting portworx Service on all Storage Driver Nodes")
+			for _, node := range pxNodes {
+				err := Inst().V.StartDriver(node)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to start portworx on node %s", node.Name))
+			}
+		})
+		stepLog = "Re-create Pure secret"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().S.CreateSecret(pxNamespace, PureSecretName, pureSecretDataField, pureSecretJSON)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to create secret [%s] in [%s] namespace", PureSecretName, pxNamespace))
+		})
+		stepLog = "Now Check if PX is up on all nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, node := range pxNodes {
+				err := Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", node.Name))
+			}
+			log.InfoD("Portworx is up on all nodes")
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
 	})
 })

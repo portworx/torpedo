@@ -879,7 +879,7 @@ func IsPoolAddDiskSupported() bool {
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	// Apps for which we have to skip volume validation due to various limitations
-	excludeAppContextList := []string{"tektoncd", "pxb-singleapp-multivol", "pxb-multipleapp-multivol"}
+	excludeAppContextList := []string{"tektoncd", "pxb-singleapp-multivol", "pg-mysql-multiprov-ocp", "pg-mysql-multiprov-iks", "pg-mysql-multiprov-aks"}
 	defer func() {
 		if len(errChan) > 0 {
 			close(*errChan[0])
@@ -2856,8 +2856,10 @@ func ToggleAutopilotInStc() error {
 	checkPodIsDeleted := func() (interface{}, bool, error) {
 		autopilotLabels := make(map[string]string)
 		autopilotLabels["name"] = "autopilot"
-		pods, err := k8sCore.GetPods(pxNamespace, autopilotLabels)
-		expect(err).NotTo(haveOccurred())
+		autoPilotNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		pods, err := k8sCore.GetPods(autoPilotNamespace, autopilotLabels)
+		dash.VerifyFatal(err, nil, "Failed to get pods")
 		if stc.Spec.Autopilot.Enabled {
 			log.Infof("autopilot is active, checking is pod is present.")
 			if len(pods.Items) == 0 {
@@ -9339,6 +9341,71 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) 
 	return nil
 }
 
+func DeletePoolAndValidate(stNode node.Node, poolIDToDelete string) error {
+	isPureBackend := false
+	validateMultipath := []string{}
+	if IsPureCluster() {
+		isPureBackend = true
+	}
+
+	if isPureBackend {
+		// if pure backend , we get the list of all multipath devices used while creating the pool
+		// later check if those multipath devices are still exist post deleting the pool
+		multipathDevBeforeDelete, err := GetMultipathDeviceOnPool(&stNode)
+		log.FailOnError(err, fmt.Sprintf("Failed to get list of Multipath devices on Node [%v]", stNode.Name))
+		validateMultipath = multipathDevBeforeDelete[poolIDToDelete]
+	}
+
+	poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools, Err: %v", err)
+	}
+
+	poolsMap, err := Inst().V.GetPoolDrives(&stNode)
+	if err != nil {
+		return fmt.Errorf("error getting pool drive from the node [%s],Err: %v", stNode.Name, err)
+	}
+
+	log.InfoD(fmt.Sprintf("Delete poolID %s on node %s", poolIDToDelete, stNode.Name))
+	err = DeleteGivenPoolInNode(stNode, poolIDToDelete, true)
+	if err != nil {
+		return fmt.Errorf("error deleting pool [%s] in the node [%s], Err: %v", poolIDToDelete, stNode.Name, err)
+	}
+
+	poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools after pool deletion, Err: %v", err)
+	}
+
+	if len(poolsBfr) <= len(poolsAfr) {
+		return fmt.Errorf("pool count not matching after pool deletion. Pools before deletion:%d, pools after deletion %d", len(poolsBfr), len(poolsAfr))
+	}
+
+	poolsMap, err = Inst().V.GetPoolDrives(&stNode)
+	if err != nil {
+		return fmt.Errorf("error getting pool drive from the node [%s] after pool deletion,Err: %v", stNode.Name, err)
+	}
+	if _, ok := poolsMap[poolIDToDelete]; ok {
+		return fmt.Errorf("pool [%s] still exists on the node [%s]", poolIDToDelete, stNode.Name)
+	}
+
+	if isPureBackend {
+		// Get list of all Multipath devices after deleting the pool
+		allMultipathDev, err := GetMultipathDeviceIDsOnNode(&stNode)
+		if err != nil {
+			return fmt.Errorf("failed to get multipath devices on Node [%v],Err: %v", stNode.Name, err)
+		}
+		for _, eachMultipath := range allMultipathDev {
+			for _, validateEach := range validateMultipath {
+				if validateEach == eachMultipath {
+					return fmt.Errorf("multipath device [%v] did not delete on Deleting Pool", validateEach)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func GetPoolUUIDWithMetadataDisk(stNode node.Node) (string, error) {
 
 	systemOpts := node.SystemctlOpts{
@@ -13290,16 +13357,15 @@ func CheckVolumesExistinFB(flashBlades []pureutils.FlashBladeEntry, listofFbdaPv
 			}
 			FsFullName, nameErr := pureutils.GetFilesystemFullName(fbClient, volumeName)
 			log.FailOnError(nameErr, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
-			isExists, err := pureutils.IsFileSystemExists(fbClient, FsFullName)
-
-			if isExists && err == nil {
+			if FsFullName != "" {
 				log.Infof("Volume [%v] exists on FB [%v]", volumeName, fb.MgmtEndPoint)
 				pvcFbdaMap[volumeName] = true
-			} else if !isExists && err == nil {
+			} else if err != nil && FsFullName == "" {
+				log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
+			} else {
 				log.Infof("Volume [%v] does not exist on FB [%v]", volumeName, fb.MgmtEndPoint)
 				pvcFbdaMap[volumeName] = false
 			}
-			log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
 		}
 	}
 	for FbdaVol, volStatus := range pvcFbdaMap {
@@ -13585,4 +13651,33 @@ func GetClusterName(kubeConfigFile string) (string, error) {
 		return "", err
 	}
 	return output, nil
+}
+
+// GetUniqueElementsFromList gets unique elements from a list
+func GetUniqueElementsFromList(input []string) []string {
+	uniqueMap := make(map[string]bool)
+	uniqueSlice := make([]string, 0)
+
+	for _, element := range input {
+		if !uniqueMap[element] {
+			uniqueMap[element] = true
+			uniqueSlice = append(uniqueSlice, element)
+		}
+	}
+
+	return uniqueSlice
+}
+
+func GetVolumeNamefromPVC(namespace string) ([]string, error) {
+	var pvclist []string
+	allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	if err != nil {
+		log.InfoD("error getting pvcs from namespace [%s]", namespace)
+		return nil, err
+	}
+	for _, p := range allPvcList.Items {
+		pvclist = append(pvclist, p.Spec.VolumeName)
+		return pvclist, nil
+	}
+	return nil, fmt.Errorf("No PVCs found in namespace [%s]", namespace)
 }

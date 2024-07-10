@@ -110,7 +110,7 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 			log.InfoD("Creating source and destination rancher project in source cluster")
 			for i := 0; i < 2; i++ {
 				project := fmt.Sprintf("rke-project-%v", RandomString(10))
-				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, RancherProjectDescription, RancherActiveCluster, projectLabel, projectAnnotation)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, RancherProjectDescription, rke.SourceClusterName, projectLabel, projectAnnotation)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s", project))
 				projectID, err := Inst().S.(*rke.Rancher).GetProjectID(project)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting Project ID for project %s", project))
@@ -185,7 +185,7 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			project := fmt.Sprintf("dest-rke-project-%v", RandomString(10))
-			_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, RancherProjectDescription, RancherActiveCluster, projectLabel, projectAnnotation)
+			_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, RancherProjectDescription, rke.DestinationClusterName, projectLabel, projectAnnotation)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s", project))
 			projectID, err := Inst().S.(*rke.Rancher).GetProjectID(project)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project ID for destination cluster %s", project))
@@ -372,7 +372,7 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", L
 		Step("Creating a rancher project in source cluster", func() {
 			log.InfoD("Creating a rancher project in source cluster")
 			sourceProject = fmt.Sprintf("source-project-%v", RandomString(10))
-			_, err = Inst().S.(*rke.Rancher).CreateRancherProject(sourceProject, RancherProjectDescription, RancherActiveCluster, projectLabel, projectAnnotation)
+			_, err = Inst().S.(*rke.Rancher).CreateRancherProject(sourceProject, RancherProjectDescription, rke.SourceClusterName, projectLabel, projectAnnotation)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s in source cluster", sourceProject))
 			sourceProjectID, err = Inst().S.(*rke.Rancher).GetProjectID(sourceProject)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting Project ID for project %s", sourceProject))
@@ -397,7 +397,7 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", L
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			for i := 0; i < 2; i++ {
 				destProject := fmt.Sprintf("dest-rke-project-%v-%v", RandomString(5), i)
-				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(destProject, RancherProjectDescription, RancherActiveCluster, projectLabel, projectAnnotation)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(destProject, RancherProjectDescription, rke.DestinationClusterName, projectLabel, projectAnnotation)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s in destination cluster", destProject))
 				destProjectList = append(destProjectList, destProject)
 				destProjectID, err := Inst().S.(*rke.Rancher).GetProjectID(destProject)
@@ -611,7 +611,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", Label(TestCa
 			log.InfoD("Creating 2 rancher projects in source cluster")
 			for i := 0; i < 2; i++ {
 				sourceProject = fmt.Sprintf("source-project-%v-%v", RandomString(10), i)
-				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(sourceProject, RancherProjectDescription, RancherActiveCluster, projectLabel, projectAnnotation)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(sourceProject, RancherProjectDescription, rke.SourceClusterName, projectLabel, projectAnnotation)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s in source cluster", sourceProject))
 				sourceProjectID, err = Inst().S.(*rke.Rancher).GetProjectID(sourceProject)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting Project ID for project %s", sourceProject))
@@ -687,7 +687,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", Label(TestCa
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			for i := 0; i < 2; i++ {
 				destProject := fmt.Sprintf("dest-rke-project-%v-%v", RandomString(5), i)
-				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(destProject, "new project", RancherActiveCluster, projectLabel, projectAnnotation)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(destProject, "new project", rke.DestinationClusterName, projectLabel, projectAnnotation)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s in destination cluster", destProject))
 				destProjectList = append(destProjectList, destProject)
 				destProjectID, err := Inst().S.(*rke.Rancher).GetProjectID(destProject)
@@ -985,7 +985,7 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", La
 			log.InfoD("Creating rancher projects on source cluster")
 			for i := 0; i < 2; i++ {
 				project := fmt.Sprintf("source-rke-project-%v-%v", i+1, RandomString(5))
-				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, RancherProjectDescription, RancherActiveCluster, projectLabel, projectAnnotation)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, RancherProjectDescription, rke.SourceClusterName, projectLabel, projectAnnotation)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s", project))
 				projectID, err := Inst().S.(*rke.Rancher).GetProjectID(project)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting Project ID for project %s", project))
@@ -1070,7 +1070,7 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", La
 			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			project := fmt.Sprintf("destination-rke-project-%v", RandomString(5))
-			_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, RancherProjectDescription, RancherActiveCluster, projectLabel, projectAnnotation)
+			_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, RancherProjectDescription, rke.DestinationClusterName, projectLabel, projectAnnotation)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s", project))
 			projectID, err := Inst().S.(*rke.Rancher).GetProjectID(project)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project ID for destination cluster %s", project))

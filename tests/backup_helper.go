@@ -19,6 +19,9 @@ import (
 	"text/template"
 	"time"
 
+	optest "github.com/libopenstorage/operator/pkg/util/test"
+	"k8s.io/apimachinery/pkg/watch"
+
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -87,6 +90,7 @@ const (
 	Vpinisetti     TestcaseAuthor = "vpinisetti-px"
 	Sabrarhussaini TestcaseAuthor = "sabrarhussaini"
 	ATrivedi       TestcaseAuthor = "atrivedi-px"
+	Dbinnal        TestcaseAuthor = "dbinnal-px"
 )
 
 // TestcaseQuarter List
@@ -108,6 +112,7 @@ const (
 	defaultStorkDeploymentNamespace           = "kube-system"
 	UpgradeStorkImage                         = "TARGET_STORK_VERSION"
 	LatestStorkImage                          = "23.9.0"
+	LowerStorkImage                           = "24.2.0"
 	restoreNamePrefix                         = "tp-restore"
 	DestinationClusterName                    = "destination-cluster"
 	AppReadinessTimeout                       = 10 * time.Minute
@@ -142,8 +147,8 @@ const (
 	BackupLocationDeleteRetryTime             = 30 * time.Second
 	RebootNodeTimeout                         = 1 * time.Minute
 	RebootNodeTimeBeforeRetry                 = 5 * time.Second
-	LatestPxBackupVersion                     = "2.7.0"
-	defaultPxBackupHelmBranch                 = "2.7.0"
+	LatestPxBackupVersion                     = "2.7.2"
+	defaultPxBackupHelmBranch                 = "2.7.2"
 	pxCentralPostInstallHookJobName           = "pxcentral-post-install-hook"
 	quickMaintenancePod                       = "quick-maintenance-repo"
 	fullMaintenancePod                        = "full-maintenance-repo"
@@ -181,6 +186,15 @@ const (
 	CorrectMemoryRequest                      = "700Mi"
 	CorrectMemoryLimit                        = "1Gi"
 	IncorrectImageSuffix                      = "-incorrect"
+	RestrictedPSA                             = "restricted"
+	RestrictedPSAVersion                      = "latest"
+	CustomRestrictedPSADescription            = "Custom Restricted PSA"
+	BaselinePSA                               = "baseline"
+	BaselinePSAVersion                        = "latest"
+	CustomBaselinePSADescription              = "Custom Baseline PSA"
+	PrivilegedPSA                             = "privileged"
+	PrivilegedPSAVersion                      = "latest"
+	CustomPrivilegedPSADescription            = "Custom Privileged PSA"
 )
 
 var (
@@ -216,7 +230,10 @@ var (
 	IsBackupLongevityRun       = false
 	PvcListBeforeRun           []string
 	PvcListAfterRun            []string
-	PSAAppMap                  = map[string]string{"postgres-backup": "postgres-backup-psa-restricted", "mysql-backup": "mysql-backup-psa-restricted"}
+	RestrictedPSALabel         = map[string]string{"pod-security.kubernetes.io/enforce": "restricted"}
+	BaselinePSALabel           = map[string]string{"pod-security.kubernetes.io/enforce": "baseline"}
+	PrivilegedPSALabel         = map[string]string{"pod-security.kubernetes.io/enforce": "privileged"}
+	PSAAppMap                  = map[string]string{"postgres-backup": "postgres-restricted", "mysql-backup": "mysql-restricted"}
 )
 
 type UserRoleAccess struct {
@@ -2741,6 +2758,56 @@ func BackupWithPartialSuccessCheck(backupName string, orgID string, retryDuratio
 	return nil
 }
 
+// BackupFailedCheck inspects backup task
+func BackupFailedCheck(backupName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context1.Context) error {
+	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
+	}
+	statusesExpected := [...]api.BackupInfo_StatusInfo_Status{
+		api.BackupInfo_StatusInfo_Failed,
+	}
+	statusesUnexpected := [...]api.BackupInfo_StatusInfo_Status{
+		api.BackupInfo_StatusInfo_Success,
+		api.BackupInfo_StatusInfo_PartialSuccess,
+		api.BackupInfo_StatusInfo_Invalid,
+		api.BackupInfo_StatusInfo_Aborted,
+		api.BackupInfo_StatusInfo_Failed,
+	}
+	backupFailCheckFunc := func() (interface{}, bool, error) {
+		resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+		if err != nil {
+			return "", false, err
+		}
+		actual := resp.GetBackup().GetStatus().Status
+		reason := resp.GetBackup().GetStatus().Reason
+		for _, status := range statusesExpected {
+			if actual == status {
+				return "", false, nil
+			}
+		}
+		for _, status := range statusesUnexpected {
+			if actual == status {
+				return "", false, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
+			}
+		}
+
+		return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
+
+	}
+	_, err = task.DoRetryWithTimeout(backupFailCheckFunc, retryDuration, retryInterval)
+	log.InfoD("Backup fail check for backup %s finished at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // BackupSuccessCheckWithValidation checks if backup is Success and then validates the backup
 func BackupSuccessCheckWithValidation(ctx context1.Context, backupName string, scheduledAppContextsToBackup []*scheduler.Context, orgID string, retryDuration time.Duration, retryInterval time.Duration, resourceTypeFilter ...string) error {
 	err := BackupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
@@ -4573,8 +4640,8 @@ func ValidateAllPodsInPxBackupNamespace() error {
 	return err
 }
 
-// getStorkImageVersion returns current stork image version.
-func getStorkImageVersion() (string, error) {
+// GetStorkImageVersion returns current stork image version.
+func GetStorkImageVersion() (string, error) {
 	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
 	if err != nil {
 		return "", err
@@ -4588,7 +4655,7 @@ func getStorkImageVersion() (string, error) {
 	return storkImageVersion, nil
 }
 
-// upgradeStorkVersion upgrades the stork to the provided version.
+// UpgradeStorkVersion upgrades the stork to the provided version.
 func UpgradeStorkVersion(storkImageToUpgrade string) error {
 	var finalImageToUpgrade string
 	var postUpgradeStorkImageVersionStr string
@@ -4596,7 +4663,7 @@ func UpgradeStorkVersion(storkImageToUpgrade string) error {
 	if err != nil {
 		return err
 	}
-	currentStorkImageStr, err := getStorkImageVersion()
+	currentStorkImageStr, err := GetStorkImageVersion()
 	if err != nil {
 		return err
 	}
@@ -4654,7 +4721,7 @@ func UpgradeStorkVersion(storkImageToUpgrade string) error {
 	}
 	// Wait for upgrade request to go through before validating
 	t := func() (interface{}, bool, error) {
-		postUpgradeStorkImageVersionStr, err = getStorkImageVersion()
+		postUpgradeStorkImageVersionStr, err = GetStorkImageVersion()
 		if err != nil {
 			return "", true, err
 		}
@@ -4680,6 +4747,101 @@ func UpgradeStorkVersion(storkImageToUpgrade string) error {
 
 	log.Infof("Successfully upgraded stork version from %v to %v", currentStorkImageStr, postUpgradeStorkImageVersionStr)
 	return nil
+}
+
+// DowngradeStorkVersion downgrades the stork version to the provided image
+func DowngradeStorkVersion(storkImageToDowngrade string) error {
+	var finalImageToDowngrade string
+	var postDowngradeStorkImageVersionStr string
+	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
+	if err != nil {
+		return err
+	}
+	currentStorkImageStr, err := GetStorkImageVersion()
+	if err != nil {
+		return err
+	}
+	currentStorkVersion, err := version.NewSemver(currentStorkImageStr)
+	if err != nil {
+		return err
+	}
+	storkImageVersionToDowngrade, err := version.NewSemver(storkImageToDowngrade)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Current stork version : %s", currentStorkVersion)
+	log.Infof("Downgrading stork version to : %s", storkImageVersionToDowngrade)
+
+	if currentStorkVersion.LessThanOrEqual(storkImageVersionToDowngrade) {
+		return fmt.Errorf("cannot downgrade stork version from %s to %s as the current version is lower than the provided version", currentStorkVersion, storkImageVersionToDowngrade)
+	}
+	internalDockerRegistry := os.Getenv("INTERNAL_DOCKER_REGISTRY")
+	if internalDockerRegistry != "" {
+		finalImageToDowngrade = fmt.Sprintf("%s/portworx/stork:%s", internalDockerRegistry, storkImageToDowngrade)
+	} else {
+		finalImageToDowngrade = fmt.Sprintf("docker.io/openstorage/stork:%s", storkImageToDowngrade)
+	}
+	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
+	if isOpBased {
+		log.Infof("Operator based Portworx deployment, Downgrading stork via StorageCluster")
+		storageSpec, err := Inst().V.GetDriver()
+		if err != nil {
+			return err
+		}
+		storageSpec.Spec.Stork.Image = finalImageToDowngrade
+
+		// Check to reset customImageRegistry to blank as in case of ibm it'll be icr.io/ext/ and not
+		// docker.io/ which causes issues when we try to install stork which is not pushed to icr.io/ext
+		if GetClusterProviders()[0] == "ibm" {
+			storageSpec.Spec.CustomImageRegistry = ""
+		}
+
+		_, err = operator.Instance().UpdateStorageCluster(storageSpec)
+		if err != nil {
+			return err
+		}
+	} else {
+		log.Infof("Non-Operator based Portworx deployment, Upgrading stork via Deployment")
+		storkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+		if err != nil {
+			return err
+		}
+		storkDeployment.Spec.Template.Spec.Containers[0].Image = finalImageToDowngrade
+		_, err = apps.Instance().UpdateDeployment(storkDeployment)
+		if err != nil {
+			return err
+		}
+	}
+	// Wait for downgrade request to go through before validating
+	t := func() (interface{}, bool, error) {
+		postDowngradeStorkImageVersionStr, err = GetStorkImageVersion()
+		if err != nil {
+			return "", true, err
+		}
+		if !strings.EqualFold(postDowngradeStorkImageVersionStr, storkImageToDowngrade) {
+			return "", true, fmt.Errorf("expected version after upgrade was %s but got %s", storkImageToDowngrade, postDowngradeStorkImageVersionStr)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+
+	// validate stork pods after downgrade
+	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+	if err != nil {
+		return err
+	}
+	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, storkPodReadyTimeout, podReadyRetryTime)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Successfully downgraded stork version from %v to %v", currentStorkImageStr, postDowngradeStorkImageVersionStr)
+	return nil
+
 }
 
 // CreateBackupWithNamespaceLabel creates a backup with Namespace label and checks for success
@@ -7311,12 +7473,12 @@ func GetBackupPodAge() (map[string]nsPodAge, error) {
 	k8sCore := core.Instance()
 	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
 	if err != nil {
-		return podAge, fmt.Errorf("failed to get namespaces list")
+		return podAge, fmt.Errorf("failed to get namespaces list error:[%v]", err)
 	}
 	for _, namespace := range allNamespaces.Items {
 		pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
 		if err != nil {
-			return podAge, fmt.Errorf("failed to get pods for namespace")
+			return podAge, fmt.Errorf("failed to get pods for namespace error:[%v]", err)
 		}
 		for _, pod := range pods.Items {
 			podAge[namespace.ObjectMeta.GetName()] = nsPodAge{pod.ObjectMeta.GetGenerateName(): pod.GetCreationTimestamp().Time}
@@ -7332,7 +7494,7 @@ func ComparePodAge(oldPodAge map[string]nsPodAge) error {
 	k8sCore := core.Instance()
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to get list of services")
+		return fmt.Errorf("failed to get list of services error:[%v]", err)
 	}
 	for _, svc := range allServices.Items {
 		if svc.Name == "portworx-service" {
@@ -7344,7 +7506,7 @@ func ComparePodAge(oldPodAge map[string]nsPodAge) error {
 	for _, namespace := range allNamespaces.Items {
 		pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
 		if err != nil {
-			return fmt.Errorf("failed to get pods for namespace")
+			return fmt.Errorf("failed to get pods for namespace error:[%v]", err)
 		}
 		if IsPresent(namespacesToSkip, namespace.ObjectMeta.GetName()) {
 			for _, pod := range pods.Items {
@@ -9398,8 +9560,9 @@ func UpdateMaintenanceCronJob(backupLocation string, maintenanceJobType Maintena
 // CreateInvalidVolumeSnapshotClass creates invalid VolumeSnapshotClass for given provisioner
 func CreateInvalidVolumeSnapshotClass(snapShotClassName, provisioner string) (*volsnapv1.VolumeSnapshotClass, error) {
 	volumeSnapshotClassParameters := make(map[string]string)
+	invalidProvisioner := "invalid-" + provisioner
 	volumeSnapshotClassParameters["invalidParameter"] = "invalidValue"
-	volumeSnapshotClass, err := Inst().S.CreateVolumeSnapshotClassesWithParameters(snapShotClassName, provisioner, false, "Delete", volumeSnapshotClassParameters)
+	volumeSnapshotClass, err := Inst().S.CreateVolumeSnapshotClassesWithParameters(snapShotClassName, invalidProvisioner, false, "Delete", volumeSnapshotClassParameters)
 	if err != nil {
 		return nil, err
 	}
@@ -9431,6 +9594,90 @@ func DeleteAllDataExportCRs(namespace string) error {
 	return err
 }
 
+// DeleteDataExportCRForVolume deletes the data export CR for the provided PVC
+func DeleteDataExportCRForVolume(pvc *corev1.PersistentVolumeClaim) error {
+	var found bool
+	var filterOptions = metav1.ListOptions{}
+	namespace := pvc.Namespace
+	kdmpClient := kdmp.Instance()
+	t := func() (interface{}, bool, error) {
+		dataExportCrList, err := kdmpClient.ListDataExport(namespace, filterOptions)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to list data export CRs in namespace [%s]: %w", namespace, err)
+		}
+		if len(dataExportCrList.Items) == 0 {
+			return "", true, fmt.Errorf("no data export CRs found in namespace [%s]", namespace)
+		}
+		for _, dataExportCr := range dataExportCrList.Items {
+			if dataExportCr.Spec.Source.Namespace == namespace && dataExportCr.Spec.Source.Name == pvc.Name {
+				found = true
+				log.Infof("Deleting data export CR [%s] in namespace [%s]", dataExportCr.Name, namespace)
+				err := kdmpClient.DeleteDataExport(dataExportCr.Name, namespace)
+				if err != nil {
+					return nil, false, fmt.Errorf("failed to delete data export CR [%s] in namespace [%s]: %w", dataExportCr.Name, namespace, err)
+				}
+			}
+		}
+		if !found {
+			return "", true, fmt.Errorf("no data export CR found for PVC [%s] in namespace [%s]", pvc.Name, namespace)
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+	return err
+}
+
+// WatchAndKillDataExportCR watches for the data export CRs in the provided namespaces and deletes them as soon as they are created
+func WatchAndKillDataExportCR(namespaces []string, timeoutDuration time.Duration) error {
+	kdmpClient := kdmp.Instance()
+	// Map of namespace and watcher
+	var namespaceWatcherMap = make(map[string]watch.Interface)
+	for _, namespace := range namespaces {
+		watcher, err := kdmpClient.WatchDataExport(namespace, metav1.ListOptions{})
+		if err != nil {
+			return err
+		}
+		namespaceWatcherMap[namespace] = watcher
+		log.Infof("Watcher created for namespace [%s]", namespace)
+	}
+
+	for namespace, watcher := range namespaceWatcherMap {
+		go func(namespace string, watcher watch.Interface) {
+			defer GinkgoRecover()
+			defer func() {
+				watcher.Stop()
+				log.InfoD("Watcher stopped for namespace [%s]", namespace)
+			}()
+			ch := watcher.ResultChan()
+			overallTimeout := time.After(timeoutDuration)
+			log.InfoD("Watcher started for namespace [%s]", namespace)
+			for {
+				select {
+				case event, ok := <-ch:
+					if !ok {
+						log.InfoD("Watcher channel closed")
+						return
+					}
+					log.InfoD("Received event: %v", event)
+					if event.Type == watch.Added {
+						log.InfoD("DataExport CR added. Initiating delete.")
+						err := DeleteAllDataExportCRs(namespace)
+						if err != nil {
+							log.Infof("Error deleting DataExport CR: %v", err)
+						} else {
+							log.InfoD("DataExport CR deleted successfully.")
+						}
+					}
+				case <-overallTimeout:
+					log.InfoD("Watcher timed out after the specified overall duration")
+					return
+				}
+			}
+		}(namespace, watcher)
+	}
+	return nil
+}
+
 // StopCloudsnapBackup stops the cloudsnap for the provided pvc name and namespace
 func StopCloudsnapBackup(pvcName, namespace string) error {
 	var found bool
@@ -9457,7 +9704,7 @@ func StopCloudsnapBackup(pvcName, namespace string) error {
 						return "", true, fmt.Errorf("waiting to get the cs id for PVC [%s] in namespace [%s]", pvcName, namespace)
 					}
 					cmd := fmt.Sprintf("pxctl cs stop -n %s", key)
-					workerNode := node.GetWorkerNodes()[0]
+					workerNode := node.GetStorageNodes()[0]
 					output, err := runCmdGetOutput(cmd, workerNode)
 					log.Infof("Output of the command [%s]: \n%s", cmd, output)
 					if err != nil {
@@ -9510,7 +9757,7 @@ type CloudsnapStatus struct {
 func GetCloudsnapStatus() (map[string]CloudsnapStatus, error) {
 	statusMap := make(map[string]CloudsnapStatus)
 	// Get a worker node
-	workerNode := node.GetWorkerNodes()[0]
+	workerNode := node.GetStorageNodes()[0]
 	cmd := "pxctl cs status -j"
 	output, err := runCmdGetOutput(cmd, workerNode)
 	if err != nil {
@@ -10003,10 +10250,11 @@ type FeaturePlatformMap map[string]map[string][]string
 
 var featureData = FeaturePlatformMap{
 	"PartialBackup": {
-		"openshift": {"postgres-backup", "pxb-multipleapp-multivol"},
-		"GKE":       {"TODO", "TODO"},
-		"AKS":       {"TODO", "TODO"},
-		"Vanilla":   {"TODO", "TODO"},
+		"openshift": {"pg-mysql-multiprov-ocp"},
+		"gke":       {"TODO", "TODO"},
+		"azure":     {"pg-mysql-multiprov-aks"},
+		"vanilla":   {"TODO", "TODO"},
+		"ibm":       {"pg-mysql-multiprov-iks"},
 	},
 }
 
@@ -10025,4 +10273,98 @@ func GetApplicationSpecForFeature(feature string) ([]string, error) {
 		return nil, fmt.Errorf("platform %s not found for feature %s", platform, feature)
 	}
 	return nil, fmt.Errorf("feature %s not found", feature)
+}
+
+// GetVSCMapping gets all storageClasses in cluster, retrieves their provisioners, and maps them to their corresponding VolumeSnapshotClass.
+func GetVSCMapping() (map[string]string, error) {
+	// Create a map to store the provisioner and corresponding VolumeSnapshotClass
+	provisionerToSnapshotClassMap := make(map[string]string)
+	k8sStorage := storage.Instance()
+	// Get the list of StorageClasses
+	scList, err := k8sStorage.GetAllStorageClasses()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the list of VolumeSnapshotClasses
+	snapshotClasses, err := Inst().S.GetAllSnapshotClasses()
+	if err != nil {
+		return nil, err
+	}
+
+	snapshotDriverToClassMap := make(map[string]string)
+	for _, snapshotClass := range snapshotClasses.Items {
+		snapshotDriverToClassMap[snapshotClass.Driver] = snapshotClass.Name
+	}
+
+	for _, sc := range scList.Items {
+		scProvisioner := sc.Provisioner
+		if snapshotClassName, exists := snapshotDriverToClassMap[scProvisioner]; exists {
+			provisionerToSnapshotClassMap[scProvisioner] = snapshotClassName
+		}
+	}
+
+	return provisionerToSnapshotClassMap, nil
+}
+
+// UpdateDriverWithEnvVariable updates a driver's environment variables ,If the variables exist, their values are updated; otherwise, they are added.
+func UpdateDriverWithEnvVariable(envVariables map[string]string) error {
+	// Get PX StorageCluster
+	clusterSpec, err := Inst().V.GetDriver()
+	if err != nil {
+		return err
+	}
+	envVarMap := make(map[string]corev1.EnvVar)
+
+	// Add existing environment variables to the map
+	for _, env := range clusterSpec.Spec.Env {
+		envVarMap[env.Name] = env
+	}
+
+	// Update the map with environment variables
+	for k, v := range envVariables {
+		if existingEnvVar, exists := envVarMap[k]; exists {
+			// If the environment variable already exists and ValueFrom is nil, update the value
+			if existingEnvVar.ValueFrom == nil {
+				existingEnvVar.Value = v
+			}
+			envVarMap[k] = existingEnvVar
+		} else {
+			// Otherwise, add the new environment variable
+			envVarMap[k] = corev1.EnvVar{Name: k, Value: v}
+		}
+	}
+
+	// Convert the map back to a slice of environment variables
+	var updatedEnvVarList []corev1.EnvVar
+	for _, envVar := range envVarMap {
+		updatedEnvVarList = append(updatedEnvVarList, envVar)
+	}
+
+	clusterSpec.Spec.Env = updatedEnvVarList
+
+	pxOperator := operator.Instance()
+	_, err = pxOperator.UpdateStorageCluster(clusterSpec)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Deleting PX pods for reloading the runtime Opts")
+	err = DeletePXPods(clusterSpec.Namespace)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Sleeping for 10 minutes for PX cluster to stabilise after deletion of pods")
+	time.Sleep(10 * time.Minute)
+	_, err = optest.ValidateStorageClusterIsOnline(clusterSpec, 10*time.Minute, 3*time.Minute)
+	if err != nil {
+		return err
+	}
+
+	log.InfoD("Waiting for PX Nodes to be up")
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := Inst().V.WaitDriverUpOnNode(n, 15*time.Minute); err != nil {
+			return err
+		}
+	}
+	return nil
 }
