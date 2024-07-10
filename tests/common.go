@@ -13718,13 +13718,20 @@ func DoParallelUpgradePDBValidation(stopSignal <-chan struct{}, mError *error) {
 		*mError = multierr.Append(*mError, err)
 		return
 	}
-	allowedDisruptions := (len(nodes) / 2) + 1
-	if stc.Annotations != nil && stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] != "" {
-		allowedDisruptions, err = strconv.Atoi(stc.Annotations["portworx.io/disable-non-disruptive-upgrade"])
-		if err != nil {
-			*mError = multierr.Append(*mError, err)
-			return
+	userMinAvailable, err := oputil.MinAvailableForStoragePDB(stc)
+	if err != nil {
+		userMinAvailable = -1
+	}
+	quorumValue := (len(nodes) / 2) + 1
+
+	if stc.Annotations != nil {
+		if userMinAvailable >= quorumValue && userMinAvailable < len(nodes) {
+			quorumValue = userMinAvailable
+		} else if stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] == "true" {
+			log.Infof("Non Disruptive Upgrade is disabled without providing valid minAvailable. Upgrading 1 node at a time")
+			quorumValue = len(nodes) - 1
 		}
+
 	}
 
 	itr := 1
@@ -13736,7 +13743,7 @@ func DoParallelUpgradePDBValidation(stopSignal <-chan struct{}, mError *error) {
 			return
 		default:
 			errorChan := make(chan error, 50)
-			ValidateNodePDB(allowedDisruptions, len(nodes), &errorChan)
+			ValidateNodePDB(quorumValue, len(nodes), &errorChan)
 			for err := range errorChan {
 				*mError = multierr.Append(*mError, err)
 			}
@@ -13749,7 +13756,7 @@ func DoParallelUpgradePDBValidation(stopSignal <-chan struct{}, mError *error) {
 	}
 }
 
-func ValidateNodePDB(allowedDisruptions int, totalNodes int, errChan ...*chan error) {
+func ValidateNodePDB(minAvailable int, totalNodes int, errChan ...*chan error) {
 	defer func() {
 		if len(errChan) > 0 {
 			close(*errChan[0])
@@ -13776,8 +13783,8 @@ func ValidateNodePDB(allowedDisruptions int, totalNodes int, errChan ...*chan er
 	nodesDownInt := nodesDown.(int)
 
 	Step("Validate PDB minAvailable for px storage", func() {
-		if nodesDownInt > allowedDisruptions {
-			err := fmt.Errorf("nodes down [%d] is more than allowed disruptions [%d]", nodesDownInt, allowedDisruptions)
+		if nodesDownInt > totalNodes-minAvailable {
+			err := fmt.Errorf("nodes down [%d] is more than allowed disruptions [%d]", nodesDownInt, totalNodes-minAvailable)
 			processError(err, errChan...)
 		}
 	})
