@@ -381,6 +381,11 @@ const (
 	SkipTestLabel = "skip-test"
 )
 
+// Scale test labels
+const (
+	ScaleTestLabel = "Scale-test"
+)
+
 // Volume labels
 const (
 	PortworxVolumeLabel = "portworx-volume"
@@ -410,7 +415,7 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	DuplicateSharedBackup:                                            {DuplicateSharedBackupLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
 	DifferentAccessSameUser:                                          {DifferentAccessSameUserLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
 	ShareBackupWithUsersAndGroups:                                    {ShareBackupWithUsersAndGroupsLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly},
-	ShareLargeNumberOfBackupsWithLargeNumberOfUsers:                  {ShareLargeNumberOfBackupsWithLargeNumberOfUsersLabel},
+	ShareLargeNumberOfBackupsWithLargeNumberOfUsers:                  {ShareLargeNumberOfBackupsWithLargeNumberOfUsersLabel, ScaleTestLabel},
 	CancelClusterBackupShare:                                         {CancelClusterBackupShareLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
 	ShareBackupAndEdit:                                               {ShareBackupAndEditLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly},
 	SharedBackupDelete:                                               {SharedBackupDeleteLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
@@ -484,7 +489,7 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	BackupNamespaceInNfsRestoredFromS3:                               {BackupNamespaceInNfsRestoredFromS3Label, aetosl3awsVanilla, aetosl3awsrke, aetosl3nfsrke, aetosl3nfsVanilla, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
 	DeleteS3ScheduleAndCreateNfsSchedule:                             {DeleteS3ScheduleAndCreateNfsScheduleLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3nfsrke, aetosl3nfsVanilla, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
 	KubeAndPxNamespacesSkipOnAllNSBackup:                             {KubeAndPxNamespacesSkipOnAllNSBackupLabel, aetosl3awsVanilla, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	MultipleBackupLocationWithSameEndpoint:                           {MultipleBackupLocationWithSameEndpointLabel},
+	MultipleBackupLocationWithSameEndpoint:                           {MultipleBackupLocationWithSameEndpointLabel, ScaleTestLabel},
 	UpgradePxBackup:                                                  {UpgradePxBackupLabel},
 	StorkUpgradeWithBackup:                                           {StorkUpgradeWithBackupLabel},
 	PXBackupEndToEndBackupAndRestoreWithUpgrade:                      {PXBackupEndToEndBackupAndRestoreWithUpgradeLabel},
@@ -510,13 +515,13 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	DefaultBackupRestoreWithKubevirtAndNonKubevirtNS:                 {DefaultBackupRestoreWithKubevirtAndNonKubevirtNSLabel, KubevirtAppLabel},
 	KubevirtScheduledVMDelete:                                        {KubevirtScheduledVMDeleteLabel, KubevirtAppLabel},
 	CustomBackupRestoreWithKubevirtAndNonKubevirtNS:                  {CustomBackupRestoreWithKubevirtAndNonKubevirtNSLabel, KubevirtAppLabel},
-	ExcludeInvalidDirectoryFileBackup:                                {ExcludeInvalidDirectoryFileBackupLabel},
-	ExcludeDirectoryFileBackup:                                       {ExcludeDirectoryFileBackupLabel},
+	ExcludeInvalidDirectoryFileBackup:                                {ExcludeInvalidDirectoryFileBackupLabel, ScaleTestLabel},
+	ExcludeDirectoryFileBackup:                                       {ExcludeDirectoryFileBackupLabel, ScaleTestLabel},
 	MultipleMemberProjectBackupAndRestoreForSingleNamespace:          {MultipleMemberProjectBackupAndRestoreForSingleNamespaceLabel},
 	MultipleProvisionerCsiSnapshotDeleteBackupAndRestore:             {MultipleProvisionerCsiSnapshotDeleteBackupAndRestoreLabel},
 	BackupNetworkErrorTest:                                           {BackupNetworkErrorTestLabel},
 	IssueMultipleBackupsAndRestoreInterleavedCopies:                  {IssueMultipleBackupsAndRestoreInterleavedCopiesLabel},
-	ValidateFiftyVolumeBackups:                                       {ValidateFiftyVolumeBackupsLabel},
+	ValidateFiftyVolumeBackups:                                       {ValidateFiftyVolumeBackupsLabel, ScaleTestLabel},
 	PXBackupClusterUpgradeTest:                                       {PXBackupClusterUpgradeTestLabel},
 	BackupToLockedBucketWithSharedObjects:                            {BackupToLockedBucketWithSharedObjectsLabel, vanillaPipelineWithS3LockedBucket},
 	RemoveJSONFilesFromNFSBackupLocation:                             {RemoveJSONFilesFromNFSBackupLocationLabel},
