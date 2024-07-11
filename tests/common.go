@@ -8345,7 +8345,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 
 // enableAutoFSTrim on supported PX version.
 func EnableAutoFSTrim() {
-	nodes := node.GetWorkerNodes()
+	nodes := node.GetStorageDriverNodes()
 	var isPXNodeAvailable bool
 	for _, pxNode := range nodes {
 		isPxInstalled, err := Inst().V.IsDriverInstalled(pxNode)
@@ -8373,7 +8373,9 @@ func EnableAutoFSTrim() {
 			break
 		}
 	}
-	dash.VerifyFatal(isPXNodeAvailable, true, "No PX node available in the cluster")
+	if !isPXNodeAvailable {
+		log.FailOnError(fmt.Errorf("no px node available for enabling auto-fstrim"), "error in enabling auto-fstrim")
+	}
 }
 
 // EndTorpedoTest ends the logging for torpedo test
