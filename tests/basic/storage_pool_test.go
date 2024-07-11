@@ -9061,12 +9061,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 							log.FailOnError(err, "failed to delete volume with volume ID [%s]", eachVol)
 						}
 
-						// Remove the first element
-						for i := 0; i < len(volumesCreated)-1; i++ {
-							volumesCreated[i] = volumesCreated[i+1]
-						}
-						// Resize the array by truncating the last element
-						volumesCreated = volumesCreated[:len(volumesCreated)-1]
+						volumesCreated = volumesCreated[1:]
 					}
 					if terminate {
 						break
@@ -10825,10 +10820,10 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 
 var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 	/*
-	  1. Deploy apps
-	  2. Pick a volume and locate the node where this is attached
-	  3. Delete the volume and let it be placed in trashcan
-	  4. Trigger pool expand in the node where the trashcan volume is present
+	   1. Deploy apps
+	   2. Pick a volume and locate the node where this is attached
+	   3. Delete the volume and let it be placed in trashcan
+	   4. Trigger pool expand in the node where the trashcan volume is present
 
 	*/
 
@@ -11057,8 +11052,8 @@ var _ = Describe("{CheckPoolOffline}", func() {
 var _ = Describe("{FACDPoolIOPriorityCheck}", func() {
 
 	/* This test is created to provide functional testing coverage for ticket PWX-35590
-	1. Create a cluster with FACD backend
-	2. Check if the IO Priority for the storagepools is HIGH
+	   1. Create a cluster with FACD backend
+	   2. Check if the IO Priority for the storagepools is HIGH
 	*/
 
 	JustBeforeEach(func() {
