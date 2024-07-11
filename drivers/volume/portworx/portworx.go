@@ -1379,6 +1379,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	}
 
 	vol := out.(*api.Volume)
+	log.Infof("volume struct before validating volume: %v", vol)
 
 	// if the volume is a clone or a snap, validate its parent
 	if vol.IsSnapshot() || vol.IsClone() {
@@ -1402,6 +1403,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	if vol.Spec.ProxySpec != nil && vol.Spec.ProxySpec.ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK {
 		// Checking the device path when state is attached
 		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && !strings.Contains(vol.DevicePath, DeviceMapper) {
+			log.Infof("volume struct inside device path checking: %v", vol)
 			return &ErrFailedToInspectVolume{
 				ID:    volumeName,
 				Cause: fmt.Sprintf("Failed to validate device path [%s]", vol.DevicePath),
