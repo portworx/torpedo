@@ -2450,7 +2450,7 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 		// select a random node to run the test
 		n := node.GetStorageDriverNodes()[0]
 
-		stepLog := "get the secrete of FA which is not present in pure secret"
+		stepLog := "get the secret of FA which is not present in pure secret"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			//get the flash array details
@@ -4575,9 +4575,10 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		})
 
 		//GetVolumeNameFromPvc will collect volume name from pvc which indirect will be the px volume name and this name is suffix to the volumes created in FA backend
-		GetVolumeNameFromPvc := func(namespace string, pvclist []string) []string {
+		GetVolumeNameFromPvc := func(namespace string) []string {
+			pvclist := make([]string, 0)
 			allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
-			log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", FadaAppNameSpace))
+			log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
 			for _, p := range allPvcList.Items {
 				pvclist = append(pvclist, p.Spec.VolumeName)
 			}
@@ -4586,8 +4587,8 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		log.InfoD("waiting for a minute for volume name to populate")
 		time.Sleep(1 * time.Minute)
 		//collect volumes names which are required to find out the volumes in FA and FB backend
-		listofFadaPvc = GetVolumeNameFromPvc(FadaAppNameSpace, listofFadaPvc)
-		listofFbdaPvc = GetVolumeNameFromPvc(FbdaAppNameSpace, listofFbdaPvc)
+		listofFadaPvc = GetVolumeNameFromPvc(FadaAppNameSpace)
+		listofFbdaPvc = GetVolumeNameFromPvc(FbdaAppNameSpace)
 
 		stepLog = "check if the FA and FB volumes are created in the backend"
 		Step(stepLog, func() {
@@ -6532,5 +6533,139 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{EnableTrashCanDeleteVol}", func() {
+	/*
+		https://portworx.testrail.net/index.php?/cases/view/298122
+		https://purestorage.atlassian.net/browse/PTX-25046
+
+		1. Deploy Applications
+		2. Enable TrashCan for the cluster
+		4. Destroy the applications
+		5. Check if the volumes are not placed in trashcan and  deleted from the FA
+		6. Disable TrashCan for the node
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("EnableTrashCanDeleteVol", "Enable TrashCan and Delete Volume this shouldn't delete volumes in the backend", nil, 298122)
+	})
+
+	var contexts []*scheduler.Context
+	itLog := "Enable TrashCan and Delete Volume"
+	It(itLog, func() {
+		// getPureVolName translates the volume name into its equivalent in the pure backend
+		cluster, err := Inst().V.InspectCurrentCluster()
+		log.FailOnError(err, "failed to inspect current cluster")
+		log.Infof("Current cluster [%s] UID: [%s]", cluster.Cluster.Name, cluster.Cluster.Id)
+
+		clusterUIDPrefix := strings.Split(cluster.Cluster.Id, "-")[0]
+
+		getPureVolName := func(volName string) string {
+			return "px_" + clusterUIDPrefix + "-" + volName
+		}
+
+		//GetVolumeNameFromPvc will collect volume name from pvc which indirect will be the px volume name and this name is suffix to the volumes created in FA backend
+		GetVolumeNameFromPvc := func(namespace string) []string {
+			pvclist := make([]string, 0)
+			allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+			log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
+			for _, p := range allPvcList.Items {
+				pvclist = append(pvclist, p.Spec.VolumeName)
+			}
+			return pvclist
+		}
+		defer func() {
+			stepLog := "Disable trashcan"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				//Disable trashcan in the node
+				err := Inst().V.SetClusterOptsWithConfirmation(node.GetStorageNodes()[0], map[string]string{
+					"--volume-expiration-minutes": "0",
+				})
+				log.FailOnError(err, "error while disabling trashcan")
+				log.InfoD("Trashcan is successfully disabled")
+			})
+		}()
+		log.InfoD(itLog)
+
+		stepLog = "Enable trashcan"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//Enable trashcan in the node
+			err = Inst().V.SetClusterOptsWithConfirmation(node.GetStorageNodes()[0], map[string]string{
+				"--volume-expiration-minutes": "600",
+			})
+			log.FailOnError(err, "error while enabling trashcan")
+			log.InfoD("Trashcan is successfully enabled")
+
+		})
+
+		stepLog = "Schedule Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				ns := fmt.Sprintf("enabletrashcan-%d", i)
+				contexts = append(contexts, ScheduleApplications(ns)...)
+			}
+		})
+		ValidateApplications(contexts)
+
+		// before destroying the apps, get the volume list
+		var volumeList []string
+		for _, ctx := range contexts {
+			vol := GetVolumeNameFromPvc(ctx.App.NameSpace)
+			volumeList = append(volumeList, vol...)
+		}
+
+		stepLog = "Destroy apps and let it's volumes should not be placed in trashcan"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(contexts, nil)
+		})
+
+		stepLog = "Check if the volumes are placed in trashcan and not deleted from the FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//Get pure secrets
+			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+
+			pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+			log.FailOnError(err, "Failed to get secret %v", pxPureSecret)
+			flashArraysInSecret := pxPureSecret.Arrays
+			flashBladesInSecret := pxPureSecret.Blades
+
+			//Check if the volumes are placed in trashcan
+			volumeNamesInTrashCan, err := Inst().V.GetTrashCanVolumeNames(node.GetStorageDriverNodes()[0])
+			log.FailOnError(err, "Failed to get volume ids in trashcan")
+
+			for _, vol := range volumeNamesInTrashCan {
+				if len(vol) == 0 {
+					continue
+				}
+				for _, volName := range volumeList {
+					if strings.Contains(volName, vol) {
+						log.FailOnError(fmt.Errorf("Volume [%v] is placed in trashcan", volName), "Volume is placed in trashcan")
+					}
+				}
+			}
+
+			for _, volName := range volumeList {
+				pureVolName := getPureVolName(volName)
+
+				exists, err := CheckIfVolumeExistsInFBorFA(flashBladesInSecret, flashArraysInSecret, pureVolName)
+				log.FailOnError(err, "Failed to check if volume exists in FB or FA")
+				dash.VerifyFatal(exists, false, fmt.Sprintf("Volume [%v] Present in backend?", pureVolName))
+			}
+
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })

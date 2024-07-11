@@ -8662,6 +8662,12 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
+		isDmthin, err := IsDMthin()
+		log.FailOnError(err, "Error while checking cluster type")
+		if isDmthin {
+			Skip("Drive add Journal Device is not supported for DMThin")
+		}
+
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddriveasjournal-%d", i))...)
