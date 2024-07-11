@@ -1388,6 +1388,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	}
 
 	vol := out.(*api.Volume)
+	log.Infof("vol struct before validation %+v", vol)
 
 	// if the volume is a clone or a snap, validate its parent
 	if vol.IsSnapshot() || vol.IsClone() {
