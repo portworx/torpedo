@@ -8941,17 +8941,18 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
 		terminate := false
+		var deleteMutex sync.Mutex
 		stopRoutine := func() {
 			if !terminate {
 				terminate = true
 				time.Sleep(1 * time.Minute) // Wait for 1 min to settle down all other go routines to terminate
+				deleteMutex.Lock()
 				for _, each := range volumesCreated {
 					if IsVolumeExits(each) {
 						log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
 					}
-
 				}
-
+				deleteMutex.Unlock()
 			}
 		}
 
@@ -9055,6 +9056,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 
 						time.Sleep(5 * time.Second)
 						// Delete the Volume
+						deleteMutex.Lock()
 						err = Inst().V.DeleteVolume(eachVol)
 						if err != nil {
 							stopRoutine()
@@ -9062,6 +9064,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 						}
 
 						volumesCreated = volumesCreated[1:]
+						deleteMutex.Unlock()
 					}
 					if terminate {
 						break
