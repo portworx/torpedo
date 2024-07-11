@@ -12545,7 +12545,6 @@ func WaitForVolumeClean(vol *volume.Volume) error {
 
 // GetFADetailsUsed Returns list of FlashArrays used in the cluster
 func GetFADetailsUsed() ([]pureutils.FlashArrayEntry, error) {
-	//get the flash array details
 	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get details on FlashArray used in the cluster")
@@ -12556,12 +12555,18 @@ func GetFADetailsUsed() ([]pureutils.FlashArrayEntry, error) {
 		return nil, fmt.Errorf("Unable to get Px Pure Secret")
 	}
 
+	for _, array := range pxPureSecret.Arrays {
+		mgmtEndpointParts := strings.Split(array.MgmtEndPoint, ",")
+		if len(mgmtEndpointParts) > 1 {
+			array.MgmtEndPoint = mgmtEndpointParts[0]
+		}
+	}
+
 	if len(pxPureSecret.Arrays) > 0 {
 		return pxPureSecret.Arrays, nil
 	}
 	return nil, fmt.Errorf("Failed to list FA Arrays ")
 }
-
 func FlashArrayGetIscsiPorts() (map[string][]string, error) {
 	flashArrays, err := GetFADetailsUsed()
 	log.FailOnError(err, "Failed to get flasharray details")
