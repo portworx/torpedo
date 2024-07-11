@@ -1612,6 +1612,10 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 			mountPath, bytesToWrite := pureutils.GetAppDataDir(pods[0].Namespace)
 			mountPath = mountPath + "/myfile"
 
+			if bytesToWrite == 0 {
+				bytesToWrite = units.GiB
+			}
+
 			// write to the Direct Access volume
 			ddCmd := fmt.Sprintf("dd bs=512 count=%d if=/dev/urandom of=%s", bytesToWrite/512, mountPath)
 			cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", ddCmd}
@@ -8343,7 +8347,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 
 // enableAutoFSTrim on supported PX version.
 func EnableAutoFSTrim() {
-	nodes := node.GetWorkerNodes()
+	nodes := node.GetStorageDriverNodes()
 	var isPXNodeAvailable bool
 	for _, pxNode := range nodes {
 		isPxInstalled, err := Inst().V.IsDriverInstalled(pxNode)
@@ -8371,7 +8375,9 @@ func EnableAutoFSTrim() {
 			break
 		}
 	}
-	dash.VerifyFatal(isPXNodeAvailable, true, "No PX node available in the cluster")
+	if !isPXNodeAvailable {
+		log.FailOnError(fmt.Errorf("no px node available for enabling auto-fstrim"), "error in enabling auto-fstrim")
+	}
 }
 
 // EndTorpedoTest ends the logging for torpedo test

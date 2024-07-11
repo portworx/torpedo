@@ -4779,7 +4779,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 		stepLog := "Deploy FADA app"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			taskName := "Clone-fada-app-volume" + Inst().InstanceID
+			taskName := "clone-fada-app-volume" + Inst().InstanceID
 			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
 				CsiAppKeys:         Inst().AppList,
@@ -6174,6 +6174,134 @@ var _ = Describe("{VerifyPoolCreateInProperZones}", func() {
 		AfterEachTest(contexts)
 	})
 })
+var _ = Describe("{RestartPXonAllWorkerNodesandCheckVolumes}", func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-24005
+	   1.Deploy Applications
+	   2.Validate Applications are Deployed
+	   3.Collect the existing Volume status (state,status) before stopping the PX
+	   4.Stop portworx on all nodes
+	   5.Restart all the worker nodes
+	   6.Make sure Both portworx and node are up.
+	   7.Collect the  Volume status (state,status) after restarting the PX and compare with the status before stopping the PX
+	   8.Validate the Applications are running
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPXonAllWorkerNodesandCheckVolumes",
+			"Stop PX on all nodes at once and then wait for a minute and enable px on all nodes and check if px is up and validate applications", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	itLog := "RebootAllWorkerNodesandCheckPX"
+	It(itLog, func() {
+		var listofFadaPvc []string
+		// VolStruct consists of Two Values of a particular volume -its state and status
+		type VolStruct struct {
+			State  string
+			Status string
+		}
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "Failed to get FA details used")
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := "restartpxonworkernodes" + Inst().InstanceID
+			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				CsiAppKeys:         Inst().CsiAppList,
+				StorageProvisioner: Provisioner,
+				Namespace:          taskName,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+			contexts = append(contexts, context...)
+		}
+		ValidateApplications(contexts)
+		//GetVolumeNameFromPvc will collect volume name from pvc which indirect will be the px volume name and this name is suffix to the volumes created in FA backend
+		GetPureVolumeNameFromPvc := func(namespace string, pvclist []string) []string {
+			allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+			log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
+			for _, p := range allPvcList.Items {
+				scForPvc, err := k8sCore.GetStorageClassForPVC(&p)
+				log.FailOnError(err, "Failed to get storage class for pvc [%s]", p.Name)
+				backend, _ := scForPvc.Parameters["backend"]
+				if backend == "pure_block" {
+					pvclist = append(pvclist, p.Spec.VolumeName)
+				}
+
+			}
+			return pvclist
+		}
+		log.InfoD("waiting for a minute for volume name to populate")
+		time.Sleep(1 * time.Minute)
+		//collect volumes names which are required to find out the volumes in FA and FB backend
+		for _, ctx := range contexts {
+			listofFadaPvc = GetPureVolumeNameFromPvc(ctx.ScheduleOptions.Namespace, listofFadaPvc)
+		}
+		faErr := CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
+		log.FailOnError(faErr, "Failed to check if volumes created  exist in FA")
+		//inspectVolumes Collects the state and status of the volumes before and after the restart of the PX
+		inspectVolumes := func(contexts []*scheduler.Context) map[string]VolStruct {
+			volMap := make(map[string]VolStruct)
+			for _, ctx := range contexts {
+				volumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes for context [%s]", ctx.App.Key)
+				for _, vol := range volumes {
+					apiVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "Failed to inspect the volume [%v]", vol.ID)
+					volMap[apiVol.Id] = VolStruct{apiVol.State.String(), apiVol.Status.String()}
+				}
+			}
+			return volMap
+		}
+		volMap := inspectVolumes(contexts)
+		stepLog := "Stop portworx on all Nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Stopping portworx  Service on Nodes")
+			err := Inst().V.StopDriver(node.GetStorageDriverNodes(), false, nil)
+			dash.VerifyFatal(err, nil, "Failed to stop portworx on nodes")
+			log.InfoD("stopped portworx on all nodes")
+		})
+		stepLog = " Now wait for a minute and make PX up"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			time.Sleep(1 * time.Minute)
+			log.InfoD("Starting portworx Service on Nodes")
+			for _, node := range node.GetStorageDriverNodes() {
+				err := Inst().V.StartDriver(node)
+				log.FailOnError(err, "Failed to start portworx on node [%s]", node.Name)
+			}
+			for _, node := range node.GetStorageDriverNodes() {
+				err := Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", node.Name))
+			}
+			log.InfoD("Portworx is up on all nodes")
+		})
+		time.Sleep(1 * time.Minute)
+		log.InfoD("Waiting for a minute for cluster to stablize and volumes to return to their original state before validating")
+		stepLog = "Validate Volumes After PX restart and compare the state ,status of the volumes before the Restart of the PX"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			faErr = CheckVolumesExistinFA(flashArrays, listofFadaPvc, false)
+			log.FailOnError(faErr, "Failed to check if volumes created exist in FA")
+			volMapAfterRestart := inspectVolumes(contexts)
+			for volId, volDetailsBeforeRestart := range volMap {
+				if volDetailsAfterRestart, found := volMapAfterRestart[volId]; found {
+					if volDetailsBeforeRestart != volDetailsAfterRestart {
+						log.FailOnError(fmt.Errorf("Volume [%s] state or status changed after restart Before Restart : [%v] ,After Restart [%v]", volId, volDetailsBeforeRestart, volDetailsAfterRestart), "Volume state or status changed after restart")
+					}
+				} else {
+					log.FailOnError(fmt.Errorf("Volume [%s] not found in the map after restart", volId), "Volume not found in the map after restart")
+				}
+			}
+		})
+
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		DestroyApps(contexts, nil)
+		AfterEachTest(contexts)
+	})
+})
 
 var _ = Describe("{RestartPXAfterPureSecretRecreation}", func() {
 	/*
@@ -6249,5 +6377,160 @@ var _ = Describe("{RestartPXAfterPureSecretRecreation}", func() {
 	})
 	JustAfterEach(func() {
 		EndTorpedoTest()
+	})
+})
+var _ = Describe("{CheckCloudDrivesinFA}", func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-23972
+		1.Collect FA endpoints details from pure.json
+		2.Collect all cloud drives from the nodes
+		3.Collect the Drive ID from drive set configuration from each node
+		4.check in which FA the cloud drive is present and note down in a map
+		5.Check if the cloud drives are distributed across different FA from pure.json file
+	*/
+	BeforeEach(func() {
+		StartTorpedoTest("CheckCloudDrivesinFA", "Check if the cloud drives are present in FA", nil, 0)
+	})
+	itLog := "Check Cloud Drives are present in FA"
+	It(itLog, func() {
+		stNodes := node.GetStorageNodes()
+		log.InfoD(itLog)
+		// A list to store the cloud drives
+		var clouddrives []string
+		//Create a map to track the FA endpoints and the count of cloud drives in each FA
+		faEndPoints := make(map[string]int)
+		NewCloudDrivesFAendpoints := make(map[string]int)
+		//Create a map to track the cloud drives and the FA in which they are present
+		CloudDriveListMap := make(map[string]string)
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "Failed to get FA details used")
+		for _, fa := range flashArrays {
+			log.InfoD("FA EndPoint [%v]", fa.MgmtEndPoint)
+			//Initially Putting count of cloud drives in each Fa endpoint as zero
+			faEndPoints[fa.MgmtEndPoint] = 0
+			NewCloudDrivesFAendpoints[fa.MgmtEndPoint] = 0
+		}
+		stepLog := "Collect all cloud Drives from the nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			cloudData, err := GetCloudDriveList()
+			log.FailOnError(err, "Failed to get cloud drives")
+			log.InfoD("Collect the Drive ID from drive set configuration from each node")
+			for _, cloudDrive := range *cloudData {
+				for _, v := range cloudDrive.Configs {
+					log.InfoD("Cloud Drive ID [%v] in the node [%v]", v.ID, cloudDrive.NodeID)
+					clouddrives = append(clouddrives, v.ID)
+				}
+			}
+		})
+		checkCloudDrivesInFA := func(flashArrays []pureutils.FlashArrayEntry, clouddrives []string) map[string]string {
+			CloudDriveListMap := make(map[string]string)
+			for _, fa := range flashArrays {
+				faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
+				if err != nil {
+					log.Fatalf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+					continue
+				}
+				for _, cloudDrive := range clouddrives {
+					// If the cloud drive is already present in the map then we are skipping the current loop
+					if CloudDriveListMap[cloudDrive] != "" {
+						continue
+					}
+					cloudDrivefullName, err := GetVolumeCompleteNameOnFA(faClient, cloudDrive)
+					log.FailOnError(err, "Failed to get volume name for cloud drive id [%v]", cloudDrive)
+					if cloudDrivefullName != "" {
+						log.Infof("cloud drive [%v] exists in [%v]", cloudDrivefullName, fa.MgmtEndPoint)
+						CloudDriveListMap[cloudDrive] = fa.MgmtEndPoint
+					}
+				}
+			}
+			return CloudDriveListMap
+		}
+
+		stepLog = "Check if the cloud drives are present in FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			CloudDriveListMap = checkCloudDrivesInFA(flashArrays, clouddrives)
+		})
+		stepLog = "Check if all cloud drives are not in single FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//Loop through the cloud drives and increment the count in faEndPoints
+			for _, fa := range CloudDriveListMap {
+				faEndPoints[fa]++
+			}
+			log.InfoD("Check if the cloud drives are distributed across different FA from pure.json file")
+			for endpoint, count := range faEndPoints {
+				//If any of FA mgmt endpoint has zero cloud drives then print the error
+				if count == 0 {
+					log.Errorf("Cloud Drives are not present in FA [%v]", endpoint)
+				}
+			}
+		})
+		var newCloudDrives []string
+		cloudDriveExists := func(cloudDrive string, clouddrivelist []string) bool {
+			for _, clouddrive := range clouddrivelist {
+				if cloudDrive == clouddrive {
+					return true
+				}
+			}
+			return false
+		}
+		stepLog = "Add New cloud Drives on each node and check if they are not in single FA"
+		Step(stepLog, func() {
+			for _, selectedNode := range stNodes {
+				//Add new cloud drive on each node
+				for i := 0; i < 3; i++ {
+					newSpec := "size=100"
+					err = Inst().V.AddCloudDrive(&selectedNode, newSpec, -1)
+					log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", selectedNode.Name))
+					log.InfoD("Check volume Driver is up on the node after adding the cloud drive on the node [%v]", selectedNode.Name)
+					err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+
+				}
+			}
+			//Get the newly created cloud drives from the nodes
+			cloudData, err := GetCloudDriveList()
+			log.FailOnError(err, "Failed to get cloud drives")
+			for _, cloudDrive := range *cloudData {
+				for _, v := range cloudDrive.Configs {
+					iscloudDriveExists := cloudDriveExists(v.ID, clouddrives)
+					if !iscloudDriveExists {
+						newCloudDrives = append(newCloudDrives, v.ID)
+						log.InfoD("Newly created Cloud Drive ID [%v] in the node [%v]", v.ID, cloudDrive.NodeID)
+					}
+				}
+			}
+
+		})
+		var newCloudDriveListMap map[string]string
+		stepLog = "Check if the new cloud drives are present in FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			newCloudDriveListMap = checkCloudDrivesInFA(flashArrays, newCloudDrives)
+			//Loop through the cloud drives and increment the count in faEndPoints and compare the count with the previous count
+
+			for _, fa := range newCloudDriveListMap {
+				NewCloudDrivesFAendpoints[fa]++
+
+			}
+			log.InfoD("Check if the new cloud drives are distributed across different FA from pure.json file")
+			for FAendpoint, count := range faEndPoints {
+				if count == 0 {
+					if newValue, ok := NewCloudDrivesFAendpoints[FAendpoint]; ok {
+						if newValue != count {
+							log.Infof("New Cloud Drives are distributed across different FA from pure.json file")
+						} else {
+							log.FailOnError(fmt.Errorf("New Cloud Drives are not distributed across different FA from pure.json file"), "New Cloud Drives are not distributed across different FA from pure.json file")
+						}
+					}
+				}
+			}
+
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 })
