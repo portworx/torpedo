@@ -1824,6 +1824,11 @@ var _ = Describe("{StopPxOnNodeWhereVMIsProvisioned}", func() {
 					err := Inst().V.StartDriver(nodeObj)
 					log.FailOnError(err, "Failed to start PX on the node: %s", nodeObj.Name)
 					log.Infof("Succesfully started PX on the node: %s", nodeObj.Name)
+
+					// wait for PX to be up and running on the node
+					err = Inst().V.WaitDriverUpOnNode(nodeObj, defaultCommandTimeout)
+					log.FailOnError(err, "Failed to wait for PX to be up and running on the node: %s", nodeObj.Name)
+
 				})
 			}
 		}

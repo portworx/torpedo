@@ -424,8 +424,11 @@ type Driver interface {
 	// CSICloneTest clones a volume and validate the content
 	CSICloneTest(*Context, CSICloneRequest) error
 
-	// WaitForSinglePVCToBound retries and waits up to 30 minutes for a single PVC to be bound
+	// WaitForSinglePVCToBound retries and waits up to 30 minutes for a single PVC to be bound0
 	WaitForSinglePVCToBound(pvcName, namespace string, timeout int) error
+
+	//WaitForRestoredPVCsToBound waits for restored PVCs to be bound
+	WaitForRestoredPVCsToBound(pvcNamePrefix string, namespace string, numPVCs int) error
 
 	// CreateCsiSnapsForVolumes create csi snapshots for all volumes in a context
 	CreateCsiSnapsForVolumes(*Context, string) (map[string]*volsnapv1.VolumeSnapshot, error)

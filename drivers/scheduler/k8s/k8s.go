@@ -4675,9 +4675,28 @@ func (k *K8s) ResizePVC(ctx *scheduler.Context, pvc *corev1.PersistentVolumeClai
 			storageSize.Add(extraAmount)
 			pvc.Spec.Resources.Requests[corev1.ResourceStorage] = storageSize
 			if _, err := k8sOps.UpdatePersistentVolumeClaim(pvc); err != nil {
-				return nil, &scheduler.ErrFailedToResizeStorage{
-					App:   ctx.App,
-					Cause: err.Error(),
+				if strings.Contains(err.Error(), "the object has been modified;") {
+					log.InfoD("PVC has been modified, retrying the operation")
+					// If the object has been modified, we need to retry the operation
+					if pvc, err = k8sOps.GetPersistentVolumeClaim(pvc.Name, pvc.Namespace); err != nil {
+						return nil, err
+					}
+					storageSize = pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+					storageSize.Add(extraAmount)
+					pvc.Spec.Resources.Requests[corev1.ResourceStorage] = storageSize
+					log.InfoD("Changing the PVC size to [%v]", storageSize.String())
+					if _, err := k8sOps.UpdatePersistentVolumeClaim(pvc); err != nil {
+						return nil, &scheduler.ErrFailedToResizeStorage{
+							App:   ctx.App,
+							Cause: err.Error(),
+						}
+					}
+
+				} else {
+					return nil, &scheduler.ErrFailedToResizeStorage{
+						App:   ctx.App,
+						Cause: err.Error(),
+					}
 				}
 			}
 		}
@@ -7507,7 +7526,7 @@ func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedule
 	}
 	log.Info("Finished issuing PVC creation request, proceed to validate")
 
-	if err = k.waitForRestoredPVCsToBound(request.RestoredPVCName, pvcObj.Namespace, numOfRestoredPVCForCloneManyTest); err != nil {
+	if err = k.WaitForRestoredPVCsToBound(request.RestoredPVCName, pvcObj.Namespace, numOfRestoredPVCForCloneManyTest); err != nil {
 		return fmt.Errorf("%d PVCs did not go into bound after 30 mins: %v", numOfRestoredPVCForCloneManyTest, err)
 	}
 
@@ -8303,8 +8322,8 @@ func (k *K8s) WaitForSinglePVCToBound(pvcName, namespace string, timeout int) er
 	return nil
 }
 
-// waitForRestoredPVCsToBound retries and waits up to 30 minutes for all PVCs to be bound
-func (k *K8s) waitForRestoredPVCsToBound(pvcNamePrefix string, namespace string, numPVCs int) error {
+// WaitForRestoredPVCsToBound retries and waits up to 30 minutes for all PVCs to be bound
+func (k *K8s) WaitForRestoredPVCsToBound(pvcNamePrefix string, namespace string, numPVCs int) error {
 	var pvc *v1.PersistentVolumeClaim
 	var err error
 	kubeClient, err := k.getKubeClient("")

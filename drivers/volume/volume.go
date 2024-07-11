@@ -130,6 +130,9 @@ type Driver interface {
 	// CreateSnapshot creates snapshot for a given volume ID with a given snapshot name
 	CreateSnapshot(volumeID string, snapName string) (*api.SdkVolumeSnapshotCreateResponse, error)
 
+	// RestoreSnapshot restores the snapshot for a given snapshot ID to a given volume ID
+	RestoreSnapshot(snapshotID string, volumeID string) (*api.SdkVolumeSnapshotRestoreResponse, error)
+
 	// ValidateCreateVolume validates whether a volume has been created properly.
 	// params are the custom volume options passed when creating the volume.
 	ValidateCreateVolume(name string, params map[string]string) error

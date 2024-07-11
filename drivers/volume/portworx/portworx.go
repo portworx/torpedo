@@ -958,6 +958,15 @@ func (d *portworx) CreateSnapshot(volumeID string, snapName string) (*api.SdkVol
 
 }
 
+func (d *portworx) RestoreSnapshot(snapshotID string, volumeID string) (*api.SdkVolumeSnapshotRestoreResponse, error) {
+	volDriver := d.getVolDriver()
+	snapshotResponse, err := volDriver.SnapshotRestore(d.getContext(), &api.SdkVolumeSnapshotRestoreRequest{SnapshotId: snapshotID, VolumeId: volumeID})
+	if err != nil {
+		return nil, fmt.Errorf("Error while restoring snapshot [%s] on the volume [%s], Err: %v", snapshotID, volumeID, err)
+	}
+	return snapshotResponse, nil
+}
+
 func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
 	response, err := d.getVolDriver().Inspect(d.getContextWithToken(context.Background(), d.token), &api.SdkVolumeInspectRequest{VolumeId: name})
 	if err != nil {

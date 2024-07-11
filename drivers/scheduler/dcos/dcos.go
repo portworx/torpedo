@@ -1049,6 +1049,15 @@ func (d *dcos) WaitForSinglePVCToBound(pvcName, namespace string, timeout int) e
 	}
 }
 
+func (d *dcos) WaitForRestoredPVCsToBound(pvcNamePrefix string, namespace string, numPVCs int) error {
+	//WaitForRestoredPVCsToBound is not supported for DCOS
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "WaitForRestoredPVCsToBound()",
+	}
+
+}
+
 func (d *dcos) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnapshotRequest) error {
 	//CSISnapshotTest is not supported for DCOS
 	return &errors.ErrNotSupported{

@@ -7234,7 +7234,7 @@ func ParseFlags() {
 	flag.BoolVar(&pureVolumes, "pure-volumes", false, "To enable using Pure backend for shared volumes")
 	flag.StringVar(&pureSANType, "pure-san-type", "ISCSI", "If using Pure volumes, which SAN type is being used. ISCSI, FC, and NVMEOF-RDMA are all valid values.")
 	flag.StringVar(&pureFADAPod, "pure-fada-pod", "", "If using Pure FADA volumes, what FA Pod to place the volumes in. This Pod must already exist, and be in the same Realm matching the px-pure-secret")
-	flag.BoolVar(&runCSISnapshotAndRestoreManyTest, "pure-fa-snapshot-restore-to-many-test", false, "If using Pure volumes, to enable Pure clone many tests")
+	flag.BoolVar(&runCSISnapshotAndRestoreManyTest, "pure-fa-snapshot-restore-to-many-test", true, "If using Pure volumes, to enable Pure clone many tests")
 	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
 	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
 	flag.StringVar(&schedUpgradeHops, "sched-upgrade-hops", "", "Comma separated list of versions scheduler upgrade to take hops")

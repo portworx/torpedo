@@ -214,6 +214,14 @@ func (d *DefaultDriver) CreateSnapshot(volumeID string, snapName string) (*api.S
 	}
 }
 
+// RestoreSnapshot restores the volume from the snapshot
+func (d *DefaultDriver) RestoreSnapshot(snapshotID string, volumeID string) (*api.SdkVolumeSnapshotRestoreResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RestoreSnapshot()",
+	}
+}
+
 // GetStorageDevices returns the list of storage devices used by the given node.
 func (d *DefaultDriver) GetStorageDevices(n node.Node) ([]string, error) {
 	// TODO: Implement

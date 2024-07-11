@@ -26,6 +26,7 @@ import (
 
 	"github.com/libopenstorage/openstorage/api"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -6534,3 +6535,153 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{RestoreSnapShotTriggerResize}", func() {
+
+	/*
+		        combined the below test cases:
+			1. https://purestorage.atlassian.net/browse/PTX-25052
+		           https://portworx.testrail.net/index.php?/cases/view/59002
+			2. https://purestorage.atlassian.net/browse/PTX-25052
+
+			1. Schedule applications like fio or something
+			2. Take a snapshot of the volume
+			3. Restore the snapshot and validate the data
+			4. Trigger resize on multiple volumes and validate the data
+			5. Delete the applications
+
+
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestoreSnapShotTriggerResize", "Restore SnapShot and Trigger Resize", nil, 59002)
+	})
+
+	var contexts []*scheduler.Context
+	var volSnapshotClass *volsnapv1.VolumeSnapshotClass // volume snapshot class
+	var restoredPVCList []*v1.PersistentVolumeClaim
+
+	itLog := "Restore SnapShot and Trigger Resize"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		stepLog := "Schedule Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("restore-snapshot-trigger-resize-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+
+		stepLog = "Create csi snapshot class and csi snapshots for the application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName := PureSnapShotClass
+			volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete")
+			if err != nil {
+				isSnapshotClassExists := strings.Contains(err.Error(), "already exists")
+				dash.VerifyFatal(isSnapshotClassExists, true, "Failed to create volume snapshot class")
+			} else {
+				log.InfoD("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
+			}
+		})
+		stepLog = "Create CSI snapshots, Restore the snapshot and validate the data"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes")
+
+				timestamp := time.Now().Format("01-02-15h04m05s")
+
+				request := scheduler.CSISnapshotRequest{
+					Namespace:         vols[0].Namespace,
+					Timestamp:         timestamp,
+					OriginalPVCName:   vols[0].Name,
+					SnapName:          "basic-csi-snapshot-many" + timestamp,
+					RestoredPVCName:   "csi-restored-many" + timestamp,
+					SnapshotclassName: PureSnapShotClass,
+				}
+				numberOfRestore := 10
+				restoredPVCList, err = CreateCSISnapshotAndRestore(ctx, request, numberOfRestore)
+			}
+
+		})
+
+		var wg sync.WaitGroup
+
+		stepLog = "Trigger resize on multiple volumes and validate the data"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, pvc := range restoredPVCList {
+				wg.Add(1)
+				go func(claim *v1.PersistentVolumeClaim) {
+					defer wg.Done()
+					defer GinkgoRecover()
+					pvcSize := claim.Spec.Resources.Requests.Storage().String()
+					pvcSize = strings.TrimSuffix(pvcSize, "Gi")
+					pvcSizeInt, err := strconv.Atoi(pvcSize)
+					log.FailOnError(err, "Failed to convert pvc size to int")
+					_, err = Inst().S.ResizePVC(contexts[0], claim, uint64(pvcSizeInt))
+					log.FailOnError(err, "Failed to resize pvc")
+					log.InfoD("increasing pvc [%s/%s]  size to %v %v", claim.Namespace, claim.Name, 2*pvcSizeInt, claim.UID)
+					//resize pvc to double of the initial size
+
+				}(pvc)
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+func CreateCSISnapshotAndRestore(ctx *scheduler.Context, request scheduler.CSISnapshotRequest, numOfRestoredPVCForCloneManyTest int) ([]*v1.PersistentVolumeClaim, error) {
+	// Create a snapshot
+
+	restoredPVCLIST := make([]*v1.PersistentVolumeClaim, 0)
+
+	pvcObj, err := k8sCore.GetPersistentVolumeClaim(request.OriginalPVCName, request.Namespace)
+	size := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
+	log.Infof("Size of original PVC in snapshot/restore test is %v", size)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
+	}
+	originalStorageClass, err := k8sCore.GetStorageClassForPVC(pvcObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve storage class for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
+	}
+	storageClassName := originalStorageClass.Name
+	log.Infof("Proceeding with storage class %s", storageClassName)
+
+	// creating the snapshot
+	volSnapshot, err := Inst().S.CreateCsiSnapshot(request.SnapName, pvcObj.Namespace, request.SnapshotclassName, pvcObj.Name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create snapshot %s for volume %s", request.SnapName, pvcObj.Name)
+	}
+
+	log.Infof("Successfully created snapshot: [%s] for pvc: %s", volSnapshot.Name, pvcObj.Name)
+	for i := 0; i < numOfRestoredPVCForCloneManyTest; i++ {
+		restoredPVCName := fmt.Sprint(request.RestoredPVCName, i)
+		restoredPVCSpec, err := k8s.GeneratePVCRestoreSpec(size, pvcObj.Namespace, restoredPVCName, volSnapshot.Name, storageClassName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build restored PVC Spec: %s", err)
+		}
+		restoredPVCSpec, err = k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+		if err != nil {
+			return nil, fmt.Errorf("failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err)
+		}
+		log.Infof("Successfully restored PVC: [%s] from snapshot: [%s]", restoredPVCName, volSnapshot.Name)
+		restoredPVCLIST = append(restoredPVCLIST, restoredPVCSpec)
+	}
+	log.Info("Finished issuing PVC creation request, proceed to validate")
+
+	if err = Inst().S.WaitForRestoredPVCsToBound(request.RestoredPVCName, pvcObj.Namespace, numOfRestoredPVCForCloneManyTest); err != nil {
+		return nil, fmt.Errorf("%d PVCs did not go into bound after 30 mins: %v", numOfRestoredPVCForCloneManyTest, err)
+	}
+
+	return restoredPVCLIST, nil
+}
