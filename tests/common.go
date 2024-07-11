@@ -8342,8 +8342,7 @@ func GetVifInterface(faClient *newflasharray.Client, faMgmtIP, apiToken string) 
 			if networkInterface.Eth.Subtype == "vif" && networkInterface.Enabled == true {
 				PureFaClientVif, err := pureutils.PureCreateClientAndConnectRest2_x(networkInterface.Eth.Address, apiToken)
 				if err != nil {
-					log.FailOnError(err, "failed to create client and connect to FA with IP [%s]", networkInterface.Eth.Address)
-					return nil, err
+					return nil, fmt.Errorf("failed to create client and connect to FA with IP [%s]: %v", networkInterface.Eth.Address, err)
 				}
 				return PureFaClientVif, nil
 			}
@@ -8359,8 +8358,7 @@ func ToggleManagementInterface(PureFaClientVif *newflasharray.Client, faMgmtIP s
 	var LastDisabledInterface string
 	networkInterfaces, err := pureutils.ListAllInterfaces(PureFaClientVif)
 	if err != nil {
-		log.FailOnError(err, "failed to list network interfaces on FA with IP [%s]", faMgmtIP)
-		return "", err
+		return "", fmt.Errorf("failed to list network interfaces on FA with IP [%s]: %v", faMgmtIP, err)
 	}
 	for _, nw := range networkInterfaces {
 		for _, networkInterface := range nw.Items {
