@@ -1055,6 +1055,14 @@ func (d *DefaultDriver) GetTrashCanVolumeIds(n node.Node) ([]string, error) {
 	}
 }
 
+// GetTrashCanVolumeNames returns the volume names in the trashcan and an error if any
+func (d *DefaultDriver) GetTrashCanVolumeNames(n node.Node) ([]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetTrashCanVolumeNames()",
+	}
+}
+
 // IsPureFileVolume returns true if volume is FB volumes else false
 func (d *DefaultDriver) IsPureFileVolume(volume *Volume) (bool, error) {
 	return false, &errors.ErrNotSupported{

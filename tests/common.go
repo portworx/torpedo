@@ -13387,6 +13387,45 @@ func CheckVolumesExistinFB(flashBlades []pureutils.FlashBladeEntry, listofFbdaPv
 	}
 	return nil
 }
+
+// CheckIfVolumeExistsInFBorFA Checks if volume exists in FB or FA
+func CheckIfVolumeExistsInFBorFA(flashBlades []pureutils.FlashBladeEntry, flashArrays []pureutils.FlashArrayEntry, volume string) (bool, error) {
+	if IsPureCluster() {
+		log.InfoD("checking if volume:%v exists in FB or FA", volume)
+		for _, fb := range flashBlades {
+			fbClient, err := pureutils.PureCreateFbClientAndConnect(fb.MgmtEndPoint, fb.APIToken)
+			if err != nil {
+				return false, err
+			}
+			FsFullName, nameErr := pureutils.GetFilesystemFullName(fbClient, volume)
+			log.FailOnError(nameErr, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volume, fb.MgmtEndPoint))
+			if FsFullName != "" {
+				log.Infof("Volume [%v] exists on FB [%v]", volume, fb.MgmtEndPoint)
+				return true, nil
+			} else if err != nil && FsFullName == "" {
+				return false, err
+			}
+
+		}
+		for _, fa := range flashArrays {
+			faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
+			if err != nil {
+				return false, err
+			}
+			volName, err := GetVolumeCompleteNameOnFA(faClient, volume)
+			if err != nil {
+				return false, err
+			}
+			if volName != "" {
+				log.Infof("Volume [%v] exists on FA [%v]", volName, fa.MgmtEndPoint)
+				return true, err
+			}
+
+		}
+	}
+	return false, nil
+}
+
 func CheckIopsandBandwidthinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, reqBandwidth uint64, reqIops uint64) error {
 	pvcFadaMap := make(map[string]bool)
 	for _, volumeName := range listofFadaPvc {

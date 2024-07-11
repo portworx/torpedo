@@ -458,8 +458,11 @@ type Driver interface {
 	// GetNodeStats returns the node stats of the given node and an error if any
 	GetNodeStats(n node.Node) (map[string]map[string]int, error)
 
-	// GetTrashCanVolumeIds returns the node stats of the given node and an error if any
+	// GetTrashCanVolumeIds returns list of volume ids present in the trashcan
 	GetTrashCanVolumeIds(n node.Node) ([]string, error)
+
+	// GetTrashCanVolumeName returns the list of volume names present in trashcan
+	GetTrashCanVolumeNames(n node.Node) ([]string, error)
 
 	//GetKvdbMembers returns KVDB memebers of the PX cluster
 	GetKvdbMembers(n node.Node) (map[string]*MetadataNode, error)
