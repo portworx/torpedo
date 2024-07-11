@@ -1328,6 +1328,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		d.refreshEndpoint = refreshEndpoint
 	}
 	volDriver := d.getVolDriver()
+	n := node.GetWorkerNodes()[0]
 	t := func() (interface{}, bool, error) {
 		volumeInspectResponse, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token),
 			&api.SdkVolumeInspectRequest{
@@ -1403,6 +1404,16 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	if vol.Spec.ProxySpec != nil && vol.Spec.ProxySpec.ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK {
 		// Checking the device path when state is attached
 		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && !strings.Contains(vol.DevicePath, DeviceMapper) {
+			out, err := d.nodeDriver.RunCommand(
+				n,
+				fmt.Sprintf("pxctl volume inspect %s", vol.Id),
+				node.ConnectionOpts{
+					Timeout:         validatePXStartTimeout,
+					TimeBeforeRetry: defaultRetryInterval,
+				})
+
+			log.Infof(out)
+			log.FailOnError(err, "Failed to run pxctl volume inspect command")
 			log.Infof("volume struct inside device path checking: %v", vol)
 			return &ErrFailedToInspectVolume{
 				ID:    volumeName,
