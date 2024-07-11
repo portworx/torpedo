@@ -1383,6 +1383,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 		})
 
 		for vol, params := range vols {
+
 			if Inst().ConfigMap != "" {
 				params[authTokenParam], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 				if err != nil {

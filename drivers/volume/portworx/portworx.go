@@ -1411,6 +1411,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	if vol.Spec.ProxySpec != nil && vol.Spec.ProxySpec.ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK {
 		// Checking the device path when state is attached
 		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && !strings.Contains(vol.DevicePath, DeviceMapper) {
+			log.Infof("Volume struct during device path validation  %+v", vol)
 			return &ErrFailedToInspectVolume{
 				ID:    volumeName,
 				Cause: fmt.Sprintf("Failed to validate device path [%s]", vol.DevicePath),
