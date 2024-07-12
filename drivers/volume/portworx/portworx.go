@@ -1423,7 +1423,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			log.FailOnError(err, "Failed to validate the device path for a volume")
 		}
 
-		log.Debugf("Successfully validated the device path for a volume [%s]", volumeName)
+		log.Debugf("Successfully validated the device path for the volume [%s]", volumeName)
 	}
 
 	// If CSI Topology key is set in param, validate volume attached on right node
