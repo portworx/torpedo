@@ -903,11 +903,7 @@ var _ = Describe("{PoolExpandResizePoolMaintenanceCycle}", func() {
 	})
 
 	JustBeforeEach(func() {
-		isPoolAddDiskSupported := IsPoolAddDiskSupported()
-		if !isPoolAddDiskSupported {
-			Skip("Add disk operation is not supported for DMThin Setup")
-		}
-		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 100)
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
@@ -926,18 +922,13 @@ var _ = Describe("{PoolExpandResizePoolMaintenanceCycle}", func() {
 	stepLog := "cycle through maintenance mode after pool expand is complete"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		isPoolAddDiskSupported := IsPoolAddDiskSupported()
-		if !isPoolAddDiskSupported {
-			Skip("Add disk operation is not supported for DMThin Setup")
-		}
-
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
 
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
-		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
 
 		err = waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(err, nil, "Pool expansion does not result in error")
