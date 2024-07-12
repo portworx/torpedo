@@ -1415,10 +1415,19 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			log.Infof(out)
 			log.FailOnError(err, "Failed to run pxctl volume inspect command")
 			log.Infof("volume struct inside device path checking: %v", vol)
-			return &ErrFailedToInspectVolume{
-				ID:    volumeName,
-				Cause: fmt.Sprintf("Failed to validate device path [%s]", vol.DevicePath),
-			}
+			time.Sleep(20 * time.Second)
+			log.Infof("sleeping for 20 seconds to check device path again")
+			out, err = d.nodeDriver.RunCommand(
+				n,
+				fmt.Sprintf("pxctl volume inspect %s", vol.Id),
+				node.ConnectionOpts{
+					Timeout:         validatePXStartTimeout,
+					TimeBeforeRetry: defaultRetryInterval,
+				})
+
+			log.Infof(out)
+			log.FailOnError(err, "Failed to run pxctl volume inspect command")
+
 		}
 		log.Debugf("Successfully validated the device path for a volume [%s]", volumeName)
 	}
