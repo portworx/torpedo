@@ -16,7 +16,8 @@ spec:
       domain:
         devices:
           disks:
-            - disk:
+            - bootOrder: 1
+              disk:
                 bus: virtio
               name: containerdisk
             {{ if .ClaimsCount }}
