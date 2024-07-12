@@ -1341,7 +1341,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		}
 		vol := volumeInspectResponse.Volume
 		if !strings.Contains(vol.DevicePath, DeviceMapper) {
-			return nil, true, fmt.Errorf("device path is not correct for volume [%s]. Expected: %s, Actual: %s", volumeName, vol.AttachedOn, vol.DevicePath)
+			return nil, true, fmt.Errorf("device path [%s] is not correct for volume [%s]", vol.DevicePath, volumeName)
 		}
 		return nil, false, nil
 
