@@ -903,6 +903,10 @@ var _ = Describe("{PoolExpandResizePoolMaintenanceCycle}", func() {
 	})
 
 	JustBeforeEach(func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			Skip("Add disk operation is not supported for DMThin Setup")
+		}
 		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
@@ -922,6 +926,10 @@ var _ = Describe("{PoolExpandResizePoolMaintenanceCycle}", func() {
 	stepLog := "cycle through maintenance mode after pool expand is complete"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			Skip("Add disk operation is not supported for DMThin Setup")
+		}
 
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
