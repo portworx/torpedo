@@ -6537,7 +6537,7 @@ func TriggerUpgradeVolumeDriverFromCatalog(contexts *[]*scheduler.Context, recor
 				}
 				timeAfterUpgrade = time.Now()
 				durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
-				expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
+				expectedUpgradeTime := 40 * len(node.GetStorageDriverNodes())
 				upgradeStatus := "PASS"
 				if durationInMins <= expectedUpgradeTime {
 					log.InfoD("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)

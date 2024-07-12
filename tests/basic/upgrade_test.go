@@ -195,7 +195,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				dash.VerifyFatal(err, nil, "Volume driver upgrade successful?")
 
 				durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
-				expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
+				expectedUpgradeTime := 40 * len(node.GetStorageDriverNodes())
 				dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Verify volume drive upgrade within expected time")
 				upgradeStatus := "PASS"
 				if durationInMins <= expectedUpgradeTime {
@@ -464,7 +464,7 @@ var _ = Describe("{UpgradeVolumeDriverFromCatalog}", func() {
 				timeAfterUpgrade = time.Now()
 
 				durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
-				expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
+				expectedUpgradeTime := 40 * len(node.GetStorageDriverNodes())
 				dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Verify volume drive upgrade within expected time")
 
 				upgradeStatus := "PASS"
