@@ -6173,3 +6173,136 @@ var _ = Describe("{VerifyPoolCreateInProperZones}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{DeleteVolumesDuringKvdbRunFlatMode}", func() {
+	/*
+		 		https://purestorage.atlassian.net/browse/PTX-23978
+				1. Create Few Volumes, attach few volumes and let few volumes be in detached mode
+				2. Put the Cluster in run Flat mode -if the external etcd or internal KVDB nodes(>2 nodes) go offline, Portworx goes into run-flat mode.
+				3. Try Deleting Volumes During flat mode and volumes should not be deleted .
+				4. Try Attaching volumes during flat mode and volumes should not be attached
+				5. Try Detaching volumes during flat mode and volumes should not be detached
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeleteVolumesDuringKvdbRunFlatMode", "Delete Volumes During KVDB Run Flat Mode", nil, 0)
+	})
+	itLog := "DeleteVolumesDuringKvdbRunFlatMode"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var volList []string
+		var isFlatModeEnabled bool
+		var selectedNodes []node.Node
+		volumeCount := 10
+		stepLog := "Create Few Volumes, attach few volumes and let few volumes be in detached mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < volumeCount; i++ {
+				volName := fmt.Sprintf("volduringkvdbflatmode-%d", i)
+				volId, err := Inst().V.CreateVolume(volName, 10, 1)
+				log.FailOnError(err, "Failed to create volume")
+				volList = append(volList, volId)
+			}
+			log.InfoD("Attach few volumes and let few volumes be in detached mode")
+			for i := 0; i < 5; i++ {
+				out, err := Inst().V.AttachVolume(volList[i])
+				log.FailOnError(err, "Failed to attach volume")
+				log.InfoD("Volume attached [%v]", out)
+			}
+		})
+		stepLog = "Put the Cluster in run Flat mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodes, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Failed to get kvdb nodes")
+			if len(kvdbNodes) < 2 {
+				log.FailOnError(fmt.Errorf("KVDB nodes are less than 2"), "KVDB nodes are less than 2")
+			}
+
+			// Select two KVDB nodes
+			selectedNodes = make([]node.Node, 0)
+			for i := 0; i < 2; i++ {
+				kvdbNode, err := node.GetNodeDetailsByNodeID(kvdbNodes[i].ID)
+				log.FailOnError(err, "Failed to get kvdb node details")
+				log.InfoD("KVDB node to be stopped: %s", kvdbNode.Name)
+				selectedNodes = append(selectedNodes, kvdbNode)
+			}
+
+			// Stop the driver on the selected nodes
+			for _, kvdbNode := range selectedNodes {
+				err = Inst().V.StopDriver([]node.Node{kvdbNode}, false, nil)
+				log.FailOnError(err, "Failed to stop kvdb node")
+				log.InfoD("Stopped kvdb node: %s", kvdbNode.Name)
+				err = Inst().V.WaitDriverDownOnNode(kvdbNode)
+				log.FailOnError(err, "Failed to wait for driver to be down on node")
+			}
+		})
+		stepLog = "Try Deleting Volumes During flat mode and volumes should not be deleted"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < 5; i++ {
+				err := Inst().V.DeleteVolume(volList[i])
+				if err != nil {
+					isFlatModeEnabled = strings.Contains(err.Error(), "KVDB connection failed, either node has networking issues or KVDB members are down or KVDB cluster is unhealthy. All operations (get/update/delete) are unavailable.")
+					if isFlatModeEnabled {
+						log.InfoD("Volume [%v] is not deleted during flat mode", volList[i])
+					} else {
+						log.FailOnError(err, "Failed to delete volume")
+					}
+				}
+				err = Inst().V.DetachVolume(volList[i])
+				if err != nil {
+					isFlatModeEnabled = strings.Contains(err.Error(), "KVDB connection failed, either node has networking issues or KVDB members are down or KVDB cluster is unhealthy. All operations (get/update/delete) are unavailable.")
+					if isFlatModeEnabled {
+						log.InfoD("Volume [%v] is not detached during flat mode", volList[i])
+					} else {
+						log.FailOnError(err, "Failed to detach volume")
+					}
+				}
+			}
+		})
+		stepLog = "Try Attaching volumes during flat mode and volumes should not be attached"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 5; i < 10; i++ {
+				out, err := Inst().V.AttachVolume(volList[i])
+				if err != nil {
+					isFlatModeEnabled = strings.Contains(err.Error(), "KVDB connection failed, either node has networking issues or KVDB members are down or KVDB cluster is unhealthy. All operations (get/update/delete) are unavailable.")
+					if isFlatModeEnabled {
+						log.InfoD("Volume [%v] is not attached during flat mode", volList[i])
+					} else {
+						log.FailOnError(err, "Failed to attach volume")
+					}
+				}
+				log.InfoD("Volume attached [%v]", out)
+			}
+		})
+		stepLog = "Make Kvdb nodes up"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, kvdbNode := range selectedNodes {
+				err := Inst().V.StartDriver(kvdbNode)
+				log.FailOnError(err, "Failed to start kvdb node")
+				log.InfoD("Started kvdb node: %s", kvdbNode.Name)
+				err = Inst().V.WaitDriverUpOnNode(kvdbNode, Inst().DriverStartTimeout)
+				log.FailOnError(err, "Failed to wait for driver to be up on node")
+			}
+		})
+		stepLog = "Delete the volumes which are created"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < 5; i++ {
+				err := Inst().V.DetachVolume(volList[i])
+				log.FailOnError(err, "Failed to detach volume")
+				err = Inst().V.DeleteVolume(volList[i])
+				log.FailOnError(err, "Failed to delete volume")
+			}
+			for i := 5; i < 10; i++ {
+				err = Inst().V.DeleteVolume(volList[i])
+				log.FailOnError(err, "Failed to delete volume")
+			}
+
+		})
+
+	})
+
+})

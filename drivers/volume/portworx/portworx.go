@@ -1328,7 +1328,24 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		d.refreshEndpoint = refreshEndpoint
 	}
 	volDriver := d.getVolDriver()
-	n := node.GetWorkerNodes()[0]
+	volumeInspectDevicePath := func() (interface{}, bool, error) {
+		volumeInspectResponse, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token),
+			&api.SdkVolumeInspectRequest{
+				VolumeId: volumeName,
+				Options: &api.VolumeInspectOptions{
+					Deep: true,
+				},
+			})
+		if err != nil {
+			return nil, true, err
+		}
+		vol := volumeInspectResponse.Volume
+		if !strings.Contains(vol.DevicePath, DeviceMapper) {
+			return nil, true, fmt.Errorf("device path is not correct for volume [%s]. Expected: %s, Actual: %s", volumeName, vol.AttachedOn, vol.DevicePath)
+		}
+		return nil, false, nil
+
+	}
 	t := func() (interface{}, bool, error) {
 		volumeInspectResponse, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token),
 			&api.SdkVolumeInspectRequest{
@@ -1380,8 +1397,6 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	}
 
 	vol := out.(*api.Volume)
-	log.Infof("volume struct before validating volume: %v", vol)
-
 	// if the volume is a clone or a snap, validate its parent
 	if vol.IsSnapshot() || vol.IsClone() {
 		parentResp, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: vol.Source.Parent})
@@ -1404,31 +1419,10 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	if vol.Spec.ProxySpec != nil && vol.Spec.ProxySpec.ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK {
 		// Checking the device path when state is attached
 		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && !strings.Contains(vol.DevicePath, DeviceMapper) {
-			out, err := d.nodeDriver.RunCommand(
-				n,
-				fmt.Sprintf("pxctl volume inspect %s", vol.Id),
-				node.ConnectionOpts{
-					Timeout:         validatePXStartTimeout,
-					TimeBeforeRetry: defaultRetryInterval,
-				})
-
-			log.Infof(out)
-			log.FailOnError(err, "Failed to run pxctl volume inspect command")
-			log.Infof("volume struct inside device path checking: %v", vol)
-			time.Sleep(20 * time.Second)
-			log.Infof("sleeping for 20 seconds to check device path again")
-			out, err = d.nodeDriver.RunCommand(
-				n,
-				fmt.Sprintf("pxctl volume inspect %s", vol.Id),
-				node.ConnectionOpts{
-					Timeout:         validatePXStartTimeout,
-					TimeBeforeRetry: defaultRetryInterval,
-				})
-
-			log.Infof(out)
-			log.FailOnError(err, "Failed to run pxctl volume inspect command")
-
+			_, err := task.DoRetryWithTimeout(volumeInspectDevicePath, 5*time.Minute, inspectVolumeRetryInterval)
+			log.FailOnError(err, "Failed to validate the device path for a volume")
 		}
+
 		log.Debugf("Successfully validated the device path for a volume [%s]", volumeName)
 	}
 
