@@ -30,8 +30,8 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 
 				startCmd := "pidof px" //sudo systemctl status portworx
 				output, _ := Inst().N.RunCommand(node, startCmd, nn.ConnectionOpts{
-					Timeout:         20 * time.Second,
-					TimeBeforeRetry: 5 * time.Second,
+					Timeout:         30 * time.Second,
+					TimeBeforeRetry: 20 * time.Second,
 					Sudo:            true,
 				})
 				processPid[node.Id] = output
@@ -42,7 +42,7 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 
 				for _, node := range nn.GetStorageNodes() {
 
-					startCmd := "pidof px" //sudo systemctl status portworx
+					startCmd := "systemctl stop portworx;systemctl start portworx;pidof px" //sudo systemctl status portworx
 					output, _ := Inst().N.RunCommand(node, startCmd, nn.ConnectionOpts{
 						Timeout:         20 * time.Second,
 						TimeBeforeRetry: 5 * time.Second,
