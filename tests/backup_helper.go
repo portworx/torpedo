@@ -9704,6 +9704,7 @@ func StopCloudsnapBackup(pvcName, namespace string) error {
 						return "", true, fmt.Errorf("waiting to get the cs id for PVC [%s] in namespace [%s]", pvcName, namespace)
 					}
 					cmd := fmt.Sprintf("pxctl cs stop -n %s", key)
+					log.Infof("Output of GetStorageNodes() from StopCloudsnapBackup is [%s]", node.GetStorageNodes())
 					workerNode := node.GetStorageNodes()[0]
 					output, err := runCmdGetOutput(cmd, workerNode)
 					log.Infof("Output of the command [%s]: \n%s", cmd, output)
@@ -9757,6 +9758,7 @@ type CloudsnapStatus struct {
 func GetCloudsnapStatus() (map[string]CloudsnapStatus, error) {
 	statusMap := make(map[string]CloudsnapStatus)
 	// Get a worker node
+	log.Infof("Output of GetStorageNodes() from GetCloudsnapStatus is [%s]", node.GetStorageNodes())
 	workerNode := node.GetStorageNodes()[0]
 	cmd := "pxctl cs status -j"
 	output, err := runCmdGetOutput(cmd, workerNode)

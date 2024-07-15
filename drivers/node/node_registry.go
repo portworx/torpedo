@@ -3,6 +3,7 @@ package node
 import (
 	"fmt"
 	"github.com/pborman/uuid"
+	"github.com/portworx/torpedo/pkg/log"
 	"sync"
 )
 
@@ -20,6 +21,7 @@ func AddNode(n Node) error {
 	defer lock.Unlock()
 	n.uuid = uuid.New()
 	nodeRegistry[n.uuid] = n
+	log.Infof("Adding node n [%s] with uuid [%s]", n.Name, n.uuid)
 	return nil
 }
 
@@ -31,6 +33,7 @@ func UpdateNode(n Node) error {
 		return fmt.Errorf("node to be updated does not exist")
 	}
 	nodeRegistry[n.uuid] = n
+	log.Infof("Updating node n [%s] with uuid [%s]", n.Name, n.uuid)
 	return nil
 }
 
@@ -90,6 +93,7 @@ func IsMasterNode(n Node) bool {
 // driver is installed
 func GetStorageDriverNodes() []Node {
 	var nodeList []Node
+	log.Infof("Output of nodeRegistry from GetStorageDriverNodes() is [%s]", nodeRegistry)
 	for _, n := range nodeRegistry {
 		if n.IsStorageDriverInstalled {
 			nodeList = append(nodeList, n)
@@ -107,11 +111,13 @@ func IsStorageNode(n Node) bool {
 func GetStorageNodes() []Node {
 	var nodeList []Node
 	storageDriverNodes := GetStorageDriverNodes()
+	log.Infof("Output of storageDriverNodes() from GetStorageNodes() is [%s]", GetStorageDriverNodes())
 	for _, n := range storageDriverNodes {
 		if IsStorageNode(n) {
 			nodeList = append(nodeList, n)
 		}
 	}
+	log.Infof("Output of nodeList from GetStorageNodes() is [%s]", nodeList)
 	return nodeList
 }
 

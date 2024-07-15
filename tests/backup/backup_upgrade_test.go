@@ -1532,3 +1532,324 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUid, ctx)
 	})
 })
+
+var _ = Describe("{AbrarDebugOne}", func() {
+	var (
+		numDeployments             int
+		srcClusterUid              string
+		destClusterUid             string
+		partialAppNamespaces       []string
+		partialAppContexts         []*scheduler.Context
+		partialScheduleName        string
+		partialSchedulePolicyUid   string
+		partialScheduledBackupName string
+		partialCloudAccountName    string
+		partialCloudAccountUid     string
+		partialBackupLocationName  string
+		partialBackupLocationUid   string
+		partialBackupLocationMap   map[string]string
+		failedVolumes              []*corev1.PersistentVolumeClaim
+		stopChans                  map[int]chan struct{}
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("AbrarDebug", "Debug", nil, 0, Sabrarhussaini, Q2FY25)
+		log.Infof("Scheduling applications")
+	})
+
+	It("Abrar Debug TC One", func() {
+		Step("Provision apps for partial success validation", func() {
+			log.InfoD("Provisioning two apps for partial success validation")
+			appList := Inst().AppList
+			defer func() {
+				Inst().AppList = appList
+			}()
+			Inst().AppList = []string{"postgres-withdata"}
+			partialAppContexts = make([]*scheduler.Context, 0)
+			partialAppNamespaces = make([]string, 0)
+			numDeployments = 2
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+			log.Infof("Scheduling applications")
+			for i := 0; i < numDeployments; i++ {
+				taskName := fmt.Sprintf("partial-app-%d", i)
+				appContexts := ScheduleApplications(taskName)
+				for _, appCtx := range appContexts {
+					namespace := GetAppNamespace(appCtx, taskName)
+					partialAppNamespaces = append(partialAppNamespaces, namespace)
+					partialAppContexts = append(partialAppContexts, appCtx)
+					appCtx.ReadinessTimeout = AppReadinessTimeout
+				}
+			}
+		})
+
+		Step("Validating applications for partial success", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(partialAppContexts)
+		})
+
+		Step("Create cloud credentials and backup locations for partial success validation", func() {
+			log.InfoD("Create cloud credentials and backup locations for partial success validation")
+			providers := GetBackupProviders()
+			partialBackupLocationMap = make(map[string]string)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				partialCloudAccountUid = uuid.New()
+				partialCloudAccountName = fmt.Sprintf("%s-%s-%v", "cred-partial-bkp", provider, time.Now().Unix())
+				log.Infof("Creating a cloud credential for partial backup [%s] with UID [%s] using [%s] as the provider", partialCloudAccountUid, partialCloudAccountName, provider)
+				err := CreateCloudCredential(provider, partialCloudAccountName, partialCloudAccountUid, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential [%s] with UID [%s] using [%s] as the provider", partialCloudAccountName, BackupOrgID, provider))
+				partialBackupLocationName = fmt.Sprintf("%s-partial-bl-%v", getGlobalBucketName(provider), time.Now().Unix())
+				partialBackupLocationUid = uuid.New()
+				partialBackupLocationMap[partialBackupLocationUid] = partialBackupLocationName
+				bucketName := getGlobalBucketName(provider)
+				log.Infof("Creating a backup location [%s] with UID [%s] using the [%s] bucket", partialBackupLocationName, partialBackupLocationUid, bucketName)
+				err = CreateBackupLocation(provider, partialBackupLocationName, partialBackupLocationUid, partialCloudAccountName, partialCloudAccountUid, bucketName, BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location [%s] with UID [%s] using the bucket [%s]", partialBackupLocationName, partialBackupLocationUid, bucketName))
+			}
+		})
+
+		Step("Create source and destination clusters", func() {
+			log.InfoD("Creating source and destination clusters")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.Infof("Creating source [%s] and destination [%s] clusters", SourceClusterName, DestinationClusterName)
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, DestinationClusterName))
+			srcClusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.Infof("Cluster [%s] uid: [%s]", SourceClusterName, srcClusterUid)
+			dstClusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(dstClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+			log.Infof("Cluster [%s] uid: [%s]", DestinationClusterName, destClusterUid)
+		})
+
+		Step("Initiate a go routine to stop CR backups for PVCs", func() {
+			// Making a list of PVCs to fail
+			k8sCore := k8score.Instance()
+			pvcList, err := k8sCore.GetPersistentVolumeClaims(partialAppNamespaces[0], make(map[string]string))
+			log.FailOnError(err, fmt.Sprintf("error getting PVC list for namespace %s", partialAppNamespaces[0]))
+			log.Infof("pvc list is %v", pvcList)
+			for _, pvc := range pvcList.Items {
+				log.Infof("pvc %v", pvc)
+				failedVolumes = append(failedVolumes, &pvc)
+			}
+			log.Infof("Failed volumes are %v", failedVolumes)
+			if len(failedVolumes) > 0 {
+				partialAppContexts[0].SkipPodValidation = true
+			}
+
+			// Channel to signal termination of the go routine
+			stopChans = make(map[int]chan struct{})
+			stopChan := make(chan struct{})
+			stopChans[0] = stopChan // Save the channel in the global map with index 0
+
+			// Go routine to stop backups for the PVCs
+			go func() {
+				defer GinkgoRecover()
+				timeoutChan := time.After(1 * time.Hour) // Create a timeout channel for 1 hour
+				for {
+					select {
+					case <-stopChan:
+						log.InfoD("Received signal to stop the go routine for stopping CR backups")
+						return
+					case <-timeoutChan:
+						log.InfoD("Timeout reached. Stopping the go routine for stopping CR backups")
+						return
+					default:
+						var wg1 sync.WaitGroup
+						wg1.Add(len(failedVolumes))
+						for _, pvc := range failedVolumes {
+							go func(pvc *corev1.PersistentVolumeClaim) {
+								defer GinkgoRecover()
+								defer wg1.Done()
+								err = StopCloudsnapBackup(pvc.Name, pvc.Namespace)
+								dash.VerifySafely(err, nil, fmt.Sprintf("error stopping all cs backups for %s [%s] in namespace %s", pvc.Name, pvc.Spec.VolumeName, pvc.Namespace))
+							}(pvc)
+						}
+						wg1.Wait()
+					}
+				}
+			}()
+		})
+
+		Step("Create a scheduled backup for partial backup validation", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.InfoD("Creating a new schedule policy for new apps for partial success validation before the upgrade")
+			partialScheduleName = fmt.Sprintf("partial-backup-schedule-%v", RandomString(6))
+			partialSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, int64(15), 5)
+			err = Inst().Backup.BackupSchedulePolicy(partialScheduleName, uuid.New(), BackupOrgID, partialSchedulePolicyInfo)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of new schedule policy [%s]", partialScheduleName))
+			partialSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, partialScheduleName)
+			log.FailOnError(err, "Fetching uid of schedule policy [%s]", partialScheduleName)
+			log.InfoD("Taking scheduled backup of namespaces [%s] before upgrade", partialAppNamespaces)
+			partialScheduledBackupName = fmt.Sprintf("partial-scheduled-backup-%v", RandomString(6))
+			_, err = CreateScheduleBackupWithoutCheck(partialScheduledBackupName, SourceClusterName, partialBackupLocationName, partialBackupLocationUid, partialAppNamespaces, nil, BackupOrgID, "", "", "", "", partialScheduleName, partialSchedulePolicyUid, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", partialScheduleName))
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+		})
+
+		Step("Verify the status of the first scheduled backup with failed volume", func() {
+			log.InfoD("Verifying if the status of the first scheduled backup with failed volume is reported as Failed")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, partialScheduledBackupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the first scheduled backup with schedule [%s]", firstScheduleBackupName))
+			log.Infof("Validating if the first scheduled backup [%s] is of Partial Success", firstScheduleBackupName)
+			err = BackupWithPartialSuccessCheck(firstScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] is in partial backup state", firstScheduleBackupName))
+			log.InfoD("Restoring the scheduled backup with partial success")
+			namespaceMapping := make(map[string]string)
+			for _, namespace := range partialAppNamespaces {
+				namespaceMapping[namespace] = namespace + RandomString(4)
+			}
+			restoreName := fmt.Sprintf("%s-%s", "restore-partial-bkp", RandomString(4))
+			log.InfoD("Restoring the schedule backup with partial success [%s] in cluster [%s] with restore [%s]", firstScheduleBackupName, DestinationClusterName, restoreName)
+			err = CreatePartialRestoreWithValidation(ctx, restoreName, firstScheduleBackupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, partialAppContexts, failedVolumes)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
+			if stopChan, exists := stopChans[0]; exists {
+				close(stopChan) // Signal the go routine to terminate
+				log.InfoD("Go routine for stopping CR backups has been signaled to stop")
+			}
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(partialAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.InfoD("Deleting partial backup schedule [%s]", partialScheduledBackupName)
+		err = DeleteSchedule(partialScheduledBackupName, SourceClusterName, BackupOrgID, ctx)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", partialScheduledBackupName))
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "Switching context to destination cluster failed")
+		err = SetSourceKubeConfig()
+		log.FailOnError(err, "Switching context to source cluster failed")
+		CleanupCloudSettingsAndClusters(partialBackupLocationMap, partialCloudAccountName, partialCloudAccountUid, ctx)
+	})
+})
+
+var _ = Describe("{AbrarDebugTwo}", func() {
+	var (
+		numDeployments       int
+		partialAppNamespaces []string
+		partialAppContexts   []*scheduler.Context
+		failedVolumes        []*corev1.PersistentVolumeClaim
+		stopChans            map[int]chan struct{}
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("AbrarDebug", "Debug", nil, 0, Sabrarhussaini, Q2FY25)
+		log.Infof("Scheduling applications")
+	})
+
+	It("Abrar Debug TC Two", func() {
+		Step("Provision apps for partial success validation", func() {
+			log.InfoD("Provisioning two apps for partial success validation")
+			appList := Inst().AppList
+			defer func() {
+				Inst().AppList = appList
+			}()
+			Inst().AppList = []string{"postgres-backup"}
+			partialAppContexts = make([]*scheduler.Context, 0)
+			partialAppNamespaces = make([]string, 0)
+			numDeployments = 1
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+			log.Infof("Scheduling applications")
+			for i := 0; i < numDeployments; i++ {
+				taskName := fmt.Sprintf("partial-app-%d", i)
+				appContexts := ScheduleApplications(taskName)
+				for _, appCtx := range appContexts {
+					namespace := GetAppNamespace(appCtx, taskName)
+					partialAppNamespaces = append(partialAppNamespaces, namespace)
+					partialAppContexts = append(partialAppContexts, appCtx)
+					appCtx.ReadinessTimeout = AppReadinessTimeout
+				}
+			}
+		})
+
+		Step("Validating applications for partial success", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(partialAppContexts)
+		})
+
+		Step("Initiate a go routine to stop CR backups for PVCs", func() {
+			// Making a list of PVCs to fail
+			k8sCore := k8score.Instance()
+			pvcList, err := k8sCore.GetPersistentVolumeClaims(partialAppNamespaces[0], make(map[string]string))
+			log.FailOnError(err, fmt.Sprintf("error getting PVC list for namespace %s", partialAppNamespaces[0]))
+			log.Infof("pvc list is %v", pvcList)
+			for _, pvc := range pvcList.Items {
+				log.Infof("pvc %v", pvc)
+				failedVolumes = append(failedVolumes, &pvc)
+			}
+			// Channel to signal termination of the go routine
+			stopChans = make(map[int]chan struct{})
+			stopChan := make(chan struct{})
+			stopChans[0] = stopChan // Save the channel in the global map with index 0
+
+			// Go routine to stop backups for the PVCs
+			go func() {
+				defer GinkgoRecover()
+				timeoutChan := time.After(1 * time.Hour) // Create a timeout channel for 1 hour
+				for {
+					select {
+					case <-stopChan:
+						log.InfoD("Received signal to stop the go routine for stopping CR backups")
+						return
+					case <-timeoutChan:
+						log.InfoD("Timeout reached. Stopping the go routine for stopping CR backups")
+						return
+					default:
+						var wg1 sync.WaitGroup
+						wg1.Add(len(failedVolumes))
+						for _, pvc := range failedVolumes {
+							go func(pvc *corev1.PersistentVolumeClaim) {
+								err = Inst().S.RefreshNodeRegistry()
+								log.FailOnError(err, "Refresh Node Registry failed")
+								defer GinkgoRecover()
+								defer wg1.Done()
+								err = StopCloudsnapBackup(pvc.Name, pvc.Namespace)
+								dash.VerifySafely(err, nil, fmt.Sprintf("error stopping all cs backups for %s [%s] in namespace %s", pvc.Name, pvc.Spec.VolumeName, pvc.Namespace))
+							}(pvc)
+						}
+						wg1.Wait()
+					}
+				}
+			}()
+		})
+
+		Step("Switch between contexts", func() {
+			for i := 0; i < 100; i++ {
+				log.InfoD("Iteration : %v", i+1)
+				time.Sleep(5 * time.Second)
+				err := SetDestinationKubeConfig()
+				log.FailOnError(err, "Switching context to destination cluster failed")
+				time.Sleep(5 * time.Second)
+				err = SetSourceKubeConfig()
+				log.FailOnError(err, "Switching context to source cluster failed")
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(partialAppContexts)
+		if stopChan, exists := stopChans[0]; exists {
+			close(stopChan) // Signal the go routine to terminate
+			log.InfoD("Go routine for stopping CR backups has been signaled to stop")
+		}
+	})
+})
