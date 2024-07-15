@@ -1422,7 +1422,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		// Checking the device path when state is attached
 		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && !strings.Contains(vol.DevicePath, DeviceMapper) {
 			_, err := task.DoRetryWithTimeout(volumeInspectDevicePath, 5*time.Minute, inspectVolumeRetryInterval)
-			log.FailOnError(err, "Failed to validate the device path for a volume")
+			return fmt.Errorf("Failed to validate the device path for a volume [%s] : %v", volumeName, err)
 		}
 		log.Debugf("Successfully validated the device path for a volume [%s]", volumeName)
 	}
