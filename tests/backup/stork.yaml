@@ -1,0 +1,381 @@
+# SOURCE: https://install.portworx.com/?kbver=1.27.9+e36e183&comp=stork
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: stork-account
+  namespace: portworx
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    scheduler.alpha.kubernetes.io/critical-pod: ""
+  labels:
+    tier: control-plane
+  name: stork
+  namespace: portworx
+spec:
+  selector:
+    matchLabels:
+      name: stork
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 3
+  template:
+    metadata:
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ""
+      labels:
+        name: stork
+        tier: control-plane
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "name"
+                    operator: In
+                    values:
+                      - stork
+              topologyKey: "kubernetes.io/hostname"
+      hostPID: false
+      containers:
+        - name: stork
+          command:
+            - /stork
+            - --driver=pxd
+            - --verbose
+            - --leader-elect=true
+            - --health-monitor-interval=120
+            - --webhook-controller=true
+          image: docker.pwx.dev.purestorage.com/portworx/venkat/stork:23.9.1
+          imagePullPolicy: Always
+          env:
+            - name: "PX_SERVICE_NAME"
+              value: "portworx-api"
+            - name: PX_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: STORK-NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+          resources:
+            requests:
+              cpu: '0.1'
+      serviceAccountName: stork-account
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: stork-service
+  namespace: portworx
+spec:
+  selector:
+    name: stork
+  ports:
+    - name: extender
+      protocol: TCP
+      port: 8099
+      targetPort: 8099
+    - name: webhook
+      protocol: TCP
+      port: 443
+      targetPort: 443
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stork-config
+  namespace: portworx
+data:
+  stork-config.yaml: |
+    apiVersion: kubescheduler.config.k8s.io/v1beta3
+    clientConnection:
+      acceptContentTypes: ""
+      burst: 100
+      contentType: application/vnd.kubernetes.protobuf
+      kubeconfig: ""
+      qps: 50
+    enableContentionProfiling: true
+    enableProfiling: true
+    extenders:
+    - filterVerb: filter
+      httpTimeout: 5m0s
+      prioritizeVerb: prioritize
+      urlPrefix: http://stork-service.kube-system:8099
+      weight: 5
+    kind: KubeSchedulerConfiguration
+    leaderElection:
+      leaderElect: true
+      leaseDuration: 15s
+      renewDeadline: 10s
+      resourceLock: leases
+      resourceName: stork-scheduler
+      resourceNamespace: kube-system
+      retryPeriod: 2s
+    parallelism: 16
+    percentageOfNodesToScore: 0
+    podInitialBackoffSeconds: 1
+    podMaxBackoffSeconds: 10
+    profiles:
+    - pluginConfig:
+      - args:
+          apiVersion: kubescheduler.config.k8s.io/v1beta3
+          kind: DefaultPreemptionArgs
+          minCandidateNodesAbsolute: 100
+          minCandidateNodesPercentage: 10
+        name: DefaultPreemption
+      - args:
+          apiVersion: kubescheduler.config.k8s.io/v1beta3
+          hardPodAffinityWeight: 1
+          kind: InterPodAffinityArgs
+        name: InterPodAffinity
+      - args:
+          apiVersion: kubescheduler.config.k8s.io/v1beta3
+          kind: NodeAffinityArgs
+        name: NodeAffinity
+      - args:
+          apiVersion: kubescheduler.config.k8s.io/v1beta3
+          kind: NodeResourcesBalancedAllocationArgs
+          resources:
+          - name: cpu
+            weight: 1
+          - name: memory
+            weight: 1
+        name: NodeResourcesBalancedAllocation
+      - args:
+          apiVersion: kubescheduler.config.k8s.io/v1beta3
+          kind: NodeResourcesFitArgs
+          scoringStrategy:
+            resources:
+            - name: cpu
+              weight: 1
+            - name: memory
+              weight: 1
+            type: LeastAllocated
+        name: NodeResourcesFit
+      - args:
+          apiVersion: kubescheduler.config.k8s.io/v1beta3
+          defaultingType: System
+          kind: PodTopologySpreadArgs
+        name: PodTopologySpread
+      - args:
+          apiVersion: kubescheduler.config.k8s.io/v1beta3
+          bindTimeoutSeconds: 600
+          kind: VolumeBindingArgs
+        name: VolumeBinding
+      plugins:
+        bind: {}
+        filter: {}
+        multiPoint:
+          enabled:
+          - name: PrioritySort
+          - name: NodeUnschedulable
+          - name: NodeName
+          - name: TaintToleration
+            weight: 3
+          - name: NodeAffinity
+            weight: 2
+          - name: NodePorts
+          - name: NodeResourcesFit
+            weight: 1
+          - name: VolumeRestrictions
+          - name: EBSLimits
+          - name: GCEPDLimits
+          - name: NodeVolumeLimits
+          - name: AzureDiskLimits
+          - name: VolumeBinding
+          - name: VolumeZone
+          - name: PodTopologySpread
+            weight: 2
+          - name: InterPodAffinity
+            weight: 2
+          - name: DefaultPreemption
+          - name: NodeResourcesBalancedAllocation
+            weight: 1
+          - name: ImageLocality
+            weight: 1
+          - name: DefaultBinder
+        permit: {}
+        postBind: {}
+        postFilter: {}
+        preBind: {}
+        preFilter: {}
+        preScore: {}
+        queueSort: {}
+        reserve: {}
+        score: {}
+      schedulerName: stork
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: stork-scheduler-account
+  namespace: portworx
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    component: scheduler
+    tier: control-plane
+    name: stork-scheduler
+  name: stork-scheduler
+  namespace: portworx
+spec:
+  selector:
+    matchLabels:
+      name: stork-scheduler
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        component: scheduler
+        tier: control-plane
+        name: stork-scheduler
+      name: stork-scheduler
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "name"
+                    operator: In
+                    values:
+                      - stork-scheduler
+              topologyKey: "kubernetes.io/hostname"
+      hostPID: false
+      containers:
+        - name: stork-scheduler
+          command:
+            - /usr/local/bin/kube-scheduler
+            - --bind-address=0.0.0.0
+            - --config=/etc/kubernetes/stork-config.yaml
+          image: registry.k8s.io/kube-scheduler-amd64:v1.27.9
+          imagePullPolicy: Always
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 10259
+              scheme: HTTPS
+            initialDelaySeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 10259
+              scheme: HTTPS
+          resources:
+            requests:
+              cpu: '0.1'
+          volumeMounts:
+            - mountPath: /etc/kubernetes
+              name: scheduler-config
+      serviceAccountName: stork-scheduler-account
+      volumes:
+        - configMap:
+            name: stork-config
+          name: scheduler-config
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: stork-scheduler-role
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get", "create", "update"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["", "events.k8s.io"]
+    resources: ["events"]
+    verbs: ["create", "patch", "update"]
+  - apiGroups: [""]
+    resourceNames: ["kube-scheduler"]
+    resources: ["endpoints"]
+    verbs: ["delete", "get", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["nodes", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["bindings", "pods/binding"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["pods/status"]
+    verbs: ["patch", "update"]
+  - apiGroups: [""]
+    resources: ["replicationcontrollers", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps", "extensions"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims", "persistentvolumes"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses", "csinodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["create", "update", "get", "list", "watch"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: stork-scheduler-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: stork-scheduler-account
+    namespace: portworx
+roleRef:
+  kind: ClusterRole
+  name: stork-scheduler-role
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: stork-snapshot-sc
+provisioner: stork-snapshot
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: stork-role
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: stork-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: stork-account
+    namespace: portworx
+roleRef:
+  kind: ClusterRole
+  name: stork-role
+  apiGroup: rbac.authorization.k8s.io

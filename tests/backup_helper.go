@@ -2179,7 +2179,7 @@ func CreateUsers(numberOfUsers int) []string {
 		go func(userName, firstName, lastName, email string) {
 			defer GinkgoRecover()
 			defer wg.Done()
-			err := backup.AddUser(userName, firstName, lastName, email, CommonPassword)
+			err := backup.AddUser(userName, firstName, lastName, email, "snigdha")
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Creating user - %s", userName))
 			users = append(users, userName)
 		}(userName, firstName, lastName, email)

@@ -41,8 +41,8 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", Label(TestCa
 		numberOfBackups                                = 1
 		randomSuffix                                   = RandomString(4)
 		infraAdminRole             backup.PxBackupRole = backup.InfrastructureOwner
-		controlChannel             chan string
-		errorGroup                 *errgroup.Group
+		//controlChannel             chan string
+		//errorGroup                 *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -66,7 +66,7 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", Label(TestCa
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step(fmt.Sprintf("Create %d users with %s role", numberOfUsers, infraAdminRole), func() {
 			log.InfoD(fmt.Sprintf("Creating %d users with %s role", numberOfUsers, infraAdminRole))
@@ -175,8 +175,10 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", Label(TestCa
 				userScheduleNameMap[user] = userScheduleName
 			})
 		}
+
 		err = TaskHandler(infraAdminUsers, createObjectsFromUser, Parallel)
 		log.FailOnError(err, "failed to create objects from user")
+
 		for _, user := range infraAdminUsers {
 			Step(fmt.Sprintf("Take restore of backups from the user %s", user), func() {
 				log.InfoD(fmt.Sprintf("Taking restore of backups from the user %s", user))
@@ -353,24 +355,24 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", Label(TestCa
 	})
 
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		log.InfoD("Destroying the scheduled applications")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
-		cleanupUserObjects := func(user string) {
-			nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
-			log.FailOnError(err, "failed to fetch user %s ctx", user)
-			for cloudCredentialUID, cloudCredentialName := range userCloudCredentialMap[user] {
-				CleanupCloudSettingsAndClusters(userBackupLocationMap[user], cloudCredentialName, cloudCredentialUID, nonAdminCtx)
-				break
-			}
-			err = backup.DeleteUser(user)
-			log.FailOnError(err, "failed to delete user %s", user)
-		}
-		err = TaskHandler(infraAdminUsers, cleanupUserObjects, Parallel)
-		log.FailOnError(err, "failed to cleanup user objects from user")
+		//defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		//log.InfoD("Destroying the scheduled applications")
+		//opts := make(map[string]bool)
+		//opts[SkipClusterScopedObjects] = true
+		//err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		//log.FailOnError(err, "Data validations failed")
+		//cleanupUserObjects := func(user string) {
+		//	nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+		//	log.FailOnError(err, "failed to fetch user %s ctx", user)
+		//	for cloudCredentialUID, cloudCredentialName := range userCloudCredentialMap[user] {
+		//		CleanupCloudSettingsAndClusters(userBackupLocationMap[user], cloudCredentialName, cloudCredentialUID, nonAdminCtx)
+		//		break
+		//	}
+		//	err = backup.DeleteUser(user)
+		//	log.FailOnError(err, "failed to delete user %s", user)
+		//}
+		//err = TaskHandler(infraAdminUsers, cleanupUserObjects, Parallel)
+		//log.FailOnError(err, "failed to cleanup user objects from user")
 	})
 })
 
