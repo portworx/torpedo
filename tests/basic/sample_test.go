@@ -3,8 +3,10 @@ package tests
 import (
 	"fmt"
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/torpedo/drivers/node"
+	nn "github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/log"
+	"time"
+
 	//"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -18,19 +20,42 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 	})
 
 	It("has to setup, validate and teardown apps", func() {
-		err = DeletePXPods("kube-system")
 
-		//var contexts []*scheduler.Context
-		//Delete perticular pod
-
-		stepLog = "Validate PX on all nodes"
-		//storageNodeList :=
+		// Get uptime for px service on each node
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			for _, node := range node.GetStorageNodes() {
-				status, err := IsPxRunningOnNode(&node)
-				log.FailOnError(err, fmt.Sprintf("Failed to check if PX is running on node [%s]", node.Name))
-				dash.VerifySafely(status, true, fmt.Sprintf("PX is not running on node [%s]", node.Name))
+			processPid := make(map[string]string)
+
+			for _, node := range nn.GetStorageNodes() {
+
+				startCmd := "pidof px" //sudo systemctl status portworx
+				output, _ := Inst().N.RunCommand(node, startCmd, nn.ConnectionOpts{
+					Timeout:         20 * time.Second,
+					TimeBeforeRetry: 5 * time.Second,
+					Sudo:            true,
+				})
+				processPid[node.Id] = output
+
+				err = DeletePXPods("kube-system")
+
+				processPidPostRestart := make(map[string]string)
+
+				for _, node := range nn.GetStorageNodes() {
+
+					startCmd := "pidof px" //sudo systemctl status portworx
+					output, _ := Inst().N.RunCommand(node, startCmd, nn.ConnectionOpts{
+						Timeout:         20 * time.Second,
+						TimeBeforeRetry: 5 * time.Second,
+						Sudo:            true,
+					})
+					processPidPostRestart[node.Id] = output
+				}
+				for key, value1 := range processPid {
+					value2, ok := processPidPostRestart[key]
+					if !ok || value1 != value2 {
+						log.FailOnError(err, fmt.Sprintf("New process id observed on %s", key))
+					}
+				}
 			}
 		})
 	})
