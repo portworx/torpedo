@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      initContainers:
+        - name: init-mysql
+          image: busybox
+          command: [ 'sh', '-c', "dd if=/dev/urandom of=/etc/postgresql/conf.d/dummyfile bs=1M count=100" ]
+          volumeMounts:
+            - name: postgres-ibmc
+              mountPath: /etc/postgresql/conf.d
+      containers:
+        - name: postgres
+          image: postgres:13
+          env:
+            - name: POSTGRES_PASSWORD
+              value: postgrespassword
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: postgres-portworx
+              mountPath: /var/lib/postgresql/data
+            - name: postgres-ibmc
+              mountPath: /etc/postgresql/conf.d
+      volumes:
+        - name: postgres-portworx
+          persistentVolumeClaim:
+            claimName: postgres-portworx-pvc
+        - name: postgres-ibmc
+          persistentVolumeClaim:
+            claimName: postgres-ibmc-pvc

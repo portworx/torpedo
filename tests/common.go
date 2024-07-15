@@ -889,7 +889,7 @@ func IsPoolAddDiskSupported() bool {
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	// Apps for which we have to skip volume validation due to various limitations
-	excludeAppContextList := []string{"tektoncd", "pxb-singleapp-multivol", "pxb-multipleapp-multivol"}
+	excludeAppContextList := []string{"tektoncd", "pxb-singleapp-multivol", "pg-mysql-multiprov-ocp", "pg-mysql-multiprov-iks", "pg-mysql-multiprov-aks"}
 	defer func() {
 		if len(errChan) > 0 {
 			close(*errChan[0])
@@ -1619,6 +1619,10 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 
 			mountPath, bytesToWrite := pureutils.GetAppDataDir(pods[0].Namespace)
 			mountPath = mountPath + "/myfile"
+
+			if bytesToWrite == 0 {
+				bytesToWrite = units.GiB
+			}
 
 			// write to the Direct Access volume
 			ddCmd := fmt.Sprintf("dd bs=512 count=%d if=/dev/urandom of=%s", bytesToWrite/512, mountPath)
@@ -2866,8 +2870,10 @@ func ToggleAutopilotInStc() error {
 	checkPodIsDeleted := func() (interface{}, bool, error) {
 		autopilotLabels := make(map[string]string)
 		autopilotLabels["name"] = "autopilot"
-		pods, err := k8sCore.GetPods(pxNamespace, autopilotLabels)
-		expect(err).NotTo(haveOccurred())
+		autoPilotNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		pods, err := k8sCore.GetPods(autoPilotNamespace, autopilotLabels)
+		dash.VerifyFatal(err, nil, "Failed to get pods")
 		if stc.Spec.Autopilot.Enabled {
 			log.Infof("autopilot is active, checking is pod is present.")
 			if len(pods.Items) == 0 {
@@ -8457,7 +8463,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 
 // enableAutoFSTrim on supported PX version.
 func EnableAutoFSTrim() {
-	nodes := node.GetWorkerNodes()
+	nodes := node.GetStorageDriverNodes()
 	var isPXNodeAvailable bool
 	for _, pxNode := range nodes {
 		isPxInstalled, err := Inst().V.IsDriverInstalled(pxNode)
@@ -8485,7 +8491,9 @@ func EnableAutoFSTrim() {
 			break
 		}
 	}
-	dash.VerifyFatal(isPXNodeAvailable, true, "No PX node available in the cluster")
+	if !isPXNodeAvailable {
+		log.FailOnError(fmt.Errorf("no px node available for enabling auto-fstrim"), "error in enabling auto-fstrim")
+	}
 }
 
 // ToggleMgmtNetworkInterfaces is a function that toggles the management network interfaces on a FlashArray.
@@ -9490,6 +9498,71 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) 
 
 	if err != nil && !strings.Contains(err.Error(), "not in pool maintenance mode") {
 		return err
+	}
+	return nil
+}
+
+func DeletePoolAndValidate(stNode node.Node, poolIDToDelete string) error {
+	isPureBackend := false
+	validateMultipath := []string{}
+	if IsPureCluster() {
+		isPureBackend = true
+	}
+
+	if isPureBackend {
+		// if pure backend , we get the list of all multipath devices used while creating the pool
+		// later check if those multipath devices are still exist post deleting the pool
+		multipathDevBeforeDelete, err := GetMultipathDeviceOnPool(&stNode)
+		log.FailOnError(err, fmt.Sprintf("Failed to get list of Multipath devices on Node [%v]", stNode.Name))
+		validateMultipath = multipathDevBeforeDelete[poolIDToDelete]
+	}
+
+	poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools, Err: %v", err)
+	}
+
+	poolsMap, err := Inst().V.GetPoolDrives(&stNode)
+	if err != nil {
+		return fmt.Errorf("error getting pool drive from the node [%s],Err: %v", stNode.Name, err)
+	}
+
+	log.InfoD(fmt.Sprintf("Delete poolID %s on node %s", poolIDToDelete, stNode.Name))
+	err = DeleteGivenPoolInNode(stNode, poolIDToDelete, true)
+	if err != nil {
+		return fmt.Errorf("error deleting pool [%s] in the node [%s], Err: %v", poolIDToDelete, stNode.Name, err)
+	}
+
+	poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools after pool deletion, Err: %v", err)
+	}
+
+	if len(poolsBfr) <= len(poolsAfr) {
+		return fmt.Errorf("pool count not matching after pool deletion. Pools before deletion:%d, pools after deletion %d", len(poolsBfr), len(poolsAfr))
+	}
+
+	poolsMap, err = Inst().V.GetPoolDrives(&stNode)
+	if err != nil {
+		return fmt.Errorf("error getting pool drive from the node [%s] after pool deletion,Err: %v", stNode.Name, err)
+	}
+	if _, ok := poolsMap[poolIDToDelete]; ok {
+		return fmt.Errorf("pool [%s] still exists on the node [%s]", poolIDToDelete, stNode.Name)
+	}
+
+	if isPureBackend {
+		// Get list of all Multipath devices after deleting the pool
+		allMultipathDev, err := GetMultipathDeviceIDsOnNode(&stNode)
+		if err != nil {
+			return fmt.Errorf("failed to get multipath devices on Node [%v],Err: %v", stNode.Name, err)
+		}
+		for _, eachMultipath := range allMultipathDev {
+			for _, validateEach := range validateMultipath {
+				if validateEach == eachMultipath {
+					return fmt.Errorf("multipath device [%v] did not delete on Deleting Pool", validateEach)
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -12761,6 +12834,13 @@ func GetFADetailsUsed() ([]pureutils.FlashArrayEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Unable to get Px Pure Secret")
 	}
+	// This step we are particularly doing it for multiple Mgmt Endpoints where famgmtendpoint will have one or more endpoints so we are picking only one endpoint for testing
+	for _, array := range pxPureSecret.Arrays {
+		mgmtEndpointParts := strings.Split(array.MgmtEndPoint, ",")
+		if len(mgmtEndpointParts) > 1 {
+			array.MgmtEndPoint = mgmtEndpointParts[0]
+		}
+	}
 
 	if len(pxPureSecret.Arrays) > 0 {
 		return pxPureSecret.Arrays, nil
@@ -13445,16 +13525,15 @@ func CheckVolumesExistinFB(flashBlades []pureutils.FlashBladeEntry, listofFbdaPv
 			}
 			FsFullName, nameErr := pureutils.GetFilesystemFullName(fbClient, volumeName)
 			log.FailOnError(nameErr, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
-			isExists, err := pureutils.IsFileSystemExists(fbClient, FsFullName)
-
-			if isExists && err == nil {
+			if FsFullName != "" {
 				log.Infof("Volume [%v] exists on FB [%v]", volumeName, fb.MgmtEndPoint)
 				pvcFbdaMap[volumeName] = true
-			} else if !isExists && err == nil {
+			} else if err != nil && FsFullName == "" {
+				log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
+			} else {
 				log.Infof("Volume [%v] does not exist on FB [%v]", volumeName, fb.MgmtEndPoint)
 				pvcFbdaMap[volumeName] = false
 			}
-			log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
 		}
 	}
 	for FbdaVol, volStatus := range pvcFbdaMap {
