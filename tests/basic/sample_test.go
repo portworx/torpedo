@@ -36,13 +36,12 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 				})
 				processPid[node.Id] = output
 
+				//Deleting px pods from all the node
 				err = DeletePXPods("kube-system")
 
 				processPidPostRestart := make(map[string]string)
-
 				for _, node := range nn.GetStorageNodes() {
-
-					startCmd := "systemctl stop portworx;systemctl start portworx;pidof px" //sudo systemctl status portworx
+					startCmd := "pidof px" //sudo systemctl status portworx
 					output, _ := Inst().N.RunCommand(node, startCmd, nn.ConnectionOpts{
 						Timeout:         20 * time.Second,
 						TimeBeforeRetry: 5 * time.Second,
@@ -50,6 +49,7 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 					})
 					processPidPostRestart[node.Id] = output
 				}
+				//Verify PID before and after for PX process
 				for key, value1 := range processPid {
 					value2, ok := processPidPostRestart[key]
 					if !ok || value1 != value2 {
