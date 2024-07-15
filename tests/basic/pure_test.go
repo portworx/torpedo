@@ -6167,6 +6167,104 @@ var _ = Describe("{VerifyPoolCreateInProperZones}", func() {
 			log.FailOnError(err, "Failed to validate cloud drives topologies")
 
 		})
+
+		var nodeZone string
+		var selectedNode node.Node
+
+		stepLog = "update label on the worker node and perform pool operations"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			driverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "Failed to get volume driver namespace")
+
+			pxPureSecret, err := pureutils.GetPXPureSecret(driverNamespace)
+			log.FailOnError(err, "Failed to get px pure secret")
+
+			endpointToZoneMap := pxPureSecret.GetArrayToZoneMap()
+			if len(endpointToZoneMap) < 2 {
+				log.FailOnError(fmt.Errorf("need atleast 2 different zones to run this test"), "Need atleast 2 different zones to run this test")
+			}
+
+			for _, stNode := range node.GetStorageDriverNodes() {
+				if stNode.SchedulerTopology != nil && stNode.SchedulerTopology.Labels != nil {
+					if _, ok := stNode.SchedulerTopology.Labels["topology.portworx.io/zone"]; ok {
+						selectedNode = stNode
+					}
+				}
+			}
+
+			nodeZone = selectedNode.SchedulerTopology.Labels["topology.portworx.io/zone"]
+
+			var alternateZone string
+
+			for _, z := range endpointToZoneMap {
+				if z != nodeZone {
+					alternateZone = z
+					break
+				}
+			}
+
+			log.InfoD("Updating label on the node [%s] from [%s] to [%s]", selectedNode.Name, nodeZone, alternateZone)
+
+			err = Inst().S.AddLabelOnNode(selectedNode, "topology.portworx.io/zone", alternateZone)
+			log.FailOnError(err, fmt.Sprintf("Failed to add label on node [%s]", selectedNode.Name))
+
+			defer func() {
+				log.InfoD("Updating label on the node [%s] from [%s] to [%s]", selectedNode.Name, alternateZone, nodeZone)
+
+				err = Inst().S.AddLabelOnNode(selectedNode, "topology.portworx.io/zone", nodeZone)
+				log.FailOnError(err, fmt.Sprintf("Failed to add label on node [%s]", selectedNode.Name))
+			}()
+			selectedPoolUUID := selectedNode.StoragePools[0].Uuid
+
+			//This logic needs a change after WX-38093 fix
+			stepLog = fmt.Sprintf("Initiate pool expansion drive using Resize type Auto after label change to [%s] ", alternateZone)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				poolToBeResized, err := GetStoragePoolByUUID(selectedPoolUUID)
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPoolUUID))
+				drvSize, err := getPoolDiskSize(poolToBeResized)
+				log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+				expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+
+				isjournal, err := IsJournalEnabled()
+				log.FailOnError(err, "Failed to check if Journal enabled")
+
+				log.InfoD("Current Size of the pool %s is %d", selectedPoolUUID, poolToBeResized.TotalSize/units.GiB)
+				err = Inst().V.ExpandPool(selectedPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
+				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+				resizeErr := waitForPoolToBeResized(expectedSize, selectedPoolUUID, isjournal)
+				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s expansion using resize-disk", selectedPoolUUID))
+
+			})
+
+			//This logic needs a change after WX-38093 fix
+			stepLog = fmt.Sprintf("Add new pool after label change to [%s]", alternateZone)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				//Add a cloud drive as a journal device
+				driveSpecs, err := GetCloudDriveDeviceSpecs()
+				log.FailOnError(err, "Error getting cloud drive specs")
+
+				deviceSpec := driveSpecs[0]
+
+				err = Inst().V.AddCloudDrive(&selectedNode, deviceSpec, -1)
+				dash.VerifyFatal(err != nil, true, fmt.Sprintf("Failed to add cloud drive on node [%s] as expected. Err: [%v]", selectedNode.Name, err))
+
+			})
+		})
+
+		stepLog = fmt.Sprintf("Add new pool after label change to [%s]", nodeZone)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = AddCloudDrive(selectedNode, -1)
+			if err != nil {
+				log.Error(err)
+			}
+		})
+
 	})
 
 	JustAfterEach(func() {

@@ -753,7 +753,7 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 					// TODO: PTX-2445 Replace isMetadataNode API call with SDK call
 					isMetadataNode, err := d.isMetadataNode(*n, address)
 					if err != nil {
-						log.Warnf("Can not check if node [%s] is a metadata node", n.Name)
+						log.Warnf("Can not check if node [%s] is a metadata node,Err: [%v]", n.Name, err)
 					}
 					n.IsMetadataNode = isMetadataNode
 

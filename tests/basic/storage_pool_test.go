@@ -9355,19 +9355,31 @@ func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
 	poolListAfterCreate := make(map[string]int)
 
 	isDmthin, err := IsDMthin()
-	log.FailOnError(err, "failed to check if Node is DMThin ")
+
+	if err != nil {
+		return err
+	}
 
 	for _, eachNode := range nodes {
-		pools, _ := GetPoolsDetailsOnNode(&eachNode)
-		log.InfoD("Length of pools present on Node [%v] =  [%v]", eachNode.Name, len(pools))
-		poolList[eachNode.Name] = len(pools)
+		if node.IsStorageNode(eachNode) {
+			pools, err := GetPoolsDetailsOnNode(&eachNode)
+			if err != nil {
+				return err
+			}
+			poolList[eachNode.Name] = len(pools)
+		} else {
+			poolList[eachNode.Name] = 0
+		}
+		log.InfoD("Length of pools present on Node [%v] =  [%v]", eachNode.Name, poolList[eachNode.Name])
+
 	}
 
 	log.InfoD("Pool Details and total pools present [%v]", poolList)
+	errChan := make(chan error, len(nodes))
 
-	wg.Add(len(nodes))
 	for _, eachNode := range nodes {
-		go func(eachNode node.Node) {
+		wg.Add(1)
+		go func(eachNode node.Node, errChan chan error) {
 			defer wg.Done()
 			defer GinkgoRecover()
 			log.InfoD("Adding cloud drive on Node [%v]", eachNode.Name)
@@ -9377,11 +9389,32 @@ func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
 				log.FailOnError(AddMetadataDisk(eachNode), "Failed to add metadata disk to the node ")
 			}
 
+			//Adding new pool
 			err := AddCloudDrive(eachNode, -1)
-			log.FailOnError(err, "adding cloud drive failed on Node [%v]", eachNode)
-		}(eachNode)
+			if err != nil {
+				errChan <- err
+			}
+		}(eachNode, errChan)
 	}
-	wg.Wait()
+	// Close the error channel once all goroutines are done
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	var addCloudDriveErrs []string
+
+	// Collect addCloudDriveErrs from all goroutines
+	for err := range errChan {
+		if err != nil {
+			addCloudDriveErrs = append(addCloudDriveErrs, err.Error())
+		}
+	}
+	if len(addCloudDriveErrs) > 0 {
+		concatenatedError := errors.New(strings.Join(addCloudDriveErrs, "; "))
+		return concatenatedError
+
+	}
 
 	err = Inst().V.RefreshDriverEndpoints()
 	log.FailOnError(err, "error refreshing driver end points")

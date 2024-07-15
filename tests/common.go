@@ -1102,6 +1102,10 @@ func ValidatePureCloudDriveTopologies() error {
 			return err
 		}
 
+		if driveSet.Zone != nodeZone {
+			return fmt.Errorf("node %s is in zone %s, but drive set is in zone %s", node.SchedulerNodeName, nodeZone, driveSet.Zone)
+		}
+
 		for configID, driveConfig := range driveSet.Configs {
 			err = nil
 			if len(driveConfig.Labels) == 0 {
