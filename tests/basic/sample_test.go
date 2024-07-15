@@ -18,7 +18,7 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 	})
 
 	It("has to setup, validate and teardown apps", func() {
-		err = DeletePXPods("portworx")
+		err = DeletePXPods("kube-system")
 
 		//var contexts []*scheduler.Context
 		//Delete perticular pod
