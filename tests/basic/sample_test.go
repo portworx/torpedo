@@ -35,30 +35,31 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 					Sudo:            true,
 				})
 				processPid[node.Id] = output
-				log.Infof(fmt.Sprintf("Process IDs for px before stopping portworx pod  %s", processPid))
+			}
+			log.Infof(fmt.Sprintf("Process IDs for px before stopping portworx pod  %s", processPid))
 
-				//Deleting px pods from all the node
-				err = DeletePXPods("kube-system")
+			//Deleting px pods from all the node
+			err = DeletePXPods("kube-system")
 
-				processPidPostRestart := make(map[string]string)
-				startCmd = "pidof px"
-				for _, node := range nn.GetStorageNodes() {
-					output, _ := Inst().N.RunCommand(node, startCmd, nn.ConnectionOpts{
-						Timeout:         20 * time.Second,
-						TimeBeforeRetry: 5 * time.Second,
-						Sudo:            true,
-					})
-					processPidPostRestart[node.Id] = output
-				}
-				log.Infof(fmt.Sprintf("Process IDs for px after stopping portworx pod  %s", processPidPostRestart))
-				//Verify PID before and after for PX process
-				for key, value1 := range processPid {
-					value2, ok := processPidPostRestart[key]
-					if !ok || value1 != value2 {
-						log.FailOnError(err, fmt.Sprintf("Px process seems to have restarted  as new process id observed on %s %s", key, value2))
-					}
+			processPidPostRestart := make(map[string]string)
+			startCmd = "pidof px"
+			for _, node := range nn.GetStorageNodes() {
+				output, _ := Inst().N.RunCommand(node, startCmd, nn.ConnectionOpts{
+					Timeout:         20 * time.Second,
+					TimeBeforeRetry: 5 * time.Second,
+					Sudo:            true,
+				})
+				processPidPostRestart[node.Id] = output
+			}
+			log.Infof(fmt.Sprintf("Process IDs for px after stopping portworx pod  %s", processPidPostRestart))
+			//Verify PID before and after for PX process
+			for key, value1 := range processPid {
+				value2, ok := processPidPostRestart[key]
+				if !ok || value1 != value2 {
+					log.FailOnError(err, fmt.Sprintf("Px process seems to have restarted  as new process id observed on %s %s", key, value2))
 				}
 			}
+
 		})
 	})
 })
