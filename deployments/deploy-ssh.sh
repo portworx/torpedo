@@ -806,6 +806,8 @@ spec:
       value: "${GKE_SURGE_VALUE}"
     - name: GOOGLE_APPLICATION_CREDENTIALS
       value: "${GOOGLE_APPLICATION_CREDENTIALS}"
+    - name: TOGGLE_PURE_MGMT_IP
+      value: "${TOGGLE_PURE_MGMT_IP}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
