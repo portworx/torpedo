@@ -448,10 +448,16 @@ var _ = Describe("{AddStorageNode}", func() {
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		storageNodeBefore := node.GetStorageNodes()
+		storageNodeBeforeNameList := make(map[string]string, 0)
+		var newStorageNode node.Node
+
+		for _, node := range storageNodeBefore {
+			storageNodeBeforeNameList[node.Name] = node.Name
+		}
+
 		stepLog = fmt.Sprintf("Adding a storage node to the platform [%s]", Inst().S.String())
-
 		Step(stepLog, func() {
-
 			log.InfoD(stepLog)
 			contexts = make([]*scheduler.Context, 0)
 
@@ -555,6 +561,54 @@ var _ = Describe("{AddStorageNode}", func() {
 			updatedStorageNodesCount := len(node.GetStorageNodes())
 			dash.VerifyFatal(expectedStorageNodesCount, updatedStorageNodesCount, "verify new storage node is added")
 			ValidateAndDestroy(contexts, nil)
+		})
+		// After adding a storage node check if we can create pools on the new node.
+
+		stepLog := "Creating pools on the new storage node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//find the node which has been newly added as storage node
+			storageNodes := node.GetStorageNodes()
+			var newStorageNode node.Node
+
+			for _, node := range storageNodes {
+				if _, ok := storageNodeBeforeNameList[node.Name]; !ok {
+					newStorageNode = node
+					break
+				}
+			}
+
+			//create a new pool on the new storage node
+			err := AddCloudDrive(newStorageNode, -1)
+			log.FailOnError(err, "error creating pool on the new storage node")
+		})
+
+		stepLog = "Schedule application and check if the pvcs are getting provisioned on the newly added node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("addstnode-%d", i))...)
+			}
+
+			// check if volumes are attached to newly created storage node
+			ValidateApplications(contexts)
+			numOfVolsInNewNode := 0
+			for _, ctx := range contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "error getting volumes")
+				for _, vol := range vols {
+					volInspect, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "error inspecting volume")
+					log.InfoD("Volume is attached on node: %v and %v", volInspect.AttachedOn, newStorageNode)
+
+					if volInspect.AttachedOn == newStorageNode.Name {
+						numOfVolsInNewNode += 1
+					}
+				}
+			}
+			DestroyApps(contexts, nil)
+			dash.VerifyFatal(numOfVolsInNewNode > 0, true, "verify volumes are attached to the new storage node")
 		})
 	})
 	JustAfterEach(func() {
