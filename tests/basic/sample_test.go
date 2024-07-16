@@ -35,7 +35,7 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 					Sudo:            true,
 				})
 				processPid[node.Id] = output
-				log.Infof(fmt.Sprintf("New process id observed on %s", processPid))
+				log.Infof(fmt.Sprintf("Process IDs for px before stopping portworx pod  %s", processPid))
 
 				//Deleting px pods from all the node
 				err = DeletePXPods("kube-system")
@@ -50,7 +50,7 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 					})
 					processPidPostRestart[node.Id] = output
 				}
-				log.Infof(fmt.Sprintf("New process id observed on %s", processPidPostRestart))
+				log.Infof(fmt.Sprintf("Process IDs for px after stopping portworx pod  %s", processPidPostRestart))
 				//Verify PID before and after for PX process
 				for key, value1 := range processPid {
 					value2, ok := processPidPostRestart[key]
