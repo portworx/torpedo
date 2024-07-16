@@ -4199,20 +4199,32 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 }
 
 func (d *portworx) RejoinNode(n *node.Node) error {
+	log.Infof("UnCordoning node [%s]", n.Name)
+	if err := k8sCore.UnCordonNode(n.Name, defaultTimeout, defaultRetryInterval); err != nil {
+		return &ErrFailedToRejoinNode{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to uncordon node [%s], Err: %v", n.Name, err),
+		}
+	}
+	log.Infof("Sleeping for 5 minutes before running node-wipe on node [%s]", n.Name)
+	time.Sleep(5 * time.Minute)
+
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: podUpRetryInterval,
 		Timeout:         10 * time.Minute,
 	}
 
+	log.Infof("Running node-wipe on node [%s]", n.Name)
 	if _, err := d.nodeDriver.RunCommand(*n, fmt.Sprintf("%s sv node-wipe --all", d.getPxctlPath(*n)), opts); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed running node wipe on node [%s], Err: %v", n.Name, err),
 		}
 	}
-	log.Info("Node wipe is successfull")
+	log.Info("Node wipe is successful")
 
+	log.Infof("Removing label [%s] from node [%s]", schedops.PXServiceLabelKey, n.Name)
 	if err := k8sCore.RemoveLabelOnNode(n.Name, schedops.PXServiceLabelKey); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
@@ -4220,6 +4232,7 @@ func (d *portworx) RejoinNode(n *node.Node) error {
 		}
 	}
 
+	log.Infof("Removing label [%s] from node [%s]", schedops.PXEnabledLabelKey, n.Name)
 	if err := k8sCore.RemoveLabelOnNode(n.Name, schedops.PXEnabledLabelKey); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
@@ -4227,17 +4240,11 @@ func (d *portworx) RejoinNode(n *node.Node) error {
 		}
 	}
 
+	log.Infof("Restarting volume driver on node [%s]", n.Name)
 	if err := d.RestartDriver(*n, nil); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: err.Error(),
-		}
-	}
-
-	if err := k8sCore.UnCordonNode(n.Name, defaultTimeout, defaultRetryInterval); err != nil {
-		return &ErrFailedToRejoinNode{
-			Node:  n.Name,
-			Cause: fmt.Sprintf("Failed to uncordon node [%s], Err: %v", n.Name, err),
 		}
 	}
 
