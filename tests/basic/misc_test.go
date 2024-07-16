@@ -19,6 +19,7 @@ import (
 	"github.com/portworx/torpedo/pkg/pureutils"
 
 	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
@@ -1764,7 +1765,7 @@ var _ = Describe("{KubeClusterRestart}", func() {
 				log.InfoD("Waiting for node [%s] to be back up", stNode.Name)
 				err := Inst().N.TestConnection(stNode, node.ConnectionOpts{
 					Timeout:         15 * time.Minute,
-					TimeBeforeRetry: 10 * time.Second,
+					TimeBeforeRetry: 30 * time.Second,
 				})
 				log.FailOnError(err, "error while testing node status [%s]", stNode.Name)
 				err = Inst().S.IsNodeReady(stNode)
@@ -1783,5 +1784,59 @@ var _ = Describe("{KubeClusterRestart}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
+	JustBeforeEach(func() {
+		var testrailID = 87311294
+		StartTorpedoTest("VerifyNoNodeRestartUponPxPodRestart", "Verify that px serivce remain up even if px pod got deleted ", nil, 0)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	It("has to setup, validate and teardown apps", func() {
+
+		// Get uptime for px service on each node
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			processPid := make(map[string]string)
+			startCmd := "pidof px"
+			//Capturing PID pf PX before stopping PX pods
+			for _, nnode := range node.GetStorageNodes() {
+				output, _ := Inst().N.RunCommand(nnode, startCmd, node.ConnectionOpts{
+					Timeout:         30 * time.Second,
+					TimeBeforeRetry: 20 * time.Second,
+					Sudo:            true,
+				})
+				processPid[nnode.Id] = output
+			}
+			log.Infof(fmt.Sprintf("Process IDs for px before stopping portworx pod  %s", processPid))
+
+			//Deleting px pods from all the node
+			err = DeletePXPods("kube-system")
+			if err != nil {
+				log.FailOnError(err, fmt.Sprintf("Not able to delete PX pods "))
+			}
+
+			//Capturing PID pf PX after stopping PX pods
+			processPidPostRestart := make(map[string]string)
+			for _, nnode := range node.GetStorageNodes() {
+				output, _ := Inst().N.RunCommand(nnode, startCmd, node.ConnectionOpts{
+					Timeout:         20 * time.Second,
+					TimeBeforeRetry: 5 * time.Second,
+					Sudo:            true,
+				})
+				processPidPostRestart[nnode.Id] = output
+			}
+			log.Infof(fmt.Sprintf("Process IDs for px after stopping portworx pod  %s", processPidPostRestart))
+			//Verify PID before and after for PX process
+			for nodeDetails, beforePID := range processPid {
+				afterPID, _ := processPidPostRestart[nodeDetails]
+				if beforePID != afterPID {
+					log.Infof(fmt.Sprintf("We have observed different PIDs before/after %s/%s on Node %s ", beforePID, afterPID, nodeDetails))
+				}
+				Expect(beforePID).To(Equal(afterPID))
+			}
+		})
 	})
 })

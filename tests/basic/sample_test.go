@@ -14,7 +14,7 @@ import (
 
 // Arpit jira https://purestorage.atlassian.net/browse/PTX-24859
 
-var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
+var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart11}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("VerifyNoNodeRestartUponPxPodRestart", "Verify that px serivce remain up even if px pod got deleted ", nil, 0)
@@ -40,11 +40,12 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 
 			//Deleting px pods from all the node
 			err = DeletePXPods("kube-system")
-			log.FailOnError(err, fmt.Sprintf("Not able to delete PX pods "))
+			if err != nil {
+				log.FailOnError(err, fmt.Sprintf("Not able to delete PX pods "))
+			}
 
 			//Capturing PID pf PX after stopping PX pods
 			processPidPostRestart := make(map[string]string)
-			startCmd = "pidof px-ns"
 			for _, node := range nn.GetStorageNodes() {
 				output, _ := Inst().N.RunCommand(node, startCmd, nn.ConnectionOpts{
 					Timeout:         20 * time.Second,
