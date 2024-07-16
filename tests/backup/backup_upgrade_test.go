@@ -1,6 +1,7 @@
 package tests
 
 import (
+	context1 "context"
 	"fmt"
 	"github.com/hashicorp/go-version"
 	k8score "github.com/portworx/sched-ops/k8s/core"
@@ -271,7 +272,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		partialBackupLocationUid           string
 		partialBackupLocationMap           map[string]string
 		failedVolumes                      []*corev1.PersistentVolumeClaim
-		stopChans                          map[int]chan struct{}
+		cancelFunc                         context1.CancelFunc
 	)
 	updateBackupToContextMapping := func(backupName string, appContextsToBackup []*scheduler.Context) {
 		mutex.Lock()
@@ -341,7 +342,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 					namespace := GetAppNamespace(appCtx, taskName)
 					partialAppNamespaces = append(partialAppNamespaces, namespace)
 					partialAppContexts = append(partialAppContexts, appCtx)
-					appCtx.ReadinessTimeout = AppReadinessTimeout
+					appCtx.ReadinessTimeout = 15 * time.Minute
 				}
 			}
 		})
@@ -543,6 +544,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			log.FailOnError(err, "Fetching uid of schedule policy [%s]", schedulePolicyName)
 			log.Infof("Schedule policy [%s] uid: [%s]", schedulePolicyName, schedulePolicyUid)
 		})
+
 		Step("Initiate a go routine to stop CR backups for PVCs", func() {
 			// Making a list of PVCs to fail
 			k8sCore := k8score.Instance()
@@ -553,44 +555,25 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				log.Infof("pvc %v", pvc)
 				failedVolumes = append(failedVolumes, &pvc)
 			}
-			log.Infof("Failed volumes are %v", failedVolumes)
 			if len(failedVolumes) > 0 {
 				partialAppContexts[0].SkipPodValidation = true
 			}
-
-			// Channel to signal termination of the go routine
-			stopChans = make(map[int]chan struct{})
-			stopChan := make(chan struct{})
-			stopChans[0] = stopChan // Save the channel in the global map with index 0
-
-			// Go routine to stop backups for the PVCs
-			go func() {
-				defer GinkgoRecover()
-				timeoutChan := time.After(1 * time.Hour) // Create a timeout channel for 1 hour
-				for {
-					select {
-					case <-stopChan:
-						log.InfoD("Received signal to stop the go routine for stopping CR backups")
-						return
-					case <-timeoutChan:
-						log.InfoD("Timeout reached. Stopping the go routine for stopping CR backups")
-						return
-					default:
-						var wg1 sync.WaitGroup
-						wg1.Add(len(failedVolumes))
-						for _, pvc := range failedVolumes {
-							go func(pvc *corev1.PersistentVolumeClaim) {
-								defer GinkgoRecover()
-								defer wg1.Done()
-								log.Infof("Stopping all cs backups for %s [%s] in namespace %s", pvc.Name, pvc.Spec.VolumeName, pvc.Namespace)
-								err = StopCloudsnapBackup(pvc.Name, pvc.Namespace)
-								dash.VerifySafely(err, nil, fmt.Sprintf("error stopping all cs backups for %s [%s] in namespace %s", pvc.Name, pvc.Spec.VolumeName, pvc.Namespace))
-							}(pvc)
-						}
-						wg1.Wait()
+			var wg sync.WaitGroup
+			var ctx context1.Context
+			ctx, cancelFunc = context1.WithCancel(context1.Background())
+			wg.Add(len(failedVolumes))
+			for _, pvc := range failedVolumes {
+				go func(pvc *corev1.PersistentVolumeClaim) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := WatchAndStopCloudsnapBackup(pvc.Name, pvc.Namespace, 1*time.Hour, ctx)
+					if err != nil {
+						dash.VerifySafely(err, nil, fmt.Sprintf("watching and stopping cloudsnap backup for PVC [%s] in namespace [%s]: %v", pvc.Name, pvc.Namespace, err))
+					} else {
+						log.InfoD("Cloudsnap backup watch and stop process completed successfully for PVC [%s] in namespace [%s].", pvc.Name, pvc.Namespace)
 					}
-				}
-			}()
+				}(pvc)
+			}
 		})
 
 		Step("Create a scheduled backup for partial backup validation", func() {
@@ -751,10 +734,6 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			log.Infof("Validating if the latest scheduled backup [%s] is of Partial Success", latestScheduleBackupName)
 			err = BackupWithPartialSuccessCheck(latestScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] is in partial backup state", latestScheduleBackupName))
-			if stopChan, exists := stopChans[0]; exists {
-				close(stopChan) // Signal the go routine to terminate
-				log.InfoD("Go routine for stopping CR backups has been signaled to stop")
-			}
 			log.InfoD("Restoring the scheduled backup with partial success")
 			namespaceMapping := make(map[string]string)
 			for _, namespace := range partialAppNamespaces {
@@ -766,6 +745,12 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			err = CreatePartialRestoreWithValidation(ctx, restoreName, latestScheduleBackupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, partialAppContexts, failedVolumes)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 			restoreNames = append(restoreNames, restoreName)
+			if cancelFunc != nil {
+				cancelFunc()
+				log.Infof("All goroutines have been signaled to stop")
+			} else {
+				log.Warnf("No running goroutines to stop")
+			}
 		})
 
 		Step("Restore backups created before px-backup upgrade with and without pre and post exec rules", func() {
@@ -1549,7 +1534,7 @@ var _ = Describe("{AbrarDebugOne}", func() {
 		partialBackupLocationUid   string
 		partialBackupLocationMap   map[string]string
 		failedVolumes              []*corev1.PersistentVolumeClaim
-		stopChans                  map[int]chan struct{}
+		cancelFunc                 context1.CancelFunc
 	)
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("AbrarDebug", "Debug", nil, 0, Sabrarhussaini, Q2FY25)
@@ -1640,43 +1625,25 @@ var _ = Describe("{AbrarDebugOne}", func() {
 				log.Infof("pvc %v", pvc)
 				failedVolumes = append(failedVolumes, &pvc)
 			}
-			log.Infof("Failed volumes are %v", failedVolumes)
 			if len(failedVolumes) > 0 {
 				partialAppContexts[0].SkipPodValidation = true
 			}
-
-			// Channel to signal termination of the go routine
-			stopChans = make(map[int]chan struct{})
-			stopChan := make(chan struct{})
-			stopChans[0] = stopChan // Save the channel in the global map with index 0
-
-			// Go routine to stop backups for the PVCs
-			go func() {
-				defer GinkgoRecover()
-				timeoutChan := time.After(1 * time.Hour) // Create a timeout channel for 1 hour
-				for {
-					select {
-					case <-stopChan:
-						log.InfoD("Received signal to stop the go routine for stopping CR backups")
-						return
-					case <-timeoutChan:
-						log.InfoD("Timeout reached. Stopping the go routine for stopping CR backups")
-						return
-					default:
-						var wg1 sync.WaitGroup
-						wg1.Add(len(failedVolumes))
-						for _, pvc := range failedVolumes {
-							go func(pvc *corev1.PersistentVolumeClaim) {
-								defer GinkgoRecover()
-								defer wg1.Done()
-								err = StopCloudsnapBackup(pvc.Name, pvc.Namespace)
-								dash.VerifySafely(err, nil, fmt.Sprintf("error stopping all cs backups for %s [%s] in namespace %s", pvc.Name, pvc.Spec.VolumeName, pvc.Namespace))
-							}(pvc)
-						}
-						wg1.Wait()
+			var wg sync.WaitGroup
+			var ctx context1.Context
+			ctx, cancelFunc = context1.WithCancel(context1.Background())
+			wg.Add(len(failedVolumes))
+			for _, pvc := range failedVolumes {
+				go func(pvc *corev1.PersistentVolumeClaim) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := WatchAndStopCloudsnapBackup(pvc.Name, pvc.Namespace, 15*time.Minute, ctx)
+					if err != nil {
+						dash.VerifySafely(err, nil, fmt.Sprintf("watching and stopping cloudsnap backup for PVC [%s] in namespace [%s]: %v", pvc.Name, pvc.Namespace, err))
+					} else {
+						log.InfoD("Cloudsnap backup watch and stop process completed successfully for PVC [%s] in namespace [%s].", pvc.Name, pvc.Namespace)
 					}
-				}
-			}()
+				}(pvc)
+			}
 		})
 
 		Step("Create a scheduled backup for partial backup validation", func() {
@@ -1717,9 +1684,11 @@ var _ = Describe("{AbrarDebugOne}", func() {
 			log.InfoD("Restoring the schedule backup with partial success [%s] in cluster [%s] with restore [%s]", firstScheduleBackupName, DestinationClusterName, restoreName)
 			err = CreatePartialRestoreWithValidation(ctx, restoreName, firstScheduleBackupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, partialAppContexts, failedVolumes)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
-			if stopChan, exists := stopChans[0]; exists {
-				close(stopChan) // Signal the go routine to terminate
-				log.InfoD("Go routine for stopping CR backups has been signaled to stop")
+			if cancelFunc != nil {
+				cancelFunc()
+				log.Infof("All goroutines have been signaled to stop")
+			} else {
+				log.Warnf("No running goroutines to stop")
 			}
 		})
 
@@ -1742,114 +1711,86 @@ var _ = Describe("{AbrarDebugOne}", func() {
 	})
 })
 
-var _ = Describe("{AbrarDebugTwo}", func() {
-	var (
-		numDeployments       int
-		partialAppNamespaces []string
-		partialAppContexts   []*scheduler.Context
-		failedVolumes        []*corev1.PersistentVolumeClaim
-		stopChans            map[int]chan struct{}
-	)
-	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("AbrarDebug", "Debug", nil, 0, Sabrarhussaini, Q2FY25)
-		log.Infof("Scheduling applications")
-	})
-
-	It("Abrar Debug TC Two", func() {
-		Step("Provision apps for partial success validation", func() {
-			log.InfoD("Provisioning two apps for partial success validation")
-			appList := Inst().AppList
-			defer func() {
-				Inst().AppList = appList
-			}()
-			Inst().AppList = []string{"postgres-backup"}
-			partialAppContexts = make([]*scheduler.Context, 0)
-			partialAppNamespaces = make([]string, 0)
-			numDeployments = 1
-			err := SetSourceKubeConfig()
-			log.FailOnError(err, "Switching context to source cluster failed")
-			log.Infof("Scheduling applications")
-			for i := 0; i < numDeployments; i++ {
-				taskName := fmt.Sprintf("partial-app-%d", i)
-				appContexts := ScheduleApplications(taskName)
-				for _, appCtx := range appContexts {
-					namespace := GetAppNamespace(appCtx, taskName)
-					partialAppNamespaces = append(partialAppNamespaces, namespace)
-					partialAppContexts = append(partialAppContexts, appCtx)
-					appCtx.ReadinessTimeout = AppReadinessTimeout
-				}
-			}
-		})
-
-		Step("Validating applications for partial success", func() {
-			log.InfoD("Validating applications")
-			ValidateApplications(partialAppContexts)
-		})
-
-		Step("Initiate a go routine to stop CR backups for PVCs", func() {
-			// Making a list of PVCs to fail
-			k8sCore := k8score.Instance()
-			pvcList, err := k8sCore.GetPersistentVolumeClaims(partialAppNamespaces[0], make(map[string]string))
-			log.FailOnError(err, fmt.Sprintf("error getting PVC list for namespace %s", partialAppNamespaces[0]))
-			log.Infof("pvc list is %v", pvcList)
-			for _, pvc := range pvcList.Items {
-				log.Infof("pvc %v", pvc)
-				failedVolumes = append(failedVolumes, &pvc)
-			}
-			// Channel to signal termination of the go routine
-			stopChans = make(map[int]chan struct{})
-			stopChan := make(chan struct{})
-			stopChans[0] = stopChan // Save the channel in the global map with index 0
-
-			// Go routine to stop backups for the PVCs
-			go func() {
-				defer GinkgoRecover()
-				timeoutChan := time.After(1 * time.Hour) // Create a timeout channel for 1 hour
-				for {
-					select {
-					case <-stopChan:
-						log.InfoD("Received signal to stop the go routine for stopping CR backups")
-						return
-					case <-timeoutChan:
-						log.InfoD("Timeout reached. Stopping the go routine for stopping CR backups")
-						return
-					default:
-						var wg1 sync.WaitGroup
-						wg1.Add(len(failedVolumes))
-						for _, pvc := range failedVolumes {
-							go func(pvc *corev1.PersistentVolumeClaim) {
-								err = Inst().S.RefreshNodeRegistry()
-								log.FailOnError(err, "Refresh Node Registry failed")
-								defer GinkgoRecover()
-								defer wg1.Done()
-								err = StopCloudsnapBackup(pvc.Name, pvc.Namespace)
-								dash.VerifySafely(err, nil, fmt.Sprintf("error stopping all cs backups for %s [%s] in namespace %s", pvc.Name, pvc.Spec.VolumeName, pvc.Namespace))
-							}(pvc)
-						}
-						wg1.Wait()
-					}
-				}
-			}()
-		})
-
-		Step("Switch between contexts", func() {
-			for i := 0; i < 100; i++ {
-				log.InfoD("Iteration : %v", i+1)
-				time.Sleep(5 * time.Second)
-				err := SetDestinationKubeConfig()
-				log.FailOnError(err, "Switching context to destination cluster failed")
-				time.Sleep(5 * time.Second)
-				err = SetSourceKubeConfig()
-				log.FailOnError(err, "Switching context to source cluster failed")
-			}
-		})
-	})
-
-	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(partialAppContexts)
-		if stopChan, exists := stopChans[0]; exists {
-			close(stopChan) // Signal the go routine to terminate
-			log.InfoD("Go routine for stopping CR backups has been signaled to stop")
-		}
-	})
-})
+//var _ = Describe("{AbrarDebugTwo}", func() {
+//	var (
+//		partialAppNamespaces []string
+//		partialAppContexts   []*scheduler.Context
+//		failedVolumes        []*corev1.PersistentVolumeClaim
+//	)
+//	JustBeforeEach(func() {
+//		StartPxBackupTorpedoTest("AbrarDebug", "Debug", nil, 0, Sabrarhussaini, Q2FY25)
+//		log.Infof("Scheduling applications")
+//	})
+//
+//	It("Abrar Debug TC Two", func() {
+//		Step("Provision apps for partial success validation", func() {
+//			log.InfoD("Provisioning two apps for partial success validation")
+//			appList := Inst().AppList
+//			defer func() {
+//				Inst().AppList = appList
+//			}()
+//			Inst().AppList = []string{"postgres-backup"}
+//			partialAppContexts = make([]*scheduler.Context, 0)
+//			partialAppNamespaces = make([]string, 0)
+//			numDeployments := 1
+//			err := SetSourceKubeConfig()
+//			log.FailOnError(err, "Switching context to source cluster failed")
+//			log.Infof("Scheduling applications")
+//			for i := 0; i < numDeployments; i++ {
+//				taskName := fmt.Sprintf("partial-app-%d", i)
+//				appContexts := ScheduleApplications(taskName)
+//				for _, appCtx := range appContexts {
+//					namespace := GetAppNamespace(appCtx, taskName)
+//					partialAppNamespaces = append(partialAppNamespaces, namespace)
+//					partialAppContexts = append(partialAppContexts, appCtx)
+//					appCtx.ReadinessTimeout = AppReadinessTimeout
+//				}
+//			}
+//		})
+//
+//		Step("Validating applications for partial success", func() {
+//			log.InfoD("Validating applications")
+//			ValidateApplications(partialAppContexts)
+//		})
+//		//
+//		Step("Initiate a go routine to stop CR backups for PVCs", func() {
+//			// Making a list of PVCs to fail
+//			k8sCore := k8score.Instance()
+//			pvcList, err := k8sCore.GetPersistentVolumeClaims(partialAppNamespaces[0], make(map[string]string))
+//			log.FailOnError(err, fmt.Sprintf("error getting PVC list for namespace %s", partialAppNamespaces[0]))
+//			log.Infof("pvc list is %v", pvcList)
+//			for _, pvc := range pvcList.Items {
+//				log.Infof("pvc %v", pvc)
+//				failedVolumes = append(failedVolumes, &pvc)
+//			}
+//			var wg sync.WaitGroup
+//			wg.Add(len(failedVolumes))
+//			for _, pvc := range failedVolumes {
+//				go func(pvc *corev1.PersistentVolumeClaim) {
+//					defer GinkgoRecover()
+//					defer wg.Done()
+//					err := WatchAndStopCloudsnapBackup(pvc.Name, pvc.Namespace, 5*time.Minute)
+//					if err != nil {
+//						dash.VerifySafely(err, nil, fmt.Sprintf("Error watching and stopping cloudsnap backup for PVC [%s] in namespace [%s]: %v", pvc.Name, pvc.Namespace, err))
+//					} else {
+//						log.InfoD("Cloudsnap backup watch and stop process completed successfully for PVC [%s] in namespace [%s].", pvc.Name, pvc.Namespace)
+//					}
+//				}(pvc)
+//			}
+//		})
+//
+//		Step("Switch between contexts", func() {
+//			for i := 0; i < 10; i++ {
+//				log.InfoD("Iteration : %v", i+1)
+//				err := SetDestinationKubeConfig()
+//				log.FailOnError(err, "Switching context to destination cluster failed")
+//				err = SetSourceKubeConfig()
+//				log.FailOnError(err, "Switching context to source cluster failed")
+//			}
+//		})
+//	})
+//
+//	JustAfterEach(func() {
+//		defer EndPxBackupTorpedoTest(partialAppContexts)
+//	})
+//})

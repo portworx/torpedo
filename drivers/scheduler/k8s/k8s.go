@@ -349,7 +349,6 @@ func (k *K8s) AddNewNode(newNode corev1.Node) error {
 	if err := node.AddNode(n); err != nil {
 		return err
 	}
-	log.Infof("Adding node [%s]", newNode)
 	return nil
 }
 
@@ -444,20 +443,17 @@ func (k *K8s) RescanSpecs(specDir, storageDriver string) error {
 func (k *K8s) RefreshNodeRegistry() error {
 
 	nodes, err := k8sCore.GetNodes()
-	log.Infof("Nodes from RefreshNodeRegistry() is [%s]", nodes)
 	if err != nil {
 		return err
 	}
 
 	node.CleanupRegistry()
-	log.Infof("Nodes from RefreshNodeRegistry() after cleanup [%s]", nodes)
-	log.Infof("Storage Driver Nodes are [%s]", node.GetStorageDriverNodes())
+
 	for _, n := range nodes.Items {
 		if err = k.AddNewNode(n); err != nil {
 			return err
 		}
 	}
-	log.Infof("Nodes from RefreshNodeRegistry() after adding new nodes is [%s]", nodes)
 	return nil
 }
 

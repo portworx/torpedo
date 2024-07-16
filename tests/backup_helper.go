@@ -9704,7 +9704,6 @@ func StopCloudsnapBackup(pvcName, namespace string) error {
 						return "", true, fmt.Errorf("waiting to get the cs id for PVC [%s] in namespace [%s]", pvcName, namespace)
 					}
 					cmd := fmt.Sprintf("pxctl cs stop -n %s", key)
-					log.Infof("Output of GetStorageNodes() from StopCloudsnapBackup is [%s]", node.GetStorageNodes())
 					workerNode := node.GetStorageNodes()[0]
 					output, err := runCmdGetOutput(cmd, workerNode)
 					log.Infof("Output of the command [%s]: \n%s", cmd, output)
@@ -9758,7 +9757,6 @@ type CloudsnapStatus struct {
 func GetCloudsnapStatus() (map[string]CloudsnapStatus, error) {
 	statusMap := make(map[string]CloudsnapStatus)
 	// Get a worker node
-	log.Infof("Output of GetStorageNodes() from GetCloudsnapStatus is [%s]", node.GetStorageNodes())
 	workerNode := node.GetStorageNodes()[0]
 	cmd := "pxctl cs status -j"
 	output, err := runCmdGetOutput(cmd, workerNode)
@@ -9770,6 +9768,84 @@ func GetCloudsnapStatus() (map[string]CloudsnapStatus, error) {
 		return nil, fmt.Errorf("failed to unmarshal the output of the command %s on %s: %s", cmd, workerNode.Name, err.Error())
 	}
 	return statusMap, nil
+}
+
+// WatchAndStopCloudsnapBackup watches the cloudsnap creation and stops it if a new entry is added
+func WatchAndStopCloudsnapBackup(pvcName, namespace string, timeoutDuration time.Duration, ctx context1.Context) error {
+	workerNode := node.GetStorageNodes()[0]
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	timeout := time.After(timeoutDuration)
+	getCloudsnapStatus := func() (map[string]CloudsnapStatus, error) {
+		statusMap := make(map[string]CloudsnapStatus)
+		cmd := "pxctl cs status -j"
+		output, err := runCmdGetOutput(cmd, workerNode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to run command %s on %s: %s", cmd, workerNode.Name, err.Error())
+		}
+		err = json.Unmarshal([]byte(output), &statusMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal the output of the command %s on %s: %s", cmd, workerNode.Name, err.Error())
+		}
+		return statusMap, nil
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			statusMap, err := getCloudsnapStatus()
+			if err != nil {
+				return fmt.Errorf("failed to get cloudsnap status from cluster: %w", err)
+			}
+
+			found := false
+			for key, value := range statusMap {
+				if strings.Contains(key, fmt.Sprintf("%s-%s", namespace, pvcName)) {
+					found = true
+					log.Infof("Key - %s", key)
+					log.Infof("Cloudsnap for PVC [%s] in namespace [%s] detected with id [%s] and status [%s]", pvcName, namespace, value.ID, value.Status)
+
+					switch value.Status {
+					case "Done":
+						log.Infof("Cloudsnap for PVC [%s] in namespace [%s] is already completed with status [%s]", pvcName, namespace, value.Status)
+					case "Stopped":
+						log.Infof("Cloudsnap for PVC [%s] in namespace [%s] is already stopped with status [%s]", pvcName, namespace, value.Status)
+					case "", "Active":
+						// Stop the cloudsnap
+						cmd := fmt.Sprintf("pxctl cs stop -n %s", key)
+						output, err := runCmdGetOutput(cmd, workerNode)
+						log.Infof("Output of the command [%s]: \n%s", cmd, output)
+						if err != nil {
+							return fmt.Errorf("failed to run command %s on %s: %w", cmd, workerNode.Name, err)
+						}
+
+						// Verify if the cloudsnap is stopped
+						statusMap, err = getCloudsnapStatus()
+						if err != nil {
+							return fmt.Errorf("failed to get cloudsnap status from cluster: %w", err)
+						}
+						if statusMap[key].Status != "Stopped" {
+							return fmt.Errorf("cloudsnap not yet stopped for PVC [%s] in namespace [%s], status: %s", pvcName, namespace, statusMap[key].Status)
+						}
+
+						log.Infof("Cloudsnap for PVC [%s] in namespace [%s] has been stopped.", pvcName, namespace)
+						return nil
+					default:
+						log.Infof("Cloudsnap for PVC [%s] in namespace [%s] is in an unexpected status [%s]", pvcName, namespace, value.Status)
+					}
+				}
+			}
+
+			if !found {
+				log.Infof("No cloudsnap found for PVC [%s] in namespace [%s]", pvcName, namespace)
+			}
+		case <-timeout:
+			log.Infof("WatchAndStopCloudsnapBackupWithFixedNode timed out after %v", timeoutDuration)
+			return nil
+		}
+	}
 }
 
 // CreatePartialBackupWithVscMapping creates backup with Vsc mapping and checks for partial success
