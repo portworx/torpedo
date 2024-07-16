@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	nn "github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/log"
 	"time"
@@ -41,8 +42,8 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 			err = DeletePXPods("kube-system")
 
 			//Capturing PID pf PX after stopping PX pods
-			startCmd = "pidof px-ns"
 			processPidPostRestart := make(map[string]string)
+			startCmd = "pidof px-ns"
 			for _, node := range nn.GetStorageNodes() {
 				output, _ := Inst().N.RunCommand(node, startCmd, nn.ConnectionOpts{
 					Timeout:         20 * time.Second,
@@ -53,13 +54,13 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 			}
 			log.Infof(fmt.Sprintf("Process IDs for px after stopping portworx pod  %s", processPidPostRestart))
 			//Verify PID before and after for PX process
-			for key, value1 := range processPid {
-				value2, ok := processPidPostRestart[key]
-				if !ok || value1 != value2 {
-					log.FailOnError(err, fmt.Sprintf("Px process id %s seems to have been restarted as new process id observed on %s", value2, key))
+			for nodeDetails, beforePID := range processPid {
+				afterPID, ok := processPidPostRestart[nodeDetails]
+				if !ok || beforePID != afterPID {
+					log.FailOnError(err, fmt.Sprintf("Px process id %s seems to have been restarted as new process id observed on %s", afterPID, nodeDetails))
 				}
+				Expect(beforePID).To(Equal(afterPID))
 			}
-
 		})
 	})
 })
