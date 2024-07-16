@@ -33,6 +33,7 @@ type Client struct {
 	Volumes *VolumeServices
 	Realms  *RealmsServices
 	Pods    *PodServices
+	Network *NetworkServices
 }
 
 // Type supported is used for retrieving the support API versions from the Flash Array
@@ -299,6 +300,7 @@ func (c *Client) InitializeServices() *Client {
 	c.Volumes = &VolumeServices{client: c}
 	c.Realms = &RealmsServices{client: c}
 	c.Pods = &PodServices{client: c}
+	c.Network = &NetworkServices{client: c}
 	return c
 }
 
