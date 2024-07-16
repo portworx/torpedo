@@ -25,10 +25,10 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			processPid := make(map[string]string)
+			startCmd := "pidof px"
 
 			for _, node := range nn.GetStorageNodes() {
-
-				startCmd := "pidof px" //sudo systemctl status portworx
+				
 				output, _ := Inst().N.RunCommand(node, startCmd, nn.ConnectionOpts{
 					Timeout:         30 * time.Second,
 					TimeBeforeRetry: 20 * time.Second,
@@ -42,7 +42,7 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 			err = DeletePXPods("kube-system")
 
 			processPidPostRestart := make(map[string]string)
-			startCmd = "pidof px"
+
 			for _, node := range nn.GetStorageNodes() {
 				output, _ := Inst().N.RunCommand(node, startCmd, nn.ConnectionOpts{
 					Timeout:         20 * time.Second,
