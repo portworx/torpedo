@@ -35,12 +35,13 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 					Sudo:            true,
 				})
 				processPid[node.Id] = output
+				log.Infof(fmt.Sprintf("New process id observed on %s", processPid))
 
 				//Deleting px pods from all the node
 				err = DeletePXPods("kube-system")
 
 				processPidPostRestart := make(map[string]string)
-				startCmd = "pidof px1"
+				startCmd = "pidof px"
 				for _, node := range nn.GetStorageNodes() {
 					output, _ := Inst().N.RunCommand(node, startCmd, nn.ConnectionOpts{
 						Timeout:         20 * time.Second,
@@ -49,11 +50,12 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 					})
 					processPidPostRestart[node.Id] = output
 				}
+				log.Infof(fmt.Sprintf("New process id observed on %s", processPidPostRestart))
 				//Verify PID before and after for PX process
 				for key, value1 := range processPid {
 					value2, ok := processPidPostRestart[key]
 					if !ok || value1 != value2 {
-						log.FailOnError(err, fmt.Sprintf("New process id observed on %s", key))
+						log.FailOnError(err, fmt.Sprintf("Px process seems to have restarted  as new process id observed on %s %s", key, value2))
 					}
 				}
 			}
