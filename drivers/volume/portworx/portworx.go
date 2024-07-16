@@ -344,8 +344,7 @@ func (d *portworx) GetStorageSpec() (*pxapi.StorageSpec, error) {
 
 // ListStoragePools returns all PX storage pools
 func (d *portworx) ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultPXAPITimeout)
-	defer cancel()
+	ctx := d.getContext()
 
 	// TODO PX SDK currently does not have a way of directly getting storage pool objects.
 	// We need to list nodes and then inspect each node
@@ -4644,6 +4643,12 @@ func (d *portworx) GetKvdbMembers(n node.Node) (map[string]*torpedovolume.Metada
 		return nil, err
 	}
 	req := c.Get().Resource("kvmembers")
+
+	if len(d.token) > 0 {
+		// Set the Authorization header with the access token
+		req.SetHeader("Authorization", "Bearer "+d.token)
+	}
+
 	resp := req.Do()
 	if resp.Error() != nil {
 		if strings.Contains(resp.Error().Error(), "command not supported") {
