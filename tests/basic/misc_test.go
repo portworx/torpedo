@@ -1787,10 +1787,10 @@ var _ = Describe("{KubeClusterRestart}", func() {
 	})
 })
 
-var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
+var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 	JustBeforeEach(func() {
 		var testrailID = 87311294
-		StartTorpedoTest("VerifyNoNodeRestartUponPxPodRestart", "Verify that px serivce remain up even if px pod got deleted ", nil, 0)
+		StartTorpedoTest("VerifyNoPxRestartDueToPxPodStop", "Verify that px serivce remain up even if px pod got deleted ", nil, 0)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
