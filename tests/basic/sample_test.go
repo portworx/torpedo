@@ -40,6 +40,7 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 
 			//Deleting px pods from all the node
 			err = DeletePXPods("kube-system")
+			log.FailOnError(err, fmt.Sprintf("Not able to delete PX pods "))
 
 			//Capturing PID pf PX after stopping PX pods
 			processPidPostRestart := make(map[string]string)
@@ -55,9 +56,9 @@ var _ = Describe("{VerifyNoNodeRestartUponPxPodRestart}", func() {
 			log.Infof(fmt.Sprintf("Process IDs for px after stopping portworx pod  %s", processPidPostRestart))
 			//Verify PID before and after for PX process
 			for nodeDetails, beforePID := range processPid {
-				afterPID, ok := processPidPostRestart[nodeDetails]
-				if !ok || beforePID != afterPID {
-					log.FailOnError(err, fmt.Sprintf("Px process id %s seems to have been restarted as new process id observed on %s", afterPID, nodeDetails))
+				afterPID, _ := processPidPostRestart[nodeDetails]
+				if beforePID != afterPID {
+					log.Infof(fmt.Sprintf("We have observed different PIDs before/after %s/%s on Node %s ", beforePID, afterPID, nodeDetails))
 				}
 				Expect(beforePID).To(Equal(afterPID))
 			}
