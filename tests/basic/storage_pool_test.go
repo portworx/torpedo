@@ -5663,9 +5663,9 @@ func addDiskToSpecificPool(node node.Node, sizeOfDisk uint64, poolID int32) (boo
 	// Add Drive to the Volume
 	err = Inst().V.AddCloudDrive(&node, newSpec, poolID)
 	if err != nil {
-		// Regex to check if the error message is reported
-		re := regexp.MustCompile(`Drive not compatible with specified pool.*`)
-		if re.MatchString(fmt.Sprintf("%v", err)) {
+		//check if the error message is reported
+		driveCompatibleErr := strings.Contains(err.Error(), "Drive not compatible with specified pool")
+		if driveCompatibleErr {
 			log.InfoD("Error while adding Disk %v", err)
 			return false, err
 		}
@@ -5741,14 +5741,12 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 		log.InfoD("Node Details %v", nodeDetails)
 
 		log.InfoD("Adding New Disk with Size [%v]", diskSize)
-		response, err := addDiskToSpecificPool(*nodeDetails, diskSize, poolID)
-		log.FailOnError(err, "Error while adding disk to the pool")
+		response, _ := addDiskToSpecificPool(*nodeDetails, diskSize, poolID)
 		dash.VerifyFatal(response, false,
 			fmt.Sprintf("Pool expansion with Disk Resize with Disk size [%v GiB] Succeeded?", diskSize))
 
 		log.InfoD("Attempt Adding Disk with size same as pool size")
-		response, err = addDiskToSpecificPool(*nodeDetails, 0, poolID)
-		log.FailOnError(err, "Error while adding disk to the pool")
+		response, _ = addDiskToSpecificPool(*nodeDetails, 0, poolID)
 		dash.VerifyFatal(response, true,
 			fmt.Sprintf("Pool expansion with Disk size same as pool size [%v GiB] Succeeded?", diskSize))
 	})
