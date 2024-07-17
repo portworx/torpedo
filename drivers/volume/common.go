@@ -1291,3 +1291,36 @@ func (d *DefaultDriver) InspectDefragSchedules(defragSchedId string) (*api.SdkIn
 		Operation: "InspectDefragSchedules()",
 	}
 }
+
+// ValidateDefragScheduleInfo validate defrag schedule information
+func (d *DefaultDriver) ValidateDefragScheduleInfo(schedInfo *api.SdkInspectScheduleResponse, startTime string, defragJob *api.DefragJob) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateDefragScheduleInfo()",
+	}
+}
+
+// ValidateDefragScheduleDeleted validates defrag schedule id is deleted
+func (d *DefaultDriver) ValidateDefragScheduleIdDeleted(scheduleId string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateDefragScheduleIdDeleted()",
+	}
+}
+
+// ValidatesDefragSchedulesTrigger validates defrag schedule triggers or not in given node ids
+func (d *DefaultDriver) ValidatesDefragSchedulesTrigger(scheduleId string, nodeIDList []string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidatesDefragSchedulesTrigger()",
+	}
+}
+
+// ValidateNodeDefragStatus validate defrag status in given node ids
+func (d *DefaultDriver) ValidateLastDefragScheduleStatus(scheduleId string, nodeIDList []string) ([]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateLastDefragScheduleStatus()",
+	}
+
+}

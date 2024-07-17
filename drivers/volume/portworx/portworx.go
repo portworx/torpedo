@@ -110,6 +110,7 @@ const (
 	mountGrepFirstColumn                      = "mount | grep %s | awk '{print $1}'"
 	PxLabelNameKey                            = "name"
 	PxLabelValue                              = "portworx"
+	DefragJobType                             = "DEFRAG"
 )
 
 const (
@@ -150,6 +151,7 @@ const (
 	expandStoragePoolTimeout          = 2 * time.Minute
 	volumeUpdateTimeout               = 2 * time.Minute
 	skinnySnapRetryInterval           = 5 * time.Second
+	defaulDefragTriggerInterval       = 15 * time.Minute
 )
 const (
 	telemetryNotEnabled = "15"
@@ -3470,6 +3472,8 @@ func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) e
 	d.licenseFeatureManager = pxapi.NewPortworxLicensedFeatureClient(conn)
 	d.autoFsTrimManager = api.NewOpenStorageFilesystemTrimClient(conn)
 	d.portworxServiceClient = pxapi.NewPortworxServiceClient(conn)
+	d.defragManager = api.NewOpenStorageFilesystemDefragClient(conn)
+	d.openStorageSchedule = api.NewOpenStorageScheduleClient(conn)
 	if legacyClusterManager, err := d.getLegacyClusterManager(endpoint, apiport); err == nil {
 		d.legacyClusterManager = legacyClusterManager
 	} else {
@@ -4361,6 +4365,19 @@ func (d *portworx) getClusterPairManager() api.OpenStorageClusterPairClient {
 	}
 	return d.clusterPairManager
 
+}
+
+func (d *portworx) getOpenStorageSchedule() api.OpenStorageScheduleClient {
+	if d.refreshEndpoint {
+		d.setDriver()
+	}
+	return d.openStorageSchedule
+}
+func (d *portworx) getDefragManager() api.OpenStorageFilesystemDefragClient {
+	if d.refreshEndpoint {
+		d.setDriver()
+	}
+	return d.defragManager
 }
 
 func (d *portworx) getClusterPairManagerByAddress(addr, token string) (api.OpenStorageClusterPairClient, error) {
@@ -6343,12 +6360,12 @@ func (d *portworx) UpdateSkinnySnapReplNum(repl string) error {
 
 // CreateDefragSchedule create defrag schedule for provided defrag job
 func (d *portworx) CreateDefragSchedule(startTime string, defragJob *api.DefragJob) (*api.SdkCreateDefragScheduleResponse, error) {
-
+	log.Infof("Creating defrag schedule for start time: %s", startTime)
 	schedReq := api.SdkCreateDefragScheduleRequest{
 		DefragTask: defragJob,
 		StartTime:  startTime,
 	}
-	return d.defragManager.CreateSchedule(d.getContext(), &schedReq)
+	return d.getDefragManager().CreateSchedule(d.getContext(), &schedReq)
 }
 
 // GetDefragNodeStatus  get defrag schedule status on a given node
@@ -6356,19 +6373,20 @@ func (d *portworx) GetDefragNodeStatus(n node.Node) (*api.SdkGetDefragNodeStatus
 	nodeStatusReq := api.SdkGetDefragNodeStatusRequest{
 		NodeId: n.Id,
 	}
-	return d.defragManager.GetNodeStatus(d.getContext(), &nodeStatusReq)
+	return d.getDefragManager().GetNodeStatus(d.getContext(), &nodeStatusReq)
 }
 
 // GetDefragClusterStatus get defrag schedule status for whole cluster
 func (d *portworx) GetDefragClusterStatus() (*api.SdkEnumerateDefragStatusResponse, error) {
+	log.Info("Getting defrag status for a cluster")
 	defragSchedReq := api.SdkEnumerateDefragStatusRequest{}
-	return d.defragManager.EnumerateNodeStatus(d.getContext(), &defragSchedReq)
+	return d.getDefragManager().EnumerateNodeStatus(d.getContext(), &defragSchedReq)
 }
 
 // CleanUpDefragSchedules cleans up all defrag schedules and stop all defrag operations
 func (d *portworx) CleanUpDefragSchedules() error {
 	defragCleanupReq := api.SdkCleanUpDefragSchedulesRequest{}
-	if _, err := d.defragManager.CleanUpSchedules(d.getContext(), &defragCleanupReq); err != nil {
+	if _, err := d.getDefragManager().CleanUpSchedules(d.getContext(), &defragCleanupReq); err != nil {
 		return err
 	}
 	return nil
@@ -6376,11 +6394,12 @@ func (d *portworx) CleanUpDefragSchedules() error {
 
 // DeleteDefragSchedule deletes provided defrag schedule
 func (d *portworx) DeleteDefragSchedule(defragSchedId string) error {
+	log.Infof("Deleting  a defrag schedule having id: [%s]", defragSchedId)
 	defragDeleteReq := api.SdkDeleteScheduleRequest{
 		Id:   defragSchedId,
-		Type: api.Job_DEFRAG,
+		Type: DefragJobType,
 	}
-	if _, err := d.openStorageSchedule.Delete(d.getContext(), &defragDeleteReq); err != nil {
+	if _, err := d.getOpenStorageSchedule().Delete(d.getContext(), &defragDeleteReq); err != nil {
 		return err
 	}
 	return nil
@@ -6388,17 +6407,103 @@ func (d *portworx) DeleteDefragSchedule(defragSchedId string) error {
 
 // GetAllDefragSchedules return all defrag schedules in a cluster
 func (d *portworx) GetAllDefragSchedules() (*api.SdkEnumerateSchedulesResponse, error) {
+	log.Info("Getting all defrag schedules in a cluster")
 	defragSchedReq := api.SdkEnumerateSchedulesRequest{
-		Type: api.Job_DEFRAG,
+		Type: DefragJobType,
 	}
-	return d.openStorageSchedule.Enumerate(d.getContext(), &defragSchedReq)
+
+	return d.getOpenStorageSchedule().Enumerate(d.getContext(), &defragSchedReq)
 }
 
 // InspectDefragSchedules return information about provided schedule id
 func (d *portworx) InspectDefragSchedules(defragSchedId string) (*api.SdkInspectScheduleResponse, error) {
+	log.Infof("Inspecting defrag schedule id: [%s]", defragSchedId)
 	inspectSchedReq := api.SdkInspectScheduleRequest{
 		Id:   defragSchedId,
-		Type: api.Job_DEFRAG,
+		Type: DefragJobType,
 	}
-	return d.openStorageSchedule.Inspect(d.getContext(), &inspectSchedReq)
+	return d.getOpenStorageSchedule().Inspect(d.getContext(), &inspectSchedReq)
+}
+
+// ValidateDefragScheduleInfo validate defrag schedule information
+func (d *portworx) ValidateDefragScheduleInfo(schedInfo *api.SdkInspectScheduleResponse, startTime string, defragJob *api.DefragJob) error {
+	log.Info("Validating defrag schedule info for schedule id: [%s]", schedInfo.Schedule.Id)
+	if schedInfo.Schedule.StartTime != startTime {
+		return fmt.Errorf("defrag schedule id: [%s] start time [%s] not matching with time for which schedule is created", schedInfo.Schedule.Id, schedInfo.Schedule.StartTime)
+	}
+	if schedInfo.Schedule.MaxDurationMinutes != defragJob.MaxDurationMinutes {
+		return fmt.Errorf("defrag schedule max duration: [%d] not matching with set max duration [%d]", schedInfo.Schedule.MaxDurationMinutes, defragJob.MaxDurationMinutes)
+	}
+	log.Info("Successfully validated Schedule Info for schedule id: [%s]", schedInfo.Schedule.Id)
+	return nil
+}
+
+// ValidateDefragScheduleDeleted validates defrag schedule id is deleted
+func (d *portworx) ValidateDefragScheduleIdDeleted(scheduleId string) error {
+	log.Infof("Validating defrag schedule id: [%s] is deleted", scheduleId)
+	resp, err := d.GetAllDefragSchedules()
+	if err != nil {
+		return fmt.Errorf("failed to get all defrag schedules. Err: %v", err)
+	}
+	for _, defragSchedule := range resp.Schedules {
+		if defragSchedule.Id == scheduleId {
+			return fmt.Errorf("schedule ID: [%s] still present in a cluster after deletion", defragSchedule.Id)
+		}
+	}
+	return nil
+}
+
+// ValidatesDefragSchedulesTrigger validates defrag schedule triggers or not in given node ids
+func (d *portworx) ValidatesDefragSchedulesTrigger(scheduleId string, nodeIDList []string) error {
+	log.Infof("Validating defrag schedule trigger for id: [%s]", scheduleId)
+	t := func() (interface{}, bool, error) {
+		resp, err := d.GetDefragClusterStatus()
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get defrag schedule cluster status. Err: %v", err)
+		}
+		for _, nodeId := range nodeIDList {
+			if resp.Status[nodeId].DefragNodeStatus.GetRunningSchedule() == scheduleId {
+				return nil, false, nil
+			}
+		}
+		return nil, true, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, defaulDefragTriggerInterval, defaultRetryInterval); err != nil {
+		return err
+	}
+	log.Infof("Successfully validate  defrag schedule trigger for id: [%s]", scheduleId)
+	return nil
+}
+
+// ValidateNodeDefragStatus validate defrag status
+func (d *portworx) ValidateLastDefragScheduleStatus(scheduleId string, nodeIDList []string) ([]string, error) {
+	log.Infof("Validating defrag schedule status for id: [%s]", scheduleId)
+	t := func() (interface{}, bool, error) {
+		resp, err := d.GetDefragClusterStatus()
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get defrag schedule cluster status. Err: %v", err)
+		}
+
+		return resp.Status, true, nil
+	}
+	defragStatusResponse, err := task.DoRetryWithTimeout(t, defaulDefragTriggerInterval, defaultRetryInterval)
+	if err != nil {
+		return nil, err
+	}
+	incompletedNodeList := make([]string, 0)
+	clusterStatus := defragStatusResponse.(map[string]*api.SdkGetDefragNodeStatusResponse)
+	for _, nodeId := range nodeIDList {
+		poolStatusMap := clusterStatus[nodeId].DefragNodeStatus.PoolStatus
+		for _, pool := range poolStatusMap {
+			if !pool.Running && !pool.LastSuccess {
+				incompletedNodeList = append(incompletedNodeList, nodeId)
+				continue
+			}
+		}
+	}
+	if len(incompletedNodeList) > 0 {
+		return incompletedNodeList, fmt.Errorf("defrag schedule not completed in all nodes")
+	}
+	log.Infof("Successfully validate  defrag schedule status for id: [%s]", scheduleId)
+	return incompletedNodeList, nil
 }
