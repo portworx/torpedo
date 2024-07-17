@@ -10215,7 +10215,7 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 	})
 
 	Step("Create Schedule Policy", func() {
-		schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, MigrationInterval)
+		schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, MigrationInterval, 0)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("schedule policy creation error: %v", err))
 			return
@@ -10375,7 +10375,7 @@ func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 	})
 
 	Step("Create Schedule Policy", func() {
-		schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, MigrationInterval)
+		schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, MigrationInterval, 0)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("schedule policy creation error: %v", err))
 			return

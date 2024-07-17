@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -281,7 +282,36 @@ func CreateMigrationSchedule(
 	return migSched, err
 }
 
-func CreateSchedulePolicy(policyName string, interval int) (pol *storkapi.SchedulePolicy, err error) {
+func CreateSnapshotSchedule(
+	namespace string,
+	pvcName string,
+	scheduleName string,
+	policyName string,
+	snapshotType string,
+	credId string) (*storkapi.VolumeSnapshotSchedule, error) {
+
+	snapSched := &storkapi.VolumeSnapshotSchedule{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name:      scheduleName,
+			Namespace: namespace,
+			Annotations: map[string]string{
+				"portworx/snapshot-type": snapshotType,
+				"portworx/cloud-cred-id": credId,
+			},
+		},
+		Spec: storkapi.VolumeSnapshotScheduleSpec{
+			Template: storkapi.VolumeSnapshotTemplateSpec{
+				Spec: crdv1.VolumeSnapshotSpec{
+					PersistentVolumeClaimName: pvcName},
+			},
+			SchedulePolicyName: policyName,
+		},
+	}
+	snapSchedule, err := storkops.Instance().CreateSnapshotSchedule(snapSched)
+	return snapSchedule, err
+}
+
+func CreateSchedulePolicy(policyName string, interval int, retain storkapi.Retain) (pol *storkapi.SchedulePolicy, err error) {
 	schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 	if err != nil {
 		log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
@@ -292,6 +322,7 @@ func CreateSchedulePolicy(policyName string, interval int) (pol *storkapi.Schedu
 			Policy: storkapi.SchedulePolicyItem{
 				Interval: &storkapi.IntervalPolicy{
 					IntervalMinutes: interval,
+					Retain: retain,
 				},
 			}}
 		schedPolicy, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
@@ -335,6 +366,47 @@ func WaitForNumOfMigration(schedName string, schedNamespace string, count int, m
 	}
 	_, err := task.DoRetryWithTimeout(checkNumOfMigrations, migTimeout, migInterval)
 	return expectedMigrations, migschedulestats, err
+}
+
+// WaitForRetainSnapshotsSuccessful waits for a certain number of snapshots to complete.
+func WaitForRetainSnapshotsSuccessful(snapSchedName string, schedNs string, retain int, snapInterval int) error {
+    for i := 0; i < retain + 1; i++ {
+        checkSuccessfulSnapshots := func() (interface{}, bool, error) {
+            snapSchedule, err := storkops.Instance().GetSnapshotSchedule(snapSchedName, schedNs)
+            if err != nil {
+                return nil, true, fmt.Errorf("failed to get snapshot schedule: %v", snapSchedName)
+            }
+
+			currentIndex := i
+            if currentIndex >= len(snapSchedule.Status.Items["Interval"]) {
+                currentIndex = len(snapSchedule.Status.Items["Interval"]) - 1
+            }
+            
+            log.Infof("========================Checking snapshot========================= %v", snapSchedule.Status.Items["Interval"][currentIndex].Name)
+            if snapSchedule.Status.Items["Interval"][currentIndex].Status != crdv1.VolumeSnapshotConditionReady {
+                return nil, true, fmt.Errorf("snapshot %v failed with status: %v", snapSchedule.Status.Items["Interval"][currentIndex].Name, snapSchedule.Status.Items["Interval"][currentIndex].Status)
+            }
+            
+            return nil, false, nil
+        }
+
+        snapStartTime := time.Now()
+        _, err := task.DoRetryWithTimeout(checkSuccessfulSnapshots, time.Minute*time.Duration(snapInterval*2), time.Second*10)
+        if err != nil {
+            return err
+        }
+        snapEndTime := time.Now()
+        snapTimeTaken := snapEndTime.Sub(snapStartTime)
+        snapIntervalMins := time.Minute * time.Duration(snapInterval)
+
+		if i == retain {
+			break
+		}
+
+        log.Infof("Waiting for next snapshot interval to start. Time pending to start next snap trigger: %v", snapIntervalMins-snapTimeTaken)
+        time.Sleep(snapIntervalMins - snapTimeTaken + 10*time.Second)
+    }
+    return nil
 }
 
 func DeleteAndWaitForMigrationSchedDeletion(name, namespace string) error {

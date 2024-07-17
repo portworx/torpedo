@@ -113,7 +113,7 @@ var _ = Describe("{BackupAndRestoreSyncDR}", Label(TestCaseLabelsMap[BackupAndRe
 		Step("Create Schedule Policy for Migration", func() {
 			log.InfoD("Create Schedule Policy for Migration")
 			MigrationInterval := 5
-			schdPol, err := asyncdr.CreateSchedulePolicy(syncSchPolicyName, MigrationInterval)
+			schdPol, err := asyncdr.CreateSchedulePolicy(syncSchPolicyName, MigrationInterval, 0)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating sync schedule policy [%s]", syncSchPolicyName))
 			log.InfoD("schedule Policy [%v ]created with %v mins of interval", schdPol.Name, MigrationInterval)
 		})

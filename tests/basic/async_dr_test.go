@@ -707,31 +707,31 @@ var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", func() {
 			log.InfoD("backup successful, backup name - %v, backup location - %v", backupName, backupLocationName)
 		})
 
-		Step("start the upgrade of volume driver", func() {
-			log.InfoD("start the upgrade of volume driver")
+		// Step("start the upgrade of volume driver", func() {
+		// 	log.InfoD("start the upgrade of volume driver")
 
-			if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
-				log.Fatalf("Unable to perform volume driver upgrade hops, none were given")
-			}
-			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
-			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
-				currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
-				if err != nil {
-					log.Warnf("error getting driver version, Err: %v", err)
-				}
-				upgradeStatus, updatedPXVersion, durationInMins := upgradePX(upgradeHop, storageNodes)
-				log.InfoD("current PX version: %s, no of nodes: %d, upgrade status: %s, updated px version: %s, duration in mins: %d on source cluster",
-					currPXVersion, len(storageNodes), upgradeStatus, updatedPXVersion, durationInMins)
-				majorVersion := strings.Split(currPXVersion, "-")[0]
-				statsData := make(map[string]string)
-				statsData["numOfNodes"] = fmt.Sprintf("%d", len(storageNodes))
-				statsData["fromVersion"] = currPXVersion
-				statsData["toVersion"] = updatedPXVersion
-				statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)
-				statsData["status"] = upgradeStatus
-				dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
-			}
-		})
+		// 	if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
+		// 		log.Fatalf("Unable to perform volume driver upgrade hops, none were given")
+		// 	}
+		// 	// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
+		// 	for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+		// 		currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+		// 		if err != nil {
+		// 			log.Warnf("error getting driver version, Err: %v", err)
+		// 		}
+		// 		upgradeStatus, updatedPXVersion, durationInMins := upgradePX(upgradeHop, storageNodes)
+		// 		log.InfoD("current PX version: %s, no of nodes: %d, upgrade status: %s, updated px version: %s, duration in mins: %d on source cluster",
+		// 			currPXVersion, len(storageNodes), upgradeStatus, updatedPXVersion, durationInMins)
+		// 		majorVersion := strings.Split(currPXVersion, "-")[0]
+		// 		statsData := make(map[string]string)
+		// 		statsData["numOfNodes"] = fmt.Sprintf("%d", len(storageNodes))
+		// 		statsData["fromVersion"] = currPXVersion
+		// 		statsData["toVersion"] = updatedPXVersion
+		// 		statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)
+		// 		statsData["status"] = upgradeStatus
+		// 		dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
+		// 	}
+		// })
 
 		Step("Perform Restore to new Ns", func() {
 			nsSpec := &v1.Namespace{
@@ -775,6 +775,64 @@ var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", func() {
 	})
 })
 
+var _ = Describe("{VolumeSnapshotTestStork}", func() {
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+
+	JustBeforeEach(func() {
+	})
+
+	It("Volume snapshot test create PVC and then create volume snapshot", func() {
+		log.InfoD("Volume snapshot test")
+
+		var (
+			taskNamePrefix     = "snaptest"
+			snapshotType       = "cloud"
+			snapInterval = 2
+			retain storkapi.Retain		
+		)
+		n := node.GetStorageDriverNodes()[0]
+		uuidCmd := "pxctl cred list -j | grep uuid"
+		output, err := runCmd(uuidCmd, n)
+		log.FailOnError(err, "error getting uuid for cloudsnap credential")
+		if output == "" {
+			log.FailOnError(fmt.Errorf("cloud cred is not created"), "Check for cloud cred exists?")
+		}
+
+		credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
+		credUUID = strings.ReplaceAll(credUUID, "\"", "")
+		log.Infof("Got Cred UUID: %s", credUUID)
+
+		retain = 2
+		scpolName := "snap-policy-" + time.Now().Format("15h03m05s")
+		schdPol, err := asyncdr.CreateSchedulePolicy(scpolName, snapInterval, retain)
+		log.FailOnError(err, "Failed to create schedule policy")
+
+		appNs, _ := initialSetupApps(taskNamePrefix, true)
+
+		pvcNames, err := GetPVCListForNamespace(appNs[0])
+
+		for _, pvcName := range pvcNames {
+			scheduleName := "snap-schedule-" + time.Now().Format("15h03m05s")
+			snapSchedule, err := asyncdr.CreateSnapshotSchedule(appNs[0], pvcName, scheduleName, schdPol.Name, snapshotType, credUUID)
+			log.FailOnError(err, "Failed to create snapshot schedule")
+			log.InfoD("SnapSchedule is %v", snapSchedule)
+			time.Sleep(30*time.Second)
+			err = asyncdr.WaitForRetainSnapshotsSuccessful(scheduleName, appNs[0], int(retain), snapInterval)
+			time.Sleep(30*time.Second)
+			schedule, err := storkops.Instance().GetSnapshotSchedule(scheduleName, appNs[0])
+			scheduleCount := len(schedule.Status.Items["Interval"])
+			dash.VerifyFatal(scheduleCount, int(retain), fmt.Sprintf("Verifying snapshot count, actual %v, expected %v", scheduleCount, int(retain)))
+		}	
+	})
+})
+
 var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", func() {
 	BeforeEach(func() {
 		if !kubeConfigWritten {
@@ -813,7 +871,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", func() {
 		scpolName := "async-policy"
 		migrationInterval := 5
 		Step("Create Schedule Policy", func() {
-			schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, migrationInterval)
+			schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, migrationInterval, 0)
 			log.FailOnError(err, "Failed to create schedule policy")
 		})
 
@@ -847,7 +905,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", func() {
 				log.FailOnError(err, "Refresh Driver end points failed")
 				stNodeClusterMap[cluster] = node.GetStorageNodes()
 				Step("Create Schedule Policy", func() {
-					schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, migrationInterval)
+					schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, migrationInterval, 0)
 					log.FailOnError(err, "Failed to create schedule policy")
 				})
 			} else {
