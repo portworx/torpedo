@@ -1331,6 +1331,24 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		d.refreshEndpoint = refreshEndpoint
 	}
 	volDriver := d.getVolDriver()
+	volumeInspectDevicePath := func() (interface{}, bool, error) {
+		volumeInspectResponse, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token),
+			&api.SdkVolumeInspectRequest{
+				VolumeId: volumeName,
+				Options: &api.VolumeInspectOptions{
+					Deep: true,
+				},
+			})
+		if err != nil {
+			return nil, true, err
+		}
+		vol := volumeInspectResponse.Volume
+		if !strings.Contains(vol.DevicePath, DeviceMapper) {
+			return nil, true, fmt.Errorf("device path [%s] is not correct for volume [%s]", vol.DevicePath, volumeName)
+		}
+		return nil, false, nil
+
+	}
 	t := func() (interface{}, bool, error) {
 		volumeInspectResponse, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token),
 			&api.SdkVolumeInspectRequest{
@@ -1405,10 +1423,14 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	if vol.Spec.ProxySpec != nil && vol.Spec.ProxySpec.ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK {
 		// Checking the device path when state is attached
 		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && !strings.Contains(vol.DevicePath, DeviceMapper) {
-			return &ErrFailedToInspectVolume{
-				ID:    volumeName,
-				Cause: fmt.Sprintf("Failed to validate device path [%s]", vol.DevicePath),
+			_, err := task.DoRetryWithTimeout(volumeInspectDevicePath, 5*time.Minute, inspectVolumeRetryInterval)
+			if err != nil {
+				return &ErrFailedToInspectVolume{
+					ID:    volumeName,
+					Cause: fmt.Sprintf("Failed to validate device path [%s]: [%v]", vol.DevicePath, err),
+				}
 			}
+
 		}
 		log.Debugf("Successfully validated the device path for a volume [%s]", volumeName)
 	}
