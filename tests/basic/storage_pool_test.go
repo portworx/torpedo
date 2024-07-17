@@ -5711,19 +5711,19 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 		// Select a Pool with IO Runing poolID returns UUID ( String )
 		var poolID int32
 
-		// Add disk to the Node
-		var diskSize uint64
-		minDiskSize := 50
-		maxDiskSize := 150
-		size := rand.Intn(maxDiskSize-minDiskSize) + minDiskSize
-		diskSize = (uint64(size) * 1024 * 1024 * 1024) / units.GiB
+		allPools, _ := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		log.InfoD("List of all the Pools present in the system [%s]", allPools)
+		var maxPoolSize uint64
+		for _, pool := range allPools {
+			if pool.TotalSize > maxPoolSize {
+				maxPoolSize = pool.TotalSize / units.GiB
+			}
+		}
+		diskSize := maxPoolSize * 2
 
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, diskSize)
 
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
-
-		allPools, _ := Inst().V.ListStoragePools(metav1.LabelSelector{})
-		log.InfoD("List of all the Pools present in the system [%s]", allPools)
 
 		// Get Pool ID of pool selected for Resize
 		for uuid, each := range allPools {
