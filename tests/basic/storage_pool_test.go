@@ -5622,25 +5622,34 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 
 })
 
-func addDiskToSpecificPool(node node.Node, sizeOfDisk uint64, poolID int32) bool {
+func addDiskToSpecificPool(node node.Node, sizeOfDisk uint64, poolID int32) (bool, error) {
 	// Get the Spec to add the disk to the Node
 	//  if the diskSize ( sizeOfDisK ) is 0 , then Disk of default spec size will be picked
 	driveSpecs, err := GetCloudDriveDeviceSpecs()
-	log.FailOnError(err, "Error getting cloud drive specs")
+	if err != nil {
+		return false, fmt.Errorf("Error getting cloud drive specs")
+	}
 	log.InfoD("Cloud Drive Spec %s", driveSpecs)
-
 	// Update the device spec to update the disk size
 	deviceSpec := driveSpecs[0]
 	deviceSpecParams := strings.Split(deviceSpec, ",")
 	paramsArr := make([]string, 0)
+	var poolSize uint64
 	for _, param := range deviceSpecParams {
 		if strings.Contains(param, "size") {
 			if sizeOfDisk == 0 {
 				var specSize uint64
-				val := strings.Split(param, "=")[1]
-				specSize, err = strconv.ParseUint(val, 10, 64)
-				log.FailOnError(err, "Error converting size [%v] to uint64", val)
-				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", specSize))
+				poolDetails, err := GetPoolsDetailsOnNode(&node)
+				if err != nil {
+					return false, fmt.Errorf("Error getting pool details on node %s", node.Name)
+				}
+				for _, pool := range poolDetails {
+					if pool.ID == poolID {
+						poolSize = pool.TotalSize / units.GiB
+					}
+					specSize = poolSize
+				}
+				paramsArr = append(paramsArr, fmt.Sprintf("size=%d", specSize))
 			} else {
 				paramsArr = append(paramsArr, fmt.Sprintf("size=%d", sizeOfDisk))
 			}
@@ -5658,12 +5667,12 @@ func addDiskToSpecificPool(node node.Node, sizeOfDisk uint64, poolID int32) bool
 		re := regexp.MustCompile(`Drive not compatible with specified pool.*`)
 		if re.MatchString(fmt.Sprintf("%v", err)) {
 			log.InfoD("Error while adding Disk %v", err)
-			return false
+			return false, err
 		}
 	}
 	err = Inst().V.RefreshDriverEndpoints()
 	log.FailOnError(err, "error refreshing driver end points")
-	return true
+	return true, nil
 }
 
 var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
@@ -5732,12 +5741,14 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 		log.InfoD("Node Details %v", nodeDetails)
 
 		log.InfoD("Adding New Disk with Size [%v]", diskSize)
-		response := addDiskToSpecificPool(*nodeDetails, diskSize, poolID)
+		response, err := addDiskToSpecificPool(*nodeDetails, diskSize, poolID)
+		log.FailOnError(err, "Error while adding disk to the pool")
 		dash.VerifyFatal(response, false,
 			fmt.Sprintf("Pool expansion with Disk Resize with Disk size [%v GiB] Succeeded?", diskSize))
 
 		log.InfoD("Attempt Adding Disk with size same as pool size")
-		response = addDiskToSpecificPool(*nodeDetails, 0, poolID)
+		response, err = addDiskToSpecificPool(*nodeDetails, 0, poolID)
+		log.FailOnError(err, "Error while adding disk to the pool")
 		dash.VerifyFatal(response, true,
 			fmt.Sprintf("Pool expansion with Disk size same as pool size [%v GiB] Succeeded?", diskSize))
 	})
@@ -10868,10 +10879,10 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 
 var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 	/*
-	  1. Deploy apps
-	  2. Pick a volume and locate the node where this is attached
-	  3. Delete the volume and let it be placed in trashcan
-	  4. Trigger pool expand in the node where the trashcan volume is present
+	   1. Deploy apps
+	   2. Pick a volume and locate the node where this is attached
+	   3. Delete the volume and let it be placed in trashcan
+	   4. Trigger pool expand in the node where the trashcan volume is present
 
 	*/
 
@@ -11100,8 +11111,8 @@ var _ = Describe("{CheckPoolOffline}", func() {
 var _ = Describe("{FACDPoolIOPriorityCheck}", func() {
 
 	/* This test is created to provide functional testing coverage for ticket PWX-35590
-	1. Create a cluster with FACD backend
-	2. Check if the IO Priority for the storagepools is HIGH
+	   1. Create a cluster with FACD backend
+	   2. Check if the IO Priority for the storagepools is HIGH
 	*/
 
 	JustBeforeEach(func() {
