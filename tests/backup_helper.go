@@ -2028,14 +2028,14 @@ func CreateRestoreWithoutCheck(restoreName string, backupName string,
 	var bkp *api.BackupObject
 	var bkpUid string
 	backupDriver := Inst().Backup
-	log.Infof("Getting the UID of the backup needed to be restored")
+	log.Infof("Getting the UID of the backup [%s] needed to be restored", backupName)
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: orgID}
 	curBackups, _ := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
-	log.Debugf("Enumerate backup response -\n%v", curBackups)
 	for _, bkp = range curBackups.GetBackups() {
 		if bkp.Name == backupName {
 			bkpUid = bkp.Uid
+			log.Infof("Backup UID for %s - %s", backupName, bkpUid)
 			break
 		}
 	}
