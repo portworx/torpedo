@@ -140,6 +140,7 @@ const (
 	errorChannelSize                 = 50
 	snapshotScheduleRetryInterval    = 2 * time.Minute
 	snapshotScheduleRetryTimeout     = 60 * time.Minute
+	defaultMaxDefragDuration         = 60
 )
 
 const (
@@ -161,6 +162,11 @@ const (
 	pvcNamePrefix        = "fada-scale-pvc"
 	fadaNamespacePrefix  = "fada-namespace"
 	podAttachTimeout     = 15 * time.Minute
+)
+
+const (
+	equalSeparator = "="
+	colonSeparator = ":"
 )
 
 // TODO Need to add for AutoJournal
@@ -261,6 +267,12 @@ var VclusterFioTotalIteration = "1"
 
 // VclusterParallelApps is the number of parallel apps to be run in vcluster
 var VclusterFioParallelApps = "2"
+
+// isDefragScheduleExist exist set to false initially
+var isDefragScheduleExist = false
+
+// defragScheduleID is needed to remember the scheduleID during next run
+var defragScheduleID string
 
 // Event describes type of test trigger
 type Event struct {
@@ -655,6 +667,12 @@ const (
 
 	// PoolDelete deletes the px pool and create new pool
 	PoolDelete = "poolDelete"
+
+	// DefragScheduleCRUDOperations validate defrag create, show, update and delete operations
+	DefragScheduleCRUDOperations = "defragScheduleCRUDOperations"
+
+	// DefragSchedules setup defrag schedules in a cluster once and validates it
+	DefragSchedules = "defragSchedules"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -7905,6 +7923,9 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*recordChan <- event
 	}()
 
+	err := Inst().V.RefreshDriverEndpoints()
+	UpdateOutcome(event, err)
+
 	setMetrics(*event)
 	stepLog := "perform kvdb failover in a cyclic manner"
 	Step(stepLog, func() {
@@ -7934,10 +7955,19 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 				nodeMap := node.GetNodesByVoDriverNodeID()
 				nodeContexts := make([]*scheduler.Context, 0)
-				log.Infof("KVDB node map is [%v]", kvdbNodeIDMap)
+				log.InfoD("KVDB node map is [%v]", kvdbNodeIDMap)
 
 				for kvdbID, nodeID := range kvdbNodeIDMap {
 					kvdbNode := nodeMap[nodeID]
+					if len(kvdbNode.Name) == 0 {
+						err = fmt.Errorf("node with id %v not found in the node registry", nodeID)
+						UpdateOutcome(event, err)
+						log.InfoD("current node registary..,")
+						for _, n := range nodeMap {
+							log.InfoD("node id: %v, node name: %v", n.VolDriverNodeID, n.Name)
+						}
+						continue
+					}
 
 					appNodeContexts, err := GetContextsOnNode(contexts, &kvdbNode)
 					nodeContexts = append(nodeContexts, appNodeContexts...)
@@ -11669,6 +11699,307 @@ func TriggerScaleFADAVolumeAttach(contexts *[]*scheduler.Context, recordChan *ch
 		})
 		updateMetrics(*event)
 	})
+}
+
+func TriggerDefragScheduleCRUDOps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(DefragScheduleCRUDOperations)
+	defer ginkgo.GinkgoRecover()
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DefragScheduleCRUDOperations,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var scheduleId string
+	var defragJob opsapi.DefragJob
+	nodeIds := make([]string, 0)
+	stepLog := "Setting up defrag schedule for all storage nodes"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		startTime, err := getDefragStartTime()
+		log.Infof("Next schedule start time at: [%s]", startTime)
+		if err != nil {
+			log.Errorf("Failed to get start time. Error: %v", err)
+			UpdateOutcome(event, err)
+		}
+		moreWait, err := doNeedToWaitMoreForSchedule(startTime)
+		if err != nil {
+			log.Errorf("Failed to get wait time for schedule. Error: %v", err)
+			UpdateOutcome(event, err)
+		}
+		// If schedule start time make function to wait more than 10 minutes then skip validation
+		// so that other trigger can continue
+		log.Infof("More wait time is: %t", moreWait)
+		if moreWait {
+			log.Infof("Waiting for next defrag schedule will be longer, next start time: [%s]", startTime)
+			log.Info("Skipping defrag crud validation this time, will try to validate next time")
+			return
+		}
+
+		stepLog = fmt.Sprintf("Creating defrag schedule at start time: [%s]", startTime)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			Step(stepLog, func() {
+				storageNodes := node.GetStorageDriverNodes()
+				for _, node := range storageNodes {
+					nodeIds = append(nodeIds, node.Id)
+				}
+				defragJob = getDfragJob(uint32(len(nodeIds)), nodeIds, false)
+				resp, err := Inst().V.CreateDefragSchedule(startTime, &defragJob)
+				if err != nil {
+					log.Errorf("Failed to create defrag schedule. Error: %v", err)
+					UpdateOutcome(event, err)
+				}
+				scheduleId = resp.Schedule.Id
+			})
+		})
+
+		stepLog = fmt.Sprintf("Inspecting defrag schedule: [%s]", scheduleId)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			time.Sleep(3 * time.Second)
+			schedInfo, err := Inst().V.InspectDefragSchedules(scheduleId)
+			if err != nil {
+				log.Errorf("Failed to get defrag schedule info for schedule id: [%s].Error: %v", scheduleId, err)
+				UpdateOutcome(event, err)
+			}
+			if err = Inst().V.ValidateDefragScheduleInfo(schedInfo, startTime, &defragJob); err != nil {
+				log.Errorf("Defrag schedule info validation failed for schedule Id: [%s].Error: %v", scheduleId, err)
+				UpdateOutcome(event, err)
+			}
+		})
+
+		stepLog = fmt.Sprintf("Validate defrag schedule status: [%s]", scheduleId)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if err := Inst().V.ValidatesDefragSchedulesTrigger(scheduleId, nodeIds); err != nil {
+				log.Errorf("Defrag schedule not triggered for schedule Id: [%s].Error: %v", scheduleId, err)
+				UpdateOutcome(event, err)
+			}
+		})
+
+		stepLog = fmt.Sprintf("Deleting defrag schedule status: [%s]", scheduleId)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if err := Inst().V.DeleteDefragSchedule(scheduleId); err != nil {
+				log.Errorf("Failed to delete defrag schedule Id: [%s].Error: %v", scheduleId, err)
+				UpdateOutcome(event, err)
+
+			}
+			time.Sleep(3 * time.Second)
+			if err := Inst().V.ValidateDefragScheduleIdDeleted(scheduleId); err != nil {
+				log.Errorf("Defrag schedule still present after deletion: [%s].Error: %v", scheduleId, err)
+				UpdateOutcome(event, err)
+
+			}
+		})
+	})
+	updateMetrics(*event)
+}
+
+func TriggerDefragSchedules(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(DefragSchedules)
+	defer ginkgo.GinkgoRecover()
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DefragSchedules,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var defragJob opsapi.DefragJob
+	var startTime string
+	var err error
+	nodeIds := make([]string, 0)
+	stepLog := "Enabling and validating defrag schedules for all storage nodes"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		if !isDefragScheduleExist {
+			startTime, err = getDefragStartTime()
+			if err != nil {
+				log.Errorf("Failed to get start time. Error: %v", err)
+				UpdateOutcome(event, err)
+			}
+			log.Infof("Setting up defrag schedule at: [%s]", startTime)
+			storageNodes := node.GetStorageDriverNodes()
+			for _, node := range storageNodes {
+				nodeIds = append(nodeIds, node.Id)
+			}
+			defragJob = getDfragJob(uint32(len(nodeIds)), nodeIds, false)
+			resp, err := Inst().V.CreateDefragSchedule(startTime, &defragJob)
+			if err != nil {
+				log.Errorf("Failed to create defrag schedule. Error: %v", err)
+				UpdateOutcome(event, err)
+			}
+			defragScheduleID = resp.Schedule.Id
+			isDefragScheduleExist = true
+			schedInfo, err := Inst().V.InspectDefragSchedules(defragScheduleID)
+			if err != nil {
+				log.Errorf("Failed to get defrag schedule info for schedule id: [%s].Error: %v", defragScheduleID, err)
+				UpdateOutcome(event, err)
+			}
+			if err = Inst().V.ValidateDefragScheduleInfo(schedInfo, startTime, &defragJob); err != nil {
+				log.Errorf("Defrag schedule info validation failed for schedule Id: [%s].Error: %v", defragScheduleID, err)
+				UpdateOutcome(event, err)
+			}
+		}
+		stepLog := "Validate defrag schedules status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if isDefragScheduleExist {
+				schedInfo, err := Inst().V.InspectDefragSchedules(defragScheduleID)
+				if err != nil {
+					log.Errorf("Failed to get defrag schedule info for schedule id: [%s].Error: %v", defragScheduleID, err)
+					UpdateOutcome(event, err)
+				}
+				startTime = schedInfo.GetSchedule().StartTime
+			}
+			moreWait, err := doNeedToWaitMoreForSchedule(startTime)
+			if err != nil {
+				log.Errorf("Failed to get wait time for schedule. Error: %v", err)
+				UpdateOutcome(event, err)
+			}
+			// If schedule start time make function to wait more than 10 minutes
+			// then validates last schedules status
+			log.Infof("More wait time is: %t", moreWait)
+			if moreWait {
+				incompleteDefragNodes, err := Inst().V.ValidateLastDefragScheduleStatus(defragScheduleID, nodeIds)
+				if err != nil {
+					log.Errorf("defrag schedule is not completed on nodes: [%v].Error: %v", incompleteDefragNodes, err)
+					UpdateOutcome(event, err)
+				}
+				return
+			}
+			if err = Inst().V.ValidatesDefragSchedulesTrigger(defragScheduleID, nodeIds); err != nil {
+				log.Errorf("Defrag schedule not triggered for schedule Id: [%s].Error: %v", defragScheduleID, err)
+				UpdateOutcome(event, err)
+			}
+		})
+	})
+
+	updateMetrics(*event)
+}
+
+// getDefragStartTime return non-overlapping start time with another defrag schedule in a cluster
+func getDefragStartTime() (string, error) {
+	schedType := "daily"
+	schedHour, schedMinute, monthDay, weekDay := getCurrentTimes()
+	resp, err := Inst().V.GetAllDefragSchedules()
+	if err != nil {
+		return "", fmt.Errorf("failed to get all defrag schedules for a cluster. Err: %v", err)
+	}
+	for _, schedule := range resp.GetSchedules() {
+		schedStartTime := schedule.StartTime
+		thisSchedType, schedTime := getSchedTypeAndTime(schedStartTime)
+		// if schedules overlaps with current day and time then only update the schedule hour and minute
+		if thisSchedType == schedType || thisSchedType == monthDay || thisSchedType == weekDay {
+			if strconv.Itoa(schedHour) == schedTime[0] {
+				// if defrag schedule max duration is greater than 60 then
+				// need to find hour after that duration
+				if schedule.MaxDurationMinutes >= 60 {
+					schedHour += int(schedule.MaxDurationMinutes / 60)
+					schedHour %= 24
+				}
+				thisScheduleMinute, err := strconv.Atoi(schedTime[1])
+				if err != nil {
+					return "", fmt.Errorf("failed to parse int from string. Err: %v", err)
+				}
+				// if defrag schedule max duration plus schedule minutes >= 60. for an Example daily@19:30
+				// then after adding duration it will become 90 so need to increase schedule hour by one
+				// and need to update schedule minutes to 30
+				thisScheduleMinute += int(schedule.MaxDurationMinutes % 60)
+				if thisScheduleMinute >= 60 {
+					schedHour += thisScheduleMinute / 60
+					schedHour %= 24
+					thisScheduleMinute %= 60
+				}
+				schedMinute = thisScheduleMinute
+			}
+		}
+	}
+	// Scheduling after 2 minutes of current time or last schedule
+	schedMinute += 2
+	hour, min := strconv.Itoa(schedHour), strconv.Itoa(schedMinute)
+	if schedMinute < 10 {
+		min = fmt.Sprintf("0%s", min)
+	}
+	if schedHour < 10 {
+		hour = fmt.Sprintf("0%s", hour)
+	}
+	return fmt.Sprintf("%s=%s:%s", schedType, hour, min), nil
+}
+
+// getDfragJob return DefragJob object for defrag schedule
+func getDfragJob(maxNodesInParallel uint32, nodeIdList []string, onlyOneIteration bool) opsapi.DefragJob {
+	return opsapi.DefragJob{
+		MaxDurationMinutes:       defaultMaxDefragDuration,
+		MaxNodesInParallel:       maxNodesInParallel,
+		IncludeNodes:             nodeIdList,
+		ScheduleOneIterationOnly: onlyOneIteration,
+	}
+}
+
+// getCurrentTimes return current hour, minute, month day and week day
+func getCurrentTimes() (int, int, string, string) {
+	return time.Now().Hour(), time.Now().Minute(), strconv.Itoa(time.Now().Day()), time.Now().Weekday().String()
+}
+
+// getSchedTypeAndTime return schedule type like daily,weekly or monthly and schedule hour and minutes
+func getSchedTypeAndTime(defragSchedule string) (string, []string) {
+	fields := strings.Split(defragSchedule, equalSeparator)
+	schedTime := strings.Split(fields[1], colonSeparator)
+	return fields[0], schedTime
+}
+
+// doNeedToWaitMoreForSchedule return true if need to wait more than 10 minutes for schedule else false
+func doNeedToWaitMoreForSchedule(defragSchedule string) (bool, error) {
+	curHour, curMinute, _, _ := getCurrentTimes()
+	_, schedTime := getSchedTypeAndTime(defragSchedule)
+	schedHour, err := strconv.Atoi(schedTime[0])
+	if err != nil {
+		return true, fmt.Errorf("failed to parse schedule hour. Err: %v", err)
+	}
+	schedMinute, err := strconv.Atoi(schedTime[1])
+	if err != nil {
+		return true, fmt.Errorf("failed to parse schedule minute. Err: %v", err)
+	}
+	if curHour <= schedHour && (schedHour-curHour) <= 1 {
+		if curHour == schedHour && curMinute <= schedMinute && (schedMinute-curMinute) <= 10 {
+			return false, nil
+		} else {
+			curMinute += 10
+			if curMinute > 60 {
+				curMinute %= 60
+				if curMinute >= schedMinute {
+					return false, nil
+				}
+			}
+		}
+	}
+	return true, nil
 }
 
 // deployFadaApps deploy deployment using FADA volumes

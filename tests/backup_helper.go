@@ -9560,8 +9560,9 @@ func UpdateMaintenanceCronJob(backupLocation string, maintenanceJobType Maintena
 // CreateInvalidVolumeSnapshotClass creates invalid VolumeSnapshotClass for given provisioner
 func CreateInvalidVolumeSnapshotClass(snapShotClassName, provisioner string) (*volsnapv1.VolumeSnapshotClass, error) {
 	volumeSnapshotClassParameters := make(map[string]string)
+	invalidProvisioner := "invalid-" + provisioner
 	volumeSnapshotClassParameters["invalidParameter"] = "invalidValue"
-	volumeSnapshotClass, err := Inst().S.CreateVolumeSnapshotClassesWithParameters(snapShotClassName, provisioner, false, "Delete", volumeSnapshotClassParameters)
+	volumeSnapshotClass, err := Inst().S.CreateVolumeSnapshotClassesWithParameters(snapShotClassName, invalidProvisioner, false, "Delete", volumeSnapshotClassParameters)
 	if err != nil {
 		return nil, err
 	}
@@ -10352,8 +10353,8 @@ func UpdateDriverWithEnvVariable(envVariables map[string]string) error {
 	if err != nil {
 		return err
 	}
-	log.InfoD("Sleeping for 5 minutes for PX cluster to stabilise after deletion of pods")
-	time.Sleep(5 * time.Minute)
+	log.InfoD("Sleeping for 10 minutes for PX cluster to stabilise after deletion of pods")
+	time.Sleep(10 * time.Minute)
 	_, err = optest.ValidateStorageClusterIsOnline(clusterSpec, 10*time.Minute, 3*time.Minute)
 	if err != nil {
 		return err
