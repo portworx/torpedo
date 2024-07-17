@@ -5710,7 +5710,6 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 
 		// Select a Pool with IO Runing poolID returns UUID ( String )
 		var poolID int32
-
 		allPools, _ := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.InfoD("List of all the Pools present in the system [%s]", allPools)
 		var maxPoolSize uint64
@@ -5719,10 +5718,9 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 				maxPoolSize = pool.TotalSize / units.GiB
 			}
 		}
+		// Taking disksize 2 times the pool size to test negative scenario(to add disk size which is more than pool size)
 		diskSize := maxPoolSize * 2
-
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, diskSize)
-
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
 		// Get Pool ID of pool selected for Resize
@@ -5740,7 +5738,7 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 		log.FailOnError(err, "Getting NodeID from the given poolUUID [%v] Failed", poolUUID)
 		log.InfoD("Node Details %v", nodeDetails)
 
-		log.InfoD("Adding New Disk with Size [%v]", diskSize)
+		log.InfoD("Adding New Disk with Size [%v] which is greater than the pool size available", diskSize)
 		response, _ := addDiskToSpecificPool(*nodeDetails, diskSize, poolID)
 		dash.VerifyFatal(response, false,
 			fmt.Sprintf("Pool expansion with Disk Resize with Disk size [%v GiB] Succeeded?", diskSize))
