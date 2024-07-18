@@ -6189,6 +6189,7 @@ var _ = Describe("{DeleteVolumesDuringKvdbRunFlatMode}", func() {
 	itLog := "DeleteVolumesDuringKvdbRunFlatMode"
 	It(itLog, func() {
 		log.InfoD(itLog)
+		kvdbRunFlatMode := "KVDB connection failed, either node has networking issues or KVDB members are down or KVDB cluster is unhealthy. All operations (get/update/delete) are unavailable."
 		var volList []string
 		var isFlatModeEnabled bool
 		var selectedNodes []node.Node
@@ -6242,7 +6243,7 @@ var _ = Describe("{DeleteVolumesDuringKvdbRunFlatMode}", func() {
 			for i := 0; i < 5; i++ {
 				err := Inst().V.DeleteVolume(volList[i])
 				if err != nil {
-					isFlatModeEnabled = strings.Contains(err.Error(), "KVDB connection failed, either node has networking issues or KVDB members are down or KVDB cluster is unhealthy. All operations (get/update/delete) are unavailable.")
+					isFlatModeEnabled = strings.Contains(err.Error(), kvdbRunFlatMode)
 					if isFlatModeEnabled {
 						log.InfoD("Volume [%v] is not deleted during flat mode", volList[i])
 					} else {
@@ -6251,7 +6252,7 @@ var _ = Describe("{DeleteVolumesDuringKvdbRunFlatMode}", func() {
 				}
 				err = Inst().V.DetachVolume(volList[i])
 				if err != nil {
-					isFlatModeEnabled = strings.Contains(err.Error(), "KVDB connection failed, either node has networking issues or KVDB members are down or KVDB cluster is unhealthy. All operations (get/update/delete) are unavailable.")
+					isFlatModeEnabled = strings.Contains(err.Error(), kvdbRunFlatMode)
 					if isFlatModeEnabled {
 						log.InfoD("Volume [%v] is not detached during flat mode", volList[i])
 					} else {
@@ -6266,7 +6267,7 @@ var _ = Describe("{DeleteVolumesDuringKvdbRunFlatMode}", func() {
 			for i := 5; i < 10; i++ {
 				out, err := Inst().V.AttachVolume(volList[i])
 				if err != nil {
-					isFlatModeEnabled = strings.Contains(err.Error(), "KVDB connection failed, either node has networking issues or KVDB members are down or KVDB cluster is unhealthy. All operations (get/update/delete) are unavailable.")
+					isFlatModeEnabled = strings.Contains(err.Error(), kvdbRunFlatMode)
 					if isFlatModeEnabled {
 						log.InfoD("Volume [%v] is not attached during flat mode", volList[i])
 					} else {
