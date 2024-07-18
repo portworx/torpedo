@@ -391,7 +391,7 @@ replace (
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 
 	// PX dependencies
-	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240416193513-1e07b4359307
+	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240618001010-e4b050e66115
 
 	// Stork dependencies
 	//github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81
