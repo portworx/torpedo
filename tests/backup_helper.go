@@ -5495,6 +5495,7 @@ func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Durati
 		return "", err
 	}
 	currentScheduleBackupCount := len(allScheduleBackupNames)
+	// TO DO ; Change logic for nextScheduleBackupOrdinal to include retention count
 	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
 	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
 		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, BackupOrgID)
@@ -9804,8 +9805,6 @@ func WatchAndStopCloudsnapBackup(pvcName, namespace string, timeoutDuration time
 			for key, value := range statusMap {
 				if strings.Contains(key, fmt.Sprintf("%s-%s", namespace, pvcName)) {
 					found = true
-					// log.Infof("Key - %s", key)
-					// log.Infof("Cloudsnap for PVC [%s] in namespace [%s] detected with id [%s] and status [%s]", pvcName, namespace, value.ID, value.Status)
 					switch value.Status {
 					case "Done":
 						log.Infof("Cloudsnap for PVC [%s] in namespace [%s] is already completed with status [%s]", pvcName, namespace, value.Status)
@@ -10445,8 +10444,5 @@ func UpdateDriverWithEnvVariable(envVariables map[string]string) error {
 // IsPxInstalled checks if PX is installed by verifying the length of the list returned by GetStorageDriverNodes.
 func IsPxInstalled() bool {
 	numOfNodes := len(node.GetStorageDriverNodes())
-	if numOfNodes > 0 {
-		return true
-	}
-	return false
+	return numOfNodes > 0
 }

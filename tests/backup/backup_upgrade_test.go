@@ -346,6 +346,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 						appCtx.ReadinessTimeout = AppReadinessTimeout
 					}
 				}
+			} else {
+				log.InfoD("Skipping this step as it is a Non-PX cluster")
 			}
 		})
 
@@ -394,6 +396,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			if IsPxInstalled() {
 				log.InfoD("Validating applications")
 				ValidateApplications(partialAppContexts)
+			} else {
+				log.InfoD("Skipping this step as it is a Non-PX cluster")
 			}
 		})
 
@@ -440,6 +444,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 					err = CreateBackupLocation(provider, partialBackupLocationName, partialBackupLocationUid, partialCloudAccountName, partialCloudAccountUid, bucketName, BackupOrgID, "", true)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location [%s] with UID [%s] using the bucket [%s]", partialBackupLocationName, partialBackupLocationUid, bucketName))
 				}
+			} else {
+				log.InfoD("Skipping this step as it is a Non-PX cluster")
 			}
 		})
 
@@ -617,6 +623,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 						}
 					}(pvc)
 				}
+			} else {
+				log.InfoD("Skipping this step as it is a Non-PX cluster")
 			}
 		})
 
@@ -635,6 +643,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				partialScheduledBackupName = fmt.Sprintf("partial-scheduled-backup-%v", RandomString(6))
 				_, err = CreateScheduleBackupWithoutCheck(partialScheduledBackupName, SourceClusterName, partialBackupLocationName, partialBackupLocationUid, partialAppNamespaces, nil, BackupOrgID, "", "", "", "", partialScheduleName, partialSchedulePolicyUid, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", partialScheduleName))
+			} else {
+				log.InfoD("Skipping this step as it is a Non-PX cluster")
 			}
 		})
 
@@ -648,6 +658,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				log.Infof("Validating if the first scheduled backup [%s] of schedule [%s] is Failed", partialScheduledBackupName, firstScheduleBackupName)
 				err = BackupFailedCheck(firstScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] of schedule [%s] is in failed state", firstScheduleBackupName, partialScheduledBackupName))
+			} else {
+				log.InfoD("Skipping this step as it is a Non-PX cluster")
 			}
 		})
 
@@ -723,6 +735,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				err = CreatePartialRestoreWithValidation(ctx, restoreName, latestScheduleBackupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, partialAppContexts, failedVolumes)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
+			} else {
+				log.InfoD("Skipping this step as it is a Non-PX cluster")
 			}
 		})
 
