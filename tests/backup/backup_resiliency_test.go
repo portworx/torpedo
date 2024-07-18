@@ -1091,19 +1091,19 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", Label(TestCaseLabelsMap[
 // source cluster is backup cluster and destination cluster is application cluster for this testcase
 var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", Label(TestCaseLabelsMap[RebootNodesWhenBackupsAreInProgress]...), func() {
 	var (
-		scheduledAppContexts     []*scheduler.Context
-		appNamespaces            []string
-		cloudCredName            string
-		cloudCredUID             string
-		bkpLocationName          string
-		backupLocationUID        string
-		destClusterUid           string
-		srcClusterStatus         api.ClusterInfo_StatusInfo_Status
-		destClusterStatus        api.ClusterInfo_StatusInfo_Status
-		backupNames              []string
-		newBackupNames           []string
-		listOfStorageDriverNodes []node.Node
-		ctx                      context.Context
+		scheduledAppContexts []*scheduler.Context
+		appNamespaces        []string
+		cloudCredName        string
+		cloudCredUID         string
+		bkpLocationName      string
+		backupLocationUID    string
+		destClusterUid       string
+		srcClusterStatus     api.ClusterInfo_StatusInfo_Status
+		destClusterStatus    api.ClusterInfo_StatusInfo_Status
+		backupNames          []string
+		newBackupNames       []string
+		nodes                []node.Node
+		ctx                  context.Context
 	)
 	labelSelectors := make(map[string]string)
 	numberOfBackups, _ := strconv.Atoi(GetEnv(MaxBackupsToBeCreated, "2"))
@@ -1200,15 +1200,24 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", Label(TestCaseLabelsMa
 			log.InfoD("Switching cluster context to application[destination] cluster")
 			err := SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
-			listOfStorageDriverNodes = node.GetStorageDriverNodes()
-			err = Inst().N.RebootNode(listOfStorageDriverNodes[0], node.RebootNodeOpts{
+			nodes = node.GetStorageDriverNodes()
+			// Check if storage nodes exist in the cluster
+			if len(nodes) == 0 {
+				log.InfoD("No storage driver nodes found in the cluster. Assuming that it is a non-Px environment.")
+				nodes = node.GetWorkerNodes()
+				if len(nodes) == 0 {
+					log.FailOnError(fmt.Errorf("no worker nodes found in the cluster"), "Getting worker nodes")
+				}
+			}
+			log.Infof("Worker node chosen for reboot - %s", nodes[0].Name)
+			err = Inst().N.RebootNode(nodes[0], node.RebootNodeOpts{
 				Force: true,
 				ConnectionOpts: node.ConnectionOpts{
 					Timeout:         RebootNodeTimeout,
 					TimeBeforeRetry: RebootNodeTimeBeforeRetry,
 				},
 			})
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", listOfStorageDriverNodes[0].Name))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", nodes[0].Name))
 		})
 		Step("Check if backup is successful after one worker node on application cluster is rebooted", func() {
 			log.InfoD("Check if backup is successful after one worker node on application cluster is rebooted")
@@ -1219,18 +1228,17 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", Label(TestCaseLabelsMa
 		})
 		Step("Check if the rebooted node on application cluster is up now", func() {
 			log.InfoD("Check if the rebooted node on application cluster is up now")
-			listOfStorageDriverNodes = node.GetStorageDriverNodes()
 			nodeReadyStatus := func() (interface{}, bool, error) {
-				err := Inst().S.IsNodeReady(listOfStorageDriverNodes[0])
+				err := Inst().S.IsNodeReady(nodes[0])
 				if err != nil {
 					return "", true, err
 				}
 				return "", false, nil
 			}
 			_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", listOfStorageDriverNodes[0].Name))
-			err = Inst().V.WaitDriverUpOnNode(listOfStorageDriverNodes[0], Inst().DriverStartTimeout)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", listOfStorageDriverNodes[0].Name))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", nodes[0].Name))
+			err = Inst().V.WaitDriverUpOnNode(nodes[0], Inst().DriverStartTimeout)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", nodes[0].Name))
 		})
 		Step("Validating the deployed applications after node reboot", func() {
 			log.InfoD("Validating the deployed applications on destination cluster after node reboot")
@@ -1267,16 +1275,24 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", Label(TestCaseLabelsMa
 		})
 		Step("Reboot 2 worker nodes on application cluster when backup is in progress", func() {
 			log.InfoD("Reboot 2 worker node on application cluster when backup is in progress")
-			listOfStorageDriverNodes = node.GetStorageDriverNodes()
+			nodes = node.GetStorageDriverNodes()
+			// Check if storage nodes exist in the cluster
+			if len(nodes) == 0 {
+				log.InfoD("No storage driver nodes found in the cluster. Assuming that it is a non-Px environment.")
+				nodes = node.GetWorkerNodes()
+				if len(nodes) == 0 {
+					log.FailOnError(fmt.Errorf("no worker nodes found in the cluster"), "Getting worker nodes")
+				}
+			}
 			for i := 0; i < 2; i++ {
-				err := Inst().N.RebootNode(listOfStorageDriverNodes[i], node.RebootNodeOpts{
+				err := Inst().N.RebootNode(nodes[i], node.RebootNodeOpts{
 					Force: true,
 					ConnectionOpts: node.ConnectionOpts{
 						Timeout:         RebootNodeTimeout,
 						TimeBeforeRetry: RebootNodeTimeBeforeRetry,
 					},
 				})
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", listOfStorageDriverNodes[i].Name))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", nodes[i].Name))
 			}
 		})
 		Step("Check if backup is successful after two worker nodes are rebooted", func() {
@@ -1288,19 +1304,18 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", Label(TestCaseLabelsMa
 		})
 		Step("Check if the rebooted nodes on application cluster are up now", func() {
 			log.InfoD("Check if the rebooted nodes on application cluster are up now")
-			listOfStorageDriverNodes = node.GetStorageDriverNodes()
 			for i := 0; i < 2; i++ {
 				nodeReadyStatus := func() (interface{}, bool, error) {
-					err := Inst().S.IsNodeReady(listOfStorageDriverNodes[i])
+					err := Inst().S.IsNodeReady(nodes[i])
 					if err != nil {
 						return "", true, err
 					}
 					return "", false, nil
 				}
 				_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", listOfStorageDriverNodes[i].Name))
-				err = Inst().V.WaitDriverUpOnNode(listOfStorageDriverNodes[i], Inst().DriverStartTimeout)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", listOfStorageDriverNodes[i].Name))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", nodes[i].Name))
+				err = Inst().V.WaitDriverUpOnNode(nodes[i], Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", nodes[i].Name))
 			}
 		})
 		Step("Validating the deployed applications after node reboot", func() {
@@ -1322,12 +1337,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", Label(TestCaseLabelsMa
 			log.FailOnError(err, "Switching context to source cluster")
 		}()
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		log.InfoD("Check if the rebooted nodes on application cluster are up now")
-		log.Infof("Switching cluster context to destination cluster")
-		err := SetDestinationKubeConfig()
-		log.FailOnError(err, "Switching context to destination cluster failed")
-		listOfStorageDriverNodes = node.GetStorageDriverNodes()
-		for _, node := range listOfStorageDriverNodes {
+		for _, node := range nodes {
 			nodeReadyStatus := func() (interface{}, bool, error) {
 				err := Inst().S.IsNodeReady(node)
 				if err != nil {
@@ -1345,7 +1355,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", Label(TestCaseLabelsMa
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
 		log.Infof("Switching cluster context back to source cluster")
-		err = SetSourceKubeConfig()
+		err := SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")

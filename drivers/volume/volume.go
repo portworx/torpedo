@@ -550,6 +550,18 @@ type Driver interface {
 
 	// InspectDefragSchedules return information about provided schedule id
 	InspectDefragSchedules(defragSchedId string) (*api.SdkInspectScheduleResponse, error)
+
+	// ValidateDefragScheduleInfo validates defrag schedule information
+	ValidateDefragScheduleInfo(schedInfo *api.SdkInspectScheduleResponse, startTime string, defragJob *api.DefragJob) error
+
+	// ValidateDefragScheduleDeleted validates defrag schedule id is deleted
+	ValidateDefragScheduleIdDeleted(scheduleId string) error
+
+	// ValidatesDefragSchedulesTrigger validates defrag schedule triggers or not in given node ids
+	ValidatesDefragSchedulesTrigger(scheduleId string, nodeIDList []string) error
+
+	// ValidateLastDefragScheduleStatus validate defrag status in given node ids
+	ValidateLastDefragScheduleStatus(scheduleId string, nodeIDList []string) ([]string, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes
