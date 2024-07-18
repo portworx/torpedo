@@ -9797,16 +9797,13 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 		dash.VerifyFatal(expandedPool == nil, false, fmt.Sprintf("Pool selected for expansion is %s(UUID of pool)", expandedPool.Uuid))
 		err = WaitForExpansionToStart(poolToBeResized.Uuid)
 		log.FailOnError(err, "error when waiting for pool expansion on pool %s", poolToBeResized.Uuid)
-		var connect node.ConnectionOpts
-		connect.Timeout = 60
-		connect.TimeBeforeRetry = 10
-		err = Inst().N.ShutdownNode(*nodeDetail, node.ShutdownNodeOpts{
-			Force:          true,
-			ConnectionOpts: connect,
-		})
-		log.FailOnError(err, "failed to shutdown the node %s", nodeDetail.Name)
+
+		// poower off vm
+		err = Inst().N.PowerOffVM(*nodeDetail)
+		log.FailOnError(err, "Failed to power off the vm on Node %s", nodeDetail.Name)
 		time.Sleep(300 * time.Second)
 		log.InfoD("sleeping for 5 mins to wait for shutdown to be completed")
+
 		t := func() (interface{}, bool, error) {
 			err = Inst().N.PowerOnVM(*nodeDetail)
 			if err != nil {
