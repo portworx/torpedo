@@ -5628,25 +5628,35 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 
 })
 
-func addDiskToSpecificPool(node node.Node, sizeOfDisk uint64, poolID int32) bool {
+func addDiskToSpecificPool(node node.Node, sizeOfDisk uint64, poolID int32) (bool, error) {
 	// Get the Spec to add the disk to the Node
 	//  if the diskSize ( sizeOfDisK ) is 0 , then Disk of default spec size will be picked
 	driveSpecs, err := GetCloudDriveDeviceSpecs()
-	log.FailOnError(err, "Error getting cloud drive specs")
+	if err != nil {
+		return false, fmt.Errorf("Error getting cloud drive specs")
+	}
 	log.InfoD("Cloud Drive Spec %s", driveSpecs)
 
 	// Update the device spec to update the disk size
 	deviceSpec := driveSpecs[0]
 	deviceSpecParams := strings.Split(deviceSpec, ",")
 	paramsArr := make([]string, 0)
+	var poolSize uint64
 	for _, param := range deviceSpecParams {
 		if strings.Contains(param, "size") {
 			if sizeOfDisk == 0 {
 				var specSize uint64
-				val := strings.Split(param, "=")[1]
-				specSize, err = strconv.ParseUint(val, 10, 64)
-				log.FailOnError(err, "Error converting size [%v] to uint64", val)
-				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", specSize))
+				poolDetails, err := GetPoolsDetailsOnNode(&node)
+				if err != nil {
+					return false, fmt.Errorf("Error getting pool details on node %s", node.Name)
+				}
+				for _, pool := range poolDetails {
+					if pool.ID == poolID {
+						poolSize = pool.TotalSize / units.GiB
+					}
+					specSize = poolSize
+				}
+				paramsArr = append(paramsArr, fmt.Sprintf("size=%d", specSize))
 			} else {
 				paramsArr = append(paramsArr, fmt.Sprintf("size=%d", sizeOfDisk))
 			}
@@ -5659,17 +5669,19 @@ func addDiskToSpecificPool(node node.Node, sizeOfDisk uint64, poolID int32) bool
 
 	// Add Drive to the Volume
 	err = Inst().V.AddCloudDrive(&node, newSpec, poolID)
+	// Add Drive to the Volume
+	err = Inst().V.AddCloudDrive(&node, newSpec, poolID)
 	if err != nil {
-		// Regex to check if the error message is reported
-		re := regexp.MustCompile(`Drive not compatible with specified pool.*`)
-		if re.MatchString(fmt.Sprintf("%v", err)) {
+		//check if the error message is reported
+		driveCompatibleErr := strings.Contains(err.Error(), "Drive not compatible with specified pool")
+		if driveCompatibleErr {
 			log.InfoD("Error while adding Disk %v", err)
-			return false
+			return false, err
 		}
 	}
 	err = Inst().V.RefreshDriverEndpoints()
 	log.FailOnError(err, "error refreshing driver end points")
-	return true
+	return true, nil
 }
 
 var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
@@ -5693,6 +5705,8 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 	It(stepLog, func() {
+		var poolID int32
+		var maxPoolSize uint64
 		isPoolAddDiskSupported := IsPoolAddDiskSupported()
 		if !isPoolAddDiskSupported {
 			Skip("Add disk operation is not supported for DMThin Setup")
@@ -5704,23 +5718,17 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
-
-		// Select a Pool with IO Runing poolID returns UUID ( String )
-		var poolID int32
-
-		// Add disk to the Node
-		var diskSize uint64
-		minDiskSize := 50
-		maxDiskSize := 150
-		size := rand.Intn(maxDiskSize-minDiskSize) + minDiskSize
-		diskSize = (uint64(size) * 1024 * 1024 * 1024) / units.GiB
-
-		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, diskSize)
-
-		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
-
 		allPools, _ := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.InfoD("List of all the Pools present in the system [%s]", allPools)
+		for _, pool := range allPools {
+			if pool.TotalSize > maxPoolSize {
+				maxPoolSize = pool.TotalSize / units.GiB
+			}
+		}
+		// Taking disksize 2 times the pool size to test negative scenario(to add disk size which is more than pool size)
+		diskSize := maxPoolSize * 2
+		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, diskSize)
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
 		// Get Pool ID of pool selected for Resize
 		for uuid, each := range allPools {
@@ -5737,13 +5745,13 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 		log.FailOnError(err, "Getting NodeID from the given poolUUID [%v] Failed", poolUUID)
 		log.InfoD("Node Details %v", nodeDetails)
 
-		log.InfoD("Adding New Disk with Size [%v]", diskSize)
-		response := addDiskToSpecificPool(*nodeDetails, diskSize, poolID)
+		log.InfoD("Adding New Disk with Size [%v] which is greater than the pool size available", diskSize)
+		response, _ := addDiskToSpecificPool(*nodeDetails, diskSize, poolID)
 		dash.VerifyFatal(response, false,
 			fmt.Sprintf("Pool expansion with Disk Resize with Disk size [%v GiB] Succeeded?", diskSize))
 
 		log.InfoD("Attempt Adding Disk with size same as pool size")
-		response = addDiskToSpecificPool(*nodeDetails, 0, poolID)
+		response, _ = addDiskToSpecificPool(*nodeDetails, 0, poolID)
 		dash.VerifyFatal(response, true,
 			fmt.Sprintf("Pool expansion with Disk size same as pool size [%v GiB] Succeeded?", diskSize))
 	})
