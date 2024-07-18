@@ -6167,6 +6167,104 @@ var _ = Describe("{VerifyPoolCreateInProperZones}", func() {
 			log.FailOnError(err, "Failed to validate cloud drives topologies")
 
 		})
+
+		var nodeZone string
+		var selectedNode node.Node
+
+		stepLog = "update label on the worker node and perform pool operations"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			driverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "Failed to get volume driver namespace")
+
+			pxPureSecret, err := pureutils.GetPXPureSecret(driverNamespace)
+			log.FailOnError(err, "Failed to get px pure secret")
+
+			endpointToZoneMap := pxPureSecret.GetArrayToZoneMap()
+			if len(endpointToZoneMap) < 2 {
+				log.FailOnError(fmt.Errorf("need atleast 2 different zones to run this test"), "Need atleast 2 different zones to run this test")
+			}
+
+			for _, stNode := range node.GetStorageDriverNodes() {
+				if stNode.SchedulerTopology != nil && stNode.SchedulerTopology.Labels != nil {
+					if _, ok := stNode.SchedulerTopology.Labels["topology.portworx.io/zone"]; ok {
+						selectedNode = stNode
+					}
+				}
+			}
+
+			nodeZone = selectedNode.SchedulerTopology.Labels["topology.portworx.io/zone"]
+
+			var alternateZone string
+
+			for _, z := range endpointToZoneMap {
+				if z != nodeZone {
+					alternateZone = z
+					break
+				}
+			}
+
+			log.InfoD("Updating label on the node [%s] from [%s] to [%s]", selectedNode.Name, nodeZone, alternateZone)
+
+			err = Inst().S.AddLabelOnNode(selectedNode, "topology.portworx.io/zone", alternateZone)
+			log.FailOnError(err, fmt.Sprintf("Failed to add label on node [%s]", selectedNode.Name))
+
+			defer func() {
+				log.InfoD("Updating label on the node [%s] from [%s] to [%s]", selectedNode.Name, alternateZone, nodeZone)
+
+				err = Inst().S.AddLabelOnNode(selectedNode, "topology.portworx.io/zone", nodeZone)
+				log.FailOnError(err, fmt.Sprintf("Failed to add label on node [%s]", selectedNode.Name))
+			}()
+			selectedPoolUUID := selectedNode.StoragePools[0].Uuid
+
+			//This logic needs a change after WX-38093 fix
+			stepLog = fmt.Sprintf("Initiate pool expansion drive using Resize type Auto after label change to [%s] ", alternateZone)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				poolToBeResized, err := GetStoragePoolByUUID(selectedPoolUUID)
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPoolUUID))
+				drvSize, err := getPoolDiskSize(poolToBeResized)
+				log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+				expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+
+				isjournal, err := IsJournalEnabled()
+				log.FailOnError(err, "Failed to check if Journal enabled")
+
+				log.InfoD("Current Size of the pool %s is %d", selectedPoolUUID, poolToBeResized.TotalSize/units.GiB)
+				err = Inst().V.ExpandPool(selectedPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
+				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+				resizeErr := waitForPoolToBeResized(expectedSize, selectedPoolUUID, isjournal)
+				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s expansion using resize-disk", selectedPoolUUID))
+
+			})
+
+			//This logic needs a change after WX-38093 fix
+			stepLog = fmt.Sprintf("Add new pool after label change to [%s]", alternateZone)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				//Add a cloud drive as a journal device
+				driveSpecs, err := GetCloudDriveDeviceSpecs()
+				log.FailOnError(err, "Error getting cloud drive specs")
+
+				deviceSpec := driveSpecs[0]
+
+				err = Inst().V.AddCloudDrive(&selectedNode, deviceSpec, -1)
+				dash.VerifyFatal(err != nil, true, fmt.Sprintf("Failed to add cloud drive on node [%s] as expected. Err: [%v]", selectedNode.Name, err))
+
+			})
+		})
+
+		stepLog = fmt.Sprintf("Add new pool after label change to [%s]", nodeZone)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = AddCloudDrive(selectedNode, -1)
+			if err != nil {
+				log.Error(err)
+			}
+		})
+
 	})
 
 	JustAfterEach(func() {
@@ -6299,6 +6397,121 @@ var _ = Describe("{RestartPXonAllWorkerNodesandCheckVolumes}", func() {
 	JustAfterEach(func() {
 		EndTorpedoTest()
 		DestroyApps(contexts, nil)
+		AfterEachTest(contexts)
+	})
+})
+var _ = Describe("{RestartPxandRestartNodeWithMgmtInterfaceDown}", func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-24898
+	   1.Deploy Applications
+	   2.Validate Applications are Deployed
+	   3.Stop portworx on all nodes
+	   4.Make the Management Interface Down on the backend FA
+	   5.Start the PX and after that wait for a minute make the management interface up and then check if px is up
+	   6.Validate the Applications are running
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPxandRestartNodeWithMgmtInterfaceDown",
+			"Restart Portworx and Restart Node with Mgmt Interface of the backend FA being down for few minutes", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	itLog := "RestartPxandRestartNodeWithMgmtInterfaceDown"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var (
+			LastDisabledInterface string
+			PureFaClientVif       *newFlashArray.Client
+			FadaPvcList           []string
+			FaDetails             []pureutils.FlashArrayEntry
+		)
+		pxNodes := node.GetStorageDriverNodes()
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := "restartpxandrebootnodewithmgmtinterfacedown"
+			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				CsiAppKeys:         Inst().CsiAppList,
+				StorageProvisioner: Provisioner,
+				Namespace:          taskName,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+			contexts = append(contexts, context...)
+		}
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+		//GetVolumeNameFromPvc will collect volume name from pvc which indirect will be the px volume name and this name is suffix to the volumes created in FA backend
+		GetVolumeNameFromPvc := func(namespace string, pvclist []string) []string {
+			allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+			log.FailOnError(err, fmt.Sprintf("error getting pvcs from namespace [%s]", namespace))
+			for _, p := range allPvcList.Items {
+				scForPvc, err := k8sCore.GetStorageClassForPVC(&p)
+				log.FailOnError(err, "Failed to get storage class for pvc [%s]", p.Name)
+				backend, _ := scForPvc.Parameters["backend"]
+				if backend == "pure_block" {
+					pvclist = append(pvclist, p.Spec.VolumeName)
+				}
+			}
+			return pvclist
+		}
+		for _, ctx := range contexts {
+			FadaPvcList = GetVolumeNameFromPvc(ctx.App.NameSpace, nil)
+		}
+		for _, volname := range FadaPvcList {
+			FaDetails, err = GetFADetailsFromVolumeName(volname)
+			log.FailOnError(err, "Failed to get FA details from volume name")
+			break
+		}
+		stepLog := "Stop portworx on all Nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Stopping portworx  Service on Nodes")
+			err := Inst().V.StopDriver(pxNodes, false, nil)
+			dash.VerifyFatal(err, nil, "Failed to stop portworx on nodes")
+			log.InfoD("stopped portworx on all nodes")
+		})
+		stepLog = "Make the Management Interface Down on the backend FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+			secret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+			log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
+			for _, fa := range FaDetails {
+				faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+				apiToken, err := pureutils.GetApiTokenForFAMgmtEndpoint(secret, fa.MgmtEndPoint)
+				log.FailOnError(err, "failed to get API token for FA with IP [%s]", fa.MgmtEndPoint)
+				PureFaClientVif, err = GetVifInterface(faClient, fa.MgmtEndPoint, apiToken)
+				log.FailOnError(err, "failed to get vif interface for FA with IP [%s]", fa.MgmtEndPoint)
+				LastDisabledInterface, err = DisableManagementInterface(PureFaClientVif, fa.MgmtEndPoint, false)
+			}
+		})
+		stepLog = "Start the PX and after that wait for a minute make the management interface up and then check if px is up"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Starting portworx  Service on Nodes")
+			for _, node := range pxNodes {
+				err := Inst().V.StartDriver(node)
+				log.FailOnError(err, "Failed to start portworx on node [%s]", node.Name)
+			}
+			log.InfoD("Wait for a minute and make the management interface up")
+			time.Sleep(1 * time.Minute)
+			_, err := pureutils.SetInterfaceEnabled(PureFaClientVif, LastDisabledInterface, true)
+			log.FailOnError(err, "Failed to enable the management interface")
+			for _, node := range pxNodes {
+				err = Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", node.Name))
+			}
+			log.InfoD("Portworx is up on all nodes")
+
+		})
+		stepLog = "Validate the applications are in running state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 })
