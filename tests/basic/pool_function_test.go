@@ -1213,7 +1213,7 @@ var _ = Describe("{StorageFullPoolExpansion}", func() {
 	)
 
 	BeforeEach(func() {
-		Inst().AppList = []string{"fio-fastpath-repl1"}
+		Inst().AppList = []string{"fio-fastpath"}
 		contexts = ScheduleApplications("storagefull-resize")
 		appList = Inst().AppList
 	})
