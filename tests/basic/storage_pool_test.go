@@ -7706,7 +7706,7 @@ var _ = Describe("{NodeAddDiskWhileAddDiskInProgress}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51356
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("NodeAddDriveWhileAddDriveInProgress", "Initiate pool expansion using add-drive while one already in progress", nil, testrailID)
+		StartTorpedoTest("NodeAddDriveWhileAddDiskInProgress", "Initiate pool expansion using add-drive while one already in progress", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
