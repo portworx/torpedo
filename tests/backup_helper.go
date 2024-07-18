@@ -5495,6 +5495,7 @@ func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Durati
 		return "", err
 	}
 	currentScheduleBackupCount := len(allScheduleBackupNames)
+	// TO DO ; Change logic for nextScheduleBackupOrdinal to include retention count
 	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
 	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
 		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, BackupOrgID)
@@ -9770,6 +9771,77 @@ func GetCloudsnapStatus() (map[string]CloudsnapStatus, error) {
 	return statusMap, nil
 }
 
+// WatchAndStopCloudsnapBackup watches the cloudsnap creation and stops it if a new entry is added
+func WatchAndStopCloudsnapBackup(pvcName, namespace string, timeoutDuration time.Duration, ctx context1.Context) error {
+	workerNode := node.GetStorageNodes()[0]
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	timeout := time.After(timeoutDuration)
+	getCloudsnapStatus := func() (map[string]CloudsnapStatus, error) {
+		statusMap := make(map[string]CloudsnapStatus)
+		cmd := "pxctl cs status -j"
+		output, err := runCmdGetOutput(cmd, workerNode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to run command %s on %s: %s", cmd, workerNode.Name, err.Error())
+		}
+		err = json.Unmarshal([]byte(output), &statusMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal the output of the command %s on %s: %s", cmd, workerNode.Name, err.Error())
+		}
+		return statusMap, nil
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			log.Infof("Context status is [%v]", ctx.Err())
+			return nil
+		case <-ticker.C:
+			statusMap, err := getCloudsnapStatus()
+			if err != nil {
+				return fmt.Errorf("failed to get cloudsnap status from cluster: %w", err)
+			}
+			found := false
+			for key, value := range statusMap {
+				if strings.Contains(key, fmt.Sprintf("%s-%s", namespace, pvcName)) {
+					found = true
+					switch value.Status {
+					case "Done":
+						log.Infof("Cloudsnap for PVC [%s] in namespace [%s] is already completed with status [%s]", pvcName, namespace, value.Status)
+					case "Stopped":
+						log.Infof("Cloudsnap for PVC [%s] in namespace [%s] is already stopped with status [%s]", pvcName, namespace, value.Status)
+					case "", "Active":
+						// Stop the cloudsnap
+						cmd := fmt.Sprintf("pxctl cs stop -n %s", key)
+						_, err := runCmdGetOutput(cmd, workerNode)
+						if err != nil {
+							log.Infof("failed to run command %s on %s: %w", cmd, workerNode.Name, err)
+						}
+						statusMap, err = getCloudsnapStatus()
+						if err != nil {
+							log.Infof("failed to get cloudsnap status from cluster: %w", err)
+						}
+						if statusMap[key].Status != "Stopped" {
+							log.Infof("cloudsnap not yet stopped for PVC [%s] in namespace [%s], status: %s", pvcName, namespace, statusMap[key].Status)
+						} else {
+							log.Infof("Cloudsnap for PVC [%s] in namespace [%s] has been stopped.", pvcName, namespace)
+						}
+					default:
+						log.Infof("Cloudsnap for PVC [%s] in namespace [%s] is in an unexpected status [%s]", pvcName, namespace, value.Status)
+					}
+				}
+			}
+
+			if !found {
+				log.Infof("No cloudsnap found for PVC [%s] in namespace [%s]", pvcName, namespace)
+			}
+		case <-timeout:
+			log.Infof("WatchAndStopCloudsnapBackupWithFixedNode timed out after %v", timeoutDuration)
+			return nil
+		}
+	}
+}
+
 // CreatePartialBackupWithVscMapping creates backup with Vsc mapping and checks for partial success
 func CreatePartialBackupWithVscMapping(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
@@ -10367,4 +10439,10 @@ func UpdateDriverWithEnvVariable(envVariables map[string]string) error {
 		}
 	}
 	return nil
+}
+
+// IsPxInstalled checks if PX is installed by verifying the length of the list returned by GetStorageDriverNodes.
+func IsPxInstalled() bool {
+	numOfNodes := len(node.GetStorageDriverNodes())
+	return numOfNodes > 0
 }
