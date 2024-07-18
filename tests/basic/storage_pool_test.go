@@ -5675,8 +5675,7 @@ func addDiskToSpecificPool(node node.Node, sizeOfDisk uint64, poolID int32) (boo
 		//check if the error message is reported
 		driveCompatibleErr := strings.Contains(err.Error(), "Drive not compatible with specified pool")
 		if driveCompatibleErr {
-			log.InfoD("Error while adding Disk %v", err)
-			return false, err
+			return false, fmt.Errorf("Error while adding Disk %v", err)
 		}
 	}
 	err = Inst().V.RefreshDriverEndpoints()
