@@ -19,7 +19,6 @@ import (
 	"github.com/portworx/torpedo/pkg/pureutils"
 
 	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
@@ -1821,6 +1820,7 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 			//Capturing PID pf PX after stopping PX pods
 			processPidPostRestart := make(map[string]string)
 			for _, nnode := range node.GetStorageNodes() {
+				startCmd = "pidof px-ns"
 				output, _ := Inst().N.RunCommand(nnode, startCmd, node.ConnectionOpts{
 					Timeout:         20 * time.Second,
 					TimeBeforeRetry: 5 * time.Second,
@@ -1833,10 +1833,13 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 			for nodeDetails, beforePID := range processPid {
 				afterPID, _ := processPidPostRestart[nodeDetails]
 				if beforePID != afterPID {
-					log.Infof(fmt.Sprintf("We have observed different PIDs before/after %s/%s on Node %s ", beforePID, afterPID, nodeDetails))
+					log.FailOnError(fmt.Errorf("Process ID of PX process before anfter PX pod restart is differentfor px pr "), "We have observed different PIDs before/after %s/%s on Node %s ", beforePID, afterPID, nodeDetails)
 				}
-				Expect(beforePID).To(Equal(afterPID))
 			}
 		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+
 	})
 })
