@@ -1813,11 +1813,10 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 
 			//Deleting px pods from all the node
 			err = DeletePXPods("kube-system")
-			
+
 			//Capturing PID pf PX after stopping PX pods
 			processPidPostRestart := make(map[string]string)
 			for _, nnode := range node.GetStorageNodes() {
-				startCmd = "pidof px-ns"
 				err := Inst().V.WaitForPxPodsToBeUp(nnode)
 				if err != nil {
 					log.FailOnError(fmt.Errorf("PX POD is not up, we can not test further "), "PX POD is down on node %s", nnode.Name)
