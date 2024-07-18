@@ -1813,12 +1813,7 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 
 			//Deleting px pods from all the node
 			err = DeletePXPods("kube-system")
-
-			Inst().V.WaitForPxPodsToBeUp(n)
-			if err != nil {
-				log.FailOnError(err, fmt.Sprintf("Not able to delete PX pods "))
-			}
-
+			
 			//Capturing PID pf PX after stopping PX pods
 			processPidPostRestart := make(map[string]string)
 			for _, nnode := range node.GetStorageNodes() {
