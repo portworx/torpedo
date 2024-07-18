@@ -709,8 +709,11 @@ func InitInstance() {
 	if Inst().ConfigMap != "" {
 		log.Infof("Using Config Map: %s ", Inst().ConfigMap)
 		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-		log.FailOnError(err, "Error occured while getting token from config map")
+		log.FailOnError(err, "Error occurred while getting token from config map")
 		log.Infof("Token used for initializing: %s ", token)
+		err = os.Setenv("PXCTL_AUTH_TOKEN", token)
+		log.FailOnError(err, "Error occurred while setting PXCTL_AUTH_TOKEN")
+
 	} else {
 		token = ""
 	}
@@ -718,17 +721,17 @@ func InitInstance() {
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
 	})
-	log.FailOnError(err, "Error occured while Node Driver Initialization")
+	log.FailOnError(err, "Error occurred while Node Driver Initialization")
 
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
-	log.FailOnError(err, "Error occured while Volume Driver Initialization")
+	log.FailOnError(err, "Error occurred while Volume Driver Initialization")
 
 	err = Inst().M.Init(Inst().JobName, Inst().JobType)
-	log.FailOnError(err, "Error occured while monitor Initialization")
+	log.FailOnError(err, "Error occurred while monitor Initialization")
 
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
-		log.FailOnError(err, "Error occured while Backup Driver Initialization")
+		log.FailOnError(err, "Error occurred while Backup Driver Initialization")
 	}
 	SetupTestRail()
 
