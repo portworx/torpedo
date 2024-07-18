@@ -1017,31 +1017,33 @@ func ValidatePDB(pdbValue int, allowedDisruptions int, initialNumNodes int, isCl
 		}
 
 	})
-	Step("Validate number of disruptions ", func() {
-		t := func() (interface{}, bool, error) {
-			nodes, err := Inst().V.GetDriverNodes()
+	if Inst().S.String() != anthos.SchedName {
+		Step("Validate number of disruptions ", func() {
+			t := func() (interface{}, bool, error) {
+				nodes, err := Inst().V.GetDriverNodes()
+				if err != nil {
+					return nil, true, fmt.Errorf("failed to get portworx nodes due to %v. Retrying with timeout", err)
+				} else {
+					return nodes, false, nil
+				}
+			}
+			nodes, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 			if err != nil {
-				return nil, true, fmt.Errorf("failed to get portworx nodes due to %v. Retrying with timeout", err)
-			} else {
-				return nodes, false, nil
-			}
-		}
-		nodes, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
-		if err != nil {
-			processError(err, errChan...)
-		} else {
-			currentNumNodes := len(nodes.([]*opsapi.StorageNode))
-			if allowedDisruptions < initialNumNodes-currentNumNodes {
-				err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
 				processError(err, errChan...)
-			}
-			if initialNumNodes-currentNumNodes > 1 {
-				*isClusterParallelyUpgraded = true
+			} else {
+				currentNumNodes := len(nodes.([]*opsapi.StorageNode))
+				if allowedDisruptions < initialNumNodes-currentNumNodes {
+					err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
+					processError(err, errChan...)
+				}
+				if initialNumNodes-currentNumNodes > 1 {
+					*isClusterParallelyUpgraded = true
 
+				}
 			}
-		}
 
-	})
+		})
+	}
 
 }
 
