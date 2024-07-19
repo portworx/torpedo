@@ -6297,3 +6297,41 @@ var _ = Describe("{DeleteVolumesDuringKvdbRunFlatMode}", func() {
 	})
 
 })
+
+var _ = Describe("{pvcresizecheck}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("pvcresizecheck", "Verify pvc resize", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	itLog := "pvcresizecheck"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		stepLog := "Schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pvcresize-%d", i))...)
+			}
+		})
+
+		ValidateApplications(contexts)
+
+		stepLog = "Resize PVCs"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for _, ctx := range contexts {
+				pvcs, err := GetContextPVCs(ctx)
+				log.FailOnError(err, "Failed to get pvc's from context")
+				for _, pvc := range pvcs {
+					pvcSize := pvc.Spec.Resources.Requests.Storage().String()
+					pvcSize = strings.TrimSuffix(pvcSize, "Gi")
+					pvcSizeInt, err := strconv.Atoi(pvcSize)
+					log.InfoD("resizing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
+					_, err = Inst().S.ResizePVC(ctx, pvc, uint64(pvcSizeInt/2))
+					log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
+				}
+			}
+		})
+	})
+})
