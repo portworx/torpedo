@@ -6335,8 +6335,8 @@ var _ = Describe("{pvcresizecheck}", func() {
 					pvcSize := pvc.Spec.Resources.Requests.Storage().String()
 					pvcSize = strings.TrimSuffix(pvcSize, "Gi")
 					pvcSizeInt, err := strconv.Atoi(pvcSize)
-					log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
-					resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(pvcSizeInt)/4)
+					log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, pvcSizeInt/4, pvc.UID)
+					resizedVol, err := Inst().S.ResizePVC(ctx, pvc, 1)
 					log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
 					log.InfoD("Vol uid %v of the app %s", resizedVol.ID, ctx.App.Key)
 
