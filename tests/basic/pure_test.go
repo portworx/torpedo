@@ -6315,7 +6315,7 @@ var _ = Describe("{pvcresizecheck}", func() {
 		})
 
 		ValidateApplications(contexts)
-		defer DestroyApps(contexts, nil)
+		//defer DestroyApps(contexts, nil)
 
 		stepLog = "Resize PVCs"
 		Step(stepLog, func() {
