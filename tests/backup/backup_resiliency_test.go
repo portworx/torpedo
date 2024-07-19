@@ -984,18 +984,25 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", Label(TestCaseLabelsMap[
 			log.InfoD("Restoring the backups taken")
 			ctx, err = backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
+			var mutex sync.Mutex
 			for _, backupName := range backupNames {
 				sem <- struct{}{}
 				restoreName := fmt.Sprintf("%s-restore", backupName)
 				restoreNames = append(restoreNames, restoreName)
 				wg.Add(1)
-				go func(backupName string) {
+				go func(backupName, restoreName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
 					defer func() { <-sem }()
-					_, err = CreateRestoreWithoutCheck(restoreName, backupName, nil, DestinationClusterName, BackupOrgID, ctx)
+					namespaceMap := make(map[string]string)
+					mutex.Lock()
+					if appCtx, ok := appContextsToBackupMap[backupName]; ok {
+						namespaceMap[appCtx[0].ScheduleOptions.Namespace] = fmt.Sprintf("%s-%s", appCtx[0].ScheduleOptions.Namespace, RandomString(4))
+					}
+					mutex.Unlock()
+					_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMap, DestinationClusterName, BackupOrgID, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring the backup %s with name %s", backupName, restoreName))
-				}(backupName)
+				}(backupName, restoreName)
 			}
 			wg.Wait()
 			log.Infof("The list of restores are: %v", restoreNames)
