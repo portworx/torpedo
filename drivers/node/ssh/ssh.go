@@ -4,9 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	docker_types "github.com/docker/docker/api/types"
 	"io/ioutil"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"net"
 	"os"
 	"regexp"
@@ -14,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	docker_types "github.com/docker/docker/api/types"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
@@ -27,6 +26,7 @@ import (
 	ssh_pkg "golang.org/x/crypto/ssh"
 	appsv1_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -617,17 +617,20 @@ func (s *SSH) RunCommandWithNoRetry(n node.Node, command string, options node.Co
 		}
 	}
 
-	out, err := s.doCmdUsingPodWithoutRetry(n, command)
-	if err != nil {
-		return "", err
-	}
+	// Execute Command, but return error after deleting admin security context
+	out, cmdErr := s.doCmdUsingPodWithoutRetry(n, command)
 
 	if len(token) > 0 && strings.Contains(command, "pxctl") && !strings.Contains(command, "which") {
 		deleteCtxCmd := fmt.Sprintf("%s context delete admin", "sudo /opt/pwx/bin/pxctl")
-		_, err = s.doCmdUsingPod(n, options, deleteCtxCmd, false)
+		_, err := s.doCmdUsingPod(n, options, deleteCtxCmd, false)
 		if err != nil {
 			return "", err
 		}
+	}
+
+	// Want to return this error after deleting admin security context
+	if cmdErr != nil {
+		return "", cmdErr
 	}
 	return out, nil
 }
