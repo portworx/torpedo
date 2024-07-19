@@ -836,6 +836,25 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 	return resp.VolumeId, nil
 }
 
+func (d *portworx) CreateAggregatedVolume(volName string, size uint64, haLevel int64, aggregationLevel uint32) (string, error) {
+	volDriver := d.getVolDriver()
+	resp, err := volDriver.Create(d.getContext(),
+		&api.SdkVolumeCreateRequest{
+			Name: volName,
+			Spec: &api.VolumeSpec{
+				Size:             size,
+				HaLevel:          haLevel,
+				Format:           api.FSType_FS_TYPE_EXT4,
+				AggregationLevel: aggregationLevel,
+			},
+		})
+	if err != nil {
+		return "", fmt.Errorf("failed to create volume, Err: %v", err)
+	}
+	log.Infof("Successfully created Portworx volume [%s], size %v, ha %v, aggregation %v", resp.VolumeId, size, haLevel, aggregationLevel)
+	return resp.VolumeId, nil
+}
+
 // CreateVolumeUsingPxctlCmd resizes a pool of a given UUID using CLI command
 func (d *portworx) CreateVolumeUsingPxctlCmd(n node.Node, volName string, size uint64, haLevel int64) error {
 	log.InfoD("Initiate Volume create with Volume Name %s", volName)
@@ -6511,4 +6530,19 @@ func (d *portworx) ValidateLastDefragScheduleStatus(scheduleId string, nodeIDLis
 	}
 	log.Infof("Successfully validate  defrag schedule status for id: [%s]", scheduleId)
 	return incompletedNodeList, nil
+}
+
+func (d *portworx) GetNodeFromPXID(pxID string) (*api.StorageNode, error) {
+	log.Infof("Getting the node using nodeId [%s]", pxID)
+	var nodeManager api.OpenStorageNodeClient = d.getNodeManager()
+
+	nodeResponse, err := nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: pxID})
+	if err != nil {
+		return nil, err
+	}
+
+	if nodeResponse.Node.MgmtIp == "" {
+		return nil, fmt.Errorf("got an empty MgmtIp from SdkNodeInspectRequest")
+	}
+	return nodeResponse.Node, nil
 }

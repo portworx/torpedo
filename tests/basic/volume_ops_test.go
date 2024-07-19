@@ -3730,3 +3730,424 @@ var _ = Describe("{RestartPxandRestartNode}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{CloudSnapWithMetaDataVolAggregate}", func() {
+	/*
+			https://purestorage.atlassian.net/browse/PTX-25041
+		        https://purestorage.atlassian.net/browse/PWX-34334
+			1. enable extentmetadata based cloudsnap
+			2. Create aggr 2 repl 2 volume and write some data to it
+			3. Write some data to it
+			4. Create cloudsnap request. note down the nodes on which cloudsnap runs ( one ip for each aggr)
+			Repeat above steps till 2 more cloudsnaps are created.
+			5. Write some data to the volume, detach the volume
+			6. stop portworx on the fist replicaset where cloudsnap ran previously
+			7. issue cloudsnap command again
+			8. Once the cloudsnap is done, make sure it's full and not incremental
+			9. Restore the cloudsnap and make sure data matches with the source volume.
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("CloudSnapWithMetaDataVolAggregate", "CloudSnap with metadata volume aggregate", nil, 0)
+	})
+
+	itLog := "CloudSnapWithMetaDataVolAggregate"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var (
+			selectedNode = node.GetStorageNodes()[0]
+			nodeName     string
+		)
+
+		stepLog := "Create cloud credentials and Enable extentmetadata based cloudsnap"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = CreatePXCloudCredential()
+			log.FailOnError(err, "Failed to create cloudsnap credential")
+			log.InfoD("Created cloudsnap credential")
+
+			enableCmd := "cluster options update --cloudsnap-using-metadata-enabled on"
+			_, err := runPxctlCommand(enableCmd, node.GetStorageDriverNodes()[0], nil)
+			log.FailOnError(err, "Failed to enable extentmetadata based cloudsnap")
+			log.InfoD("Successfully enabled extentmetadata based cloudsnap")
+		})
+
+		stepLog = "Create aggr 2 repl 2 volume and write some data to it"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volName := fmt.Sprintf("dd-cloudsnap")
+			volId, err := Inst().V.CreateAggregatedVolume(volName, 10000, 2, 2)
+			log.FailOnError(err, "Failed to create volume")
+			log.InfoD("Successfully created volume with id: %s", volId)
+
+			// Mount the volume,attach the volume and write some data to it
+			//attach volume to host
+			attachCmd := fmt.Sprintf("pxctl host attach %s", volName)
+			cmdConnectionOpts := node.ConnectionOpts{
+				Timeout:         15 * time.Second,
+				TimeBeforeRetry: 5 * time.Second,
+				Sudo:            true,
+			}
+
+			_, err = Inst().N.RunCommandWithNoRetry(selectedNode, attachCmd, cmdConnectionOpts)
+			log.FailOnError(err, "Failed to attach volume to host")
+
+			mountPath := fmt.Sprintf("/var/lib/osd/mounts/%s", volName)
+			creatDir := fmt.Sprintf("mkdir %s", mountPath)
+
+			log.Infof("Running command %s on %s", creatDir, selectedNode.Name)
+			_, err = Inst().N.RunCommandWithNoRetry(selectedNode, creatDir, cmdConnectionOpts)
+			log.FailOnError(err, "Failed to create directory %s", mountPath)
+
+			mountCmd := fmt.Sprintf("pxctl host mount --path %s %s", mountPath, volName)
+			log.Infof("Running command %s on %s", mountCmd, selectedNode.Name)
+			_, err = Inst().N.RunCommandWithNoRetry(selectedNode, mountCmd, cmdConnectionOpts)
+			log.FailOnError(err, "Failed to mount volume %s", volName)
+
+			// create a file named test file in mountpath
+			filePath := fmt.Sprintf("/var/lib/osd/mounts/%s/testFile1", volName)
+			createFile := fmt.Sprintf("touch %s", filePath)
+			_, err = Inst().N.RunCommandWithNoRetry(selectedNode, createFile, cmdConnectionOpts)
+			log.FailOnError(err, "Failed to create file %s", filePath)
+
+			err = writeDataUsingDD(selectedNode, 60, filePath)
+			log.FailOnError(err, "Failed to write data to volume")
+		})
+
+		stepLog = "Create cloudsnap schedule request and wait until 3 cloudsnaps are created"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volName := fmt.Sprintf("dd-cloudsnap")
+
+			uuidCmd := "pxctl cred list -j | grep uuid"
+			output, err := runCmd(uuidCmd, selectedNode)
+			log.FailOnError(err, "error getting uuid for cloudsnap credential")
+			if output == "" {
+				log.FailOnError(fmt.Errorf("cloud cred is not created"), "Check for cloud cred exists?")
+			}
+
+			credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
+			credUUID = strings.ReplaceAll(credUUID, "\"", "")
+			log.Infof("Got Cred UUID: %s", credUUID)
+
+			// Create cloudsnap schedule request
+			cloudSnapScheduleCmd := fmt.Sprintf("cloudsnap schedules create %s -p 15 --cred-id %s", volName, credUUID)
+			_, err = runPxctlCommand(cloudSnapScheduleCmd, selectedNode, nil)
+			log.FailOnError(err, "Failed to run cloudsnap schedule command")
+
+			t := func() (interface{}, bool, error) {
+				cmd := fmt.Sprintf("pxctl cs list -j | jq '[.[] | select(.SrcVolumeName == \"%s\")] | length'", volName)
+				output, err = runCmd(cmd, selectedNode)
+				if err != nil {
+					return nil, true, err
+				}
+				output = strings.TrimSpace(output)
+				value, err := strconv.Atoi(output)
+				if err != nil {
+					return nil, true, err
+				}
+				if value >= 3 {
+					return nil, false, nil
+				}
+
+				return nil, true, fmt.Errorf("Number of cloudsnap created is still less than 3, current value: %v", output)
+			}
+			_, err = task.DoRetryWithTimeout(t, 3/2*time.Hour, 1*time.Minute)
+			log.FailOnError(err, "Failed to wait for 3 scheduled cloudsnap creation")
+
+		})
+
+		stepLog = "Write some data to the volume, detach the volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volName := fmt.Sprintf("dd-cloudsnap")
+			mountPath := fmt.Sprintf("/var/lib/osd/mounts/%s/testFile2", volName)
+
+			mkdirCmd := fmt.Sprintf("touch %s", mountPath)
+			_, err := runCmd(mkdirCmd, selectedNode)
+
+			err = writeDataUsingDD(selectedNode, 60, mountPath)
+			log.FailOnError(err, "Failed to write data to volume")
+
+			volInspect, err := Inst().V.InspectVolume(volName)
+			log.FailOnError(err, "Failed to inspect volume")
+
+			// Stop portworx on the first replicaset where cloudsnap ran previously
+			nodeName = volInspect.ReplicaSets[0].Nodes[0]
+
+			// Unmount the volume and detach the volume
+			t := func() (interface{}, bool, error) {
+				path := fmt.Sprintf("/var/lib/osd/mounts/%s", volName)
+				unmountCmd := fmt.Sprintf("pxctl host unmount %s --path %s", volName, path)
+				_, err = Inst().N.RunCommandWithNoRetry(selectedNode, unmountCmd, node.ConnectionOpts{})
+				if err != nil {
+					return nil, true, err
+				}
+
+				detachCmd := fmt.Sprintf("pxctl host detach %s", volName)
+				_, err = Inst().N.RunCommandWithNoRetry(selectedNode, detachCmd, node.ConnectionOpts{})
+				if err != nil {
+					return nil, true, err
+				}
+
+				return nil, false, nil
+			}
+
+			_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 15*time.Second)
+			log.FailOnError(err, "Failed to unmount and detach volume")
+
+		})
+
+		stepLog = "Stop portworx on the first replicaset where cloudsnap ran previously"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			n, err := Inst().V.GetNodeFromPXID(nodeName)
+			log.FailOnError(err, "Failed to get node by name %s", nodeName)
+
+			nodeDetails, err := node.GetNodeDetailsByNodeID(n.Id)
+			log.FailOnError(err, "Failed to get node by name %s", nodeName)
+
+			log.InfoD("Stopping portworx on node %s", nodeDetails.Name)
+			err = Inst().V.StopDriver([]node.Node{nodeDetails}, false, nil)
+			log.FailOnError(err, "Failed to stop portworx on node %s", nodeDetails.Name)
+
+			err = Inst().V.WaitDriverDownOnNode(nodeDetails)
+			log.FailOnError(err, "Failed to wait for portworx to be down on node %s", nodeDetails.Name)
+
+		})
+
+		stepLog = "Wait for another snapshot to be created"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volName := fmt.Sprintf("dd-cloudsnap")
+
+			n, err := Inst().V.GetNodeFromPXID(nodeName)
+			log.FailOnError(err, "Failed to get node by name %s", nodeName)
+
+			nodeDetails, err := node.GetNodeDetailsByNodeID(n.Id)
+			log.FailOnError(err, "Failed to get node by name %s", nodeName)
+
+			if selectedNode.Name == nodeDetails.Name {
+				for _, node := range node.GetStorageDriverNodes() {
+					if node.Name != nodeName {
+						selectedNode = node
+						break
+					}
+				}
+			}
+
+			t := func() (interface{}, bool, error) {
+				cmd := fmt.Sprintf("pxctl cs list -j | jq '[.[] | select(.SrcVolumeName == \"%s\")] | length'", volName)
+				output, err := runCmd(cmd, selectedNode)
+				if err != nil {
+					return nil, true, err
+				}
+				output = strings.TrimSpace(output)
+				value, err := strconv.Atoi(output)
+				if err != nil {
+					return nil, true, err
+				}
+
+				if value > 4 {
+					return nil, false, nil
+				}
+				return nil, true, fmt.Errorf("Number of cloudsnap created is still less than 4, current value: %v", output)
+			}
+			_, err = task.DoRetryWithTimeout(t, 1*time.Hour, 1*time.Minute)
+			log.FailOnError(err, "Failed to wait for 4 scheduled cloudsnap creation")
+		})
+		stepLog = "check if the most recent cloudsnap taken is not incremental"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volName := fmt.Sprintf("dd-cloudsnap")
+
+			// Get the most recent cloudsnap
+			cmd := fmt.Sprintf(`pxctl cs list -j | jq -r '[.[] | select(.SrcVolumeName == "%s")] | sort_by(.Timestamp) | last | .ID'`, volName)
+			cloudSnapName, err := runCmd(cmd, selectedNode)
+			log.FailOnError(err, "Failed to get the most recent cloudsnap")
+
+			if strings.Contains(cloudSnapName, "inc") {
+				//Start portworx on the node where it was stopped
+				n, err := Inst().V.GetNodeFromPXID(nodeName)
+				log.FailOnError(err, "Failed to get node by name %s", nodeName)
+
+				nodeDetails, err := node.GetNodeDetailsByNodeID(n.Id)
+				log.FailOnError(err, "Failed to get node by name %s", nodeName)
+
+				log.InfoD("Starting portworx on node %s", nodeDetails.Name)
+				err = Inst().V.StartDriver(nodeDetails)
+				log.FailOnError(err, "Failed to start portworx on node %s", nodeDetails.Name)
+
+				err = Inst().V.WaitDriverUpOnNode(nodeDetails, Inst().DriverStartTimeout)
+				log.FailOnError(err, "Failed to wait for portworx to be up on node %s", nodeDetails.Name)
+
+				log.FailOnError(fmt.Errorf("The most recent cloudsnap is incremental"), "The most recent cloudsnap should be full")
+			}
+
+		})
+
+		stepLog = "Start portworx on the node where it was stopped"
+		Step(stepLog, func() {
+			//Start portworx on the node where it was stopped
+			n, err := Inst().V.GetNodeFromPXID(nodeName)
+			log.FailOnError(err, "Failed to get node by name %s", nodeName)
+
+			nodeDetails, err := node.GetNodeDetailsByNodeID(n.Id)
+			log.FailOnError(err, "Failed to get node by name %s", nodeName)
+
+			log.InfoD("Starting portworx on node %s", nodeDetails.Name)
+			err = Inst().V.StartDriver(nodeDetails)
+			log.FailOnError(err, "Failed to start portworx on node %s", nodeDetails.Name)
+
+			err = Inst().V.WaitDriverUpOnNode(nodeDetails, Inst().DriverStartTimeout)
+			log.FailOnError(err, "Failed to wait for portworx to be up on node %s", nodeDetails.Name)
+
+		})
+
+		stepLog = "Restore the cloudsnap and make sure data matches with the source volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			uuidCmd := "pxctl cred list -j | grep uuid"
+			output, err := runCmd(uuidCmd, selectedNode)
+			log.FailOnError(err, "error getting uuid for cloudsnap credential")
+			if output == "" {
+				log.FailOnError(fmt.Errorf("cloud cred is not created"), "Check for cloud cred exists?")
+			}
+
+			credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
+			credUUID = strings.ReplaceAll(credUUID, "\"", "")
+			log.Infof("Got Cred UUID: %s", credUUID)
+
+			restorevolName := fmt.Sprintf("dd-cloudsnap-restore")
+			volName := fmt.Sprintf("dd-cloudsnap")
+
+			// Get the most recent cloudsnap
+			cmd := fmt.Sprintf("pxctl cs list -j | jq -r '[.[] | select(.SrcVolumeName == \"%s\")] | sort_by(.Timestamp) | last | .ID'", volName)
+			cloudSnapName, err := runCmd(cmd, selectedNode)
+			log.InfoD("Most recent cloudsnap: %s", cloudSnapName)
+			log.FailOnError(err, "Failed to get the most recent cloudsnap")
+
+			cloudSnapName = strings.TrimSpace(cloudSnapName)
+
+			restoreCmd := fmt.Sprintf("cs restore --snap %s --volume %s --cred-id %s", cloudSnapName, restorevolName, credUUID)
+			log.InfoD("Running command %s on %s", restoreCmd, selectedNode.Name)
+			_, err = runPxctlCommand(restoreCmd, selectedNode, nil)
+			log.FailOnError(err, "Failed to restore cloudsnap")
+
+			// Wait until the restore is done
+			err = WaitForCloudsnapRestore(cloudSnapName, selectedNode)
+			log.FailOnError(err, "Failed to wait for cloudsnap restore")
+
+			//Attach the cloudsnap restore volume to the host
+			attachCmd := fmt.Sprintf("host attach %s", restorevolName)
+			_, err = runPxctlCommand(attachCmd, selectedNode, nil)
+			log.FailOnError(err, "Failed to attach volume to host")
+
+			// make a directory to mount the volume
+			mountPath := fmt.Sprintf("mkdir /var/lib/osd/mounts/%s", restorevolName)
+			creatDir := fmt.Sprintf("mkdir %s", mountPath)
+
+			cmdConnectionOpts := node.ConnectionOpts{
+				Timeout:         15 * time.Second,
+				TimeBeforeRetry: 5 * time.Second,
+				Sudo:            true,
+			}
+
+			log.Infof("Running command %s on %s", creatDir, selectedNode.Name)
+			_, err = Inst().N.RunCommandWithNoRetry(selectedNode, creatDir, cmdConnectionOpts)
+			log.FailOnError(err, "Failed to create directory %s", mountPath)
+
+			//Mount the volume
+			mountCmd := fmt.Sprintf("pxctl host mount --path %s %s", mountPath, restorevolName)
+			log.Infof("Running command %s on %s", mountCmd, selectedNode.Name)
+			_, err = Inst().N.RunCommandWithNoRetry(selectedNode, mountCmd, cmdConnectionOpts)
+			log.FailOnError(err, "Failed to mount volume %s", restorevolName)
+
+			// Compare the data in the source volume and the restored volume
+			cmd = fmt.Sprintf("diff -r /var/lib/osd/mounts/%s /var/lib/osd/mounts/%s", restorevolName, restorevolName)
+			_, err = runCmd(cmd, selectedNode)
+			log.FailOnError(err, "Data in the source volume and the restored volume do not match")
+
+			// list all the files in the mounts directory
+			cmd = fmt.Sprintf("ls -l /var/lib/osd/mounts/%s", restorevolName)
+			restoredFiles, err := runCmd(cmd, selectedNode)
+			log.FailOnError(err, "Failed to list all the files in the mounts directory")
+
+			log.InfoD("List of all the files in the mounts directory: %s", restoredFiles)
+
+			cmd = fmt.Sprintf("ls -l /var/lib/osd/mounts/%s", volName)
+			sourceFiles, err := runCmd(cmd, selectedNode)
+			log.FailOnError(err, "Failed to list all the files in the mounts directory")
+			log.InfoD("List of all the files in the mounts directory: %s", sourceFiles)
+
+			md5SumRestoreMap := make(map[string]string)
+
+			// Compare the data in the source volume and the restored volume
+			for _, file := range strings.Split(restoredFiles, "\n") {
+				cmd = fmt.Sprintf("md5sum /var/lib/osd/mounts/%s/%s", restorevolName, file)
+				restoredFileMD5, err := runCmd(cmd, selectedNode)
+				log.FailOnError(err, "Failed to get the md5sum of the file %s", file)
+
+				md5SumRestoreMap[file] = restoredFileMD5
+			}
+
+			for _, file := range strings.Split(sourceFiles, "\n") {
+				cmd = fmt.Sprintf("md5sum /var/lib/osd/mounts/%s/%s", volName, file)
+				sourceFileMD5, err := runCmd(cmd, selectedNode)
+				log.FailOnError(err, "Failed to get the md5sum of the file %s", file)
+
+				if md5SumRestoreMap[file] != sourceFileMD5 {
+					log.FailOnError(fmt.Errorf("Data in the source volume and the restored volume do not match"), "Data in the source volume and the restored volume do not match")
+				}
+			}
+			log.InfoD("Data in the source volume and the restored volume match")
+		})
+
+	})
+
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+
+})
+
+// WaitForCloudsnapRestore waits for the restore to be done
+func WaitForCloudsnapRestore(cloudSnapName string, selectedNode node.Node) error {
+	t := func() (interface{}, bool, error) {
+		cmd := fmt.Sprintf("pxctl cs status | grep %s | awk '{print $3;exit}'", cloudSnapName)
+		output, err := runCmd(cmd, selectedNode)
+		if err != nil {
+			return nil, true, err
+		}
+		output = strings.TrimSpace(output)
+		if output == "Restore-Done" {
+			log.InfoD("Restore of cloudsnap %s has been completed", cloudSnapName)
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("Restore is still in progress")
+	}
+	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, 15*time.Minute)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// WriteDataUsingDD writes data to the volume using dd command
+func writeDataUsingDD(n node.Node, size int, mountPath string) error {
+	cmdConnectionOpts := node.ConnectionOpts{
+		Timeout:         15 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	}
+
+	writeCmd := fmt.Sprintf("dd if=/dev/zero of=%s bs=1M count=%d", mountPath, size)
+	log.Infof("Running command %s on %s", writeCmd, n.Name)
+	_, err = Inst().N.RunCommandWithNoRetry(n, writeCmd, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

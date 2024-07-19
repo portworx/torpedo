@@ -95,6 +95,10 @@ type Driver interface {
 	// returns volume_id of the new volume
 	CreateVolume(volName string, size uint64, haLevel int64) (string, error)
 
+	// CreateAggregatedVolume creates a volume with the default setting
+	// returns volume_id of the new volume
+	CreateAggregatedVolume(volName string, size uint64, haLevel int64, aggregationLevel uint32) (string, error)
+
 	// CreateVolumeUsingPxctlCmd resizes a pool of a given UUID using CLI command
 	CreateVolumeUsingPxctlCmd(n node.Node, volName string, size uint64, haLevel int64) error
 
@@ -562,6 +566,9 @@ type Driver interface {
 
 	// ValidateLastDefragScheduleStatus validate defrag status in given node ids
 	ValidateLastDefragScheduleStatus(scheduleId string, nodeIDList []string) ([]string, error)
+
+	// GetNodeFromPXID returns the node object from the given PXID
+	GetNodeFromPXID(pxID string) (*api.StorageNode, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

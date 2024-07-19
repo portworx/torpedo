@@ -129,6 +129,15 @@ func (d *DefaultDriver) CreateVolume(volName string, size uint64, haLevel int64)
 	}
 }
 
+// CreateAggregatedVolume creates a volume with the given setting
+// returns volume_id of the new volume
+func (d *DefaultDriver) CreateAggregatedVolume(volName string, size uint64, haLevel int64, aggregationLevel uint32) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateAggregatedVolume()",
+	}
+}
+
 // CreateVolumeUsingPxctlCmd resizes a pool of a given UUID using CLI command
 func (d *DefaultDriver) CreateVolumeUsingPxctlCmd(n node.Node, volName string, size uint64, haLevel int64) error {
 	return &errors.ErrNotSupported{
@@ -1323,4 +1332,12 @@ func (d *DefaultDriver) ValidateLastDefragScheduleStatus(scheduleId string, node
 		Operation: "ValidateLastDefragScheduleStatus()",
 	}
 
+}
+
+// GetNodeFromPXID gets the node from the given pxID
+func (d *DefaultDriver) GetNodeFromPXID(pxID string) (*api.StorageNode, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodeFromPXID()",
+	}
 }
