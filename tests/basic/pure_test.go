@@ -6315,21 +6315,31 @@ var _ = Describe("{pvcresizecheck}", func() {
 		})
 
 		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
 
 		stepLog = "Resize PVCs"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-
+			var pvcs []*v1.PersistentVolumeClaim
 			for _, ctx := range contexts {
-				pvcs, err := GetContextPVCs(ctx)
-				log.FailOnError(err, "Failed to get pvc's from context")
+				appVolumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes from context")
+				log.InfoD(fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
+					Inst().V.String(), ctx.App.Key, appVolumes))
+				for _, eachVol := range appVolumes {
+					pvc, err := GetPVCObjFromVol(eachVol)
+					log.FailOnError(err, "Failed to get PVC Details from Volume [%v]", eachVol.Name)
+					pvcs = append(pvcs, pvc)
+				}
 				for _, pvc := range pvcs {
 					pvcSize := pvc.Spec.Resources.Requests.Storage().String()
 					pvcSize = strings.TrimSuffix(pvcSize, "Gi")
 					pvcSizeInt, err := strconv.Atoi(pvcSize)
-					log.InfoD("resizing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
-					_, err = Inst().S.ResizePVC(ctx, pvc, uint64(pvcSizeInt/2))
+					log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
+					resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(pvcSizeInt)/4)
 					log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
+					log.InfoD("Vol uid %v of the app %s", resizedVol.ID, ctx.App.Key)
+
 				}
 			}
 		})
