@@ -6250,7 +6250,13 @@ var _ = Describe("{DeleteVolumesDuringKvdbRunFlatMode}", func() {
 						log.FailOnError(err, "Failed to delete volume")
 					}
 				}
-				err = Inst().V.DetachVolume(volList[i])
+			}
+		})
+		stepLog = "Try Detaching volumes during flat mode and volumes should not be detached"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < 5; i++ {
+				err := Inst().V.DetachVolume(volList[i])
 				if err != nil {
 					isFlatModeEnabled = strings.Contains(err.Error(), kvdbRunFlatMode)
 					if isFlatModeEnabled {
@@ -6265,7 +6271,7 @@ var _ = Describe("{DeleteVolumesDuringKvdbRunFlatMode}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for i := 5; i < 10; i++ {
-				out, err := Inst().V.AttachVolume(volList[i])
+				_, err := Inst().V.AttachVolume(volList[i])
 				if err != nil {
 					isFlatModeEnabled = strings.Contains(err.Error(), kvdbRunFlatMode)
 					if isFlatModeEnabled {
@@ -6274,7 +6280,6 @@ var _ = Describe("{DeleteVolumesDuringKvdbRunFlatMode}", func() {
 						log.FailOnError(err, "Failed to attach volume")
 					}
 				}
-				log.InfoD("Volume attached [%v]", out)
 			}
 		})
 		stepLog = "Make Kvdb nodes up"
