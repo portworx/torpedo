@@ -86,7 +86,7 @@ type AppConfig struct {
 	DataSize                    string   `yaml:"data_size"`
 	VmID                        string   `yaml:"vm_id"`
 	PureFaPodName               string   `yaml:"pure_fa_pod_name"`
-	FsType                      string   `yaml:"csi.storage.k8s.io/fstype: xfs"`
+	FsType                      string   `yaml:"csi.storage.k8s.io/fstype"`
 	CreateOptions               string   `yaml:"createoptions"`
 }
 
