@@ -6747,3 +6747,166 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{PxRestartOnNodeWithJournalDeviceFADA}", func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-25040
+		1. Schedule application
+		2. Find a node with journal device
+		3. Create and attach mutiple FADA volumes to the node
+		4. Restart PX on the node
+		5. After restart make sure PX is up and all the volumes are healthy.
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PxRestartOnNodeWithJournalDevice", "Restart PX on a node with journal device", nil, 0)
+	})
+
+	var (
+		contexts                []*scheduler.Context
+		selectedNode            node.Node
+		volumeValidationTimeOut = 1 * time.Minute
+		JournalDevicePath       string
+	)
+
+	itLog := "PxRestartOnNodeWithJournalDevice"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		stepLog := "schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("journaldevice-%d", i))...)
+			}
+
+		})
+		defer DestroyApps(contexts, nil)
+		ValidateApplications(contexts)
+
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes := node.GetStorageDriverNodes()
+			for _, node := range storageNodes {
+				output, err := runCmd("pxctl status", node)
+				log.FailOnError(err, "Failed to run pxctl status on node: %v", node.Name)
+				log.Infof("pxctl status output: %v", output)
+
+				if !strings.Contains(output, "Journal Device") {
+					selectedNode = node
+					break
+				}
+			}
+			if selectedNode.Name == "" {
+				stepLog = "Put pool in maintenance mode and add a cloud drive as a journal device"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					//Put pool in maintenance mode
+					defer func() {
+						err := ExitPoolMaintenance(selectedNode)
+						log.FailOnError(err, "Failed to exit pool maintenance mode")
+					}()
+					err := EnterPoolMaintenance(selectedNode)
+					log.FailOnError(err, "Failed to enter pool maintenance mode")
+
+					//Add a cloud drive as a journal device
+					driveSpecs, err := GetCloudDriveDeviceSpecs()
+					log.FailOnError(err, "Error getting cloud drive specs")
+
+					deviceSpec := driveSpecs[0]
+					devicespecjournal := deviceSpec + " --journal"
+
+					err = Inst().V.AddCloudDrive(&selectedNode, devicespecjournal, -1)
+					log.FailOnError(err, "Failed to add cloud drive as a journal device")
+				})
+			}
+			log.Infof("Selected Node for add journal device: %v", selectedNode.Name)
+		})
+		stepLog = "Create and attach a FADA volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Create a namespace for the volume
+			namespace := "fada-namespace"
+			_, err := CreateNamespaces(namespace, 1)
+			log.FailOnError(err, "Failed to create namespace")
+
+			nsuuid := uuid.New()
+
+			// Create Storage Class
+			scName := fmt.Sprintf("fada-sc-%s", nsuuid.String())
+			log.Infof("Create Storage class with Name [%v]", scName)
+			var allowVolExpansion bool = true
+			err = CreateFlashStorageClass(scName,
+				"pure_block",
+				v1.PersistentVolumeReclaimDelete,
+				nil, nil, &allowVolExpansion,
+				storageApi.VolumeBindingImmediate,
+				nil)
+			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", scName))
+
+			for i := 0; i < 10; i++ {
+				pvcName := fmt.Sprintf("fada-pvc-%d", i)
+				log.FailOnError(CreateFlashPVCOnCluster(pvcName, scName, namespace, "100"),
+					"Failed to create PVC on the cluster")
+			}
+
+			log.FailOnError(err, "Failed to create and attach FADA volume")
+		})
+
+		stepLog = "Restart PX on the node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//before we restart get the journal device path
+			JournalDevicePath, err = Inst().V.GetJournalDevicePath(&selectedNode)
+			log.FailOnError(err, "Failed to get journal device path")
+
+			err = Inst().V.StopDriver([]node.Node{selectedNode}, false, nil)
+			log.FailOnError(err, "Failed to stop PX on the node")
+
+			// wait for px to go down completely
+			err = Inst().V.WaitDriverDownOnNode(selectedNode)
+			log.FailOnError(err, "Failed to wait for PX to go down on the node")
+
+			err = Inst().V.StartDriver(selectedNode)
+			log.FailOnError(err, "Failed to start PX on the node")
+
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+			log.FailOnError(err, "Failed to wait for PX to come up on the node")
+		})
+
+		stepLog = "Verify PX is up and all volumes are healthy"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+
+			// Verify all volumes are healthy
+			FADAPvcList, err := GetAllPVCFromNs("fada-namespace", nil)
+			log.FailOnError(err, "Failed to get all PVCs from namespace")
+
+			for _, pvc := range FADAPvcList {
+				err := k8sCore.ValidatePersistentVolumeClaim(&pvc, volumeValidationTimeOut, retryInterval)
+				log.FailOnError(err, "Failed to validate PVC [%v]", pvc.Name)
+			}
+
+			//Check if the journal partition is still attached
+			systemOpts := node.SystemctlOpts{
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: defaultRetryInterval,
+				},
+				Action: "start",
+			}
+			drivesMap, err := Inst().N.GetBlockDrives(selectedNode, systemOpts)
+			log.FailOnError(err, "error getting block drives from node %s", selectedNode.Name)
+
+			//check if key exists in the map
+			if _, ok := drivesMap[JournalDevicePath]; !ok {
+				log.FailOnError(fmt.Errorf("Journal Device [%v] not found in the drives map", JournalDevicePath), "Journal Device not found in the drives map")
+			}
+
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		DestroyApps(contexts, nil)
+	})
+})
