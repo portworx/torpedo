@@ -1987,9 +1987,8 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 			}
 		})
 	})
-	itLog = "has to fill up the sharedv4 volume completely, resize the volume, validate and teardown apps"
-	It(itLog, func() {
-		log.InfoD(itLog)
+	It("has to fill up the sharedv4 volume completely, resize the volume, validate and teardown apps", func() {
+		log.InfoD("has to fill up the sharedv4 volume completely, resize the volume, validate and teardown apps")
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sPvcBasic", testSuiteName))
 		var scaleFactor = 2
@@ -2054,9 +2053,8 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 			}
 		})
 	})
-	itLog = "has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps"
-	It(itLog, func() {
-		log.InfoD(itLog)
+	It("has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps", func() {
+		log.InfoD("has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps")
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%srebalance", testSuiteName))
 		poolLabel := map[string]string{"autopilot": "resizedisk"}
