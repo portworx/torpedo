@@ -21,14 +21,14 @@ spec:
           volumeMounts:
             - name: mysql-portworx
               mountPath: /var/lib/mysql
-            - name: mysql-cephfs
+            - name: mysql-gke
               mountPath: /etc/mysql/conf.d
       containers:
-        - name: mysql
-          image: mysql:5.6
+        - image: mysql:5.6
+          name: mysql
           env:
             - name: MYSQL_ROOT_PASSWORD
-              value: rootpassword
+              value: password
           ports:
             - containerPort: 3306
           livenessProbe:
@@ -46,12 +46,12 @@ spec:
           volumeMounts:
             - name: mysql-portworx
               mountPath: /var/lib/mysql
-            - name: mysql-cephfs
+            - name: mysql-gke
               mountPath: /etc/mysql/conf.d
       volumes:
         - name: mysql-portworx
           persistentVolumeClaim:
             claimName: mysql-portworx-pvc
-        - name: mysql-cephfs
+        - name: mysql-gke
           persistentVolumeClaim:
-            claimName: mysql-cephfs-pvc
+            claimName: mysql-gke-pvc

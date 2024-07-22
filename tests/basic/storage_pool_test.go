@@ -2873,6 +2873,12 @@ var _ = Describe("{ResizeWithJrnlAndMeta}", func() {
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		isDmthin, err := IsDMthin()
+		log.FailOnError(err, "Error while checking cluster type")
+		if isDmthin {
+			Skip("Drive add Journal Device is not supported for DMThin")
+		}
+
 		journalStatus, err := IsJournalEnabled()
 		log.FailOnError(err, "err getting journal status")
 		dash.VerifyFatal(journalStatus, true, "verify journal device is enabled")
@@ -8661,7 +8667,11 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 	stepLog := "Add drive when as journal"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-
+		isDmthin, err := IsDMthin()
+		log.FailOnError(err, "Error while checking cluster type")
+		if isDmthin {
+			Skip("Drive add Journal Device is not supported for DMThin")
+		}
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddriveasjournal-%d", i))...)
@@ -8941,16 +8951,19 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
 		terminate := false
+		var deleteMutex sync.Mutex
 		stopRoutine := func() {
 			if !terminate {
 				terminate = true
 				time.Sleep(1 * time.Minute) // Wait for 1 min to settle down all other go routines to terminate
+				deleteMutex.Lock()
 				for _, each := range volumesCreated {
 					if IsVolumeExits(each) {
 						log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
 					}
 
 				}
+				deleteMutex.Unlock()
 
 			}
 		}
@@ -8958,7 +8971,6 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		defer stopRoutine()
 
 		// Wait for KVDB Nodes up and running and in healthy state
-		// Go routine to kill kvdb master in regular intervals
 		go func() {
 			defer wg.Done()
 			defer GinkgoRecover()
@@ -8971,8 +8983,6 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 					stopRoutine()
 					log.FailOnError(err, "not all kvdb members in healthy state")
 				}
-				// Wait for some time after killing kvdb master Node
-				time.Sleep(5 * time.Minute)
 			}
 		}()
 
@@ -9054,6 +9064,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 						}
 
 						time.Sleep(5 * time.Second)
+						deleteMutex.Lock()
 						// Delete the Volume
 						err = Inst().V.DeleteVolume(eachVol)
 						if err != nil {
@@ -9061,12 +9072,8 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 							log.FailOnError(err, "failed to delete volume with volume ID [%s]", eachVol)
 						}
 
-						// Remove the first element
-						for i := 0; i < len(volumesCreated)-1; i++ {
-							volumesCreated[i] = volumesCreated[i+1]
-						}
-						// Resize the array by truncating the last element
-						volumesCreated = volumesCreated[:len(volumesCreated)-1]
+						volumesCreated = volumesCreated[1:]
+						deleteMutex.Unlock()
 					}
 					if terminate {
 						break
@@ -9358,19 +9365,31 @@ func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
 	poolListAfterCreate := make(map[string]int)
 
 	isDmthin, err := IsDMthin()
-	log.FailOnError(err, "failed to check if Node is DMThin ")
+
+	if err != nil {
+		return err
+	}
 
 	for _, eachNode := range nodes {
-		pools, _ := GetPoolsDetailsOnNode(&eachNode)
-		log.InfoD("Length of pools present on Node [%v] =  [%v]", eachNode.Name, len(pools))
-		poolList[eachNode.Name] = len(pools)
+		if node.IsStorageNode(eachNode) {
+			pools, err := GetPoolsDetailsOnNode(&eachNode)
+			if err != nil {
+				return err
+			}
+			poolList[eachNode.Name] = len(pools)
+		} else {
+			poolList[eachNode.Name] = 0
+		}
+		log.InfoD("Length of pools present on Node [%v] =  [%v]", eachNode.Name, poolList[eachNode.Name])
+
 	}
 
 	log.InfoD("Pool Details and total pools present [%v]", poolList)
+	errChan := make(chan error, len(nodes))
 
-	wg.Add(len(nodes))
 	for _, eachNode := range nodes {
-		go func(eachNode node.Node) {
+		wg.Add(1)
+		go func(eachNode node.Node, errChan chan error) {
 			defer wg.Done()
 			defer GinkgoRecover()
 			log.InfoD("Adding cloud drive on Node [%v]", eachNode.Name)
@@ -9380,11 +9399,32 @@ func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
 				log.FailOnError(AddMetadataDisk(eachNode), "Failed to add metadata disk to the node ")
 			}
 
+			//Adding new pool
 			err := AddCloudDrive(eachNode, -1)
-			log.FailOnError(err, "adding cloud drive failed on Node [%v]", eachNode)
-		}(eachNode)
+			if err != nil {
+				errChan <- err
+			}
+		}(eachNode, errChan)
 	}
-	wg.Wait()
+	// Close the error channel once all goroutines are done
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	var addCloudDriveErrs []string
+
+	// Collect addCloudDriveErrs from all goroutines
+	for err := range errChan {
+		if err != nil {
+			addCloudDriveErrs = append(addCloudDriveErrs, err.Error())
+		}
+	}
+	if len(addCloudDriveErrs) > 0 {
+		concatenatedError := errors.New(strings.Join(addCloudDriveErrs, "; "))
+		return concatenatedError
+
+	}
 
 	err = Inst().V.RefreshDriverEndpoints()
 	log.FailOnError(err, "error refreshing driver end points")
@@ -9722,6 +9762,9 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 
 	stepLog := "while pool is expanding shutdown and poweron and check operation resumes"
 	It(stepLog, func() {
+		if !IsPoolAddDiskSupported() {
+			Skip("Add disk is not supported on DMTHin Cluster.. Skipping the test")
+		}
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebalanceshutdown-%d", i))...)
@@ -10825,10 +10868,10 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 
 var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 	/*
-	  1. Deploy apps
-	  2. Pick a volume and locate the node where this is attached
-	  3. Delete the volume and let it be placed in trashcan
-	  4. Trigger pool expand in the node where the trashcan volume is present
+	   1. Deploy apps
+	   2. Pick a volume and locate the node where this is attached
+	   3. Delete the volume and let it be placed in trashcan
+	   4. Trigger pool expand in the node where the trashcan volume is present
 
 	*/
 
@@ -11057,8 +11100,8 @@ var _ = Describe("{CheckPoolOffline}", func() {
 var _ = Describe("{FACDPoolIOPriorityCheck}", func() {
 
 	/* This test is created to provide functional testing coverage for ticket PWX-35590
-	1. Create a cluster with FACD backend
-	2. Check if the IO Priority for the storagepools is HIGH
+	   1. Create a cluster with FACD backend
+	   2. Check if the IO Priority for the storagepools is HIGH
 	*/
 
 	JustBeforeEach(func() {

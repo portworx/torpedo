@@ -309,7 +309,7 @@ var _ = Describe("{PartialBackupSuccessWithPxVolumes}", Label(TestCaseLabelsMap[
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
 			for _, appCtx := range appContexts {
-				appCtx.ReadinessTimeout = 20 * time.Minute
+				appCtx.ReadinessTimeout = 30 * time.Minute
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
 			}
 		}

@@ -619,6 +619,8 @@ func populateIntervals() {
 	triggerInterval[DeleteCloudsnaps] = make(map[int]time.Duration)
 	triggerInterval[RestartKubeletService] = make(map[int]time.Duration)
 	triggerInterval[PoolDelete] = make(map[int]time.Duration)
+	triggerInterval[DefragScheduleCRUDOperations] = make(map[int]time.Duration)
+	triggerInterval[DefragSchedules] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -1635,6 +1637,12 @@ func populateIntervals() {
 	triggerInterval[AggrVolDepReplResizeOps][6] = 5 * baseInterval
 	triggerInterval[AggrVolDepReplResizeOps][5] = 6 * baseInterval
 
+	triggerInterval[DefragScheduleCRUDOperations][10] = 1 * baseInterval
+	triggerInterval[DefragScheduleCRUDOperations][9] = 2 * baseInterval
+	triggerInterval[DefragScheduleCRUDOperations][8] = 3 * baseInterval
+	triggerInterval[DefragScheduleCRUDOperations][7] = 4 * baseInterval
+	triggerInterval[DefragScheduleCRUDOperations][6] = 5 * baseInterval
+
 	// DeleteOldNamespaces trigger will be triggered every 10 hours
 	triggerInterval[DeleteOldNamespaces][10] = 2 * baseInterval
 
@@ -1681,6 +1689,12 @@ func populateIntervals() {
 	triggerInterval[ScaleFADAVolumeAttach][3] = 21 * baseInterval
 	triggerInterval[ScaleFADAVolumeAttach][2] = 24 * baseInterval
 	triggerInterval[ScaleFADAVolumeAttach][1] = 30 * baseInterval
+
+	triggerInterval[DefragSchedules][10] = 3 * baseInterval
+	triggerInterval[DefragSchedules][9] = 5 * baseInterval
+	triggerInterval[DefragSchedules][8] = 8 * baseInterval
+	triggerInterval[DefragSchedules][7] = 10 * baseInterval
+	triggerInterval[DefragSchedules][6] = 12 * baseInterval
 
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
@@ -1776,7 +1790,8 @@ func populateIntervals() {
 	triggerInterval[ScaleFADAVolumeAttach][0] = 0
 	triggerInterval[RestartKubeletService][0] = 0
 	triggerInterval[PoolDelete][0] = 0
-
+	triggerInterval[DefragSchedules][0] = 0
+	triggerInterval[DefragScheduleCRUDOperations][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
