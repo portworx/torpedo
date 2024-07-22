@@ -6747,3 +6747,184 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{ShutdownNodeDuringRAID4PoolAutoExpandWithIO}", func() {
+	/*
+		PTX:
+			https://purestorage.atlassian.net/browse/PTX-25034
+
+		TestRail:
+			https://portworx.testrail.net/index.php?/cases/view/299220
+
+		Steps:
+			1. Initiate pool expansion on the pool with active IO.
+			2. While the pool expansion is in progress, run the following command to initiate shutdown while IO is in progress:
+
+				do cat /proc/mdstat | grep -i "active raid4" ; if [ $? -eq 0 ]; then shutdown -r now ; break ; fi ; done
+	*/
+
+	var (
+		contexts        = make([]*scheduler.Context, 0)
+		nodeWithPoolID  *node.Node
+		poolToBeResized *api.StoragePool
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ShutdownNodeDuringRAID4PoolAutoExpandWithIO",
+			"Initiate pool expand and shutdown node during RAID 4 with active IO", nil, 299220)
+	})
+
+	itLog := "Initiate pool expand and shutdown node during RAID 4 with active IO"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		isDMThin, err := IsDMthin()
+		log.FailOnError(err, "failed to check if DMThin is enabled")
+
+		if !isDMThin {
+			log.Warnf("Skipping [ShutdownNodeDuringRAID4PoolAutoExpandWithIO] because isDMThin [%v]", isDMThin)
+			//Skip(fmt.Sprintf("Skipping [ShutdownNodeDuringRAID4PoolAutoExpandWithIO] because isDMThin [%v] or isPureCloudProvider [%v]", isDMThin, isPureCloudProvider))
+		}
+
+		stepLog := "Scheduling applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("sdndrpaewio-299220-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+		defer appsValidateAndDestroy(contexts)
+
+		stepLog = "Pick a pool to auto expand"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "failed to list pools")
+			dash.VerifyFatal(len(pools) > 0, true, "Verifying if pools exist")
+
+			log.Infof("Available pools to resize: %v", pools)
+
+			retryAttempts := 3
+			for attempt := 0; attempt < retryAttempts; attempt++ {
+				log.Infof("Attempt to find a pool to resize [%d] of [%d]", attempt+1, retryAttempts)
+
+				poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_AUTO, 0)
+				dash.VerifyFatal(len(poolIDToResize) > 0, true, "Verifying if pool to resize is picked")
+				poolToBeResized = pools[poolIDToResize]
+				log.InfoD("Pool to be resized: %v", poolToBeResized)
+
+				// PX queues new requests. Since we cannot determine the expected size, we must
+				// wait for the ongoing operation to complete.
+				time.Sleep(time.Second * 60)
+				log.InfoD("Wait for the current pool resize operation to complete")
+				if readyForResize, err := poolResizeIsInProgress(poolToBeResized); readyForResize {
+					break
+				} else {
+					log.Warnf("Pool [%s] cannot be expanded due to error: [%v]", poolIDToResize, err)
+				}
+
+				dash.VerifyFatal(attempt < retryAttempts, true, "Verifying if a pool is available to resize")
+			}
+
+			dash.VerifyFatal(poolToBeResized != nil, true, "Verifying if pool is not nil")
+
+			nodeWithPoolID, err = GetNodeWithGivenPoolID(poolIDToResize)
+			log.FailOnError(err, "failed to get node with pool ID [%s]", poolIDToResize)
+		})
+
+		stepLog = fmt.Sprintf("Run the shutdown script on the node where the pool [%s] is present", poolIDToResize)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			shutdownScript := `RESULTS_PATH="/mnt/testresults"
+sudo mkdir -p "$RESULTS_PATH"
+LOG_PATH="$RESULTS_PATH/sdndrpaewio-shutdown.log"
+SCRIPT_PATH="$RESULTS_PATH/sdndrpaewio-shutdown-script.sh"
+cat << 'EOF' > "$SCRIPT_PATH"
+> "$LOG_PATH"
+
+echo "\$(date) - Watching /proc/mdstat" >> "$LOG_PATH"
+while true; do
+    if grep -i "active raid4" /proc/mdstat >> "$LOG_PATH"; then
+        echo "\$(date) - Initiating shutdown" >> "$LOG_PATH"
+        shutdown -r now
+        break
+    fi
+    # To reduce the CPU usage
+    sleep 1
+done
+EOF
+sudo chmod +x "$SCRIPT_PATH"
+nohup sudo "$SCRIPT_PATH" > "$RESULTS_PATH/nohup.out" 2>&1 &`
+
+			cmdConnectionOpts := node.ConnectionOpts{
+				Timeout:         30 * time.Second,
+				TimeBeforeRetry: 10 * time.Second,
+			}
+
+			log.Infof("Running shutdown script on node %s", nodeWithPoolID.Name)
+			output, err := Inst().N.RunCommandWithNoRetry(*nodeWithPoolID, shutdownScript, cmdConnectionOpts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the shutdown script ran on node [%s]", nodeWithPoolID.Name))
+			log.Infof("The output of the shutdown script is: [%s]", output)
+		})
+		defer func() {
+			cmdConnectionOpts := node.ConnectionOpts{
+				Timeout:         30 * time.Second,
+				TimeBeforeRetry: 10 * time.Second,
+			}
+
+			commands := map[string]string{
+				"grep shutdown script": `ps aux | grep /mnt/testresults/sdndrpaewio-shutdown-script.sh`,
+				//"no grep shutdown script": `ps aux | grep "sh /mnt/testresults/sdndrpaewio-shutdown-script.sh" | grep -v grep`,
+				//"awk shutdown script":  `ps aux | grep /mnt/testresults/sdndrpaewio-shutdown-script.sh | grep -v grep | awk '{print \$2}'`,
+				//"kill shutdown script": `ps aux | grep /mnt/testresults/sdndrpaewio-shutdown-script.sh | grep -v grep | awk '{print \$2}' | xargs -r sudo kill`,
+				"awk shutdown script":  `ps aux | grep /mnt/testresults/sdndrpaewio-shutdown-script.sh | grep -v grep | awk '{print $2}'`,
+				"kill shutdown script": `ps aux | grep /mnt/testresults/sdndrpaewio-shutdown-script.sh | grep -v grep | awk '{print $2}' | xargs -r sudo kill`,
+			}
+
+			for desc, cmd := range commands {
+				log.Infof("Running [%s] on node [%s]", desc, nodeWithPoolID.Name)
+				output, err := Inst().N.RunCommandWithNoRetry(*nodeWithPoolID, cmd, cmdConnectionOpts)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the [%s] ran on node [%s]", desc, nodeWithPoolID.Name))
+				log.Infof("The output of the [%s] is: [%s]", desc, output)
+			}
+		}()
+
+		stepLog = fmt.Sprintf("Expand the pool [%s] using resize type Auto", poolIDToResize)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			log.InfoD("Current size of the pool [%s] is [%d]", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
+			expectedPoolSize := poolToBeResized.TotalSize * 2 / units.GiB
+			log.InfoD("Expected size of the pool [%s] is [%d]", poolIDToResize, expectedPoolSize)
+
+			log.Infof("Expanding the pool [%s] to [%d] GiB", poolIDToResize, expectedPoolSize)
+			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedPoolSize, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if pool [%s] is set to expand using resize type Auto", poolIDToResize))
+
+			log.Infof("Waiting for the pool [%s] to be resized to [%d] GiB", poolIDToResize, expectedPoolSize)
+
+			isJournalEnabled, err := IsJournalEnabled()
+			log.FailOnError(err, "failed to check if journal is enabled")
+
+			err = waitForPoolToBeResized(expectedPoolSize, poolIDToResize, isJournalEnabled)
+			log.FailOnError(err, "failed to wait for pool [%s] to be resized", poolIDToResize)
+
+			ValidateApplications(contexts)
+		})
+
+		/*
+			TODO:
+				Need to check if PX is coming up
+				Need to check if pool is resized and is online
+				Need to validate data consistency for all volumes
+		*/
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
