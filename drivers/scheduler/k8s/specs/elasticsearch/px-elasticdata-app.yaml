@@ -1,156 +1,91 @@
----
 apiVersion: v1
 kind: Service
 metadata:
-  name: elasticsearch-cluster
+  name: elasticsearch
+  labels:
+    app: elasticsearch
 spec:
+  ports:
+    - port: 9200
+      name: http
+    - port: 9300
+      name: transport
   clusterIP: None
   selector:
-    app: es-cluster
-  ports:
-  - name: transport
-    port: 9300
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: elasticsearch-api
-spec:
-  selector:
-    app: es-cluster
-  ports:
-  - name: http
-    port: 9200
-    targetPort: 9200
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: es-config
-data:
-  elasticsearch.yml: |
-    cluster.name: my-elastic-cluster
-    network.host: "0.0.0.0"
-    bootstrap.memory_lock: false
-    discovery.zen.ping.unicast.hosts: elasticsearch-cluster
-    discovery.zen.minimum_master_nodes: 1
-    xpack.security.enabled: false
-    xpack.monitoring.enabled: false
-  ES_JAVA_OPTS: -Xms512m -Xmx512m
+    app: elasticsearch
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: esnode
+  name: elasticsearch
 spec:
-  serviceName: elasticsearch-api
+  serviceName: "elasticsearch"
   replicas: 3
   selector:
     matchLabels:
-      app: es-cluster
-  updateStrategy:
-    type: RollingUpdate
+      app: elasticsearch
   template:
     metadata:
       labels:
-        app: es-cluster
+        app: elasticsearch
     spec:
-      schedulerName: stork
       securityContext:
         fsGroup: 1000
-      initContainers:
-      - name: init-sysctl
-        image: busybox
-        imagePullPolicy: IfNotPresent
-        securityContext:
-          privileged: true
-        command: ["sysctl", "-w", "vm.max_map_count=262144"]
+        runAsUser: 1000
       containers:
-      - name: elasticsearch
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:7.10.1
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "0.5"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
+          ports:
+            - containerPort: 9200
+              name: http
+            - containerPort: 9300
+              name: transport
+          env:
+            - name: discovery.type
+              value: single-node
+          volumeMounts:
+            - name: elasticsearch-storage
+              mountPath: /usr/share/elasticsearch/data
+  volumeClaimTemplates:
+    - metadata:
+        name: elasticsearch-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: elasticsearch-sc
         resources:
           requests:
-            memory: 1Gi
-            cpu: "0.5"
-          limits:
-            cpu: "1.0"
-        securityContext:
-          privileged: true
-          runAsUser: 1000
-          capabilities:
-            add:
-              - IPC_LOCK
-              - SYS_RESOURCE
-        image: docker.elastic.co/elasticsearch/elasticsearch:7.2.0
-        imagePullPolicy: IfNotPresent
-        env:
-        - name: ES_JAVA_OPTS
-          valueFrom:
-            configMapKeyRef:
-              name: es-config
-              key: ES_JAVA_OPTS
-        readinessProbe:
-          httpGet:
-            scheme: HTTP
-            path: /_cluster/health?local=true
-            port: 9200
-          initialDelaySeconds: 5
-        ports:
-        - containerPort: 9200
-          name: es-http
-        - containerPort: 9300
-          name: es-transport
-        volumeMounts:
-        - name: es-data
-          mountPath: /usr/share/elasticsearch/data
-        - name: elasticsearch-config
-          mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
-          subPath: elasticsearch.yml
-      volumes:
-      - name: elasticsearch-config
-        configMap:
-          name: es-config
-          items:
-          - key: elasticsearch.yml
-            path: elasticsearch.yml
-  volumeClaimTemplates:
-  - metadata:
-      name: es-data
-    spec:
-      storageClassName: elasticsearch-sc
-      accessModes: [ "ReadWriteOnce" ]
-      resources:
-        requests:
-          storage: 5Gi
+            storage: 10Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: es-load
-  namespace: default
-  labels:
-    app: es-load
+  name: io-app
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
-      app: es-load
+      app: io-app
   template:
     metadata:
       labels:
-        app: es-load
+        app: io-app
     spec:
       containers:
-      - name: es-load
-        image: portworx/torpedo-esload:1.1
-        imagePullPolicy: IfNotPresent
-        env:
-        - name: POD_NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
-        command:
-          - /bin/bash
-          - -c
-          - "./esload.sh --es_address esnode-0.elasticsearch-api.$POD_NAMESPACE.svc.cluster.local:9200 --indices 4 --documents 5 --seconds 120 --not-green --clients 1"
-      restartPolicy: Always
-
+        - name: io-container
+          image: appropriate/curl
+          command: ["/bin/sh", "-c", "while true; do \
+          timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ); \
+          value=$((RANDOM % 100)); \
+          user_id=$((RANDOM % 1000)); \
+          status=$(if [ $((RANDOM % 2)) -eq 0 ]; then echo \"active\"; else echo \"inactive\"; fi); \
+          large_text=$(head -c 10000 </dev/urandom | tr -dc A-Za-z0-9); \
+          json_payload=$(printf '{\"timestamp\": \"%s\", \"message\": \"Hello from the I/O app\", \"value\": %d, \"user_id\": %d, \"status\": \"%s\", \"large_text\": \"%s\"}' \"$timestamp\" \"$value\" \"$user_id\" \"$status\" \"$large_text\"); \
+          curl -X POST \"http://elasticsearch:9200/my-index/_doc/\" -H 'Content-Type: application/json' -d \"$json_payload\"; \
+          done"]
