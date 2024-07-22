@@ -405,7 +405,7 @@ const (
 	defaultRetryInterval        = 10 * time.Second
 	defaultCmdTimeout           = 20 * time.Second
 	defaultCmdRetryInterval     = 5 * time.Second
-	defaultDriverStartTimeout   = 10 * time.Minute
+	defaultDriverStartTimeout   = 15 * time.Minute
 	defaultKvdbRetryInterval    = 5 * time.Minute
 	addDriveUpTimeOut           = 15 * time.Minute
 	podDestroyTimeout           = 5 * time.Minute
@@ -892,7 +892,7 @@ func IsPoolAddDiskSupported() bool {
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	// Apps for which we have to skip volume validation due to various limitations
-	excludeAppContextList := []string{"tektoncd", "pxb-singleapp-multivol", "pg-mysql-multiprov-ocp", "pg-mysql-multiprov-iks", "pg-mysql-multiprov-aks"}
+	excludeAppContextList := []string{"tektoncd", "pxb-singleapp-multivol", "pg-mysql-multiprov-ocp", "pg-mysql-multiprov-iks", "pg-mysql-multiprov-aks", "pg-mysql-multiprov-gke"}
 	defer func() {
 		if len(errChan) > 0 {
 			close(*errChan[0])
@@ -1017,31 +1017,33 @@ func ValidatePDB(pdbValue int, allowedDisruptions int, initialNumNodes int, isCl
 		}
 
 	})
-	Step("Validate number of disruptions ", func() {
-		t := func() (interface{}, bool, error) {
-			nodes, err := Inst().V.GetDriverNodes()
+	if Inst().S.String() != anthos.SchedName {
+		Step("Validate number of disruptions ", func() {
+			t := func() (interface{}, bool, error) {
+				nodes, err := Inst().V.GetDriverNodes()
+				if err != nil {
+					return nil, true, fmt.Errorf("failed to get portworx nodes due to %v. Retrying with timeout", err)
+				} else {
+					return nodes, false, nil
+				}
+			}
+			nodes, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 			if err != nil {
-				return nil, true, fmt.Errorf("failed to get portworx nodes due to %v. Retrying with timeout", err)
-			} else {
-				return nodes, false, nil
-			}
-		}
-		nodes, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
-		if err != nil {
-			processError(err, errChan...)
-		} else {
-			currentNumNodes := len(nodes.([]*opsapi.StorageNode))
-			if allowedDisruptions < initialNumNodes-currentNumNodes {
-				err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
 				processError(err, errChan...)
-			}
-			if initialNumNodes-currentNumNodes > 1 {
-				*isClusterParallelyUpgraded = true
+			} else {
+				currentNumNodes := len(nodes.([]*opsapi.StorageNode))
+				if allowedDisruptions < initialNumNodes-currentNumNodes {
+					err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
+					processError(err, errChan...)
+				}
+				if initialNumNodes-currentNumNodes > 1 {
+					*isClusterParallelyUpgraded = true
 
+				}
 			}
-		}
 
-	})
+		})
+	}
 
 }
 

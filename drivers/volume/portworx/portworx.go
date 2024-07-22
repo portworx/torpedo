@@ -2592,13 +2592,13 @@ func (d *portworx) GetNodeForBackup(backupID string) (node.Node, error) {
 	return node.Node{}, fmt.Errorf("node where backup with id [%s] running, not found", backupID)
 }
 
-// check all the possible attachment options (node ID or node IP)
+// IsVolumeAttachedOnNode check all the possible attachment options (node ID or node IP)
 func (d *portworx) IsVolumeAttachedOnNode(volume *api.Volume, node node.Node) (bool, error) {
 	log.Debugf("Volume [%s] attached on [%s] checking for node [%s]", volume.Id, volume.AttachedOn, node.VolDriverNodeID)
 	if node.VolDriverNodeID == volume.AttachedOn {
 		return true, nil
 	}
-	resp, err := d.nodeManager.Inspect(context.Background(), &api.SdkNodeInspectRequest{NodeId: node.VolDriverNodeID})
+	resp, err := d.nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: node.VolDriverNodeID})
 	if err != nil {
 		return false, err
 	}

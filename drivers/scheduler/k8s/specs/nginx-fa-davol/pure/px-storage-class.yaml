@@ -5,11 +5,14 @@ metadata:
   name: mount-fa-sc
 parameters:
   backend: "pure_block"
-  csi.storage.k8s.io/fstype: xfs
-  createoptions: -b size=2048
-  {{ if .PureFaPodName }}
-  pure_fa_pod_name: "{{ .PureFaPodName }}"
-  {{ end }}
+  {{ if .FsType }}
+  csi.storage.k8s.io/fstype: "{{ .FsType }}"
+  {{ else }}
+  csi.storage.k8s.io/fstype: "xfs" {{ end }}
+  {{ if .CreateOptions }}
+  createoptions:  "{{ .CreateOptions }}"
+  {{ else }}
+  createoptions: -b size=2048 {{ end }}
 provisioner: pxd.portworx.com
 reclaimPolicy: Delete
 volumeBindingMode: Immediate
@@ -25,9 +28,6 @@ parameters:
   backend: "pure_block"
   csi.storage.k8s.io/fstype: ext4
   createoptions: -b 2048
-  {{ if .PureFaPodName }}
-  pure_fa_pod_name: "{{ .PureFaPodName }}"
-  {{ end }}
 provisioner: pxd.portworx.com 
 reclaimPolicy: Delete
 volumeBindingMode: Immediate

@@ -1,0 +1,179 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-cluster
+spec:
+  clusterIP: None
+  selector:
+    app: es-cluster
+  ports:
+    - name: transport
+      port: 9300
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-api
+spec:
+  selector:
+    app: es-cluster
+  ports:
+    - name: http
+      port: 9200
+      targetPort: 9200
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: es-config
+data:
+  elasticsearch.yml: |
+    cluster.name: my-elastic-cluster
+    network.host: "0.0.0.0"
+    bootstrap.memory_lock: false
+    discovery.seed_hosts: ["esnode-0.elasticsearch-cluster.${POD_NAMESPACE}.svc.cluster.local", "esnode-1.elasticsearch-cluster.${POD_NAMESPACE}.svc.cluster.local", "esnode-2.elasticsearch-cluster.${POD_NAMESPACE}.svc.cluster.local"]
+    cluster.initial_master_nodes: ["esnode-0", "esnode-1", "esnode-2"]
+    xpack.security.enabled: false
+    xpack.monitoring.enabled: false
+  ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+  startup.sh: |
+    #!/bin/sh
+    CONFIG_FILE="/usr/share/elasticsearch/config/elasticsearch.yml"
+    cp /config/elasticsearch.yml $CONFIG_FILE
+    exec /usr/local/bin/docker-entrypoint.sh eswrapper
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: esnode
+spec:
+  serviceName: elasticsearch-cluster
+  replicas: 3
+  selector:
+    matchLabels:
+      app: es-cluster
+  template:
+    metadata:
+      labels:
+        app: es-cluster
+    spec:
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+        - name: init-sysctl
+          image: busybox
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          command: ["sysctl", "-w", "vm.max_map_count=262144"]
+        - name: init-copy-script
+          image: busybox
+          command: ["sh", "-c", "cp /config/startup.sh /startup/startup.sh && chmod +x /startup/startup.sh"]
+          volumeMounts:
+            - name: elasticsearch-config
+              mountPath: /config
+            - name: writable-startup-script
+              mountPath: /startup
+      containers:
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:7.2.0
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: 1Gi
+              cpu: "0.5"
+            limits:
+              cpu: "1.0"
+          securityContext:
+            privileged: true
+            runAsUser: 1000
+            capabilities:
+              add:
+                - IPC_LOCK
+                - SYS_RESOURCE
+          env:
+            - name: ES_JAVA_OPTS
+              valueFrom:
+                configMapKeyRef:
+                  name: es-config
+                  key: ES_JAVA_OPTS
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          readinessProbe:
+            httpGet:
+              scheme: HTTP
+              path: /_cluster/health?local=true
+              port: 9200
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          ports:
+            - containerPort: 9200
+              name: es-http
+            - containerPort: 9300
+              name: es-transport
+          volumeMounts:
+            - name: es-data
+              mountPath: /usr/share/elasticsearch/data
+            - name: elasticsearch-config
+              mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
+              subPath: elasticsearch.yml
+            - name: writable-startup-script
+              mountPath: /startup
+          command: ["/bin/sh", "-c", "/startup/startup.sh"]
+      volumes:
+        - name: elasticsearch-config
+          configMap:
+            name: es-config
+            items:
+              - key: elasticsearch.yml
+                path: elasticsearch.yml
+              - key: ES_JAVA_OPTS
+                path: ES_JAVA_OPTS
+              - key: startup.sh
+                path: startup.sh
+        - name: writable-startup-script
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: es-data
+      spec:
+        storageClassName: elasticsearch-sc
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 200Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: es-load
+  labels:
+    app: es-load
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: es-load
+  template:
+    metadata:
+      labels:
+        app: es-load
+    spec:
+      containers:
+        - name: es-load
+          image: portworx/torpedo-esload:1.1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          command:
+            - /bin/bash
+            - -c
+            - "./esload.sh --es_address esnode-0.elasticsearch-cluster.$POD_NAMESPACE.svc.cluster.local:9200 --indices 4 --documents 5 --seconds 120 --not-green --clients 1"
+      restartPolicy: Always

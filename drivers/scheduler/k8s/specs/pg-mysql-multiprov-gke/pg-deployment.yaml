@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      initContainers:
+        - name: init-postgres-data
+          image: busybox
+          command: ['sh', '-c', 'dd if=/dev/zero of=/var/lib/postgresql/data/initfile bs=1M count=100']
+          volumeMounts:
+            - name: postgres-portworx
+              mountPath: /var/lib/postgresql/data
+      containers:
+        - name: postgres
+          image: postgres:13
+          env:
+            - name: POSTGRES_PASSWORD
+              value: postgrespassword
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: postgres-portworx
+              mountPath: /var/lib/postgresql/data
+            - name: postgres-gke
+              mountPath: /etc/postgresql/conf.d
+      volumes:
+        - name: postgres-portworx
+          persistentVolumeClaim:
+            claimName: postgres-portworx-pvc
+        - name: postgres-gke
+          persistentVolumeClaim:
+            claimName: postgres-gke-pvc

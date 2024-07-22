@@ -2,6 +2,10 @@ package tests
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
+	"time"
+
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -17,9 +21,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	corev1 "k8s.io/api/core/v1"
-	"net/url"
-	"strings"
-	"time"
 )
 
 var _ = Describe("{UpgradeCluster}", func() {
@@ -90,6 +91,10 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 				err = Inst().S.UpgradeScheduler(version)
 				if err != nil {
+					err = Inst().S.RefreshNodeRegistry()
+					log.FailOnError(err, "Refresh Node Registry failed")
+					err = Inst().V.RefreshDriverEndpoints()
+					log.FailOnError(err, "Refresh Driver Endpoints failed")
 					PrintPxctlStatus()
 					PrintK8sClusterInfo()
 				}

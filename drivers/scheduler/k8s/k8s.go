@@ -122,6 +122,8 @@ const (
 	PureBlock = "pure_block"
 	// PortworxStrict provisioner for using same provisioner as provided in the spec
 	PortworxStrict = "strict"
+	// Stork Snapshot Provisioner
+	StorkSnapshot = "stork-snapshot"
 	// CsiProvisioner is csi provisioner
 	CsiProvisioner = "pxd.portworx.com"
 	// PortworxVolumeProvisioner is a provisioner for portworx volumes
@@ -1930,14 +1932,18 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 		// volume.GetStorageProvisioner() returns the corresponding value from the portworx.provisioners map
 		// based on the --provisioner flag, such as "kubernetes.io/portworx-volume", "pxd.portworx.com", or "strict".
-		if volume.GetStorageProvisioner() != PortworxStrict {
-			// options.StorageProvisioner corresponds to the --provisioner flag (portworx or csi).
-			if options.StorageProvisioner == string(volume.DefaultStorageProvisioner) || options.StorageProvisioner == string(volume.CSIStorageProvisioner) {
-				// app.IsCSI is true if the app is in CSI_APP_LIST.
-				if app.IsCSI {
-					obj.Provisioner = CsiProvisioner
-				} else {
-					obj.Provisioner = volume.GetStorageProvisioner()
+		if obj.Provisioner == StorkSnapshot {
+			log.Infof("Provisioner is set to stork-snapshot")
+		} else {
+			if volume.GetStorageProvisioner() != PortworxStrict {
+				// options.StorageProvisioner corresponds to the --provisioner flag (portworx or csi).
+				if options.StorageProvisioner == string(volume.DefaultStorageProvisioner) || options.StorageProvisioner == string(volume.CSIStorageProvisioner) {
+					// app.IsCSI is true if the app is in CSI_APP_LIST.
+					if app.IsCSI {
+						obj.Provisioner = CsiProvisioner
+					} else {
+						obj.Provisioner = volume.GetStorageProvisioner()
+					}
 				}
 			}
 		}
@@ -4147,6 +4153,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 				Namespace: obj.Namespace,
 				Shared:    k.isPVCShared(obj),
 			})
+			log.Infof("[%v] Deleting PVC: %v", ctx.App.Key, obj.Name)
 
 			if err := k8sCore.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
 				if k8serrors.IsNotFound(err) {
@@ -4158,7 +4165,6 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 					Cause: fmt.Sprintf("[%s] Failed to destroy PVC: %v. Err: %v", ctx.App.Key, obj.Name, err),
 				}
 			}
-
 			log.Infof("[%v] Destroyed PVC: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sExternalStorage.DeleteSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {

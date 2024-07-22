@@ -2873,6 +2873,12 @@ var _ = Describe("{ResizeWithJrnlAndMeta}", func() {
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		isDmthin, err := IsDMthin()
+		log.FailOnError(err, "Error while checking cluster type")
+		if isDmthin {
+			Skip("Drive add Journal Device is not supported for DMThin")
+		}
+
 		journalStatus, err := IsJournalEnabled()
 		log.FailOnError(err, "err getting journal status")
 		dash.VerifyFatal(journalStatus, true, "verify journal device is enabled")
@@ -8661,7 +8667,11 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 	stepLog := "Add drive when as journal"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-
+		isDmthin, err := IsDMthin()
+		log.FailOnError(err, "Error while checking cluster type")
+		if isDmthin {
+			Skip("Drive add Journal Device is not supported for DMThin")
+		}
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddriveasjournal-%d", i))...)
@@ -9752,6 +9762,9 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 
 	stepLog := "while pool is expanding shutdown and poweron and check operation resumes"
 	It(stepLog, func() {
+		if !IsPoolAddDiskSupported() {
+			Skip("Add disk is not supported on DMTHin Cluster.. Skipping the test")
+		}
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebalanceshutdown-%d", i))...)
