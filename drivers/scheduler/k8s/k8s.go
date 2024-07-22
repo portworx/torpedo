@@ -3947,7 +3947,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				}
 				log.Infof("[%v] Validated PVC: %v size based on Autopilot rules", ctx.App.Key, obj.Name)
 			} else {
-				log.Warnf("[%v] Autopilot is not enabled, PVC: %v size validation is not possible", ctx.App.Key, obj.Name)
+				log.Debugf("[%v] Autopilot is not enabled, Skipping PVC: %v size validation with autopilot rules", ctx.App.Key, obj.Name)
 			}
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sExternalStorage.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,
@@ -4147,6 +4147,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 				Namespace: obj.Namespace,
 				Shared:    k.isPVCShared(obj),
 			})
+			log.Infof("[%v] Deleting PVC: %v", ctx.App.Key, obj.Name)
 
 			if err := k8sCore.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
 				if k8serrors.IsNotFound(err) {
@@ -4158,7 +4159,6 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 					Cause: fmt.Sprintf("[%s] Failed to destroy PVC: %v. Err: %v", ctx.App.Key, obj.Name, err),
 				}
 			}
-
 			log.Infof("[%v] Destroyed PVC: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sExternalStorage.DeleteSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
@@ -4759,7 +4759,7 @@ func (k *K8s) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName, snapshotNa
 		}
 	}
 
-	log.Infof("[%v] Deleted Snapshot: %v", ctx.App.Key, snapshotName)
+	log.Infof("[%v] Deleted Snapshot: %v on namespace [%v]", ctx.App.Key, snapshotName, snapshotNameSpace)
 
 	return nil
 

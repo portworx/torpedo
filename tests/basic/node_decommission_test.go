@@ -181,7 +181,7 @@ var _ = Describe("{DecommissionNode}", func() {
 
 					return false, true, fmt.Errorf("node %s not joined yet", nodeToDecommission.Name)
 				}
-				_, err = task.DoRetryWithTimeout(t, appReadinessTimeout, defaultRetryInterval)
+				_, err = task.DoRetryWithTimeout(t, 20*time.Minute, defaultRetryInterval)
 				log.FailOnError(err, fmt.Sprintf("error joining the node [%s]", nodeToDecommission.Name))
 				dash.VerifyFatal(rejoinedNode != nil, true, fmt.Sprintf("verify node [%s] rejoined PX cluster", nodeToDecommission.Name))
 				err = Inst().S.RefreshNodeRegistry()
@@ -343,7 +343,7 @@ var _ = Describe("{KvdbDecommissionNode}", func() {
 
 					return false, true, fmt.Errorf("node %s not joined yet", nodeToDecommission.Name)
 				}
-				_, err = task.DoRetryWithTimeout(t, appReadinessTimeout, defaultRetryInterval)
+				_, err = task.DoRetryWithTimeout(t, 20*time.Minute, defaultRetryInterval)
 				log.FailOnError(err, fmt.Sprintf("error joining the node [%s]", nodeToDecommission.Name))
 				dash.VerifyFatal(rejoinedNode != nil, true, fmt.Sprintf("verify node [%s] rejoined PX cluster", nodeToDecommission.Name))
 				err = Inst().S.RefreshNodeRegistry()

@@ -529,6 +529,39 @@ type Driver interface {
 
 	// ValidatePureFBDAMountSource checks that, on all the given nodes, all the provided FBDA volumes are mounted using the expected IP
 	ValidatePureFBDAMountSource(nodes []node.Node, vols []*Volume, expectedIP string) error
+
+	// CreateDefragSchedule create defrag schedule
+	CreateDefragSchedule(startTime string, defragJob *api.DefragJob) (*api.SdkCreateDefragScheduleResponse, error)
+
+	// GetDefragNodeStatus  get defrag schedule status on a given node
+	GetDefragNodeStatus(n node.Node) (*api.SdkGetDefragNodeStatusResponse, error)
+
+	// GetDefragClusterStatus get defrag schedule status for whole cluster
+	GetDefragClusterStatus() (*api.SdkEnumerateDefragStatusResponse, error)
+
+	// CleanUpDefragSchedules cleans up all defrag schedules and stop all defrag operations
+	CleanUpDefragSchedules() error
+
+	// DeleteDefragSchedule delete specificed defrag schedule
+	DeleteDefragSchedule(defragSchedId string) error
+
+	// GetAllDefragSchedules return all defrag schedules in a cluster
+	GetAllDefragSchedules() (*api.SdkEnumerateSchedulesResponse, error)
+
+	// InspectDefragSchedules return information about provided schedule id
+	InspectDefragSchedules(defragSchedId string) (*api.SdkInspectScheduleResponse, error)
+
+	// ValidateDefragScheduleInfo validates defrag schedule information
+	ValidateDefragScheduleInfo(schedInfo *api.SdkInspectScheduleResponse, startTime string, defragJob *api.DefragJob) error
+
+	// ValidateDefragScheduleDeleted validates defrag schedule id is deleted
+	ValidateDefragScheduleIdDeleted(scheduleId string) error
+
+	// ValidatesDefragSchedulesTrigger validates defrag schedule triggers or not in given node ids
+	ValidatesDefragSchedulesTrigger(scheduleId string, nodeIDList []string) error
+
+	// ValidateLastDefragScheduleStatus validate defrag status in given node ids
+	ValidateLastDefragScheduleStatus(scheduleId string, nodeIDList []string) ([]string, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

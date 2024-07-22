@@ -4,9 +4,7 @@ import (
 	"bytes"
 	context1 "context"
 	"fmt"
-	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/watch"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -20,6 +18,9 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	optest "github.com/libopenstorage/operator/pkg/util/test"
+	"k8s.io/apimachinery/pkg/watch"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -89,6 +90,7 @@ const (
 	Vpinisetti     TestcaseAuthor = "vpinisetti-px"
 	Sabrarhussaini TestcaseAuthor = "sabrarhussaini"
 	ATrivedi       TestcaseAuthor = "atrivedi-px"
+	Dbinnal        TestcaseAuthor = "dbinnal-px"
 )
 
 // TestcaseQuarter List
@@ -184,6 +186,15 @@ const (
 	CorrectMemoryRequest                      = "700Mi"
 	CorrectMemoryLimit                        = "1Gi"
 	IncorrectImageSuffix                      = "-incorrect"
+	RestrictedPSA                             = "restricted"
+	RestrictedPSAVersion                      = "latest"
+	CustomRestrictedPSADescription            = "Custom Restricted PSA"
+	BaselinePSA                               = "baseline"
+	BaselinePSAVersion                        = "latest"
+	CustomBaselinePSADescription              = "Custom Baseline PSA"
+	PrivilegedPSA                             = "privileged"
+	PrivilegedPSAVersion                      = "latest"
+	CustomPrivilegedPSADescription            = "Custom Privileged PSA"
 )
 
 var (
@@ -2017,14 +2028,14 @@ func CreateRestoreWithoutCheck(restoreName string, backupName string,
 	var bkp *api.BackupObject
 	var bkpUid string
 	backupDriver := Inst().Backup
-	log.Infof("Getting the UID of the backup needed to be restored")
+	log.Infof("Getting the UID of the backup [%s] needed to be restored", backupName)
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: orgID}
 	curBackups, _ := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
-	log.Debugf("Enumerate backup response -\n%v", curBackups)
 	for _, bkp = range curBackups.GetBackups() {
 		if bkp.Name == backupName {
 			bkpUid = bkp.Uid
+			log.Infof("Backup UID for %s - %s", backupName, bkpUid)
 			break
 		}
 	}
@@ -5484,6 +5495,7 @@ func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Durati
 		return "", err
 	}
 	currentScheduleBackupCount := len(allScheduleBackupNames)
+	// TO DO ; Change logic for nextScheduleBackupOrdinal to include retention count
 	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
 	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
 		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, BackupOrgID)
@@ -7462,12 +7474,12 @@ func GetBackupPodAge() (map[string]nsPodAge, error) {
 	k8sCore := core.Instance()
 	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
 	if err != nil {
-		return podAge, fmt.Errorf("failed to get namespaces list")
+		return podAge, fmt.Errorf("failed to get namespaces list error:[%v]", err)
 	}
 	for _, namespace := range allNamespaces.Items {
 		pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
 		if err != nil {
-			return podAge, fmt.Errorf("failed to get pods for namespace")
+			return podAge, fmt.Errorf("failed to get pods for namespace error:[%v]", err)
 		}
 		for _, pod := range pods.Items {
 			podAge[namespace.ObjectMeta.GetName()] = nsPodAge{pod.ObjectMeta.GetGenerateName(): pod.GetCreationTimestamp().Time}
@@ -7483,7 +7495,7 @@ func ComparePodAge(oldPodAge map[string]nsPodAge) error {
 	k8sCore := core.Instance()
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to get list of services")
+		return fmt.Errorf("failed to get list of services error:[%v]", err)
 	}
 	for _, svc := range allServices.Items {
 		if svc.Name == "portworx-service" {
@@ -7495,7 +7507,7 @@ func ComparePodAge(oldPodAge map[string]nsPodAge) error {
 	for _, namespace := range allNamespaces.Items {
 		pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
 		if err != nil {
-			return fmt.Errorf("failed to get pods for namespace")
+			return fmt.Errorf("failed to get pods for namespace error:[%v]", err)
 		}
 		if IsPresent(namespacesToSkip, namespace.ObjectMeta.GetName()) {
 			for _, pod := range pods.Items {
@@ -9549,8 +9561,9 @@ func UpdateMaintenanceCronJob(backupLocation string, maintenanceJobType Maintena
 // CreateInvalidVolumeSnapshotClass creates invalid VolumeSnapshotClass for given provisioner
 func CreateInvalidVolumeSnapshotClass(snapShotClassName, provisioner string) (*volsnapv1.VolumeSnapshotClass, error) {
 	volumeSnapshotClassParameters := make(map[string]string)
+	invalidProvisioner := "invalid-" + provisioner
 	volumeSnapshotClassParameters["invalidParameter"] = "invalidValue"
-	volumeSnapshotClass, err := Inst().S.CreateVolumeSnapshotClassesWithParameters(snapShotClassName, provisioner, false, "Delete", volumeSnapshotClassParameters)
+	volumeSnapshotClass, err := Inst().S.CreateVolumeSnapshotClassesWithParameters(snapShotClassName, invalidProvisioner, false, "Delete", volumeSnapshotClassParameters)
 	if err != nil {
 		return nil, err
 	}
@@ -9692,7 +9705,7 @@ func StopCloudsnapBackup(pvcName, namespace string) error {
 						return "", true, fmt.Errorf("waiting to get the cs id for PVC [%s] in namespace [%s]", pvcName, namespace)
 					}
 					cmd := fmt.Sprintf("pxctl cs stop -n %s", key)
-					workerNode := node.GetWorkerNodes()[0]
+					workerNode := node.GetStorageNodes()[0]
 					output, err := runCmdGetOutput(cmd, workerNode)
 					log.Infof("Output of the command [%s]: \n%s", cmd, output)
 					if err != nil {
@@ -9745,7 +9758,7 @@ type CloudsnapStatus struct {
 func GetCloudsnapStatus() (map[string]CloudsnapStatus, error) {
 	statusMap := make(map[string]CloudsnapStatus)
 	// Get a worker node
-	workerNode := node.GetWorkerNodes()[0]
+	workerNode := node.GetStorageNodes()[0]
 	cmd := "pxctl cs status -j"
 	output, err := runCmdGetOutput(cmd, workerNode)
 	if err != nil {
@@ -9756,6 +9769,77 @@ func GetCloudsnapStatus() (map[string]CloudsnapStatus, error) {
 		return nil, fmt.Errorf("failed to unmarshal the output of the command %s on %s: %s", cmd, workerNode.Name, err.Error())
 	}
 	return statusMap, nil
+}
+
+// WatchAndStopCloudsnapBackup watches the cloudsnap creation and stops it if a new entry is added
+func WatchAndStopCloudsnapBackup(pvcName, namespace string, timeoutDuration time.Duration, ctx context1.Context) error {
+	workerNode := node.GetStorageNodes()[0]
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	timeout := time.After(timeoutDuration)
+	getCloudsnapStatus := func() (map[string]CloudsnapStatus, error) {
+		statusMap := make(map[string]CloudsnapStatus)
+		cmd := "pxctl cs status -j"
+		output, err := runCmdGetOutput(cmd, workerNode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to run command %s on %s: %s", cmd, workerNode.Name, err.Error())
+		}
+		err = json.Unmarshal([]byte(output), &statusMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal the output of the command %s on %s: %s", cmd, workerNode.Name, err.Error())
+		}
+		return statusMap, nil
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			log.Infof("Context status is [%v]", ctx.Err())
+			return nil
+		case <-ticker.C:
+			statusMap, err := getCloudsnapStatus()
+			if err != nil {
+				return fmt.Errorf("failed to get cloudsnap status from cluster: %w", err)
+			}
+			found := false
+			for key, value := range statusMap {
+				if strings.Contains(key, fmt.Sprintf("%s-%s", namespace, pvcName)) {
+					found = true
+					switch value.Status {
+					case "Done":
+						log.Infof("Cloudsnap for PVC [%s] in namespace [%s] is already completed with status [%s]", pvcName, namespace, value.Status)
+					case "Stopped":
+						log.Infof("Cloudsnap for PVC [%s] in namespace [%s] is already stopped with status [%s]", pvcName, namespace, value.Status)
+					case "", "Active":
+						// Stop the cloudsnap
+						cmd := fmt.Sprintf("pxctl cs stop -n %s", key)
+						_, err := runCmdGetOutput(cmd, workerNode)
+						if err != nil {
+							log.Infof("failed to run command %s on %s: %w", cmd, workerNode.Name, err)
+						}
+						statusMap, err = getCloudsnapStatus()
+						if err != nil {
+							log.Infof("failed to get cloudsnap status from cluster: %w", err)
+						}
+						if statusMap[key].Status != "Stopped" {
+							log.Infof("cloudsnap not yet stopped for PVC [%s] in namespace [%s], status: %s", pvcName, namespace, statusMap[key].Status)
+						} else {
+							log.Infof("Cloudsnap for PVC [%s] in namespace [%s] has been stopped.", pvcName, namespace)
+						}
+					default:
+						log.Infof("Cloudsnap for PVC [%s] in namespace [%s] is in an unexpected status [%s]", pvcName, namespace, value.Status)
+					}
+				}
+			}
+
+			if !found {
+				log.Infof("No cloudsnap found for PVC [%s] in namespace [%s]", pvcName, namespace)
+			}
+		case <-timeout:
+			log.Infof("WatchAndStopCloudsnapBackupWithFixedNode timed out after %v", timeoutDuration)
+			return nil
+		}
+	}
 }
 
 // CreatePartialBackupWithVscMapping creates backup with Vsc mapping and checks for partial success
@@ -10238,10 +10322,11 @@ type FeaturePlatformMap map[string]map[string][]string
 
 var featureData = FeaturePlatformMap{
 	"PartialBackup": {
-		"openshift": {"postgres-backup", "pxb-multipleapp-multivol"},
-		"GKE":       {"TODO", "TODO"},
-		"AKS":       {"TODO", "TODO"},
-		"Vanilla":   {"TODO", "TODO"},
+		"openshift": {"pg-mysql-multiprov-ocp"},
+		"gke":       {"pg-mysql-multiprov-gke"},
+		"azure":     {"pg-mysql-multiprov-aks"},
+		"vanilla":   {"TODO", "TODO"},
+		"ibm":       {"pg-mysql-multiprov-iks"},
 	},
 }
 
@@ -10340,8 +10425,8 @@ func UpdateDriverWithEnvVariable(envVariables map[string]string) error {
 	if err != nil {
 		return err
 	}
-	log.InfoD("Sleeping for 5 minutes for PX cluster to stabilise after deletion of pods")
-	time.Sleep(5 * time.Minute)
+	log.InfoD("Sleeping for 10 minutes for PX cluster to stabilise after deletion of pods")
+	time.Sleep(10 * time.Minute)
 	_, err = optest.ValidateStorageClusterIsOnline(clusterSpec, 10*time.Minute, 3*time.Minute)
 	if err != nil {
 		return err
@@ -10354,4 +10439,10 @@ func UpdateDriverWithEnvVariable(envVariables map[string]string) error {
 		}
 	}
 	return nil
+}
+
+// IsPxInstalled checks if PX is installed by verifying the length of the list returned by GetStorageDriverNodes.
+func IsPxInstalled() bool {
+	numOfNodes := len(node.GetStorageDriverNodes())
+	return numOfNodes > 0
 }

@@ -2873,6 +2873,12 @@ var _ = Describe("{ResizeWithJrnlAndMeta}", func() {
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		isDmthin, err := IsDMthin()
+		log.FailOnError(err, "Error while checking cluster type")
+		if isDmthin {
+			Skip("Drive add Journal Device is not supported for DMThin")
+		}
+
 		journalStatus, err := IsJournalEnabled()
 		log.FailOnError(err, "err getting journal status")
 		dash.VerifyFatal(journalStatus, true, "verify journal device is enabled")
@@ -5827,7 +5833,8 @@ var _ = Describe("{PoolDelete}", func() {
 		poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "Failed to list storage pools")
 
-		deletePoolAndValidate(nodeSelected, poolIDToDelete)
+		err = DeletePoolAndValidate(nodeSelected, poolIDToDelete)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%s] deletion in the node [%s]", poolIDToDelete, nodeSelected.Name))
 
 		contexts = make([]*scheduler.Context, 0)
 
@@ -7583,7 +7590,8 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", func() {
 			nodePools := stNode.StoragePools
 			for _, nodePool := range nodePools {
 				poolIDToDelete := fmt.Sprintf("%d", nodePool.ID)
-				deletePoolAndValidate(stNode, poolIDToDelete)
+				err = DeletePoolAndValidate(stNode, poolIDToDelete)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%s] deletion in the node [%s]", poolIDToDelete, stNode.Name))
 			}
 			stepLog := fmt.Sprintf("validate node [%s] changed to storageless node", stNode.Name)
 			Step(stepLog, func() {
@@ -7658,7 +7666,8 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			nodePool := stNode.StoragePools[0]
-			deletePoolAndValidate(stNode, fmt.Sprintf("%d", nodePool.ID))
+			err = DeletePoolAndValidate(stNode, fmt.Sprintf("%d", nodePool.ID))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%d] deletion in the node [%s]", nodePool.ID, stNode.Name))
 			err := Inst().V.RefreshDriverEndpoints()
 			log.FailOnError(err, "error refreshing end points")
 			slNodes := node.GetStorageLessNodes()
@@ -7680,57 +7689,6 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
-
-func deletePoolAndValidate(stNode node.Node, poolIDToDelete string) {
-	isPureBackend := false
-	validateMultipath := []string{}
-	if IsPureCluster() {
-		isPureBackend = true
-	}
-
-	if isPureBackend {
-		// if pure backend , we get the list of all multipath devices used while creating the pool
-		// later check if those multipath devices are still exist post deleting the pool
-		multipathDevBeforeDelete, err := GetMultipathDeviceOnPool(&stNode)
-		log.FailOnError(err, fmt.Sprintf("Failed to get list of Multipath devices on Node [%v]", stNode.Name))
-		validateMultipath = multipathDevBeforeDelete[poolIDToDelete]
-	}
-
-	poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-	log.FailOnError(err, "Failed to list storage pools")
-
-	poolsMap, err := Inst().V.GetPoolDrives(&stNode)
-	log.FailOnError(err, "error getting pool drive from the node [%s]", stNode.Name)
-
-	stepLog := fmt.Sprintf("Delete poolID %s on node %s", poolIDToDelete, stNode.Name)
-
-	Step(stepLog, func() {
-		log.InfoD(stepLog)
-		err = DeleteGivenPoolInNode(stNode, poolIDToDelete, true)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("verify deleting pool [%s] in the node [%s]", poolIDToDelete, stNode.Name))
-
-		poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-		log.FailOnError(err, "Failed to list storage pools")
-
-		dash.VerifySafely(len(poolsBfr) > len(poolsAfr), true, "verify pools count is updated after pools deletion")
-
-		poolsMap, err = Inst().V.GetPoolDrives(&stNode)
-		log.FailOnError(err, "error getting pool drive from the node [%s]", stNode.Name)
-		_, ok := poolsMap[poolIDToDelete]
-		dash.VerifyFatal(ok, false, "verify drive is deleted from the node")
-
-		if isPureBackend {
-			// Get list of all Multipath devices after deleting the pool
-			allMultipathDev, err := GetMultipathDeviceIDsOnNode(&stNode)
-			log.FailOnError(err, fmt.Sprintf("failed to get multipath devices on Node [%v]", stNode.Name))
-			for _, eachMultipath := range allMultipathDev {
-				for _, validateEach := range validateMultipath {
-					dash.VerifyFatal(validateEach == eachMultipath, false, fmt.Sprintf("Multipath device [%v] did not delete on Deleting Pool", validateEach))
-				}
-			}
-		}
-	})
-}
 
 var _ = Describe("{NodeAddDiskWhileAddDiskInProgress}", func() {
 	/*
@@ -8709,7 +8667,11 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 	stepLog := "Add drive when as journal"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-
+		isDmthin, err := IsDMthin()
+		log.FailOnError(err, "Error while checking cluster type")
+		if isDmthin {
+			Skip("Drive add Journal Device is not supported for DMThin")
+		}
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddriveasjournal-%d", i))...)
@@ -8971,6 +8933,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 	stepLog := "has to schedule apps and update replication factor for attached node"
 	It(stepLog, func() {
 		var wg sync.WaitGroup
+		contexts = make([]*scheduler.Context, 0)
 		numGoroutines := 2
 
 		wg.Add(numGoroutines)
@@ -8988,16 +8951,19 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
 		terminate := false
+		var deleteMutex sync.Mutex
 		stopRoutine := func() {
 			if !terminate {
 				terminate = true
 				time.Sleep(1 * time.Minute) // Wait for 1 min to settle down all other go routines to terminate
+				deleteMutex.Lock()
 				for _, each := range volumesCreated {
 					if IsVolumeExits(each) {
 						log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
 					}
 
 				}
+				deleteMutex.Unlock()
 
 			}
 		}
@@ -9005,7 +8971,6 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 		defer stopRoutine()
 
 		// Wait for KVDB Nodes up and running and in healthy state
-		// Go routine to kill kvdb master in regular intervals
 		go func() {
 			defer wg.Done()
 			defer GinkgoRecover()
@@ -9018,8 +8983,6 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 					stopRoutine()
 					log.FailOnError(err, "not all kvdb members in healthy state")
 				}
-				// Wait for some time after killing kvdb master Node
-				time.Sleep(5 * time.Minute)
 			}
 		}()
 
@@ -9101,6 +9064,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 						}
 
 						time.Sleep(5 * time.Second)
+						deleteMutex.Lock()
 						// Delete the Volume
 						err = Inst().V.DeleteVolume(eachVol)
 						if err != nil {
@@ -9108,12 +9072,8 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 							log.FailOnError(err, "failed to delete volume with volume ID [%s]", eachVol)
 						}
 
-						// Remove the first element
-						for i := 0; i < len(volumesCreated)-1; i++ {
-							volumesCreated[i] = volumesCreated[i+1]
-						}
-						// Resize the array by truncating the last element
-						volumesCreated = volumesCreated[:len(volumesCreated)-1]
+						volumesCreated = volumesCreated[1:]
+						deleteMutex.Unlock()
 					}
 					if terminate {
 						break
@@ -9405,19 +9365,31 @@ func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
 	poolListAfterCreate := make(map[string]int)
 
 	isDmthin, err := IsDMthin()
-	log.FailOnError(err, "failed to check if Node is DMThin ")
+
+	if err != nil {
+		return err
+	}
 
 	for _, eachNode := range nodes {
-		pools, _ := GetPoolsDetailsOnNode(&eachNode)
-		log.InfoD("Length of pools present on Node [%v] =  [%v]", eachNode.Name, len(pools))
-		poolList[eachNode.Name] = len(pools)
+		if node.IsStorageNode(eachNode) {
+			pools, err := GetPoolsDetailsOnNode(&eachNode)
+			if err != nil {
+				return err
+			}
+			poolList[eachNode.Name] = len(pools)
+		} else {
+			poolList[eachNode.Name] = 0
+		}
+		log.InfoD("Length of pools present on Node [%v] =  [%v]", eachNode.Name, poolList[eachNode.Name])
+
 	}
 
 	log.InfoD("Pool Details and total pools present [%v]", poolList)
+	errChan := make(chan error, len(nodes))
 
-	wg.Add(len(nodes))
 	for _, eachNode := range nodes {
-		go func(eachNode node.Node) {
+		wg.Add(1)
+		go func(eachNode node.Node, errChan chan error) {
 			defer wg.Done()
 			defer GinkgoRecover()
 			log.InfoD("Adding cloud drive on Node [%v]", eachNode.Name)
@@ -9427,11 +9399,32 @@ func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
 				log.FailOnError(AddMetadataDisk(eachNode), "Failed to add metadata disk to the node ")
 			}
 
+			//Adding new pool
 			err := AddCloudDrive(eachNode, -1)
-			log.FailOnError(err, "adding cloud drive failed on Node [%v]", eachNode)
-		}(eachNode)
+			if err != nil {
+				errChan <- err
+			}
+		}(eachNode, errChan)
 	}
-	wg.Wait()
+	// Close the error channel once all goroutines are done
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	var addCloudDriveErrs []string
+
+	// Collect addCloudDriveErrs from all goroutines
+	for err := range errChan {
+		if err != nil {
+			addCloudDriveErrs = append(addCloudDriveErrs, err.Error())
+		}
+	}
+	if len(addCloudDriveErrs) > 0 {
+		concatenatedError := errors.New(strings.Join(addCloudDriveErrs, "; "))
+		return concatenatedError
+
+	}
 
 	err = Inst().V.RefreshDriverEndpoints()
 	log.FailOnError(err, "error refreshing driver end points")
@@ -9769,6 +9762,9 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 
 	stepLog := "while pool is expanding shutdown and poweron and check operation resumes"
 	It(stepLog, func() {
+		if !IsPoolAddDiskSupported() {
+			Skip("Add disk is not supported on DMTHin Cluster.. Skipping the test")
+		}
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebalanceshutdown-%d", i))...)
@@ -10146,7 +10142,8 @@ var _ = Describe("{PoolDeleteFunctionality}", func() {
 			for _, pool := range nodePools[:len(nodePools)-1] {
 				poolID := fmt.Sprintf("%v", pool.GetID())
 				log.Infof("delete pool %v", poolID)
-				deletePoolAndValidate(selectedNode, poolID)
+				err = DeletePoolAndValidate(selectedNode, poolID)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%s] deletion in the node [%s]", poolID, selectedNode.Name))
 			}
 		})
 
@@ -10485,7 +10482,8 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 
 			dash.VerifyFatal(len(vols) == 0, true, fmt.Sprintf("expect all volumes deleted: %+v", vols))
 
-			deletePoolAndValidate(*testNode, poolIDToDelete)
+			err = DeletePoolAndValidate(*testNode, poolIDToDelete)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%s] deletion in the node [%s]", poolIDToDelete, testNode.Name))
 
 			// add a pool back
 			err = AddCloudDrive(*testNode, -1)
@@ -10580,7 +10578,8 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 				log.FailOnError(err, "failed to delete snap with volume ID [%s]", snapID)
 			}
 
-			deletePoolAndValidate(*testNode, poolIDToDelete)
+			err = DeletePoolAndValidate(*testNode, poolIDToDelete)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%s] deletion in the node [%s]", poolIDToDelete, testNode.Name))
 
 			// add a pool back
 			err = AddCloudDrive(*testNode, -1)
@@ -10625,7 +10624,8 @@ var _ = Describe("{PoolDeleteServiceDisruption}", func() {
 
 		dash.VerifyFatal(poolIDToDelete != "", true, fmt.Sprintf("check deltable pool on node %s: poolIDToDelete %v", testNode.Name, poolIDToDelete))
 
-		deletePoolAndValidate(*testNode, poolIDToDelete)
+		err = DeletePoolAndValidate(*testNode, poolIDToDelete)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%s] deletion in the node [%s]", poolIDToDelete, testNode.Name))
 
 		stepLog := "1. Verify enter and exit maintenance mode"
 		Step(stepLog, func() {
@@ -10868,10 +10868,10 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 
 var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 	/*
-	  1. Deploy apps
-	  2. Pick a volume and locate the node where this is attached
-	  3. Delete the volume and let it be placed in trashcan
-	  4. Trigger pool expand in the node where the trashcan volume is present
+	   1. Deploy apps
+	   2. Pick a volume and locate the node where this is attached
+	   3. Delete the volume and let it be placed in trashcan
+	   4. Trigger pool expand in the node where the trashcan volume is present
 
 	*/
 
@@ -11100,8 +11100,8 @@ var _ = Describe("{CheckPoolOffline}", func() {
 var _ = Describe("{FACDPoolIOPriorityCheck}", func() {
 
 	/* This test is created to provide functional testing coverage for ticket PWX-35590
-	1. Create a cluster with FACD backend
-	2. Check if the IO Priority for the storagepools is HIGH
+	   1. Create a cluster with FACD backend
+	   2. Check if the IO Priority for the storagepools is HIGH
 	*/
 
 	JustBeforeEach(func() {
@@ -11765,7 +11765,8 @@ var _ = Describe("{PoolDeleteMultiplePools}", func() {
 		stepLog := fmt.Sprintf("1. delete second pool, id %v", poolIDs[1])
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			deletePoolAndValidate(*testNode, poolIDs[1])
+			err = DeletePoolAndValidate(*testNode, poolIDs[1])
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%s] deletion in the node [%s]", poolIDs[1], testNode.Name))
 		})
 
 		// add a pool back
@@ -11779,7 +11780,8 @@ var _ = Describe("{PoolDeleteMultiplePools}", func() {
 		stepLog = fmt.Sprintf("3. delete third pool, id %v", poolIDs[2])
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			deletePoolAndValidate(*testNode, poolIDs[2])
+			err = DeletePoolAndValidate(*testNode, poolIDs[2])
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%s] deletion in the node [%s]", poolIDs[2], testNode.Name))
 		})
 		stepLog = "4. Verify reboot"
 		Step(stepLog, func() {

@@ -2,6 +2,7 @@ package ocp
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
@@ -102,6 +103,12 @@ func (o *ocp) InspectVolume(name string) (*api.Volume, error) {
 		Type:      "Function",
 		Operation: "InspectVolume()",
 	}
+}
+
+// WaitDriverUpOnNode must wait till the volume driver becomes usable on a given node
+func (o *ocp) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
+	log.Warnf("WaitDriverUpOnNode function has not been implemented for volume driver - %s", o.String())
+	return nil
 }
 
 // UpdateFBDANFSEndpoint updates the NFS endpoint for a given FBDA volume

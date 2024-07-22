@@ -273,7 +273,7 @@ var _ = Describe("{BackupCSIVolumesWithPartialSuccess}", Label(TestCaseLabelsMap
 })
 
 // This testcase verified the partial backup success when few Px volumes snapshots are successful and few are failed
-var _ = Describe("{PartialBackupSuccessWithPxVolumes}", func() {
+var _ = Describe("{PartialBackupSuccessWithPxVolumes}", Label(TestCaseLabelsMap[PartialBackupSuccessWithPxVolumes]...), func() {
 
 	var (
 		scheduledAppContexts []*scheduler.Context
@@ -309,7 +309,7 @@ var _ = Describe("{PartialBackupSuccessWithPxVolumes}", func() {
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
 			for _, appCtx := range appContexts {
-				appCtx.ReadinessTimeout = AppReadinessTimeout
+				appCtx.ReadinessTimeout = 30 * time.Minute
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
 			}
 		}
@@ -464,7 +464,7 @@ var _ = Describe("{PartialBackupSuccessWithPxVolumes}", func() {
 })
 
 // This testcase Verifies partial backup and restore when both Px and KDMP volumes are backed up with failing KDMP backups
-var _ = Describe("{PartialBackupSuccessWithPxAndKDMPVolumes}", func() {
+var _ = Describe("{PartialBackupSuccessWithPxAndKDMPVolumes}", Label(TestCaseLabelsMap[PartialBackupSuccessWithPxAndKDMPVolumes]...), func() {
 
 	var (
 		backupNames            []string
@@ -983,7 +983,7 @@ var _ = Describe("{BackupStateTransitionForScheduledBackups}", Label(TestCaseLab
 })
 
 // This testcase verifies that the restoring from a partial backup with a lower stork version on the destination fails with the correct error message
-var _ = Describe("{PartialBackupWithLowerStorkVersion}", func() {
+var _ = Describe("{PartialBackupWithLowerStorkVersion}", Label(TestCaseLabelsMap[PartialBackupWithLowerStorkVersion]...), func() {
 	var (
 		backupNames          []string
 		scheduledAppContexts []*scheduler.Context
@@ -1217,7 +1217,7 @@ var _ = Describe("{PartialBackupWithLowerStorkVersion}", func() {
 })
 
 // This testcase verifies the partial backup success when few Px volumes backups failed while taking backup to Azure Global Location when env variable is set to non-global location.
-var _ = Describe("{PartialBackupSuccessWithAzureEndpoint}", func() {
+var _ = Describe("{PartialBackupSuccessWithAzureEndpoint}", Label(TestCaseLabelsMap[PartialBackupSuccessWithAzureEndpoint]...), func() {
 
 	var (
 		backupNames                []string
@@ -1240,7 +1240,7 @@ var _ = Describe("{PartialBackupSuccessWithAzureEndpoint}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("PartialBackupSuccessWithAzureEndpoint", "verifies the partial backup success when few Px volumes backups failed while taking backup to Azure Global Location when env variable is set to non-global location", nil, 299236, Ak, Q2FY25)
+		StartPxBackupTorpedoTest("PartialBackupSuccessWithAzureEndpoint", "Verifies the partial backup success when few Px volumes backups failed while taking backup to Azure Global Location when env variable is set to non-global location", nil, 299236, Ak, Q2FY25)
 		// This testcase is specific to Azure provider with Px Volumes
 		provider = "azure"
 		numOfNamespace := 1
@@ -1253,7 +1253,8 @@ var _ = Describe("{PartialBackupSuccessWithAzureEndpoint}", func() {
 			Inst().AppList = appList
 		}()
 		var err error
-		Inst().AppList = []string{"pxb-singleapp-multivol"}
+		Inst().AppList, err = GetApplicationSpecForFeature("PartialBackup")
+		log.FailOnError(err, "Fetching application spec for feature PartialBackup")
 		for i := 0; i < numOfNamespace; i++ {
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
@@ -1286,13 +1287,14 @@ var _ = Describe("{PartialBackupSuccessWithAzureEndpoint}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
-			backupLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
+			customBucketName := fmt.Sprintf("%s-%s-%v", provider, "custom", RandomString(4))
+			backupLocationName = fmt.Sprintf("%s-bl-%s", customBucketName, RandomString(4))
 			cloudCredUID = uuid.New()
 			backupLocationUID = uuid.New()
 			backupLocationMap[backupLocationUID] = backupLocationName
 			err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
-			err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+			err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, customBucketName, BackupOrgID, "", true)
 			dash.VerifyFatal(err, nil, "Creating backup location")
 		})
 

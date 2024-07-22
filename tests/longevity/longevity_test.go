@@ -110,6 +110,9 @@ var _ = Describe("{Longevity}", func() {
 		ResetDiscardMounts:                TriggerResetDiscardMounts,
 		ScaleFADAVolumeAttach:             TriggerScaleFADAVolumeAttach,
 		RestartKubeletService:             TriggerKubeletRestart,
+		PoolDelete:                        TriggerPoolDelete,
+		DefragScheduleCRUDOperations:      TriggerDefragScheduleCRUDOps,
+		DefragSchedules:                   TriggerDefragSchedules,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){

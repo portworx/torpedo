@@ -1235,3 +1235,92 @@ func (d *DefaultDriver) UpdateSkinnySnapReplNum(repl string) error {
 		Operation: "UpdateSkinnySnapReplNum()",
 	}
 }
+
+// CreateDefragSchedule create defrag schedule for provided defrag job
+func (d *DefaultDriver) CreateDefragSchedule(startTime string, defragJob *api.DefragJob) (*api.SdkCreateDefragScheduleResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateDefragSchedule()",
+	}
+}
+
+// GetDefragNodeStatus  get defrag schedule status on a given node
+func (d *DefaultDriver) GetDefragNodeStatus(n node.Node) (*api.SdkGetDefragNodeStatusResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDefragNodeStatus()",
+	}
+}
+
+// GetDefragClusterStatus get defrag schedule status for whole cluster
+func (d *DefaultDriver) GetDefragClusterStatus() (*api.SdkEnumerateDefragStatusResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDefragClusterStatus()",
+	}
+}
+
+// CleanUpDefragSchedules cleans up all defrag schedules and stop all defrag operations
+func (d *DefaultDriver) CleanUpDefragSchedules() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CleanUpDefragSchedules()",
+	}
+}
+
+// DeleteDefragSchedule deletes provided defrag schedule
+func (d *DefaultDriver) DeleteDefragSchedule(defragSchedId string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteDefragSchedule()",
+	}
+}
+
+// GetAllDefragSchedules return all defrag schedules in a cluster
+func (d *DefaultDriver) GetAllDefragSchedules() (*api.SdkEnumerateSchedulesResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAllDefragSchedules()",
+	}
+}
+
+// InspectDefragSchedules return information about provided schedule id
+func (d *DefaultDriver) InspectDefragSchedules(defragSchedId string) (*api.SdkInspectScheduleResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "InspectDefragSchedules()",
+	}
+}
+
+// ValidateDefragScheduleInfo validate defrag schedule information
+func (d *DefaultDriver) ValidateDefragScheduleInfo(schedInfo *api.SdkInspectScheduleResponse, startTime string, defragJob *api.DefragJob) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateDefragScheduleInfo()",
+	}
+}
+
+// ValidateDefragScheduleDeleted validates defrag schedule id is deleted
+func (d *DefaultDriver) ValidateDefragScheduleIdDeleted(scheduleId string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateDefragScheduleIdDeleted()",
+	}
+}
+
+// ValidatesDefragSchedulesTrigger validates defrag schedule triggers or not in given node ids
+func (d *DefaultDriver) ValidatesDefragSchedulesTrigger(scheduleId string, nodeIDList []string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidatesDefragSchedulesTrigger()",
+	}
+}
+
+// ValidateNodeDefragStatus validate defrag status in given node ids
+func (d *DefaultDriver) ValidateLastDefragScheduleStatus(scheduleId string, nodeIDList []string) ([]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateLastDefragScheduleStatus()",
+	}
+
+}
