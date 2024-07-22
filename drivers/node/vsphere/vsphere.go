@@ -262,16 +262,6 @@ func (v *vsphere) getVMFinder() (*find.Finder, error) {
 		}
 
 	}
-	ds, err := f.DefaultDatastore(v.ctx)
-	if ds == nil {
-		datastores, err := f.DatastoreList(v.ctx, "*")
-		log.Info("Datastores available %v ", datastores)
-		log.Info("Err available %v ", err)
-	} else {
-		log.Info("Default DS  %v ", ds)
-		log.Info("Default err  %v ", err)
-	}
-
 	// Make future calls local to this datacenter
 	f.SetDatacenter(dc)
 	return f, nil
