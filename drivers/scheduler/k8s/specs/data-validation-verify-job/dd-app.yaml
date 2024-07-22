@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: verify-job
+spec:
+  template:
+    spec:
+      containers:
+        - name: verify
+          image: ubuntu
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              md5sum -c /data/all_files.md5 && echo 'Verification complete, augmenting data...' &&
+              for i in $(seq 1 5); do
+                for j in $(seq 1 5); do
+                  for k in $(seq 1 5); do
+                    mkdir -p /data/dir$i/subdir$j/nest$k;
+                    last_file=$(find /data/dir$i/subdir$j/nest$k -type f | sed 's/.*file\([0-9]*\).*/\1/' | sort -n | tail -1);
+                    last_file=$((last_file + 1)); 
+                    end_file=$((last_file + 99)); 
+                    for l in $(seq $last_file $end_file); do
+                      dd if=/dev/urandom of=/data/dir$i/subdir$j/nest$k/file$l bs=4K count=1;
+                    done;
+                  done;
+                done;
+              done &&
+              find /data/dir* -type f ! -name 'all_files.md5' -exec md5sum {} + > /data/all_files.md5 &&
+              echo 'Data augmentation complete and checksums updated.'
+          volumeMounts:
+            - name: data-volume
+              mountPath: /data
+      restartPolicy: Never
+      volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: data-validation-verify-pvc

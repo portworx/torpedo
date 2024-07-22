@@ -1,0 +1,19 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: data-validation-sc-ss
+provisioner: stork-snapshot
+parameters:
+  repl: "3"
+  sharedv4: "true"
+  sharedv4_svc_type: ""
+  nodiscard: "true"
+  mount_options: "nodiscard=true"
+  journal: "true"
+  priority_io: "high"
+  io_profile: "db_remote"
+  snapshotschedule.stork.libopenstorage.org/interval-schedule: |
+    schedulePolicyName: localintervalpolicydv
+    annotations:
+      portworx/snapshot-type: local
+allowVolumeExpansion: true
