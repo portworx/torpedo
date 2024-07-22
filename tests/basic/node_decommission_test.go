@@ -380,3 +380,223 @@ var _ = Describe("{KvdbDecommissionNode}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{Decommission2Storage1KVDBNodeAtOnce}", func() {
+	var (
+		contexts            = make([]*scheduler.Context, 0)
+		nodesToDecommission []node.Node
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("Decommission2Storage1KVDBNodeAtOnce", "Validate decommissioning of 2 Storage nodes and 1 KVDB node at once", nil, 86013)
+	})
+
+	// decommissionAndRejoinNode decommissions a node and rejoin it back to the cluster
+	decommissionAndRejoinNode := func(n node.Node) (err error) {
+		log.Infof("Decommissioning node [%s]", n.Name)
+
+		var suspendedSchedules []*v1alpha1.VolumeSnapshotSchedule
+		defer func() {
+			if len(suspendedSchedules) > 0 {
+				for _, schedule := range suspendedSchedules {
+					makeSuspend := false
+					schedule.Spec.Suspend = &makeSuspend
+					_, err := storkops.Instance().UpdateSnapshotSchedule(schedule)
+					if err != nil {
+						err = fmt.Errorf("error resuming volumes snapshot schedule for volume [%s]. Err: [%v]", schedule.Name, err)
+						return
+					}
+				}
+			}
+		}()
+		err = PrereqForNodeDecomm(n, suspendedSchedules)
+		if err != nil {
+			err = fmt.Errorf("failed while performing prerequisites for node decommission. Err: [%v]", err)
+			return
+		}
+		err = Inst().S.PrepareNodeToDecommission(n, Inst().Provisioner)
+		if err != nil {
+			err = fmt.Errorf("failed while preparing node [%s] for decommission. Err: [%v]", n.Name, err)
+			return
+		}
+		err = Inst().V.DecommissionNode(&n)
+		if err != nil {
+			err = fmt.Errorf("failed while decommissioning node [%s]. Err: [%v]", n.Name, err)
+			return
+		}
+
+		log.Infof("Checking if node [%s] was decommissioned", n.Name)
+		t := func() (interface{}, bool, error) {
+			status, err := Inst().V.GetNodeStatus(n)
+			if err != nil {
+				return false, true, err
+			}
+			if *status == api.Status_STATUS_NONE {
+				return true, false, nil
+			}
+			return false, true, fmt.Errorf("node %s not decomissioned yet", n.Name)
+		}
+		decommissioned, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+		if err != nil {
+			err = fmt.Errorf("failed while getting decommissioned node status. Err: [%v]", err)
+			return
+		}
+		if !decommissioned.(bool) {
+			err = fmt.Errorf("failed to decommission node [%s]", n.Name)
+			return
+		}
+		err = Inst().S.RefreshNodeRegistry()
+		if err != nil {
+			err = fmt.Errorf("failed while refreshing node registry. Err: [%v]", err)
+			return
+		}
+		err = Inst().V.RefreshDriverEndpoints()
+		if err != nil {
+			err = fmt.Errorf("failed while refreshing storage drive endpoints. Err: [%v]", err)
+			return
+		}
+		t = func() (interface{}, bool, error) {
+			newKVDBNodes, err := GetAllKvdbNodes()
+			if err != nil {
+				return false, true, fmt.Errorf("failed to get all KVDB nodes. Err: [%v]", err)
+			}
+			if len(newKVDBNodes) == 3 {
+				log.Infof("The new KVDB nodes are: [%v]", newKVDBNodes)
+				for _, nKVDBNode := range newKVDBNodes {
+					if nKVDBNode.Leader && !nKVDBNode.IsHealthy {
+						return false, true, fmt.Errorf("leader kvdb node [%s] is not healthy", nKVDBNode.ID)
+					}
+				}
+				for _, nKVDBNode := range newKVDBNodes {
+					if !nKVDBNode.IsHealthy {
+						return false, true, fmt.Errorf("kvdb node [%s] is not healthy", nKVDBNode.ID)
+					}
+				}
+				return true, false, nil
+			}
+			return false, true, fmt.Errorf("actual number of KVDB nodes [%d], expected [%d]", len(newKVDBNodes), 3)
+		}
+		_, err = task.DoRetryWithTimeout(t, 8*time.Minute, defaultRetryInterval)
+		if err != nil {
+			err = fmt.Errorf("failed while verifying KVDB nodes are updated. Err: [%v]", err)
+			return
+		}
+
+		log.Infof("Rejoining node [%s]", n.Name)
+		err = Inst().V.RejoinNode(&n)
+		if err != nil {
+			err = fmt.Errorf("failed while rejoining node [%s]. Err: [%v]", n.Name, err)
+			return
+		}
+		var rejoinedNode *api.StorageNode
+		t = func() (interface{}, bool, error) {
+			drvNodes, err := Inst().V.GetDriverNodes()
+			if err != nil {
+				return false, true, fmt.Errorf("failed to get driver nodes. Err: [%v]", err)
+			}
+			for _, n := range drvNodes {
+				log.Infof("current node [%s]", n.Hostname)
+				if n.Hostname == n.Hostname {
+					rejoinedNode = n
+					return true, false, nil
+				}
+			}
+			return false, true, fmt.Errorf("node %s not rejoined yet", n.Name)
+		}
+		_, err = task.DoRetryWithTimeout(t, 20*time.Minute, defaultRetryInterval)
+		if err != nil {
+			err = fmt.Errorf("failed while rejoining the node [%s/%s]. Err: [%v]", n.Name, n.Hostname, err)
+			return
+		}
+		if rejoinedNode == nil {
+			err = fmt.Errorf("rejoined node not found")
+			return
+		}
+		if rejoinedNode.Hostname == "" {
+			err = fmt.Errorf("rejoined node [%v] hostname not found", rejoinedNode)
+			return
+		}
+		err = Inst().S.RefreshNodeRegistry()
+		if err != nil {
+			err = fmt.Errorf("failed while refreshing node registry. Err: [%v]", err)
+			return
+		}
+		err = Inst().V.RefreshDriverEndpoints()
+		if err != nil {
+			err = fmt.Errorf("failed while refreshing storage drive endpoints. Err: [%v]", err)
+			return
+		}
+		for _, pxNode := range node.GetStorageDriverNodes() {
+			if pxNode.Name == rejoinedNode.Hostname {
+				err = Inst().V.WaitDriverUpOnNode(pxNode, Inst().DriverStartTimeout)
+				if err != nil {
+					err = fmt.Errorf("failed while waiting for driver up on rejoined node [%s]. Err: [%v]", pxNode.Name, err)
+					return
+				}
+			}
+		}
+		return nil
+	}
+
+	stepLog := "validate decommissioning of 2 storage nodes and 1 kvdb node"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		stepLog := "Schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				testName := "decommission2st1kvdb-nodes"
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Pick 2 storage nodes and 1 kvdb node to decommission"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			kvdbNodes, err := GetAllKvdbNodes()
+			log.FailOnError(err, "failed to get list of KVDB nodes from the cluster")
+			dash.VerifyFatal(len(kvdbNodes), 3, "Verify if there are 3 kvdb nodes")
+
+			storageNodes, err := GetStorageNodes()
+			log.FailOnError(err, "failed to get list of storage nodes from the cluster")
+
+			rand.Seed(time.Now().UnixNano())
+			rand.Shuffle(len(storageNodes), func(i, j int) { storageNodes[i], storageNodes[j] = storageNodes[j], storageNodes[i] })
+			selectedStorageNodes := storageNodes[:2]
+
+			rand.Shuffle(len(kvdbNodes), func(i, j int) { kvdbNodes[i], kvdbNodes[j] = kvdbNodes[j], kvdbNodes[i] })
+			selectedKvdbNode := kvdbNodes[0]
+
+			kvdbNodeDetails, err := node.GetNodeDetailsByNodeID(selectedKvdbNode.ID)
+			log.FailOnError(err, fmt.Sprintf("error getting node with id: %s", selectedKvdbNode.ID))
+
+			nodesToDecommission = append(selectedStorageNodes, kvdbNodeDetails)
+			log.InfoD("Nodes to decommission: [%+v]", nodesToDecommission)
+		})
+
+		Step("Decommission and rejoin nodes", func() {
+			for _, n := range nodesToDecommission {
+				err := decommissionAndRejoinNode(n)
+				log.FailOnError(err, fmt.Sprintf("failed while decommissioning and rejoining node [%s]", n.Name))
+			}
+		})
+
+		stepLog = "Destroy applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
