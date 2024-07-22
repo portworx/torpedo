@@ -1940,7 +1940,6 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 		testName := strings.ToLower(fmt.Sprintf("%sPvcBasicInScale", testSuiteName))
 
 		stepLog = "schedule applications"
-
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for i := 0; i < scaleFactor; i++ {
@@ -1996,7 +1995,6 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 		var scaleFactor = 2
 		var appName = "aut-postgres-sharedv4"
 		stepLog = "schedule applications"
-
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for i := 0; i < scaleFactor; i++ {
@@ -2068,13 +2066,11 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleRebalanceByProvisionedMean([]string{"-10", "15"}, false),
-			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])*120/100)/units.GiB, 50, aututils.RuleScaleTypeResizeDisk, poolLabel),
-			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[1])*120/100)/units.GiB, 50, aututils.RuleScaleTypeResizeDisk, poolLabel),
-			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[2])*120/100)/units.GiB, 50, aututils.RuleScaleTypeResizeDisk, poolLabel),
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])*120/100)/units.GiB, 30, aututils.RuleScaleTypeResizeDisk, poolLabel),
 		}
 		storageNodeIds := []string{}
 		// take first 3 (default replicaset for volumes is 3) storage node IDs, label and schedule volumes onto them
-		for _, n := range storageNodes[0:3] {
+		for _, n := range storageNodes {
 			for k, v := range poolLabel {
 				Inst().S.AddLabelOnNode(n, k, v)
 			}
