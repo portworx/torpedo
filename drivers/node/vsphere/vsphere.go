@@ -13,7 +13,9 @@ import (
 
 	pxutil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	coreops "github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/ssh"
@@ -23,6 +25,8 @@ import (
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/utils/strings/slices"
 )
 
 const (
@@ -258,12 +262,75 @@ func (v *vsphere) getVMFinder() (*find.Finder, error) {
 		}
 
 	}
+	ds, err := f.DefaultDatastore(v.ctx)
+	if ds == nil {
+		datastores, err := f.DatastoreList(v.ctx, "*")
+		log.Info("Datastores available %v ", datastores)
+		log.Info("Err available %v ", err)
+	} else {
+		log.Info("Default DS  %v ", ds)
+		log.Info("Default err  %v ", err)
+	}
 
 	// Make future calls local to this datacenter
 	f.SetDatacenter(dc)
-
 	return f, nil
 
+}
+
+//GetCompatibleDatastores get matching prefix datastores
+func (v *vsphere) GetCompatibleDatastores(portworxNamespace string, datastoreNames []string) ([]*object.Datastore, error) {
+	var err error
+	datastores, err := v.GetDatastoresFromDatacenter()
+	if err != nil {
+		return nil, err
+	}
+	var stc *operatorcorev1.StorageCluster
+	pxOperator := operator.Instance()
+	stcList, err := pxOperator.ListStorageClusters(portworxNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to find storage clusters %v ", err)
+	}
+	var selectedDatastore []*object.Datastore
+	stc, err = pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to find storage cluster %v  in namespace  %s ", err, portworxNamespace)
+	}
+	var envVariables []v1.EnvVar
+	envVariables = stc.Spec.CommonConfig.Env
+	var prefixName string
+	for _, envVar := range envVariables {
+		if envVar.Name == "VSPHERE_DATASTORE_PREFIX" {
+			prefixName = envVar.Value
+			log.Infof("prefixName   %s ", prefixName)
+		}
+	}
+	if prefixName == "" {
+		return nil, fmt.Errorf("Failed to find VSPHERE_DATASTORE_PREFIX  prefix ")
+	}
+	for _, ds := range datastores {
+		if strings.HasPrefix(ds.Name(), prefixName) && slices.Contains(datastoreNames, ds.Name()) {
+			log.Infof("Prefix match found for datastore Name %v ", ds.Name())
+			selectedDatastore = append(selectedDatastore, ds)
+		}
+	}
+	if len(selectedDatastore) == 0 || len(selectedDatastore) != len(datastoreNames) {
+		return nil, fmt.Errorf("All datastores are not available, available are  %v , but expected are : %v", selectedDatastore, datastoreNames)
+	}
+	return selectedDatastore, nil
+}
+
+func (v *vsphere) GetDatastoresFromDatacenter() ([]*object.Datastore, error) {
+	var finder *find.Finder
+	finder, err := v.getVMFinder()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to find  getVMFinder err:: %+v", err)
+	}
+	datastores, err := finder.DatastoreList(v.ctx, "*")
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get all the datastores. err: %+v", err)
+	}
+	return datastores, nil
 }
 
 func (v *vsphere) connect() error {
