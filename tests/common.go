@@ -8055,6 +8055,50 @@ func GetStoragePoolByUUID(poolUUID string) (*opsapi.StoragePool, error) {
 	return pool, nil
 }
 
+func GetExpectedSizeWithJournal(expectedSize uint64, pool *opsapi.StoragePool, isjournal bool, isDmthin bool) (uint64, error) {
+	expectedSizeWithJournal := expectedSize
+	if isjournal {
+		if isDmthin {
+			count, err := getPoolDiskCount(pool)
+			if err != nil {
+				return 0, err
+			}
+			count = count * 3
+			expectedSizeWithJournal = expectedSizeWithJournal - count
+			log.InfoD("dmthin expected size %v with journal %v drive cnt %v", expectedSize, expectedSizeWithJournal, count)
+		} else {
+			expectedSizeWithJournal = expectedSizeWithJournal - 3
+			log.InfoD("btrfs expected %v size %v with journal %v", expectedSize, expectedSizeWithJournal)
+		}
+	}
+	return expectedSizeWithJournal, nil
+}
+
+func getPoolDiskCount(pool *opsapi.StoragePool) (uint64, error) {
+	stNode, err := GetNodeWithGivenPoolID(pool.Uuid)
+	if err != nil {
+		return 0, err
+	}
+
+	drvMap, err := Inst().V.GetPoolDrives(stNode)
+	if err != nil {
+		return 0, fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
+	}
+
+	count := uint64(0)
+	for p, disks := range drvMap {
+		result, _ := strconv.ParseInt(p, 10, 32)
+		poolIdInt := int32(result)
+		log.InfoD("Pool id from map %v vs pool id from pool %v", poolIdInt, pool.ID)
+		if poolIdInt == pool.ID {
+			return uint64(len(disks)), nil
+		}
+	}
+
+	log.InfoD("Returning count %v for pool %v", count, pool.ID)
+	return count, nil
+}
+
 // ValidateUserRole will validate if a given user has the provided PxBackupRole mapped to it
 func ValidateUserRole(userName string, role backup.PxBackupRole) (bool, error) {
 	roleMapping, err := backup.GetRolesForUser(userName)

@@ -3149,11 +3149,14 @@ func WaitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 				return nil, true, fmt.Errorf("waiting for pool status to update")
 			}
 		}
-		newPoolSize := expandedPool.TotalSize / units.GiB
-		expectedSizeWithJournal := expectedSize
-		if isJournalEnabled {
-			expectedSizeWithJournal = expectedSizeWithJournal - 3
+
+		isDmthin, err := IsDMthin()
+		if err != nil {
+			return nil, false, err
 		}
+		newPoolSize := expandedPool.TotalSize / units.GiB
+		expectedSizeWithJournal, err := GetExpectedSizeWithJournal(expectedSize, expandedPool, isJournalEnabled, isDmthin)
+		log.FailOnError(err, "error getting expected size with journal")
 		if newPoolSize >= expectedSizeWithJournal {
 			// storage pool resize has been completed
 			return nil, false, nil

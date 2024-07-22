@@ -537,6 +537,9 @@ func nodePoolsExpansion(testName string) {
 		eligibility        map[string]bool
 	)
 
+	isDmthin, err := IsDMthin()
+	log.FailOnError(err, "Failed to check if cluster is dmthin")
+
 	stepLog := fmt.Sprintf("has to schedule apps, and expand it by %s", option)
 	It(stepLog, func() {
 		log.InfoD(stepLog)
@@ -607,12 +610,10 @@ func nodePoolsExpansion(testName string) {
 				log.FailOnError(err, fmt.Sprintf("error getting drive size for pool [%s]", poolToBeResized.Uuid))
 				expectedSize = (poolToBeResized.TotalSize / units.GiB) + drvSize
 				poolsExpectedSizeMap[poolToBeResized.Uuid] = expectedSize
-
 				//To-Do Need to handle the case for multiple pools
-				expectedSizeWithJournal = expectedSize
-				if isjournal {
-					expectedSizeWithJournal = expectedSizeWithJournal - 3
-				}
+				expectedSizeWithJournal, err = GetExpectedSizeWithJournal(expectedSize, poolToBeResized, isjournal, isDmthin)
+				log.FailOnError(err, "error getting expected size with journal")
+
 				log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
 
 				err = Inst().V.ExpandPool(poolToBeResized.Uuid, operation, expectedSize, true)
@@ -633,11 +634,11 @@ func nodePoolsExpansion(testName string) {
 			exitPoolMaintenance(poolsToBeResized[0].Uuid)
 
 			for poolUUID, expectedSize := range poolsExpectedSizeMap {
+				resizedPool, err := GetStoragePoolByUUID(poolUUID)
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID  %s", poolUUID))
 				resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
-				expectedSizeWithJournal = expectedSize
-				if isjournal {
-					expectedSizeWithJournal = expectedSizeWithJournal - 3
-				}
+				expectedSizeWithJournal, err = GetExpectedSizeWithJournal(expectedSize, resizedPool, isjournal, isDmthin)
+				log.FailOnError(err, "error getting expected size with journal")
 				log.FailOnError(resizeErr, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
 			}
 
@@ -652,10 +653,8 @@ func nodePoolsExpansion(testName string) {
 				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID  %s", poolUUID))
 				newPoolSize := resizedPool.TotalSize / units.GiB
 				isExpansionSuccess := false
-				expectedSizeWithJournal = expectedSize
-				if isjournal {
-					expectedSizeWithJournal = expectedSizeWithJournal - 3
-				}
+				expectedSizeWithJournal, err = GetExpectedSizeWithJournal(expectedSize, resizedPool, isjournal, isDmthin)
+				log.FailOnError(err, "error getting expected size with journal")
 				if newPoolSize >= expectedSizeWithJournal {
 					isExpansionSuccess = true
 				}
@@ -996,10 +995,12 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 		}
 		newPoolSize := expandedPool.TotalSize / units.GiB
 
-		expectedSizeWithJournal := expectedSize
-		if isJournalEnabled {
-			expectedSizeWithJournal = expectedSizeWithJournal - 3
+		isDmthin, err := IsDMthin()
+		if err != nil {
+			return nil, false, err
 		}
+		expectedSizeWithJournal, err := GetExpectedSizeWithJournal(expectedSize, expandedPool, isJournalEnabled, isDmthin)
+		log.FailOnError(err, "error getting expected size with journal")
 		if newPoolSize >= expectedSizeWithJournal {
 			// storage pool resize has been completed
 			return nil, false, nil
@@ -11797,4 +11798,65 @@ var _ = Describe("{PoolDeleteMultiplePools}", func() {
 		AfterEachTest(contexts)
 	})
 
+})
+
+var _ = Describe("{PoolDeleteWithJournalOnData}", func() {
+	/*
+		1. Delete all pools in a node and ensure it becomes storageless with data pool having journal device partition
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolDeleteWithJournalOnData", "Tests case where pools are deleted and node becomes storageless", nil, 0)
+	})
+
+	stepLog := "Delete all the pools in a node, create a new pool and delete again"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		stNodes := node.GetStorageNodes()
+		kvdbNodesIDs := make([]string, 0)
+		kvdbMembers, err := Inst().V.GetKvdbMembers(stNodes[0])
+		log.FailOnError(err, "Error getting KVDB members")
+
+		var stNode node.Node
+		for _, k := range kvdbMembers {
+			kvdbNodesIDs = append(kvdbNodesIDs, k.Name)
+		}
+		for _, n := range stNodes {
+			if !Contains(kvdbNodesIDs, n.Id) {
+				stNode = n
+			}
+		}
+
+		stepLog = fmt.Sprintf("Deleting all the pools from the node [%s]", stNode.Name)
+		Step(stepLog, func() {
+			nodePools := stNode.StoragePools
+			for _, nodePool := range nodePools {
+				poolIDToDelete := fmt.Sprintf("%d", nodePool.ID)
+				err = DeletePoolAndValidate(stNode, poolIDToDelete)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%s] deletion in the node [%s]", poolIDToDelete, stNode.Name))
+			}
+			stepLog := fmt.Sprintf("validate node [%s] changed to storageless node", stNode.Name)
+			Step(stepLog, func() {
+				err := Inst().V.RefreshDriverEndpoints()
+				log.FailOnError(err, "error refreshing end points")
+				slNodes := node.GetStorageLessNodes()
+				isStorageless := false
+				for _, n := range slNodes {
+					if n.Name == stNode.Name {
+						isStorageless = true
+						break
+					}
+				}
+
+				dash.VerifyFatal(isStorageless, true, fmt.Sprintf("Verify node %s is converted to storageless node", stNode.Name))
+			})
+
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
 })
