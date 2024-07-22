@@ -1796,6 +1796,7 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 	It("has to setup, validate and teardown apps", func() {
 
 		// Get uptime for px service on each node
+		stepLog = "Getting PID of Px process before and after PX pods on all the nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			processPid := make(map[string]string)
