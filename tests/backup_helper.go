@@ -915,6 +915,116 @@ func CreateVMBackupWithValidation(ctx context1.Context, backupName string, vms [
 	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
 }
 
+func TakeMultipleBackupOfAllClusters(ctx context1.Context, backupOrgID string, clusterConfigPathMap map[string]string, numOfBackups int, snapShotLimit int, backupLocationName, backupLocationUid string, backupAppContexts []*scheduler.Context, backupNamePrefix string) ([]string, error) {
+	log.InfoD("Taking backup of application from all clusters")
+	labelSelectors := make(map[string]string)
+	namespaces := make([]string, 0)
+	for _, scheduledAppContext := range backupAppContexts {
+		namespace := scheduledAppContext.ScheduleOptions.Namespace
+		if !Contains(namespaces, namespace) {
+			namespaces = append(namespaces, namespace)
+		}
+	}
+	type backupResult struct {
+		name string
+		err  error
+	}
+
+	backupResults := make(chan backupResult)
+	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, snapShotLimit) // Semaphore to limit to snapShotLimit number of concurrent goroutines
+
+	ctx, cancel := context1.WithCancel(ctx) // Create a cancellable context
+	defer cancel()                          // Ensure cancel is called to release resources
+
+	for clusterName := range clusterConfigPathMap {
+		wg.Add(1)
+		go func(clusterName string) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			log.Infof("Taking backup of application from cluster %s", clusterName)
+			currentClusterUid, err := Inst().Backup.GetClusterUID(ctx, backupOrgID, clusterName)
+			if err != nil {
+				log.Errorf("Failed to get cluster UID for cluster %s: %v", clusterName, err)
+				return
+			}
+			var innerWg sync.WaitGroup
+			for i := 0; i < numOfBackups; i++ {
+				semaphore <- struct{}{} // Acquire semaphore
+				innerWg.Add(1)
+				go func(i int) {
+					defer innerWg.Done()
+					defer GinkgoRecover()
+					defer func() { <-semaphore }() // Release semaphore
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						currentBackupName := fmt.Sprintf("%s-%v", backupNamePrefix, RandomString(6))
+						err := CreateBackup(currentBackupName, clusterName, backupLocationName, backupLocationUid, namespaces, labelSelectors, backupOrgID, currentClusterUid, "", "", "", "", ctx)
+						backupResults <- backupResult{name: currentBackupName, err: err}
+					}
+				}(i)
+			}
+			innerWg.Wait() // Wait for all backup routines for this cluster to complete
+		}(clusterName)
+	}
+
+	go func() {
+		wg.Wait()            // Wait for all cluster routines to complete
+		close(backupResults) // Close the channel after all work is done
+	}()
+
+	var backupNameList []string
+	var errList []error
+
+	for result := range backupResults {
+		if result.err != nil {
+			log.Errorf("Failed to create and validate backup: %v", result.err)
+			errList = append(errList, result.err)
+			cancel() // Cancel remaining operations on first error
+			break
+		} else {
+			log.Infof("Successfully created and validated backup [%s]", result.name)
+			backupNameList = append(backupNameList, result.name)
+		}
+	}
+
+	if len(errList) > 0 {
+		return backupNameList, fmt.Errorf("some backups failed")
+	}
+
+	// If all backups are successful, validate the backups
+	validationResults := make(chan error)
+	var validationWg sync.WaitGroup
+
+	for _, backupName := range backupNameList {
+		validationWg.Add(1)
+		go func(backupName string) {
+			defer validationWg.Done()
+			defer GinkgoRecover()
+			err := ValidateBackup(ctx, backupName, backupOrgID, backupAppContexts, make([]string, 0))
+			validationResults <- err
+		}(backupName)
+	}
+	go func() {
+		validationWg.Wait()      // Wait for all validation routines to complete
+		close(validationResults) // Close the channel after all work is done
+	}()
+
+	for err := range validationResults {
+		if err != nil {
+			log.Errorf("Validation failed: %v", err)
+			errList = append(errList, err)
+		}
+	}
+
+	if len(errList) > 0 {
+		return backupNameList, fmt.Errorf("some validations failed")
+	}
+	return backupNameList, nil
+}
+
 func UpdateBackup(backupName string, backupUid string, orgId string, cloudCred string, cloudCredUID string, ctx context1.Context) (*api.BackupUpdateResponse, error) {
 	backupDriver := Inst().Backup
 	bkpUpdateRequest := &api.BackupUpdateRequest{
