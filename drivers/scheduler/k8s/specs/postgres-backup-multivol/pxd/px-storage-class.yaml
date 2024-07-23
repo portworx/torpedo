@@ -1,30 +1,17 @@
-{{/* Portworx persistent volume claim */}}
-{{ if .ClaimsCount }}
-{{- range $val := Iterate .ClaimsCount }}
----
-apiVersion: v1
-kind: PersistentVolumeClaim
+##### Portworx storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
 metadata:
-  name: postgres-data-{{ $val }}
-spec:
-  storageClassName: postgres-sc
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 2Gi
-{{- end }}
-{{ else }}
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: postgres-data
-spec:
-  storageClassName: postgres-sc
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 2Gi
-{{- end }}
+  name: postgres-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  {{ if .Repl }}
+  repl: "{{ .Repl }}"
+  {{ else }}
+  repl: "3"{{ end }}
+  priority_io: "high"
+  {{ if .Fs }}
+  fs: {{ .Fs }}{{ end }}
+  {{ if .AggregationLevel }}
+  aggregation_level: "{{ .AggregationLevel }}"{{ end }}
+allowVolumeExpansion: true
