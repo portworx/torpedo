@@ -13858,3 +13858,119 @@ func GetVolumeNamefromPVC(namespace string) ([]string, error) {
 	}
 	return nil, fmt.Errorf("No PVCs found in namespace [%s]", namespace)
 }
+
+// SelectPoolDeletableNodes return a list of pool deletable nodes: prioritize for non-kvdb nodes
+func SelectPoolDeletableNodes() ([]node.Node, error) {
+	testNodes := []node.Node{}
+	log.Info("Select non-kvdb node or node with > 1 pools)")
+	stNodes := node.GetStorageNodes()
+	log.InfoD("storage nodes %+v", stNodes)
+
+	kvdbNodesIDs := []string{}
+	kvdbMembers, err := Inst().V.GetKvdbMembers(stNodes[0])
+	if err != nil {
+		return nil, err
+	}
+	log.InfoD("kvdb members %+v", kvdbMembers)
+
+	for _, n := range kvdbMembers {
+		kvdbNodesIDs = append(kvdbNodesIDs, n.Name)
+	}
+
+	// testNodes for pool deletable: [non-kvdb-nodes] + [kvdb-nodes with >= 2 pools]
+	// collect non-kvdb firsts
+	for _, n := range stNodes {
+		if !Contains(kvdbNodesIDs, n.Id) { // non kvdb node
+			log.InfoD("get non-kvdb node %v", n.Name)
+			poolsMap, err := Inst().V.GetPoolDrives(&n)
+			if err != nil {
+				return nil, err
+			}
+			log.InfoD("non-kvdb node %v has %v pools %+v", n.Name, len(poolsMap), poolsMap)
+			if len(poolsMap) > 0 {
+				testNodes = append(testNodes, n)
+			}
+		}
+	}
+
+	// kvdb nodes, need at least 2 pools
+	for _, n := range stNodes {
+		if Contains(kvdbNodesIDs, n.Id) {
+			log.InfoD("get kvdb node %v", n.Name)
+			poolsMap, err := Inst().V.GetPoolDrives(&n)
+			if err != nil {
+				return nil, err
+			}
+			log.InfoD("kvdb node %v has %v pools %+v", n.Name, len(poolsMap), poolsMap)
+			if len(poolsMap) > 1 {
+				testNodes = append(testNodes, n)
+			}
+		}
+	}
+
+	if len(testNodes) == 0 { // it means all nodes are kvdb-nodes with 1 pools
+		testNode := stNodes[0]
+		log.InfoD("select kvdb node %v for test, the node need to have at least 2 pools", testNode.Name)
+		poolsMap, err := Inst().V.GetPoolDrives(&testNode)
+		if err != nil {
+			return nil, err
+		}
+		log.InfoD("the kvdb node %v has pools %+v", testNode.Name, poolsMap)
+		if len(poolsMap) <= 1 {
+			log.InfoD("try create new pool for test")
+			err = AddCloudDrive(testNode, -1)
+			if err != nil {
+				return nil, err
+			}
+		}
+		testNodes = append(testNodes, testNode)
+	}
+
+	for _, n := range testNodes {
+		log.InfoD("found pool deletable node %v", n.Name)
+	}
+
+	dash.VerifyFatal(len(testNodes) > 0, true, "select test node")
+	return testNodes, nil
+}
+
+// DeletePoolsOnMultipleNodesInParallel delete pools on multiple nodes in parallel
+func DeletePoolsOnMultipleNodesInParallel(poolDeleteNodes []node.Node) error {
+
+	// Delete pools on multiple nodes in parallel
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(poolDeleteNodes))
+	for _, n := range poolDeleteNodes {
+		wg.Add(1)
+		go func(node node.Node) {
+			defer wg.Done()
+			drvMap, err := Inst().V.GetPoolDrives(&node)
+			if err != nil {
+				errCh <- err
+			}
+
+			poolIDs := []string{}
+
+			for poolID := range drvMap {
+				poolIDs = append(poolIDs, poolID)
+			}
+			for index, poolID := range poolIDs {
+				err = DeletePoolAndValidate(node, poolID)
+				if err == nil {
+					log.Infof("Pool [%v] deleted successfully on Node [%v]", poolID, node.Name)
+					break
+				}
+				if err != nil && index == len(poolIDs)-1 {
+					errCh <- err
+					log.Infof("Failed to delete Pool [%v] on Node [%v]", poolID, node.Name)
+				}
+			}
+		}(n)
+	}
+	wg.Wait()
+	if errch := <-errCh; errch != nil {
+		return errch
+	}
+
+	return nil
+}
