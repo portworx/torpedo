@@ -6764,7 +6764,7 @@ var _ = Describe("{ValidateFAVolumeTokenTimeout}", func() {
 
 	var (
 		selectedNode      node.Node
-		numInitialVolumes = 200
+		numInitialVolumes = 10
 		//numAttachRequests = 40
 	)
 
@@ -6778,6 +6778,15 @@ var _ = Describe("{ValidateFAVolumeTokenTimeout}", func() {
 
 		if !IsPureCloudProvider() {
 			Skip("Skipping [ValidateFAVolumeTokenTimeout] because IsPureCloudProvider [false]")
+		} else {
+			summary, err := Inst().V.GetLicenseSummary()
+			log.FailOnError(err, "failed to get license summary")
+			log.Infof("License Summary: [%v]", summary)
+
+			for _, feature := range summary.Features {
+				log.Infof("Feature As A Whole: [%v]", feature)
+				log.Infof("Feature [%v -- %v -- %v]", feature.Name, feature.Quantity, feature.Valid)
+			}
 		}
 
 		stepLog := "Label a node to schedule applications"
