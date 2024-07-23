@@ -606,6 +606,7 @@ var (
 	contextsCreated                      []*scheduler.Context
 	CurrentClusterConfigPath             = ""
 	clusterProvider                      = "aws"
+	ClusterPrefix                        = "default"
 )
 
 var (
@@ -5194,6 +5195,110 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				if err != nil {
 					return err
 				}
+			}
+		}
+	}
+	return nil
+}
+
+// CreateDuplicateApplicationClusters Adds n cluster objects to the Px-Backup using the supplied kubeconfig path
+func CreateDuplicateApplicationClusters(orgID string, cloudName string, uid string, ctx context1.Context, configPath string, n int, clusterPrefix string) error {
+	var clusterCredName string
+	var clusterCredUid string
+
+	clusterCreation := func(clusterCredName string, clusterCredUid string, clusterName string, configPath string) error {
+		err := CreateCluster(clusterName, configPath, orgID, clusterCredName, clusterCredUid, ctx)
+		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
+			return err
+		}
+		// Check cluster status
+		clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, clusterName, ctx)
+		if err != nil {
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", clusterName))
+		}
+		dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", clusterName))
+		return nil
+	}
+
+	clusterProvider := GetClusterProviders()
+	for _, provider := range clusterProvider {
+		switch provider {
+		case drivers.ProviderAzure, drivers.ProviderAws, drivers.ProviderGke, drivers.ProviderIbm:
+			for i := 0; i < n; i++ {
+				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, cloudName, RandomString(5))
+				clusterCredUid = uuid.New()
+				log.Infof("Creating cloud credential for cluster")
+				err := CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, cloudName)
+				if err != nil {
+					if strings.Contains(err.Error(), CreateCloudCredentialError) {
+						log.Infof("The error is - %v", err.Error())
+						adminCtx, err := backup.GetAdminCtxFromSecret()
+						if err != nil {
+							return fmt.Errorf("failed to fetch px-central-admin ctx with error %v", err)
+						}
+						log.Infof("Creating cloud credential %s from admin context and sharing with all the users", clusterCredName)
+						err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, adminCtx, cloudName)
+						if err != nil {
+							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
+						}
+						err = AddCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
+						if err != nil {
+							return fmt.Errorf("failed to share the cloud cred with error %v", err)
+						}
+					} else {
+						return fmt.Errorf("failed to create cloud cred with error =%v", err)
+					}
+				}
+				clusterName := fmt.Sprintf("cluster-%s-%d", clusterPrefix, i+1)
+				err = clusterCreation(clusterCredName, clusterCredUid, clusterName, configPath)
+				if err != nil {
+					return err
+				}
+				ClusterConfigPathMap[clusterName] = configPath // Store the cluster name and its kubeconfig path
+			}
+
+		case drivers.ProviderRke:
+			for i := 0; i < n; i++ {
+				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, cloudName, RandomString(5))
+				clusterCredUid = uuid.New()
+				log.Infof("Creating cloud credential for cluster")
+				err := CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, cloudName)
+				if err != nil {
+					if strings.Contains(err.Error(), CreateCloudCredentialError) {
+						log.Infof("The error is - %v", err.Error())
+						adminCtx, err := backup.GetAdminCtxFromSecret()
+						if err != nil {
+							return fmt.Errorf("failed to fetch px-central-admin ctx with error %v", err)
+						}
+						log.Infof("Creating cloud credential %s from admin context and sharing with all the users", clusterCredName)
+						err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, adminCtx, cloudName)
+						if err != nil {
+							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
+						}
+						err = AddCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, Invalid, Read, adminCtx, orgID)
+						if err != nil {
+							return fmt.Errorf("failed to share the cloud cred with error %v", err)
+						}
+					} else {
+						return fmt.Errorf("failed to create cloud cred with error =%v", err)
+					}
+				}
+				clusterName := fmt.Sprintf("cluster-%s-%d", clusterPrefix, i+1)
+				err = clusterCreation(clusterCredName, clusterCredUid, clusterName, configPath)
+				if err != nil {
+					return err
+				}
+				ClusterConfigPathMap[clusterName] = configPath // Store the cluster name and its kubeconfig path
+			}
+
+		default:
+			for i := 0; i < n; i++ {
+				clusterName := fmt.Sprintf("cluster-%s-%d", clusterPrefix, i+1)
+				err := clusterCreation(clusterCredName, clusterCredUid, clusterName, configPath)
+				if err != nil {
+					return err
+				}
+				ClusterConfigPathMap[clusterName] = configPath // Store the cluster name and its kubeconfig path
 			}
 		}
 	}
