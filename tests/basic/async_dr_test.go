@@ -25,6 +25,7 @@ import (
 
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/applicationbackup"
 	"github.com/portworx/torpedo/pkg/asyncdr"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
@@ -646,6 +647,134 @@ var _ = Describe("{StorkctlPerformFailoverFailbackeckEsClusterwide}", func() {
 	})
 })
 
+var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", func() {
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+
+	JustBeforeEach(func() {
+		upgradeHopsList := make(map[string]string)
+		upgradeHopsList["upgradeHops"] = Inst().UpgradeStorageDriverEndpointList
+		upgradeHopsList["UpgradeVolumeDriverDuringAppBkpRestore"] = "true"
+		StartTorpedoTest("UpgradeVolumeDriverDuringAppBkpRestore", "Validating volume driver upgrade during migration", upgradeHopsList, 0)
+		log.InfoD("Volume driver upgrade hops list [%s]", upgradeHopsList)
+	})
+
+	It("upgrade volume driver during app backup and restore and ensure everything is running fine", func() {
+		log.InfoD("upgrade volume driver during app backup and restore and ensure everything is running fine")
+
+		var (
+			nsRest             = "apprest-" + time.Now().Format("15h03m05s")
+			restName           = "storkrestore-" + time.Now().Format("15h03m05s")
+			s3SecretName       = "s3secret"
+			backupLocationName = "storkbackuplocation-" + time.Now().Format("15h03m05s")
+			backupName         = "storkbackup-" + time.Now().Format("15h03m05s")
+			taskNamePrefix     = "appbkprest-upgradepx"
+			defaultNs          = "kube-system"
+			timeout            = 10 * time.Minute	
+		)
+		bkpNs, contexts := initialSetupApps(taskNamePrefix, true)
+		storageNodes := node.GetStorageNodes()
+
+		// AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
+		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
+		log.FailOnError(err, "Cloud drive installation failed")
+		if !isCloudDrive {
+			for _, storageNode := range storageNodes {
+				err := Inst().V.AddBlockDrives(&storageNode, nil)
+				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
+					continue
+				}
+				log.FailOnError(err, "Adding block drive(s) failed.")
+			}
+		}
+
+		Step("Create App Backup", func() {
+			log.Infof("Contexts is: %v", contexts)
+			log.FailOnError(err, "Failed to create app")
+			backupLocation, err := applicationbackup.CreateBackupLocation(backupLocationName, defaultNs, s3SecretName)
+			log.FailOnError(err, "Failed to create backup location")
+			appBackup, bkp_create_err := applicationbackup.CreateApplicationBackupKs(backupName, defaultNs, backupLocation, bkpNs)
+			log.FailOnError(bkp_create_err, "Failed to create backup")
+			log.Infof("Backup is %v", appBackup)
+			bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(backupName, defaultNs, timeout)
+			log.FailOnError(bkp_comp_err, "Backup completion failed")
+			log.InfoD("backup successful, backup name - %v, backup location - %v", backupName, backupLocationName)
+		})
+
+		Step("start the upgrade of volume driver", func() {
+			log.InfoD("start the upgrade of volume driver")
+
+			if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
+				log.Fatalf("Unable to perform volume driver upgrade hops, none were given")
+			}
+			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
+			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+				currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+				if err != nil {
+					log.Warnf("error getting driver version, Err: %v", err)
+				}
+				upgradeStatus, updatedPXVersion, durationInMins := upgradePX(upgradeHop, storageNodes)
+				log.InfoD("current PX version: %s, no of nodes: %d, upgrade status: %s, updated px version: %s, duration in mins: %d on source cluster",
+					currPXVersion, len(storageNodes), upgradeStatus, updatedPXVersion, durationInMins)
+				majorVersion := strings.Split(currPXVersion, "-")[0]
+				statsData := make(map[string]string)
+				statsData["numOfNodes"] = fmt.Sprintf("%d", len(storageNodes))
+				statsData["fromVersion"] = currPXVersion
+				statsData["toVersion"] = updatedPXVersion
+				statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)
+				statsData["status"] = upgradeStatus
+				dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
+			}
+		})
+
+		Step("Perform Restore to new Ns", func() {
+			nsSpec := &v1.Namespace{
+				ObjectMeta: meta_v1.ObjectMeta{
+					Name: nsRest,
+				},
+			}
+			_, err = core.Instance().CreateNamespace(nsSpec)
+			log.FailOnError(err, "Failed to create namespace")
+			bl, err := storkops.Instance().GetBackupLocation(backupLocationName, defaultNs)
+			log.FailOnError(err, "Failed to get backup location")
+			log.Infof("BackupLocation is %v", bl)
+			ab, err := storkops.Instance().GetApplicationBackup(backupName, defaultNs)
+			log.FailOnError(err, "Failed to get backup location")
+			namespaceMapping := make(map[string]string)
+			namespaceMapping[bkpNs[0]] = nsRest
+			appRestore, restore_err := applicationbackup.CreateApplicationRestore(restName, defaultNs, bl, ab.Name, namespaceMapping)
+			log.FailOnError(restore_err, "Failed to create restore")
+			log.Infof("Restore is %v", appRestore)
+			restr_comp_err := applicationbackup.WaitForAppRestoreCompletion(restName, defaultNs, timeout)
+			log.FailOnError(restr_comp_err, "Restore completion failed")
+			log.InfoD("restore successful, restore name - %v", restName)
+			restContext, err := CloneAppContextAndTransformWithMappings(contexts[0], namespaceMapping, nil, true)
+			waitForPodsToBeRunning(restContext, false)
+			log.FailOnError(err, "Failed to get mapped context")
+			contexts = append(contexts, restContext)
+		})
+
+		Step("Destroy apps", func() {
+			log.InfoD("Destroy apps")
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
 var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", func() {
 	BeforeEach(func() {
 		if !kubeConfigWritten {
@@ -659,8 +788,8 @@ var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", func() {
 	JustBeforeEach(func() {
 		upgradeHopsList := make(map[string]string)
 		upgradeHopsList["upgradeHops"] = Inst().UpgradeStorageDriverEndpointList
-		upgradeHopsList["UpgradeVolumeDriverDuringMigration"] = "true"
-		StartTorpedoTest("UpgradeVolumeDriverDuringMigration", "Validating volume driver upgrade during migration", upgradeHopsList, 0)
+		upgradeHopsList["UpgradeVolumeDriverDuringAsyncDrMigration"] = "true"
+		StartTorpedoTest("UpgradeVolumeDriverDuringAsyncDrMigration", "Validating volume driver upgrade during migration", upgradeHopsList, 0)
 		log.InfoD("Volume driver upgrade hops list [%s]", upgradeHopsList)
 	})
 	var contexts []*scheduler.Context
