@@ -6763,7 +6763,9 @@ var _ = Describe("{ValidateFAVolumeTokenTimeout}", func() {
 	*/
 
 	var (
-		selectedNode node.Node
+		selectedNode      node.Node
+		numInitialVolumes = 200
+		//numAttachRequests = 40
 	)
 
 	JustBeforeEach(func() {
@@ -6794,35 +6796,32 @@ var _ = Describe("{ValidateFAVolumeTokenTimeout}", func() {
 			log.FailOnError(err, "failed to remove label [schedule=true] on node [%v]", selectedNode)
 		}()
 
-		stepLog = "Schedule applications on the [schedule=true] labeled node"
+		stepLog = fmt.Sprintf("Attach upto [%d] volumes on node [%v]", numInitialVolumes, selectedNode.Name)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 
-			appList := Inst().AppList
-			defer func() {
-				Inst().AppList = appList
-			}()
-			Inst().AppList = []string{"postgres-backup-multivol"}
-
-			specFactory, err := spec.NewFactory(Inst().SpecDir, "pure", Inst().S)
-			log.FailOnError(err, "failed to create spec factory with specDir [%v], storageProvisioner [%v], and scheduler [%v]", Inst().SpecDir, "pure", Inst().S.String())
-			var appSpecs []*spec.AppSpec
-			for _, key := range []string{"postgres-backup-multivol"} {
-				var appSpec *spec.AppSpec
-				appSpec, err = specFactory.Get(key)
-				log.FailOnError(err, "failed to get app spec for key [%v]", key)
-				appSpecs = append(appSpecs, appSpec)
+			appName := "postgres-backup-multivol"
+			appConfig := Inst().CustomAppConfig[appName]
+			Inst().CustomAppConfig[appName] = scheduler.AppConfig{
+				ClaimsCount: numInitialVolumes,
 			}
-			contexts, err := Inst().S.ScheduleWithCustomAppSpecs(
-				appSpecs,
+			defer func() {
+				Inst().CustomAppConfig[appName] = appConfig
+				err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+				log.FailOnError(err, "failed to rescan specs. SpecDir [%s] and StorageDriver [%s]", Inst().SpecDir, Inst().V.String())
+			}()
+			err = Inst().S.RescanSpecs(Inst().SpecDir, "pure")
+			log.FailOnError(err, "failed to rescan specs. SpecDir [%s] and StorageDriver [%s]", Inst().SpecDir, "pure")
+			contexts, err := Inst().S.Schedule(
 				"stuck-token-"+Inst().InstanceID,
 				scheduler.ScheduleOptions{
+					AppKeys:            []string{appName},
 					Nodes:              []node.Node{selectedNode},
 					Labels:             map[string]string{"schedule": "true"},
 					StorageProvisioner: string(portworx.PortworxCsi),
 				},
 			)
-			log.FailOnError(err, "failed to schedule applications with custom app specs")
+			log.FailOnError(err, "failed to schedule [%s] on node [%v]", appName, selectedNode.Name)
 			ValidateApplications(contexts)
 		})
 	})
