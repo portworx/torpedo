@@ -6747,3 +6747,77 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{ValidateFAVolumeTokenTimeout}", func() {
+	/*
+		PTX:
+			https://purestorage.atlassian.net/browse/PTX-25034
+		TestRail:
+			https://portworx.testrail.net/index.php?/cases/view/298095
+		Steps:
+			1. Have multipath enabled. Each FA LUN should have at least 2 paths.
+			2. Attach upto 200 volumes on a single node.
+			3. Next send 40 volume attachment requests at the same time on this node.
+			   For each operation PX takes a token, and it expects the token to be released after the attach operation
+			   Each attach operation takes a long time and hence within 3 minutes we end up crashing since the token does not get released for a few attach requests.
+	*/
+
+	var (
+		selectedNode node.Node
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateFAVolumeTokenTimeout", "Validate the FA volume token timeout", nil, 0)
+	})
+
+	itLog := "Validate FA Volume Token Timeout"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		if !IsPureCloudProvider() {
+			Skip("Skipping [ValidateFAVolumeTokenTimeout] because IsPureCloudProvider [false]")
+		}
+
+		stepLog := "Label a node to schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			nodes := node.GetStorageDriverNodes()
+			rand.Seed(time.Now().UnixNano())
+			selectedNode = nodes[rand.Intn(len(nodes))]
+			log.Infof("Node selected for scheduling applications: [%v]", selectedNode)
+
+			err := Inst().S.AddLabelOnNode(selectedNode, "schedule", "true")
+			log.FailOnError(err, "failed to add label [schedule=true] on node [%v]", selectedNode)
+		})
+
+		stepLog = "Schedule applications on the [schedule=true] labeled node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			appList := Inst().AppList
+			defer func() {
+				Inst().AppList = appList
+			}()
+			Inst().AppList = []string{"postgres-backup-multivol"}
+
+			specFactory, err := spec.NewFactory(Inst().SpecDir, "pure", Inst().S)
+			log.FailOnError(err, "failed to create spec factory with specDir [%v], storageProvisioner [%v], and scheduler [%v]", Inst().SpecDir, "pure", Inst().S.String())
+			var appSpecs []*spec.AppSpec
+			for _, key := range []string{"postgres-backup-multivol"} {
+				var appSpec *spec.AppSpec
+				appSpec, err = specFactory.Get(key)
+				log.FailOnError(err, "failed to get app spec for key [%v]", key)
+				appSpecs = append(appSpecs, appSpec)
+			}
+			contexts, err := Inst().S.ScheduleWithCustomAppSpecs(appSpecs, "hello-world", scheduler.ScheduleOptions{
+				StorageProvisioner: string(portworx.PortworxCsi),
+			})
+			log.FailOnError(err, "failed to schedule applications with custom app specs")
+			ValidateApplications(contexts)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
