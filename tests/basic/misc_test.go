@@ -1800,14 +1800,14 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			processPid := make(map[string]string)
-			startCmd := "pidof px"
+			processCmd := "pidof px"
 			storageNode := node.GetStorageNodes()
 			storageLessNodes := node.GetStorageLessNodes()
 			var AllNodes []node.Node
 			AllNodes = append(storageNode, storageLessNodes...)
 			//Capturing PID pf PX before stopping PX pods
 			for _, nnode := range AllNodes {
-				output, _ := Inst().N.RunCommand(nnode, startCmd, node.ConnectionOpts{
+				output, _ := Inst().N.RunCommand(nnode, processCmd, node.ConnectionOpts{
 					Timeout:         30 * time.Second,
 					TimeBeforeRetry: 20 * time.Second,
 					Sudo:            true,
@@ -1829,7 +1829,7 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 				if err != nil {
 					log.FailOnError(fmt.Errorf("PX POD is not up, we can not test further due to err %s", err), "PX POD is down on node %s", nnode.Name)
 				}
-				output, err := Inst().N.RunCommand(nnode, startCmd, node.ConnectionOpts{
+				output, err := Inst().N.RunCommand(nnode, processCmd, node.ConnectionOpts{
 					Timeout:         20 * time.Second,
 					TimeBeforeRetry: 5 * time.Second,
 					Sudo:            true,
