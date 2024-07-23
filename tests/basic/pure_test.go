@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	pxapi "github.com/libopenstorage/operator/api/px"
 
 	"github.com/devans10/pugo/flasharray"
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
@@ -6784,6 +6785,11 @@ var _ = Describe("{ValidateFAVolumeTokenTimeout}", func() {
 			log.Infof("License Summary: [%v]", summary)
 
 			for _, feature := range summary.Features {
+				if feature.Name == faLicense[LabLocalAttaches] {
+					if feature.Quantity.(*pxapi.LicensedFeature_Count).Count < 200 {
+						Skip(fmt.Sprintf("Skipping [ValidateFAVolumeTokenTimeout] because maximum volumes per node [%v] is less than 200", feature.Quantity.(*pxapi.LicensedFeature_Count).Count))
+					}
+				}
 				log.Infof("Feature As A Whole: [%v]", feature)
 				log.Infof("Feature [%v -- %v -- %v]", feature.Name, feature.Quantity, feature.Valid)
 			}
@@ -6831,6 +6837,10 @@ var _ = Describe("{ValidateFAVolumeTokenTimeout}", func() {
 				},
 			)
 			log.FailOnError(err, "failed to schedule [%s] on node [%v]", appName, selectedNode.Name)
+			for _, ctx := range contexts {
+				ctx.ReadinessTimeout = 20 * time.Minute
+			}
+
 			ValidateApplications(contexts)
 		})
 	})
