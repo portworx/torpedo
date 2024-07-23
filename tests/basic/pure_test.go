@@ -6809,9 +6809,14 @@ var _ = Describe("{ValidateFAVolumeTokenTimeout}", func() {
 				log.FailOnError(err, "failed to get app spec for key [%v]", key)
 				appSpecs = append(appSpecs, appSpec)
 			}
-			contexts, err := Inst().S.ScheduleWithCustomAppSpecs(appSpecs, "hello-world", scheduler.ScheduleOptions{
-				StorageProvisioner: string(portworx.PortworxCsi),
-			})
+			contexts, err := Inst().S.ScheduleWithCustomAppSpecs(
+				appSpecs,
+				"stuck-token"+Inst().InstanceID,
+				scheduler.ScheduleOptions{
+					Nodes:              []node.Node{selectedNode},
+					StorageProvisioner: string(portworx.PortworxCsi),
+				},
+			)
 			log.FailOnError(err, "failed to schedule applications with custom app specs")
 			ValidateApplications(contexts)
 		})
