@@ -7,6 +7,7 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/vmware/govmomi/object"
 )
 
 // Type identifies the type of the cluster node
@@ -217,6 +218,12 @@ type Driver interface {
 	// DetachDisk vdisk from node.
 	DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string) error
 
+	//GetCompatibleDatastores
+	GetCompatibleDatastores(portworxNamespace string, datastoreNames []string) ([]*object.Datastore, error)
+
+	//Get All datastores
+	GetDatastoresFromDatacenter() ([]*object.Datastore, error)
+
 	// PowerOnVMByName power on the VM using the vm name
 	PowerOnVMByName(vmName string) error
 
@@ -298,6 +305,20 @@ func (d *notSupportedDriver) DetachDrivesFromVM(stc *corev1.StorageCluster, node
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "DetachDrivesFromVM()",
+	}
+}
+
+func (d *notSupportedDriver) GetDatastoresFromDatacenter() ([]*object.Datastore, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDatastoresFromDatacenter()",
+	}
+}
+
+func (d *notSupportedDriver) GetCompatibleDatastores(portworxNamespace string, datastoreNames []string) ([]*object.Datastore, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDatastoresFromDatacenter()",
 	}
 }
 
