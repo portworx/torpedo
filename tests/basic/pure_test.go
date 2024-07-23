@@ -6789,6 +6789,10 @@ var _ = Describe("{ValidateFAVolumeTokenTimeout}", func() {
 			err := Inst().S.AddLabelOnNode(selectedNode, "schedule", "true")
 			log.FailOnError(err, "failed to add label [schedule=true] on node [%v]", selectedNode)
 		})
+		defer func() {
+			err := Inst().S.RemoveLabelOnNode(selectedNode, "schedule")
+			log.FailOnError(err, "failed to remove label [schedule=true] on node [%v]", selectedNode)
+		}()
 
 		stepLog = "Schedule applications on the [schedule=true] labeled node"
 		Step(stepLog, func() {
@@ -6811,9 +6815,10 @@ var _ = Describe("{ValidateFAVolumeTokenTimeout}", func() {
 			}
 			contexts, err := Inst().S.ScheduleWithCustomAppSpecs(
 				appSpecs,
-				"stuck-token"+Inst().InstanceID,
+				"stuck-token-"+Inst().InstanceID,
 				scheduler.ScheduleOptions{
 					Nodes:              []node.Node{selectedNode},
+					Labels:             map[string]string{"schedule": "true"},
 					StorageProvisioner: string(portworx.PortworxCsi),
 				},
 			)
