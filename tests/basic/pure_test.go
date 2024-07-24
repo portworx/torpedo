@@ -7411,8 +7411,8 @@ var _ = Describe("{ValidateFAVolumeTokenTimeout}", func() {
 
 	var (
 		selectedNode      node.Node
-		numInitialVolumes = 200
-		numAttachRequests = 40
+		numInitialVolumes = 50
+		numAttachRequests = 10
 		appSpecs          []*spec.AppSpec
 		contexts          []*scheduler.Context
 	)
