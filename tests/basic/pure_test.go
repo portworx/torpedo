@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	pxapi "github.com/libopenstorage/operator/api/px"
+
 	"github.com/devans10/pugo/flasharray"
 	"github.com/ghodss/yaml"
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
@@ -7392,3 +7394,134 @@ func modifyPVCName(filePath, newPVCName string) error {
 
 	return nil
 }
+
+var _ = Describe("{ValidateFAVolumeTokenTimeout}", func() {
+	/*
+		PTX:
+			https://purestorage.atlassian.net/browse/PTX-25034
+		TestRail:
+			https://portworx.testrail.net/index.php?/cases/view/298095
+		Steps:
+			1. Have multipath enabled. Each FA LUN should have at least 2 paths.
+			2. Attach upto 200 volumes on a single node.
+			3. Next send 40 volume attachment requests at the same time on this node.
+			   For each operation PX takes a token, and it expects the token to be released after the attachment operation
+			   Each attach operation takes a long time and hence within 3 minutes we end up crashing since the token does not get released for a few attach requests.
+	*/
+
+	var (
+		selectedNode      node.Node
+		numInitialVolumes = 200
+		numAttachRequests = 40
+		appSpecs          []*spec.AppSpec
+		contexts          []*scheduler.Context
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateFAVolumeTokenTimeout", "Validate the FA volume token timeout", nil, 0)
+	})
+
+	itLog := "Validate FA Volume Token Timeout"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		if !IsPureCloudProvider() {
+			Skip("Skipping [ValidateFAVolumeTokenTimeout] because IsPureCloudProvider [false]")
+		} else {
+			summary, err := Inst().V.GetLicenseSummary()
+			log.FailOnError(err, "failed to get license summary")
+			log.Infof("License Summary: [%v]", summary)
+
+			for _, feature := range summary.Features {
+				if feature.Name == faLicense[LabLocalAttaches] {
+					if feature.Quantity.(*pxapi.LicensedFeature_Count).Count < 200 {
+						Skip(fmt.Sprintf("Skipping [ValidateFAVolumeTokenTimeout] because maximum volumes per node [%v] is less than 200", feature.Quantity.(*pxapi.LicensedFeature_Count).Count))
+					}
+				}
+				log.Infof("Feature As A Whole: [%v]", feature)
+				log.Infof("Feature [%v -- %v -- %v]", feature.Name, feature.Quantity, feature.Valid)
+			}
+		}
+
+		stepLog := "Label a node to schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			nodes := node.GetStorageDriverNodes()
+			rand.Seed(time.Now().UnixNano())
+			selectedNode = nodes[rand.Intn(len(nodes))]
+			log.Infof("Node selected for scheduling applications: [%v]", selectedNode)
+
+			err := Inst().S.AddLabelOnNode(selectedNode, "schedule", "true")
+			log.FailOnError(err, "failed to add label [schedule=true] on node [%v]", selectedNode)
+		})
+		defer func() {
+			err := Inst().S.RemoveLabelOnNode(selectedNode, "schedule")
+			log.FailOnError(err, "failed to remove label [schedule=true] on node [%v]", selectedNode)
+		}()
+
+		stepLog = fmt.Sprintf("Attach upto [%d] volumes on node [%v]", numInitialVolumes, selectedNode.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			appName := "postgres-backup-multivol"
+			appConfig := Inst().CustomAppConfig[appName]
+			Inst().CustomAppConfig[appName] = scheduler.AppConfig{
+				ClaimsCount: numInitialVolumes,
+			}
+			defer func() {
+				Inst().CustomAppConfig[appName] = appConfig
+				err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+				log.FailOnError(err, "failed to rescan specs. SpecDir [%s] and StorageDriver [%s]", Inst().SpecDir, Inst().V.String())
+			}()
+			err = Inst().S.RescanSpecs(Inst().SpecDir, "pure")
+			log.FailOnError(err, "failed to rescan specs. SpecDir [%s] and StorageDriver [%s]", Inst().SpecDir, "pure")
+
+			specFactory, err := spec.NewFactory(Inst().SpecDir, "pure", Inst().S)
+			log.FailOnError(err, "failed to create spec factory with SpecDir [%s] and StorageDriver [%s]", Inst().SpecDir, "pure")
+
+			appSpec, err := specFactory.Get(appName)
+			log.FailOnError(err, "failed to get app spec for [%s]", appName)
+			appSpecs = append(appSpecs, appSpec)
+
+			Inst().CustomAppConfig[appName] = scheduler.AppConfig{
+				ClaimsCount: numAttachRequests,
+			}
+
+			err = Inst().S.RescanSpecs(Inst().SpecDir, "pure")
+			log.FailOnError(err, "failed to rescan specs. SpecDir [%s] and StorageDriver [%s]", Inst().SpecDir, "pure")
+
+			specFactory, err = spec.NewFactory(Inst().SpecDir, "pure", Inst().S)
+			log.FailOnError(err, "failed to create spec factory with SpecDir [%s] and StorageDriver [%s]", Inst().SpecDir, "pure")
+
+			appSpec, err = specFactory.Get(appName)
+			log.FailOnError(err, "failed to get app spec for [%s]", appName)
+			appSpecs = append(appSpecs, appSpec)
+
+			for index, appSpec := range appSpecs {
+				log.Infof("Scheduling [%s-%d] on node [%v]", appSpec.Key, index, selectedNode.Name)
+				context, err := Inst().S.ScheduleWithCustomAppSpecs(
+					[]*spec.AppSpec{appSpec},
+					fmt.Sprintf("stuck-token-%v-%d", Inst().InstanceID, index),
+					scheduler.ScheduleOptions{
+						Nodes:              []node.Node{selectedNode},
+						Labels:             map[string]string{"schedule": "true"},
+						StorageProvisioner: string(portworx.PortworxCsi),
+					},
+				)
+				log.FailOnError(err, "failed to schedule [%s] on node [%v]", appName, selectedNode.Name)
+				contexts = append(contexts, context...)
+				time.Sleep(30 * time.Second)
+			}
+
+			for _, ctx := range contexts {
+				ctx.ReadinessTimeout = 20 * time.Minute
+			}
+			ValidateApplications(contexts)
+			defer appsValidateAndDestroy(contexts)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
