@@ -12846,6 +12846,7 @@ func GetFADetailsUsed() ([]pureutils.FlashArrayEntry, error) {
 	// This step we are particularly doing it for multiple Mgmt Endpoints where famgmtendpoint will have one or more endpoints so we are picking only one endpoint for testing
 	for _, array := range pxPureSecret.Arrays {
 		mgmtEndpointParts := strings.Split(array.MgmtEndPoint, ",")
+		println("mgmtEndpointParts:", mgmtEndpointParts)
 		if len(mgmtEndpointParts) > 1 {
 			array.MgmtEndPoint = mgmtEndpointParts[0]
 		}
