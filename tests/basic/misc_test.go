@@ -1788,13 +1788,13 @@ var _ = Describe("{KubeClusterRestart}", func() {
 
 var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 	JustBeforeEach(func() {
+		// https://purestorage.atlassian.net/browse/PTX-24859
 		StartTorpedoTest("VerifyNoPxRestartDueToPxPodStop", "Verify that px serivce remain up even if px pod got deleted ", nil, 87311294)
 	})
 
 	It("has to setup, validate and teardown apps", func() {
-
 		// Get uptime for px service on each node
-		stepLog = "Getting PID of Px process before and after PX pods on all the nodes"
+		stepLog = "Getting PID of Px process before and after restarting PX pods on all the nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			processPid := make(map[string]string)
@@ -1812,6 +1812,7 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 			}
 			log.Infof(fmt.Sprintf("Process IDs for px before stopping portworx pod  %s", processPid))
 
+			//Get namespace details of Px Pods
 			namespace, err := Inst().S.GetPortworxNamespace()
 			log.FailOnError(err, "We have not Px pods in any of the namespace")
 
@@ -1825,6 +1826,7 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 				if err != nil {
 					log.FailOnError(fmt.Errorf("PX POD is not up, we can not test further due to err %s", err), "PX POD is down on node %s", nnode.Name)
 				}
+				processCmd = "pidof px-ns"
 				output, err := Inst().N.RunCommand(nnode, processCmd, node.ConnectionOpts{
 					Timeout:         20 * time.Second,
 					TimeBeforeRetry: 5 * time.Second,
@@ -1839,7 +1841,7 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 			//Verify PID before and after for PX process
 			for nodeId, beforePID := range processPid {
 				afterPID, _ := processPidPostRestart[nodeId]
-				dash.VerifyFatal(beforePID, afterPID, fmt.Sprintf("Process ID of PX process before after PX pod restart is differentfor px pr"))
+				dash.VerifyFatal(beforePID, afterPID, fmt.Sprintf("Process ID of PX process before and after PX pod restart is different"))
 			}
 		})
 	})
