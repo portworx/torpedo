@@ -1788,9 +1788,7 @@ var _ = Describe("{KubeClusterRestart}", func() {
 
 var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 	JustBeforeEach(func() {
-		var testrailID = 87311294
-		StartTorpedoTest("VerifyNoPxRestartDueToPxPodStop", "Verify that px serivce remain up even if px pod got deleted ", nil, 0)
-		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		StartTorpedoTest("VerifyNoPxRestartDueToPxPodStop", "Verify that px serivce remain up even if px pod got deleted ", nil, 87311294)
 	})
 
 	It("has to setup, validate and teardown apps", func() {
@@ -1801,28 +1799,26 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 			log.InfoD(stepLog)
 			processPid := make(map[string]string)
 			processCmd := "pidof px"
-			storageNode := node.GetStorageNodes()
-			storageLessNodes := node.GetStorageLessNodes()
-			var AllNodes []node.Node
-			AllNodes = append(storageNode, storageLessNodes...)
+			AllNodes := node.GetStorageDriverNodes()
 			//Capturing PID pf PX before stopping PX pods
 			for _, nnode := range AllNodes {
-				output, _ := Inst().N.RunCommand(nnode, processCmd, node.ConnectionOpts{
+				output, err := Inst().N.RunCommand(nnode, processCmd, node.ConnectionOpts{
 					Timeout:         30 * time.Second,
 					TimeBeforeRetry: 20 * time.Second,
 					Sudo:            true,
 				})
+				log.FailOnError(err, "Fail to run command on %s node",nnode)
 				processPid[nnode.Id] = output
 			}
 			log.Infof(fmt.Sprintf("Process IDs for px before stopping portworx pod  %s", processPid))
 
-			//Deleting px pods from all the node
 			namespace, err := Inst().S.GetPortworxNamespace()
-			if err != nil {
-				log.FailOnError(fmt.Errorf("Portworx namespace  %s is not found: err %v", namespace, err), "No namespace found with Px pods")
-			}
+			log.FailOnError(err, "We have not Px pods in any of the namespace")
+
+			//Deleting px pods from all the node
 			err = DeletePXPods(namespace)
-			//Capturing PID pf PX after stopping PX pods
+			log.FailOnError(err, "Portworx namespace  %s is not found: err %v", namespace))
+			//Capturing PID of PX after stopping PX pods
 			processPidPostRestart := make(map[string]string)
 			for _, nnode := range AllNodes {
 				err := Inst().V.WaitForPxPodsToBeUp(nnode)
@@ -1841,9 +1837,9 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 			}
 			log.Infof(fmt.Sprintf("Process IDs for px after stopping portworx pod  %s", processPidPostRestart))
 			//Verify PID before and after for PX process
-			for nodeDetails, beforePID := range processPid {
-				afterPID, _ := processPidPostRestart[nodeDetails]
-				dash.VerifyFatal(beforePID == afterPID, true, fmt.Sprintf("Process ID of PX process before anfter PX pod restart is differentfor px pr"))
+			for nodeId, beforePID := range processPid {
+				afterPID, _ := processPidPostRestart[nodeId]
+				dash.VerifyFatal(beforePID, afterPID, fmt.Sprintf("Process ID of PX process before after PX pod restart is differentfor px pr"))
 			}
 		})
 	})
