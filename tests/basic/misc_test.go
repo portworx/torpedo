@@ -1807,7 +1807,7 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 					TimeBeforeRetry: 20 * time.Second,
 					Sudo:            true,
 				})
-				log.FailOnError(err, "Fail to run command on %s node",nnode)
+				log.FailOnError(err, "Fail to run command on %s node", nnode)
 				processPid[nnode.Id] = output
 			}
 			log.Infof(fmt.Sprintf("Process IDs for px before stopping portworx pod  %s", processPid))
@@ -1817,7 +1817,7 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 
 			//Deleting px pods from all the node
 			err = DeletePXPods(namespace)
-			log.FailOnError(err, "Portworx namespace  %s is not found: err %v", namespace))
+			log.FailOnError(err, "We have come across error while deleting PX pod ")
 			//Capturing PID of PX after stopping PX pods
 			processPidPostRestart := make(map[string]string)
 			for _, nnode := range AllNodes {
