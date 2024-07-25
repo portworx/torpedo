@@ -1826,7 +1826,6 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 				if err != nil {
 					log.FailOnError(fmt.Errorf("PX POD is not up, we can not test further due to err %s", err), "PX POD is down on node %s", nnode.Name)
 				}
-				processCmd = "pidof px-ns"
 				output, err := Inst().N.RunCommand(nnode, processCmd, node.ConnectionOpts{
 					Timeout:         20 * time.Second,
 					TimeBeforeRetry: 5 * time.Second,
