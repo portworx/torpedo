@@ -81,6 +81,8 @@ var _ = Describe("{Longevity}", func() {
 		StorkAppBkpHaUpdate:               TriggerStorkAppBkpHaUpdate,
 		StorkAppBkpPxRestart:              TriggerStorkAppBkpPxRestart,
 		StorkAppBkpPoolResize:             TriggerStorkAppBkpPoolResize,
+		StorkVolumeSnapshotSchedule: 	 TriggerStorkVolumeSnapshotSchedule,
+		StorkVolumeSnapshotScheduleLocal: 	 TriggerStorkVolumeSnapshotScheduleLocal,
 		RestartKvdbVolDriver:              TriggerRestartKvdbVolDriver,
 		HAIncreaseAndReboot:               TriggerHAIncreaseAndReboot,
 		AddDiskAndReboot:                  TriggerPoolAddDiskAndReboot,

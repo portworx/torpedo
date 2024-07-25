@@ -590,6 +590,8 @@ func populateIntervals() {
 	triggerInterval[StorkAppBkpHaUpdate] = make(map[int]time.Duration)
 	triggerInterval[StorkAppBkpPxRestart] = make(map[int]time.Duration)
 	triggerInterval[StorkAppBkpPoolResize] = make(map[int]time.Duration)
+	triggerInterval[StorkVolumeSnapshotSchedule] = make(map[int]time.Duration)
+	triggerInterval[StorkVolumeSnapshotScheduleLocal] = make(map[int]time.Duration)
 	triggerInterval[HAIncreaseAndReboot] = make(map[int]time.Duration)
 	triggerInterval[AddDrive] = make(map[int]time.Duration)
 	triggerInterval[AddDiskAndReboot] = make(map[int]time.Duration)
@@ -939,6 +941,29 @@ func populateIntervals() {
 	triggerInterval[StorkAppBkpPoolResize][3] = 21 * baseInterval
 	triggerInterval[StorkAppBkpPoolResize][2] = 24 * baseInterval
 	triggerInterval[StorkAppBkpPoolResize][1] = 27 * baseInterval
+
+	triggerInterval[StorkVolumeSnapshotSchedule][10] = 1 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][9] = 3 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][8] = 6 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][7] = 9 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][6] = 12 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][5] = 15 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][4] = 18 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][3] = 21 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][2] = 24 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][1] = 27 * baseInterval
+
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][10] = 1 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][9] = 3 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][8] = 6 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][7] = 9 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][6] = 12 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][5] = 15 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][4] = 18 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][3] = 21 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][2] = 24 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][1] = 27 * baseInterval
+
 	baseInterval = 60 * time.Minute
 
 	triggerInterval[AppTasksDown][10] = 1 * baseInterval
@@ -1758,6 +1783,8 @@ func populateIntervals() {
 	triggerInterval[StorkAppBkpHaUpdate][0] = 0
 	triggerInterval[StorkAppBkpPxRestart][0] = 0
 	triggerInterval[StorkAppBkpPoolResize][0] = 0
+	triggerInterval[StorkVolumeSnapshotSchedule][0] = 0
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][0] = 0
 	triggerInterval[DeleteOldNamespaces][0] = 0
 	triggerInterval[HAIncreaseAndReboot][0] = 0
 	triggerInterval[AddDrive][0] = 0
