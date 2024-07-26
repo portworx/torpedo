@@ -31,7 +31,7 @@ import (
 var k8sCore = core.Instance()
 
 // This test performs basic test of starting an application and destroying it (along with storage)
-var _ = Describe("{SetupTeardown}", func() {
+var _ = Describe("{SetupTeardown}", Label("sanity", "P0"), func() {
 	var testrailID = 35258
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35258
 	var runID int
@@ -132,7 +132,7 @@ func StartPureBackgroundWriteRoutines() func() {
 }
 
 // Volume Driver Plugin is down, unavailable - and the client container should not be impacted.
-var _ = Describe("{VolumeDriverDown}", func() {
+var _ = Describe("{VolumeDriverDown}", Label("sanity", "P1", "destructive"), func() {
 	var testrailID = 35259
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35259
 	var runID int
@@ -214,7 +214,7 @@ var _ = Describe("{VolumeDriverDown}", func() {
 
 // Volume Driver Plugin is down, unavailable on the nodes where the volumes are
 // attached - and the client container should not be impacted.
-var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
+var _ = Describe("{VolumeDriverDownAttachedNode}", Label("P0", "destructive"), func() {
 	var testrailID = 35260
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35260
 	var runID int
@@ -286,7 +286,7 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 })
 
 // Volume Driver Plugin has crashed - and the client container should not be impacted.
-var _ = Describe("{VolumeDriverCrash}", func() {
+var _ = Describe("{VolumeDriverCrash}", Label("P0", "P2", "P3"), func() {
 	var testrailID = 35261
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35261
 	var runID int
@@ -417,8 +417,12 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 	})
 })
 
+var LabelMap = map[string]Labels{
+	"{AppTasksDown}": Label("AppTasksDown", "P4", "btrfs"),
+}
+
 // This test deletes all tasks of an application and checks if app converges back to desired state
-var _ = Describe("{AppTasksDown}", func() {
+var _ = Describe("{AppTasksDown}", LabelMap["{AppTasksDown}"], func() {
 	var testrailID = 35263
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35264
 	var runID int
