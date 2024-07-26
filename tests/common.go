@@ -12844,10 +12844,10 @@ func GetFADetailsUsed() ([]pureutils.FlashArrayEntry, error) {
 		return nil, fmt.Errorf("Unable to get Px Pure Secret")
 	}
 	// This step we are particularly doing it for multiple Mgmt Endpoints where famgmtendpoint will have one or more endpoints so we are picking only one endpoint for testing
-	for _, array := range pxPureSecret.Arrays {
-		mgmtEndpointParts := strings.Split(array.MgmtEndPoint, ",")
+	for i := range pxPureSecret.Arrays {
+		mgmtEndpointParts := strings.Split(pxPureSecret.Arrays[i].MgmtEndPoint, ",")
 		if len(mgmtEndpointParts) > 1 {
-			array.MgmtEndPoint = mgmtEndpointParts[0]
+			pxPureSecret.Arrays[i].MgmtEndPoint = mgmtEndpointParts[0]
 		}
 	}
 
