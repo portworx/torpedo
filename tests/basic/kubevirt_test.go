@@ -988,8 +988,7 @@ var _ = Describe("{RebootRootDiskAttachedNode}", func() {
 		defer func() {
 			Inst().AppList = appList
 		}()
-		Inst().AppList = []string{"kubevirt-cirros-live-migration", "kubevirt-windows-vm",
-			"kubevirt-fio-pvc-clone", "kubevirt-fio-load-disk-repl-2", "kubevirt-fio-load-multi-disk"}
+		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1448,6 +1447,7 @@ var _ = Describe("{MultipleVMVolHaDecrease}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for _, appCtx := range appCtxs {
+				wg.Add(1)
 				go func(appCtx *scheduler.Context) {
 					defer GinkgoRecover()
 					defer wg.Done()
