@@ -444,6 +444,7 @@ apiVersion: v1
 metadata:
   name: testresults
 spec:
+  storageClassName: px-db
   accessModes:
     - ReadWriteOnce
   resources:
