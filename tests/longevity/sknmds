@@ -1,0 +1,113 @@
+ kubectl logs pxcentral-keycloak-0 -n px-backup -f
+Defaulted container "keycloak" out of: keycloak, wait-for-postgresql (init), px-keycloak-login-theme (init)
+Changes detected in configuration. Updating the server image.
+Updating the configuration and installing your custom providers, if any. Please wait.
+2024-08-06 12:41:44,639 INFO  [io.quarkus.deployment.QuarkusAugmentor] (main) Quarkus augmentation completed in 19889ms
+Server configuration updated and persisted. Run the following command to review the configuration:
+
+	kc.sh show-config
+
+Next time you run the server, just run:
+
+	kc.sh start --optimized --spi-login-protocol-openid-connect-legacy-logout-redirect-uri=true --spi-connections-jpa-default-migration-strategy=update
+
+2024-08-06 12:41:45,727 INFO  [org.keycloak.quarkus.runtime.hostname.DefaultHostnameProvider] (main) Hostname settings: Base URL: <unset>, Hostname: <request>, Strict HTTPS: false, Path: <request>, Strict BackChannel: false, Admin URL: <unset>, Admin: <request>, Port: -1, Proxied: true
+2024-08-06 12:41:45,737 WARN  [org.keycloak.protocol.oidc.OIDCLoginProtocolFactory] (main) Deprecated switch 'legacy-logout-redirect-uri' is enabled. Please try to disable it and update your clients to use OpenID Connect compliant way for RP-initiated logout.
+2024-08-06 12:41:46,737 WARN  [io.quarkus.agroal.runtime.DataSources] (main) Datasource <default> enables XA but transaction recovery is not enabled. Please enable transaction recovery by setting quarkus.transaction-manager.enable-recovery=true, otherwise data may be lost if the application is terminated abruptly
+2024-08-06 12:41:47,347 INFO  [org.infinispan.SERVER] (keycloak-cache-init) ISPN005054: Native IOUring transport not available, using NIO instead: io.netty.incubator.channel.uring.IOUring
+2024-08-06 12:41:47,409 WARN  [io.quarkus.vertx.http.runtime.VertxHttpRecorder] (main) The X-Forwarded-* and Forwarded headers will be considered when determining the proxy address. This configuration can cause a security issue as clients can forge requests and send a forwarded header that is not overwritten by the proxy. Please consider use one of these headers just to forward the proxy address in requests.
+2024-08-06 12:41:47,410 WARN  [org.infinispan.PERSISTENCE] (keycloak-cache-init) ISPN000554: jboss-marshalling is deprecated and planned for removal
+2024-08-06 12:41:47,449 WARN  [org.infinispan.CONFIG] (keycloak-cache-init) ISPN000569: Unable to persist Infinispan internal caches as no global state enabled
+2024-08-06 12:41:47,464 INFO  [org.infinispan.CONTAINER] (keycloak-cache-init) ISPN000556: Starting user marshaller 'org.infinispan.jboss.marshalling.core.JBossUserMarshaller'
+2024-08-06 12:41:47,714 INFO  [org.infinispan.CLUSTER] (keycloak-cache-init) ISPN000088: Unable to use any JGroups configuration mechanisms provided in properties {}. Using default JGroups configuration!
+2024-08-06 12:41:47,787 INFO  [org.infinispan.CLUSTER] (keycloak-cache-init) ISPN000078: Starting JGroups channel `ISPN`
+2024-08-06 12:41:47,790 INFO  [org.jgroups.JChannel] (keycloak-cache-init) local_addr: 98ee150e-6407-489c-bba3-2ff3c7906e96, name: pxcentral-keycloak-0-12541
+2024-08-06 12:41:47,795 WARN  [org.jgroups.protocols.UDP] (keycloak-cache-init) JGRP000015: the send buffer of socket MulticastSocket was set to 1MB, but the OS only allocated 212.99KB
+2024-08-06 12:41:47,795 WARN  [org.jgroups.protocols.UDP] (keycloak-cache-init) JGRP000015: the receive buffer of socket MulticastSocket was set to 20MB, but the OS only allocated 212.99KB
+2024-08-06 12:41:47,795 WARN  [org.jgroups.protocols.UDP] (keycloak-cache-init) JGRP000015: the send buffer of socket MulticastSocket was set to 1MB, but the OS only allocated 212.99KB
+2024-08-06 12:41:47,795 WARN  [org.jgroups.protocols.UDP] (keycloak-cache-init) JGRP000015: the receive buffer of socket MulticastSocket was set to 25MB, but the OS only allocated 212.99KB
+2024-08-06 12:41:47,800 INFO  [org.jgroups.protocols.FD_SOCK2] (keycloak-cache-init) server listening on *.39955
+2024-08-06 12:41:49,804 INFO  [org.jgroups.protocols.pbcast.GMS] (keycloak-cache-init) pxcentral-keycloak-0-12541: no members discovered after 2001 ms: creating cluster as coordinator
+2024-08-06 12:41:49,811 INFO  [org.infinispan.CLUSTER] (keycloak-cache-init) ISPN000094: Received new cluster view for channel ISPN: [pxcentral-keycloak-0-12541|0] (1) [pxcentral-keycloak-0-12541]
+2024-08-06 12:41:49,816 INFO  [org.infinispan.CLUSTER] (keycloak-cache-init) ISPN000079: Channel `ISPN` local address is `pxcentral-keycloak-0-12541`, physical addresses are `[10.233.86.214:55491]`
+2024-08-06 12:41:50,160 INFO  [org.keycloak.connections.infinispan.DefaultInfinispanConnectionProviderFactory] (main) Node name: pxcentral-keycloak-0-12541, Site name: null
+2024-08-06 12:41:50,164 INFO  [org.keycloak.broker.provider.AbstractIdentityProviderMapper] (main) Registering class org.keycloak.broker.provider.mappersync.ConfigSyncEventListener
+2024-08-06 12:41:51,920 INFO  [io.quarkus] (main) Keycloak 21.1.1 on JVM (powered by Quarkus 2.13.7.Final) started in 7.114s. Listening on: http://0.0.0.0:8080
+2024-08-06 12:41:51,921 INFO  [io.quarkus] (main) Profile prod activated.
+2024-08-06 12:41:51,921 INFO  [io.quarkus] (main) Installed features: [agroal, cdi, hibernate-orm, jdbc-h2, jdbc-mariadb, jdbc-mssql, jdbc-mysql, jdbc-oracle, jdbc-postgresql, keycloak, logging-gelf, micrometer, narayana-jta, reactive-routes, resteasy, resteasy-jackson, smallrye-context-propagation, smallrye-health, vertx]
+2024-08-06 12:41:51,928 ERROR [org.keycloak.services] (main) KC-SERVICES0010: Failed to add user 'admin' to realm 'master': user with username exists
+^C
+root@ip-10-13-232-241:~# kubectl logs pxcentral-keycloak-0 -n px-backup --previous
+Defaulted container "keycloak" out of: keycloak, wait-for-postgresql (init), px-keycloak-login-theme (init)
+Changes detected in configuration. Updating the server image.
+Updating the configuration and installing your custom providers, if any. Please wait.
+2024-08-06 12:41:15,990 INFO  [io.quarkus.deployment.QuarkusAugmentor] (main) Quarkus augmentation completed in 36883ms
+Server configuration updated and persisted. Run the following command to review the configuration:
+
+	kc.sh show-config
+
+Next time you run the server, just run:
+
+	kc.sh start --optimized --spi-login-protocol-openid-connect-legacy-logout-redirect-uri=true --spi-connections-jpa-default-migration-strategy=update
+
+2024-08-06 12:41:17,267 WARN  [org.keycloak.protocol.oidc.OIDCLoginProtocolFactory] (main) Deprecated switch 'legacy-logout-redirect-uri' is enabled. Please try to disable it and update your clients to use OpenID Connect compliant way for RP-initiated logout.
+2024-08-06 12:41:17,268 INFO  [org.keycloak.quarkus.runtime.hostname.DefaultHostnameProvider] (main) Hostname settings: Base URL: <unset>, Hostname: <request>, Strict HTTPS: false, Path: <request>, Strict BackChannel: false, Admin URL: <unset>, Admin: <request>, Port: -1, Proxied: true
+2024-08-06 12:41:18,320 WARN  [io.quarkus.agroal.runtime.DataSources] (main) Datasource <default> enables XA but transaction recovery is not enabled. Please enable transaction recovery by setting quarkus.transaction-manager.enable-recovery=true, otherwise data may be lost if the application is terminated abruptly
+2024-08-06 12:41:18,533 WARN  [io.agroal.pool] (agroal-11) Datasource '<default>': Connection to pxcentral-keycloak-postgresql:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.
+2024-08-06 12:41:18,534 WARN  [org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator] (JPA Startup Thread: keycloak-default) HHH000342: Could not obtain connection to query metadata: org.postgresql.util.PSQLException: Connection to pxcentral-keycloak-postgresql:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.
+	at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:319)
+	at org.postgresql.core.ConnectionFactory.openConnection(ConnectionFactory.java:49)
+	at org.postgresql.jdbc.PgConnection.<init>(PgConnection.java:247)
+	at org.postgresql.Driver.makeConnection(Driver.java:434)
+	at org.postgresql.Driver.connect(Driver.java:291)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:681)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:229)
+	at org.postgresql.ds.common.BaseDataSource.getConnection(BaseDataSource.java:103)
+	at org.postgresql.xa.PGXADataSource.getXAConnection(PGXADataSource.java:49)
+	at org.postgresql.xa.PGXADataSource.getXAConnection(PGXADataSource.java:35)
+	at io.agroal.pool.ConnectionFactory.createConnection(ConnectionFactory.java:232)
+	at io.agroal.pool.ConnectionPool$CreateConnectionTask.call(ConnectionPool.java:536)
+	at io.agroal.pool.ConnectionPool$CreateConnectionTask.call(ConnectionPool.java:517)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
+	at io.agroal.pool.util.PriorityScheduledExecutor.beforeExecute(PriorityScheduledExecutor.java:75)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1134)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:833)
+Caused by: java.net.ConnectException: Connection refused
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+	at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(NioSocketImpl.java:542)
+	at java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:597)
+	at java.base/java.net.SocksSocketImpl.connect(SocksSocketImpl.java:327)
+	at java.base/java.net.Socket.connect(Socket.java:633)
+	at org.postgresql.core.PGStream.createSocket(PGStream.java:241)
+	at org.postgresql.core.PGStream.<init>(PGStream.java:98)
+	at org.postgresql.core.v3.ConnectionFactoryImpl.tryConnect(ConnectionFactoryImpl.java:109)
+	at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:235)
+	... 17 more
+
+2024-08-06 12:41:18,900 INFO  [org.infinispan.SERVER] (keycloak-cache-init) ISPN005054: Native IOUring transport not available, using NIO instead: io.netty.incubator.channel.uring.IOUring
+2024-08-06 12:41:18,921 WARN  [io.quarkus.vertx.http.runtime.VertxHttpRecorder] (main) The X-Forwarded-* and Forwarded headers will be considered when determining the proxy address. This configuration can cause a security issue as clients can forge requests and send a forwarded header that is not overwritten by the proxy. Please consider use one of these headers just to forward the proxy address in requests.
+2024-08-06 12:41:18,964 WARN  [org.infinispan.PERSISTENCE] (keycloak-cache-init) ISPN000554: jboss-marshalling is deprecated and planned for removal
+2024-08-06 12:41:19,005 WARN  [org.infinispan.CONFIG] (keycloak-cache-init) ISPN000569: Unable to persist Infinispan internal caches as no global state enabled
+2024-08-06 12:41:19,019 INFO  [org.infinispan.CONTAINER] (keycloak-cache-init) ISPN000556: Starting user marshaller 'org.infinispan.jboss.marshalling.core.JBossUserMarshaller'
+2024-08-06 12:41:19,299 INFO  [org.infinispan.CLUSTER] (keycloak-cache-init) ISPN000088: Unable to use any JGroups configuration mechanisms provided in properties {}. Using default JGroups configuration!
+2024-08-06 12:41:19,371 INFO  [org.infinispan.CLUSTER] (keycloak-cache-init) ISPN000078: Starting JGroups channel `ISPN`
+2024-08-06 12:41:19,375 INFO  [org.jgroups.JChannel] (keycloak-cache-init) local_addr: 0aa1858f-57a2-43b4-bbab-6897cc53a806, name: pxcentral-keycloak-0-4187
+2024-08-06 12:41:19,380 WARN  [org.jgroups.protocols.UDP] (keycloak-cache-init) JGRP000015: the send buffer of socket MulticastSocket was set to 1MB, but the OS only allocated 212.99KB
+2024-08-06 12:41:19,380 WARN  [org.jgroups.protocols.UDP] (keycloak-cache-init) JGRP000015: the receive buffer of socket MulticastSocket was set to 20MB, but the OS only allocated 212.99KB
+2024-08-06 12:41:19,380 WARN  [org.jgroups.protocols.UDP] (keycloak-cache-init) JGRP000015: the send buffer of socket MulticastSocket was set to 1MB, but the OS only allocated 212.99KB
+2024-08-06 12:41:19,380 WARN  [org.jgroups.protocols.UDP] (keycloak-cache-init) JGRP000015: the receive buffer of socket MulticastSocket was set to 25MB, but the OS only allocated 212.99KB
+2024-08-06 12:41:19,385 INFO  [org.jgroups.protocols.FD_SOCK2] (keycloak-cache-init) server listening on *.27081
+2024-08-06 12:41:21,388 INFO  [org.jgroups.protocols.pbcast.GMS] (keycloak-cache-init) pxcentral-keycloak-0-4187: no members discovered after 2002 ms: creating cluster as coordinator
+2024-08-06 12:41:21,396 INFO  [org.infinispan.CLUSTER] (keycloak-cache-init) ISPN000094: Received new cluster view for channel ISPN: [pxcentral-keycloak-0-4187|0] (1) [pxcentral-keycloak-0-4187]
+2024-08-06 12:41:21,400 INFO  [org.infinispan.CLUSTER] (keycloak-cache-init) ISPN000079: Channel `ISPN` local address is `pxcentral-keycloak-0-4187`, physical addresses are `[10.233.86.214:42617]`
+2024-08-06 12:41:21,767 INFO  [org.keycloak.connections.infinispan.DefaultInfinispanConnectionProviderFactory] (main) Node name: pxcentral-keycloak-0-4187, Site name: null
+2024-08-06 12:41:21,773 INFO  [org.keycloak.broker.provider.AbstractIdentityProviderMapper] (main) Registering class org.keycloak.broker.provider.mappersync.ConfigSyncEventListener
+2024-08-06 12:41:21,778 WARN  [io.agroal.pool] (agroal-11) Datasource '<default>': Connection to pxcentral-keycloak-postgresql:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.
+2024-08-06 12:41:21,801 INFO  [org.infinispan.CLUSTER] (main) ISPN000080: Disconnecting JGroups channel `ISPN`
+2024-08-06 12:41:21,837 ERROR [org.keycloak.quarkus.runtime.cli.ExecutionExceptionHandler] (main) ERROR: Failed to start server in (production) mode
+2024-08-06 12:41:21,837 ERROR [org.keycloak.quarkus.runtime.cli.ExecutionExceptionHandler] (main) ERROR: Failed to obtain JDBC connection
+2024-08-06 12:41:21,837 ERROR [org.keycloak.quarkus.runtime.cli.ExecutionExceptionHandler] (main) ERROR: Connection to pxcentral-keycloak-postgresql:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.
+2024-08-06 12:41:21,837 ERROR [org.keycloak.quarkus.runtime.cli.ExecutionExceptionHandler] (main) ERROR: Connection refused
+2024-08-06 12:41:21,837 ERROR [org.keycloak.quarkus.runtime.cli.ExecutionExceptionHandler] (main) For more details run the same command passing the '--verbose' option. Also you can use '--help' to see the details about the usage of the particular command.

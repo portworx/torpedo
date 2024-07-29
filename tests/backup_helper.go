@@ -6493,6 +6493,28 @@ func GetAllBackupSchedulesForUser(username, password string) ([]string, error) {
 	return scheduleNames, nil
 }
 
+// GetAllBackupSchedulesForAdmimin returns all current BackupSchedules for admin.
+func GetAllBackupSchedulesForAdmin() ([]string, error) {
+	scheduleNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return nil, err
+	}
+
+	scheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId: BackupOrgID,
+	}
+	currentSchedules, err := backupDriver.EnumerateBackupSchedule(ctx, scheduleEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, schedule := range currentSchedules.GetBackupSchedules() {
+		scheduleNames = append(scheduleNames, schedule.GetName())
+	}
+	return scheduleNames, nil
+}
+
 // GetAllRestoresForUser returns all the current restores for the user.
 func GetAllRestoresForUser(username string, password string) ([]string, error) {
 	restoreNames := make([]string, 0)
