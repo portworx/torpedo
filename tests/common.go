@@ -229,6 +229,7 @@ var (
 var (
 	// PDBValidationMinOpVersion specifies the minimum PX Operator version required to enable PDB validation in the UpgradeCluster
 	PDBValidationMinOpVersion, _ = version.NewVersion("24.1.0-")
+	ParallelUpgradeVersion, _    = version.NewVersion("24.2.0-")
 )
 
 type OwnershipAccessType int32
@@ -2159,7 +2160,7 @@ func GetAppStorageClasses(appCtx *scheduler.Context) (*[]string, error) {
 func CreateScheduleOptions(namespace string, errChan ...*chan error) scheduler.ScheduleOptions {
 	log.Infof("Creating ScheduleOptions")
 
-	//if not hyper converged set up deploy apps only on storageless nodes
+	// if not hyper converged set up deploy apps only on storageless nodes
 	if !Inst().IsHyperConverged {
 		var err error
 
@@ -2948,7 +2949,7 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 			pxLabel := make(map[string]string)
 			pxLabel[labelNameKey] = defaultStorageProvisioner
 			pxPodRestartCountMap, err := Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-			//Using fatal verification will abort longevity runs
+			// Using fatal verification will abort longevity runs
 			if err != nil {
 				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
 			}
@@ -2968,7 +2969,7 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 			// Validate portworx operator pod check
 			pxLabel[labelNameKey] = portworxOperatorName
 			pxPodRestartCountMap, err = Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-			//Using fatal verification will abort longevity runs
+			// Using fatal verification will abort longevity runs
 			if err != nil {
 				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
 			}
@@ -3022,7 +3023,7 @@ func ValidateClusterSize(count int64) {
 		log.FailOnError(err, "Failed to check if px is running on master")
 		if !isPxOnMaster {
 			node.GetMasterNodes()
-			//Removing master nodes for currentNodeCount
+			// Removing master nodes for currentNodeCount
 			currentNodeCount = currentNodeCount - int64(len(node.GetMasterNodes()))
 		}
 	}
@@ -4085,7 +4086,7 @@ func CreateClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig 
 }
 
 func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string, mode string, sourceCluster int, destCluster int) (err error) {
-	//var token string
+	// var token string
 	// Setting kubeconfig to source because we will create bidirectional cluster pair based on source as reference
 	err = SetCustomKubeConfig(sourceCluster)
 	if err != nil {
@@ -4402,7 +4403,7 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 				},
 			},
 		}
-		//ctx, err = backup.GetPxCentralAdminCtx()
+		// ctx, err = backup.GetPxCentralAdminCtx()
 		ctx, err = backup.GetAdminCtxFromSecret()
 		if err != nil {
 			return
@@ -4437,7 +4438,7 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 				Uid:  BackupLocationUID,
 			},
 		}
-		//ctx, err = backup.GetPxCentralAdminCtx()
+		// ctx, err = backup.GetPxCentralAdminCtx()
 		ctx, err = backup.GetAdminCtxFromSecret()
 		if err != nil {
 			return
@@ -4559,7 +4560,7 @@ func InspectBackup(backupName string) (bkpInspectResponse *api.BackupInspectResp
 			OrgId: OrgID,
 			Name:  backupName,
 		}
-		//ctx, err = backup.GetPxCentralAdminCtx()
+		// ctx, err = backup.GetPxCentralAdminCtx()
 		ctx, err = backup.GetAdminCtxFromSecret()
 		if err != nil {
 			return
@@ -4627,7 +4628,7 @@ func InspectScheduledBackup(backupScheduleName, backupScheduleUID string) (bkpSc
 			Name:  backupScheduleNamePrefix + backupScheduleName,
 			Uid:   backupScheduleUID,
 		}
-		//ctx, err = backup.GetPxCentralAdminCtx()
+		// ctx, err = backup.GetPxCentralAdminCtx()
 		ctx, err = backup.GetAdminCtxFromSecret()
 		if err != nil {
 			return
@@ -5876,7 +5877,7 @@ func CreateOrganization(orgID string) {
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
 				err))
 		_, err = backupDriver.CreateOrganization(ctx, req)
-		//expect(err).NotTo(haveOccurred(),
+		// expect(err).NotTo(haveOccurred(),
 		//	fmt.Sprintf("Failed to create organization [%s]. Error: [%v]",
 		//		orgID, err))
 	})
@@ -5908,7 +5909,7 @@ func UpdateScheduledBackup(schedulePolicyName, schedulePolicyUID string, Schedul
 				},
 			},
 		}
-		//ctx, err = backup.GetPxCentralAdminCtx()
+		// ctx, err = backup.GetPxCentralAdminCtx()
 		ctx, err = backup.GetAdminCtxFromSecret()
 		if err != nil {
 			return
@@ -6356,7 +6357,7 @@ func HaIncreaseErrorInjectionTargetNode(event *EventRecord, ctx *scheduler.Conte
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
 				return
 			}
-			//if repl is 3 cannot increase repl for the volume
+			// if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
 				return
@@ -6370,7 +6371,7 @@ func HaIncreaseErrorInjectionTargetNode(event *EventRecord, ctx *scheduler.Conte
 				var newReplID string
 				var newReplNode node.Node
 
-				//selecting the target node for repl increase
+				// selecting the target node for repl increase
 				for nID, node := range storageNodeMap {
 					nExist := false
 					for _, id := range replicaNodes {
@@ -6567,7 +6568,7 @@ func HaIncreaseErrorInjectSourceNode(event *EventRecord, ctx *scheduler.Context,
 
 			}
 
-			//if repl is 3 cannot increase repl for the volume
+			// if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
 				return
@@ -6612,7 +6613,7 @@ func HaIncreaseErrorInjectSourceNode(event *EventRecord, ctx *scheduler.Context,
 							} else {
 								log.Infof("Waiting for 60 seconds for re-sync to initialize before source nodes reboot")
 								time.Sleep(60 * time.Second)
-								//rebooting source nodes one by one
+								// rebooting source nodes one by one
 								for _, nID := range replicaNodes {
 									replNodeToReboot := storageNodeMap[nID]
 									dashStats := make(map[string]string)
@@ -6783,7 +6784,7 @@ func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 }
 
 func IsNFSSubPathEmpty(subPath string) (bool, error) {
-	//TODO enhance the method to work with NFS server on cloud
+	// TODO enhance the method to work with NFS server on cloud
 	// Get NFS share details from ENV variables.
 	creds := GetNfsInfoFromEnv()
 	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
@@ -7204,7 +7205,7 @@ func ParseFlags() {
 	var migrationHops string
 	var autopilotUpgradeImage string
 	var csiGenericDriverConfigMapName string
-	//dashboard fields
+	// dashboard fields
 	var user, testBranch, testProduct, testType, testDescription, testTags string
 	var testsetID int
 	var torpedoJobName string
@@ -7323,7 +7324,7 @@ func ParseFlags() {
 		log.FailOnError(err, fmt.Sprintf("failed to parse secure app list: %v", secureAppsCSV))
 		secureAppList = append(secureAppList, apl...)
 		log.Infof("Secure apps : %+v", secureAppList)
-		//Adding secure apps as part of app list for deployment
+		// Adding secure apps as part of app list for deployment
 		appList = append(appList, secureAppList...)
 	}
 
@@ -7336,7 +7337,7 @@ func ParseFlags() {
 		log.FailOnError(err, fmt.Sprintf("failed to parse repl-1 app list: %v", repl1AppsCSV))
 		repl1AppList = append(repl1AppList, apl...)
 		log.Infof("volume repl 1 apps : %+v", repl1AppList)
-		//Adding repl-1 apps as part of app list for deployment
+		// Adding repl-1 apps as part of app list for deployment
 		appList = append(appList, repl1AppList...)
 	}
 
@@ -7609,7 +7610,7 @@ func CreateLogger(filename string) *lumberjack.Logger {
 		Filename:   filePath,
 		MaxSize:    10, // megabytes
 		MaxBackups: 10,
-		MaxAge:     30,   //days
+		MaxAge:     30,   // days
 		Compress:   true, // disabled by default
 		LocalTime:  true,
 	}
@@ -7622,7 +7623,7 @@ func CreateLogger(filename string) *lumberjack.Logger {
 func CloseLogger(testLogger *lumberjack.Logger) {
 	if testLogger != nil {
 		testLogger.Close()
-		//Below steps are performed to remove current file from log output
+		// Below steps are performed to remove current file from log output
 		log.SetDefaultOutput(suiteLogger)
 	}
 
@@ -8086,7 +8087,7 @@ func ValidateDriveRebalance(stNode node.Node) error {
 	var err error
 	var drivePath string
 	drivePathsToValidate := make([]string, 0)
-	//2 min wait for new disk to associate with the node
+	// 2 min wait for new disk to associate with the node
 	time.Sleep(2 * time.Minute)
 
 	t := func() (interface{}, bool, error) {
@@ -8111,7 +8112,7 @@ func ValidateDriveRebalance(stNode node.Node) error {
 	}
 	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
 	if err != nil {
-		//this is a special case occurs where drive is added with same path as deleted pool
+		// this is a special case occurs where drive is added with same path as deleted pool
 		if initPoolCount >= len(stNode.Pools) {
 			for p := range stNode.Disks {
 				drivePathsToValidate = append(drivePathsToValidate, p)
@@ -8204,7 +8205,7 @@ func ValidateRebalanceJobs(stNode node.Node) error {
 				log.InfoD("Job %v is in Running state", job.GetId())
 
 				currentDone, total := getReblanceWorkSummary(jobResponse)
-				//checking for rebalance progress
+				// checking for rebalance progress
 				for currentDone < total && previousDone < currentDone {
 					time.Sleep(2 * time.Minute)
 					log.InfoD("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
@@ -8675,7 +8676,7 @@ func GetPoolsInUse() ([]string, error) {
 	for _, pv := range pvlist.Items {
 		volumeID := pv.GetName()
 		poolUuids, err := GetPoolIDsFromVolName(volumeID)
-		//Needed this logic as a workaround for PWX-35637
+		// Needed this logic as a workaround for PWX-35637
 		if err != nil && strings.Contains(err.Error(), "not found") {
 			continue
 		}
@@ -9015,7 +9016,7 @@ func GetPoolsDetailsOnNode(n *node.Node) ([]*opsapi.StoragePool, error) {
 	if err != nil {
 		return nil, err
 	}
-	//updating the node info after refresh
+	// updating the node info after refresh
 	stDriverNodes := node.GetStorageDriverNodes()
 	for _, stDriverNode := range stDriverNodes {
 		if stDriverNode.VolDriverNodeID == n.VolDriverNodeID {
@@ -9292,7 +9293,7 @@ func GetAutoFsTrimStatusForCtx(ctx *scheduler.Context) (map[string]opsapi.Filesy
 		if isPureVol {
 			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
 		}
-		//skipping fstrim check for log PVCs
+		// skipping fstrim check for log PVCs
 		if strings.Contains(v.Name, "log") {
 			continue
 		}
@@ -9346,7 +9347,7 @@ func GetAutoFstrimUsageForCtx(ctx *scheduler.Context) (map[string]*opsapi.Fstrim
 		if isPureVol {
 			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
 		}
-		//skipping fstrim check for log PVCs
+		// skipping fstrim check for log PVCs
 		if strings.Contains(v.Name, "log") {
 			continue
 		}
@@ -9800,7 +9801,7 @@ func GetVolumeReplicationStatus(vol *volume.Volume) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	//sample output : "Replication Status       :  Up"
+	// sample output : "Replication Status       :  Up"
 	output = strings.Split(strings.TrimSpace(output), ":")[1]
 	return strings.TrimSpace(output), nil
 }
@@ -10542,7 +10543,7 @@ outer:
 		} else {
 			timeout = appScaleFactor * ctx.ReadinessTimeout
 		}
-		//Waiting for all the apps in ctx are running
+		// Waiting for all the apps in ctx are running
 		mError = Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
 		if mError != nil {
 			return mError
@@ -10553,7 +10554,7 @@ outer:
 			return mError
 		}
 
-		//waiting for volumes replication status should be up before calculating md5sum
+		// waiting for volumes replication status should be up before calculating md5sum
 		for _, v := range appVolumes {
 			var replicaSets []*opsapi.ReplicaSet
 			replicaSets, mError = Inst().V.GetReplicaSets(v)
@@ -10561,7 +10562,7 @@ outer:
 				return mError
 			}
 
-			//skipping the validation if volume is repl 2
+			// skipping the validation if volume is repl 2
 			if len(replicaSets) == 1 && len(replicaSets[0].PoolUuids) == 1 {
 				continue outer
 			}
@@ -10607,7 +10608,7 @@ outer:
 			mError = multierr.Append(mError, err)
 			return mError
 		}
-		//waiting for volumes to be detached after scale down
+		// waiting for volumes to be detached after scale down
 		for _, v := range appVolumes {
 			t := func() (interface{}, bool, error) {
 				apiVol, err := Inst().V.InspectVolume(v.ID)
@@ -10637,7 +10638,7 @@ outer:
 
 		}
 
-		//function to calulate md5sum of the given volume in the give pool
+		// function to calulate md5sum of the given volume in the give pool
 		calChecksum := func(wg *sync.WaitGroup, v *volume.Volume, nodeDetail *node.Node, poolUuid string, errCh chan<- error) {
 			defer ginkgo.GinkgoRecover()
 			defer wg.Done()
@@ -10663,7 +10664,7 @@ outer:
 				return
 			}
 			log.InfoD("Getting md5sum for volume %s on pool %s in node %s", inspectVolume.Id, poolUuid, nodeDetail.Name)
-			//To-Do update the command if set up is dmthin
+			// To-Do update the command if set up is dmthin
 			cmd := fmt.Sprintf("/opt/pwx/bin/runc exec -t portworx md5sum /var/.px/%d/%s/pxdev", poolID, inspectVolume.Id)
 
 			if isDmthinSetup {
@@ -10747,7 +10748,7 @@ outer:
 
 					}
 				}
-				//clearing the pool after the volume validation
+				// clearing the pool after the volume validation
 				for k := range dmthinPoolChecksumMap {
 					delete(dmthinPoolChecksumMap, k)
 				}
@@ -10769,7 +10770,7 @@ outer:
 					}
 
 				}
-				//clearing the pool after the volume validation
+				// clearing the pool after the volume validation
 				for k := range poolChecksumMap {
 					delete(poolChecksumMap, k)
 				}
@@ -10782,7 +10783,7 @@ outer:
 }
 
 func revertAppScale(ctx *scheduler.Context) error {
-	//reverting application scale
+	// reverting application scale
 	applicationScaleUpMap := make(map[string]int32, len(ctx.App.SpecList))
 
 	applicationScaleMap, err := Inst().S.GetScaleFactorMap(ctx)
@@ -10911,7 +10912,7 @@ func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*schedul
 				contextsOnNode = append(contextsOnNode, ctx)
 				break
 			}
-			//case where volume is attached to different node but one of the replicas is the give node
+			// case where volume is attached to different node but one of the replicas is the give node
 			replicaSets, err := Inst().V.GetReplicaSets(v)
 			if err != nil {
 				return nil, err
@@ -11574,7 +11575,7 @@ func UpdateDriverVariables(envVar, runTimeOpts map[string]string) error {
 
 	var newEnvVarList []corev1.EnvVar
 
-	//Update environment variables in the spec
+	// Update environment variables in the spec
 	if envVar != nil && len(envVar) > 0 {
 		for _, env := range clusterSpec.Spec.Env {
 			newEnvVarList = append(newEnvVarList, env)
@@ -11586,7 +11587,7 @@ func UpdateDriverVariables(envVar, runTimeOpts map[string]string) error {
 		clusterSpec.Spec.Env = newEnvVarList
 	}
 
-	//Update RunTimeOpts in the spec
+	// Update RunTimeOpts in the spec
 	if runTimeOpts != nil && len(runTimeOpts) > 0 {
 		if clusterSpec.Spec.RuntimeOpts == nil {
 			clusterSpec.Spec.RuntimeOpts = make(map[string]string)
@@ -12061,7 +12062,7 @@ func CreatePXCloudCredential() error {
 func GetCloudsnapBucketName(contexts []*scheduler.Context) (string, error) {
 
 	var bucketName string
-	//Stopping cloudnsnaps before bucket deletion
+	// Stopping cloudnsnaps before bucket deletion
 	for _, ctx := range contexts {
 		if strings.Contains(ctx.App.Key, "cloudsnap") {
 			if bucketName == "" {
@@ -12758,7 +12759,7 @@ func GetIQNOfNode(n node.Node) (string, error) {
 
 // GetIQNOfFA gets the IQN of the FA
 func GetIQNOfFA(n node.Node, FAclient flasharray.Client) (string, error) {
-	//Run iscsiadm commands to login to the controllers
+	// Run iscsiadm commands to login to the controllers
 	networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(&FAclient, "iscsi")
 	log.FailOnError(err, "Failed to get network interfaces based on service type")
 
@@ -12833,7 +12834,7 @@ func WaitForVolumeClean(vol *volume.Volume) error {
 
 // GetFADetailsUsed Returns list of FlashArrays used in the cluster
 func GetFADetailsUsed() ([]pureutils.FlashArrayEntry, error) {
-	//get the flash array details
+	// get the flash array details
 	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get details on FlashArray used in the cluster")
@@ -12966,7 +12967,7 @@ func EnableFlashArrayNetworkInterface(faMgmtIP string, iface string) error {
 
 // GetFBDetailsFromCluster Returns list of FlashBlades used in the cluster
 func GetFBDetailsFromCluster() ([]pureutils.FlashBladeEntry, error) {
-	//get the flash array details
+	// get the flash array details
 	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get details on FlashBlade used in the cluster")
@@ -13469,7 +13470,7 @@ func CheckVolumesExistinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPv
 		}
 		for _, volumeName := range listofFadaPvc {
 			if !NoVolumeExists {
-				//This is to make sure we dont iterate through volumes which are already found in one FA,which means the value for that volume name is already true
+				// This is to make sure we dont iterate through volumes which are already found in one FA,which means the value for that volume name is already true
 				if pvcFadaMap[volumeName] {
 					continue
 				}
@@ -13581,7 +13582,7 @@ func CheckIopsandBandwidthinFA(flashArrays []pureutils.FlashArrayEntry, listofFa
 						iops := volItem.QoS.IopsLimit
 						log.FailOnError(err, "Failed to convert iops to int")
 						log.InfoD("iops for volume [%v] is [%v]", volname, iops)
-						//compare bandwidth and iops with max_iops and max_bandwidth
+						// compare bandwidth and iops with max_iops and max_bandwidth
 						if bandwidth < reqBandwidth || iops < reqIops {
 							pvcFadaMap[volname] = false
 						} else {
@@ -13857,4 +13858,65 @@ func GetVolumeNamefromPVC(namespace string) ([]string, error) {
 		return pvclist, nil
 	}
 	return nil, fmt.Errorf("No PVCs found in namespace [%s]", namespace)
+}
+
+func DoVolumeQuorumValidation(volumeQuorumValidationStopSignal chan struct{}, vQourumError *error) {
+	itr := 1
+	for {
+		log.Infof("Volume quorum validation iteration: #%d", itr)
+		select {
+		case <-volumeQuorumValidationStopSignal:
+			log.Infof("Exiting volume quorum validation routine")
+			return
+		default:
+			errorChan := make(chan error, 50)
+			ValidateVolumeQuorum(&errorChan)
+			for err := range errorChan {
+				*vQourumError = multierr.Append(*vQourumError, err)
+			}
+			if *vQourumError != nil {
+				return
+			}
+			itr++
+			time.Sleep(10 * time.Second)
+		}
+	}
+}
+
+func ValidateVolumeQuorum(errChan ...*chan error) {
+	volIDs, err := Inst().V.ListAllVolumes()
+	if err != nil {
+		// add to errChan
+		err := fmt.Errorf("error listing volumes, Err: %v", err)
+		processError(err, errChan...)
+	}
+
+	for _, volID := range volIDs {
+		apiVol, err := Inst().V.InspectVolume(volID)
+		if err != nil {
+			err = fmt.Errorf("error inspecting volume [%s], Err: %v", volID, err)
+		}
+		// check if volume is up
+		if apiVol.Status != opsapi.VolumeStatus_VOLUME_STATUS_UP {
+			// check if volume replicas are on different nodes
+			// get all the nodes where replicas are present
+			replicas := apiVol.ReplicaSets
+			if len(replicas) == 0 {
+				err := fmt.Errorf("volume [%s] does not have any replicas", volID)
+				processError(err, errChan...)
+			}
+
+			replicaNodes := replicas[0].Nodes
+
+			// if it is repl-2 volume and replicas are on same node, do not fail the test
+			// if it is repl-3 volume and replicas or either on same or 2 different nodes, do not fail the test
+			if len(replicaNodes) == 1 || (len(replicaNodes) == 2 && len(apiVol.ReplicaSets) == 3) {
+				log.Warnf("volume [%s] replicas are on same or 2 different nodes [%v]", volID, replicaNodes)
+				continue
+			} else {
+				err = fmt.Errorf("volume [%s] is not up", volID)
+				return
+			}
+		}
+	}
 }

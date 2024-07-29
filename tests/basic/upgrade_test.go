@@ -119,7 +119,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		storageNodes := node.GetStorageNodes()
 		numOfNodes := len(node.GetStorageDriverNodes())
 
-		//AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
+		// AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
 		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
 		log.FailOnError(err, "Cloud drive installation failed")
 
@@ -156,6 +156,18 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 			defer func() {
 				close(stopSignal)
 			}()
+
+			opver, err := optest.GetPxOperatorVersion()
+			if err == nil && opver.GreaterThanOrEqual(ParallelUpgradeVersion) {
+				var volumeError error
+				stopVolumeQuorumValidationSignal := make(chan struct{})
+				go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &volumeError)
+				defer func() {
+					close(stopVolumeQuorumValidationSignal)
+				}()
+			} else {
+				log.Infof("Skipping volume quorum validation as operator version is less than %s", ParallelUpgradeVersion)
+			}
 
 			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
 			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
@@ -617,7 +629,7 @@ var _ = Describe("{UpgradePxKvdbMemberDown}", func() {
 						dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Upgrade took more than expected time to complete")
 						upgradeStatus = "FAIL"
 					}
-					//check if all the versions are updated except one node.
+					// check if all the versions are updated except one node.
 					var count = 0
 					for _, n := range storageNodes {
 						updatedPXVersion, err := Inst().V.GetDriverVersionOnNode(n)

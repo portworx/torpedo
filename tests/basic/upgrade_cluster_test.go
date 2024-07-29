@@ -89,6 +89,18 @@ var _ = Describe("{UpgradeCluster}", func() {
 					log.Warnf("PDB validation skipped. Current Px-Operator version: [%s], minimum required: [%s]. Error: [%v].", opver, PDBValidationMinOpVersion, err)
 				}
 
+				// validate volume quorum during upgrade
+				if opver.GreaterThanOrEqual(ParallelUpgradeVersion) {
+					var vQourumError error
+					stopVolumeValidationSignal := make(chan struct{})
+					go DoVolumeQuorumValidation(stopVolumeValidationSignal, &vQourumError)
+					defer func() {
+						close(stopVolumeValidationSignal)
+					}()
+				} else {
+					log.Warnf("Volume quorum validation skipped. Current Px-Operator version: [%s], minimum required: [%s]. Error: [%v].", opver, ParallelUpgradeVersion, err)
+				}
+
 				err = Inst().S.UpgradeScheduler(version)
 				if err != nil {
 					err = Inst().S.RefreshNodeRegistry()
@@ -212,7 +224,7 @@ func validateClusterNodes(stopSignal <-chan struct{}, mError *error) {
 		stNodeNames[stNode.Name] = true
 	}
 
-	//Handling case where we have storageless node as kvdb node with dedicated kvdb device attached.
+	// Handling case where we have storageless node as kvdb node with dedicated kvdb device attached.
 	kvdbNodes, _ := GetAllKvdbNodes()
 	for _, kvdbNode := range kvdbNodes {
 		sNode, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
