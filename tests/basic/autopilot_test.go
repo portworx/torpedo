@@ -2075,7 +2075,7 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 			storageNodeIds = append(storageNodeIds, n.Id)
 		}
 
-		numberOfVolumes := 10
+		numberOfVolumes := 60
 		// 0.35 value is the 35% of total provisioned size which will trigger rebalance for above autopilot rule
 		volumeSize := getVolumeSizeByProvisionedPercentage(storageNodes[0], numberOfVolumes, 0.35)
 
