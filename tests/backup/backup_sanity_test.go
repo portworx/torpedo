@@ -2,7 +2,9 @@ package tests
 
 import (
 	"fmt"
+	k8score "github.com/portworx/sched-ops/k8s/core"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -363,5 +365,193 @@ var _ = Describe("{BasicBackupCreation}", Label(TestCaseLabelsMap[BasicBackupCre
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
 		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// This testcase verifies basic backup rule,backup location, cloud setting
+var _ = Describe("{BasicScheduleBackupCreation}", Label(TestCaseLabelsMap[BasicBackupCreation]...), func() {
+	var (
+		scheduledAppContexts []*scheduler.Context
+		scheduleNames        []string
+
+		cloudCredName                   string
+		cloudCredUID                    string
+		backupLocationUID               string
+		backupLocationName              string
+		invalidVolumeSnapShotClassNames []string
+		backupLocationMap               map[string]string
+		labelSelectors                  map[string]string
+		schedulePolicyName              string
+		schedulePolicyUID               string
+		schedulePolicyInterval          = int64(15)
+		providers                       []string
+		sourceNamespaces                []string
+
+		provisionerInvalidVscMap = make(map[string]string)
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("BasicScheduleBackupCreation", "Deploying backup", nil, 0, Ak, Q4FY23)
+
+		backupLocationMap = make(map[string]string)
+		labelSelectors = make(map[string]string)
+		providers = GetBackupProviders()
+
+		log.InfoD("scheduling applications on source")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < 150; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+				AppNamespace := appCtx.ScheduleOptions.Namespace
+				sourceNamespaces = append(sourceNamespaces, AppNamespace)
+			}
+		}
+
+	})
+
+	It("Basic Backup Creation", func() {
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
+
+		Step("Validating the app is running", func() {
+			log.InfoD("Validating the app is running\"")
+			var wg sync.WaitGroup
+			for _, appCtx := range scheduledAppContexts {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					Inst().S.WaitForRunning(appCtx, 5*time.Minute, 10*time.Second)
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				backupLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		Step("Create schedule policy", func() {
+			log.InfoD("Creating schedule policy")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			schedulePolicyName = fmt.Sprintf("%s-%v", "periodic-schedule-policy", RandomString(5))
+			schedulePolicyUID = uuid.New()
+			err = CreateBackupScheduleIntervalPolicy(1000, schedulePolicyInterval, 5, schedulePolicyName, schedulePolicyUID, BackupOrgID, ctx, false, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule policy %s", schedulePolicyName))
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+		})
+
+		Step("Create invalid volume snapshot class for CSI volumes", func() {
+			pvcLabelSelector := make(map[string]string)
+			pvcLabelSelector["backupVolumeType"] = "csi"
+			k8sCore := k8score.Instance()
+			for _, appCtx := range scheduledAppContexts[:1] {
+				scheduledNamespace := appCtx.ScheduleOptions.Namespace
+				pvcList, err := k8sCore.GetPersistentVolumeClaims(scheduledNamespace, pvcLabelSelector)
+				log.FailOnError(err, "Getting PVC list with provisioner based label selector")
+				for _, pvc := range pvcList.Items {
+					scProvisioner, err := k8sCore.GetStorageProvisionerForPVC(&pvc)
+					log.FailOnError(err, fmt.Sprintf("Getting Storage Provisioner for PVC %s ", pvc.Name))
+					invalidVolumeSnapShotClassName := fmt.Sprintf("invalid-snapshotclass-%s-%s", RandomString(3), pvc.Name)
+					_, err = CreateInvalidVolumeSnapshotClass(invalidVolumeSnapShotClassName, scProvisioner)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of invalid snapshot class [%s] creation for provisioner [%s]", invalidVolumeSnapShotClassName, scProvisioner))
+					invalidVolumeSnapShotClassNames = append(invalidVolumeSnapShotClassNames, invalidVolumeSnapShotClassName)
+					provisionerInvalidVscMap[scProvisioner] = invalidVolumeSnapShotClassName
+				}
+			}
+
+		})
+
+		Step("Taking scheduled backup of application from source cluster", func() {
+			log.InfoD("taking scheduled backup of applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for i, appNamespace := range sourceNamespaces {
+				scheduleName := fmt.Sprintf("%s%v-%s-%s", "sch", i, appNamespace, RandomString(4))
+				scheduleBackupName, err := CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName, SourceClusterName, backupLocationName, backupLocationUID, []string{appNamespace}, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, ctx, provisionerInvalidVscMap, false)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of partial schedule backup [%s]", scheduleBackupName))
+				scheduleNames = append(scheduleNames, scheduleName)
+			}
+		})
+
+		Step("Wait for all iterations of backups to be completed", func() {
+			log.InfoD("\"Wait for all iterations of backups to be completed")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for i := 0; i <= 34*4; i++ {
+				var mutex sync.Mutex
+				errors := make([]string, 0)
+				var wg sync.WaitGroup
+				for _, scheduleName := range scheduleNames {
+					wg.Add(1)
+					go func(scheduleName string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						_, err := GetNextScheduleBackupName(scheduleName, time.Duration(schedulePolicyInterval), ctx)
+						if err != nil {
+							mutex.Lock()
+							errors = append(errors, fmt.Sprintf("Failed while getting next schedule for  [%s] , error [%s]", scheduleName, err.Error()))
+							mutex.Unlock()
+						}
+					}(scheduleName)
+				}
+				wg.Wait()
+			}
+		})
+
+		Step("Delete scheduled backup of application from source cluster", func() {
+			log.InfoD("Delete scheduled backup of applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			scheduleNames, _ = GetAllBackupSchedulesForAdmin()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			schedulePolicyName := "periodic-schedule-policy-yfkyd"
+			for _, scheduleName := range scheduleNames {
+				err := SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Suspension of schedule backup [%s]", scheduleName))
+			}
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
 	})
 })
