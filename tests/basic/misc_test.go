@@ -1802,15 +1802,11 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 			AllNodes := node.GetStorageDriverNodes()
 			//Capturing PID pf PX before stopping PX pods
 			for _, nnode := range AllNodes {
-				output, err := Inst().N.RunCommand(nnode, processCmd, node.ConnectionOpts{
-					Timeout:         30 * time.Second,
-					TimeBeforeRetry: 20 * time.Second,
-					Sudo:            true,
-				})
+				output, err := Inst().N.RunCommand(nnode, processCmd, node.ConnectionOpts{Timeout: 30 * time.Second, TimeBeforeRetry: 20 * time.Second, Sudo: true})
 				log.FailOnError(err, "Fail to run command on %s node", nnode)
 				processPid[nnode.Id] = output
 			}
-			log.Infof(fmt.Sprintf("Process IDs for px before stopping portworx pod  %s", processPid))
+			log.Infof("Process IDs for px before stopping portworx pod  %s", processPid)
 
 			//Get namespace details of Px Pods
 			namespace, err := Inst().S.GetPortworxNamespace()
@@ -1826,17 +1822,13 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 				if err != nil {
 					log.FailOnError(fmt.Errorf("PX POD is not up, we can not test further due to err %s", err), "PX POD is down on node %s", nnode.Name)
 				}
-				output, err := Inst().N.RunCommand(nnode, processCmd, node.ConnectionOpts{
-					Timeout:         20 * time.Second,
-					TimeBeforeRetry: 5 * time.Second,
-					Sudo:            true,
-				})
+				output, err := Inst().N.RunCommand(nnode, processCmd, node.ConnectionOpts{Timeout: 30 * time.Second, TimeBeforeRetry: 20 * time.Second, Sudo: true})
 				if err != nil {
 					log.FailOnError(fmt.Errorf("Fail to get process id of PX process"), "Fail to get process id of PX process in node %s due to  %s", nnode.Name, err)
 				}
 				processPidPostRestart[nnode.Id] = output
 			}
-			log.Infof(fmt.Sprintf("Process IDs for px after stopping portworx pod  %s", processPidPostRestart))
+			log.Infof("Process IDs for px after stopping portworx pod  %s", processPidPostRestart)
 			//Verify PID before and after for PX process
 			for nodeId, beforePID := range processPid {
 				afterPID, _ := processPidPostRestart[nodeId]
