@@ -2083,10 +2083,16 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			stNodes := node.GetStorageDriverNodes()
-			for _, node := range stNodes {
+			for _, stnode := range stNodes {
 				volCreatecmd := "NODE=$(pxctl status | grep 'This node' | awk '{print $2}') && seq 1 30 | xargs -I {} pxctl volume create rebalance-${NODE}-{} --size 30 --nodes $NODE"
-				_, volerr := runPxctlCommand(volCreatecmd, node, nil)
-				log.FailOnError(volerr, "Failed to create volumes on the node")
+				ConnectionOpts := node.ConnectionOpts{
+					Timeout:         10 * time.Minute,
+					TimeBeforeRetry: defaultCommandRetry,
+				}
+				output, err := Inst().N.RunCommandWithNoRetry(stnode, volCreatecmd, ConnectionOpts)
+				log.InfoD("Output of the command: %s", output)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the volumes created on node [%s]", stnode.Name))
+
 			}
 		})
 
@@ -2137,11 +2143,18 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 		stepLog = "Delete Volumes on each node"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+
 			stNodes := node.GetStorageDriverNodes()
-			for _, node := range stNodes {
+			for _, stnode := range stNodes {
 				volDeletecmd := "NODE=$(pxctl status | grep 'This node' | awk '{print $2}') && seq 1 30 | xargs -I {} pxctl volume delete rebalance-${NODE}-{} --force"
-				_, volerr := runPxctlCommand(volDeletecmd, node, nil)
-				log.FailOnError(volerr, "Failed to delete volumes on the node")
+				ConnectionOpts := node.ConnectionOpts{
+					Timeout:         10 * time.Minute,
+					TimeBeforeRetry: 5 * time.Second,
+				}
+				output, err := Inst().N.RunCommandWithNoRetry(stnode, volDeletecmd, ConnectionOpts)
+				log.InfoD("Output of the command: %s", output)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the volumes created on node [%s]", stnode.Name))
+
 			}
 		})
 	})
