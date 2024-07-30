@@ -1786,6 +1786,25 @@ var _ = Describe("{KubeClusterRestart}", func() {
 	})
 })
 
+// GetPxPIDMap returns a map of node ID to PX PID
+func GetPxPIDMap(nodes []node.Node) (map[string]string, error) {
+	pxPIDMap := make(map[string]string)
+	getPxPidCmd := "pidof px"
+
+	for _, n := range nodes {
+		err := Inst().V.WaitForPxPodsToBeUp(n)
+		if err != nil {
+			return nil, fmt.Errorf("failed to wait for PX pod to be up in node [%s]. Err: [%v]", n.Name, err)
+		}
+		output, err := Inst().N.RunCommand(n, getPxPidCmd, node.ConnectionOpts{Timeout: 30 * time.Second, TimeBeforeRetry: 20 * time.Second, Sudo: true})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get PX PID on node [%s]. Err: [%v]", n.Name, err)
+		}
+		pxPIDMap[n.Id] = output
+	}
+	return pxPIDMap, nil
+}
+
 var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 	JustBeforeEach(func() {
 		// https://purestorage.atlassian.net/browse/PTX-24859
@@ -1797,16 +1816,20 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 		stepLog = "Getting PID of Px process before and after restarting PX pods on all the nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			processPid := make(map[string]string)
-			processCmd := "pidof px"
-			AllNodes := node.GetStorageDriverNodes()
-			//Capturing PID pf PX before stopping PX pods
-			for _, nnode := range AllNodes {
-				output, err := Inst().N.RunCommand(nnode, processCmd, node.ConnectionOpts{Timeout: 30 * time.Second, TimeBeforeRetry: 20 * time.Second, Sudo: true})
-				log.FailOnError(err, "Fail to run command on %s node", nnode)
-				processPid[nnode.Id] = output
+			//processPid := make(map[string]string)
+			//AllNodes := node.GetStorageDriverNodes()
+			processPid, err := GetPxPIDMap(node.GetStorageDriverNodes())
+			if err != nil {
+				log.FailOnError(err, "Failed while getting PID of PX process")
 			}
-			log.Infof("Process IDs for px before stopping portworx pod  %s", processPid)
+
+			//Capturing PID pf PX before stopping PX pods
+			//for _, nnode := range AllNodes {
+			//	output, err := Inst().N.RunCommand(nnode, processCmd, node.ConnectionOpts{Timeout: 30 * time.Second, TimeBeforeRetry: 20 * time.Second, Sudo: true})
+			//	log.FailOnError(err, "Fail to run command on %s node", nnode)
+			//	processPid[nnode.Id] = output
+			//}
+			//log.Infof("Process IDs for px before stopping portworx pod  %s", processPid)
 
 			//Get namespace details of Px Pods
 			namespace, err := Inst().S.GetPortworxNamespace()
@@ -1816,18 +1839,23 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 			err = DeletePXPods(namespace)
 			log.FailOnError(err, "We have come across error while deleting PX pod ")
 			//Capturing PID of PX after stopping PX pods
-			processPidPostRestart := make(map[string]string)
-			for _, nnode := range AllNodes {
-				err := Inst().V.WaitForPxPodsToBeUp(nnode)
-				if err != nil {
-					log.FailOnError(fmt.Errorf("PX POD is not up, we can not test further due to err %s", err), "PX POD is down on node %s", nnode.Name)
-				}
-				output, err := Inst().N.RunCommand(nnode, processCmd, node.ConnectionOpts{Timeout: 30 * time.Second, TimeBeforeRetry: 20 * time.Second, Sudo: true})
-				if err != nil {
-					log.FailOnError(fmt.Errorf("Fail to get process id of PX process"), "Fail to get process id of PX process in node %s due to  %s", nnode.Name, err)
-				}
-				processPidPostRestart[nnode.Id] = output
+			//processPidPostRestart := make(map[string]string)
+
+			processPidPostRestart, err := GetPxPIDMap(node.GetStorageDriverNodes())
+			if err != nil {
+				log.FailOnError(err, "Failed while getting PID of PX process")
 			}
+			//for _, nnode := range AllNodes {
+			//	err := Inst().V.WaitForPxPodsToBeUp(nnode)
+			//	if err != nil {
+			//		log.FailOnError(fmt.Errorf("PX POD is not up, we can not test further due to err %s", err), "PX POD is down on node %s", nnode.Name)
+			//	}
+			//	output, err := Inst().N.RunCommand(nnode, processCmd, node.ConnectionOpts{Timeout: 30 * time.Second, TimeBeforeRetry: 20 * time.Second, Sudo: true})
+			//	if err != nil {
+			//		log.FailOnError(fmt.Errorf("Fail to get process id of PX process"), "Fail to get process id of PX process in node %s due to  %s", nnode.Name, err)
+			//	}
+			//	processPidPostRestart[nnode.Id] = output
+			//}
 			log.Infof("Process IDs for px after stopping portworx pod  %s", processPidPostRestart)
 			//Verify PID before and after for PX process
 			for nodeId, beforePID := range processPid {
