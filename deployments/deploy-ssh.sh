@@ -667,6 +667,7 @@ spec:
         --torpedo-job-type="${TORPEDO_JOB_TYPE}" \
         --torpedo-skip-system-checks="${TORPEDO_SKIP_SYSTEM_CHECKS}" \
         --fa-secret="${FA_SECRET}" \
+        "$SCALE_APP_TIMEOUT_ARG" \
         "${APP_DESTROY_TIMEOUT_ARG}" && \
         if [ -n "${POST_TORPEDO_SCRIPT_CM_NAME}" ]; then
             bash /tmp/${POST_TORPEDO_SCRIPT_CM_NAME}/script
