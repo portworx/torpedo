@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -26,7 +27,6 @@ import (
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/utils/strings/slices"
 )
 
 const (
@@ -268,7 +268,7 @@ func (v *vsphere) getVMFinder() (*find.Finder, error) {
 
 }
 
-//GetCompatibleDatastores get matching prefix datastores
+// GetCompatibleDatastores get matching prefix datastores
 func (v *vsphere) GetCompatibleDatastores(portworxNamespace string, datastoreNames []string) ([]*object.Datastore, error) {
 	var err error
 	datastores, err := v.GetDatastoresFromDatacenter()
@@ -299,12 +299,12 @@ func (v *vsphere) GetCompatibleDatastores(portworxNamespace string, datastoreNam
 		return nil, fmt.Errorf("Failed to find VSPHERE_DATASTORE_PREFIX  prefix ")
 	}
 	for _, ds := range datastores {
-		if strings.HasPrefix(ds.Name(), prefixName) && slices.Contains(datastoreNames, ds.Name()) {
+		if strings.HasPrefix(ds.Name(), prefixName) {
 			log.Infof("Prefix match found for datastore Name %v ", ds.Name())
 			selectedDatastore = append(selectedDatastore, ds)
 		}
 	}
-	if len(selectedDatastore) == 0 || len(selectedDatastore) != len(datastoreNames) {
+	if len(selectedDatastore) == 0 {
 		return nil, fmt.Errorf("All datastores are not available, available are  %v , but expected are : %v", selectedDatastore, datastoreNames)
 	}
 	return selectedDatastore, nil
@@ -861,4 +861,276 @@ func (v *vsphere) RemoveNonRootDisks(n node.Node) error {
 	}
 
 	return nil
+}
+
+// VmRelocate relocates the largest disks of a VM from one datastore to another within the same prefix group
+// With moveAllDisks true we will be moving all disks attached to a VM onto same Datastore
+// If moveAllDisks is set to False then we will choose the largest sized disk and move that only to a new Datastore
+func (v *vsphere) VmRelocate(ctx context.Context, node node.Node, portworxNamespace string, moveAllDisks bool) error {
+	vm, err := v.FindVMByIP(node)
+	if err != nil {
+		return fmt.Errorf("error retrieving VM: %v", err)
+	}
+
+	var vmProps mo.VirtualMachine
+	err = vm.Properties(ctx, vm.Reference(), []string{"config.hardware"}, &vmProps)
+	if err != nil {
+		return fmt.Errorf("error retrieving VM properties: %v", err)
+	}
+
+	compatibleDatastores, err := v.GetCompatibleDatastores(portworxNamespace, []string{})
+	if err != nil {
+		return fmt.Errorf("error retrieving compatible datastores: %v", err)
+	}
+
+	if !moveAllDisks {
+		largestDisks := findLargestDisksOnDatastores(vmProps.Config.Hardware.Device, compatibleDatastores)
+		if len(largestDisks) == 0 {
+			return fmt.Errorf("no large disks found on specified prefix datastores")
+		}
+
+		sourceDatastore := object.NewDatastore(vm.Client(), largestDisks[0].Datastore)
+
+		targetDatastores, err := filterTargetDatastores(ctx, sourceDatastore, compatibleDatastores)
+		if err != nil {
+			return fmt.Errorf("error filtering target datastores: %v", err)
+		}
+
+		err = initiateStorageVmotion(ctx, vm, largestDisks[:1], targetDatastores)
+		if err != nil {
+			return fmt.Errorf("error during storage vMotion: %v", err)
+		}
+	} else {
+		var targetDatastores []*object.Datastore
+		var temp *object.Datastore
+		maxAvailableSpace := int64(-1)
+		for _, ds := range compatibleDatastores {
+			var dsProps mo.Datastore
+			if err := ds.Properties(ctx, ds.Reference(), []string{"summary"}, &dsProps); err == nil {
+				if available := dsProps.Summary.FreeSpace; available > maxAvailableSpace {
+					maxAvailableSpace = available
+					temp = ds
+				}
+			}
+		}
+
+		if temp == nil {
+			return fmt.Errorf("failed to select a target datastore")
+		}
+		targetDatastores = append(targetDatastores, temp)
+
+		diskLocators := make([]types.VirtualMachineRelocateSpecDiskLocator, 0)
+		for _, device := range vmProps.Config.Hardware.Device {
+			if disk, ok := device.(*types.VirtualDisk); ok {
+				diskLocators = append(diskLocators, types.VirtualMachineRelocateSpecDiskLocator{
+					DiskId:    disk.Key,
+					Datastore: targetDatastores[0].Reference(),
+				})
+			}
+		}
+
+		if len(diskLocators) == 0 {
+			return fmt.Errorf("no disks found on the VM")
+		}
+
+		err = initiateStorageVmotion(ctx, vm, diskLocators, targetDatastores)
+		if err != nil {
+			return fmt.Errorf("error during storage vMotion: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// Function to get the datastore's cluster
+func getDatastoreCluster(ctx context.Context, ds *object.Datastore) (*object.StoragePod, error) {
+	var dsProps mo.Datastore
+	err := ds.Properties(ctx, ds.Reference(), []string{"parent"}, &dsProps)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get properties for datastore: %v", err)
+	}
+
+	if dsProps.Parent != nil {
+		spRef := dsProps.Parent.Reference()
+		if spRef.Type == "StoragePod" {
+			return object.NewStoragePod(ds.Client(), spRef), nil
+		}
+	}
+
+	return nil, nil
+}
+
+// filterTargetDatastores filters from list of Datastores available with the prefix defined in Storageclass
+// If source DS is in a cluster with another DS, then this method skips the other DS and chooses a DS outside this cluster
+func filterTargetDatastores(ctx context.Context, sourceDatastore *object.Datastore, allDatastores []*object.Datastore) ([]*object.Datastore, error) {
+	sourceCluster, err := getDatastoreCluster(ctx, sourceDatastore)
+	if err != nil {
+		return nil, err
+	}
+	var filteredDatastores []*object.Datastore
+
+	for _, ds := range allDatastores {
+		if ds.Reference().Value == sourceDatastore.Reference().Value {
+			continue
+		}
+		targetCluster, err := getDatastoreCluster(ctx, ds)
+		if err != nil {
+			continue
+		}
+		if sourceCluster == nil || targetCluster == nil || sourceCluster.Reference() != targetCluster.Reference() {
+			filteredDatastores = append(filteredDatastores, ds)
+		}
+	}
+	return filteredDatastores, nil
+}
+
+// findLargestDisksOnDatastores identifies the largest disks on the specified datastores for a VM
+func findLargestDisksOnDatastores(devices []types.BaseVirtualDevice, datastores []*object.Datastore) []types.VirtualMachineRelocateSpecDiskLocator {
+	datastoreMap := make(map[types.ManagedObjectReference]*object.Datastore)
+	for _, ds := range datastores {
+		datastoreMap[ds.Reference()] = ds
+	}
+
+	var disks []struct {
+		Disk     *types.VirtualDisk
+		Capacity int64
+	}
+
+	for _, device := range devices {
+		if disk, ok := device.(*types.VirtualDisk); ok {
+			if backingInfo, ok := disk.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
+				dsRef := backingInfo.Datastore
+				if _, exists := datastoreMap[*dsRef]; exists {
+					disks = append(disks, struct {
+						Disk     *types.VirtualDisk
+						Capacity int64
+					}{
+						Disk: disk, Capacity: disk.CapacityInKB,
+					})
+				}
+			} else {
+				log.Infof("Disk backing type assertion failed")
+			}
+		}
+	}
+
+	sort.Slice(disks, func(i, j int) bool {
+		return disks[i].Capacity > disks[j].Capacity
+	})
+
+	diskLocators := []types.VirtualMachineRelocateSpecDiskLocator{}
+	for _, disk := range disks {
+		if backing, ok := disk.Disk.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
+			diskLocator := types.VirtualMachineRelocateSpecDiskLocator{
+				DiskId:    disk.Disk.Key,
+				Datastore: *backing.Datastore,
+			}
+			diskLocators = append(diskLocators, diskLocator)
+		} else {
+			log.Infof("Disk backing type is not compatible or assertion failed\n")
+		}
+	}
+	return diskLocators
+}
+
+// initiateStorageVmotion starts the Storage vMotion process for the disks, targeting a specific datastore.
+func initiateStorageVmotion(ctx context.Context, vm *object.VirtualMachine, diskLocators []types.VirtualMachineRelocateSpecDiskLocator, datastores []*object.Datastore) error {
+	var targetDatastore *object.Datastore
+	if len(datastores) == 0 {
+		return fmt.Errorf("no compatible datastores available for storage vMotion")
+	}
+	if len(datastores) > 1 {
+		maxAvailableSpace := int64(-1)
+		for _, ds := range datastores {
+			var dsProps mo.Datastore
+			if err := ds.Properties(ctx, ds.Reference(), []string{"summary"}, &dsProps); err == nil {
+				if available := dsProps.Summary.FreeSpace; available > maxAvailableSpace {
+					maxAvailableSpace = available
+					targetDatastore = ds
+				}
+			}
+		}
+	} else {
+		targetDatastore = datastores[0]
+	}
+
+	if targetDatastore == nil {
+		return fmt.Errorf("failed to select a target datastore")
+	}
+
+	for i := range diskLocators {
+		diskLocators[i].Datastore = targetDatastore.Reference()
+	}
+
+	relocateSpec := types.VirtualMachineRelocateSpec{
+		Disk: diskLocators,
+	}
+
+	task, err := vm.Relocate(ctx, relocateSpec, types.VirtualMachineMovePriorityDefaultPriority)
+	if err != nil {
+		return fmt.Errorf("error initiating VM relocate: %v", err)
+	}
+	return task.Wait(ctx)
+}
+
+// FindVMByName finds a virtual machine by its name.
+func (v *vsphere) FindVMByName(vmName string) (*object.VirtualMachine, error) {
+	log.Infof("VM Name is: %v", vmName)
+	finder, err := v.getVMFinder()
+	if err != nil {
+		return nil, err
+	}
+	vm, err := finder.VirtualMachine(v.ctx, vmName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find VM: %v", err)
+	}
+	return vm, nil
+}
+
+// FindDatastoreByName finds a datastore by its name.
+func (v *vsphere) FindDatastoreByName(dsName string) (*object.Datastore, error) {
+	finder, err := v.getVMFinder()
+	if err != nil {
+		return nil, err
+	}
+	ds, err := finder.Datastore(v.ctx, dsName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find datastore: %v", err)
+	}
+	return ds, nil
+}
+
+// FindVMByIP finds the vsphere Name of a VM through its Data IP Address
+func (v *vsphere) FindVMByIP(node node.Node) (*object.VirtualMachine, error) {
+	log.Infof("Searching VM by IP Addresses: %v", node.Addresses)
+	finder, err := v.getVMFinder()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get VM finder: %v", err)
+	}
+
+	vms, err := finder.VirtualMachineList(v.ctx, "*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve VM list: %v", err)
+	}
+
+	for _, vm := range vms {
+		var vmProps mo.VirtualMachine
+		err = vm.Properties(v.ctx, vm.Reference(), []string{"guest.net"}, &vmProps)
+		if err != nil {
+			log.Infof("failed to get properties for VM: %s, error: %v", vm.Name(), err)
+			continue
+		}
+
+		for _, net := range vmProps.Guest.Net {
+			for _, ip := range net.IpAddress {
+				for _, nodeIP := range node.Addresses {
+					if ip == nodeIP {
+						log.Infof("Found VM by IP Address %s: %s", ip, vm.Name())
+						return vm, nil
+					}
+				}
+			}
+		}
+	}
+	return nil, fmt.Errorf("no VM found with the given IP addresses: %v", node.Addresses)
 }
