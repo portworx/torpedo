@@ -2079,6 +2079,17 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 		// 0.35 value is the 35% of total provisioned size which will trigger rebalance for above autopilot rule
 		volumeSize := getVolumeSizeByProvisionedPercentage(storageNodes[0], numberOfVolumes, 0.35)
 
+		stepLog = "Create Volumes on each node  in order to achieve pool re-balance"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			stNodes := node.GetStorageDriverNodes()
+			for _, node := range stNodes {
+				volCreatecmd := "NODE=$(pxctl status | grep 'This node' | awk '{print $2}') && seq 1 30 | xargs -I {} pxctl volume create rebalance-${NODE}-{} --size 30 --nodes $NODE"
+				_, volerr := runPxctlCommand(volCreatecmd, node, nil)
+				log.FailOnError(volerr, "Failed to create volumes on the node")
+			}
+		})
+
 		stepLog := "schedule apps with autopilot rules"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -2120,6 +2131,17 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 				for key := range poolLabel {
 					Inst().S.RemoveLabelOnNode(storageNode, key)
 				}
+			}
+		})
+
+		stepLog = "Delete Volumes on each node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			stNodes := node.GetStorageDriverNodes()
+			for _, node := range stNodes {
+				volDeletecmd := "NODE=$(pxctl status | grep 'This node' | awk '{print $2}') && seq 1 30 | xargs -I {} pxctl volume delete rebalance-${NODE}-{} --force"
+				_, volerr := runPxctlCommand(volDeletecmd, node, nil)
+				log.FailOnError(volerr, "Failed to delete volumes on the node")
 			}
 		})
 	})
