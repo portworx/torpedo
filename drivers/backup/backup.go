@@ -8,7 +8,6 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
-	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
 // Image Generic struct
@@ -253,6 +252,11 @@ type Backup interface {
 	WaitForBackupCompletion(ctx context.Context, backupName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
 
+	// WaitForBackupPartialCompletion waits for backup to partial complete successfully
+	// or till timeout is reached. API should poll every `timeBeforeRetry`
+	WaitForBackupPartialCompletion(ctx context.Context, backupName string, orgID string,
+		timeout time.Duration, timeBeforeRetry time.Duration) error
+
 	// WaitForBackupDeletion waits for backup to be deleted successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry
 	WaitForBackupDeletion(ctx context.Context, backupName string, orgID string,
@@ -439,9 +443,6 @@ type Rule interface {
 
 	// CreateRuleForBackup creates backup rule
 	CreateRuleForBackup(appName string, orgID string, prePostFlag string) (bool, string, error)
-
-	// CreateRuleForKubevirtBackup creates backup rule for kubevirt
-	CreateRuleForKubevirtBackup(ctx context.Context, virtualMachineList []kubevirtv1.VirtualMachine, orgID string, prePostFlag string, template string) (bool, string, error)
 
 	// DeleteRuleForBackup deletes backup rule
 	DeleteRuleForBackup(orgID string, ruleName string) error

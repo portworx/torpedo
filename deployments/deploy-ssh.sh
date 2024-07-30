@@ -124,6 +124,10 @@ if [ -z "${PURE_SAN_TYPE}" ]; then
     PURE_SAN_TYPE=ISCSI
 fi
 
+if [ -z "${PURE_FADA_POD}" ]; then
+    PURE_FADA_POD=""
+fi
+
 if [ -n "${PROVISIONER}" ]; then
     PROVISIONER="$PROVISIONER"
 fi
@@ -154,7 +158,7 @@ if [ -n "${CONFIG_MAP}" ]; then
 fi
 
 if [ -z "${TORPEDO_IMG}" ]; then
-    TORPEDO_IMG="portworx/torpedo:latest"
+    TORPEDO_IMG="portworx/torpedo:master"
     echo "Using default torpedo image: ${TORPEDO_IMG}"
 fi
 
@@ -238,6 +242,10 @@ if [ -n "$ANTHOS_INST_PATH" ]; then
     ANTHOS_INST_PATH="${ANTHOS_INST_PATH}"
 fi
 
+if [ -n "$ANTHOS_HOST_PATH" ]; then
+    ANTHOS_HOST_PATH="${ANTHOS_HOST_PATH}"
+fi
+
 for i in $@
 do
 case $i in
@@ -249,7 +257,7 @@ case $i in
 esac
 done
 
-echo "checking if we need to override test suite: ${TEST_SUITE}"
+echo "Checking if we need to override test suite: ${TEST_SUITE}"
 
 # TODO: Remove this after all longevity jobs switch to 'bin/longevity.test' for TEST_SUITE.
 case $FOCUS_TESTS in
@@ -271,14 +279,14 @@ if [ -z "${AUTOPILOT_UPGRADE_VERSION}" ]; then
     AUTOPILOT_UPGRADE_VERSION=""
 fi
 
-kubectl delete secret torpedo
-kubectl delete pod torpedo
-state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
+kubectl -n default delete secret torpedo
+kubectl -n default delete pod torpedo
+state=`kubectl -n default get pod torpedo | grep -v NAME | awk '{print $3}'`
 timeout=0
 while [ "$state" == "Terminating" -a $timeout -le 600 ]; do
   echo "Terminating torpedo..."
   sleep 1
-  state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
+  state=`kubectl -n default get pod torpedo | grep -v NAME | awk '{print $3}'`
   timeout=$[$timeout+1]
 done
 
@@ -291,7 +299,7 @@ TORPEDO_CUSTOM_PARAM_VOLUME=""
 TORPEDO_CUSTOM_PARAM_MOUNT=""
 CUSTOM_APP_CONFIG_PATH=""
 if [ -n "${CUSTOM_APP_CONFIG}" ]; then
-    kubectl create configmap custom-app-config --from-file=custom_app_config.yml=${CUSTOM_APP_CONFIG}
+    kubectl -n default create configmap custom-app-config --from-file=custom_app_config.yml=${CUSTOM_APP_CONFIG}
     CUSTOM_APP_CONFIG_PATH="/mnt/torpedo/custom_app_config.yml"
     TORPEDO_CUSTOM_PARAM_VOLUME="{ \"name\": \"custom-app-config-volume\", \"configMap\": { \"name\": \"custom-app-config\", \"items\": [{\"key\": \"custom_app_config.yml\", \"path\": \"custom_app_config.yml\"}] } }"
     TORPEDO_CUSTOM_PARAM_MOUNT="{ \"name\": \"custom-app-config-volume\", \"mountPath\": \"${CUSTOM_APP_CONFIG_PATH}\", \"subPath\": \"custom_app_config.yml\" }"
@@ -300,7 +308,7 @@ fi
 TORPEDO_SSH_KEY_VOLUME=""
 TORPEDO_SSH_KEY_MOUNT=""
 if [ -n "${TORPEDO_SSH_KEY}" ]; then
-    kubectl create secret generic key4torpedo --from-file=${TORPEDO_SSH_KEY}
+    kubectl -n default create secret generic key4torpedo --from-file=${TORPEDO_SSH_KEY}
     TORPEDO_SSH_KEY_VOLUME="{ \"name\": \"ssh-key-volume\", \"secret\": { \"secretName\": \"key4torpedo\", \"defaultMode\": 256 }}"
     TORPEDO_SSH_KEY_MOUNT="{ \"name\": \"ssh-key-volume\", \"mountPath\": \"/home/torpedo/\" }"
 fi
@@ -316,6 +324,9 @@ TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\"
 
 AWS_VOLUME="{ \"name\": \"aws-volume\", \"configMap\": { \"name\": \"aws-cm\", \"items\": [{\"key\": \"credentials\", \"path\": \"credentials\"}, {\"key\": \"config\", \"path\": \"config\"}]} }"
 AWS_VOLUME_MOUNT="{ \"name\": \"aws-volume\", \"mountPath\": \"/root/.aws/\" }"
+
+ANTHOS_VOLUME="{ \"name\": \"anthosdir\", \"hostPath\": { \"path\": \"${ANTHOS_HOST_PATH}\", \"type\": \"Directory\" } }"
+ANTHOS_VOLUME_MOUNT="{ \"name\": \"anthosdir\", \"mountPath\": \"/anthosdir\" }"
 
 VOLUMES="${TESTRESULTS_VOLUME}"
 
@@ -365,13 +376,18 @@ if [ -n "${TORPEDO_CUSTOM_PARAM_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_CUSTOM_PARAM_MOUNT}"
 fi
 
+if [ -n "${ANTHOS_HOST_PATH}" ]; then
+  VOLUMES="${VOLUMES},${ANTHOS_VOLUME}"
+  VOLUME_MOUNTS="${VOLUME_MOUNTS},${ANTHOS_VOLUME_MOUNT}"
+fi
+
 BUSYBOX_IMG="busybox"
 if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
     BUSYBOX_IMG="${INTERNAL_DOCKER_REGISTRY}/busybox"
     TORPEDO_IMG="${INTERNAL_DOCKER_REGISTRY}/${TORPEDO_IMG}"
 fi
 
-kubectl create configmap cloud-config --from-file=/config/cloud-json
+kubectl -n default create configmap cloud-config --from-file=/config/cloud-json
 
 # List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
 FROM_FILE=""
@@ -386,7 +402,7 @@ if [ -n "${KUBECONFIGS}" ]; then
        CLUSTER_CONFIGS="${CLUSTER_CONFIGS},`basename ${i}`"
      fi
   done
-  kubectl create configmap kubeconfigs ${FROM_FILE}
+  kubectl -n default create configmap kubeconfigs ${FROM_FILE}
 fi
 
 K8S_VENDOR_KEY=""
@@ -497,7 +513,7 @@ spec:
     args: [ "--trace",
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
-            "--poll-progress-after", "10m",
+            "--poll-progress-after", "20m",
             --junit-report=$JUNIT_REPORT_PATH,
             "$FOCUS_ARG",
             "$SKIP_ARG",
@@ -534,6 +550,7 @@ spec:
             "--pure-volumes=$IS_PURE_VOLUMES",
             "--pure-fa-snapshot-restore-to-many-test=$PURE_FA_CLONE_MANY_TEST",
             "--pure-san-type=$PURE_SAN_TYPE",
+            "--pure-fada-pod=$PURE_FADA_POD",
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "--px-runtime-opts=$PX_RUNTIME_OPTS",
@@ -568,6 +585,7 @@ spec:
             "--torpedo-job-name=$TORPEDO_JOB_NAME",
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
+            "--fa-secret=${FA_SECRET}",
             "$APP_DESTROY_TIMEOUT_ARG",
             "$SCALE_APP_TIMEOUT_ARG",
     ]
@@ -586,6 +604,8 @@ spec:
       value: "${TORPEDO_SSH_PASSWORD}"
     - name: TORPEDO_SSH_KEY
       value: "${TORPEDO_SSH_KEY}"
+    - name: AZURE_ENDPOINT
+      value: "${AZURE_ENDPOINT}"
     - name: AZURE_TENANT_ID
       value: "${AZURE_TENANTID}"
     - name: VOLUME_PROVIDER
@@ -598,10 +618,10 @@ spec:
       value: "${AZURE_CLIENTSECRET}"
     - name: AZURE_ACCOUNT_NAME
       value: "${AZURE_ACCOUNT_NAME}"
-    - name: SOURCE_RKE_TOKEN
-      value: "${SOURCE_RKE_TOKEN}"
-    - name: DESTINATION_RKE_TOKEN
-      value: "${DESTINATION_RKE_TOKEN}"
+    - name: RANCHER_TOKEN
+      value: "${RANCHER_TOKEN}"
+    - name: RANCHER_URL
+      value: "${RANCHER_URL}"
     - name: AZURE_ACCOUNT_KEY
       value: "${AZURE_ACCOUNT_KEY}"
     - name: AZURE_SUBSCRIPTION_ID
@@ -702,8 +722,16 @@ spec:
       value: "${TARGET_CLUSTER_NAME}"
     - name: PX_ORACLE_user_ocid
       value: "${PX_ORACLE_user_ocid}"
+    - name: PX_ORACLE_compartment_id
+      value: "${PX_ORACLE_compartment_id}"
+    - name: PX_ORACLE_cluster_name
+      value: "${PX_ORACLE_cluster_name}"
     - name: PX_ORACLE_fingerprint
       value: "${PX_ORACLE_fingerprint}"
+    - name: PX_ORACLE_cluster_region
+      value: "${PX_ORACLE_cluster_region}"
+    - name: PX_ORACLE_tenancy
+      value: "${PX_ORACLE_tenancy}"
     - name: PX_ORACLE_private_key_path
       value: "${ORACLE_API_KEY}"
     - name: INSTANCE_GROUP
@@ -770,12 +798,79 @@ spec:
       value: "${IKS_PX_WORKERPOOL_NAME}"
     - name: IKS_CLUSTER_REGION
       value: "${IKS_CLUSTER_REGION}"
+    - name: LONGEVITY_UPGRADE_EXECUTION_THRESHOLD
+      value: "${LONGEVITY_UPGRADE_EXECUTION_THRESHOLD}"
+    - name: GKE_UPGRADE_STRATEGY
+      value: "${GKE_UPGRADE_STRATEGY}"
+    - name: GKE_SURGE_VALUE
+      value: "${GKE_SURGE_VALUE}"
+    - name: GOOGLE_APPLICATION_CREDENTIALS
+      value: "${GOOGLE_APPLICATION_CREDENTIALS}"
+    - name: TOGGLE_PURE_MGMT_IP
+      value: "${TOGGLE_PURE_MGMT_IP}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
 
 
 EOF
+
+if [ "${RUN_GINKGO_COMMAND}" = "true" ]; then
+    torpedo_pod_command="ginkgo"
+    torpedo_pod_args=$(yq e '.spec.containers[] | select(.name == "torpedo") | .args[]' torpedo.yaml | sed 's/,$//')
+
+	# This code removes the comma if the line ends with it.
+	# If the line is an empty string, it is quoted.
+	# Otherwise, the line is printed normally.
+    formatted_torpedo_pod_args=$(echo "$torpedo_pod_args" | awk '{
+        if ($0 ~ /,$/) {
+            gsub(/,$/, "", $0);
+            printf "%s ", $0;
+        } else {
+            if ($0 == "") {
+                printf "\"\" ";
+            } else {
+                printf "%s ", $0;
+            }
+        }
+    }')
+
+    torpedo_pod_ginkgo_command="$torpedo_pod_command $formatted_torpedo_pod_args"
+    echo "Formatted Ginkgo Command: $torpedo_pod_ginkgo_command"
+
+    # This code skips a flag followed by an empty string ("") if the next token is another flag or if it is the end of the command.
+    # This is necessary because Torpedo does not handle empty strings as expected.
+    # Example: In the input ginkgo --trace --timeout "" --fail-fast ... --fa-secret ""
+    # --timeout "" is skipped because it is immediately followed by another flag --fail-fast
+    # --fa-secret "" is also skipped because it is the last token and followed by no other arguments.
+    cleaned_torpedo_pod_ginkgo_command=$(echo "$torpedo_pod_ginkgo_command" | awk '
+	{
+	   output = "";
+	   i = 1;
+	   while (i <= NF) {
+		   if ($(i) ~ /^--/ && $(i+1) == "\"\"") {
+			   if (i+2 <= NF && $(i+2) ~ /^--/) {
+				   i += 2;
+				   continue;
+			   } else if (i+2 > NF) {
+				   i += 2;
+				   continue;
+			   }
+		   }
+		   output = output (output ? " " : "") $(i);
+		   i++;
+	   }
+	   print output;
+	}')
+    echo "Cleaned Ginkgo Command: $cleaned_torpedo_pod_ginkgo_command"
+
+    $cleaned_torpedo_pod_ginkgo_command
+    exit $?
+fi
+
+if [ -z "${ANTHOS_HOST_PATH}" ]; then
+  sed -i  '/GOOGLE_APPLICATION_CREDENTIALS/, +1d' torpedo.yaml
+fi 
 
 # If these are passed, we will create a docker config secret to use to pull images
 if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
@@ -799,13 +894,13 @@ fi
 cat torpedo.yaml
 
 echo "Deploying torpedo pod..."
-kubectl apply -f torpedo.yaml
+kubectl -n default apply -f torpedo.yaml
 
 echo "Waiting for torpedo to start running"
 
 function describe_pod_then_exit {
   echo "Pod description:"
-  kubectl describe pod torpedo
+  kubectl -n default describe pod torpedo
   exit 1
 }
 
@@ -813,13 +908,13 @@ function terminate_pod_then_exit {
     echo "Terminating Ginkgo test in Torpedo pod..."
     # Fetch the PID of the Ginkgo test process
     local test_pid
-    test_pid=$(kubectl exec torpedo -- pgrep -f 'torpedo/bin')
+    test_pid=$(kubectl -n default exec torpedo -- pgrep -f 'torpedo/bin')
     if [ "$test_pid" ]; then
         # Using SIGKILL instead of SIGTERM to immediately stop the process.
         # SIGTERM would allow Ginkgo to run AfterSuite and generate reports,
         # but the intention here is to stop the process immediately.
         echo "Sending SIGKILL to terminate Ginkgo test process with PID: $test_pid"
-        kubectl exec torpedo -- kill -SIGKILL "$test_pid"
+        kubectl -n default exec torpedo -- kill -SIGKILL "$test_pid"
     fi
     exit 1
 }
@@ -832,7 +927,7 @@ trap terminate_pod_then_exit SIGTERM
     first_iteration=true
     for i in $(seq 1 900); do
         echo "Iteration: $i"
-        state=$(kubectl get pod torpedo | grep -v NAME | awk '{print $3}')
+        state=$(kubectl -n default get pod torpedo | grep -v NAME | awk '{print $3}')
 
         if [ "$state" == "Error" ]; then
             echo "Error: Torpedo finished with $state state"
@@ -841,11 +936,11 @@ trap terminate_pod_then_exit SIGTERM
             # For the first iteration, display all logs. Later, only from 1 minute ago
             if [ "$first_iteration" = true ]; then
                 echo "Logs from first iteration"
-                kubectl logs -f torpedo
+                kubectl -n default logs -f torpedo
                 first_iteration=false
             else
                 echo "Logs from iteration: $i"
-                kubectl logs -f --since=1m torpedo
+                kubectl -n default logs -f --since=1m torpedo
             fi
         elif [ "$state" == "Completed" ]; then
             echo "Success: Torpedo finished with $state state"

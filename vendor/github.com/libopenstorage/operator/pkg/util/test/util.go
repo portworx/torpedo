@@ -7,8 +7,10 @@ import (
 	"crypto/rand"
 	cryptoTls "crypto/tls"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -18,6 +20,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,6 +40,7 @@ import (
 	k8serrors "github.com/portworx/sched-ops/k8s/errors"
 	openshiftops "github.com/portworx/sched-ops/k8s/openshift"
 	operatorops "github.com/portworx/sched-ops/k8s/operator"
+	policyops "github.com/portworx/sched-ops/k8s/policy"
 	prometheusops "github.com/portworx/sched-ops/k8s/prometheus"
 	rbacops "github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/task"
@@ -112,10 +116,13 @@ const (
 	// PxOperatorMasterVersion is a tag for PX Operator master version
 	PxOperatorMasterVersion = "99.9.9"
 
-	// AksPVCControllerSecurePort is the PVC controller secure port.
-	AksPVCControllerSecurePort = "10261"
+	// CustomPVCControllerSecurePort is the PVC controller secure port.
+	CustomPVCControllerSecurePort = "10261"
 
 	pxAnnotationPrefix = "portworx.io"
+
+	// PvcControllerAnnotation annotation indicating whether to deploy a PVC controller
+	PvcControllerAnnotation = pxAnnotationPrefix + "/pvc-controller"
 
 	// TelemetryCertName is name of the telemetry cert.
 	TelemetryCertName = "pure-telemetry-certs"
@@ -137,14 +144,15 @@ const (
 	AnnotationIsPKS = pxAnnotationPrefix + "/is-pks"
 
 	// Telemetry default params
-	productionArcusLocation         = "external"
-	productionArcusRestProxyURL     = "rest.cloud-support.purestorage.com"
-	productionArcusRegisterProxyURL = "register.cloud-support.purestorage.com"
-	stagingArcusLocation            = "internal"
-	stagingArcusRestProxyURL        = "rest.staging-cloud-support.purestorage.com"
-	stagingArcusRegisterProxyURL    = "register.staging-cloud-support.purestorage.com"
-	arcusPingInterval               = 6 * time.Second
-	arcusPingRetry                  = 5
+	productionArcusLocation           = "external"
+	productionArcusRestProxyURL       = "rest.cloud-support.purestorage.com"
+	productionArcusRegisterProxyURL   = "register.cloud-support.purestorage.com"
+	stagingArcusLocation              = "internal"
+	stagingArcusRestProxyURL          = "rest.staging-cloud-support.purestorage.com"
+	stagingArcusRegisterProxyURL      = "register.staging-cloud-support.purestorage.com"
+	arcusPingInterval                 = 6 * time.Second
+	arcusPingRetry                    = 5
+	pxTelemetryPhonehomeConfigmapName = "px-telemetry-phonehome"
 
 	defaultOcpClusterCheckTimeout  = 15 * time.Minute
 	defaultOcpClusterCheckInterval = 1 * time.Minute
@@ -158,6 +166,9 @@ const (
 
 	defaultTelemetryInPxctlValidationTimeout  = 20 * time.Minute
 	defaultTelemetryInPxctlValidationInterval = 30 * time.Second
+
+	defaultTelemetryPortValidationTimeout  = 2 * time.Minute
+	defaultTelemetryPortValidationInterval = 10 * time.Second
 
 	defaultStorageNodesValidationTimeout  = 30 * time.Minute
 	defaultStorageNodesValidationInterval = 30 * time.Second
@@ -174,6 +185,17 @@ const (
 	defaultRunCmdInPxPodTimeout  = 25 * time.Second
 	defaultRunCmdInPxPodInterval = 5 * time.Second
 
+	defaultCheckFreshInstallTimeout  = 120 * time.Second
+	defaultCheckFreshInstallInterval = 5 * time.Second
+
+	// Node Wiper constants
+	defaultNodeWiperValidationTimeout  = 2 * time.Minute
+	defaultNodeWiperValidationInterval = 5 * time.Second
+	// this is required to set as portworx package is not exporting the default image
+	defaultNodeWiperImage   = "portworx/px-node-wiper:2.13.2"
+	pxVersionsConfigmapName = "px-versions"
+	VersionConfigMapKey     = "versions"
+
 	etcHostsFile       = "/etc/hosts"
 	tempEtcHostsMarker = "### px-operator unit-test"
 )
@@ -183,21 +205,31 @@ const (
 var TestSpecPath = "testspec"
 
 var (
-	opVer1_9_1, _                     = version.NewVersion("1.9.1-")
-	opVer1_10, _                      = version.NewVersion("1.10.0-")
-	opVer23_3, _                      = version.NewVersion("23.3.0-")
-	opVer23_8, _                      = version.NewVersion("23.8.0-")
-	opVer23_5, _                      = version.NewVersion("23.5.0-")
-	opVer23_5_1, _                    = version.NewVersion("23.5.1-")
-	opVer23_7, _                      = version.NewVersion("23.7.0-")
-	minOpVersionForKubeSchedConfig, _ = version.NewVersion("1.10.2-")
-	OpVer23_10_3, _                   = version.NewVersion("23.10.3-")
+	// opVer1_5_0, _   = version.NewVersion("1.5.0-")
+	opVer1_9_1, _   = version.NewVersion("1.9.1-")
+	opVer1_10, _    = version.NewVersion("1.10.0-")
+	opVer23_3, _    = version.NewVersion("23.3.0-")
+	opVer23_5, _    = version.NewVersion("23.5.0-")
+	opVer23_5_1, _  = version.NewVersion("23.5.1-")
+	opVer23_7, _    = version.NewVersion("23.7.0-")
+	opVer23_8, _    = version.NewVersion("23.8.0-")
+	opVer23_10, _   = version.NewVersion("23.10.0-")
+	opVer23_10_2, _ = version.NewVersion("23.10.2-")
+	OpVer23_10_3, _ = version.NewVersion("23.10.3-")
+	opVer24_1_0, _  = version.NewVersion("24.1.0-")
 
+	minOpVersionForKubeSchedConfig, _ = version.NewVersion("1.10.2-")
+	minimumCcmGoVersionCO, _          = version.NewVersion("1.2.3")
+	minimumPxVersionCO, _             = version.NewVersion("3.2")
+
+	// PodDisruptionBudget is only supported in starting with k8s v1.21.0+
+	minSupportedK8sVersionForPdb, _ = version.NewVersion("1.21.0")
 	// OCP Dynamic Plugin is only supported in starting with OCP 4.12+ which is k8s v1.25.0+
 	minK8sVersionForDynamicPlugin, _ = version.NewVersion("1.25.0")
 
-	pxVer3_0, _  = version.NewVersion("3.0")
 	pxVer2_13, _ = version.NewVersion("2.13")
+	pxVer3_0, _  = version.NewVersion("3.0")
+	pxVer3_1, _  = version.NewVersion("3.1")
 
 	// minimumPxVersionCCMJAVA minimum PX version to install ccm-java
 	minimumPxVersionCCMJAVA, _ = version.NewVersion("2.8")
@@ -208,6 +240,12 @@ var (
 // MockDriver creates a mock storage driver
 func MockDriver(mockCtrl *gomock.Controller) *mock.MockDriver {
 	return mock.NewMockDriver(mockCtrl)
+}
+
+func NoopKubevirtManager(mockCtrl *gomock.Controller) *mock.MockKubevirtManager {
+	kubevirtMock := mock.NewMockKubevirtManager(mockCtrl)
+	kubevirtMock.EXPECT().ClusterHasVMPods().Return(false, nil).AnyTimes()
+	return kubevirtMock
 }
 
 // FakeK8sClient creates a fake controller-runtime Kubernetes client. Also
@@ -545,6 +583,13 @@ func UninstallStorageCluster(cluster *corev1.StorageCluster, kubeconfig ...strin
 			return nil, true, err
 		}
 
+		if cluster.Spec.DeleteStrategy.Type == corev1.UninstallAndWipeStorageClusterStrategyType {
+			if err := validateNodeWiper(cluster, defaultNodeWiperValidationTimeout, defaultNodeWiperValidationInterval, false); err != nil {
+				logrus.Errorf("Failed to validate node wiper: Err: [%v]", err)
+				return nil, true, err
+			}
+		}
+
 		return nil, false, nil
 	}
 
@@ -553,6 +598,169 @@ func UninstallStorageCluster(cluster *corev1.StorageCluster, kubeconfig ...strin
 	}
 
 	return nil
+}
+
+func validateNodeWiper(cluster *corev1.StorageCluster, timeout time.Duration, interval time.Duration, checkRunningState bool) error {
+
+	logrus.Debugf("Validating NodeWiper pods")
+	labels := map[string]string{}
+	labels["name"] = "px-node-wiper"
+
+	// Get storage node list
+	expectedPxNodeList, err := GetExpectedPxNodeList(cluster)
+	if err != nil {
+		return fmt.Errorf("failed to get expected storage node list: Err: [%v]", err)
+	}
+	expectedPxNodeNameList := ConvertNodeListToNodeNameList(expectedPxNodeList)
+
+	// Validate the pods are running & matches count with storage nodes
+	f := func() (interface{}, bool, error) {
+		pods, err := coreops.Instance().GetPods(cluster.Namespace, labels)
+		if err != nil || pods == nil {
+			return nil, true, fmt.Errorf("failed to get NodeWiper pods for StorageCluster [%s]: Err: [%v]", cluster.Name, err)
+		}
+		if len(pods.Items) != len(expectedPxNodeNameList) {
+			return nil, true, fmt.Errorf("expected pods: [%v]. actual pods: Err: [%v]", len(expectedPxNodeNameList), len(pods.Items))
+		}
+		logrus.Debugf("NodeWiper pod count matches storageNodes: [%d]", len(pods.Items))
+		return nil, false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(f, timeout, interval); err != nil {
+		return fmt.Errorf("failed to match NodeWiper pod count for StorageCluster [%s]: Err: [%v]", cluster.Name, err)
+	}
+
+	pods, err := coreops.Instance().GetPods(cluster.Namespace, labels)
+	if err != nil {
+		return fmt.Errorf("failed to get NodeWiper pods for StorageCluster [%s]: Err: [%v]", cluster.Name, err)
+	}
+	if checkRunningState {
+		var podsReady []string
+		var podsNotReady []string
+		var wg sync.WaitGroup
+
+		for _, pod := range pods.Items {
+			wg.Add(1)
+			go func(p v1.Pod) {
+				defer wg.Done()
+				f := func() (interface{}, bool, error) {
+					logrus.Debugf("NodeWiper pod [%s] ; State: [%s]", p.Name, p.Status.Phase)
+					if !coreops.Instance().IsPodRunning(p) {
+						return nil, true, fmt.Errorf("err: NodeWiper pod [%s] is not running yet", p.Name)
+					}
+					return nil, false, nil
+				}
+				if _, err := task.DoRetryWithTimeout(f, timeout, interval/2); err != nil {
+					logrus.Errorf("err: NodeWiper pod [%s] timed out to be ready", p.Name)
+					podsNotReady = append(podsNotReady, p.Name)
+				} else {
+					logrus.Infof("NodeWiper pod [%s] is Running!", p.Name)
+					podsReady = append(podsReady, p.Name)
+				}
+			}(pod)
+		}
+		wg.Wait()
+
+		if len(podsReady) != len(expectedPxNodeNameList) {
+			return fmt.Errorf("failed to get following NodeWiper pods ready on storageNodes: Err: [%s]", podsNotReady)
+		}
+		logrus.Debugf("All NodeWiper pods are ready on storageNodes: [%s]", podsReady)
+	}
+
+	// Validate images are correct
+	opVersion, err := GetPxOperatorVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get operator version, Err: %v", err)
+	}
+	k8sVersion, err := GetK8SVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get k8s version, Err: %v", err)
+	}
+
+	// check if px-versions config-map exists
+	var pxImageList map[string]string
+	config, _ := coreops.Instance().GetConfigMap(pxVersionsConfigmapName, cluster.Namespace)
+	if config != nil {
+		logrus.Debugf("px-versions config-map found, fetching images from config-map")
+		pxImageList, err = GetImagesFromConfigMap(config)
+		if err != nil {
+			return fmt.Errorf("failed to get images from config-map: Err: [%v]", err)
+		}
+	} else {
+		pxSpecURL := reconstructSpecURL(cluster)
+		pxImageList, err = GetImagesFromVersionURL(pxSpecURL, k8sVersion)
+		if err != nil {
+			return fmt.Errorf("failed to get images from version URL: Err: [%v]", err)
+		}
+	}
+
+	pxVersion := GetPortworxVersion(cluster)
+
+	var nodeWiperImage string
+	if opVersion.GreaterThanOrEqual(opVer23_10_2) {
+		if pxVersion.GreaterThanOrEqual(pxVer3_1) {
+			nodeWiperImage = cluster.Spec.Image
+		} else {
+			nodeWiperImage = pxImageList["nodeWiper"]
+		}
+	} else if opVersion.LessThan(opVer23_10_2) {
+		if pxVersion.LessThan(pxVer3_1) {
+			nodeWiperImage = pxImageList["nodeWiper"]
+		} else {
+			nodeWiperImage = defaultNodeWiperImage
+		}
+	}
+	logrus.Debugf("Expected nodeWiper image: [%s]", nodeWiperImage)
+	err = validateContainerImageInsidePods(cluster, nodeWiperImage, "px-node-wiper", pods)
+	if err != nil {
+		return fmt.Errorf("failed to validate NodeWiper image: Err: [%v]", err)
+	}
+	logrus.Debugf("NodeWiper images match!")
+
+	return nil
+}
+
+func GetImagesFromConfigMap(config *v1.ConfigMap) (map[string]string, error) {
+	pxImageList := map[string]string{}
+	versionData, ok := config.Data[VersionConfigMapKey]
+	if !ok {
+		// If the exact key does not exist, just take the first one
+		// as only one key is expected
+		for _, value := range config.Data {
+			versionData = value
+			break
+		}
+	}
+	// We try to look for key:value pairs in the configmap data
+	// If the value is not found, we ignore it
+	for _, line := range strings.Split(versionData, "\n") {
+		splitLine := strings.SplitN(strings.TrimSpace(line), ":", 2)
+		if len(splitLine) != 2 {
+			continue
+		}
+		key, value := splitLine[0], splitLine[1]
+		pxImageList[key] = strings.TrimSpace(value)
+	}
+
+	return pxImageList, nil
+}
+
+func reconstructSpecURL(cluster *corev1.StorageCluster) string {
+	var pxUrl string
+	pxImage := cluster.Spec.Image
+	pxVersionStr := strings.Split(pxImage, ":")[len(strings.Split(pxImage, ":"))-1]
+	_, err := version.NewSemver(pxVersionStr)
+	if err != nil {
+		logrus.WithError(err).Warnf("Invalid PX version [%s] extracted from image name", pxVersionStr)
+		for _, env := range cluster.Spec.Env {
+			if env.Name == PxReleaseManifestURLEnvVarName {
+				pxUrl = strings.TrimSuffix(env.Value, "/version")
+			}
+		}
+	} else {
+		pxUrl = fmt.Sprintf("https://install.portworx.com/%s", pxVersionStr)
+	}
+	logrus.Debugf("Reconstructed PX spec URL: [%s]", pxUrl)
+	return pxUrl
 }
 
 func validateTelemetrySecret(cluster *corev1.StorageCluster, timeout, interval time.Duration, force bool) error {
@@ -582,7 +790,10 @@ func validateTelemetrySecret(cluster *corev1.StorageCluster, timeout, interval t
 			}
 			// Validate secret owner should not have owner reference
 			// Do not validate reference for PX Operators below 1.10, as this was introduced in 1.10+, see PWX-26326 for more info
-			opVersion, _ := GetPxOperatorVersion()
+			opVersion, err := GetPxOperatorVersion()
+			if err != nil {
+				return nil, false, fmt.Errorf("failed to get operator version, Err: %v", err)
+			}
 			if opVersion.GreaterThanOrEqual(opVer1_10) {
 				for _, reference := range secret.OwnerReferences {
 					if reference.UID == ownerRef.UID {
@@ -758,9 +969,17 @@ func ValidateStorageCluster(
 		os.Setenv("KUBECONFIG", kubeconfig[0])
 	}
 
+	freshInstall, err := IsThisFreshInstall(clusterSpec, defaultCheckFreshInstallTimeout, defaultCheckFreshInstallInterval)
+	if err != nil {
+		return err
+	}
+
+	if freshInstall {
+		logrus.Debug("This is fresh PX installation!")
+	}
+
 	// Validate StorageCluster
 	var liveCluster *corev1.StorageCluster
-	var err error
 	if shouldStartSuccessfully {
 		liveCluster, err = ValidateStorageClusterIsOnline(clusterSpec, timeout, interval)
 		if err != nil {
@@ -815,6 +1034,12 @@ func ValidateStorageCluster(
 		return err
 	}
 
+	// Validate PX pods annotation
+	checkPxPodAnnotationsTimeout := 1 * time.Hour // NOTE: Temporary large timeout until PWX-36555 is resolved
+	if err = validatePxPodsAnnotations(liveCluster, checkPxPodAnnotationsTimeout, interval); err != nil {
+		return err
+	}
+
 	// Validate components
 	if err = validateComponents(pxImageList, clusterSpec, liveCluster, timeout, interval); err != nil {
 		return err
@@ -826,6 +1051,94 @@ func ValidateStorageCluster(
 	}
 
 	return nil
+}
+
+func validatePxPodsAnnotations(cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	logrus.Debug("Validate PX pods..")
+	opVersion, err := GetPxOperatorVersion()
+	if err != nil {
+		return err
+	}
+	if opVersion.LessThan(opVer23_10) {
+		logrus.Warnf("Skipping PX pods annotation validation for operator version [%s]", opVersion)
+		return nil
+	}
+	t := func() (interface{}, bool, error) {
+		// Get list of PX pods
+		pods, err := coreops.Instance().GetPodsByOwner(cluster.UID, cluster.Namespace)
+		if err != nil || pods == nil {
+			return "", true, fmt.Errorf("failed to get pods for StorageCluster [%s/%s]. Err: %v",
+				cluster.Namespace, cluster.Name, err)
+		}
+
+		for _, pod := range pods {
+			storageNode, err := operatorops.Instance().GetStorageNode(pod.Spec.NodeName, pod.Namespace)
+			if err != nil {
+				return nil, true, fmt.Errorf("failed to get StorageNode [%s] for PX pod [%s], Err: %v", pod.Spec.NodeName, pod.Name, err)
+			}
+
+			safeToEvictAnnotationName := "cluster-autoscaler.kubernetes.io/safe-to-evict"
+			safeToEvictValue, exists := pod.Annotations[safeToEvictAnnotationName]
+			if !exists {
+				return nil, true, fmt.Errorf("px pod [%s] is missing expected annnotation [%s]", pod.Name, safeToEvictAnnotationName)
+			}
+			safeToEvict, err := strconv.ParseBool(safeToEvictValue)
+			if err != nil {
+				return nil, true, fmt.Errorf("failed to convert [%v] to bool, Err: %v", safeToEvictValue, err)
+			}
+
+			// This should validate the annotation cluster-autoscaler.kubernetes.io/safe-to-evict value,
+			// when node is Storage, annotation value should be set to false,
+			// when node is Storageless, annotation value should be set to true
+			if storageNode.Status.NodeAttributes.Storage != nil && *storageNode.Status.NodeAttributes.Storage != !safeToEvict {
+				return nil, true, fmt.Errorf("failed to validate PX pod [%s] annotation [%s] value [%v], storageNode storage value [%v]", pod.Name, safeToEvictAnnotationName, safeToEvict, *storageNode.Status.NodeAttributes.Storage)
+			}
+			logrus.Debugf("PX pod [%s] belongs to node [%s], storage [%v] and has annotation [%s: %s]", pod.Name, storageNode.Name, *storageNode.Status.NodeAttributes.Storage, safeToEvictAnnotationName, safeToEvictValue)
+		}
+		return nil, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+
+	logrus.Debug("Successfully validated PX pods")
+	return nil
+}
+
+// IsThisFreshInstall checks if its fresh install or not and returns true or false
+func IsThisFreshInstall(clusterSpec *corev1.StorageCluster, timeout, interval time.Duration) (bool, error) {
+	var isFreshInstall bool
+	t := func() (interface{}, bool, error) {
+		cluster, err := operatorops.Instance().GetStorageCluster(clusterSpec.Name, clusterSpec.Namespace)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get StorageCluster [%s] in [%s], Err: %v", clusterSpec.Name, cluster.Namespace, err)
+		}
+		return cluster, false, nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, timeout, interval)
+	if err != nil {
+		return isFreshInstall, fmt.Errorf("failed to determine if this is fresh install or not, Err: %v", err)
+	}
+	cluster := out.(*corev1.StorageCluster)
+
+	// Check if PX install if fresh
+	isFreshInstall = isThisFreshInstall(cluster)
+	if !isFreshInstall {
+		logrus.Debug("This is not a fresh PX installation!")
+	}
+	return isFreshInstall, nil
+}
+
+// IsThisFreshInstall checks whether it's a fresh Portworx install, copied this function her due to import cycle not allowed
+func isThisFreshInstall(cluster *corev1.StorageCluster) bool {
+	// To handle failures during fresh install e.g. validation failures,
+	// extra check for px runtime states is added here to avoid unexpected behaviors
+	return cluster.Status.Phase == "" ||
+		cluster.Status.Phase == string(corev1.ClusterStateInit) ||
+		(cluster.Status.Phase == string(corev1.ClusterStateDegraded) &&
+			util.GetStorageClusterCondition(cluster, "Portworx", corev1.ClusterConditionTypeRuntimeState) == nil)
 }
 
 // ValidateClusterProviderHealth validates health of the cluster provider environment
@@ -1497,7 +1810,7 @@ func GetExpectedPxNodeList(cluster *corev1.StorageCluster) ([]v1.Node, error) {
 			NodeAffinity: cluster.Spec.Placement.NodeAffinity.DeepCopy(),
 		}
 	} else {
-		if IsK3sCluster() || IsPxDeployedOnMaster(cluster) {
+		if IsK3sOrRke2Cluster() || IsPxDeployedOnMaster(cluster) {
 			runOnMaster = true
 		}
 
@@ -1576,8 +1889,8 @@ func GetFullVersion() (*version.Version, string, error) {
 	return ver, "", err
 }
 
-// IsK3sCluster returns true or false, based on this kubernetes cluster is k3s or not
-func IsK3sCluster() bool {
+// IsK3sOrRke2Cluster returns true or false, based on this kubernetes cluster is k3s or rke2 or not
+func IsK3sOrRke2Cluster() bool {
 	// Get k8s version ext
 	_, ext, _ := GetFullVersion()
 
@@ -1631,6 +1944,11 @@ func validateComponents(pxImageList map[string]string, originalClusterSpec, clus
 
 	// Validate KVDB
 	if err := ValidateKvdb(pxImageList, cluster, timeout, interval); err != nil {
+		return err
+	}
+
+	// Validate Poddisruptionbudget
+	if err := ValidatePodDisruptionBudget(cluster, timeout, interval); err != nil {
 		return err
 	}
 
@@ -1811,7 +2129,10 @@ func ValidateInternalKvdbEnabled(pxImageList map[string]string, cluster *corev1.
 
 		// Figure out what default registry to use for kvdb image, based on PX Operator version
 		kvdbImageName := "k8s.gcr.io/pause"
-		opVersion, _ := GetPxOperatorVersion()
+		opVersion, err := GetPxOperatorVersion()
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get operator version, Err: %v", err)
+		}
 		if opVersion.GreaterThanOrEqual(opVer23_3) {
 			kvdbImageName = "registry.k8s.io/pause"
 		}
@@ -1901,8 +2222,14 @@ func ValidatePvcController(pxImageList map[string]string, cluster *corev1.Storag
 		},
 	}
 
+	// Get PX Operator version
+	opVersion, err := GetPxOperatorVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get PX Operator version, Err: %v", err)
+	}
+
 	// Check if PVC Controller is enabled or disabled
-	if isPVCControllerEnabled(cluster) {
+	if isPVCControllerEnabled(cluster, opVersion) {
 		return ValidatePvcControllerEnabled(pvcControllerDp, cluster, timeout, interval)
 	}
 	return ValidatePvcControllerDisabled(pvcControllerDp, timeout, interval)
@@ -2125,7 +2452,10 @@ func ValidateStorkScheduler(pxImageList map[string]string, cluster *corev1.Stora
 
 	// Figure out what default registry to use for stork-scheduler image, based on PX Operator version
 	storkSchedulerImageName := "k8s.gcr.io/kube-scheduler-amd64"
-	opVersion, _ := GetPxOperatorVersion()
+	opVersion, err := GetPxOperatorVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get operator version, Err: %v", err)
+	}
 	if opVersion.GreaterThanOrEqual(opVer23_3) {
 		storkSchedulerImageName = "registry.k8s.io/kube-scheduler-amd64"
 	}
@@ -2815,6 +3145,7 @@ func validatePvcControllerPorts(cluster *corev1.StorageCluster, pvcControllerDep
 			return nil, true, fmt.Errorf("failed to get %s deployment pods, Err: %v", pvcControllerDeployment.Name, err)
 		}
 
+		opVersion, err := GetPxOperatorVersion()
 		numberOfPods := 0
 		// Go through every PVC Controller pod and look for --port and --secure-port commands in portworx-pvc-controller-manager pods and match it to the pvc-controller-port and pvc-controller-secure-port passed in StorageCluster annotations
 		for _, pod := range pods {
@@ -2825,8 +3156,8 @@ func validatePvcControllerPorts(cluster *corev1.StorageCluster, pvcControllerDep
 						for _, containerCommand := range container.Command {
 							if strings.Contains(containerCommand, "--secure-port") {
 								if len(pvcSecurePort) == 0 {
-									if isAKS(cluster) {
-										if strings.Split(containerCommand, "=")[1] != AksPVCControllerSecurePort {
+									if isAKS(cluster) || (err == nil && opVersion.GreaterThanOrEqual(opVer24_1_0) && IsK3sOrRke2Cluster()) {
+										if strings.Split(containerCommand, "=")[1] != CustomPVCControllerSecurePort {
 											return nil, true, fmt.Errorf("failed to validate secure-port, secure-port is missing in the PVC Controler pod %s", pod.Name)
 										}
 									} else {
@@ -3086,7 +3417,10 @@ func validateContainerImageInsidePods(cluster *corev1.StorageCluster, expectedIm
 	logrus.Infof("Validating image for [%s] container inside pod(s)", containerName)
 
 	// Get PX Operator version
-	opVersion, _ := GetPxOperatorVersion()
+	opVersion, err := GetPxOperatorVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get operator version, Err: %v", err)
+	}
 	if opVersion.GreaterThanOrEqual(opVer1_9_1) {
 		expectedImage = util.GetImageURN(cluster, expectedImage)
 	}
@@ -3176,7 +3510,7 @@ func ValidateSecurity(cluster *corev1.StorageCluster, previouslyEnabled bool, ti
 
 // ValidateSecurityEnabled validates PX Security components are enabled/running as expected
 func ValidateSecurityEnabled(cluster *corev1.StorageCluster, storkDp *appsv1.Deployment, timeout, interval time.Duration) error {
-	logrus.Info("Validate PX Security components are enabled")
+	logrus.Info("Validate PX Security components are enabled...")
 
 	t := func() (interface{}, bool, error) {
 		// Validate Stork ENV vars, if Stork is enabled
@@ -3219,12 +3553,13 @@ func ValidateSecurityEnabled(cluster *corev1.StorageCluster, storkDp *appsv1.Dep
 		return fmt.Errorf("failed to validate PX Auth is enabled on PX nodes, Err: %v", err)
 	}
 
+	logrus.Info("Successfully validated PX Security components are enabled")
 	return nil
 }
 
 // ValidateSecurityDisabled validates PX Security components are disabled/uninstalled as expected
 func ValidateSecurityDisabled(cluster *corev1.StorageCluster, storkDp *appsv1.Deployment, previouslyEnabled bool, timeout, interval time.Duration) error {
-	logrus.Info("Validate PX Security components are not disabled")
+	logrus.Info("Validate PX Security components are disabled/uninstalled...")
 
 	t := func() (interface{}, bool, error) {
 		// Validate Stork ENV vars, if Stork is enabled
@@ -3282,6 +3617,7 @@ func ValidateSecurityDisabled(cluster *corev1.StorageCluster, storkDp *appsv1.De
 		return fmt.Errorf("failed to validate PX Auth is disabled on PX nodes, Err: %v", err)
 	}
 
+	logrus.Info("Successfully validated PX Security components are disabled/uninstalled")
 	return nil
 }
 
@@ -3443,7 +3779,7 @@ func ValidatePrometheus(pxImageList map[string]string, cluster *corev1.StorageCl
 func ValidateGrafana(pxImageList map[string]string, cluster *corev1.StorageCluster) error {
 	opVersion, err := GetPxOperatorVersion()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get operator version, Err: %v", err)
 	}
 	if opVersion.LessThan(opVer23_8) {
 		logrus.Infof("Skipping grafana validation for operation version: [%s]", opVersion.String())
@@ -3606,7 +3942,7 @@ func ValidateTelemetry(pxImageList map[string]string, originalClusterSpec, clust
 	logrus.Infof("PX Version: [%s]", pxVersion.String())
 	opVersion, err := GetPxOperatorVersion()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get operator version, Err: %v", err)
 	}
 	logrus.Infof("PX Operator version: [%s]", opVersion.String())
 
@@ -3662,7 +3998,11 @@ func shouldTelemetryBeEnabled(originalClusterSpec, cluster *corev1.StorageCluste
 	logrus.Info("Check PX and PX Operator versions to determine which Telemetry version to validate against..")
 	pxVersion := GetPortworxVersion(cluster)
 	logrus.Infof("PX Version: [%s]", pxVersion.String())
-	opVersion, _ := GetPxOperatorVersion()
+	opVersion, err := GetPxOperatorVersion()
+	if err != nil {
+		logrus.Errorf("failed to get operator version, Err: %v", err)
+		return false
+	}
 	logrus.Infof("PX Operator version: [%s]", opVersion.String())
 
 	// Check if Telemetry is enabled or disabled in the original spec
@@ -4160,6 +4500,116 @@ func ValidateAlertManagerDisabled(pxImageList map[string]string, cluster *corev1
 	return nil
 }
 
+// This validates the telemetry container orchestrator usage.  Container orchestrator manages the telemetry registration certificate secret.
+// The container orchestrator is a server running in PX which handles gprc requests to save/retrieve/delete the registration certificate secret.
+func ValidateTelemetryContainerOrchestrator(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	const (
+		OsdBaseLogDir = "/var/lib/osd/log"
+		coStateDir    = OsdBaseLogDir + "/coState"
+	)
+
+	logrus.Infof("Validating telemetry container orchestrator usage...")
+
+	configMap, err := coreops.Instance().GetConfigMap("px-telemetry-register", cluster.Namespace)
+	if err != nil {
+		return err
+	}
+
+	logrus.Infof("Obtained px-telemetry-register configmap...")
+
+	isCOenabled := strings.Contains(configMap.Data["config_properties_px.yaml"], "certStoreType: \"kvstore\"")
+	if !isCOenabled {
+		return fmt.Errorf("telemetry container orchestrator 'certStoreType: kvstore' is expected to be set in 'px-telemetry-register' configmap")
+	}
+
+	logrus.Infof("Validated 'certStoreType: kvstore' configmap setting")
+
+	// Test validation is done by checking timestamp entries of when the container orchestrator operations were called (server start, secret set/get).
+	// The timestamps for secret set/get must be after the timestamp for the start.
+	labelSelector := map[string]string{"role": "px-telemetry-registration"}
+	nodeList, err := coreops.Instance().GetNodes()
+	if err != nil {
+		return err
+	}
+
+	logrus.Infof("find telemetry registration pod node and px pod on that node...")
+
+	var pxPod v1.Pod
+	for _, node := range nodeList.Items {
+		// Get telemetry registration pod
+		podList, err := coreops.Instance().GetPodsByNodeAndLabels(node.Name, cluster.Namespace, labelSelector)
+		if err != nil {
+			return err
+		}
+
+		if len(podList.Items) == 0 {
+			continue
+		}
+		tregPod := podList.Items[0]
+		logrus.Infof("Found telemetry registration pod [%s] on node [%s]", tregPod.Name, node.Name)
+		labelSelector = map[string]string{"name": "portworx"}
+		podList, err = coreops.Instance().GetPodsByNodeAndLabels(node.Name, cluster.Namespace, labelSelector)
+		if err != nil {
+			return err
+		}
+
+		if len(podList.Items) == 0 {
+			return fmt.Errorf("failed to find Portworx pod on telemetry registration node [%s]", node.Name)
+		}
+		pxPod = podList.Items[0]
+		logrus.Infof("Found PX pod [%s] on telemetry registration node [%s]", pxPod.Name, node.Name)
+		break
+	}
+
+	getCoStateTimeStamp := func(tsFileName string) (int64, error) {
+		tmData, err := runCmdInsidePxPod(&pxPod, "cat "+tsFileName, cluster.Namespace, false)
+		if err != nil {
+			return 0, err
+		}
+
+		tm, terr := strconv.ParseInt(string(tmData), 10, 64)
+		if terr != nil {
+			return 0, terr
+		}
+		return tm, nil
+	}
+
+	coStartTime, startErr := getCoStateTimeStamp(coStateDir + "/kvStart.ts")
+	if startErr != nil {
+		return fmt.Errorf("container orchestrator validated failed, error obtaining start time from costate file: %v", startErr)
+	}
+	logrus.Infof("container orchestrater server start time: %v", time.Unix(coStartTime, 0))
+
+	coSetTime, setErr := getCoStateTimeStamp(coStateDir + "/kvSet.ts")
+	coGetTime, getErr := getCoStateTimeStamp(coStateDir + "/kvGet.ts")
+
+	if setErr == nil {
+		// secret set time exists, check it
+		logrus.Infof("container orchestrater set time: %v\n", time.Unix(coSetTime, 0))
+		if coSetTime > coStartTime {
+			logrus.Infof("container orchestrator validated via set time")
+			return nil
+		}
+		setErr = fmt.Errorf("set time is less than start time, check for upgrade")
+		logrus.Infof("%s", setErr.Error())
+	}
+
+	if setErr != nil && getErr != nil {
+		// No secret handler timestamp exists
+		return fmt.Errorf("container orchestrator validated failed, error obtaining costate file: %v and %v", setErr, getErr)
+	}
+
+	// secret get time stamp exists, check it
+	logrus.Infof("container orchestrater get time: %v\n", time.Unix(coGetTime, 0))
+	if coGetTime < coStartTime {
+		return fmt.Errorf("container orchestrator validated failed, get time is less than start time")
+	}
+
+	logrus.Infof("container orchestrator validated via get time")
+
+	return nil
+}
+
 // ValidateTelemetryV2Enabled validates telemetry component is running as expected
 func ValidateTelemetryV2Enabled(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
 	logrus.Info("Validate Telemetry components are enabled")
@@ -4247,7 +4697,43 @@ func ValidateTelemetryV2Enabled(pxImageList map[string]string, cluster *corev1.S
 
 	// Validate Telemetry is Healthy in pxctl status
 	if err := validateTelemetryStatusInPxctl(true, cluster); err != nil {
+		// Check if the issue is with Telemetry ports
+		portErr := validateTelemetryPorts(cluster)
+		if portErr != nil {
+			err = fmt.Errorf("%v, might be due to Err: %v", err, portErr)
+		}
 		return fmt.Errorf("failed to validate that Telemetry is Healthy in pxctl status, Err: %v", err)
+	}
+
+	// Validate Telemetry ports
+	if err := validateTelemetryPorts(cluster); err != nil {
+		return err
+	}
+
+	// Validate registration certificate management via Container Orchestrator
+	ccmGoImage, ok := pxImageList["telemetry"]
+	if !ok {
+		return fmt.Errorf("failed to find image for telemetry")
+	}
+
+	ccmGoVersionStr := strings.Split(ccmGoImage, ":")[len(strings.Split(ccmGoImage, ":"))-1]
+	ccmGoVersion, err := version.NewSemver(ccmGoVersionStr)
+	if err != nil {
+		return fmt.Errorf("failed to find telemetry image version")
+	}
+
+	masterOpVersion, _ := version.NewVersion(PxOperatorMasterVersion)
+	opVersion, err := GetPxOperatorVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get operator version, Err: %v", err)
+	}
+	pxVersion := GetPortworxVersion(cluster)
+
+	// NOTE: These versions will need to be updated when we move the CO code to a release. Currently its bound to master branches
+	if opVersion.GreaterThanOrEqual(masterOpVersion) && pxVersion.GreaterThanOrEqual(minimumPxVersionCO) && ccmGoVersion.GreaterThanOrEqual(minimumCcmGoVersionCO) { // Validate the versions
+		if err := ValidateTelemetryContainerOrchestrator(pxImageList, cluster, timeout, interval); err != nil {
+			return err
+		}
 	}
 
 	logrus.Infof("All Telemetry components were successfully enabled/installed")
@@ -4318,9 +4804,126 @@ func validatePxAuthOnPxNodes(pxAuthShouldBeEnabled bool, cluster *corev1.Storage
 
 }
 
+// validateTelemetryPorts validates Telemetry ports
+func validateTelemetryPorts(cluster *corev1.StorageCluster) error {
+	logrus.Info("Validate Telemetry ports...")
+	telemetryPort, err := getTelemetryLogUploaderPortFromConfigMap(cluster.Namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get Telemetry port, Err: %v", err)
+	}
+
+	if err := validateTelemetryLogUploaderPortOnPxNodes(cluster, telemetryPort); err != nil {
+		return fmt.Errorf("failed to validate Telemetry ports, Err: %v", err)
+	}
+
+	logrus.Info("Successfully validate PX Telemetry ports")
+	return nil
+}
+
+// getTelemetryLogUploaderPortFromConfigMap gets PX Telemetry Phonehome Configmap object, parses port from ccm.properties data and returns it
+func getTelemetryLogUploaderPortFromConfigMap(namespace string) (string, error) {
+	logrus.Infof("Get PX Telemetry LogUploader port from [%s] ConfigMap in [%s] namespace...", pxTelemetryPhonehomeConfigmapName, namespace)
+
+	// Get configmap
+	TelemetryPhonehomeConfigmap, err := coreops.Instance().GetConfigMap(pxTelemetryPhonehomeConfigmapName, namespace)
+	if err != nil {
+		return "", fmt.Errorf("failed to get Telemetry ConfigMap [%s] in [%s] namespace, Err: %v", TelemetryPhonehomeConfigmap, namespace, err)
+	}
+
+	// Check if ccm.properties data exists
+	ccmPropertiesJSON, exists := TelemetryPhonehomeConfigmap.Data["ccm.properties"]
+	if !exists {
+		return "", fmt.Errorf("failed to find 'ccm.properties' in ConfigMap [%s] object Data", TelemetryPhonehomeConfigmap.Name)
+	}
+
+	// Unmarshal ccm.properties json
+	var ccmProperties map[string]interface{}
+	err = json.Unmarshal([]byte(ccmPropertiesJSON), &ccmProperties)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal ccm.properties data json object, Err: %v", err)
+	}
+
+	// Check if port exists
+	logUploaderPort, exists := ccmProperties["port"].(string)
+	if !exists {
+		return "", fmt.Errorf("failed to find 'port' in the ccm.properties")
+	}
+
+	if len(logUploaderPort) == 0 {
+		return "", fmt.Errorf("got empty port value from ccm.properties")
+	}
+
+	logrus.Infof("Got PX Telemetry LogUploader port [%s] from Configmap [%s] in [%s] namespace", logUploaderPort, TelemetryPhonehomeConfigmap.Name, namespace)
+	return logUploaderPort, nil
+}
+
+// validateTelemetryLogUploaderPortOnPxNodes validates port on each PX node from the pxctl status output to be same as expected port
+func validateTelemetryLogUploaderPortOnPxNodes(cluster *corev1.StorageCluster, expectedPort string) error {
+	listOptions := map[string]string{"name": "portworx"}
+	cmd := "PX_LOGLEVEL=debug pxctl status |& grep Setting"
+
+	logrus.Infof("Validate Telemetry LogUploader port on all PX nodes...")
+	t := func() (interface{}, bool, error) {
+		if cluster.Spec.Security != nil && cluster.Spec.Security.Enabled {
+			token, err := getSecurityAdminToken(cluster.Namespace)
+			if err != nil {
+				return nil, true, err
+			}
+			cmd = fmt.Sprintf("PXCTL_AUTH_TOKEN=%s %s", token, cmd)
+		}
+
+		// Get Portworx pods
+		pxPods, err := coreops.Instance().GetPods(cluster.Namespace, listOptions)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get PX pods, Err: %v", err)
+		}
+
+		for _, pxPod := range pxPods.Items {
+			// Validate PX pod is ready to run command on
+			if !coreops.Instance().IsPodReady(pxPod) {
+				return nil, true, fmt.Errorf("[%s (%s)] PX pod is not in Ready state", pxPod.Spec.NodeName, pxPod.Name)
+			}
+
+			output, err := runCmdInsidePxPod(&pxPod, cmd, cluster.Namespace, false)
+			if err != nil {
+				return nil, true, fmt.Errorf("got error while trying to get Telemetry status from pxctl, Err: %v", err)
+			}
+
+			if len(output) == 0 {
+				return nil, true, fmt.Errorf("got empty output from pxctl status command")
+			}
+			statusLines := strings.Split(output, "\n")
+
+			// Parse port from the output
+			var logUploaderPort string
+			telemetryStatusString := regexp.MustCompile(`Setting loguploader server:\s\S+:(\d+)`)
+			for _, line := range statusLines {
+				if matches := telemetryStatusString.FindStringSubmatch(line); matches != nil {
+					logUploaderPort = strings.TrimSpace(matches[1])
+					continue
+				}
+			}
+
+			// Check that ports match
+			if expectedPort != logUploaderPort {
+				return nil, true, fmt.Errorf("failed to validate PX Telemetry LogUploader port on PX node [%s (%s)], expected [%s], got [%s]", pxPod.Spec.NodeName, pxPod.Name, expectedPort, logUploaderPort)
+			}
+			logrus.Infof("Expected PX Telemetry LogUploader port [%s] in the ConfigMap and actual port [%s] on the PX node [%s (%s)]", expectedPort, logUploaderPort, pxPod.Spec.NodeName, pxPod.Name)
+		}
+		return nil, false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, defaultTelemetryPortValidationTimeout, defaultTelemetryPortValidationInterval)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateTelemetryStatusInPxctl validates Telemetry status on each PX node from the pxctl status output
 func validateTelemetryStatusInPxctl(telemetryShouldBeEnabled bool, cluster *corev1.StorageCluster) error {
 	listOptions := map[string]string{"name": "portworx"}
-	cmd := "pxctl status | grep Telemetry:"
+	cmd := "pxctl status |& grep Telemetry:"
 
 	logrus.Infof("Validate Telemetry pxctl status on all PX nodes")
 	t := func() (interface{}, bool, error) {
@@ -4624,7 +5227,10 @@ func ValidateTelemetryV2Disabled(cluster *corev1.StorageCluster, timeout, interv
 // ValidateTelemetryV1Enabled validates telemetry component is running as expected
 func ValidateTelemetryV1Enabled(pxImageList map[string]string, cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
 	logrus.Info("Validate Telemetry components are enabled")
-	opVersion, _ := GetPxOperatorVersion()
+	opVersion, err := GetPxOperatorVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get operator version, Err: %v", err)
+	}
 	validateMetricsCollector := opVersion.LessThan(opVer1_10)
 
 	t := func() (interface{}, bool, error) {
@@ -4729,6 +5335,103 @@ func ValidateTelemetryV1Enabled(pxImageList map[string]string, cluster *corev1.S
 	return nil
 }
 
+// ValidatePodDisruptionBudget validates the value of minavailable and number of disruptions for px-storage poddisruptionbudget
+func ValidatePodDisruptionBudget(cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	logrus.Info("Validate px-storage poddisruptionbudget minAvailable and allowed disruptions")
+
+	kbVer, err := GetK8SVersion()
+	if err != nil {
+		return err
+	}
+	k8sVersion, _ := version.NewVersion(kbVer)
+	opVersion, err := GetPxOperatorVersion()
+	if err != nil {
+		return err
+	}
+
+	// PodDisruptionBudget is supported for k8s version greater than or equal to 1.21 and operator version greater than or equal to 1.5.0
+	// Changing opVersion to 23.10.0 for PTX-23350 | TODO: add better logic with PTX-23407
+	if k8sVersion.GreaterThanOrEqual(minSupportedK8sVersionForPdb) && opVersion.GreaterThanOrEqual(opVer23_10) {
+		// This is only for non async DR setup
+		t := func() (interface{}, bool, error) {
+
+			nodes, err := operatorops.Instance().ListStorageNodes(cluster.Namespace)
+			if err != nil {
+				return nil, true, fmt.Errorf("failed to get storage nodes, Err: %v", err)
+			}
+
+			nodeslen := 0
+			availablenodes := 0
+			for _, node := range nodes.Items {
+				if *node.Status.NodeAttributes.Storage {
+					nodeslen++
+					if node.Status.Phase == "Online" {
+						availablenodes++
+					}
+				}
+			}
+			nodesUnavailable := nodeslen - availablenodes
+			// Skip PDB validation for px-storage if number of storage nodes is lesser than or equal to 2
+			if nodeslen <= 2 {
+				logrus.Infof("Storage PDB does not exist for storage nodes lesser than or equal to 2, skipping PDB validattion")
+				return nil, false, nil
+			}
+
+			pdb, err := policyops.Instance().GetPodDisruptionBudget("px-storage", cluster.Namespace)
+			if err != nil {
+				return nil, true, fmt.Errorf("failed to get px-storage poddisruptionbudget, Err: %v", err)
+			}
+			actualPdbValue := pdb.Spec.MinAvailable.IntValue()
+			actualAllowedDisruptions := pdb.Status.DisruptionsAllowed
+
+			// If annotations to override PDB are not set or if the value of minAvailable is lesser than (n/1)+1 (px quorum)
+			// or if it is more than or equal to number of storage nodes then use default minAvailable calculation
+			// Else minAvailable will be annotation value
+			var annotatedPDBVal int
+			var expectedPdbValue int
+			var expectedAllowedDsiruptions int
+			pxQuorum := math.Floor(float64(nodeslen)/2) + 1
+			if val, ok := cluster.Annotations["portworx.io/storage-pdb-min-available"]; ok {
+				annotatedPDBVal, err = strconv.Atoi(val)
+				if err != nil {
+					return nil, true, fmt.Errorf("error in converting string to int, Err: %v", err)
+				}
+				if annotatedPDBVal < int(pxQuorum) || annotatedPDBVal >= nodeslen {
+					expectedPdbValue = nodeslen - 1
+					expectedAllowedDsiruptions = 1
+					if nodesUnavailable > 0 {
+						expectedAllowedDsiruptions = 0
+					}
+				} else {
+					expectedPdbValue = annotatedPDBVal
+					expectedAllowedDsiruptions = nodeslen - annotatedPDBVal
+				}
+
+			} else {
+				expectedPdbValue = nodeslen - 1
+				expectedAllowedDsiruptions = 1
+				if nodesUnavailable > 0 {
+					expectedAllowedDsiruptions = 0
+				}
+			}
+			if expectedPdbValue == actualPdbValue && expectedAllowedDsiruptions == int(actualAllowedDisruptions) {
+				return nil, false, nil
+			}
+
+			return nil, true, fmt.Errorf("incorrect PDB value. Expected PDB [%d], Actual PDB [%d], allowed dis [%d], actual dis [%d]", expectedPdbValue, actualPdbValue, expectedAllowedDsiruptions, actualAllowedDisruptions)
+		}
+
+		if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	logrus.Debugf("Skipping poddisruptionbudget validation, not supported for kubernetes version [%s] and operator version [%s]", k8sVersion, opVersion)
+	return nil
+
+}
+
 // validatePodTopologySpreadConstraints validates pod topology spread constraints
 func validatePodTopologySpreadConstraints(deployment *appsv1.Deployment, timeout, interval time.Duration) error {
 	t := func() (interface{}, bool, error) {
@@ -4760,22 +5463,31 @@ func validatePodTopologySpreadConstraints(deployment *appsv1.Deployment, timeout
 	return nil
 }
 
-func isPVCControllerEnabled(cluster *corev1.StorageCluster) bool {
-	enabled, err := strconv.ParseBool(cluster.Annotations["portworx.io/pvc-controller"])
+// isPVCControllerEnabled return if PVC controller should or should not be enabled in the cluster
+func isPVCControllerEnabled(cluster *corev1.StorageCluster, opVersion *version.Version) bool {
+	enabled, err := strconv.ParseBool(cluster.Annotations[PvcControllerAnnotation])
 	if err == nil {
+		logrus.Debugf("PVC Controller is explicitly set via annotation [%s: %v]", PvcControllerAnnotation, enabled)
 		return enabled
 	}
 
-	// If portworx is disabled, then do not run pvc controller unless explicitly told to.
+	// If portworx is disabled, then do not run pvc controller unless explicitly told to
 	if !isPortworxEnabled(cluster) {
+		logrus.Debug("PVC Controller is disabled since PX is not enabled")
 		return false
 	}
 
-	// Enable PVC controller for managed kubernetes services. Also enable it for openshift,
-	// only if Portworx service is not deployed in kube-system namespace.
-	if isPKS(cluster) || isEKS(cluster) ||
-		isGKE(cluster) || isAKS(cluster) ||
-		isOKE(cluster) || cluster.Namespace != "kube-system" {
+	// Enable PVC controller for managed kubernetes services.
+	// Also enable it, if Portworx service is not deployed in kube-system namespace
+	if isOpenshift(cluster) && opVersion.GreaterThanOrEqual(opVer24_1_0) {
+		logrus.Debugf("PVC Controller is disabled for OCP clusters starting from PX Operator [24.1.0+], current PX Operator version [%s]", opVersion.String())
+		return false
+	} else if isPKS(cluster) || isEKS(cluster) ||
+		isGKE(cluster) || isAKS(cluster) || isOKE(cluster) {
+		logrus.Debugf("PVC Controller is enabled for Managed Kubernetes Serivces")
+		return true
+	} else if cluster.Namespace != "kube-system" {
+		logrus.Debugf("PVC Controller is enabled since PX is deployed outside of [kube-system] in [%s] namespace", cluster.Namespace)
 		return true
 	}
 	return false
@@ -4960,7 +5672,10 @@ func validateAllStorageNodesInState(namespace string, status corev1.NodeConditio
 func ValidateStorageClusterIsOnline(cluster *corev1.StorageCluster, timeout, interval time.Duration) (*corev1.StorageCluster, error) {
 	state := string(corev1.ClusterConditionStatusOnline)
 	var conditions []corev1.ClusterCondition
-	opVersion, _ := GetPxOperatorVersion()
+	opVersion, err := GetPxOperatorVersion()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get operator version, Err: %v", err)
+	}
 	if opVersion.GreaterThanOrEqual(opVer23_5) {
 		state = string(corev1.ClusterStateRunning)
 		conditions = append(conditions, corev1.ClusterCondition{

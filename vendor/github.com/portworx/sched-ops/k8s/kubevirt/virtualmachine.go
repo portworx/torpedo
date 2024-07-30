@@ -1,10 +1,15 @@
 package kubevirt
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/portworx/sched-ops/task"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"k8s.io/apimachinery/pkg/api/errors"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 )
@@ -42,6 +47,26 @@ type VirtualMachineOps interface {
 	IsVirtualMachineRunning(*kubevirtv1.VirtualMachine) bool
 	// UpdateVirtualMachine updates existing Kubevirt VirtualMachine
 	UpdateVirtualMachine(*kubevirtv1.VirtualMachine) (*kubevirtv1.VirtualMachine, error)
+	// IsKubevirtCRDInstalled to check if virtualmachine crd is installed.
+	IsKubevirtCRDInstalled() error
+}
+
+var (
+	// VirtualMachineCRD
+	VirtualMachineCRD = "virtualmachines.kubevirt.io"
+	// VirtualMachineCRDError error return code for virtualMachine CRD
+	VirtualMachineCRDError = status.Error(codes.FailedPrecondition, "Kubevirt CRD not configured on the cluster.")
+)
+
+// IsKubevirtCRDInstalled will check if virtualmachines.kubevirt.io CRD exists.
+func (c *Client) IsKubevirtCRDInstalled() error {
+	_, err := c.kubevirt.ExtensionsClient().ApiextensionsV1().CustomResourceDefinitions().Get(context.TODO(), VirtualMachineCRD, k8smetav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return VirtualMachineCRDError
+		}
+	}
+	return err
 }
 
 // ListVirtualMachines List Kubevirt VirtualMachine in given namespace
@@ -49,13 +74,19 @@ func (c *Client) ListVirtualMachines(namespace string) (*kubevirtv1.VirtualMachi
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-
+	if err := c.IsKubevirtCRDInstalled(); err != nil {
+		return nil, err
+	}
 	return c.kubevirt.VirtualMachine(namespace).List(&k8smetav1.ListOptions{})
 }
 
 // BatchListVirtualMachines List Kubevirt VirtualMachine in given namespace
 func (c *Client) BatchListVirtualMachines(namespace string, listOptions *k8smetav1.ListOptions) (*kubevirtv1.VirtualMachineList, error) {
 	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
+	if err := c.IsKubevirtCRDInstalled(); err != nil {
 		return nil, err
 	}
 
@@ -67,13 +98,18 @@ func (c *Client) CreateVirtualMachine(vm *kubevirtv1.VirtualMachine) (*kubevirtv
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-
+	if err := c.IsKubevirtCRDInstalled(); err != nil {
+		return nil, err
+	}
 	return c.kubevirt.VirtualMachine(vm.GetNamespace()).Create(vm)
 }
 
 // GetVirtualMachine Get updated VirtualMachine from client matching name and namespace
 func (c *Client) GetVirtualMachine(name string, namespace string) (*kubevirtv1.VirtualMachine, error) {
 	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+	if err := c.IsKubevirtCRDInstalled(); err != nil {
 		return nil, err
 	}
 
@@ -100,11 +136,22 @@ func (c *Client) ValidateVirtualMachineRunning(name, namespace string, timeout, 
 		return fmt.Errorf("failed to get Virtual Machine")
 	}
 
-	// Start the VirtualMachine if its not Started yet
-	if vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusStopped ||
-		vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusStopping {
+	// Start the VirtualMachine if it is "startable" and its not Started yet
+	// Avoid "Always does not support manual start requests" error by checking the RunStrategy
+	// https://bugzilla.redhat.com/show_bug.cgi?id=1709794
+	runStrategy, err := vm.RunStrategy()
+	if err != nil {
+		return fmt.Errorf("failed to get RunStrategy for VM %s/%s: %w", namespace, name, err)
+	}
+	if runStrategy != kubevirtv1.RunStrategyAlways && (vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusStopped ||
+		vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusStopping) {
 		if err = c.StartVirtualMachine(vm); err != nil {
-			return fmt.Errorf("Failed to start VirtualMachine %v", err)
+			if strings.Contains(err.Error(), "VM is already running") {
+				// Proceed if the VM is already running
+				fmt.Printf("VM [%s] in namespace [%s] is already running, proceeding with validation", vm.Name, vm.Namespace)
+			} else {
+				return fmt.Errorf("failed to start VirtualMachine: %v", err)
+			}
 		}
 	}
 
@@ -112,13 +159,14 @@ func (c *Client) ValidateVirtualMachineRunning(name, namespace string, timeout, 
 
 		vm, err = c.GetVirtualMachine(name, namespace)
 		if err != nil {
-			return "", false, fmt.Errorf("failed to get Virtual Machine")
+			return "", false, fmt.Errorf("failed to get Virtual Machine %s/%s: %w", namespace, name, err)
 		}
 
-		if vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusRunning {
+		if vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusRunning && vm.Status.Ready {
 			return "", false, nil
 		}
-		return "", true, fmt.Errorf("Virtual Machine not in running state: %v", vm.Status.PrintableStatus)
+		return "", true, fmt.Errorf("virtual machine %s/%s is not ready: %v: %v", namespace, name,
+			vm.Status.PrintableStatus, vm.Status.Conditions)
 
 	}
 	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {

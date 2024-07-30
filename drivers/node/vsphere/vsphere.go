@@ -2,14 +2,20 @@ package vsphere
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"github.com/vmware/govmomi/vim25/mo"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	pxutil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
+	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	coreops "github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/ssh"
@@ -17,7 +23,10 @@ import (
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/utils/strings/slices"
 )
 
 const (
@@ -42,6 +51,76 @@ const (
 	// VMReadyRetryInterval interval for retry when checking VM power state
 	VMReadyRetryInterval = 5 * time.Second
 )
+
+type DriveSet struct {
+	// Configs describes the configuration of the drives present in this set
+	// The key is the volumeID
+	Configs map[string]DriveConfig
+	// NodeID is the id of the node where the drive set is being used/last
+	// used
+	NodeID string
+	// ReservedInstanceID if set is the instance ID of the node that's attempting to transfer the driveset to itself
+	ReservedInstanceID string
+	// SchedulerNodeName is the name of the node in scheduler context
+	SchedulerNodeName string
+	// NodeIndex is the index of the node where the drive set is being
+	// used/last used
+	NodeIndex int
+	// CreateTimestamp is the timestamp when the drive set was created
+	CreateTimestamp time.Time
+	// InstanceID is the cloud provider id of the instance using this drive set
+	InstanceID string
+	// Zone defines the zone in which the node exists
+	Zone string
+	// State state of the drive set from the well defined states
+	State string
+	// Labels associated with this drive set
+	Labels *map[string]string `json:"labels"`
+}
+
+// DriveConfig defines the configuration for a cloud drive
+type DriveConfig struct {
+	// Type defines the type of cloud drive
+	Type string
+	// Size defines the size of the cloud drive in Gi
+	Size int64
+	// ID is the cloud drive id
+	ID string
+	// Path is the path where the drive is attached
+	Path string
+	// Iops is the iops that the drive supports
+	Iops int64
+	// Vpus provide a measure of disk resources available for
+	// performance (IOPS/GBs) of Oracle drives.
+	// Oracle uses VPU in lieu of disk types.
+	Vpus int64
+	// PXType indicates how this drive is being used by PX
+	PXType string
+	// State state of the drive config from the well defined states
+	State string
+	// Labels associated with this drive config
+	Labels map[string]string `json:"labels"`
+	// AttachOptions for cloud drives to be attached
+	AttachOptions map[string]string
+	// Provisioner is a name of provisioner which was used to create a drive
+	Provisioner string
+	// Encryption Key string to be passed in device specs
+	EncryptionKeyInfo string
+	// UUID of VMDK
+	DiskUUID string
+}
+
+// DrivePaths stores the device paths of the disks which will be used by PX.
+type DrivePaths struct {
+	// Storage drives
+	Storage []string
+	// Journal drive
+	Journal string
+	// Metadata drive
+	Metadata string
+	// Kvdb drive
+	Kvdb string
+}
 
 // Vsphere ssh driver
 type vsphere struct {
@@ -183,12 +262,65 @@ func (v *vsphere) getVMFinder() (*find.Finder, error) {
 		}
 
 	}
-
 	// Make future calls local to this datacenter
 	f.SetDatacenter(dc)
-
 	return f, nil
 
+}
+
+//GetCompatibleDatastores get matching prefix datastores
+func (v *vsphere) GetCompatibleDatastores(portworxNamespace string, datastoreNames []string) ([]*object.Datastore, error) {
+	var err error
+	datastores, err := v.GetDatastoresFromDatacenter()
+	if err != nil {
+		return nil, err
+	}
+	var stc *operatorcorev1.StorageCluster
+	pxOperator := operator.Instance()
+	stcList, err := pxOperator.ListStorageClusters(portworxNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to find storage clusters %v ", err)
+	}
+	var selectedDatastore []*object.Datastore
+	stc, err = pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to find storage cluster %v  in namespace  %s ", err, portworxNamespace)
+	}
+	var envVariables []v1.EnvVar
+	envVariables = stc.Spec.CommonConfig.Env
+	var prefixName string
+	for _, envVar := range envVariables {
+		if envVar.Name == "VSPHERE_DATASTORE_PREFIX" {
+			prefixName = envVar.Value
+			log.Infof("prefixName   %s ", prefixName)
+		}
+	}
+	if prefixName == "" {
+		return nil, fmt.Errorf("Failed to find VSPHERE_DATASTORE_PREFIX  prefix ")
+	}
+	for _, ds := range datastores {
+		if strings.HasPrefix(ds.Name(), prefixName) && slices.Contains(datastoreNames, ds.Name()) {
+			log.Infof("Prefix match found for datastore Name %v ", ds.Name())
+			selectedDatastore = append(selectedDatastore, ds)
+		}
+	}
+	if len(selectedDatastore) == 0 || len(selectedDatastore) != len(datastoreNames) {
+		return nil, fmt.Errorf("All datastores are not available, available are  %v , but expected are : %v", selectedDatastore, datastoreNames)
+	}
+	return selectedDatastore, nil
+}
+
+func (v *vsphere) GetDatastoresFromDatacenter() ([]*object.Datastore, error) {
+	var finder *find.Finder
+	finder, err := v.getVMFinder()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to find  getVMFinder err:: %+v", err)
+	}
+	datastores, err := finder.DatastoreList(v.ctx, "*")
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get all the datastores. err: %+v", err)
+	}
+	return datastores, nil
 }
 
 func (v *vsphere) connect() error {
@@ -248,6 +380,139 @@ func (v *vsphere) connect() error {
 	return nil
 }
 
+// DetachDisk vdisks from node.
+func (v *vsphere) DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string) error {
+	configData, err := GetCloudDriveConfigmapData(stc)
+	if err != nil {
+		err = fmt.Errorf("Failed to find configData: err %w", err)
+		return err
+	}
+	//Find out the instance VMUUID and then dettach.
+	for _, nodeConfigData := range configData {
+		if nodeName == nodeConfigData.SchedulerNodeName {
+			allDiskPaths := GetDiskPaths(nodeConfigData)
+			instanceId := nodeConfigData.InstanceID
+			for i := 0; i < len(allDiskPaths); i++ {
+				log.Infof("Diskpath for %v is %v and instance id is %v", nodeConfigData.NodeID, allDiskPaths[i], instanceId)
+				err = v.DetachDisk(instanceId, allDiskPaths[i])
+				if err != nil {
+					//log.InfoD("Detach drives from the node failed %v", err)
+					err = fmt.Errorf("Detaching disk: %s on node %s failed: %w", allDiskPaths[i], nodeName, err)
+					return err
+				}
+			}
+		} else {
+			log.Infof(" Node Name from config %s, expected %s ", nodeConfigData.SchedulerNodeName, nodeName)
+		}
+	}
+	return nil
+}
+
+func (v *vsphere) DetachDisk(vmUuid string, path string) error {
+	// Getting finder instance
+	f, err := v.getVMFinder()
+	if err != nil {
+		return err
+	}
+	// vmMap Reset to get the new valid VMs info.
+	vmMap = make(map[string]*object.VirtualMachine)
+	// Find virtual machines in datacenter
+	vms, err := f.VirtualMachineList(v.ctx, "*")
+	var vmMo *object.VirtualMachine
+	if err != nil {
+		return fmt.Errorf("failed to find any virtual machines on %s: %v", v.vsphereHostIP, err)
+	}
+	for _, vm := range vms {
+		if vm.UUID(v.ctx) == vmUuid {
+			//Found
+			vmMo = vm
+			log.Infof("VM found %v", vm)
+			break
+		}
+	}
+	//Error if not found
+	if vmMo == nil {
+		return fmt.Errorf("Virtual machine not found")
+	}
+	//Remove device and detach VM
+	var selectedDevice types.BaseVirtualDevice
+	deviceList, err := vmMo.Device(v.ctx)
+	if err != nil {
+		return fmt.Errorf("Failed to get the devices for VM: %q. err: %+v", vmMo, err)
+	}
+	log.Infof("All devices %v", deviceList)
+	// filter vm devices to retrieve device for the given vmdk file identified by disk path
+	for _, device := range deviceList {
+		if deviceList.TypeName(device) == "VirtualDisk" {
+			virtualDevice := device.GetVirtualDevice()
+			if backing, ok := virtualDevice.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
+				if matchVirtualDiskAndVolPath(backing.FileName, path) {
+					log.Infof("Found VirtualDisk backing with filename %q for diskPath %q", backing.FileName, path)
+					selectedDevice = device
+				}
+			}
+		}
+	}
+	if selectedDevice != nil {
+		log.Infof("Selected device %v", selectedDevice)
+		return vmMo.RemoveDevice(v.ctx, true, selectedDevice)
+	}
+	return fmt.Errorf("No device selected for VM: %q", vmMo)
+}
+
+// Match the paths between fileNamePath and absolute vmdk path
+func matchVirtualDiskAndVolPath(diskPath, volPath string) bool {
+	diskPath = strings.TrimSuffix(diskPath, filepath.Ext(diskPath))
+	volPath = strings.TrimSuffix(volPath, filepath.Ext(volPath))
+	return diskPath == volPath
+}
+
+// Get virtual disk path.
+// TODO need to filter only of type: DrivePaths
+func GetDiskPaths(driveset DriveSet) []string {
+	diskPaths := []string{}
+	for vmdkPath, configs := range driveset.Configs {
+		//TODO need to change later
+		log.InfoD("PX type %s ", configs.PXType)
+		if configs.PXType == "data" {
+			diskPath := vmdkPath
+			datastore := GetDatastore(configs)
+			openBracketIndex := strings.Index(diskPath, "[")
+			closeBracketIndex := strings.Index(diskPath, "]")
+			// Extract the substring inside the square brackets
+			substring := diskPath[openBracketIndex+1 : closeBracketIndex]
+			// Replace the substring inside the square brackets with datastore
+			diskPath = strings.Replace(diskPath, substring, datastore, 1)
+			diskPaths = append(diskPaths, diskPath)
+			log.Infof("diskPath %s is of type data ", diskPath)
+		}
+	}
+	return diskPaths
+}
+
+// GetDatastore
+func GetDatastore(configs DriveConfig) string {
+	for key, val := range configs.Labels {
+		if key == "datastore" {
+			return val
+		}
+	}
+	return ""
+}
+
+// GetCloudDriveConfigmapData Get clouddrive configMap data.
+func GetCloudDriveConfigmapData(cluster *corev1.StorageCluster) (map[string]DriveSet, error) {
+	cloudDriveConfigmapName := pxutil.GetCloudDriveConfigMapName(cluster)
+	var PortworxNamespace = "kube-system"
+	cloudDriveConfifmap, _ := coreops.Instance().GetConfigMap(cloudDriveConfigmapName, PortworxNamespace)
+	var configData map[string]DriveSet
+	err := json.Unmarshal([]byte(cloudDriveConfifmap.Data["cloud-drive"]), &configData)
+	if err != nil {
+		return nil, err
+	}
+	return configData, nil
+}
+
 // AddVM adds a new VM object to vmMap
 func (v *vsphere) AddMachine(vmName string) error {
 	var f *find.Finder
@@ -268,6 +533,10 @@ func (v *vsphere) AddMachine(vmName string) error {
 	err = vm.Properties(v.ctx, vm.Reference(), []string{"guest.hostName"}, &vmMo)
 	if err != nil {
 		return err
+	}
+
+	if vmMo.Guest == nil {
+		return fmt.Errorf("failed to find guest info for virtual machine %s", vmName)
 	}
 
 	// Get the hostname
@@ -358,7 +627,7 @@ func (v *vsphere) PowerOnVMByName(vmName string) error {
 	// Make sure vmName is part of vmMap before using this method
 
 	var err error
-	//Reestblish connection to avoid session timeout.
+	//Reestablish connection to avoid session timeout.
 	err = v.connect()
 	if err != nil {
 		return err
@@ -479,4 +748,117 @@ func init() {
 
 func (v *vsphere) GetSupportedDriveTypes() ([]string, error) {
 	return []string{"thin", "zeroedthick", "eagerzeroedthick", "lazyzeroedthick"}, nil
+}
+
+// MoveDisks detaches all disks from the source VM and attaches it to the target
+func (v *vsphere) MoveDisks(sourceNode node.Node, targetNode node.Node) error {
+	// Reestablish connection to avoid session timeout.
+	err := v.connect()
+	if err != nil {
+		return err
+	}
+
+	sourceVM, ok := vmMap[sourceNode.Name]
+	if !ok {
+		return fmt.Errorf("could not fetch VM for node: %s", sourceNode.Name)
+	}
+
+	targetVM, ok := vmMap[targetNode.Name]
+	if !ok {
+		return fmt.Errorf("could not fetch VM for node: %s", targetNode.Name)
+	}
+
+	devices, err := sourceVM.Device(v.ctx)
+	if err != nil {
+		return err
+	}
+
+	// Detach disks from source VM and attach to destination VM
+	var disks []*types.VirtualDisk
+	for _, device := range devices {
+		if disk, ok := device.(*types.VirtualDisk); ok {
+			// skip the first/root disk
+			if *disk.UnitNumber == 0 {
+				continue
+			}
+			disks = append(disks, disk)
+
+			config := &types.VirtualMachineConfigSpec{
+				DeviceChange: []types.BaseVirtualDeviceConfigSpec{
+					&types.VirtualDeviceConfigSpec{
+						Operation: types.VirtualDeviceConfigSpecOperationRemove,
+						Device:    disk,
+					},
+				},
+			}
+			log.Debugf("Detaching disk %s from VM %s", disk.DeviceInfo.GetDescription().Label, sourceVM.Name())
+			event, err := sourceVM.Reconfigure(v.ctx, *config)
+			if err != nil {
+				return err
+			}
+
+			err = event.Wait(v.ctx)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, disk := range disks {
+		config := &types.VirtualMachineConfigSpec{
+			DeviceChange: []types.BaseVirtualDeviceConfigSpec{
+				&types.VirtualDeviceConfigSpec{
+					Operation: types.VirtualDeviceConfigSpecOperationAdd,
+					Device:    disk,
+				},
+			},
+		}
+		log.Debugf("Attaching disk %s to VM %s", disk.DeviceInfo.GetDescription().Label, targetVM.Name())
+		event, err := targetVM.Reconfigure(v.ctx, *config)
+		if err != nil {
+			return err
+		}
+
+		err = event.Wait(v.ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// RemoveNonRootDisks removes all disks except the root disk from the VM
+func (v *vsphere) RemoveNonRootDisks(n node.Node) error {
+	// Reestablish connection to avoid session timeout.
+	err := v.connect()
+	if err != nil {
+		return err
+	}
+
+	vm, ok := vmMap[n.Name]
+	if !ok {
+		return fmt.Errorf("could not fetch VM for node: %s", n.Name)
+	}
+
+	devices, err := vm.Device(v.ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, device := range devices {
+		if disk, ok := device.(*types.VirtualDisk); ok {
+			// skip the first/root disk
+			if *disk.UnitNumber == 0 {
+				continue
+			}
+			log.Debugf("Deleting disk %s from VM %s", disk.DeviceInfo.GetDescription().Label, vm.Name())
+			err = vm.RemoveDevice(v.ctx, false, disk)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

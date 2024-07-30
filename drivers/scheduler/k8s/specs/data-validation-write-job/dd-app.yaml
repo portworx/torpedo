@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: write-and-checksum-job
+spec:
+  template:
+    spec:
+      containers:
+        - name: write-checksum
+          image: ubuntu
+          command: ["/bin/bash", "-c"]
+          args: [
+            "for i in $(seq 1 5); do \
+              for j in $(seq 1 5); do \
+                for k in $(seq 1 5); do \
+                  mkdir -p /data/dir$i/subdir$j/nest$k; \
+                  for l in $(seq 1 100); do \
+                    dd if=/dev/urandom of=/data/dir$i/subdir$j/nest$k/file$l bs=4K count=1; \
+                  done; \
+                done; \
+              done; \
+            done; \
+            find /data/ -type f ! -name 'all_files.md5' -exec md5sum {} + > /data/all_files.md5"
+          ]
+          volumeMounts:
+            - name: data-volume
+              mountPath: /data
+      restartPolicy: Never
+      volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: data-validation-write-pvc

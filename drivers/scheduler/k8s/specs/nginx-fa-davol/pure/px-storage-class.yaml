@@ -5,8 +5,14 @@ metadata:
   name: mount-fa-sc
 parameters:
   backend: "pure_block"
-  csi.storage.k8s.io/fstype: xfs
-  createoptions: -b size=2048
+  {{ if .FsType }}
+  csi.storage.k8s.io/fstype: "{{ .FsType }}"
+  {{ else }}
+  csi.storage.k8s.io/fstype: "xfs" {{ end }}
+  {{ if .CreateOptions }}
+  createoptions:  "{{ .CreateOptions }}"
+  {{ else }}
+  createoptions: -b size=2048 {{ end }}
 provisioner: pxd.portworx.com
 reclaimPolicy: Delete
 volumeBindingMode: Immediate

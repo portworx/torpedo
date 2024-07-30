@@ -5,7 +5,7 @@ ARG MAKE_TARGET
 WORKDIR /go/src/github.com/portworx/torpedo
 
 # Install setup dependencies
-RUN apk update && apk add --no-cache bash git gcc musl-dev make curl openssh-client
+RUN apk update && apk add --no-cache bash git gcc musl-dev make curl openssh-client coreutils python3
 
 RUN GOFLAGS= GO111MODULE=on go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo@v2.15.0
 
@@ -18,13 +18,15 @@ RUN mkdir bin && \
 
 # Install IBM Cloud SDK
 RUN curl -fsSL https://clis.cloud.ibm.com/install/linux | sh && \
-    ibmcloud plugin install -f vpc-infrastructure && \
+    ibmcloud plugin install -v 11.3.0 -f vpc-infrastructure && \
     ibmcloud plugin install -f container-service
 
 # Install vCluster binary
 RUN curl -L -o vcluster "https://github.com/loft-sh/vcluster/releases/latest/download/vcluster-linux-amd64"  \
     && install -c -m 0755 vcluster /usr/local/bin  \
     && rm -f vcluster
+
+
 
 # No need to copy *everything*. This keeps the cache useful
 COPY vendor vendor
@@ -48,11 +50,18 @@ RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
 # Build a fresh container with just the binaries
 FROM alpine:3.18.5
 
-RUN apk add --no-cache ca-certificates bash curl jq libc6-compat
+RUN apk add --no-cache ca-certificates bash curl jq libc6-compat coreutils
 
  # Install Azure Cli
 RUN apk add --no-cache --update python3 py3-pip
 RUN apk add --no-cache --update --virtual=build gcc musl-dev python3-dev libffi-dev openssl-dev cargo make && pip3 install "pyyaml<=5.3.1" && pip3 install --no-cache-dir --prefer-binary azure-cli && apk del build
+
+
+# Install Oracle CLI
+RUN bash -c "$(curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh)" -- --python-install-location /usr/bin/python3 --accept-all-defaults && \
+    chmod a+x /root/bin/oci && \
+    mv -f /root/bin/oci /usr/bin/oci
+
 
 # Install kubectl from Docker Hub.
 COPY --from=lachlanevenson/k8s-kubectl:latest /usr/local/bin/kubectl /usr/local/bin/kubectl
@@ -85,6 +94,10 @@ RUN apk add --no-cache openssh sshpass
 
 # Install dependancy for OCP 4.14 CLI
 RUN apk --update add gcompat
+
+# Install yq
+RUN wget https://github.com/mikefarah/yq/releases/download/v4.25.1/yq_linux_amd64 -O /usr/bin/yq && \
+    chmod +x /usr/bin/yq
 
 # Copy ginkgo & binaries over from previous container
 COPY --from=build /go/bin/ginkgo /bin/ginkgo

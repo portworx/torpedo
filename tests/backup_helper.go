@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"bytes"
 	context1 "context"
 	"fmt"
 	"io/ioutil"
@@ -15,7 +16,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
+
+	optest "github.com/libopenstorage/operator/pkg/util/test"
+	"k8s.io/apimachinery/pkg/watch"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -50,6 +55,7 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
@@ -84,6 +90,7 @@ const (
 	Vpinisetti     TestcaseAuthor = "vpinisetti-px"
 	Sabrarhussaini TestcaseAuthor = "sabrarhussaini"
 	ATrivedi       TestcaseAuthor = "atrivedi-px"
+	Dbinnal        TestcaseAuthor = "dbinnal-px"
 )
 
 // TestcaseQuarter List
@@ -105,6 +112,7 @@ const (
 	defaultStorkDeploymentNamespace           = "kube-system"
 	UpgradeStorkImage                         = "TARGET_STORK_VERSION"
 	LatestStorkImage                          = "23.9.0"
+	LowerStorkImage                           = "24.2.0"
 	restoreNamePrefix                         = "tp-restore"
 	DestinationClusterName                    = "destination-cluster"
 	AppReadinessTimeout                       = 10 * time.Minute
@@ -130,6 +138,7 @@ const (
 	GlobalAWSLockedBucketPrefix               = "global-aws-locked"
 	GlobalAzureLockedBucketPrefix             = "global-azure-locked"
 	GlobalGCPLockedBucketPrefix               = "global-gcp-locked"
+	AzureChinaEndpoint                        = "CHINA"
 	MongodbStatefulset                        = "pxc-backup-mongodb"
 	PxBackupDeployment                        = "px-backup"
 	BackupDeleteTimeout                       = 60 * time.Minute
@@ -138,14 +147,14 @@ const (
 	BackupLocationDeleteRetryTime             = 30 * time.Second
 	RebootNodeTimeout                         = 1 * time.Minute
 	RebootNodeTimeBeforeRetry                 = 5 * time.Second
-	LatestPxBackupVersion                     = "2.6.0"
-	defaultPxBackupHelmBranch                 = "master"
+	LatestPxBackupVersion                     = "2.7.2"
+	defaultPxBackupHelmBranch                 = "2.7.2"
 	pxCentralPostInstallHookJobName           = "pxcentral-post-install-hook"
 	quickMaintenancePod                       = "quick-maintenance-repo"
 	fullMaintenancePod                        = "full-maintenance-repo"
 	jobDeleteTimeout                          = 5 * time.Minute
 	jobDeleteRetryTime                        = 10 * time.Second
-	PodStatusTimeOut                          = 20 * time.Minute
+	PodStatusTimeOut                          = 30 * time.Minute
 	PodStatusRetryTime                        = 30 * time.Second
 	licenseCountUpdateTimeout                 = 15 * time.Minute
 	licenseCountUpdateRetryTime               = 1 * time.Minute
@@ -168,6 +177,24 @@ const (
 	sshPodName                                = "ssh-pod"
 	sshPodNamespace                           = "ssh-pod-namespace"
 	VirtLauncherContainerName                 = "compute"
+	storkControllerConfigMap                  = "stork-controller-config"
+	storkControllerConfigMapUpdateTimeout     = 15 * time.Minute
+	storkControllerConfigMapRetry             = 30 * time.Second
+	BackupLocationValidationTimeout           = 10 * time.Minute
+	BackupLocationValidationRetryTime         = 30 * time.Second
+	IncorrectMemoryRequest                    = "2Mi"
+	CorrectMemoryRequest                      = "700Mi"
+	CorrectMemoryLimit                        = "1Gi"
+	IncorrectImageSuffix                      = "-incorrect"
+	RestrictedPSA                             = "restricted"
+	RestrictedPSAVersion                      = "latest"
+	CustomRestrictedPSADescription            = "Custom Restricted PSA"
+	BaselinePSA                               = "baseline"
+	BaselinePSAVersion                        = "latest"
+	CustomBaselinePSADescription              = "Custom Baseline PSA"
+	PrivilegedPSA                             = "privileged"
+	PrivilegedPSAVersion                      = "latest"
+	CustomPrivilegedPSADescription            = "Custom Privileged PSA"
 )
 
 var (
@@ -201,6 +228,12 @@ var (
 	NfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
 	queryCountForValidation    = 10
 	IsBackupLongevityRun       = false
+	PvcListBeforeRun           []string
+	PvcListAfterRun            []string
+	RestrictedPSALabel         = map[string]string{"pod-security.kubernetes.io/enforce": "restricted"}
+	BaselinePSALabel           = map[string]string{"pod-security.kubernetes.io/enforce": "baseline"}
+	PrivilegedPSALabel         = map[string]string{"pod-security.kubernetes.io/enforce": "privileged"}
+	PSAAppMap                  = map[string]string{"postgres-backup": "postgres-restricted", "mysql-backup": "mysql-restricted"}
 )
 
 type UserRoleAccess struct {
@@ -325,6 +358,18 @@ var (
 				},
 			},
 		},
+		"mysql-backup-psa-restricted": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH TABLES WITH READ LOCK;system ${WAIT_CMD};'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"true"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+			PostRule: backup.PostRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH LOGS; UNLOCK TABLES;'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
 		"postgres": {
 			PreRule: backup.PreRule{
 				Rule: backup.RuleSpec{
@@ -396,6 +441,13 @@ var (
 			},
 		},
 		"postgres-cephfs-csi": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"postgres-backup-psa-restricted": {
 			PreRule: backup.PreRule{
 				Rule: backup.RuleSpec{
 					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
@@ -551,6 +603,23 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 		return err
 	}
 	log.Infof("Backup [%s] created successfully", backupName)
+	return nil
+}
+
+// CreateBackupWithPartialSuccessCheck creates backup and checks for partial success
+func CreateBackupWithPartialSuccessCheck(backupName string, clusterName string, bLocation string, bLocationUID string,
+	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
+	preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context) error {
+	_, err := CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
+	if err != nil {
+		return err
+	}
+
+	err = BackupWithPartialSuccessCheck(backupName, orgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Partial backup [%s] created successfully", backupName)
 	return nil
 }
 
@@ -739,6 +808,37 @@ func CreateBackupWithValidation(ctx context1.Context, backupName string, cluster
 	}
 
 	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
+}
+
+// CreateBackupWithPartialSuccessValidation creates backup, checks for partial success, and validates the partial backup
+func CreateBackupWithPartialSuccessValidation(ctx context1.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, failedVolumes []*corev1.PersistentVolumeClaim) error {
+	namespaces := make([]string, 0)
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		namespace := scheduledAppContext.ScheduleOptions.Namespace
+		if !Contains(namespaces, namespace) {
+			namespaces = append(namespaces, namespace)
+		}
+	}
+
+	log.InfoD("Backup [%s] started at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
+	// Insert data before backup which is expected to be present after restore
+	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
+	if err != nil {
+		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
+	}
+
+	err = CreateBackupWithPartialSuccessCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
+	if err != nil {
+		return err
+	}
+
+	// Insert data after backup which is expected NOT to be present after restore
+	_, _, err = InsertDataForBackupValidation(namespaces, ctx, appHandlers, backupName, commandBeforeBackup)
+	if err != nil {
+		return fmt.Errorf("Some error occurred while inserting data for backup validation after backup success check. Error - [%s]", err.Error())
+	}
+
+	return ValidateBackupWithPartialSuccess(ctx, backupName, orgID, scheduledAppContextsToBackup, make([]string, 0), failedVolumes)
 }
 
 // CreateBackupWithValidationWithVscMapping creates backup, checks for success, and validates the backup
@@ -1101,7 +1201,7 @@ func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string,
 	if err != nil {
 		return nil, err
 	}
-
+	log.InfoD("Backup without check [%s] started at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
 	_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
 	if err != nil {
 		return nil, err
@@ -1708,7 +1808,7 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 	}
 	actual := resp.GetBackup().GetStatus().Status
 	reason := resp.GetBackup().GetStatus().Reason
-	if actual != api.BackupInfo_StatusInfo_Success {
+	if actual != api.BackupInfo_StatusInfo_Success && actual != api.BackupInfo_StatusInfo_PartialSuccess {
 		return fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, api.BackupInfo_StatusInfo_Success, actual, reason)
 	}
 	backupDriver := Inst().Backup
@@ -1928,14 +2028,14 @@ func CreateRestoreWithoutCheck(restoreName string, backupName string,
 	var bkp *api.BackupObject
 	var bkpUid string
 	backupDriver := Inst().Backup
-	log.Infof("Getting the UID of the backup needed to be restored")
+	log.Infof("Getting the UID of the backup [%s] needed to be restored", backupName)
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: orgID}
 	curBackups, _ := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
-	log.Debugf("Enumerate backup response -\n%v", curBackups)
 	for _, bkp = range curBackups.GetBackups() {
 		if bkp.Name == backupName {
 			bkpUid = bkp.Uid
+			log.Infof("Backup UID for %s - %s", backupName, bkpUid)
 			break
 		}
 	}
@@ -2071,10 +2171,10 @@ func CreateUsers(numberOfUsers int) []string {
 	log.InfoD("Creating %d users", numberOfUsers)
 	var wg sync.WaitGroup
 	for i := 1; i <= numberOfUsers; i++ {
-		userName := fmt.Sprintf("testuser%v-%v", i, time.Now().Unix())
-		firstName := fmt.Sprintf("FirstName%v", i)
-		lastName := fmt.Sprintf("LastName%v", i)
-		email := fmt.Sprintf("%v@cnbu.com", userName)
+		userName := fmt.Sprintf("tp-user%d-%s", i, RandomString(4))
+		firstName := fmt.Sprintf("FirstName%d", i)
+		lastName := fmt.Sprintf("LastName%d", i)
+		email := fmt.Sprintf("%s@cnbu.com", userName)
 		wg.Add(1)
 		go func(userName, firstName, lastName, email string) {
 			defer GinkgoRecover()
@@ -2165,7 +2265,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 					log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterObj.GetName())
 				}
 			}
-			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), BackupOrgID, ctx, false)
+			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), BackupOrgID, ctx, true)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterObj.GetName()))
 			if clusterCredName != "" {
 				err = DeleteCloudCredential(clusterCredName, BackupOrgID, clusterCredUID)
@@ -2602,6 +2702,106 @@ func BackupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 
 	}
 	_, err = task.DoRetryWithTimeout(backupSuccessCheckFunc, retryDuration, retryInterval)
+	log.InfoD("Backup success check for backup %s finished at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// BackupWithPartialSuccessCheck inspects backup task
+func BackupWithPartialSuccessCheck(backupName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context1.Context) error {
+	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
+	}
+	statusesExpected := [...]api.BackupInfo_StatusInfo_Status{
+		api.BackupInfo_StatusInfo_PartialSuccess,
+	}
+	statusesUnexpected := [...]api.BackupInfo_StatusInfo_Status{
+		api.BackupInfo_StatusInfo_Success,
+		api.BackupInfo_StatusInfo_Invalid,
+		api.BackupInfo_StatusInfo_Aborted,
+		api.BackupInfo_StatusInfo_Failed,
+	}
+	backupSuccessCheckFunc := func() (interface{}, bool, error) {
+		resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+		if err != nil {
+			return "", false, err
+		}
+		actual := resp.GetBackup().GetStatus().Status
+		reason := resp.GetBackup().GetStatus().Reason
+		for _, status := range statusesExpected {
+			if actual == status {
+				return "", false, nil
+			}
+		}
+		for _, status := range statusesUnexpected {
+			if actual == status {
+				return "", false, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
+			}
+		}
+
+		return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
+
+	}
+	_, err = task.DoRetryWithTimeout(backupSuccessCheckFunc, retryDuration, retryInterval)
+	log.InfoD("Partial success check for backup %s finished at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// BackupFailedCheck inspects backup task
+func BackupFailedCheck(backupName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context1.Context) error {
+	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
+	}
+	statusesExpected := [...]api.BackupInfo_StatusInfo_Status{
+		api.BackupInfo_StatusInfo_Failed,
+	}
+	statusesUnexpected := [...]api.BackupInfo_StatusInfo_Status{
+		api.BackupInfo_StatusInfo_Success,
+		api.BackupInfo_StatusInfo_PartialSuccess,
+		api.BackupInfo_StatusInfo_Invalid,
+		api.BackupInfo_StatusInfo_Aborted,
+		api.BackupInfo_StatusInfo_Failed,
+	}
+	backupFailCheckFunc := func() (interface{}, bool, error) {
+		resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+		if err != nil {
+			return "", false, err
+		}
+		actual := resp.GetBackup().GetStatus().Status
+		reason := resp.GetBackup().GetStatus().Reason
+		for _, status := range statusesExpected {
+			if actual == status {
+				return "", false, nil
+			}
+		}
+		for _, status := range statusesUnexpected {
+			if actual == status {
+				return "", false, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
+			}
+		}
+
+		return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
+
+	}
+	_, err = task.DoRetryWithTimeout(backupFailCheckFunc, retryDuration, retryInterval)
+	log.InfoD("Backup fail check for backup %s finished at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
 	if err != nil {
 		return err
 	}
@@ -2638,8 +2838,7 @@ func ValidateBackup(ctx context1.Context, backupName string, orgID string, sched
 			return "", false, fmt.Errorf("InspectBackup Err: %v", err)
 		}
 		backupStatus := backupInspectResponse.GetBackup().GetStatus().Status
-		if backupStatus == api.BackupInfo_StatusInfo_Success ||
-			backupStatus == api.BackupInfo_StatusInfo_PartialSuccess {
+		if backupStatus == api.BackupInfo_StatusInfo_Success {
 			return "", false, nil
 		}
 		return "", true, fmt.Errorf("ValidateBackup requires backup [%s] to have a status of Success or PartialSuccess,got -%v", backupName, backupStatus)
@@ -2898,6 +3097,318 @@ func ValidateBackup(ctx context1.Context, backupName string, orgID string, sched
 	return err
 }
 
+// ValidateBackupWithPartialSuccess validates a backup's spec's objects (resources) and volumes. resourceTypesFilter can be used to select specific types to validate (nil means all types). This function must be called after switching to the context on which `scheduledAppContexts` exists. Cluster level resources aren't validated.
+func ValidateBackupWithPartialSuccess(ctx context1.Context, backupName string, orgID string, scheduledAppContexts []*scheduler.Context, resourceTypesFilter []string, failedVolumes []*corev1.PersistentVolumeClaim) error {
+	failedVolumeMap := make(map[string]bool, 0)
+	var backupInspectResponse *api.BackupInspectResponse
+	log.InfoD("Validating backup [%s] in org [%s]", backupName, orgID)
+	log.Infof("Obtaining backup info for backup [%s]", backupName)
+	backupDriver := Inst().Backup
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return fmt.Errorf("GetBackupUID Err: %v", err)
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	backupStatusCheck := func() (interface{}, bool, error) {
+		backupInspectResponse, err = backupDriver.InspectBackup(ctx, backupInspectRequest)
+		if err != nil {
+			return "", false, fmt.Errorf("InspectBackup Err: %v", err)
+		}
+		backupStatus := backupInspectResponse.GetBackup().GetStatus().Status
+		if backupStatus == api.BackupInfo_StatusInfo_PartialSuccess {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("validate backup requires backup [%s] to have a status of PartialSuccess,got -%v", backupName, backupStatus)
+	}
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(backupStatusCheck, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+
+	// Check size of backup taken is non-zero
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+	Volumes := resp.GetBackup().GetVolumes()
+	if len(Volumes) > 0 {
+		for _, failedVol := range failedVolumes {
+			failedVolumeMap[failedVol.Spec.VolumeName] = true
+		}
+		for _, volume := range Volumes {
+			isFailedVolume := failedVolumeMap[volume.Name]
+
+			if isFailedVolume {
+				if volume.Status.Status != api.BackupInfo_StatusInfo_Failed {
+					log.Errorf("Volume PVC: %s is in failedVolumes but not actually failed", volume.Pvc)
+				} else {
+					log.Infof("Skipping validation for failed volume PVC: %s", volume.Pvc)
+					continue
+				}
+			} else if volume.Status.Status != api.BackupInfo_StatusInfo_Success {
+				log.Errorf("Volume PVC: %s is not in failedVolumes and does not have success status", volume.Pvc)
+				return fmt.Errorf("volume PVC: %s is not in failedVolumes and does not have success status", volume.Pvc)
+			}
+
+			size := volume.GetTotalSize()
+			log.Infof("size is %v", size)
+			actualSize := volume.GetActualSize()
+			log.Infof("actualSize is %v", actualSize)
+
+			if !(size > 0 || actualSize > 0) {
+				return fmt.Errorf("backup size for [%s] is [%d] and actual size is [%d] which is not greater than 0", volume.Pvc, size, actualSize)
+			}
+		}
+	}
+
+	var errors []error
+	theBackup := backupInspectResponse.GetBackup()
+	backupName = theBackup.GetName()
+	resourceInfos := theBackup.GetResources()
+	backedUpVolumes := theBackup.GetVolumes()
+	volDrivers := make(map[string]struct{})
+	backupNamespaces := theBackup.GetNamespaces()
+
+	for _, vol := range backedUpVolumes {
+		driver := vol.GetDriverName()
+		volDrivers[driver] = struct{}{}
+	}
+
+	for _, scheduledAppContext := range scheduledAppContexts {
+		scheduledAppContextNamespace := scheduledAppContext.ScheduleOptions.Namespace
+		log.InfoD("Validating specs for the namespace (scheduledAppContext) [%s] in backup [%s]", scheduledAppContextNamespace, backupName)
+
+		if !Contains(backupNamespaces, scheduledAppContextNamespace) {
+			err := fmt.Errorf("the namespace (scheduledAppContext) [%s] provided to the ValidateBackup, is not present in the backup [%s]", scheduledAppContextNamespace, backupName)
+			errors = append(errors, err)
+			continue
+		}
+
+		// collect the backup resources whose specs should be present in this scheduledAppContext (namespace)
+		resourceInfoBackupObjs := make([]*api.ResourceInfo, 0)
+		for _, resource := range resourceInfos {
+			if resource.GetNamespace() == scheduledAppContextNamespace {
+				resourceInfoBackupObjs = append(resourceInfoBackupObjs, resource)
+			}
+		}
+
+		var updatedSpec interface{}
+		var name, kind, ns string
+	specloop:
+		for _, spec := range scheduledAppContext.App.SpecList {
+			if tektonspec, ok := spec.(*tektoncdv1.Task); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektonspec)
+				if err != nil {
+					err := fmt.Errorf("error in GetSpecNameKindNamepace: [%s] in namespace (appCtx) [%s], spec: [%+v]", err, scheduledAppContextNamespace, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			} else if tektonpipelinespec, ok := spec.(*tektoncdv1.Pipeline); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektonpipelinespec)
+				if err != nil {
+					err = fmt.Errorf("error in GetUpdatedSpec: [%s] in namespace (appCtx) [%s], spec: [%+v]", err, scheduledAppContextNamespace, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			} else if tektonpipelinerunspec, ok := spec.(*tektoncdv1.PipelineRun); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektonpipelinerunspec)
+				if err != nil {
+					err = fmt.Errorf("error in GetUpdatedSpec: [%s] in namespace (appCtx) [%s], spec: [%+v]", err, scheduledAppContextNamespace, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			} else if tektontaskrunspec, ok := spec.(*tektoncdv1.TaskRun); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektontaskrunspec)
+				if err != nil {
+					err = fmt.Errorf("error in GetUpdatedSpec: [%s] in namespace (appCtx) [%s], spec: [%+v]", err, scheduledAppContextNamespace, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			}
+
+			if updatedSpec != nil {
+				name, kind, ns, err = GetSpecNameKindNamepace(updatedSpec)
+			} else {
+				name, kind, ns, err = GetSpecNameKindNamepace(spec)
+			}
+			if err != nil {
+				err := fmt.Errorf("error in GetSpecNameKindNamepace: [%s] in namespace (appCtx) [%s], spec: [%+v]", err, scheduledAppContextNamespace, spec)
+				errors = append(errors, err)
+				continue specloop
+			}
+
+			if name == "" || kind == "" {
+				err := fmt.Errorf("error: GetSpecNameKindNamepace returned values with Spec Name: [%s], Kind: [%s], Namespace: [%s], in local Context (NS): [%s], where some of the values are empty, so this spec will be ignored", name, kind, ns, scheduledAppContextNamespace)
+				errors = append(errors, err)
+				continue specloop
+			}
+
+			if kind == "StorageClass" || kind == "VolumeSnapshot" {
+				// we don't backup "StorageClass"s and "VolumeSnapshot"s
+				continue specloop
+			}
+
+			// Skip PersistentVolumeClaim validation for failed volumes
+			if kind == "PersistentVolumeClaim" {
+				claim, err := k8sCore.GetPersistentVolumeClaim(name, ns)
+				if err != nil {
+					return err
+				}
+				if failedVolumeMap[claim.Spec.VolumeName] {
+					log.Infof("Skipping validation for failed PersistentVolumeClaim [%s] in namespace [%s]", name, ns)
+					continue specloop
+				}
+			}
+
+			if len(resourceTypesFilter) > 0 && !Contains(resourceTypesFilter, kind) {
+				log.Infof("kind: [%s] is not in resourceTypes [%v], so spec (name: [%s], kind: [%s], namespace: [%s]) in scheduledAppContext [%s] will not be checked for in backup [%s]", kind, resourceTypesFilter, name, kind, ns, scheduledAppContextNamespace, backupName)
+				continue specloop
+			}
+
+			// we only validate namespace level resource
+			if ns != "" {
+				for _, backupObj := range resourceInfoBackupObjs {
+					if name == backupObj.GetName() && kind == backupObj.GetKind() {
+						continue specloop
+					}
+				}
+
+				// The following error means that something was NOT backed up,
+				// OR it wasn't supposed to be backed up, and we forgot to exclude the check.
+				err := fmt.Errorf("the spec (name: [%s], kind: [%s], namespace: [%s]) found in the scheduledAppContext [%s], is not in the backup [%s]", name, kind, ns, scheduledAppContextNamespace, backupName)
+				errors = append(errors, err)
+				continue specloop
+			}
+		}
+
+		log.InfoD("Validating backed up volumes for the namespace (scheduledAppContext) [%s] in backup [%s]", scheduledAppContextNamespace, backupName)
+
+		// collect the backup resources whose VOLUMES should be present in this scheduledAppContext (namespace)
+		namespacedBackedUpVolumes := make([]*api.BackupInfo_Volume, 0)
+		for _, vol := range backedUpVolumes {
+			if vol.GetNamespace() == scheduledAppContextNamespace {
+				namespacedBackedUpVolumes = append(namespacedBackedUpVolumes, vol)
+			}
+		}
+
+		// Collect all volumes belonging to a context
+		log.Infof("getting the volumes bounded to the PVCs in the namespace (scheduledAppContext) [%s]", scheduledAppContextNamespace)
+		volumeMap := make(map[string]*volume.Volume)
+		pvcList, _ := k8sCore.GetPersistentVolumeClaims(scheduledAppContextNamespace, nil)
+		var scheduledVolumes []*volume.Volume
+		for _, pvc := range pvcList.Items {
+			vol := &volume.Volume{
+				Name: pvc.Spec.VolumeName,
+			}
+			scheduledVolumes = append(scheduledVolumes, vol)
+		}
+
+		for _, scheduledVol := range scheduledVolumes {
+			volumeMap[scheduledVol.Name] = scheduledVol
+		}
+		log.Infof("volumes bounded to the PVCs in the context [%s] are [%+v]", scheduledAppContextNamespace, scheduledVolumes)
+		if len(resourceTypesFilter) == 0 ||
+			(len(resourceTypesFilter) > 0 && Contains(resourceTypesFilter, "PersistentVolumeClaim")) {
+			// Verify if volumes are present
+		volloop:
+			for _, spec := range scheduledAppContext.App.SpecList {
+				// Obtaining the volume from the PVC
+				pvcSpecObj, ok := spec.(*corev1.PersistentVolumeClaim)
+				if !ok {
+					continue volloop
+				}
+
+				updatedSpec, err := k8s.GetUpdatedSpec(pvcSpecObj)
+				if err != nil {
+					err := fmt.Errorf("unable to fetch updated version of PVC(name: [%s], namespace: [%s]) present in the context [%s]. Error: %v", pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), scheduledAppContextNamespace, err)
+					errors = append(errors, err)
+					continue volloop
+				}
+
+				pvcObj, ok := updatedSpec.(*corev1.PersistentVolumeClaim)
+				if !ok {
+					err := fmt.Errorf("unable to fetch updated version of PVC(name: [%s], namespace: [%s]) present in the context [%s]. Error: %v", pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), scheduledAppContextNamespace, err)
+					errors = append(errors, err)
+					continue volloop
+				}
+
+				scheduledVol, ok := volumeMap[pvcObj.Spec.VolumeName]
+				if !ok {
+					err := fmt.Errorf("unable to find the volume corresponding to PVC(name: [%s], namespace: [%s]) in the cluster corresponding to the PVC's context, which is [%s]", pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), scheduledAppContextNamespace)
+					errors = append(errors, err)
+					continue volloop
+				}
+				// Finding the volume in the backup
+				for _, backedupVol := range namespacedBackedUpVolumes {
+					if backedupVol.GetName() == scheduledVol.Name {
+						if backedupVol.Pvc != pvcObj.Name {
+							err := fmt.Errorf("the PVC of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.Pvc, pvcObj.Name)
+							errors = append(errors, err)
+						}
+						// the custom apps created for partial backups have multiple volume drivers, so we are skipping the driver validation
+						if len(volDrivers) > 1 {
+							continue volloop
+						} else {
+							var expectedVolumeDriver string
+							switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
+							case string(NativeCSIWithOffloadToS3):
+								expectedVolumeDriver = "kdmp"
+							case string(NativeCSI):
+								expectedVolumeDriver = "csi"
+							case string(NativeAzure):
+								expectedVolumeDriver = "azure"
+							case string(DirectKDMP):
+								expectedVolumeDriver = "kdmp"
+							default:
+								expectedVolumeDriver = Inst().V.String()
+							}
+
+							if backedupVol.DriverName != expectedVolumeDriver {
+								err := fmt.Errorf("the Driver Name of the volume as per the backup [%s] is [%s], but the one expected is [%s]", backedupVol.GetName(), backedupVol.DriverName, expectedVolumeDriver)
+								errors = append(errors, err)
+							}
+						}
+						if backedupVol.StorageClass != *pvcObj.Spec.StorageClassName {
+							switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
+							case string(NativeCSI):
+								log.Infof("in case of native CSI backup volumes in backup object is not updated with storage class")
+							case string(NativeAzure):
+								log.Infof("in case of native azure backup volumes in backup object is not updated with storage class")
+							default:
+								err := fmt.Errorf("the Storage Class of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.StorageClass, *pvcObj.Spec.StorageClassName)
+								errors = append(errors, err)
+							}
+						}
+						continue volloop
+					}
+				}
+				// The following error means that something WAS not backed up, OR it wasn't supposed to be backed up, and we forgot to exclude the check.
+				err = fmt.Errorf("the volume [%s] corresponding to PVC(name: [%s], namespace: [%s]) was present in the cluster with the namespace containing that PVC, but the volume was not in the backup [%s]", pvcObj.Spec.VolumeName, pvcObj.GetName(), pvcObj.GetNamespace(), backupName)
+				errors = append(errors, err)
+			}
+		} else {
+			log.Infof("volumes in scheduledAppContext [%s] will not be checked for in backup [%s] as PersistentVolumeClaims are not backed up", scheduledAppContextNamespace, backupName)
+		}
+	}
+
+	errStrings := make([]string, 0)
+	for _, err := range errors {
+		if err != nil {
+			errStrings = append(errStrings, err.Error())
+		}
+	}
+
+	if len(errStrings) > 0 {
+		return fmt.Errorf("ValidateBackup Errors: {%s}", strings.Join(errStrings, "}\n{"))
+	}
+	err = validateCRCleanup(theBackup, ctx)
+	return err
+}
+
 // restoreSuccessCheck inspects restore task to check for status being "success". NOTE: If the status is different, it retries every `retryInterval` for `retryDuration` before returning `err`
 func RestoreSuccessCheck(restoreName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context1.Context) error {
 	restoreInspectRequest := &api.RestoreInspectRequest{
@@ -2934,6 +3445,8 @@ func RestoreSuccessCheck(restoreName string, orgID string, retryDuration time.Du
 		return "", true, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s] because of [%s]", restoreName, statusesExpected, actual, reason)
 	}
 	_, err := task.DoRetryWithTimeout(restoreSuccessCheckFunc, retryDuration, retryInterval)
+	log.InfoD("Restore success check for restore : %s finished at [%s]", restoreName, time.Now().Format("2006-01-02 15:04:05"))
+
 	if err != nil {
 		return err
 	}
@@ -3750,6 +4263,26 @@ func IsPresent(dataSlice interface{}, data interface{}) bool {
 	return false
 }
 
+// AppendList append only unique items of one list into another list
+func AppendList[T comparable](dataSlice1 []T, dataSlice2 []T) []T {
+	totalLength := len(dataSlice1) + len(dataSlice2)
+	map1 := make(map[T]bool, totalLength)
+	list1 := make([]T, 0, totalLength)
+	for _, element := range dataSlice1 {
+		if !map1[element] {
+			map1[element] = true
+			list1 = append(list1, element)
+		}
+	}
+	for _, element := range dataSlice2 {
+		if !map1[element] {
+			map1[element] = true
+			list1 = append(list1, element)
+		}
+	}
+	return list1
+}
+
 func DeleteBackupAndWait(backupName string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	backupEnumerateReq := &api.BackupEnumerateRequest{
@@ -3816,6 +4349,25 @@ func GetPxBackupBuildDate() (string, error) {
 	}
 	backupVersion := versionResponse.GetVersion()
 	return backupVersion.GetBuildDate(), nil
+}
+
+// CompareCurrentPxBackupVersion compares the current PX Backup version against a specified target version using a comparison method provided as a parameter.
+func CompareCurrentPxBackupVersion(targetVersionStr string, comparisonMethod func(v1, v2 *version.Version) bool) (bool, error) {
+	currentVersionStr, err := GetPxBackupVersionSemVer()
+	if err != nil {
+		return false, err
+	}
+
+	currentVersion, err := version.NewVersion(currentVersionStr)
+	if err != nil {
+		return false, err
+	}
+
+	targetVersion, err := version.NewVersion(targetVersionStr)
+	if err != nil {
+		return false, err
+	}
+	return comparisonMethod(currentVersion, targetVersion), nil
 }
 
 // PxBackupUpgrade will perform the upgrade tasks for Px Backup to the version passed as string
@@ -3885,7 +4437,7 @@ func PxBackupUpgrade(versionToUpgrade string) error {
 
 	// Get the tarball required for helm upgrade
 	helmBranch, isPresent := os.LookupEnv("PX_BACKUP_HELM_REPO_BRANCH")
-	if !isPresent {
+	if !isPresent || helmBranch == "" {
 		helmBranch = defaultPxBackupHelmBranch
 	}
 	cmd = fmt.Sprintf("curl -O  https://raw.githubusercontent.com/portworx/helm/%s/stable/px-central-%s.tgz", helmBranch, versionToUpgrade)
@@ -3904,8 +4456,74 @@ func PxBackupUpgrade(versionToUpgrade string) error {
 
 	// Execute helm upgrade using cmd
 	log.Infof("Upgrading Px-Backup version from %s to %s", currentBackupVersionString, versionToUpgrade)
-	cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
-		versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
+	customRegistry := os.Getenv("CUSTOM_REGISTRY")
+	customRepo := os.Getenv("CUSTOM_REPO")
+	if customRegistry == "" || customRepo == "" {
+		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
+			versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
+	} else {
+		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
+			versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
+
+		// Additional settings to be appended using template
+		tmpl := `,{{range .Images}}images.{{.Name}}.repo="{{$.CustomRepo}}",images.{{.Name}}.registry="{{$.CustomRegistry}}",{{end}}`
+
+		// Define the template
+		t, err := template.New("cmd").Parse(tmpl)
+		if err != nil {
+			return err
+		}
+
+		// Data for the template
+		data := struct {
+			CustomRegistry string
+			CustomRepo     string
+			Images         []struct{ Name string }
+		}{
+			CustomRegistry: customRegistry,
+			CustomRepo:     customRepo,
+			Images: []struct{ Name string }{
+				{Name: "pxcentralApiServerImage"},
+				{Name: "pxcentralFrontendImage"},
+				{Name: "pxcentralBackendImage"},
+				{Name: "pxcentralMiddlewareImage"},
+				{Name: "postInstallSetupImage"},
+				{Name: "keycloakBackendImage"},
+				{Name: "keycloakFrontendImage"},
+				{Name: "keycloakLoginThemeImage"},
+				{Name: "keycloakInitContainerImage"},
+				{Name: "mysqlImage"},
+				{Name: "pxBackupImage"},
+				{Name: "mongodbImage"},
+				{Name: "licenseServerImage"},
+				{Name: "cortexImage"},
+				{Name: "cassandraImage"},
+				{Name: "proxyConfigImage"},
+				{Name: "consulImage"},
+				{Name: "dnsmasqImage"},
+				{Name: "grafanaImage"},
+				{Name: "prometheusImage"},
+				{Name: "prometheusConfigReloadrImage"},
+				{Name: "prometheusOperatorImage"},
+				{Name: "memcachedMetricsImage"},
+				{Name: "memcachedIndexImage"},
+				{Name: "memcachedImage"},
+				{Name: "pxBackupPrometheusImage"},
+				{Name: "pxBackupAlertmanagerImage"},
+				{Name: "pxBackupPrometheusOperatorImage"},
+				{Name: "pxBackupPrometheusConfigReloaderImage"},
+			},
+		}
+
+		// Execute the template and append the result to the existing command
+		var buf bytes.Buffer
+		if err := t.Execute(&buf, data); err != nil {
+			return err
+		}
+
+		// Append the dynamically generated settings to the initial command
+		cmd += buf.String()
+	}
 	log.Infof("helm command: %v ", cmd)
 
 	pxBackupUpgradeStartTime := time.Now()
@@ -4022,8 +4640,8 @@ func ValidateAllPodsInPxBackupNamespace() error {
 	return err
 }
 
-// getStorkImageVersion returns current stork image version.
-func getStorkImageVersion() (string, error) {
+// GetStorkImageVersion returns current stork image version.
+func GetStorkImageVersion() (string, error) {
 	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
 	if err != nil {
 		return "", err
@@ -4037,7 +4655,7 @@ func getStorkImageVersion() (string, error) {
 	return storkImageVersion, nil
 }
 
-// upgradeStorkVersion upgrades the stork to the provided version.
+// UpgradeStorkVersion upgrades the stork to the provided version.
 func UpgradeStorkVersion(storkImageToUpgrade string) error {
 	var finalImageToUpgrade string
 	var postUpgradeStorkImageVersionStr string
@@ -4045,7 +4663,7 @@ func UpgradeStorkVersion(storkImageToUpgrade string) error {
 	if err != nil {
 		return err
 	}
-	currentStorkImageStr, err := getStorkImageVersion()
+	currentStorkImageStr, err := GetStorkImageVersion()
 	if err != nil {
 		return err
 	}
@@ -4103,7 +4721,7 @@ func UpgradeStorkVersion(storkImageToUpgrade string) error {
 	}
 	// Wait for upgrade request to go through before validating
 	t := func() (interface{}, bool, error) {
-		postUpgradeStorkImageVersionStr, err = getStorkImageVersion()
+		postUpgradeStorkImageVersionStr, err = GetStorkImageVersion()
 		if err != nil {
 			return "", true, err
 		}
@@ -4129,6 +4747,101 @@ func UpgradeStorkVersion(storkImageToUpgrade string) error {
 
 	log.Infof("Successfully upgraded stork version from %v to %v", currentStorkImageStr, postUpgradeStorkImageVersionStr)
 	return nil
+}
+
+// DowngradeStorkVersion downgrades the stork version to the provided image
+func DowngradeStorkVersion(storkImageToDowngrade string) error {
+	var finalImageToDowngrade string
+	var postDowngradeStorkImageVersionStr string
+	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
+	if err != nil {
+		return err
+	}
+	currentStorkImageStr, err := GetStorkImageVersion()
+	if err != nil {
+		return err
+	}
+	currentStorkVersion, err := version.NewSemver(currentStorkImageStr)
+	if err != nil {
+		return err
+	}
+	storkImageVersionToDowngrade, err := version.NewSemver(storkImageToDowngrade)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Current stork version : %s", currentStorkVersion)
+	log.Infof("Downgrading stork version to : %s", storkImageVersionToDowngrade)
+
+	if currentStorkVersion.LessThanOrEqual(storkImageVersionToDowngrade) {
+		return fmt.Errorf("cannot downgrade stork version from %s to %s as the current version is lower than the provided version", currentStorkVersion, storkImageVersionToDowngrade)
+	}
+	internalDockerRegistry := os.Getenv("INTERNAL_DOCKER_REGISTRY")
+	if internalDockerRegistry != "" {
+		finalImageToDowngrade = fmt.Sprintf("%s/portworx/stork:%s", internalDockerRegistry, storkImageToDowngrade)
+	} else {
+		finalImageToDowngrade = fmt.Sprintf("docker.io/openstorage/stork:%s", storkImageToDowngrade)
+	}
+	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
+	if isOpBased {
+		log.Infof("Operator based Portworx deployment, Downgrading stork via StorageCluster")
+		storageSpec, err := Inst().V.GetDriver()
+		if err != nil {
+			return err
+		}
+		storageSpec.Spec.Stork.Image = finalImageToDowngrade
+
+		// Check to reset customImageRegistry to blank as in case of ibm it'll be icr.io/ext/ and not
+		// docker.io/ which causes issues when we try to install stork which is not pushed to icr.io/ext
+		if GetClusterProviders()[0] == "ibm" {
+			storageSpec.Spec.CustomImageRegistry = ""
+		}
+
+		_, err = operator.Instance().UpdateStorageCluster(storageSpec)
+		if err != nil {
+			return err
+		}
+	} else {
+		log.Infof("Non-Operator based Portworx deployment, Upgrading stork via Deployment")
+		storkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+		if err != nil {
+			return err
+		}
+		storkDeployment.Spec.Template.Spec.Containers[0].Image = finalImageToDowngrade
+		_, err = apps.Instance().UpdateDeployment(storkDeployment)
+		if err != nil {
+			return err
+		}
+	}
+	// Wait for downgrade request to go through before validating
+	t := func() (interface{}, bool, error) {
+		postDowngradeStorkImageVersionStr, err = GetStorkImageVersion()
+		if err != nil {
+			return "", true, err
+		}
+		if !strings.EqualFold(postDowngradeStorkImageVersionStr, storkImageToDowngrade) {
+			return "", true, fmt.Errorf("expected version after upgrade was %s but got %s", storkImageToDowngrade, postDowngradeStorkImageVersionStr)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+
+	// validate stork pods after downgrade
+	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+	if err != nil {
+		return err
+	}
+	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, storkPodReadyTimeout, podReadyRetryTime)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Successfully downgraded stork version from %v to %v", currentStorkImageStr, postDowngradeStorkImageVersionStr)
+	return nil
+
 }
 
 // CreateBackupWithNamespaceLabel creates a backup with Namespace label and checks for success
@@ -4503,6 +5216,39 @@ func AddLabelsToMultipleNamespaces(labels map[string]string, namespaces []string
 	return nil
 }
 
+// VerifyLabelsFromMultpleNamespaces verifies labels from multiple namespaces
+func VerifyLabelsFromMultpleNamespaces(labels map[string]string, namespaces []string) error {
+	log.Infof("Verifying labels %v in namespaces %v", labels, namespaces)
+	for _, namespace := range namespaces {
+		err := VerifyNamespaceLabel(namespace, labels)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// VerifyNamespaceLabel verifies labels in a namespace
+func VerifyNamespaceLabel(namespace string, labels map[string]string) error {
+	labelsInTheNamespace, err := Inst().S.GetNamespaceLabel(namespace)
+	if err != nil {
+		return err
+	}
+	log.Infof("Labels in namespace %v are %v", namespace, labelsInTheNamespace)
+
+	for key, label := range labels {
+		err := fmt.Errorf("label %s:%s is not present in namespace %s", key, label, namespace)
+		if _, ok := labelsInTheNamespace[key]; ok {
+			if labelsInTheNamespace[key] != label {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+	return nil
+}
+
 // DeleteLabelsFromMultipleNamespaces delete labels from multiple namespace
 func DeleteLabelsFromMultipleNamespaces(labels map[string]string, namespaces []string) error {
 	for _, namespace := range namespaces {
@@ -4749,6 +5495,7 @@ func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Durati
 		return "", err
 	}
 	currentScheduleBackupCount := len(allScheduleBackupNames)
+	// TO DO ; Change logic for nextScheduleBackupOrdinal to include retention count
 	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
 	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
 		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, BackupOrgID)
@@ -5230,6 +5977,7 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest) error
 	case string(DirectKDMP):
 		log.Infof("Detected backup type - %s", DirectKDMP)
 		backupRequest.BackupType = api.BackupCreateRequest_Generic
+		backupRequest.DirectKdmp = true
 	default:
 		log.Infof("Environment variable BACKUP_TYPE is not provided")
 	}
@@ -5270,6 +6018,7 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 	case string(DirectKDMP):
 		log.Infof("Detected backup type - %s", DirectKDMP)
 		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Generic
+		backupScheduleRequest.DirectKdmp = true
 	default:
 		log.Infof("Environment variable BACKUP_TYPE is not provided")
 	}
@@ -6725,12 +7474,12 @@ func GetBackupPodAge() (map[string]nsPodAge, error) {
 	k8sCore := core.Instance()
 	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
 	if err != nil {
-		return podAge, fmt.Errorf("failed to get namespaces list")
+		return podAge, fmt.Errorf("failed to get namespaces list error:[%v]", err)
 	}
 	for _, namespace := range allNamespaces.Items {
 		pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
 		if err != nil {
-			return podAge, fmt.Errorf("failed to get pods for namespace")
+			return podAge, fmt.Errorf("failed to get pods for namespace error:[%v]", err)
 		}
 		for _, pod := range pods.Items {
 			podAge[namespace.ObjectMeta.GetName()] = nsPodAge{pod.ObjectMeta.GetGenerateName(): pod.GetCreationTimestamp().Time}
@@ -6746,7 +7495,7 @@ func ComparePodAge(oldPodAge map[string]nsPodAge) error {
 	k8sCore := core.Instance()
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to get list of services")
+		return fmt.Errorf("failed to get list of services error:[%v]", err)
 	}
 	for _, svc := range allServices.Items {
 		if svc.Name == "portworx-service" {
@@ -6758,7 +7507,7 @@ func ComparePodAge(oldPodAge map[string]nsPodAge) error {
 	for _, namespace := range allNamespaces.Items {
 		pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
 		if err != nil {
-			return fmt.Errorf("failed to get pods for namespace")
+			return fmt.Errorf("failed to get pods for namespace error:[%v]", err)
 		}
 		if IsPresent(namespacesToSkip, namespace.ObjectMeta.GetName()) {
 			for _, pod := range pods.Items {
@@ -6956,6 +7705,45 @@ func RestartAllVMsInNamespace(namespace string, waitForCompletion bool) error {
 	return nil
 }
 
+// ValidateVMMigration validate VM is migrated to a different node after any migration operation.
+func ValidateVMMigration(vm kubevirtv1.VirtualMachine, nodeName string) error {
+	k8sKubevirt := kubevirt.Instance()
+	t := func() (interface{}, bool, error) {
+		vmObj, err := k8sKubevirt.GetVirtualMachine(vm.Name, vm.Namespace)
+		if err != nil {
+			return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]\nerror - %s", vm.Name, vm.Namespace, err.Error())
+		}
+		if vmObj.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
+			return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", vm.Name, vm.Namespace, vmObj.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
+		}
+
+		vmPod, err := GetVirtLauncherPodObject(vm)
+		if err != nil {
+			return "", false, err
+		}
+
+		// Get the node where the VM is scheduled after the migration
+		nodeNameAfterMigration := vmPod.Spec.NodeName
+
+		if nodeName == nodeNameAfterMigration {
+			return "", true, fmt.Errorf("VM pod live migrated [%s] in namespace [%s] but is still on the same node [%s]", vmPod.Name, vmPod.Namespace, nodeName)
+		}
+
+		if nodeName != nodeNameAfterMigration {
+			log.InfoD("VM pod live migrated to node: [%s]", nodeNameAfterMigration)
+			return "", false, nil
+		}
+		return "", false, nil
+	}
+
+	// Retry with timeout until nodeName != nodeNameAfterMigration
+	_, err := task.DoRetryWithTimeout(t, defaultVmMountCheckTimeout, defaultVmMountCheckRetryInterval)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetAllVMsInNamespace returns all the Kubevirt VMs in the given namespace
 func GetAllVMsInNamespace(namespace string) ([]kubevirtv1.VirtualMachine, error) {
 	k8sKubevirt := kubevirt.Instance()
@@ -7023,6 +7811,22 @@ func GetVirtLauncherPodName(vm kubevirtv1.VirtualMachine) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("virt-launcher pod not found")
+}
+
+// GetVirtLauncherPodObject returns the PodObject of the virt-launcher pod in the given namespace
+func GetVirtLauncherPodObject(vm kubevirtv1.VirtualMachine) (*corev1.Pod, error) {
+	k8sCore := core.Instance()
+	pods, err := k8sCore.GetPods(vm.Namespace, make(map[string]string))
+	if err != nil {
+		return nil, err
+	}
+	for _, pod := range pods.Items {
+		if strings.Contains(pod.Name, fmt.Sprintf("%s-%s", "virt-launcher", vm.Name)) {
+			log.InfoD("virt-launcher pod found for vm [%s] is [%s]", vm.Name, pod.Name)
+			return &pod, nil
+		}
+	}
+	return nil, fmt.Errorf("virt-launcher pod not found")
 }
 
 // GetNumberOfDisksInVM returns the number of disks in the VM
@@ -7485,7 +8289,23 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	log.InfoD("Verifying if stork controller configmap is updated with new admin namespace")
+	storkControllerCmUpdate := func() (interface{}, bool, error) {
+		storkControllerConfigMapObject, err := core.Instance().GetConfigMap(storkControllerConfigMap, defaultStorkDeploymentNamespace)
+		if err != nil {
+			return "", false, fmt.Errorf("error getting stork controller configmap: %v", err)
+		}
+		log.Infof("Value of admin-ns in stork controller configmap is %s", storkControllerConfigMapObject.Data["admin-ns"])
+		if storkControllerConfigMapObject.Data["admin-ns"] == namespace {
+			fmt.Sprintf("Stork controller configmap is updated with new admin ns %s", namespace)
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("stork controller configmap is yet not updated with new admin ns %s", namespace)
+	}
+	_, err = task.DoRetryWithTimeout(storkControllerCmUpdate, storkControllerConfigMapUpdateTimeout, storkControllerConfigMapRetry)
+	if err != nil {
+		return nil, err
+	}
 	return stc, nil
 }
 
@@ -7501,11 +8321,7 @@ func getCurrentAdminNamespace() (string, error) {
 			log.InfoD("Current admin namespace - [%s]", adminNamespace)
 			return adminNamespace, nil
 		} else {
-			adminNamespace, err := k8sutils.GetStorkPodNamespace()
-			if err != nil {
-				return "", err
-			}
-			log.InfoD("Current admin namespace - [%s]", adminNamespace)
+			adminNamespace = defaultStorkDeploymentNamespace
 			return adminNamespace, nil
 		}
 
@@ -7648,30 +8464,6 @@ func GetRestoreCRs(
 		allRestoreCRNames = append(allRestoreCRNames, restore.Name)
 	}
 	return allRestoreCRNames, nil
-}
-
-// CreateKubevirtBackupRuleForAllVMsInNamespace creates a pre/post rule for all kubevirt vms in a given namespace
-func CreateKubevirtBackupRuleForAllVMsInNamespace(ctx context1.Context, namespaces []string, ruleType string,
-	template string) (bool, string, error) {
-	var listOfVirtualMachine []kubevirtv1.VirtualMachine
-	k8sKubevirt := kubevirt.Instance()
-
-	for _, namespace := range namespaces {
-		vms, err := k8sKubevirt.ListVirtualMachines(namespace)
-		if err != nil {
-			return false, "", err
-		}
-		for _, vm := range vms.Items {
-			listOfVirtualMachine = append(listOfVirtualMachine, vm)
-		}
-	}
-
-	ruleStatus, ruleName, err := Inst().Backup.CreateRuleForKubevirtBackup(ctx, listOfVirtualMachine, BackupOrgID, ruleType, template)
-	if err != nil {
-		return false, "", err
-	}
-
-	return ruleStatus, ruleName, nil
 }
 
 // UpdateKDMPConfigMap updates the KDMP configMap with the given key and value.
@@ -8253,7 +9045,7 @@ func ValidateCustomResourceRestores(ctx context1.Context, orgID string, resource
 		go func(restoreName string, nsMapping map[string]string, scMapping map[string]string) {
 			defer GinkgoRecover()
 			defer wg.Done()
-			log.InfoD("Validating restore [%s] with custom resources %v", restoreName, resourceList)
+			log.InfoD(" [%s] with custom resources %v", restoreName, resourceList)
 			var expectedRestoredAppContextList []*scheduler.Context
 			for _, context := range contexts {
 				expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(context, nsMapping, scMapping, true)
@@ -8563,4 +9355,1094 @@ func GetUpdatedKubeVirtVMSpecForBackup(scheduledAppContextsToBackup []*scheduler
 		}
 	}
 	return nil
+}
+
+// GetPVCListForNamespace retrieves the list of PVCs in the specified namespace.
+func GetPVCListForNamespace(namespace string) ([]string, error) {
+	k8sCore := core.Instance()
+	pvcList, err := k8sCore.GetPersistentVolumeClaims(namespace, make(map[string]string))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", namespace, err)
+	}
+	// Extract PVC names from the list
+	var pvcNameList []string
+	for _, pvc := range pvcList.Items {
+		pvcNameList = append(pvcNameList, pvc.Name)
+	}
+	return pvcNameList, nil
+}
+
+// GetVolumeNamesForNamespace retrieves the list of volumes in the specified namespace.
+func GetVolumeNamesForNamespace(namespace string) ([]string, error) {
+	k8sCore := core.Instance()
+	pvcList, err := k8sCore.GetPersistentVolumeClaims(namespace, make(map[string]string))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get volumes in namespace %s: %w", namespace, err)
+	}
+	// Extract volume names from the list
+	var volumeNameList []string
+	for _, pvc := range pvcList.Items {
+		volumeNameList = append(volumeNameList, pvc.Spec.VolumeName)
+	}
+	return volumeNameList, nil
+}
+
+// ValidatePVCCleanup checks if there is a mismatch between the original PVC list and the current one.
+func ValidatePVCCleanup(pvcBefore, pvcAfter []string) error {
+	pvcBeforeSet := make(map[string]bool)
+	pvcAfterSet := make(map[string]bool)
+
+	// Populate sets for PVC names before and after the run
+	for _, pvc := range pvcBefore {
+		pvcBeforeSet[pvc] = true
+	}
+
+	for _, pvc := range pvcAfter {
+		pvcAfterSet[pvc] = true
+	}
+
+	// Check for missing PVCs after the run
+	for pvc := range pvcBeforeSet {
+		if !pvcAfterSet[pvc] {
+			fmt.Printf("PVC '%s' is present before the run but not after the run\n", pvc)
+			return fmt.Errorf("mismatch in PVC list before and after the run")
+		}
+	}
+
+	// Check for extra PVCs after the run
+	for pvc := range pvcAfterSet {
+		if !pvcBeforeSet[pvc] {
+			fmt.Printf("PVC '%s' is present after the run but not before the run\n", pvc)
+			return fmt.Errorf("mismatch in PVC list before and after the run")
+		}
+	}
+
+	return nil
+}
+
+type MaintenanceJobType string
+
+const (
+	FullMaintenanceJob  MaintenanceJobType = "full-maintenance-repo"
+	QuickMaintenanceJob MaintenanceJobType = "quick-maintenance-repo"
+)
+
+// ModifyMaintenanceJobFrequency modifies the frequency of the cron job
+func ModifyMaintenanceJobFrequency(backupLocationName string, frequencyInMinutes int, maintenanceJobType MaintenanceJobType) error {
+	k8sBatch := batch.Instance()
+	cronJob, err := GetCronJobByBackupLocation(backupLocationName, maintenanceJobType)
+	if err != nil {
+		return err
+	}
+	cronJob.Spec.Schedule = fmt.Sprintf("*/%d * * * *", frequencyInMinutes)
+	_, err = k8sBatch.UpdateCronJob(cronJob)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ResetMaintenanceJobFrequency sets the frequency of the cron job to the default value
+func ResetMaintenanceJobFrequency(backupLocationName string, maintenanceJobType MaintenanceJobType) error {
+	k8sBatch := batch.Instance()
+	cronJob, err := GetCronJobByBackupLocation(backupLocationName, maintenanceJobType)
+	if err != nil {
+		return err
+	}
+	if maintenanceJobType == FullMaintenanceJob {
+		cronJob.Spec.Schedule = fmt.Sprintf("1 */23 * * *")
+	} else if maintenanceJobType == QuickMaintenanceJob {
+		cronJob.Spec.Schedule = fmt.Sprintf("1 */3 * * *")
+	} else {
+		return fmt.Errorf("invalid maintenance job type")
+	}
+
+	_, err = k8sBatch.UpdateCronJob(cronJob)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetCronJobByBackupLocation takes the backup location name and the job type and returns the cron job
+func GetCronJobByBackupLocation(backupLocationName string, maintenanceJobType MaintenanceJobType) (*batchv1.CronJob, error) {
+	k8sBatch := batch.Instance()
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return nil, err
+	}
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return nil, err
+	}
+	// Enumerate Backup Locations
+	backupDriver := Inst().Backup
+	backupLocationEnumerateRequest := &api.BackupLocationEnumerateRequest{
+		OrgId: BackupOrgID,
+	}
+	response, err := backupDriver.EnumerateBackupLocation(ctx, backupLocationEnumerateRequest)
+	if err != nil {
+		return nil, err
+	}
+	for _, backupLocation := range response.GetBackupLocations() {
+		if backupLocation.GetName() == backupLocationName {
+			cronJobName := fmt.Sprintf("%s-%s", maintenanceJobType, backupLocation.Uid[:7])
+			log.Infof("Cron Job Name: %s", cronJobName)
+			cronJob, err := k8sBatch.GetCronJob(cronJobName, pxBackupNamespace)
+			if err != nil {
+				return nil, err
+			}
+			return cronJob, nil
+		}
+	}
+	return nil, fmt.Errorf("backup location with name [%s] not found", backupLocationName)
+}
+
+// MaintenanceJobUpdateStrategy defines the strategy to update the maintenance job
+type MaintenanceJobUpdateStrategy string
+
+const (
+	UpdateIncorrectImage  MaintenanceJobUpdateStrategy = "UpdateIncorrectImage"
+	UpdateCorrectImage    MaintenanceJobUpdateStrategy = "UpdateCorrectImage"
+	UpdateIncorrectMemory MaintenanceJobUpdateStrategy = "UpdateIncorrectMemory"
+	UpdateCorrectMemory   MaintenanceJobUpdateStrategy = "UpdateCorrectMemory"
+)
+
+// UpdateMaintenanceCronJob updates the maintenance cron job based on the strategy provided
+func UpdateMaintenanceCronJob(backupLocation string, maintenanceJobType MaintenanceJobType, strategy MaintenanceJobUpdateStrategy) error {
+	k8sBatch := batch.Instance()
+	cronJob, err := GetCronJobByBackupLocation(backupLocation, maintenanceJobType)
+	if err != nil {
+		return err
+	}
+
+	switch strategy {
+	case UpdateIncorrectImage:
+		log.Infof("Updating the image of the cron job to an incorrect one")
+		// Update the image to an incorrect one iff it does not contain the string "-incorrect"
+		if !strings.Contains(cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image, IncorrectImageSuffix) {
+			cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image = cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image + IncorrectImageSuffix
+		}
+
+	case UpdateCorrectImage:
+		log.Infof("Updating the image of the cron job to the correct one")
+		// Remove the string "-incorrect" from the image name
+		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image = strings.TrimSuffix(cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image, IncorrectImageSuffix)
+
+	case UpdateIncorrectMemory:
+		log.Infof("Updating the memory request of the cron job to an incorrect value")
+		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Requests["memory"], err = resource.ParseQuantity(IncorrectMemoryRequest)
+		if err != nil {
+			return err
+		}
+		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Limits["memory"], err = resource.ParseQuantity(IncorrectMemoryRequest)
+		if err != nil {
+			return err
+		}
+
+	case UpdateCorrectMemory:
+		log.Infof("Updating the memory request of the cron job to the correct value")
+		// Update the memory request to the correct value
+		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Requests["memory"], err = resource.ParseQuantity(CorrectMemoryRequest)
+		if err != nil {
+			return err
+		}
+		cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Limits["memory"], err = resource.ParseQuantity(CorrectMemoryLimit)
+		if err != nil {
+			return err
+		}
+	}
+	log.Infof("Cron job image for backup location [%s] - [%s]", backupLocation, cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image)
+	log.Infof("Cron job memory request and limit for backup location [%s] - [%v] & [%v]", backupLocation, cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Requests["memory"], cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Resources.Limits["memory"])
+	_, err = k8sBatch.UpdateCronJob(cronJob)
+	return err
+}
+
+// CreateInvalidVolumeSnapshotClass creates invalid VolumeSnapshotClass for given provisioner
+func CreateInvalidVolumeSnapshotClass(snapShotClassName, provisioner string) (*volsnapv1.VolumeSnapshotClass, error) {
+	volumeSnapshotClassParameters := make(map[string]string)
+	invalidProvisioner := "invalid-" + provisioner
+	volumeSnapshotClassParameters["invalidParameter"] = "invalidValue"
+	volumeSnapshotClass, err := Inst().S.CreateVolumeSnapshotClassesWithParameters(snapShotClassName, invalidProvisioner, false, "Delete", volumeSnapshotClassParameters)
+	if err != nil {
+		return nil, err
+	}
+	return volumeSnapshotClass, nil
+}
+
+// DeleteAllDataExportCRs deletes the data export CR as soon as it is found in the given namespace
+func DeleteAllDataExportCRs(namespace string) error {
+	var filterOptions = metav1.ListOptions{}
+	kdmpClient := kdmp.Instance()
+	t := func() (interface{}, bool, error) {
+		dataExportCrList, err := kdmpClient.ListDataExport(namespace, filterOptions)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to list data export CRs in namespace [%s]: %w", namespace, err)
+		}
+		if len(dataExportCrList.Items) == 0 {
+			return "", true, fmt.Errorf("no data export CRs found in namespace [%s]", namespace)
+		}
+		for _, dataExportCr := range dataExportCrList.Items {
+			log.Infof("Deleting data export CR [%s] in namespace [%s]", dataExportCr.Name, namespace)
+			err := kdmpClient.DeleteDataExport(dataExportCr.Name, namespace)
+			if err != nil {
+				return nil, false, fmt.Errorf("failed to delete data export CR [%s] in namespace [%s]: %w", dataExportCr.Name, namespace, err)
+			}
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+	return err
+}
+
+// DeleteDataExportCRForVolume deletes the data export CR for the provided PVC
+func DeleteDataExportCRForVolume(pvc *corev1.PersistentVolumeClaim) error {
+	var found bool
+	var filterOptions = metav1.ListOptions{}
+	namespace := pvc.Namespace
+	kdmpClient := kdmp.Instance()
+	t := func() (interface{}, bool, error) {
+		dataExportCrList, err := kdmpClient.ListDataExport(namespace, filterOptions)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to list data export CRs in namespace [%s]: %w", namespace, err)
+		}
+		if len(dataExportCrList.Items) == 0 {
+			return "", true, fmt.Errorf("no data export CRs found in namespace [%s]", namespace)
+		}
+		for _, dataExportCr := range dataExportCrList.Items {
+			if dataExportCr.Spec.Source.Namespace == namespace && dataExportCr.Spec.Source.Name == pvc.Name {
+				found = true
+				log.Infof("Deleting data export CR [%s] in namespace [%s]", dataExportCr.Name, namespace)
+				err := kdmpClient.DeleteDataExport(dataExportCr.Name, namespace)
+				if err != nil {
+					return nil, false, fmt.Errorf("failed to delete data export CR [%s] in namespace [%s]: %w", dataExportCr.Name, namespace, err)
+				}
+			}
+		}
+		if !found {
+			return "", true, fmt.Errorf("no data export CR found for PVC [%s] in namespace [%s]", pvc.Name, namespace)
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+	return err
+}
+
+// WatchAndKillDataExportCR watches for the data export CRs in the provided namespaces and deletes them as soon as they are created
+func WatchAndKillDataExportCR(namespaces []string, timeoutDuration time.Duration) error {
+	kdmpClient := kdmp.Instance()
+	// Map of namespace and watcher
+	var namespaceWatcherMap = make(map[string]watch.Interface)
+	for _, namespace := range namespaces {
+		watcher, err := kdmpClient.WatchDataExport(namespace, metav1.ListOptions{})
+		if err != nil {
+			return err
+		}
+		namespaceWatcherMap[namespace] = watcher
+		log.Infof("Watcher created for namespace [%s]", namespace)
+	}
+
+	for namespace, watcher := range namespaceWatcherMap {
+		go func(namespace string, watcher watch.Interface) {
+			defer GinkgoRecover()
+			defer func() {
+				watcher.Stop()
+				log.InfoD("Watcher stopped for namespace [%s]", namespace)
+			}()
+			ch := watcher.ResultChan()
+			overallTimeout := time.After(timeoutDuration)
+			log.InfoD("Watcher started for namespace [%s]", namespace)
+			for {
+				select {
+				case event, ok := <-ch:
+					if !ok {
+						log.InfoD("Watcher channel closed")
+						return
+					}
+					log.InfoD("Received event: %v", event)
+					if event.Type == watch.Added {
+						log.InfoD("DataExport CR added. Initiating delete.")
+						err := DeleteAllDataExportCRs(namespace)
+						if err != nil {
+							log.Infof("Error deleting DataExport CR: %v", err)
+						} else {
+							log.InfoD("DataExport CR deleted successfully.")
+						}
+					}
+				case <-overallTimeout:
+					log.InfoD("Watcher timed out after the specified overall duration")
+					return
+				}
+			}
+		}(namespace, watcher)
+	}
+	return nil
+}
+
+// StopCloudsnapBackup stops the cloudsnap for the provided pvc name and namespace
+func StopCloudsnapBackup(pvcName, namespace string) error {
+	var found bool
+
+	t := func() (interface{}, bool, error) {
+		statusMap, err := GetCloudsnapStatus()
+		if err != nil {
+			return "", false, fmt.Errorf("failed to get cloudsnap status from cluster: %w", err)
+		}
+
+		for key, value := range statusMap {
+			if strings.Contains(key, fmt.Sprintf("%s-%s", namespace, pvcName)) {
+				found = true
+				log.Infof("Key - %s", key)
+				log.Infof("Stopping cloudsnap for PVC [%s] in namespace [%s] with id [%s] and status [%s]", pvcName, namespace, value.ID, value.Status)
+
+				switch value.Status {
+				case "Done":
+					return "", false, fmt.Errorf("cloudsnap for PVC [%s] in namespace [%s] is in %s status, not retrying", pvcName, namespace, value.Status)
+				case "Stopped":
+					return "", false, nil
+				default:
+					if value.ID == "" {
+						return "", true, fmt.Errorf("waiting to get the cs id for PVC [%s] in namespace [%s]", pvcName, namespace)
+					}
+					cmd := fmt.Sprintf("pxctl cs stop -n %s", key)
+					workerNode := node.GetStorageNodes()[0]
+					output, err := runCmdGetOutput(cmd, workerNode)
+					log.Infof("Output of the command [%s]: \n%s", cmd, output)
+					if err != nil {
+						if strings.Contains(err.Error(), "CloudsnapStop: Failed to change state: No active backup/restore for the volume") && value.Status != "Stopped" {
+							return "", true, fmt.Errorf("waiting to get the cs backup name: %w", err)
+						}
+						return "", false, fmt.Errorf("failed to run command %s on %s: %w", cmd, workerNode.Name, err)
+					}
+
+					statusMap, err = GetCloudsnapStatus()
+					if err != nil {
+						return "", false, fmt.Errorf("failed to get cloudsnap status from cluster: %w", err)
+					}
+
+					if statusMap[key].Status != "Stopped" {
+						return "", true, fmt.Errorf("cloudsnap not yet stopped for PVC [%s] in namespace [%s], status: %s", pvcName, namespace, statusMap[key].Status)
+					}
+				}
+			}
+		}
+
+		if !found {
+			return "", true, fmt.Errorf("cloudsnap not found for PVC [%s] in namespace [%s]", pvcName, namespace)
+		}
+		log.Infof("Cloudsnap stopped for PVC [%s] in namespace [%s].", pvcName, namespace)
+		return "", false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 3*time.Second)
+	return err
+}
+
+type CloudsnapStatus struct {
+	ID                 string   `json:"ID"`
+	OpType             string   `json:"OpType"`
+	Status             string   `json:"Status"`
+	BytesDone          int64    `json:"BytesDone"`
+	BytesTotal         int64    `json:"BytesTotal"`
+	EtaSeconds         int64    `json:"EtaSeconds"`
+	StartTime          string   `json:"StartTime"`
+	CompletedTime      string   `json:"CompletedTime"`
+	NodeID             string   `json:"NodeID"`
+	SrcVolumeID        string   `json:"SrcVolumeID"`
+	Info               []string `json:"Info"`
+	CredentialUUID     string   `json:"CredentialUUID"`
+	GroupCloudBackupID string   `json:"GroupCloudBackupID"`
+}
+
+// GetCloudsnapStatus returns the cloudsnap status in the current cluster
+func GetCloudsnapStatus() (map[string]CloudsnapStatus, error) {
+	statusMap := make(map[string]CloudsnapStatus)
+	// Get a worker node
+	workerNode := node.GetStorageNodes()[0]
+	cmd := "pxctl cs status -j"
+	output, err := runCmdGetOutput(cmd, workerNode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to run command %s on %s: %s", cmd, workerNode.Name, err.Error())
+	}
+	err = json.Unmarshal([]byte(output), &statusMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal the output of the command %s on %s: %s", cmd, workerNode.Name, err.Error())
+	}
+	return statusMap, nil
+}
+
+// WatchAndStopCloudsnapBackup watches the cloudsnap creation and stops it if a new entry is added
+func WatchAndStopCloudsnapBackup(pvcName, namespace string, timeoutDuration time.Duration, ctx context1.Context) error {
+	workerNode := node.GetStorageNodes()[0]
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	timeout := time.After(timeoutDuration)
+	getCloudsnapStatus := func() (map[string]CloudsnapStatus, error) {
+		statusMap := make(map[string]CloudsnapStatus)
+		cmd := "pxctl cs status -j"
+		output, err := runCmdGetOutput(cmd, workerNode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to run command %s on %s: %s", cmd, workerNode.Name, err.Error())
+		}
+		err = json.Unmarshal([]byte(output), &statusMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal the output of the command %s on %s: %s", cmd, workerNode.Name, err.Error())
+		}
+		return statusMap, nil
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			log.Infof("Context status is [%v]", ctx.Err())
+			return nil
+		case <-ticker.C:
+			statusMap, err := getCloudsnapStatus()
+			if err != nil {
+				return fmt.Errorf("failed to get cloudsnap status from cluster: %w", err)
+			}
+			found := false
+			for key, value := range statusMap {
+				if strings.Contains(key, fmt.Sprintf("%s-%s", namespace, pvcName)) {
+					found = true
+					switch value.Status {
+					case "Done":
+						log.Infof("Cloudsnap for PVC [%s] in namespace [%s] is already completed with status [%s]", pvcName, namespace, value.Status)
+					case "Stopped":
+						log.Infof("Cloudsnap for PVC [%s] in namespace [%s] is already stopped with status [%s]", pvcName, namespace, value.Status)
+					case "", "Active":
+						// Stop the cloudsnap
+						cmd := fmt.Sprintf("pxctl cs stop -n %s", key)
+						_, err := runCmdGetOutput(cmd, workerNode)
+						if err != nil {
+							log.Infof("failed to run command %s on %s: %w", cmd, workerNode.Name, err)
+						}
+						statusMap, err = getCloudsnapStatus()
+						if err != nil {
+							log.Infof("failed to get cloudsnap status from cluster: %w", err)
+						}
+						if statusMap[key].Status != "Stopped" {
+							log.Infof("cloudsnap not yet stopped for PVC [%s] in namespace [%s], status: %s", pvcName, namespace, statusMap[key].Status)
+						} else {
+							log.Infof("Cloudsnap for PVC [%s] in namespace [%s] has been stopped.", pvcName, namespace)
+						}
+					default:
+						log.Infof("Cloudsnap for PVC [%s] in namespace [%s] is in an unexpected status [%s]", pvcName, namespace, value.Status)
+					}
+				}
+			}
+
+			if !found {
+				log.Infof("No cloudsnap found for PVC [%s] in namespace [%s]", pvcName, namespace)
+			}
+		case <-timeout:
+			log.Infof("WatchAndStopCloudsnapBackupWithFixedNode timed out after %v", timeoutDuration)
+			return nil
+		}
+	}
+}
+
+// CreatePartialBackupWithVscMapping creates backup with Vsc mapping and checks for partial success
+func CreatePartialBackupWithVscMapping(backupName string, clusterName string, bLocation string, bLocationUID string,
+	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
+	preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool) error {
+	_, err := CreateBackupByNamespacesWithoutCheckWithVscMapping(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx, provisionerVolumeSnapshotClassMap, forceKdmp)
+	if err != nil {
+		return err
+	}
+
+	err = BackupWithPartialSuccessCheck(backupName, orgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Partial backup [%s] created successfully", backupName)
+	return nil
+}
+
+// CreatePartialBackupWithValidationWithVscMapping creates partial backup, checks for partial success, and validates the backup
+func CreatePartialBackupWithValidationWithVscMapping(ctx context1.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool, failedVolumes []*corev1.PersistentVolumeClaim) error {
+	namespaces := make([]string, 0)
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		namespace := scheduledAppContext.ScheduleOptions.Namespace
+		if !Contains(namespaces, namespace) {
+			namespaces = append(namespaces, namespace)
+		}
+	}
+	// Insert data before backup which is expected to be present after restore
+	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
+	if err != nil {
+		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
+	}
+	err = CreatePartialBackupWithVscMapping(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx, provisionerVolumeSnapshotClassMap, forceKdmp)
+	if err != nil {
+		return err
+	}
+	// Insert data after backup which is expected NOT to be present after restore
+	_, _, err = InsertDataForBackupValidation(namespaces, ctx, appHandlers, backupName, commandBeforeBackup)
+	if err != nil {
+		return fmt.Errorf("Some error occurred while inserting data for backup validation after backup success check. Error - [%s]", err.Error())
+	}
+	return ValidateBackupWithPartialSuccess(ctx, backupName, orgID, scheduledAppContextsToBackup, make([]string, 0), failedVolumes)
+}
+
+// CreatePartialScheduleBackupWithValidationWithVscMapping creates a partial schedule backup, checks for partial success of first (immediately triggered) backup, validates that backup and returns the name of that first partial scheduled backup
+func CreatePartialScheduleBackupWithValidationWithVscMapping(ctx context1.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool, failedVolumes []*corev1.PersistentVolumeClaim) (string, error) {
+	namespaces := make([]string, 0)
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		namespace := scheduledAppContext.ScheduleOptions.Namespace
+		if !Contains(namespaces, namespace) {
+			namespaces = append(namespaces, namespace)
+		}
+	}
+	_, err := CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, provisionerVolumeSnapshotClassMap, forceKdmp)
+	if err != nil {
+		return "", err
+	}
+	time.Sleep(1 * time.Minute)
+	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
+	return firstScheduleBackupName, BackupWithPartialSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, nil, failedVolumes)
+}
+
+// BackupWithPartialSuccessCheckWithValidation checks if backup is partial Success and then validates the backup
+func BackupWithPartialSuccessCheckWithValidation(ctx context1.Context, backupName string, scheduledAppContextsToBackup []*scheduler.Context, orgID string, retryDuration time.Duration, retryInterval time.Duration, resourceTypeFilter []string, failedVolumes []*corev1.PersistentVolumeClaim) error {
+	err := BackupWithPartialSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
+	if err != nil {
+		return err
+	}
+	return ValidateBackupWithPartialSuccess(ctx, backupName, orgID, scheduledAppContextsToBackup, resourceTypeFilter, failedVolumes)
+}
+
+// CreatePartialRestoreWithValidation creates partial restore, waits and checks for success and validates the backup
+func CreatePartialRestoreWithValidation(ctx context1.Context, restoreName, backupName string, namespaceMapping, storageClassMapping map[string]string, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context, failedVolumes []*corev1.PersistentVolumeClaim) error {
+	startTime := time.Now()
+	err := CreateRestore(restoreName, backupName, namespaceMapping, clusterName, orgID, ctx, storageClassMapping)
+	if err != nil {
+		return err
+	}
+	originalClusterConfigPath := CurrentClusterConfigPath
+	if clusterConfigPath, ok := ClusterConfigPathMap[clusterName]; !ok {
+		err = fmt.Errorf("switching cluster context: couldn't find clusterConfigPath for cluster [%s]", clusterName)
+		return err
+	} else {
+		log.InfoD("Switching cluster context to cluster [%s]", clusterName)
+		err = SetClusterContext(clusterConfigPath)
+		if err != nil {
+			return err
+		}
+	}
+	defer func() {
+		log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+		err := SetClusterContext(originalClusterConfigPath)
+		if err != nil {
+			log.FailOnError(err, "Failed switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+		}
+	}()
+	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+	for _, scheduledAppContext := range scheduledAppContexts {
+		expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMapping, storageClassMapping, true)
+		if err != nil {
+			log.Errorf("TransformAppContextWithMappings: %v", err)
+			continue
+		}
+		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+	}
+
+	// Creating a list of failed PVC to skip during validation if namespace mapping is present
+	for _, failedVolume := range failedVolumes {
+		// Check if the failedVolume namespace exists in the namespaceMapping
+		if _, ok := namespaceMapping[failedVolume.Namespace]; ok {
+			log.Infof("Namespace mapping found for failed volume [%s]. [%s] -> [%s]", failedVolume.Name, failedVolume.Namespace, namespaceMapping[failedVolume.Namespace])
+			failedVolume.Namespace = namespaceMapping[failedVolume.Namespace]
+		}
+	}
+	err = ValidatePartialRestore(ctx, restoreName, orgID, expectedRestoredAppContexts, make([]string, 0), failedVolumes)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Namespace mapping from CreateRestoreWithValidation [%v]", namespaceMapping)
+	err = ValidateDataAfterRestore(expectedRestoredAppContexts, restoreName, ctx, backupName, namespaceMapping, startTime)
+
+	return err
+}
+
+// CreatePartialRestoreWithReplacePolicyWithValidation Creates in-place restore and waits for it to complete and then validates the restore
+func CreatePartialRestoreWithReplacePolicyWithValidation(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context1.Context, storageClassMapping map[string]string, replacePolicy ReplacePolicyType, scheduledAppContexts []*scheduler.Context, failedVolumes []*corev1.PersistentVolumeClaim) (err error) {
+	err = CreateRestoreWithReplacePolicy(restoreName, backupName, namespaceMapping, clusterName, orgID, ctx, storageClassMapping, replacePolicy)
+	if err != nil {
+		return
+	}
+	originalClusterConfigPath := CurrentClusterConfigPath
+	if clusterConfigPath, ok := ClusterConfigPathMap[clusterName]; !ok {
+		err = fmt.Errorf("switching cluster context: couldn't find clusterConfigPath for cluster [%s]", clusterName)
+		return
+	} else {
+		log.InfoD("Switching cluster context to cluster [%s]", clusterName)
+		err = SetClusterContext(clusterConfigPath)
+		if err != nil {
+			return
+		}
+	}
+	defer func() {
+		log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+		err = SetClusterContext(originalClusterConfigPath)
+		if err != nil {
+			err = fmt.Errorf("failed switching cluster context back to cluster path [%s]. Err: [%v]", originalClusterConfigPath, err)
+		}
+	}()
+	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+	for _, scheduledAppContext := range scheduledAppContexts {
+		expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMapping, storageClassMapping, true)
+		if err != nil {
+			log.Errorf("TransformAppContextWithMappings: %v", err)
+			continue
+		}
+		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+	}
+	err = ValidatePartialRestore(ctx, restoreName, orgID, expectedRestoredAppContexts, make([]string, 0), failedVolumes)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// ValidatePartialRestore validates a restore's spec's objects (resources) and volumes using expectedRestoredAppContexts (generated by transforming scheduledAppContexts using TransformAppContextWithMappings). This function must be called after switching to the context on which `expectedRestoredAppContexts` exists. Cluster level resources aren't validated.
+func ValidatePartialRestore(ctx context1.Context, restoreName string, orgID string, expectedRestoredAppContexts []*scheduler.Context, resourceTypesFilter []string, failedVolumes []*corev1.PersistentVolumeClaim) error {
+	log.InfoD("Validating restore [%s] in org [%s]", restoreName, orgID)
+
+	log.Infof("Obtaining restore info for restore [%s]", restoreName)
+	backupDriver := Inst().Backup
+	restoreInspectRequest := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		OrgId: orgID,
+	}
+	restoreInspectResponse, err := backupDriver.InspectRestore(ctx, restoreInspectRequest)
+	if err != nil {
+		return err
+	}
+	theRestore := restoreInspectResponse.GetRestore()
+	restoredResourcesInfo := theRestore.GetResources()
+	apparentlyRestoredVolumes := theRestore.GetVolumes()
+	namespaceMappings := theRestore.GetNamespaceMapping()
+	volDrivers := make([]string, 0)
+	for _, vol := range apparentlyRestoredVolumes {
+		driver := vol.GetDriverName()
+		volDrivers = append(volDrivers, driver)
+	}
+
+	log.Infof("Checking status of restore [%s]", restoreName)
+	restoreStatus := theRestore.GetStatus().Status
+	if restoreStatus != api.RestoreInfo_StatusInfo_Success &&
+		restoreStatus != api.RestoreInfo_StatusInfo_PartialSuccess {
+		restoreStatusReason := theRestore.GetStatus().Reason
+		return fmt.Errorf("ValidateRestore requires restore [%s] to have a status of Success or PartialSuccess, but found [%s] with reason [%s]", restoreName, restoreStatus, restoreStatusReason)
+	}
+
+	var errors []error
+
+	// check if all the objects in the spec are present in the restore as per what px-backup reports
+	for _, expectedRestoredAppContext := range expectedRestoredAppContexts {
+
+		expectedRestoredAppContextNamespace := expectedRestoredAppContext.ScheduleOptions.Namespace
+		log.InfoD("Validating specs for the namespace (restoredAppContext) [%s] in restore [%s]", expectedRestoredAppContextNamespace, restoreName)
+
+		NSisPresent := false
+		for _, restoredNS := range namespaceMappings {
+			if restoredNS == expectedRestoredAppContextNamespace {
+				NSisPresent = true
+				break
+			}
+		}
+		if !NSisPresent {
+			err := fmt.Errorf("the namespace (restoredAppContext) [%s] provided to the ValidateRestore, is apparently not present in the restore [%s], hence cannot validate", expectedRestoredAppContextNamespace, restoreName)
+			errors = append(errors, err)
+			continue
+		}
+
+		// collect the backup resources whose specs should be present in this expectedRestoredAppContext (namespace)
+		restoredObjectsInNS := make([]*api.RestoreInfo_RestoredResource, 0)
+		for _, resource := range restoredResourcesInfo {
+			if resource.GetNamespace() == expectedRestoredAppContextNamespace {
+				restoredObjectsInNS = append(restoredObjectsInNS, resource)
+			}
+		}
+		var updatedSpec interface{}
+		var name, kind, ns string
+	specloop:
+		for _, spec := range expectedRestoredAppContext.App.SpecList {
+			if tektonspec, ok := spec.(*tektoncdv1.Task); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektonspec)
+				if err != nil {
+					err := fmt.Errorf("error in GetSpecNameKindNamepace: [%s] spec: [%+v]", err, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			} else if tektonpipelinespec, ok := spec.(*tektoncdv1.Pipeline); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektonpipelinespec)
+				if err != nil {
+					err = fmt.Errorf("error in GetUpdatedSpec: [%s]  spec: [%+v]", err, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			} else if tektonpipelinerunspec, ok := spec.(*tektoncdv1.PipelineRun); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektonpipelinerunspec)
+				if err != nil {
+					err = fmt.Errorf("error in GetUpdatedSpec: [%s] spec: [%+v]", err, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			} else if tektontaskrunspec, ok := spec.(*tektoncdv1.TaskRun); ok {
+				updatedSpec, err = k8s.GetUpdatedSpec(tektontaskrunspec)
+				if err != nil {
+					err = fmt.Errorf("error in GetUpdatedSpec: [%s] spec: [%+v]", err, spec)
+					errors = append(errors, err)
+					continue specloop
+				}
+			}
+
+			if updatedSpec != nil {
+				name, kind, ns, err = GetSpecNameKindNamepace(updatedSpec)
+			} else {
+				name, kind, ns, err = GetSpecNameKindNamepace(spec)
+			}
+			if err != nil {
+				err := fmt.Errorf("error in GetSpecNameKindNamepace: [%s] in namespace (restoredAppContext) [%s], spec: [%+v]", err, expectedRestoredAppContextNamespace, spec)
+				errors = append(errors, err)
+				continue specloop
+			}
+
+			// we only validate namespace level resources
+			if ns != "" {
+				if name == "" || kind == "" {
+					err := fmt.Errorf("error: GetSpecNameKindNamepace returned values with Spec Name: [%s], Kind: [%s], Namespace: [%s], in local Context (NS): [%s], where some of the values are empty, so this object will be ignored", name, kind, ns, expectedRestoredAppContextNamespace)
+					errors = append(errors, err)
+					continue specloop
+				}
+				if kind == "PersistentVolumeClaim" {
+					for _, failedVolume := range failedVolumes {
+						if failedVolume.Name == name && failedVolume.Namespace == ns {
+							// we don't restore PersistentVolumeClaim which is in failed state.
+							continue specloop
+						}
+					}
+				}
+
+				if kind == "StorageClass" || kind == "VolumeSnapshot" {
+					// we don't restore "StorageClass"s and "VolumeSnapshot"s (becuase we don't back them up)
+					continue specloop
+				}
+
+				if len(resourceTypesFilter) > 0 && !Contains(resourceTypesFilter, kind) {
+					log.Infof("kind: [%s] is not in resourceTypesFilter [%v], so object (name: [%s], kind: [%s], namespace: [%s]) in expectedRestoredAppContext [%s] will not be checked for in restore [%s]", kind, resourceTypesFilter, name, kind, ns, expectedRestoredAppContextNamespace, restoreName)
+					continue specloop
+				}
+
+				for _, restoredObj := range restoredObjectsInNS {
+					if name == restoredObj.Name &&
+						kind == restoredObj.Kind {
+						log.Infof("object (name: [%s], GVK: [%s,%s,%s], namespace: [%s]) was found in restore [%s], as expected by presence in expectedRestoredAppContext [%s]", restoredObj.Name, restoredObj.Group, restoredObj.Version, restoredObj.Kind, restoredObj.Namespace, restoreName, expectedRestoredAppContextNamespace)
+
+						if restoredObj.Status.Status != api.RestoreInfo_StatusInfo_Success /*Can this also be partialsuccess?*/ {
+							if restoredObj.Status.Status == api.RestoreInfo_StatusInfo_Retained {
+								if theRestore.ReplacePolicy != api.ReplacePolicy_Retain {
+									err := fmt.Errorf("object (name: [%s], kind: [%s], namespace: [%s]) was found in the restore [%s] (as expected by presence in expectedRestoredAppContext [%s]), but status was [Retained], with reason [%s], despite the replace policy being [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace, restoredObj.Status.Reason, theRestore.ReplacePolicy)
+									errors = append(errors, err)
+									IsReplacePolicySetToDelete = true
+								}
+							} else {
+								err := fmt.Errorf("object (name: [%s], kind: [%s], namespace: [%s]) was found in the restore [%s] (as expected by presence in expectedRestoredAppContext [%s]), but status was [%s], with reason [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace, restoredObj.Status.Status, restoredObj.Status.Reason)
+								errors = append(errors, err)
+							}
+						}
+
+						_, err := k8s.GetUpdatedSpec(spec)
+						if err == nil {
+							log.Infof("object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] was also present on the cluster/namespace [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
+						} else {
+							err := fmt.Errorf("presence of object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] on the cluster/namespace [%s] could not be verified as scheduler is not K8s", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
+							errors = append(errors, err)
+						}
+
+						continue specloop
+					}
+				}
+
+				// The following error means that something was NOT backed up or restored,
+				// OR it wasn't supposed to be either backed up or restored, and we forgot to exclude the check.
+				err := fmt.Errorf("object (name: [%s], kind: [%s], namespace: [%s]) is not present in restore [%s], but was expected by it's presence in expectedRestoredAppContext [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
+				errors = append(errors, err)
+
+				if kind == "PersistentVolumeClaim" {
+					err := fmt.Errorf("object (name: [%s], namespace: [%s]) is not present in restore [%s] is a PersistentVolumeClaim. Hence verification of existence of the corresponding volumes can't be done", name, ns, restoreName)
+					errors = append(errors, err)
+				}
+
+				continue specloop
+			}
+		}
+
+		// VALIDATION OF VOLUMES
+		log.InfoD("Validating Restored Volumes for the namespace (restoredAppContext) [%s] in restore [%s]", expectedRestoredAppContextNamespace, restoreName)
+
+		// Collect all volumes belonging to a namespace
+		log.Infof("getting the volumes bounded to the PVCs in the namespace (restoredAppContext) [%s] in restore [%s]", expectedRestoredAppContextNamespace, restoreName)
+		actualVolumeMap := make(map[string]*volume.Volume)
+		for _, appContext := range expectedRestoredAppContexts {
+			// Using appContext.ScheduleOptions to get the namespace of the appContext
+			// Do not use appContext.App.Namespace as it is not set
+			if appContext.ScheduleOptions.Namespace == expectedRestoredAppContextNamespace {
+				var actualRestoredVolumes []*volume.Volume
+				pvcList, _ := k8sCore.GetPersistentVolumeClaims(appContext.ScheduleOptions.Namespace, nil)
+				for _, pvc := range pvcList.Items {
+					vol := &volume.Volume{
+						Name: pvc.Spec.VolumeName,
+					}
+					actualRestoredVolumes = append(actualRestoredVolumes, vol)
+				}
+				for _, restoredVol := range actualRestoredVolumes {
+					actualVolumeMap[restoredVol.Name] = restoredVol
+				}
+				log.Infof("volumes bounded to the PVCs in the context [%s] are [%+v]", expectedRestoredAppContextNamespace, actualRestoredVolumes)
+			}
+		}
+
+		// looping over the list of volumes that PX-Backup says it restored, to run some checks
+		for _, restoredVolInfo := range apparentlyRestoredVolumes {
+			log.Infof("Restore volume is %v", restoredVolInfo.RestoreVolume)
+			if namespaceMappings[restoredVolInfo.SourceNamespace] == expectedRestoredAppContextNamespace {
+				switch restoredVolInfo.Status.Status {
+				case api.RestoreInfo_StatusInfo_Success:
+					log.Infof("in restore [%s], the status of the restored volume [%s] was Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
+				case api.RestoreInfo_StatusInfo_Retained:
+					if theRestore.ReplacePolicy == api.ReplacePolicy_Retain {
+						log.Infof("in restore [%s], the status of the restored volume [%s] was not Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
+					} else {
+						err := fmt.Errorf("in restore [%s], the status of the restored volume [%s] was not Retained. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
+						errors = append(errors, err)
+						continue
+					}
+				default:
+					err := fmt.Errorf("in restore [%s], the status of the restored volume [%s] was not Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
+					errors = append(errors, err)
+					continue
+				}
+
+				var actualVol *volume.Volume
+				var ok bool
+				if actualVol, ok = actualVolumeMap[restoredVolInfo.RestoreVolume]; !ok {
+					err := fmt.Errorf("in restore [%s], said restored volume [%s] cannot be found in the actual cluster [%s]", restoreName, restoredVolInfo.RestoreVolume, expectedRestoredAppContextNamespace)
+					errors = append(errors, err)
+					continue
+				}
+
+				if actualVol.Name != restoredVolInfo.RestoreVolume {
+					err := fmt.Errorf("in restore [%s], for restored volume [%s], PVC used is given as [%s], but actual PVC used was found to be [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Pvc, actualVol.Name)
+					errors = append(errors, err)
+				}
+
+				if IsPresent(failedVolumes, restoredVolInfo.RestoreVolume) {
+					err := fmt.Errorf("in restore [%s], for restored volume [%s], is a failed volume and not supposed to be present in restore", restoreName, restoredVolInfo.RestoreVolume)
+					errors = append(errors, err)
+				}
+				// skipping driver validation as the restore objects has multiple volume provisioners
+				if len(volDrivers) > 1 {
+					continue
+				}
+				var expectedVolumeDriver string
+				switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
+				case string(NativeCSIWithOffloadToS3):
+					expectedVolumeDriver = "kdmp"
+				case string(NativeCSI):
+					expectedVolumeDriver = "csi"
+				case string(DirectKDMP):
+					expectedVolumeDriver = "kdmp"
+				case string(NativeAzure):
+					expectedVolumeDriver = "azure"
+				default:
+					expectedVolumeDriver = Inst().V.String()
+				}
+
+				if restoredVolInfo.DriverName != expectedVolumeDriver {
+					err := fmt.Errorf("in restore [%s], for restored volume [%s], volume driver actually used is given as [%s], but expected is [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.DriverName, expectedVolumeDriver)
+					errors = append(errors, err)
+				}
+			}
+		}
+
+		// This part is added when we have taken backup of custom resources and the restored namespace will not have all the resource as that of
+		// source namespace, so modifying the expectedRestoredAppContext to have only the resources which are present in the restored namespace
+		if len(resourceTypesFilter) != 0 {
+			newCtxAppSpecList := make([]interface{}, 0)
+			for _, spec := range expectedRestoredAppContext.App.SpecList {
+				val := reflect.ValueOf(spec)
+				if val.Kind() == reflect.Struct && val.FieldByName("Kind").IsValid() {
+					kindField := val.FieldByName("Kind")
+					log.Infof("Value of Kind field is [%s]", kindField.String())
+					if IsPresent(kindField, resourceTypesFilter) {
+						newCtxAppSpecList = append(newCtxAppSpecList, spec)
+					}
+				}
+			}
+			newCtx := *expectedRestoredAppContext
+			newCtx.App.SpecList = newCtxAppSpecList
+		}
+
+		// VALIDATE APPLICATIONS
+		log.InfoD("Validate applications in restored namespace [%s] due to restore [%s]", expectedRestoredAppContextNamespace, restoreName)
+		log.InfoD("Skip pod validation for namespace [%s]: [%v]", expectedRestoredAppContextNamespace, expectedRestoredAppContext.SkipPodValidation)
+		errorChan := make(chan error, errorChannelSize)
+		ValidateContext(expectedRestoredAppContext, &errorChan)
+		for err := range errorChan {
+			errors = append(errors, err)
+		}
+	}
+
+	errStrings := make([]string, 0)
+	for _, err := range errors {
+		if err != nil {
+			errStrings = append(errStrings, err.Error())
+		}
+	}
+
+	if len(errStrings) > 0 {
+		return fmt.Errorf("ValidateRestore Errors: {%s}", strings.Join(errStrings, "}\n{"))
+	}
+
+	err = validateCRCleanup(theRestore, ctx)
+
+	return err
+}
+
+type FeaturePlatformMap map[string]map[string][]string
+
+var featureData = FeaturePlatformMap{
+	"PartialBackup": {
+		"openshift": {"pg-mysql-multiprov-ocp"},
+		"gke":       {"pg-mysql-multiprov-gke"},
+		"azure":     {"pg-mysql-multiprov-aks"},
+		"vanilla":   {"TODO", "TODO"},
+		"ibm":       {"pg-mysql-multiprov-iks"},
+	},
+}
+
+// GetApplicationSpecForFeature return applist value based on feature and platform from environment variables
+func GetApplicationSpecForFeature(feature string) ([]string, error) {
+	platform := os.Getenv("CLUSTER_PROVIDER")
+	if platform == "" {
+		return nil, fmt.Errorf("environment variable CLUSTER_PROVIDER is not set")
+	}
+
+	// Check if the feature exists in the map
+	if platforms, ok := featureData[feature]; ok {
+		if value, ok := platforms[platform]; ok {
+			return value, nil
+		}
+		return nil, fmt.Errorf("platform %s not found for feature %s", platform, feature)
+	}
+	return nil, fmt.Errorf("feature %s not found", feature)
+}
+
+// GetVSCMapping gets all storageClasses in cluster, retrieves their provisioners, and maps them to their corresponding VolumeSnapshotClass.
+func GetVSCMapping() (map[string]string, error) {
+	// Create a map to store the provisioner and corresponding VolumeSnapshotClass
+	provisionerToSnapshotClassMap := make(map[string]string)
+	k8sStorage := storage.Instance()
+	// Get the list of StorageClasses
+	scList, err := k8sStorage.GetAllStorageClasses()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the list of VolumeSnapshotClasses
+	snapshotClasses, err := Inst().S.GetAllSnapshotClasses()
+	if err != nil {
+		return nil, err
+	}
+
+	snapshotDriverToClassMap := make(map[string]string)
+	for _, snapshotClass := range snapshotClasses.Items {
+		snapshotDriverToClassMap[snapshotClass.Driver] = snapshotClass.Name
+	}
+
+	for _, sc := range scList.Items {
+		scProvisioner := sc.Provisioner
+		if snapshotClassName, exists := snapshotDriverToClassMap[scProvisioner]; exists {
+			provisionerToSnapshotClassMap[scProvisioner] = snapshotClassName
+		}
+	}
+
+	return provisionerToSnapshotClassMap, nil
+}
+
+// UpdateDriverWithEnvVariable updates a driver's environment variables ,If the variables exist, their values are updated; otherwise, they are added.
+func UpdateDriverWithEnvVariable(envVariables map[string]string) error {
+	// Get PX StorageCluster
+	clusterSpec, err := Inst().V.GetDriver()
+	if err != nil {
+		return err
+	}
+	envVarMap := make(map[string]corev1.EnvVar)
+
+	// Add existing environment variables to the map
+	for _, env := range clusterSpec.Spec.Env {
+		envVarMap[env.Name] = env
+	}
+
+	// Update the map with environment variables
+	for k, v := range envVariables {
+		if existingEnvVar, exists := envVarMap[k]; exists {
+			// If the environment variable already exists and ValueFrom is nil, update the value
+			if existingEnvVar.ValueFrom == nil {
+				existingEnvVar.Value = v
+			}
+			envVarMap[k] = existingEnvVar
+		} else {
+			// Otherwise, add the new environment variable
+			envVarMap[k] = corev1.EnvVar{Name: k, Value: v}
+		}
+	}
+
+	// Convert the map back to a slice of environment variables
+	var updatedEnvVarList []corev1.EnvVar
+	for _, envVar := range envVarMap {
+		updatedEnvVarList = append(updatedEnvVarList, envVar)
+	}
+
+	clusterSpec.Spec.Env = updatedEnvVarList
+
+	pxOperator := operator.Instance()
+	_, err = pxOperator.UpdateStorageCluster(clusterSpec)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Deleting PX pods for reloading the runtime Opts")
+	err = DeletePXPods(clusterSpec.Namespace)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Sleeping for 10 minutes for PX cluster to stabilise after deletion of pods")
+	time.Sleep(10 * time.Minute)
+	_, err = optest.ValidateStorageClusterIsOnline(clusterSpec, 10*time.Minute, 3*time.Minute)
+	if err != nil {
+		return err
+	}
+
+	log.InfoD("Waiting for PX Nodes to be up")
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := Inst().V.WaitDriverUpOnNode(n, 15*time.Minute); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// IsPxInstalled checks if PX is installed by verifying the length of the list returned by GetStorageDriverNodes.
+func IsPxInstalled() bool {
+	numOfNodes := len(node.GetStorageDriverNodes())
+	return numOfNodes > 0
 }

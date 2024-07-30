@@ -101,6 +101,22 @@ func (d *dcos) ValidateAutopilotRuleObjects() error {
 	}
 }
 
+// WaitForRebalanceToComplete validates autopilot rule objects for Rebalance
+func (d *dcos) WaitForRebalanceAROToComplete() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "WaitForRebalanceAROToComplete()",
+	}
+}
+
+// VerifyPoolResizeARO validates autopilot rule objects created for pool resize
+func (d *dcos) VerifyPoolResizeARO(apapi.AutopilotRule) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "VerifyPoolResizeARO()",
+	}
+}
+
 // GetSnapShotData retruns given snapshots
 func (d *dcos) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshotData, error) {
 	return nil, &errors.ErrNotSupported{
@@ -118,11 +134,29 @@ func (d *dcos) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotName
 }
 
 // GetSnapshotsInNameSpace get the snapshots list for the namespace
-func (d *dcos) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error) {
+func (d *dcos) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*volsnapv1.VolumeSnapshotList, error) {
 
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "DeleteSnapShot()",
+	}
+}
+
+// DeleteCsiSnapshotsFromNamespace deletes the all snapshots from a namespace
+func (d *dcos) DeleteCsiSnapshotsFromNamespace(ctx *scheduler.Context, snapshotNameSpace string) error {
+
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteCsiSnapshotsFromNamespace()",
+	}
+}
+
+// IsCsiSnapshotExists checks if a snapshot exists in the particular namespace
+func (d *dcos) IsCsiSnapshotExists(ctx *scheduler.Context, snapshotName string, namespace string) (bool, error) {
+
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsCsiSnapshotExists()",
 	}
 }
 
@@ -894,6 +928,22 @@ func (d *dcos) UpgradeScheduler(version string) error {
 	}
 }
 
+func (d *dcos) GetZones() ([]string, error) {
+	// TODO: Add implementation
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetZones()",
+	}
+}
+
+func (d *dcos) GetASGClusterSize() (int64, error) {
+	// TODO: Add implementation
+	return 0, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetASGClusterSize()",
+	}
+}
+
 func (d *dcos) CreateSecret(namespace, name, dataField, secretDataString string) error {
 	// TODO: Add implementation
 	return &errors.ErrNotSupported{
@@ -926,14 +976,6 @@ func (d *dcos) ParseCharts(chartDir string) (*scheduler.HelmRepo, error) {
 	}
 }
 
-func (d *dcos) RecycleNode(n node.Node) error {
-	//Recycle is not supported
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "RecycleNode()",
-	}
-}
-
 func (d *dcos) ValidateTopologyLabel(ctx *scheduler.Context) error {
 	//ValidateTopologyLabel is not supported
 	return &errors.ErrNotSupported{
@@ -947,6 +989,31 @@ func (d *dcos) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CreateCsiSnapshotClass()",
+	}
+}
+
+func (d *dcos) DeleteCsiSnapshotClass(snapClassName string) error {
+	//DeleteCsiSnapshotClass( is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteCsiSnapshotClass()",
+	}
+}
+
+func (d *dcos) CreateVolumeSnapshotClasses(snapClassName string, provisioner string, isDefault bool, deletePolicy string) (*volsnapv1.VolumeSnapshotClass, error) {
+	//CreateVolumeSnapshotClasses is not supported
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateVolumeSnapshotClasses()",
+	}
+}
+
+// CreateVolumeSnapshotClassesWithParameters creates a volume snapshot class with additional parameters
+func (d *dcos) CreateVolumeSnapshotClassesWithParameters(snapClassName string, provisioner string, isDefault bool, deletePolicy string, parameters map[string]string) (*volsnapv1.VolumeSnapshotClass, error) {
+	//CreateVolumeSnapshotClassesWithParameters is not supported
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateVolumeSnapshotClassesWithParameters()",
 	}
 }
 
@@ -974,7 +1041,7 @@ func (d *dcos) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneRe
 	}
 }
 
-func (d *dcos) WaitForSinglePVCToBound(pvcName, namespace string) error {
+func (d *dcos) WaitForSinglePVCToBound(pvcName, namespace string, timeout int) error {
 	//WaitForSinglePVCToBound is not supported for DCOS
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -1083,11 +1150,43 @@ func (d *dcos) GetNamespaceLabel(namespace string) (map[string]string, error) {
 	}
 }
 
+func (d *dcos) DeleteNode(node node.Node) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteNode()",
+	}
+}
+
 func (d *dcos) ScaleCluster(replicas int) error {
 	// ScaleCluster is not supported
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ScaleCluster()",
+	}
+}
+
+func (d *dcos) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetASGClusterSize()",
+	}
+}
+
+func (d *dcos) StopKubelet(n node.Node, options node.SystemctlOpts) error {
+	// StopKubelet is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StopKubelet()",
+	}
+}
+
+func (d *dcos) StartKubelet(n node.Node, options node.SystemctlOpts) error {
+	// StartKubelet is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StartKubelet()",
 	}
 }
 

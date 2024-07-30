@@ -52,6 +52,11 @@ var (
 	labels []map[string]string
 )
 
+var (
+	// StopLongevityChan is a channel to stop longevity tests
+	StopLongevityChan = make(chan struct{})
+)
+
 // TriggerFunction represents function signature of a testTrigger
 type TriggerFunction func(*[]*scheduler.Context, *chan *EventRecord)
 
@@ -204,8 +209,10 @@ func populateDisruptiveTriggers() {
 		RebootManyNodes:                 true,
 		RestartKvdbVolDriver:            true,
 		NodeDecommission:                true,
+		DetachDrives:                    true,
 		CsiSnapShot:                     false,
 		CsiSnapRestore:                  false,
+		DeleteCloudsnaps:                false,
 		KVDBFailover:                    true,
 		HAIncreaseAndReboot:             true,
 		AddDiskAndReboot:                true,
@@ -213,6 +220,9 @@ func populateDisruptiveTriggers() {
 		VolumeCreatePxRestart:           true,
 		OCPStorageNodeRecycle:           true,
 		CrashPXDaemon:                   true,
+		PowerOffAllVMs:                  true,
+		RestartKubeletService:           true,
+		PoolDelete:                      true,
 	}
 }
 
@@ -232,6 +242,7 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 	setCreatedBeforeTimeForNsDeletion(configData)
 	setUpgradeStorageDriverEndpointList(configData)
 	setVclusterFioRunOptions(configData)
+	setSchedUpgradeHops(configData)
 
 	err := populateTriggers(configData)
 	if err != nil {
@@ -355,16 +366,6 @@ func setHyperConvergedType(configData *map[string]string) {
 	}
 }
 
-func setSendGridEmailAPIKey(configData *map[string]string) error {
-	if apiKey, ok := (*configData)[SendGridEmailAPIKeyField]; ok {
-		SendGridEmailAPIKey = apiKey
-		delete(*configData, SendGridEmailAPIKeyField)
-		return nil
-	}
-	return fmt.Errorf("Failed to find [%s] field in config-map [%s] in namespace [%s]",
-		SendGridEmailAPIKeyField, testTriggersConfigMap, configMapNS)
-}
-
 func setUpgradeStorageDriverEndpointList(configData *map[string]string) {
 	// Get upgrade endpoints from configMap
 	if upgradeEndpoints, ok := (*configData)[UpgradeEndpoints]; !ok {
@@ -380,6 +381,23 @@ func setUpgradeStorageDriverEndpointList(configData *map[string]string) {
 		log.Infof("The UpgradeStorageDriverEndpointList is set to %s", Inst().UpgradeStorageDriverEndpointList)
 	}
 	delete(*configData, UpgradeEndpoints)
+}
+
+func setSchedUpgradeHops(configData *map[string]string) {
+	// Get scheduler upgrade hops from configMap
+	if schedUpgradeHops, ok := (*configData)[SchedUpgradeHops]; !ok {
+		log.Warnf("No [%s] field found in [%s] config-map in [%s] namespace.", SchedUpgradeHops, testTriggersConfigMap, configMapNS)
+	} else if schedUpgradeHops != "" {
+		currentCount := len(strings.Split(Inst().SchedUpgradeHops, ","))
+		newCount := len(strings.Split(schedUpgradeHops, ","))
+		if Inst().SchedUpgradeHops == "" || newCount >= currentCount {
+			Inst().SchedUpgradeHops = schedUpgradeHops
+		} else {
+			log.Warnf("schedUpgradeHops reduced from [%s] to [%s], removal not supported.", Inst().SchedUpgradeHops, schedUpgradeHops)
+		}
+		log.Infof("The SchedUpgradeHops is set to %s", Inst().SchedUpgradeHops)
+	}
+	delete(*configData, SchedUpgradeHops)
 }
 
 func populateTriggers(triggers *map[string]string) error {
@@ -535,10 +553,14 @@ func populateIntervals() {
 	triggerInterval[LocalSnapShot] = make(map[int]time.Duration)
 	triggerInterval[DeleteLocalSnapShot] = make(map[int]time.Duration)
 	triggerInterval[UpgradeVolumeDriver] = make(map[int]time.Duration)
+	triggerInterval[UpgradeVolumeDriverFromCatalog] = make(map[int]time.Duration)
+	triggerInterval[UpgradeCluster] = make(map[int]time.Duration)
+	triggerInterval[PowerOffAllVMs] = make(map[int]time.Duration)
 	triggerInterval[AppTasksDown] = make(map[int]time.Duration)
 	triggerInterval[AutoFsTrim] = make(map[int]time.Duration)
 	triggerInterval[UpdateVolume] = make(map[int]time.Duration)
 	triggerInterval[UpdateIOProfile] = make(map[int]time.Duration)
+	triggerInterval[DetachDrives] = make(map[int]time.Duration)
 	triggerInterval[RestartManyVolDriver] = make(map[int]time.Duration)
 	triggerInterval[RebootManyNodes] = make(map[int]time.Duration)
 	triggerInterval[NodeDecommission] = make(map[int]time.Duration)
@@ -568,6 +590,8 @@ func populateIntervals() {
 	triggerInterval[StorkAppBkpHaUpdate] = make(map[int]time.Duration)
 	triggerInterval[StorkAppBkpPxRestart] = make(map[int]time.Duration)
 	triggerInterval[StorkAppBkpPoolResize] = make(map[int]time.Duration)
+	triggerInterval[StorkVolumeSnapshotSchedule] = make(map[int]time.Duration)
+	triggerInterval[StorkVolumeSnapshotScheduleLocal] = make(map[int]time.Duration)
 	triggerInterval[HAIncreaseAndReboot] = make(map[int]time.Duration)
 	triggerInterval[AddDrive] = make(map[int]time.Duration)
 	triggerInterval[AddDiskAndReboot] = make(map[int]time.Duration)
@@ -591,9 +615,16 @@ func populateIntervals() {
 	triggerInterval[CreateAndRunFioOnVcluster] = make(map[int]time.Duration)
 	triggerInterval[CreateAndRunMultipleFioOnVcluster] = make(map[int]time.Duration)
 	triggerInterval[VolumeDriverDownVCluster] = make(map[int]time.Duration)
+	triggerInterval[SetDiscardMounts] = make(map[int]time.Duration)
+	triggerInterval[ResetDiscardMounts] = make(map[int]time.Duration)
+	triggerInterval[ScaleFADAVolumeAttach] = map[int]time.Duration{}
+	triggerInterval[DeleteCloudsnaps] = make(map[int]time.Duration)
+	triggerInterval[RestartKubeletService] = make(map[int]time.Duration)
+	triggerInterval[PoolDelete] = make(map[int]time.Duration)
+	triggerInterval[DefragScheduleCRUDOperations] = make(map[int]time.Duration)
+	triggerInterval[DefragSchedules] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
-
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
 	triggerInterval[BackupScaleMongo][9] = 2 * baseInterval
 	triggerInterval[BackupScaleMongo][8] = 3 * baseInterval
@@ -911,6 +942,28 @@ func populateIntervals() {
 	triggerInterval[StorkAppBkpPoolResize][2] = 24 * baseInterval
 	triggerInterval[StorkAppBkpPoolResize][1] = 27 * baseInterval
 
+	triggerInterval[StorkVolumeSnapshotSchedule][10] = 1 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][9] = 3 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][8] = 6 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][7] = 9 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][6] = 12 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][5] = 15 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][4] = 18 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][3] = 21 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][2] = 24 * baseInterval
+	triggerInterval[StorkVolumeSnapshotSchedule][1] = 27 * baseInterval
+
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][10] = 1 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][9] = 3 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][8] = 6 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][7] = 9 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][6] = 12 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][5] = 15 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][4] = 18 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][3] = 21 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][2] = 24 * baseInterval
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][1] = 27 * baseInterval
+
 	baseInterval = 60 * time.Minute
 
 	triggerInterval[AppTasksDown][10] = 1 * baseInterval
@@ -967,6 +1020,28 @@ func populateIntervals() {
 	triggerInterval[CrashPXDaemon][3] = 21 * baseInterval
 	triggerInterval[CrashPXDaemon][2] = 24 * baseInterval
 	triggerInterval[CrashPXDaemon][1] = 27 * baseInterval
+
+	triggerInterval[RestartKubeletService][10] = 1 * baseInterval
+	triggerInterval[RestartKubeletService][9] = 3 * baseInterval
+	triggerInterval[RestartKubeletService][8] = 6 * baseInterval
+	triggerInterval[RestartKubeletService][7] = 9 * baseInterval
+	triggerInterval[RestartKubeletService][6] = 12 * baseInterval
+	triggerInterval[RestartKubeletService][5] = 15 * baseInterval
+	triggerInterval[RestartKubeletService][4] = 18 * baseInterval
+	triggerInterval[RestartKubeletService][3] = 21 * baseInterval
+	triggerInterval[RestartKubeletService][2] = 24 * baseInterval
+	triggerInterval[RestartKubeletService][1] = 27 * baseInterval
+
+	triggerInterval[PowerOffAllVMs][10] = 1 * baseInterval
+	triggerInterval[PowerOffAllVMs][9] = 3 * baseInterval
+	triggerInterval[PowerOffAllVMs][8] = 6 * baseInterval
+	triggerInterval[PowerOffAllVMs][7] = 9 * baseInterval
+	triggerInterval[PowerOffAllVMs][6] = 12 * baseInterval
+	triggerInterval[PowerOffAllVMs][5] = 15 * baseInterval
+	triggerInterval[PowerOffAllVMs][4] = 18 * baseInterval
+	triggerInterval[PowerOffAllVMs][3] = 21 * baseInterval
+	triggerInterval[PowerOffAllVMs][2] = 24 * baseInterval
+	triggerInterval[PowerOffAllVMs][1] = 27 * baseInterval
 
 	triggerInterval[NodeMaintenanceCycle][10] = 1 * baseInterval
 	triggerInterval[NodeMaintenanceCycle][9] = 3 * baseInterval
@@ -1162,6 +1237,17 @@ func populateIntervals() {
 	triggerInterval[CloudSnapShotRestore][2] = 24 * baseInterval
 	triggerInterval[CloudSnapShotRestore][1] = 27 * baseInterval
 
+	triggerInterval[DeleteCloudsnaps][10] = 1 * baseInterval
+	triggerInterval[DeleteCloudsnaps][9] = 3 * baseInterval
+	triggerInterval[DeleteCloudsnaps][8] = 6 * baseInterval
+	triggerInterval[DeleteCloudsnaps][7] = 9 * baseInterval
+	triggerInterval[DeleteCloudsnaps][6] = 12 * baseInterval
+	triggerInterval[DeleteCloudsnaps][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[DeleteCloudsnaps][4] = 18 * baseInterval
+	triggerInterval[DeleteCloudsnaps][3] = 21 * baseInterval
+	triggerInterval[DeleteCloudsnaps][2] = 24 * baseInterval
+	triggerInterval[DeleteCloudsnaps][1] = 27 * baseInterval
+
 	triggerInterval[LocalSnapShot][10] = 1 * baseInterval
 	triggerInterval[LocalSnapShot][9] = 3 * baseInterval
 	triggerInterval[LocalSnapShot][8] = 6 * baseInterval
@@ -1293,6 +1379,17 @@ func populateIntervals() {
 	triggerInterval[UpdateIOProfile][3] = 21 * baseInterval
 	triggerInterval[UpdateIOProfile][2] = 24 * baseInterval
 	triggerInterval[UpdateIOProfile][1] = 27 * baseInterval
+
+	triggerInterval[DetachDrives][10] = 1 * baseInterval
+	triggerInterval[DetachDrives][9] = 3 * baseInterval
+	triggerInterval[DetachDrives][8] = 6 * baseInterval
+	triggerInterval[DetachDrives][7] = 9 * baseInterval
+	triggerInterval[DetachDrives][6] = 12 * baseInterval
+	triggerInterval[DetachDrives][5] = 15 * baseInterval
+	triggerInterval[DetachDrives][4] = 18 * baseInterval
+	triggerInterval[DetachDrives][3] = 21 * baseInterval
+	triggerInterval[DetachDrives][2] = 24 * baseInterval
+	triggerInterval[DetachDrives][1] = 27 * baseInterval
 
 	triggerInterval[NodeDecommission][10] = 1 * baseInterval
 	triggerInterval[NodeDecommission][9] = 3 * baseInterval
@@ -1426,6 +1523,28 @@ func populateIntervals() {
 	triggerInterval[VolumeDriverDownVCluster][2] = 24 * baseInterval
 	triggerInterval[VolumeDriverDownVCluster][1] = 27 * baseInterval
 
+	triggerInterval[SetDiscardMounts][10] = 1 * baseInterval
+	triggerInterval[SetDiscardMounts][9] = 3 * baseInterval
+	triggerInterval[SetDiscardMounts][8] = 6 * baseInterval
+	triggerInterval[SetDiscardMounts][7] = 9 * baseInterval
+	triggerInterval[SetDiscardMounts][6] = 12 * baseInterval
+	triggerInterval[SetDiscardMounts][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[SetDiscardMounts][4] = 18 * baseInterval
+	triggerInterval[SetDiscardMounts][3] = 21 * baseInterval
+	triggerInterval[SetDiscardMounts][2] = 24 * baseInterval
+	triggerInterval[SetDiscardMounts][1] = 27 * baseInterval
+
+	triggerInterval[ResetDiscardMounts][10] = 1 * baseInterval
+	triggerInterval[ResetDiscardMounts][9] = 3 * baseInterval
+	triggerInterval[ResetDiscardMounts][8] = 6 * baseInterval
+	triggerInterval[ResetDiscardMounts][7] = 9 * baseInterval
+	triggerInterval[ResetDiscardMounts][6] = 12 * baseInterval
+	triggerInterval[ResetDiscardMounts][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[ResetDiscardMounts][4] = 18 * baseInterval
+	triggerInterval[ResetDiscardMounts][3] = 21 * baseInterval
+	triggerInterval[ResetDiscardMounts][2] = 24 * baseInterval
+	triggerInterval[ResetDiscardMounts][1] = 27 * baseInterval
+
 	baseInterval = 300 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
@@ -1442,12 +1561,37 @@ func populateIntervals() {
 	triggerInterval[UpgradeVolumeDriver][6] = 5 * baseInterval
 	triggerInterval[UpgradeVolumeDriver][5] = 6 * baseInterval
 
+	triggerInterval[UpgradeVolumeDriverFromCatalog][10] = 1 * baseInterval
+	triggerInterval[UpgradeVolumeDriverFromCatalog][9] = 2 * baseInterval
+	triggerInterval[UpgradeVolumeDriverFromCatalog][8] = 3 * baseInterval
+	triggerInterval[UpgradeVolumeDriverFromCatalog][7] = 4 * baseInterval
+	triggerInterval[UpgradeVolumeDriverFromCatalog][6] = 5 * baseInterval
+	triggerInterval[UpgradeVolumeDriverFromCatalog][5] = 6 * baseInterval
+
+	triggerInterval[UpgradeCluster][10] = 1 * baseInterval
+	triggerInterval[UpgradeCluster][9] = 2 * baseInterval
+	triggerInterval[UpgradeCluster][8] = 3 * baseInterval
+	triggerInterval[UpgradeCluster][7] = 4 * baseInterval
+	triggerInterval[UpgradeCluster][6] = 5 * baseInterval
+	triggerInterval[UpgradeCluster][5] = 6 * baseInterval
+
 	triggerInterval[KVDBFailover][10] = 1 * baseInterval
 	triggerInterval[KVDBFailover][9] = 2 * baseInterval
 	triggerInterval[KVDBFailover][8] = 3 * baseInterval
 	triggerInterval[KVDBFailover][7] = 4 * baseInterval
 	triggerInterval[KVDBFailover][6] = 5 * baseInterval
 	triggerInterval[KVDBFailover][5] = 6 * baseInterval
+
+	triggerInterval[PoolDelete][10] = 1 * baseInterval
+	triggerInterval[PoolDelete][9] = 2 * baseInterval
+	triggerInterval[PoolDelete][8] = 3 * baseInterval
+	triggerInterval[PoolDelete][7] = 4 * baseInterval
+	triggerInterval[PoolDelete][6] = 5 * baseInterval
+	triggerInterval[PoolDelete][5] = 6 * baseInterval
+	triggerInterval[PoolDelete][4] = 18 * baseInterval
+	triggerInterval[PoolDelete][3] = 21 * baseInterval
+	triggerInterval[PoolDelete][2] = 24 * baseInterval
+	triggerInterval[PoolDelete][1] = 27 * baseInterval
 
 	triggerInterval[VolumesDelete][10] = 1 * baseInterval
 	triggerInterval[VolumesDelete][9] = 3 * baseInterval
@@ -1518,6 +1662,12 @@ func populateIntervals() {
 	triggerInterval[AggrVolDepReplResizeOps][6] = 5 * baseInterval
 	triggerInterval[AggrVolDepReplResizeOps][5] = 6 * baseInterval
 
+	triggerInterval[DefragScheduleCRUDOperations][10] = 1 * baseInterval
+	triggerInterval[DefragScheduleCRUDOperations][9] = 2 * baseInterval
+	triggerInterval[DefragScheduleCRUDOperations][8] = 3 * baseInterval
+	triggerInterval[DefragScheduleCRUDOperations][7] = 4 * baseInterval
+	triggerInterval[DefragScheduleCRUDOperations][6] = 5 * baseInterval
+
 	// DeleteOldNamespaces trigger will be triggered every 10 hours
 	triggerInterval[DeleteOldNamespaces][10] = 2 * baseInterval
 
@@ -1553,6 +1703,23 @@ func populateIntervals() {
 	triggerInterval[OCPStorageNodeRecycle][3] = 21 * baseInterval
 	triggerInterval[OCPStorageNodeRecycle][2] = 24 * baseInterval
 	triggerInterval[OCPStorageNodeRecycle][1] = 30 * baseInterval
+
+	triggerInterval[ScaleFADAVolumeAttach][10] = 1 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][9] = 3 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][8] = 6 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][7] = 9 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][6] = 12 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][5] = 15 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][4] = 18 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][3] = 21 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][2] = 24 * baseInterval
+	triggerInterval[ScaleFADAVolumeAttach][1] = 30 * baseInterval
+
+	triggerInterval[DefragSchedules][10] = 3 * baseInterval
+	triggerInterval[DefragSchedules][9] = 5 * baseInterval
+	triggerInterval[DefragSchedules][8] = 8 * baseInterval
+	triggerInterval[DefragSchedules][7] = 10 * baseInterval
+	triggerInterval[DefragSchedules][6] = 12 * baseInterval
 
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
@@ -1616,6 +1783,8 @@ func populateIntervals() {
 	triggerInterval[StorkAppBkpHaUpdate][0] = 0
 	triggerInterval[StorkAppBkpPxRestart][0] = 0
 	triggerInterval[StorkAppBkpPoolResize][0] = 0
+	triggerInterval[StorkVolumeSnapshotSchedule][0] = 0
+	triggerInterval[StorkVolumeSnapshotScheduleLocal][0] = 0
 	triggerInterval[DeleteOldNamespaces][0] = 0
 	triggerInterval[HAIncreaseAndReboot][0] = 0
 	triggerInterval[AddDrive][0] = 0
@@ -1624,14 +1793,17 @@ func populateIntervals() {
 	triggerInterval[AutopilotRebalance][0] = 0
 	triggerInterval[VolumeCreatePxRestart][0] = 0
 	triggerInterval[CloudSnapShotRestore][0] = 0
+	triggerInterval[DeleteCloudsnaps][0] = 0
 	triggerInterval[LocalSnapShotRestore][0] = 0
 	triggerInterval[UpdateIOProfile][0] = 0
 	triggerInterval[AggrVolDepReplResizeOps][0] = 0
 	triggerInterval[UpdateIOProfile][0] = 0
+	triggerInterval[DetachDrives][0] = 0
 	triggerInterval[AddStorageNode][0] = 0
 	triggerInterval[AddStoragelessNode][0] = 0
 	triggerInterval[OCPStorageNodeRecycle][0] = 0
 	triggerInterval[NodeDecommission][0] = 0
+	triggerInterval[PowerOffAllVMs][0] = 0
 	triggerInterval[HAIncreaseAndRestartPX][0] = 0
 	triggerInterval[HAIncreaseAndCrashPX][0] = 0
 	triggerInterval[CrashPXDaemon][0] = 0
@@ -1640,6 +1812,13 @@ func populateIntervals() {
 	triggerInterval[StorageFullPoolExpansion][0] = 0
 	triggerInterval[HAIncreaseWithPVCResize][0] = 0
 	triggerInterval[ReallocateSharedMount][0] = 0
+	triggerInterval[SetDiscardMounts][0] = 0
+	triggerInterval[ResetDiscardMounts][0] = 0
+	triggerInterval[ScaleFADAVolumeAttach][0] = 0
+	triggerInterval[RestartKubeletService][0] = 0
+	triggerInterval[PoolDelete][0] = 0
+	triggerInterval[DefragSchedules][0] = 0
+	triggerInterval[DefragScheduleCRUDOperations][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
@@ -1667,7 +1846,13 @@ func emailEventTrigger(wg *sync.WaitGroup,
 	lastInvocationTime := start
 
 	for {
-
+		select {
+		case <-StopLongevityChan:
+			log.InfoD("Received stop signal. Exiting longevity test trigger [%s] loop", triggerType)
+			return
+		default:
+			// Continuing the loop as no stop signal is received
+		}
 		// Get next interval of when trigger should happen
 		// This interval can dynamically change by editing configMap
 		waitTime, isTriggerEnabled := isTriggerEnabled(triggerType)

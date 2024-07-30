@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"container/ring"
 	"fmt"
-	"github.com/devans10/pugo/flasharray"
-	"github.com/portworx/torpedo/drivers/vcluster"
-	"github.com/portworx/torpedo/pkg/pureutils"
 	"math"
 	"math/rand"
+	"net/url"
 	"os"
 	"os/exec"
 	"reflect"
@@ -20,15 +18,26 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/devans10/pugo/flasharray"
+	oputil "github.com/libopenstorage/operator/pkg/util/test"
+	"github.com/portworx/torpedo/drivers/scheduler/aks"
+	"github.com/portworx/torpedo/drivers/scheduler/eks"
+	"github.com/portworx/torpedo/drivers/scheduler/gke"
+	"github.com/portworx/torpedo/drivers/scheduler/iks"
+	"github.com/portworx/torpedo/pkg/osutils"
+	"golang.org/x/exp/slices"
+
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apios "github.com/libopenstorage/openstorage/api"
 	opsapi "github.com/libopenstorage/openstorage/api"
+	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/operator"
 	storage "github.com/portworx/sched-ops/k8s/storage"
@@ -36,10 +45,11 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"gopkg.in/natefinch/lumberjack.v2"
 	appsapi "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	storageapi "k8s.io/api/storage/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/monitor/prometheus"
@@ -49,6 +59,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/drivers/vcluster"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/applicationbackup"
@@ -57,6 +68,7 @@ import (
 	"github.com/portworx/torpedo/pkg/email"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/pkg/stats"
 	"github.com/portworx/torpedo/pkg/units"
 )
@@ -84,6 +96,8 @@ const (
 	MigrationsCountField = "migrationscount"
 	// UpgradeEndpoints is a field in the configmap that contains a comma-separated list of upgrade endpoints
 	UpgradeEndpoints = "upgradeEndpoints"
+	// SchedUpgradeHops is a field in the configmap that contains a comma-separated list of scheduler upgrade hops
+	SchedUpgradeHops = "schedUpgradeHops"
 	// BaseInterval is a field in the configmap that represents base interval in minutes
 	BaseInterval = "baseInterval"
 	// VclusterFioRunTimeField is a field in the configmap that represents fio run time in seconds
@@ -126,6 +140,7 @@ const (
 	errorChannelSize                 = 50
 	snapshotScheduleRetryInterval    = 2 * time.Minute
 	snapshotScheduleRetryTimeout     = 60 * time.Minute
+	defaultMaxDefragDuration         = 60
 )
 
 const (
@@ -139,6 +154,19 @@ const (
 	CRASH      ErrorInjection = "crash"
 	PX_RESTART ErrorInjection = "px_restart"
 	REBOOT     ErrorInjection = "reboot"
+)
+
+const (
+	deploymentCount      = 250
+	deploymentNamePrefix = "fada-scale-dep"
+	pvcNamePrefix        = "fada-scale-pvc"
+	fadaNamespacePrefix  = "fada-namespace"
+	podAttachTimeout     = 15 * time.Minute
+)
+
+const (
+	equalSeparator = "="
+	colonSeparator = ":"
 )
 
 // TODO Need to add for AutoJournal
@@ -176,10 +204,6 @@ var ChaosMap map[string]int
 
 // coresMap stores mapping between node name and cores generated.
 var coresMap map[string]string
-
-// SendGridEmailAPIKey holds API key used to interact
-// with SendGrid Email APIs
-var SendGridEmailAPIKey string
 
 // backupCounter holds the iteration of TriggerBackup
 var backupCounter = 0
@@ -244,6 +268,12 @@ var VclusterFioTotalIteration = "1"
 // VclusterParallelApps is the number of parallel apps to be run in vcluster
 var VclusterFioParallelApps = "2"
 
+// isDefragScheduleExist exist set to false initially
+var isDefragScheduleExist = false
+
+// defragScheduleID is needed to remember the scheduleID during next run
+var defragScheduleID string
+
 // Event describes type of test trigger
 type Event struct {
 	ID   string
@@ -266,8 +296,6 @@ var eventRing *ring.Ring
 // decommissionedNode for rejoin test
 var decommissionedNode = node.Node{}
 
-// node with autopilot rule enabled
-var autoPilotLabelNode node.Node
 var autoPilotRuleCreated bool
 
 var cloudsnapMap = make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
@@ -484,6 +512,10 @@ const (
 	UpgradeStork = "upgradeStork"
 	// UpgradeVolumeDriver  upgrade volume driver version to the latest build
 	UpgradeVolumeDriver = "upgradeVolumeDriver"
+	// UpgradeVolumeDriverFromCatalog upgrades volume driver from catalog according to the Inst().UpgradeStorageDriverEndpointList
+	UpgradeVolumeDriverFromCatalog = "upgradeVolumeDriverFromCatalog"
+	// UpgradeCluster upgrades the cluster according to the Inst().SchedUpgradeHops
+	UpgradeCluster = "upgradeCluster"
 	// AppTasksDown scales app up and down
 	AppTasksDown = "appScaleUpAndDown"
 	// AutoFsTrim enables Auto Fstrim in PX cluster
@@ -491,8 +523,12 @@ const (
 	// UpdateVolume provides option to update volume with properties like iopriority.
 	UpdateVolume    = "updateVolume"
 	UpdateIOProfile = "updateIOProfile"
+	DetachDrives    = "detachDrives"
+	PowerOffAllVMs  = "powerOffAllVMs"
 	// NodeDecommission decommission random node in the PX cluster
 	NodeDecommission = "nodeDecomm"
+	// Delelete cloudsnaps
+	DeleteCloudsnaps = "deleteCloudsnaps"
 	//NodeRejoin rejoins the decommissioned node into the PX cluster
 	NodeRejoin = "nodeRejoin"
 	// RelaxedReclaim enables RelaxedReclaim in PX cluster
@@ -519,6 +555,10 @@ const (
 	AsyncDRMigrationSchedule = "asyncdrmigrationschedule"
 	// ConfluentAsyncDR runs Async DR between two clusters for Confluent kafka CRD
 	ConfluentAsyncDR = "confluentasyncdr"
+	// Storkvolumesnapshotschedule creates stork snapshot schedules
+	StorkVolumeSnapshotSchedule = "storkvolumesnapshotschedule"
+	// StorkVolumeSnapshotScheduleLocal triggers stork snapshot schedule for local volumes
+	StorkVolumeSnapshotScheduleLocal = "storkvolumesnapshotschedulelocal"
 	// KafkaAsyncDR runs Async DR between two clusters for kafka CRD
 	KafkaAsyncDR = "kafkaasyncdr"
 	// MongoAsyncDR runs Async DR between two clusters for kafka CRD
@@ -561,7 +601,7 @@ const (
 	// Volume update repl size and resize volume on aggregated volumes
 	AggrVolDepReplResizeOps = "aggrVolDepReplResizeOps"
 
-	// Add Drive to create new pool and resize Drive in maintenance mode
+	// AddResizePoolMaintenance Add Drive to create new pool and resize Drive in maintenance mode
 	AddResizePoolMaintenance = "addResizePoolInMaintenance"
 	//AddStorageNode adds storage node to existing OCP set up
 	AddStorageNode = "addStorageNode"
@@ -614,6 +654,27 @@ const (
 
 	//VolumeDriverDownVCluster creates and runs fio on vcluster and volume driver down
 	VolumeDriverDownVCluster = "VolumeDriverDownVCluster"
+
+	// SetDiscardMounts Sets and resets discard cluster wide options on the cluster
+	SetDiscardMounts = "SetDiscardMounts"
+
+	// ResetDiscardMounts Sets and resets discard cluster wide options on the cluster
+	ResetDiscardMounts = "ResetDiscardMounts"
+
+	// ScaleFADAVolumeAttach create and attach FADA volumes at scale
+	ScaleFADAVolumeAttach = "ScaleFADAVolumeAttach"
+
+	// RestartKubeletService restarts kubelet on the nodes
+	RestartKubeletService = "restartKubeletService"
+
+	// PoolDelete deletes the px pool and create new pool
+	PoolDelete = "poolDelete"
+
+	// DefragScheduleCRUDOperations validate defrag create, show, update and delete operations
+	DefragScheduleCRUDOperations = "defragScheduleCRUDOperations"
+
+	// DefragSchedules setup defrag schedules in a cluster once and validates it
+	DefragSchedules = "defragSchedules"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -684,7 +745,7 @@ func updateLongevityStats(name, eventStatName string, dashStats map[string]strin
 	name = strings.Split(name, "<br>")[0] //discarding the extra strings attached to name if any
 	version, err := Inst().V.GetDriverVersion()
 	product := "px-enterprise"
-	if eventStatName == stats.AsyncDREventName || name == stats.MetroDREventName || name == stats.StorkApplicationBackupEventName {
+	if eventStatName == stats.AsyncDREventName || eventStatName == stats.MetroDREventName || eventStatName == stats.StorkApplicationBackupEventName {
 		version, err = asyncdr.GetStorkVersion()
 		product = "stork"
 	}
@@ -791,6 +852,131 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 				}
 			}
 		}
+	})
+}
+
+// TriggerDetachDrives Detach all vsphere cloud drives, verify storage node will be recoevred after node maintenance cycle.
+func TriggerDetachDrives(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(DetachDrives)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DetachDrives,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	stepLog := "Detach cloud drives from Storage node"
+	Step(stepLog, func() {
+		var err error
+		var stc *operatorcorev1.StorageCluster
+		log.Infof(stepLog)
+		Step(stepLog,
+			func() {
+				log.Infof(stepLog)
+				getSTC := func() (interface{}, bool, error) {
+					namespace, err := Inst().S.GetPortworxNamespace()
+					if err != nil {
+						return nil, false, fmt.Errorf("Portworx namespace  %s is not found: err %v", namespace, err)
+					}
+					pxOperator := operator.Instance()
+					stcList, err := pxOperator.ListStorageClusters(namespace)
+					if err != nil {
+						return nil, false, fmt.Errorf("Storage cluster list are not available: err %v", err)
+					}
+					log.Infof("Stc list %v ", stcList)
+					stc, err = pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
+					if err != nil {
+						return nil, false, fmt.Errorf("Storage cluster is not available: err %v", err)
+					}
+					return nil, false, nil
+				}
+				_, err = task.DoRetryWithTimeout(getSTC, 3*time.Minute, 1*time.Minute)
+				UpdateOutcome(event, err)
+				var nodeId string
+				storageNodes := node.GetStorageNodes()
+				nodeId = storageNodes[0].VolDriverNodeID
+				err = Inst().N.DetachDrivesFromVM(stc, storageNodes[0].Name)
+				UpdateOutcome(event, err)
+				time.Sleep(1 * time.Minute)
+				statusErr := Inst().V.WaitDriverUpOnNode(storageNodes[0], 10*time.Minute)
+				if statusErr != nil {
+					if strings.Contains(statusErr.Error(), apios.Status_STATUS_STORAGE_DOWN.String()) {
+						log.Infof("Node has gone to Storage Down state after detach %v: Node %s", statusErr, storageNodes[0].Name)
+					} else {
+						UpdateOutcome(event, statusErr)
+					}
+				}
+				storageNode, err := Inst().V.GetDriverNode(&storageNodes[0])
+				UpdateOutcome(event, err)
+				if storageNode.Status.String() != apios.Status_STATUS_STORAGE_DOWN.String() {
+					UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", storageNode.SchedulerNodeName,
+						apios.Status_STATUS_STORAGE_DOWN, storageNode.Status))
+				}
+				log.Infof("Status of the storage node %s ,%v ", storageNode.SchedulerNodeName, storageNode.Status)
+				statusErr = Inst().V.EnterMaintenance(storageNodes[0])
+				UpdateOutcome(event, statusErr)
+				status, _ := Inst().V.GetNodeStatus(storageNodes[0])
+				log.Infof("Status when the storage node entered maintenance mode %s , ", status.String())
+				if status.String() != apios.Status_STATUS_MAINTENANCE.String() {
+					UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", storageNodes[0].Name,
+						apios.Status_STATUS_MAINTENANCE, status))
+				}
+				statusErr = Inst().V.ExitMaintenance(storageNodes[0])
+				UpdateOutcome(event, statusErr)
+				status, _ = Inst().V.GetNodeStatus(storageNodes[0])
+				log.Infof("Node Status after exit maintenance mode %v , %s", status, storageNodes[0].Name)
+				if status.String() != apios.Status_STATUS_OK.String() {
+					UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", storageNodes[0].Name,
+						apios.Status_STATUS_MAINTENANCE, status))
+				}
+				err = Inst().V.RefreshDriverEndpoints()
+				UpdateOutcome(event, err)
+				//There are chances that storageless node can convert storage node by attaching these drives. Hence making sure
+				//This node id is up.
+				var selectedStorageNode *node.Node
+				storageNodes = node.GetStorageNodes()
+				for _, nodeInfo := range storageNodes {
+					if nodeInfo.VolDriverNodeID == nodeId {
+						selectedStorageNode = &nodeInfo
+						log.Infof("Node which has the nodeID %v , %s", status, (*selectedStorageNode).Name)
+						break
+					}
+				}
+				if selectedStorageNode != nil {
+					status, err = Inst().V.GetNodeStatus(*selectedStorageNode)
+					if err != nil {
+						UpdateOutcome(event, err)
+					} else {
+						log.Infof("Node Status  %v node: %s", status, (*selectedStorageNode).SchedulerNodeName)
+						if status.String() != apios.Status_STATUS_OK.String() {
+							UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", (*selectedStorageNode).SchedulerNodeName,
+								apios.Status_STATUS_OK, status))
+						}
+					}
+				} else {
+					UpdateOutcome(event, fmt.Errorf("Failed to find the node!"))
+				}
+				for _, ctx := range *contexts {
+					log.Infof("Validating context: %v", ctx.App.Key)
+					ctx.SkipVolumeValidation = false
+					errorChan := make(chan error, errorChannelSize)
+					ValidateContext(ctx, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				}
+				err = ValidateDataIntegrity(contexts)
+				UpdateOutcome(event, err)
+				updateMetrics(*event)
+			})
 	})
 }
 
@@ -1096,13 +1282,16 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 						}
 					}
 				}
-
 				if err == nil {
 					err := HaIncreaseErrorInjectionTargetNode(event, selctx, v, storageNodeMap, errorInj)
 					log.Error(err)
+					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after HaIncreaseErrorInjectionTargetNode ", v.Name, v.ID, v.Namespace)
+					PrintInspectVolume(v.ID)
 					UpdateOutcome(event, err)
 					err = HaIncreaseErrorInjectSourceNode(event, selctx, v, storageNodeMap, errorInj)
 					log.Error(err)
+					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after HaIncreaseErrorInjectSourceNode ", v.Name, v.ID, v.Namespace)
+					PrintInspectVolume(v.ID)
 					UpdateOutcome(event, err)
 				}
 			}
@@ -1244,8 +1433,11 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							updateLongevityStats(HAIncrease, stats.HAIncreaseEventName, dashStats)
 							err = Inst().V.SetReplicationFactor(v, expRF, nil, nil, true, opts)
 							if err != nil {
+								log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s", v.Name, v.ID, v.Namespace)
+								PrintInspectVolume(v.ID)
 								log.Errorf("There is a error setting repl [%v]", err.Error())
 							}
+
 							UpdateOutcome(event, err)
 						} else {
 							log.Warnf("cannot peform HA increase as new repl factor value is greater than max allowed %v", MaxRF)
@@ -1288,6 +1480,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, err)
 				}
 			})
+
 		}
 		updateMetrics(*event)
 	})
@@ -1347,6 +1540,8 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 
 				err = Inst().V.ResizeVolume(vol.ID, newSize)
 				if err != nil {
+					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failure of resizing the volume", vol.Name, vol.ID, vol.Namespace)
+					PrintInspectVolume(vol.ID)
 					return err
 				}
 
@@ -1431,11 +1626,16 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 						}
 						err = Inst().V.SetReplicationFactor(v, currRep, nil, nil, false, opts)
 						if err != nil {
+							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failing to set replication", v.Name, v.ID, v.Namespace)
+							PrintInspectVolume(v.ID)
 							log.Errorf("There is a error setting repl [%v]", err.Error())
 							UpdateOutcome(event, err)
 						}
-
 						err = volumeResize(v)
+						if err != nil {
+							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failure of a volume resize", v.Name, v.ID, v.Namespace)
+							PrintInspectVolume(v.ID)
+						}
 						UpdateOutcome(event, err)
 
 					})
@@ -1559,6 +1759,8 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							updateLongevityStats(HADecrease, stats.HADecreaseEventName, dashStats)
 							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
 							if err != nil {
+								log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failed to  decrease repl", v.Name, v.ID, v.Namespace)
+								PrintInspectVolume(v.ID)
 								log.Errorf("There is an error decreasing repl [%v]", err.Error())
 							}
 							UpdateOutcome(event, err)
@@ -1756,6 +1958,62 @@ func TriggerCrashPXDaemon(contexts *[]*scheduler.Context, recordChan *chan *Even
 					dashStats["node"] = appNode.Name
 					updateLongevityStats(CrashPXDaemon, stats.PXDaemonCrashEventName, dashStats)
 					CrashPXDaemonAndWait([]node.Node{appNode}, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				})
+			err = ValidateDataIntegrity(&nodeContexts)
+			UpdateOutcome(event, err)
+			validateContexts(event, contexts)
+		}
+		updateMetrics(*event)
+	})
+}
+
+// TriggerKubeletRestart restarts kubelet on the nodes
+func TriggerKubeletRestart(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(RestartKubeletService)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: RestartKubeletService,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	stepLog := "restart kubelet in all nodes"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		for _, appNode := range node.GetStorageDriverNodes() {
+			err := isNodeHealthy(appNode, event.Event.Type)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
+			stepLog = fmt.Sprintf("crash volume driver %s on node: %v",
+				Inst().V.String(), appNode.Name)
+			nodeContexts, err := GetContextsOnNode(contexts, &appNode)
+			UpdateOutcome(event, err)
+
+			Step(stepLog,
+				func() {
+					log.InfoD(stepLog)
+					taskStep := fmt.Sprintf("restart driver on node: %s",
+						appNode.MgmtIp)
+					event.Event.Type += "<br>" + taskStep
+					errorChan := make(chan error, errorChannelSize)
+					dashStats := make(map[string]string)
+					dashStats["node"] = appNode.Name
+					updateLongevityStats(RestartKubeletService, stats.RestartKubeletEventName, dashStats)
+					RestartKubelet([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
 						UpdateOutcome(event, err)
 					}
@@ -2016,7 +2274,7 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 func isNodeHealthy(n node.Node, eventType string) error {
 	status, err := Inst().V.GetNodeStatus(n)
 	if err != nil {
-		log.Errorf("Unable to get Node [%s] status, skipping [%s] for the node", n.Name, eventType)
+		log.Errorf("Unable to get Node [%s] status, skipping [%s] for the node [%+v]. Error: [%v]", n.Name, eventType, n, err)
 		return err
 	}
 
@@ -2317,6 +2575,8 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 			UpdateOutcome(event, err)
 			return
 		}
+		err = Inst().S.RefreshNodeRegistry()
+		UpdateOutcome(event, err)
 		stNodes := node.GetNodesByVoDriverNodeID()
 		nodeContexts := make([]*scheduler.Context, 0)
 		for _, kvdbNode := range kvdbNodes {
@@ -2324,6 +2584,10 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 			appNode, ok := stNodes[kvdbNode.ID]
 			if !ok {
 				UpdateOutcome(event, fmt.Errorf("node with id %s not found in the nodes list", kvdbNode.ID))
+				log.InfoD("current node registry..")
+				for _, n := range stNodes {
+					log.InfoD("node volume driver id: %s, node name: %s", n.VolDriverNodeID, n.Name)
+				}
 				continue
 			}
 
@@ -2528,7 +2792,7 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		nodesToReboot := getNodesByChaosLevel(RebootManyNodes)
-		selectedNodes := make([]node.Node, len(nodesToReboot))
+		selectedNodes := make([]node.Node, 0)
 		for _, n := range nodesToReboot {
 			err := isNodeHealthy(n, event.Event.Type)
 			if err != nil {
@@ -2810,6 +3074,8 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 					log.InfoD(stepLog)
 					log.Infof("Calling CloneVolume()...")
 					clonedVolID, err = Inst().V.CloneVolume(vol.ID)
+					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after cloning the volume", vol.Name, vol.ID, vol.Namespace)
+					PrintInspectVolume(vol.ID)
 					UpdateOutcome(event, err)
 				})
 				stepLog = fmt.Sprintf("Validate successful clone %s", clonedVolID)
@@ -2913,7 +3179,13 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 							params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 							UpdateOutcome(event, err)
 						}
+						log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after vol resize", v.Name, v.ID, v.Namespace)
+						PrintInspectVolume(v.ID)
 						err := Inst().V.ValidateUpdateVolume(v, params)
+						if err != nil {
+							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after vol resize", v.Name, v.ID, v.Namespace)
+							PrintInspectVolume(v.ID)
+						}
 						UpdateOutcome(event, err)
 					}
 				})
@@ -2963,7 +3235,7 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 						interval := getCloudSnapInterval(LocalSnapShot)
 						log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
 						schedPolicy = &storkv1.SchedulePolicy{
-							ObjectMeta: meta_v1.ObjectMeta{
+							ObjectMeta: metav1.ObjectMeta{
 								Name: policyName,
 							},
 							Policy: storkv1.SchedulePolicyItem{
@@ -3232,7 +3504,7 @@ func TriggerLocalSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 				dashStats["destination-name"] = v.Name
 				dashStats["destination-namespace"] = v.Namespace
 				updateLongevityStats(LocalSnapShotRestore, stats.LocalsnapRestorEventName, dashStats)
-				restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
+				restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: metav1.ObjectMeta{
 					Name:      v.Name,
 					Namespace: v.Namespace,
 				}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: volumeSnapshotStatus.Name, SourceNamespace: appNamespace, GroupSnapshot: false}}
@@ -3311,11 +3583,16 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 					policyName := "intervalpolicy"
 					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 					if err != nil {
+						err = CreatePXCloudCredential()
+						if err != nil {
+							UpdateOutcome(event, err)
+							return
+						}
 						retain := 10
 						interval := getCloudSnapInterval(CloudSnapShot)
 						log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
 						schedPolicy = &storkv1.SchedulePolicy{
-							ObjectMeta: meta_v1.ObjectMeta{
+							ObjectMeta: metav1.ObjectMeta{
 								Name: policyName,
 							},
 							Policy: storkv1.SchedulePolicyItem{
@@ -3438,6 +3715,77 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 
 }
 
+// TriggerDeleteCloudsnaps delete cloud snaps
+func TriggerDeleteCloudsnaps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(DeleteCloudsnaps)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DeleteCloudsnaps,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	stepLog := "Delete all cloudsnaps"
+	Step(stepLog, func() {
+		log.Infof(stepLog)
+		var volCloudsnapMap = make(map[string][]string)
+		for _, ctx := range *contexts {
+			vols, err := Inst().S.GetVolumeParameters(ctx)
+			log.Infof("Validating context: %v", ctx.App.Key)
+			log.Infof("Volumes : %v", vols)
+			UpdateOutcome(event, err)
+			for vol, params := range vols {
+				inspectedVol, err := Inst().V.InspectVolume(vol)
+				UpdateOutcome(event, err)
+				csBksps, err := Inst().V.GetCloudsnapsOfGivenVolume(vol, inspectedVol.Id, params)
+				UpdateOutcome(event, err)
+				var cloudsnapIds []string
+				for _, bk := range csBksps {
+					cloudsnapIds = append(cloudsnapIds, bk.Id)
+				}
+				if len(csBksps) > 0 {
+					volCloudsnapMap[vol] = cloudsnapIds
+					err = Inst().V.DeleteAllCloudsnaps(vol, csBksps[0].SrcVolumeId, params)
+					if err != nil && !strings.Contains(err.Error(), "Key already exists") {
+						UpdateOutcome(event, err)
+					}
+				}
+			}
+		}
+		log.Infof("Wait for 10 minutes")
+		time.Sleep(600 * time.Second)
+		for _, ctx := range *contexts {
+			vols, err := Inst().S.GetVolumeParameters(ctx)
+			UpdateOutcome(event, err)
+			for vol, params := range vols {
+				log.Infof("Volume Name : %s", vol)
+				inspectedVol, err := Inst().V.InspectVolume(vol)
+				UpdateOutcome(event, err)
+				csBksps, err := Inst().V.GetCloudsnapsOfGivenVolume(vol, inspectedVol.Id, params)
+				UpdateOutcome(event, err)
+				cloudsnapIds, ok := volCloudsnapMap[vol]
+				if ok {
+					for _, bk := range csBksps {
+						if slices.Contains(cloudsnapIds, bk.Id) {
+							log.Infof("Cloud snap hasn not deleted successfully : %s: vol %s", bk.Id, vol)
+							UpdateOutcome(event, fmt.Errorf("Cloud snap has not deleted successfully : %s: vol %s", bk.Id, vol))
+						}
+					}
+				}
+			}
+		}
+		updateMetrics(*event)
+	})
+}
+
 // TriggerCloudSnapshotRestore perform in-place cloud snap restore
 func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 
@@ -3457,6 +3805,13 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 	defer func() {
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
+	}()
+
+	defer func() {
+		bucketName, err := GetCloudsnapBucketName(*contexts)
+		UpdateOutcome(event, err)
+		err = DeleteCloudSnapBucket(bucketName)
+		UpdateOutcome(event, err)
 	}()
 
 	setMetrics(*event)
@@ -3505,7 +3860,7 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 						dashStats["destination-name"] = vol.Name
 						dashStats["destination-namespace"] = vol.Namespace
 						updateLongevityStats(CloudSnapShotRestore, stats.CloudsnapRestorEventName, dashStats)
-						restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
+						restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: metav1.ObjectMeta{
 							Name:      vol.Name,
 							Namespace: vol.Namespace,
 						}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: volumeSnapshotStatus.Name, SourceNamespace: appNamespace, GroupSnapshot: false}}
@@ -3570,7 +3925,12 @@ func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *Event
 			options := mapToVolumeOptions(opts)
 
 			// Tear down storage objects
-			vols := DeleteVolumes(ctx, options)
+			log.Infof("Deleting %s app's volumes", ctx.App.Key)
+			vols, err := Inst().S.DeleteVolumes(ctx, options)
+			if err != nil {
+				log.Errorf("error deleting volumes for ctx [%s], Err: %v", ctx.App.Key, err)
+				UpdateOutcome(event, err)
+			}
 
 			// Tear down application
 			stepLog = fmt.Sprintf("start destroying %s app", ctx.App.Key)
@@ -3580,7 +3940,7 @@ func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *Event
 				UpdateOutcome(event, err)
 			})
 
-			err := ValidateVolumesDeleted(ctx.App.Key, vols)
+			err = ValidateVolumesDeleted(ctx.App.Key, vols)
 			UpdateOutcome(event, err)
 			checkLunsAfterVolumeDeletion(event, vols)
 		}
@@ -3611,7 +3971,6 @@ func checkLunsAfterVolumeDeletion(event *EventRecord, vols []*volume.Volume) {
 
 	pureClientMap := make(map[string]map[string]*flasharray.Client)
 	pureClientMap["FADA"], err = pureutils.GetFAClientMapFromPXPureSecret(pxPureSecret)
-	pureClientMap["FBDA"], err = pureutils.GetFBClientMapFromPXPureSecret(pxPureSecret)
 
 	timeout := 10 * time.Minute
 	t := func() (interface{}, bool, error) {
@@ -4086,7 +4445,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 			for i := 0; i < configMapCount; i++ {
 				configName := fmt.Sprintf("%s-%d-%d", namespace, backupCounter, i)
 				cm := &v1.ConfigMap{
-					ObjectMeta: meta_v1.ObjectMeta{
+					ObjectMeta: metav1.ObjectMeta{
 						Name:      configName,
 						Namespace: namespace,
 					},
@@ -4166,7 +4525,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 			bkpInspectResp, err := InspectBackup(backupName)
 			UpdateOutcome(event, err)
 			backupObj := bkpInspectResp.GetBackup()
-			cmList, err := core.Instance().ListConfigMap(namespace, meta_v1.ListOptions{})
+			cmList, err := core.Instance().ListConfigMap(namespace, metav1.ListOptions{})
 			//kube-root-ca.crt exists in every namespace but does not get backed up, so we subtract 1 from the count
 			if backupObj.GetResourceCount() != uint64(len(cmList.Items)-1) {
 				errMsg := fmt.Sprintf("Backup [%s] has an incorrect number of objects, expected [%d], actual [%d]", backupName, len(cmList.Items)-1, backupObj.GetResourceCount())
@@ -4550,7 +4909,7 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 						DeleteLabelFromResource(pvcPointer, labelKey)
 					}
 				}
-				cmList, err := core.Instance().ListConfigMap(ns.Name, meta_v1.ListOptions{})
+				cmList, err := core.Instance().ListConfigMap(ns.Name, metav1.ListOptions{})
 				UpdateOutcome(event, err)
 				for _, cm := range cmList.Items {
 					cmPointer, err := core.Instance().GetConfigMap(cm.Name, ns.Name)
@@ -4559,7 +4918,7 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 						DeleteLabelFromResource(cmPointer, labelKey)
 					}
 				}
-				secretList, err := core.Instance().ListSecret(ns.Name, meta_v1.ListOptions{})
+				secretList, err := core.Instance().ListSecret(ns.Name, metav1.ListOptions{})
 				UpdateOutcome(event, err)
 				for _, secret := range secretList.Items {
 					secretPointer, err := core.Instance().GetConfigMap(secret.Name, ns.Name)
@@ -4615,7 +4974,7 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 					}
 				}
 			}
-			cmList, err := core.Instance().ListConfigMap(ns.Name, meta_v1.ListOptions{})
+			cmList, err := core.Instance().ListConfigMap(ns.Name, metav1.ListOptions{})
 			UpdateOutcome(event, err)
 			for _, cm := range cmList.Items {
 				cmPointer, err := core.Instance().GetConfigMap(cm.Name, ns.Name)
@@ -4633,7 +4992,7 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 					}
 				}
 			}
-			secretList, err := core.Instance().ListSecret(ns.Name, meta_v1.ListOptions{})
+			secretList, err := core.Instance().ListSecret(ns.Name, metav1.ListOptions{})
 			UpdateOutcome(event, err)
 			for _, secret := range secretList.Items {
 				secretPointer, err := core.Instance().GetSecret(secret.Name, ns.Name)
@@ -5131,7 +5490,7 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 			App: &spec.AppSpec{
 				SpecList: []interface{}{
 					&appsapi.Deployment{
-						ObjectMeta: meta_v1.ObjectMeta{
+						ObjectMeta: metav1.ObjectMeta{
 							Name:      pxbackupDeploymentName,
 							Namespace: pxbackupDeploymentNamespace,
 						},
@@ -5214,7 +5573,7 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 			App: &spec.AppSpec{
 				SpecList: []interface{}{
 					&appsapi.Deployment{
-						ObjectMeta: meta_v1.ObjectMeta{
+						ObjectMeta: metav1.ObjectMeta{
 							Name:      pxbackupMongodbDeploymentName,
 							Namespace: pxbackupMongodbDeploymentNamespace,
 						},
@@ -5237,7 +5596,7 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 			App: &spec.AppSpec{
 				SpecList: []interface{}{
 					&appsapi.Deployment{
-						ObjectMeta: meta_v1.ObjectMeta{
+						ObjectMeta: metav1.ObjectMeta{
 							Name:      pxbackupMongodbDeploymentName,
 							Namespace: pxbackupMongodbDeploymentNamespace,
 						},
@@ -5279,12 +5638,12 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 		return false, fmt.Errorf("pool provided is nil")
 	}
 
-	if poolToBeResized != nil && poolToBeResized.LastOperation != nil {
+	if poolToBeResized.LastOperation != nil {
 		log.InfoD("Validating pool :%v to expand", poolToBeResized.Uuid)
 
 		f := func() (interface{}, bool, error) {
 
-			pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
+			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 			if err != nil {
 				return nil, true, fmt.Errorf("error getting pools list, Error :%v", err)
 			}
@@ -5292,11 +5651,15 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 			updatedPoolToBeResized := pools[poolToBeResized.Uuid]
 			if updatedPoolToBeResized.LastOperation.Status != opsapi.SdkStoragePool_OPERATION_SUCCESSFUL {
 				if updatedPoolToBeResized.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
-					return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation)
+					if strings.Contains(updatedPoolToBeResized.LastOperation.Msg, "aborting due to unclean volumes") {
+						log.Warnf("Previous Pool expanison has failed due to unclean volumes [%s], continuing with force option", updatedPoolToBeResized.LastOperation.Msg)
+						return nil, false, nil
+					}
+					return nil, false, fmt.Errorf("previous pool expansion has failed. Error: %s", updatedPoolToBeResized.LastOperation)
 				}
 				log.InfoD("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
 				if strings.Contains(updatedPoolToBeResized.LastOperation.Msg, "Will not proceed with pool expansion") {
-					return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation.Msg)
+					return nil, false, fmt.Errorf("pool resize not possible. Error: %s", updatedPoolToBeResized.LastOperation.Msg)
 				}
 				return nil, true, nil
 			}
@@ -5390,12 +5753,19 @@ func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
 	return err
 }
 
-func getStoragePoolsToExpand() ([]*opsapi.StoragePool, error) {
+func getStoragePoolsToExpand(expandType opsapi.SdkStoragePool_ResizeOperationType, chaosLevel uint64) ([]*opsapi.StoragePool, error) {
 	stNodes := node.GetStorageNodes()
 	expectedCapacity := (len(stNodes) / 2) + 1
 	poolsToExpand := make([]*opsapi.StoragePool, 0)
 	for _, stNode := range stNodes {
-		eligibility, err := GetPoolExpansionEligibility(&stNode)
+		maxSize := stNode.Pools[0].TotalSize / units.GiB
+		for _, p := range stNode.Pools {
+			if maxSize < p.TotalSize/units.GiB {
+				maxSize = p.TotalSize / units.GiB
+			}
+		}
+		expectedIncrementInSize := maxSize * chaosLevel / 100
+		eligibility, err := GetPoolExpansionEligibility(&stNode, expandType, expectedIncrementInSize)
 		if err != nil {
 			return nil, err
 		}
@@ -5419,12 +5789,19 @@ func getStoragePoolsToExpand() ([]*opsapi.StoragePool, error) {
 }
 
 // returns list of pools with metadata disk to expand
-func getStorageMetadataPoolsToExpand() ([]*opsapi.StoragePool, error) {
+func getStorageMetadataPoolsToExpand(expandType opsapi.SdkStoragePool_ResizeOperationType, chaosLevel uint64) ([]*opsapi.StoragePool, error) {
 	stNodes := node.GetStorageNodes()
 	expectedCapacity := (len(stNodes) / 2) + 1
 	poolsToExpand := make([]*opsapi.StoragePool, 0)
 	for _, stNode := range stNodes {
-		eligibility, err := GetPoolExpansionEligibility(&stNode)
+		maxSize := stNode.Pools[0].TotalSize / units.GiB
+		for _, p := range stNode.Pools {
+			if maxSize < p.TotalSize/units.GiB {
+				maxSize = p.TotalSize / units.GiB
+			}
+		}
+		expectedIncrementInSize := maxSize * chaosLevel / 100
+		eligibility, err := GetPoolExpansionEligibility(&stNode, expandType, expectedIncrementInSize)
 		if err != nil {
 			return nil, err
 		}
@@ -5478,13 +5855,13 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 			statType = stats.ResizeDiskEventName
 		}
 		isDmthin, _ := IsDMthin()
+		pNode, err = GetNodeFromPoolUUID(pool.Uuid)
+		if err != nil {
+			log.Error(err.Error())
+			UpdateOutcome(event, err)
+			return
+		}
 		if isDmthin && resizeOperationType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
-			pNode, err = GetNodeFromPoolUUID(pool.Uuid)
-			if err != nil {
-				log.Error(err.Error())
-				UpdateOutcome(event, err)
-				return
-			}
 			err = EnterPoolMaintenance(*pNode)
 			if err != nil {
 				log.InfoD(fmt.Sprintf("Printing The storage pool status after failure of entering maintenance on Node:%s ", pNode.Name))
@@ -5496,7 +5873,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 		}
 
 		updateLongevityStats(event.Event.Type, statType, dashStats)
-		err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, resizeOperationType, uint64(chaosLevel))
+		err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, resizeOperationType, chaosLevel)
 		if err != nil {
 			log.InfoD(fmt.Sprintf("Printing The storage pool status after pool resize failure on Node:%s ", pNode.Name))
 			PrintSvPoolStatus(*pNode)
@@ -5529,7 +5906,6 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 					} else {
 						err = RebootNodeAndWaitForPxUp(*storageNode)
 					}
-					err = RebootNodeAndWaitForPxUp(*storageNode)
 					if err != nil {
 						log.Error(err.Error())
 						UpdateOutcome(event, err)
@@ -5547,7 +5923,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 
 		}
 
-		if pNode != nil {
+		if pNode != nil && isDmthin && resizeOperationType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
 			err := ExitPoolMaintenance(*pNode)
 			if err != nil {
 				log.Error(err.Error())
@@ -5583,7 +5959,7 @@ func TriggerMetadataPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *c
 	stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
 	Step(stepLog, func() {
 
-		poolsToBeResized, err := getStorageMetadataPoolsToExpand()
+		poolsToBeResized, err := getStorageMetadataPoolsToExpand(opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, chaosLevel)
 
 		if err != nil {
 			log.Error(err.Error())
@@ -5593,13 +5969,9 @@ func TriggerMetadataPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *c
 		var wg sync.WaitGroup
 
 		for _, pool := range poolsToBeResized {
-			//Skipping pool resize if pool rebalance is enabled for the pool
-			if !isPoolRebalanceEnabled(pool.Uuid) {
-				//Initiating multiple pool expansions by resize-disk
-				go initiatePoolExpansion(event, &wg, pool, chaosLevel, 2, false)
-				wg.Add(1)
-			}
-
+			//Initiating multiple pool expansions by resize-disk
+			go initiatePoolExpansion(event, &wg, pool, chaosLevel, 2, false)
+			wg.Add(1)
 		}
 		wg.Wait()
 
@@ -5635,7 +6007,7 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 	stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		poolsToBeResized, err := getStoragePoolsToExpand()
+		poolsToBeResized, err := getStoragePoolsToExpand(opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, chaosLevel)
 
 		if err != nil {
 			log.Error(err.Error())
@@ -5644,12 +6016,7 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 		var poolToBeResized *opsapi.StoragePool
 		nodeContexts := make([]*scheduler.Context, 0)
 		if len(poolsToBeResized) > 0 {
-			for _, pool := range poolsToBeResized {
-				if !isPoolRebalanceEnabled(pool.Uuid) {
-					poolToBeResized = pool
-					break
-				}
-			}
+			poolToBeResized = poolsToBeResized[rand.Intn(len(poolsToBeResized))]
 			log.InfoD("Pool to resize-disk [%v]", poolToBeResized)
 			storageNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
 			UpdateOutcome(event, err)
@@ -5697,7 +6064,7 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	stepLog := fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		poolsToBeResized, err := getStoragePoolsToExpand()
+		poolsToBeResized, err := getStoragePoolsToExpand(opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK, chaosLevel)
 
 		if err != nil {
 			log.Error(err.Error())
@@ -5708,14 +6075,9 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		var wg sync.WaitGroup
 
 		for _, pool := range poolsToBeResized {
-			//Skipping pool resize if pool rebalance is enabled for the pool
-			if !isPoolRebalanceEnabled(pool.Uuid) {
-				//Initiating multiple pool expansions by add-disk
-				go initiatePoolExpansion(event, &wg, pool, chaosLevel, 1, false)
-				wg.Add(1)
-
-			}
-
+			//Initiating multiple pool expansions by add-disk
+			go initiatePoolExpansion(event, &wg, pool, chaosLevel, 1, false)
+			wg.Add(1)
 		}
 		wg.Wait()
 
@@ -5749,7 +6111,7 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 	stepLog := fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		poolsToBeResized, err := getStoragePoolsToExpand()
+		poolsToBeResized, err := getStoragePoolsToExpand(opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK, chaosLevel)
 
 		if err != nil {
 			log.Error(err.Error())
@@ -5757,12 +6119,7 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 		}
 		var poolToBeResized *opsapi.StoragePool
 		if len(poolsToBeResized) > 0 {
-			for _, pool := range poolsToBeResized {
-				if !isPoolRebalanceEnabled(pool.Uuid) {
-					poolToBeResized = pool
-					break
-				}
-			}
+			poolToBeResized = poolsToBeResized[rand.Intn(len(poolsToBeResized))]
 			storageNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
 			UpdateOutcome(event, err)
 			nodeContexts, err := GetContextsOnNode(contexts, storageNode)
@@ -5812,7 +6169,7 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 
 		Step("validate the  autopilot events", func() {
 			log.InfoD("validate the  autopilot events for %s", apRule.Name)
-			ruleEvents, err := core.Instance().ListEvents("", meta_v1.ListOptions{
+			ruleEvents, err := core.Instance().ListEvents("", metav1.ListOptions{
 				FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", apRule.Name),
 			})
 			UpdateOutcome(event, err)
@@ -5820,28 +6177,22 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 			if err == nil {
 				for _, ruleEvent := range ruleEvents.Items {
 					//checking the events triggered in last 60 mins
-					if ruleEvent.LastTimestamp.Unix() < meta_v1.Now().Unix()-3600 {
+					if ruleEvent.LastTimestamp.Unix() < metav1.Now().Unix()-3600 {
 						continue
 					}
 					log.InfoD("autopilot rule event reason : %s and message: %s ", ruleEvent.Reason, ruleEvent.Message)
 					if strings.Contains(ruleEvent.Reason, "FailedAction") || strings.Contains(ruleEvent.Reason, "RuleCheckFailed") {
 						UpdateOutcome(event, fmt.Errorf("autopilot rule %s failed, Reason: %s, Message; %s", apRule.Name, ruleEvent.Reason, ruleEvent.Message))
 					}
-
 				}
 
+				err = Inst().V.ValidateRebalanceJobs()
+				UpdateOutcome(event, err)
+
+				err = Inst().S.ValidateAutopilotRuleObjects()
+				UpdateOutcome(event, err)
+
 			}
-
-		})
-
-		Step("validate Px on the rebalanced node", func() {
-			log.InfoD("Validating PX on node : %s", autoPilotLabelNode.Name)
-			err := Inst().V.WaitDriverUpOnNode(autoPilotLabelNode, 1*time.Minute)
-			log.InfoD(fmt.Sprintf("Printing The storage pool status on reblanaced Node:%s ", autoPilotLabelNode.Name))
-			PrintSvPoolStatus(autoPilotLabelNode)
-			UpdateOutcome(event, err)
-			err = ValidateRebalanceJobs(autoPilotLabelNode)
-			UpdateOutcome(event, err)
 
 		})
 	}
@@ -5884,7 +6235,18 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 					log.InfoD("Error upgrading volume driver, Err: %v", err.Error())
 				}
 				UpdateOutcome(event, err)
-
+				endpoint, version, err := SplitStorageDriverUpgradeURL(upgradeHop)
+				if err != nil {
+					log.InfoD("Error upgrading volume driver, Err: %v", err.Error())
+				}
+				log.InfoD("Updating StorageDriverUpgradeEndpoint: URL from [%s] to [%s], Version from [%s] to [%s]", Inst().StorageDriverUpgradeEndpointURL, endpoint, Inst().StorageDriverUpgradeEndpointVersion, version)
+				Inst().StorageDriverUpgradeEndpointURL = endpoint
+				Inst().StorageDriverUpgradeEndpointVersion = version
+				err = ValidatePxLicenseSummary()
+				if err != nil {
+					err := fmt.Errorf("failed to validate license summary after upgrade. Err: [%v]", err)
+					UpdateOutcome(event, err)
+				}
 			})
 			validateContexts(event, contexts)
 		}
@@ -5892,6 +6254,340 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 	err := ValidateDataIntegrity(contexts)
 	UpdateOutcome(event, err)
 	updateMetrics(*event)
+}
+
+// TriggerUpdateCluster upgrades the cluster and ensures everything is running fine
+func TriggerUpdateCluster(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(UpgradeCluster)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: UpgradeCluster,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	// This is an exact copy of UpgradeCluster test case
+	Step("upgrade cluster and ensure everything is running fine", func() {
+		var versions []string
+		if len(Inst().SchedUpgradeHops) > 0 {
+			versions = strings.Split(Inst().SchedUpgradeHops, ",")
+		}
+		for _, v := range versions {
+			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), v), func() {
+				stopSignal := make(chan struct{})
+
+				var mError error
+				opver, err := oputil.GetPxOperatorVersion()
+				if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) {
+					go DoPDBValidation(stopSignal, &mError)
+					defer func() {
+						close(stopSignal)
+					}()
+				} else {
+					log.Warnf("PDB validation skipped. Current Px-Operator version: [%s], minimum required: [%s]. Error: [%v].", opver, PDBValidationMinOpVersion, err)
+				}
+				dashStats := make(map[string]string)
+				dashStats["sched-upgrade-hop"] = v
+				updateLongevityStats(UpgradeCluster, stats.UpdateClusterEventName, dashStats)
+				err = Inst().S.UpgradeScheduler(v)
+				if mError != nil {
+					mError = fmt.Errorf("failed to validate PDB of px-storage during cluster upgrade. Err: [%v]", mError)
+					UpdateOutcome(event, mError)
+				}
+				if err != nil {
+					err = fmt.Errorf("failed to upgrade scheduler [%s] to version [%s]. Err: [%v]", Inst().S.String(), v, err)
+					UpdateOutcome(event, err)
+					return
+				}
+
+				// Sleep needed for AKS cluster upgrades
+				if Inst().S.String() == aks.SchedName {
+					log.Warnf("Warning! This is [%s] scheduler, during Node Pool upgrades, AKS creates extra node, this node then becomes PX node. "+
+						"After the Node Pool upgrade is complete, AKS deletes this extra node, but PX Storage object still around for about ~20-30 mins. "+
+						"Recommended config is that you deploy PX with 6 nodes in 3 zones and set MaxStorageNodesPerZone to 2, "+
+						"so when extra AKS node gets created, PX gets deployed as Storageless node, otherwise if PX gets deployed as Storage node, "+
+						"PX storage objects will never be deleted and validation might fail!", Inst().S.String())
+					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(30 * time.Minute)
+				}
+
+				// Sleep needed for GKE cluster upgrades
+				if Inst().S.String() == gke.SchedName {
+					log.Warnf("This is [%s] scheduler, during Node Pool upgrades, GKE creates an extra node. "+
+						"After the Node Pool upgrade is complete, GKE deletes this extra node, but it takes some time.", Inst().S.String())
+					log.Infof("Sleeping for 10 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(10 * time.Minute)
+				}
+
+				// Sleep needed for EKS cluster upgrades
+				if Inst().S.String() == eks.SchedName {
+					log.Warnf("This is [%s] scheduler, during Node Group upgrades, EKS creates an extra node. "+
+						"After the Node Group upgrade is complete, EKS deletes this extra node, but it takes some time.", Inst().S.String())
+					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(30 * time.Minute)
+				}
+
+				// Sleep needed for IKS cluster upgrades
+				if Inst().S.String() == iks.SchedName {
+					log.Warnf("This is [%s] scheduler, during Worker Pool upgrades, IKS replaces all worker nodes. "+
+						"The replacement might affect cluster capacity temporarily, requiring time for stabilization.", Inst().S.String())
+					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(30 * time.Minute)
+				}
+
+				PrintK8sClusterInfo()
+			})
+
+			Step("validate storage components", func() {
+				urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
+				u, err := url.Parse(urlToParse)
+				if err != nil {
+					err = fmt.Errorf("error parsing PX version the url [%s]", urlToParse)
+					UpdateOutcome(event, err)
+					return
+				}
+				err = Inst().V.ValidateDriver(u.String(), true)
+				if err != nil {
+					err = fmt.Errorf("failed to validate volume driver after upgrade to %s. Err: [%v]", v, err)
+					UpdateOutcome(event, err)
+					return
+				}
+
+				// Printing cluster node info after the upgrade
+				PrintK8sClusterInfo()
+			})
+
+			// TODO: This currently doesn't work for most distros and commenting out this change, see PTX-22409
+			/*if Inst().S.String() != aks.SchedName {
+			  dash.VerifyFatal(mError, nil, "validate no parallel upgrade of nodes")          }*/
+			Step("update node drive endpoints", func() {
+				// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
+				err := Inst().S.RefreshNodeRegistry()
+				if err != nil {
+					err = fmt.Errorf("failed to refresh node registry after upgrade to scheduler version [%s]. Err: [%v]", v, err)
+					UpdateOutcome(event, err)
+					return
+				}
+
+				// Refresh Driver Endpoints
+				err = Inst().V.RefreshDriverEndpoints()
+				if err != nil {
+					err = fmt.Errorf("failed to refresh driver endpoints after upgrade to scheduler version [%s]. Err: [%v]", v, err)
+					UpdateOutcome(event, err)
+					return
+				}
+
+				// Printing pxctl status after the upgrade
+				PrintPxctlStatus()
+			})
+
+			Step("Validate license summary against expected SKU and features", func() {
+				log.Infof("Validating license summary against expected SKU and features")
+				err := ValidatePxLicenseSummary()
+				if err != nil {
+					err := fmt.Errorf("failed to validate license summary against expected SKU and features. Err: [%v]", err)
+					UpdateOutcome(event, err)
+				}
+			})
+
+			Step("validate all apps after upgrade", func() {
+				validateContexts(event, contexts)
+			})
+		}
+	})
+
+	err := ValidateDataIntegrity(contexts)
+	UpdateOutcome(event, err)
+	updateMetrics(*event)
+}
+
+// TriggerUpgradeVolumeDriverFromCatalog performs upgrade hops of volume driver based on a given list of upgradeEndpoints from marketplace
+func TriggerUpgradeVolumeDriverFromCatalog(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(UpgradeVolumeDriverFromCatalog)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: UpgradeVolumeDriverFromCatalog,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	// This is an exact copy of UpgradeVolumeDriverFromCatalog test case
+	stepLog := "upgrade volume driver from catalog and ensure everything is running fine"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		var (
+			storageNodes      = node.GetStorageNodes()
+			numOfNodes        = len(node.GetStorageDriverNodes())
+			timeBeforeUpgrade time.Time
+			timeAfterUpgrade  time.Time
+		)
+		validateContexts(event, contexts)
+		stepLog = "start the upgrade of volume driver from catalog"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
+				UpdateOutcome(event, fmt.Errorf("unable to perform volume driver upgrade hops, none were given"))
+				return
+			}
+			if IsIksCluster() {
+				log.Infof("Adding ibm helm repo [%s]", IBMHelmRepoName)
+				cmd := fmt.Sprintf("helm repo add %s %s", IBMHelmRepoName, IBMHelmRepoURL)
+				log.Infof("helm command: %v ", cmd)
+				_, _, err := osutils.ExecShell(cmd)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error adding helm repo [%s]. Err: [%v]", IBMHelmRepoName, err))
+					return
+				}
+			} else {
+				UpdateOutcome(event, fmt.Errorf("the cluster is neither IKS nor ROKS"))
+				return
+			}
+			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
+			for i, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+				if upgradeHop == "" {
+					UpdateOutcome(event, fmt.Errorf("the upgrade hop at index [%d] empty", i))
+					return
+				}
+				currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting current driver version on node [%s], Err: [%v]", storageNodes[0].Name, err))
+					return
+				}
+				timeBeforeUpgrade = time.Now()
+				upgradeHopSplit := strings.Split(upgradeHop, "/")
+				nextPXVersion := upgradeHopSplit[len(upgradeHopSplit)-1]
+				if f, err := osutils.FileExists(IBMHelmValuesFile); err != nil {
+					UpdateOutcome(event, fmt.Errorf("error checking for file [%s]. Err: [%v]", IBMHelmValuesFile, err))
+					return
+				} else {
+					if f != nil {
+						_, err = osutils.DeleteFile(IBMHelmValuesFile)
+						if err != nil {
+							UpdateOutcome(event, fmt.Errorf("error deleting file [%s]. Err: [%v]", IBMHelmValuesFile, err))
+							return
+						}
+					}
+				}
+				pxNamespace, err := Inst().V.GetVolumeDriverNamespace()
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting portworx namespace. Err: [%v]", err))
+					return
+				}
+				cmd := fmt.Sprintf("helm get values portworx -n %s > %s", pxNamespace, IBMHelmValuesFile)
+				log.Infof("Running command: %v ", cmd)
+				_, _, err = osutils.ExecShell(cmd)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting values for portworx helm chart. Err: [%v]", err))
+					return
+				}
+				f, err := osutils.FileExists(IBMHelmValuesFile)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error checking for file [%s]. Err: [%v]", IBMHelmValuesFile, err))
+					return
+				}
+				if f == nil {
+					UpdateOutcome(event, fmt.Errorf("file [%s] does not exist", IBMHelmValuesFile))
+					return
+				}
+				cmd = fmt.Sprintf("sed -i 's/imageVersion.*/imageVersion: %s/' %s", nextPXVersion, IBMHelmValuesFile)
+				log.Infof("Running command: %v ", cmd)
+				_, _, err = osutils.ExecShell(cmd)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error updating px version in [%s]. Err: [%v]", IBMHelmValuesFile, err))
+					return
+				}
+				dashStats := make(map[string]string)
+				dashStats["upgrade-hop"] = upgradeHop
+				updateLongevityStats(UpgradeVolumeDriverFromCatalog, stats.UpgradeVolumeDriverFromCatalogEventName, dashStats)
+				cmd = fmt.Sprintf("helm upgrade portworx -n %s -f %s %s/portworx --debug", pxNamespace, IBMHelmValuesFile, IBMHelmRepoName)
+				log.Infof("Running command: %v ", cmd)
+				_, _, err = osutils.ExecShell(cmd)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error running helm upgrade for portworx. Err: [%v]", err))
+					return
+				}
+				time.Sleep(2 * time.Minute)
+				stc, err := Inst().V.GetDriver()
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting storage cluster spec. Err: [%v]", err))
+					return
+				}
+				k8sVersion, err := core.Instance().GetVersion()
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting k8s version. Err: [%v]", err))
+					return
+				}
+				imageList, err := oputil.GetImagesFromVersionURL(upgradeHop, k8sVersion.String())
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting images using URL [%s] and k8s version [%s]. Err: [%v]", upgradeHop, k8sVersion.String(), err))
+					return
+				}
+				storageClusterValidateTimeout := time.Duration(len(node.GetStorageDriverNodes())*9) * time.Minute
+				err = oputil.ValidateStorageCluster(imageList, stc, storageClusterValidateTimeout, defaultRetryInterval, true)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error validating storage cluster after upgrade. Err: [%v]", err))
+					return
+				}
+				timeAfterUpgrade = time.Now()
+				durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
+				expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
+				upgradeStatus := "PASS"
+				if durationInMins <= expectedUpgradeTime {
+					log.InfoD("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
+				} else {
+					log.Warnf("Upgrade took %d minutes more than expected time %d to complete minutes", durationInMins, expectedUpgradeTime)
+					UpdateOutcome(event, fmt.Errorf("upgrade took [%v] minutes more than expected time [%v] to complete minutes", durationInMins, expectedUpgradeTime))
+					upgradeStatus = "FAIL"
+				}
+				endpoint, version, err := SplitStorageDriverUpgradeURL(upgradeHop)
+				if err != nil {
+					log.InfoD("Error upgrading volume driver, Err: %v", err.Error())
+				}
+				log.InfoD("Updating from catalog StorageDriverUpgradeEndpoint: URL from [%s] to [%s], Version from [%s] to [%s]", Inst().StorageDriverUpgradeEndpointURL, endpoint, Inst().StorageDriverUpgradeEndpointVersion, version)
+				Inst().StorageDriverUpgradeEndpointURL = endpoint
+				Inst().StorageDriverUpgradeEndpointVersion = version
+				err = ValidatePxLicenseSummary()
+				if err != nil {
+					err := fmt.Errorf("failed to validate license summary after upgrade. Err: [%v]", err)
+					UpdateOutcome(event, err)
+				}
+				updatedPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error getting updated driver version on node [%s], Err: [%v]", storageNodes[0].Name, err))
+					return
+				}
+				majorVersion := strings.Split(currPXVersion, "-")[0]
+				statsData := make(map[string]string)
+				statsData["numOfNodes"] = fmt.Sprintf("%d", numOfNodes)
+				statsData["fromVersion"] = currPXVersion
+				statsData["toVersion"] = updatedPXVersion
+				statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)
+				statsData["status"] = upgradeStatus
+				dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
+				// Validate Apps after volume driver upgrade
+				validateContexts(event, contexts)
+			}
+		})
+		err := ValidateDataIntegrity(contexts)
+		UpdateOutcome(event, err)
+		updateMetrics(*event)
+	})
 }
 
 // TriggerUpgradeStork performs upgrade of the stork
@@ -6073,15 +6769,133 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 	updateMetrics(*event)
 }
 
-// TriggerVolumeUpdate enables to test volume update
-func TriggerVolumeIOProfileUpdate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+// TriggerPowerOffAllVMs power off all the Vms
+func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
-	startLongevityTest(UpdateVolume)
+	startLongevityTest(PowerOffAllVMs)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: UpdateVolume,
+			Type: PowerOffAllVMs,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	stepLog := "Power off all worker nodes test "
+	Step(stepLog, func() {
+		log.Infof(stepLog)
+		workerNodes := node.GetWorkerNodes()
+		numberOfThread := 5
+		var numberOfNodePerThread int
+		// If number of VMs to restarted is less than  numberOfThread then
+		// only one vm assigned to each thread, else assign  len(workerNodes)/numberOfThread
+		// to per thread
+		if len(workerNodes) < numberOfThread {
+			numberOfThread = len(workerNodes)
+			numberOfNodePerThread = 1
+		} else {
+			numberOfNodePerThread = len(workerNodes) / numberOfThread
+		}
+		counter := 0
+		// Assign vms to every thread.
+		nodesInThread := make([][]node.Node, numberOfThread)
+		for t := 0; t < numberOfThread; t++ {
+			nodesInThread[t] = make([]node.Node, numberOfNodePerThread)
+			for n := 0; n < numberOfNodePerThread; n++ {
+				nodesInThread[t][n] = workerNodes[counter]
+				counter++
+			}
+		}
+		//Create an additional thread for remainder. Example if 12 VMs, assign first 10 vms to
+		// 5 threads and assign remaining 2 vms 6th thread.
+		if counter < len(workerNodes) {
+			log.Infof("Additional nodes  : %d", len(workerNodes)-counter)
+			additonalThread := make([]node.Node, len(workerNodes)-counter)
+			index := 0
+			for counter < len(workerNodes) {
+				additonalThread[index] = workerNodes[counter]
+				index++
+				counter++
+			}
+			nodesInThread = append(nodesInThread, additonalThread)
+			numberOfThread++
+		}
+		stepLog = "Power off all worker nodes in batches"
+		Step(stepLog, func() {
+			var poweroffwg sync.WaitGroup
+			for i := 0; i < numberOfThread; i++ {
+				poweroffwg.Add(1)
+				go func(nodeList []node.Node) {
+					defer poweroffwg.Done()
+					for _, nodeInfo := range nodeList {
+						log.Infof("Node Name : %v", nodeInfo.Name)
+						err := Inst().N.PowerOffVM(nodeInfo)
+						UpdateOutcome(event, err)
+					}
+				}(nodesInThread[i])
+			}
+			poweroffwg.Wait()
+			log.Infof("Completed power off VMs")
+			log.Infof("Wait for 5 minutes")
+			time.Sleep(5 * time.Minute)
+		})
+		stepLog = "Power on all worker nodes"
+		Step(stepLog, func() {
+			var poweronwg sync.WaitGroup
+			log.Infof("Poweron thread starts")
+			for i := 0; i < numberOfThread; i++ {
+				poweronwg.Add(1)
+				go func(nodeList []node.Node) {
+					defer poweronwg.Done()
+					for _, nodeInfo := range nodeList {
+						log.Infof("Node Name : %v", nodeInfo.Name)
+						err := Inst().N.PowerOnVM(nodeInfo)
+						UpdateOutcome(event, err)
+					}
+				}(nodesInThread[i])
+			}
+			poweronwg.Wait()
+			log.Infof("Completed power on Nodes")
+			for _, n := range workerNodes {
+				err := Inst().S.IsNodeReady(n)
+				err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+				UpdateOutcome(event, err)
+			}
+		})
+		stepLog = "Verify APP, volume staus and check data integrity if enabled"
+		// //Wait for PX to be up on all worker nodes
+		Step(stepLog, func() {
+			for _, ctx := range *contexts {
+				log.Infof("Validating context: %v", ctx.App.Key)
+				ctx.SkipVolumeValidation = false
+				errorChan := make(chan error, errorChannelSize)
+				ValidateContext(ctx, &errorChan)
+				for err := range errorChan {
+					UpdateOutcome(event, err)
+				}
+			}
+			err := ValidateDataIntegrity(contexts)
+			UpdateOutcome(event, err)
+		})
+		updateMetrics(*event)
+	})
+}
+
+// TriggerVolumeIOProfileUpdate enables to test volume update
+func TriggerVolumeIOProfileUpdate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(UpdateIOProfile)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: UpdateIOProfile,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -6284,14 +7098,21 @@ func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecor
 					}
 					//Verify Volume set with required IOPriority.
 					appVol, err := Inst().V.InspectVolume(v.ID)
+					if err != nil {
+						UpdateOutcome(event, err)
+						return
+					}
 					log.InfoD("COS after update %v", appVol.Spec.GetCos().SimpleString())
 					if !strings.EqualFold(requiredPriority, appVol.Spec.GetCos().SimpleString()) {
 						err = fmt.Errorf("Failed to update volume %v with expected priority %v ", v.ID, requiredPriority)
+						log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after io prirority update", v.Name, v.ID, v.Namespace)
+						PrintInspectVolume(v.ID)
 						UpdateOutcome(event, err)
 					}
 					log.InfoD("Update IO priority on [%v] : [%v]", v.ID, requiredPriority)
 				}
 				log.InfoD("Completed update on %v", v.ID)
+
 			}
 		}
 		// setIoPriority if IO priority is set to High then next iteration will be run with low.
@@ -6305,17 +7126,19 @@ func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecor
 
 func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 	for _, ctx := range *contexts {
-		var appVolumes []*volume.Volume
-		var err error
 		if strings.Contains(ctx.App.Key, "fstrim") {
-			appVolumes, err = Inst().S.GetVolumes(ctx)
-			UpdateOutcome(event, err)
+			appVolumes, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("error getting volumes for app %s: %v", ctx.App.Key, err))
+				continue
+			}
 			if len(appVolumes) == 0 {
 				UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+				continue
 			}
 
 			for _, v := range appVolumes {
-				// Skip autofs trim status on Pure DA volumes
+				// Skip autofstrim status on Pure DA volumes
 				isPureVol, err := Inst().V.IsPureVolume(v)
 				if err != nil {
 					UpdateOutcome(event, err)
@@ -6327,58 +7150,50 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 					)
 					continue
 				}
-				log.Infof("Getting info : %s", v.ID)
+
+				log.Infof("Getting volume %s inspect response", v.ID)
 				appVol, err := Inst().V.InspectVolume(v.ID)
 				if err != nil {
-					log.Errorf("Error inspecting volume: %v", err)
+					UpdateOutcome(event, fmt.Errorf("error inspecting volume [%v]: %v", v.ID, err))
+					continue
 				}
+
 				attachedNode := appVol.AttachedOn
-
-				var fsTrimStatuses map[string]opsapi.FilesystemTrim_FilesystemTrimStatus
-
 				t := func() (interface{}, bool, error) {
-					fsTrimStatuses, err = Inst().V.GetAutoFsTrimStatus(attachedNode)
+					fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(attachedNode)
 					if err != nil {
 						return nil, true, fmt.Errorf("error autofstrim status node %v status", attachedNode)
 					}
-
-					return nil, false, nil
+					val, ok := fsTrimStatuses[appVol.Id]
+					var fsTrimStatus opsapi.FilesystemTrim_FilesystemTrimStatus
+					if !ok {
+						fsTrimStatus, _ = waitForFsTrimStatus(event, attachedNode, appVol.Id)
+					} else {
+						fsTrimStatus = val
+					}
+					log.Infof("autofstrim status for volume %v, status: %v", appVol.Id, val.String())
+					if fsTrimStatus != -1 {
+						if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_COMPLETED {
+							log.InfoD("autofstrim status for volume %v completed successfully [%v]", v.ID, val.String())
+							return nil, false, nil
+						} else if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_FAILED {
+							return nil, false, fmt.Errorf("autoFstrim failed for volume %v, status: %v", v.ID, val.String())
+						} else {
+							log.InfoD("current autofstrim status for volume %v is %v", v.ID, val.String())
+							return nil, false, nil
+						}
+					} else {
+						return nil, true, fmt.Errorf("autofstrim for volume %v not started yet", v.ID)
+					}
 				}
 				_, err = task.DoRetryWithTimeout(t, defaultDriverStartTimeout, defaultRetryInterval)
 				if err != nil {
 					UpdateOutcome(event, err)
 					return
 				}
-
-				val, ok := fsTrimStatuses[appVol.Id]
-				var fsTrimStatus opsapi.FilesystemTrim_FilesystemTrimStatus
-
-				if !ok {
-					fsTrimStatus, _ = waitForFsTrimStatus(event, attachedNode, appVol.Id)
-				} else {
-					fsTrimStatus = val
-				}
-
-				if fsTrimStatus != -1 {
-
-					if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_FAILED || fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_STOPPED || fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_UNKNOWN {
-
-						err = fmt.Errorf("AutoFstrim failed for volume %v, status: %v", v.ID, val.String())
-						UpdateOutcome(event, err)
-
-					} else {
-						log.InfoD("Autofstrim status for volume %v, status: %v", v.ID, val.String())
-
-					}
-				} else {
-					log.Infof("autofstrim for volume %v not started yet", v.ID)
-				}
-
 			}
-
 		}
 	}
-
 }
 
 func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) (opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
@@ -6744,7 +7559,7 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				err = Inst().V.RejoinNode(&decommissionedNode)
 
 				if err != nil {
-					log.InfoD("Error while rejoining the node. error: %v", err)
+					log.Errorf("Error while rejoining the node. error: %v", err)
 					UpdateOutcome(event, err)
 				} else {
 
@@ -6800,22 +7615,24 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				}
 			})
 			decommissionedNode = node.Node{}
+			for _, ctx := range *contexts {
+
+				Step(fmt.Sprintf("validating context after node: [%s] rejoin",
+					decommissionedNodeName), func() {
+					errorChan := make(chan error, errorChannelSize)
+					ctx.SkipVolumeValidation = true
+					ValidateContext(ctx, &errorChan)
+					ctx.SkipVolumeValidation = false
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				})
+			}
+		} else {
+			log.Infof("No node available to rejoin")
 		}
 	})
 
-	for _, ctx := range *contexts {
-
-		Step(fmt.Sprintf("validating context after node: [%s] rejoin",
-			decommissionedNodeName), func() {
-			errorChan := make(chan error, errorChannelSize)
-			ctx.SkipVolumeValidation = true
-			ValidateContext(ctx, &errorChan)
-			ctx.SkipVolumeValidation = false
-			for err := range errorChan {
-				UpdateOutcome(event, err)
-			}
-		})
-	}
 	updateMetrics(*event)
 }
 
@@ -7012,11 +7829,11 @@ func getCloudSnapInterval(triggerType string) int {
 	case 7:
 		interval = 60
 	case 8:
-		interval = 30
+		interval = 45
 	case 9:
-		interval = 20
+		interval = 30
 	case 10:
-		interval = 10
+		interval = 20
 	}
 	return interval
 
@@ -7096,6 +7913,9 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*recordChan <- event
 	}()
 
+	err := Inst().V.RefreshDriverEndpoints()
+	UpdateOutcome(event, err)
+
 	setMetrics(*event)
 	stepLog := "perform kvdb failover in a cyclic manner"
 	Step(stepLog, func() {
@@ -7125,9 +7945,20 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 				nodeMap := node.GetNodesByVoDriverNodeID()
 				nodeContexts := make([]*scheduler.Context, 0)
+				log.InfoD("KVDB node map is [%v]", kvdbNodeIDMap)
 
 				for kvdbID, nodeID := range kvdbNodeIDMap {
 					kvdbNode := nodeMap[nodeID]
+					if len(kvdbNode.Name) == 0 {
+						err = fmt.Errorf("node with id %v not found in the node registry", nodeID)
+						UpdateOutcome(event, err)
+						log.InfoD("current node registry..")
+						for _, n := range nodeMap {
+							log.InfoD("node volume driver id: %s, node name: %s", n.VolDriverNodeID, n.Name)
+						}
+						continue
+					}
+
 					appNodeContexts, err := GetContextsOnNode(contexts, &kvdbNode)
 					nodeContexts = append(nodeContexts, appNodeContexts...)
 					errorChan := make(chan error, errorChannelSize)
@@ -7235,27 +8066,30 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 }
 
 func validateKVDBMembers(event *EventRecord, kvdbMembers map[string]*volume.MetadataNode, isDestuctive bool) bool {
-	log.InfoD("Current KVDB members: %v", kvdbMembers)
 
 	allHealthy := true
 
 	if len(kvdbMembers) == 0 {
-		err := fmt.Errorf("No KVDB membes to validate")
+		err := fmt.Errorf("no KVDB membes to validate")
 		UpdateOutcome(event, err)
 		return false
 	}
+	log.InfoD("Current KVDB members are")
+	for _, m := range kvdbMembers {
+		log.InfoD(m.Name)
+	}
 
-	for id, m := range kvdbMembers {
+	for _, m := range kvdbMembers {
 
 		if !m.IsHealthy {
-			err := fmt.Errorf("kvdb member node: %v is not healthy", id)
-			allHealthy = allHealthy && false
+			err := fmt.Errorf("kvdb member node: %v is not healthy", m.Name)
+			allHealthy = false
 			log.Warn(err.Error())
 			if isDestuctive {
 				UpdateOutcome(event, err)
 			}
 		} else {
-			log.InfoD("KVDB member node %v is healthy", id)
+			log.InfoD("KVDB member node %v is healthy", m.Name)
 		}
 	}
 
@@ -7452,6 +8286,187 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 	updateMetrics(*event)
 }
 
+// TriggerPoolDelete performs pool delete operation
+func TriggerPoolDelete(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(PoolDelete)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PoolDelete,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	stepLog := fmt.Sprintf("Perform pool delete on the volume driver node, create new pool and move repls to the new pool")
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		stNodes := node.GetStorageNodes()
+		isCloudDrive, err := IsCloudDriveInitialised(stNodes[0])
+		UpdateOutcome(event, err)
+
+		if isCloudDrive {
+			var nodeSelected node.Node
+			var nodePools []node.StoragePool
+
+			randomIndex := rand.Intn(len(stNodes))
+			nodeSelected = stNodes[randomIndex]
+			nodePools = nodeSelected.StoragePools
+
+			isjournal, err := IsJournalEnabled()
+			UpdateOutcome(event, err)
+			var jrnlPartPoolID string
+
+			//Getting pool journal device
+			if isjournal && len(nodePools) > 1 {
+				jDev, err := Inst().V.GetJournalDevicePath(&nodeSelected)
+				UpdateOutcome(event, fmt.Errorf("error getting journal device path from node %s, Err: %v", nodeSelected.Name, err))
+
+				log.Infof("JournalDev: %s", jDev)
+				if jDev == "" {
+					UpdateOutcome(event, fmt.Errorf("no journal device path found"))
+					return
+				}
+
+				drivesMap, err := Inst().V.GetPoolDrives(&nodeSelected)
+				jPath := jDev[:len(jDev)-1]
+			outer:
+				for k, v := range drivesMap {
+					for _, dv := range v {
+						if strings.Contains(dv.Device, jPath) {
+							jrnlPartPoolID = k
+							break outer
+						}
+					}
+
+				}
+				if len(jrnlPartPoolID) == 0 {
+					log.Infof("No pool is partitioned with journal device")
+				}
+			}
+
+			//Getting pool with no journal partition
+			var poolToDelete node.StoragePool
+			for _, pl := range nodePools {
+				if strconv.Itoa(int(pl.ID)) != jrnlPartPoolID {
+					poolToDelete = pl
+					break
+				}
+			}
+			poolIDToDelete := fmt.Sprintf("%d", poolToDelete.ID)
+
+			poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to list storage pools"))
+				return
+			}
+
+			nodeVols, err := GetVolumesOnNode(nodeSelected.VolDriverNodeID)
+			UpdateOutcome(event, fmt.Errorf("error getting volumes on the node [%s], Err : %v", nodeSelected.Name, err))
+
+			err = DeletePoolAndValidate(nodeSelected, poolIDToDelete)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("error deleting pool [%s] in the node [%s], Err: %v", poolIDToDelete, nodeSelected.Name, err))
+				return
+			}
+
+			//Getting spec for new cloud drive
+			newSpecSize := (poolToDelete.TotalSize / units.GiB) / 2
+			///creating a spec to perform add  drive
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+
+			deviceSpec := driveSpecs[0]
+			deviceSpecParams := strings.Split(deviceSpec, ",")
+
+			paramsArr := make([]string, 0)
+			for _, param := range deviceSpecParams {
+				if strings.Contains(param, "size") {
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", newSpecSize))
+				} else {
+					paramsArr = append(paramsArr, param)
+				}
+			}
+			newSpec := strings.Join(paramsArr, ",")
+			stepLog = fmt.Sprintf("Adding cloud drive to node %s with size %s", nodeSelected.Name, newSpec)
+
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("error adding new pool to node [%s],Err: %v", nodeSelected.Name, err))
+					return
+				}
+				err = Inst().V.RefreshDriverEndpoints()
+				UpdateOutcome(event, err)
+				log.InfoD("Validate pool rebalance after drive add to the node %s", nodeSelected.Name)
+				err = ValidateDriveRebalance(nodeSelected)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("pool re-balance failed on node %s, Err: %v", nodeSelected.Name, err))
+				}
+
+				err = Inst().V.WaitDriverUpOnNode(nodeSelected, addDriveUpTimeOut)
+				if err != nil {
+					UpdateOutcome(event, err)
+					return
+				}
+
+				poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("failed to list storage pools after adding new pool to node [%s]", nodeSelected.Name))
+					return
+				}
+				dash.VerifySafely(len(poolsBfr) == len(poolsAfr), true, "verify new pool is created")
+
+			})
+			stepLog = fmt.Sprintf("Expand newly added pool on node [%s]", nodeSelected.Name)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+				log.FailOnError(err, "Failed to list storage pools")
+				var poolIDSelected string
+				for k := range poolsAfr {
+					if _, ok := poolsBfr[k]; !ok {
+						poolIDSelected = k
+						break
+					}
+				}
+				poolToReplAdd, err := GetStoragePoolByUUID(poolIDSelected)
+
+				//moving volume replicas to new pool
+				for _, nodeVol := range nodeVols {
+					appVol, err := Inst().V.InspectVolume(nodeVol)
+					if err != nil {
+						UpdateOutcome(event, fmt.Errorf("error inspecting vol [%s], Err: %v", nodeVol, err))
+						continue
+
+					}
+					log.Infof("Updating replicas for volume [%s/%s]", appVol.Id, nodeVol)
+					replNodes := appVol.GetReplicaSets()[0].GetNodes()
+					tpVol := &volume.Volume{ID: nodeVol, Name: nodeVol}
+					err = Inst().V.SetReplicationFactor(tpVol, int64(len(replNodes)-1), nil, nil, true)
+					if err != nil {
+						UpdateOutcome(event, fmt.Errorf("error increasing repl for volume [%s] to pool [%s]", nodeVol, poolToReplAdd.Uuid))
+					} else {
+						err = Inst().V.SetReplicationFactor(tpVol, int64(len(replNodes)), nil, []string{poolToReplAdd.Uuid}, true)
+						UpdateOutcome(event, err)
+					}
+
+				}
+			})
+		}
+	})
+	updateMetrics(*event)
+}
+
 // TriggerAsyncDR triggers Async DR
 func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer endLongevityTest()
@@ -7523,7 +8538,7 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 		} else {
@@ -7635,7 +8650,7 @@ func TriggerMetroDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := metromigrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 		} else {
@@ -7730,7 +8745,7 @@ func TriggerAsyncDRPXRestartSource(contexts *[]*scheduler.Context, recordChan *c
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 			return
@@ -7836,7 +8851,7 @@ func TriggerAsyncDRPXRestartDest(contexts *[]*scheduler.Context, recordChan *cha
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 			return
@@ -7968,7 +8983,7 @@ func TriggerAsyncDRPXRestartKvdb(contexts *[]*scheduler.Context, recordChan *cha
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 			return
@@ -8068,7 +9083,7 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 		} else {
@@ -8599,7 +9614,7 @@ func TriggerStorkAppBkpPoolResize(contexts *[]*scheduler.Context, recordChan *ch
 					chaosLevel := getPoolExpandPercentage(StorkAppBkpPoolResize)
 					stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
 					Step(stepLog, func() {
-						poolsToBeResized, err := getStoragePoolsToExpand()
+						poolsToBeResized, err := getStoragePoolsToExpand(opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, chaosLevel)
 						if err != nil {
 							log.Error(err.Error())
 							UpdateOutcome(event, err)
@@ -8609,13 +9624,9 @@ func TriggerStorkAppBkpPoolResize(contexts *[]*scheduler.Context, recordChan *ch
 						var wg sync.WaitGroup
 
 						for _, pool := range poolsToBeResized {
-							//Skipping pool resize if pool rebalance is enabled for the pool
-							if !isPoolRebalanceEnabled(pool.Uuid) {
-								//Initiating multiple pool expansions by resize-disk
-								go initiatePoolExpansion(event, &wg, pool, chaosLevel, 2, false)
-								wg.Add(1)
-							}
-
+							//Initiating multiple pool expansions by resize-disk
+							go initiatePoolExpansion(event, &wg, pool, chaosLevel, 2, false)
+							wg.Add(1)
 						}
 						wg.Wait()
 					})
@@ -8927,7 +9938,7 @@ func TriggerAutoFsTrimAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 			return
@@ -9057,7 +10068,7 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 			return
@@ -9276,6 +10287,134 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 	})
 }
 
+func TriggerStorkVolumeSnapshotSchedule(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(StorkVolumeSnapshotSchedule)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Stork volume snapshot schedule triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: StorkVolumeSnapshotSchedule,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var (
+		taskNamePrefix     = "stork-snaptest-cloud"
+		snapshotType       = "cloud"
+		snapInterval = 2
+		retain storkapi.Retain = 3
+		scpolName = "snap-policy-" + time.Now().Format("15h03m05s")
+		snapNs []string
+	)
+
+	for i := 0; i < Inst().GlobalScaleFactor; i++ {
+		taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+		log.Infof("Task name %s\n", taskName)
+		appContexts := ScheduleApplications(taskName)
+		for _, ctx := range appContexts {
+			// Override default App readiness time out of 5 mins with 10 mins
+			ctx.ReadinessTimeout = appReadinessTimeout
+			namespace := GetAppNamespace(ctx, taskName)
+			snapNs = append(snapNs, namespace)
+		}
+		*contexts = append(*contexts, appContexts...)
+	}
+	ValidateApplications(*contexts)
+
+	schdPol, err := asyncdr.CreateSchedulePolicyWithRetain(scpolName, snapInterval, retain)
+	if err != nil {
+		UpdateOutcome(event, fmt.Errorf("Failed to create schedule policy"))
+		return
+	}
+
+	for _, ns := range snapNs {
+		pvcNames, err := GetPVCListForNamespace(ns)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to get pvc list for namespace"))
+			return
+		}
+		log.InfoD("creating and validating cloud snapshots for pvcs [%v] in namespace %v", pvcNames, ns)
+		err = asyncdr.ValidateSnapshotScheduleCount(pvcNames, ns, schdPol.Name, snapshotType, snapInterval, retain)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to validate snapshot schedule count"))
+			return
+		}
+	}
+}
+
+func TriggerStorkVolumeSnapshotScheduleLocal(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(StorkVolumeSnapshotScheduleLocal)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Stork volume snapshot schedule triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: StorkVolumeSnapshotScheduleLocal,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var (
+		taskNamePrefix     = "stork-snaptest-local"
+		snapshotType       = "local"
+		snapInterval = 2
+		retain storkapi.Retain = 3
+		scpolName = "snap-policy-" + time.Now().Format("15h03m05s")
+		snapNs []string
+	)
+
+	for i := 0; i < Inst().GlobalScaleFactor; i++ {
+		taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+		log.Infof("Task name %s\n", taskName)
+		appContexts := ScheduleApplications(taskName)
+		for _, ctx := range appContexts {
+			// Override default App readiness time out of 5 mins with 10 mins
+			ctx.ReadinessTimeout = appReadinessTimeout
+			namespace := GetAppNamespace(ctx, taskName)
+			snapNs = append(snapNs, namespace)
+		}
+		*contexts = append(*contexts, appContexts...)
+	}
+	ValidateApplications(*contexts)
+
+	schdPol, err := asyncdr.CreateSchedulePolicyWithRetain(scpolName, snapInterval, retain)
+	if err != nil {
+		UpdateOutcome(event, fmt.Errorf("Failed to create schedule policy"))
+		return
+	}
+
+	for _, ns := range snapNs {
+		pvcNames, err := GetPVCListForNamespace(ns)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to get pvc list for namespace"))
+			return
+		}
+		log.InfoD("creating and validating local snapshots for pvcs [%v] in namespace %v", pvcNames, ns)
+		err = asyncdr.ValidateSnapshotScheduleCount(pvcNames, ns, schdPol.Name, snapshotType, snapInterval, retain)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to validate snapshot schedule count"))
+			return
+		}
+	}
+}
+
 func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer endLongevityTest()
 	startLongevityTest(MetroDRMigrationSchedule)
@@ -9470,7 +10609,7 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 		}
 		ValidateApplications(*contexts)
 
-		allVolsCreated := []*volume.Volume{}
+		var allVolsCreated []*volume.Volume
 		for _, eachContext := range *contexts {
 			vols, err := Inst().S.GetVolumes(eachContext)
 			if err != nil {
@@ -9576,6 +10715,8 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 
 			err = Inst().V.ResizeVolume(vol.ID, newSize)
 			if err != nil {
+				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after resize", vol.Name, vol.ID, vol.Namespace)
+				PrintInspectVolume(vol.ID)
 				return err
 			}
 
@@ -9599,6 +10740,8 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 			log.Infof("Resizing Volumes created [%v]", eachVol.Name)
 			err := volumeResize(eachVol)
 			if err != nil {
+				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after resize", eachVol.Name, eachVol.ID, eachVol.Namespace)
+				PrintInspectVolume(eachVol.ID)
 				UpdateOutcome(event, fmt.Errorf("Resizing volume failed on the cluster err: [%v]", err))
 			}
 		}
@@ -9612,6 +10755,8 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 			log.InfoD("Validating Volume Status of Volume [%v]", eachVol.ID)
 			status, err := IsVolumeStatusUP(eachVol)
 			if err != nil {
+				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after io prirority update", eachVol.Name, eachVol.ID, eachVol.Namespace)
+				PrintInspectVolume(eachVol.ID)
 				UpdateOutcome(event, fmt.Errorf("error validating volume status"))
 			}
 			dash.VerifyFatal(status == true, true, "is volume status up ?")
@@ -9693,7 +10838,7 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 		dashStats["new-scale"] = fmt.Sprintf("%d", expReplicas)
 		dashStats["storage-node"] = "true"
 		updateLongevityStats(AddStorageNode, stats.NodeScaleUpEventName, dashStats)
-		err = Inst().S.ScaleCluster(expReplicas)
+		err = Inst().S.SetASGClusterSize(int64(expReplicas), 10*time.Minute)
 		if err != nil {
 			UpdateOutcome(event, err)
 			isClusterScaled = false
@@ -9705,6 +10850,12 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 	if !isClusterScaled {
 		return
 	}
+
+	err := Inst().S.RefreshNodeRegistry()
+	UpdateOutcome(event, err)
+
+	err = Inst().V.RefreshDriverEndpoints()
+	UpdateOutcome(event, err)
 
 	stepLog = "validate PX on all nodes after cluster scale up"
 	hasPXUp := true
@@ -9724,7 +10875,7 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 		return
 	}
 
-	err := Inst().V.RefreshDriverEndpoints()
+	err = Inst().V.RefreshDriverEndpoints()
 	UpdateOutcome(event, err)
 
 	updatedStorageNodesCount := len(node.GetStorageNodes())
@@ -9822,7 +10973,7 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 		dashStats["new-scale"] = fmt.Sprintf("%d", expReplicas)
 		dashStats["storage-node"] = "false"
 		updateLongevityStats(AddStoragelessNode, stats.NodeScaleUpEventName, dashStats)
-		err = Inst().S.ScaleCluster(expReplicas)
+		err = Inst().S.SetASGClusterSize(int64(expReplicas), 10*time.Minute)
 		if err != nil {
 			UpdateOutcome(event, err)
 			isClusterScaled = false
@@ -9834,6 +10985,11 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 	if !isClusterScaled {
 		return
 	}
+	err := Inst().S.RefreshNodeRegistry()
+	UpdateOutcome(event, err)
+
+	err = Inst().V.RefreshDriverEndpoints()
+	UpdateOutcome(event, err)
 
 	stepLog = "validate PX on all nodes after cluster scale up"
 	hasPXUp := true
@@ -9852,7 +11008,7 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 	if !hasPXUp {
 		return
 	}
-	err := Inst().V.RefreshDriverEndpoints()
+	err = Inst().V.RefreshDriverEndpoints()
 	UpdateOutcome(event, err)
 
 	updatedStoragelessNodesCount := len(node.GetStorageLessNodes())
@@ -9865,7 +11021,6 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)
-
 }
 
 func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
@@ -9915,7 +11070,20 @@ func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *ch
 				dashStats := make(map[string]string)
 				dashStats["node"] = delNode.Name
 				updateLongevityStats(OCPStorageNodeRecycle, stats.NodeRecycleEventName, dashStats)
-				err := Inst().S.RecycleNode(delNode)
+				err := Inst().S.DeleteNode(delNode)
+				UpdateOutcome(event, err)
+
+				stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storeage nodes",
+					Inst().AutoStorageNodeRecoveryTimeout.String())
+
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
+				})
+				err = Inst().S.RefreshNodeRegistry()
+				UpdateOutcome(event, err)
+
+				err = Inst().V.RefreshDriverEndpoints()
 				UpdateOutcome(event, err)
 			})
 		Step(fmt.Sprintf("Listing all nodes after recycling a storage node %s", delNode.Name), func() {
@@ -9954,7 +11122,6 @@ func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *ch
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)
-
 }
 
 // TriggerReallocSharedMount peforms sharedv4 and sharedv4_svc volumes reallocation
@@ -10474,13 +11641,648 @@ func TriggerVolumeDriverDownVCluster(contexts *[]*scheduler.Context, recordChan 
 
 }
 
-// CreateStorageClass method creates a storageclass using host's k8s clientset on host cluster
+func TriggerSetDiscardMounts(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(SetDiscardMounts)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: SetDiscardMounts,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	stepLog := "setting and unsetting discard mount options on regular intervals "
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		log.Infof("Starting test case here !!")
+
+		for _, appNode := range node.GetStorageNodes() {
+			err := isNodeHealthy(appNode, event.Event.Type)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
+			// Setting discard-mount-option on the node
+			err = SetUnSetDiscardMountRTOptions(&appNode, false)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
+			// Verify if the cluster options set for run time parameters
+			optionsMap := []string{"NodeRuntimeOptions"}
+			cOptions, err := Inst().V.GetClusterOpts(appNode, optionsMap)
+			if !strings.Contains(cOptions["NodeRuntimeOptions"], "discard_mount_force:1") {
+				UpdateOutcome(event, err)
+				continue
+			}
+		}
+	})
+}
+
+func TriggerResetDiscardMounts(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(ResetDiscardMounts)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: ResetDiscardMounts,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	stepLog := "setting and unsetting discard mount options on regular intervals "
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		log.Infof("Starting test case here !!")
+
+		for _, appNode := range node.GetStorageNodes() {
+			err := isNodeHealthy(appNode, event.Event.Type)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
+			// Setting discard-mount-option on the node
+			err = SetUnSetDiscardMountRTOptions(&appNode, true)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
+			// Verify if the cluster options set for run time parameters
+			optionsMap := []string{"NodeRuntimeOptions"}
+			cOptions, err := Inst().V.GetClusterOpts(appNode, optionsMap)
+			if !strings.Contains(cOptions["NodeRuntimeOptions"], "discard_mount_force:0") {
+				UpdateOutcome(event, err)
+				continue
+			}
+		}
+	})
+}
+
+func TriggerScaleFADAVolumeAttach(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(ScaleFADAVolumeAttach)
+	defer ginkgo.GinkgoRecover()
+	var wg sync.WaitGroup
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: ScaleFADAVolumeAttach,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	stepLog := "Adding FADA volumes at scale to validate FADA volumes attachment in scale "
+
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		var param = make(map[string]string)
+		var appContexts []*scheduler.Context
+		sem := make(chan struct{}, 10)
+
+		fadaScName := PureBlockStorageClass + time.Now().Format("01-02-15h04m05s")
+		log.Infof("Creating pure_block storage class class: %s", fadaScName)
+		param[PureBackend] = k8s.PureBlock
+		_, err := createPureStorageClass(fadaScName, param)
+		if err != nil {
+			log.Errorf("StorageClass creation failed for SC: %s", fadaScName)
+			UpdateOutcome(event, err)
+		}
+		log.InfoD("Deployng FADA based applications")
+		startTime := time.Now()
+		for x := 0; x < deploymentCount; x++ {
+			pvcName := fmt.Sprintf("%s-%d", pvcNamePrefix, x)
+			namespace := fmt.Sprintf("%s-%d", fadaNamespacePrefix, x)
+			deploymentName := fmt.Sprintf("%s-%d", fadaScName, x)
+			wg.Add(1)
+			sem <- struct{}{}
+			go func(scName string, pvcName string, ns string, depName string, wg *sync.WaitGroup, ctx *[]*scheduler.Context, event *EventRecord, sem chan struct{}) {
+				deployFadaApps(fadaScName, pvcName, namespace, deploymentName, wg, ctx, event)
+				<-sem
+			}(fadaScName, pvcName, namespace, deploymentName, &wg, &appContexts, event, sem)
+		}
+		wg.Wait()
+		close(sem)
+		log.InfoD("Validating applications context")
+		validateContexts(event, &appContexts)
+		log.Infof("Attaching [%d] FADA volumes took: [%v]", deploymentCount, time.Since(startTime))
+		if time.Since(startTime) > podAttachTimeout {
+			UpdateOutcome(event, fmt.Errorf("failed to complete all fada pods attachment in [%v]", podAttachTimeout))
+		}
+
+		stepLog = "Cleaning up the FADA deployments"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			sem := make(chan struct{}, 10)
+			for x := 0; x < deploymentCount; x++ {
+				sem <- struct{}{}
+				wg.Add(1)
+				go func(ctx *scheduler.Context, wg *sync.WaitGroup, event *EventRecord, sem chan struct{}) {
+					cleanupDeployment(ctx, wg, event)
+					<-sem
+				}(appContexts[x], &wg, event, sem)
+			}
+			wg.Wait()
+			close(sem)
+			log.InfoD("Successfully cleaned up the FADA deployments")
+		})
+		updateMetrics(*event)
+	})
+}
+
+func TriggerDefragScheduleCRUDOps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(DefragScheduleCRUDOperations)
+	defer ginkgo.GinkgoRecover()
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DefragScheduleCRUDOperations,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var scheduleId string
+	var defragJob opsapi.DefragJob
+	nodeIds := make([]string, 0)
+	stepLog := "Setting up defrag schedule for all storage nodes"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		startTime, err := getDefragStartTime()
+		log.Infof("Next schedule start time at: [%s]", startTime)
+		if err != nil {
+			log.Errorf("Failed to get start time. Error: %v", err)
+			UpdateOutcome(event, err)
+		}
+		moreWait, err := doNeedToWaitMoreForSchedule(startTime)
+		if err != nil {
+			log.Errorf("Failed to get wait time for schedule. Error: %v", err)
+			UpdateOutcome(event, err)
+		}
+		// If schedule start time make function to wait more than 10 minutes then skip validation
+		// so that other trigger can continue
+		log.Infof("More wait time is: %t", moreWait)
+		if moreWait {
+			log.Infof("Waiting for next defrag schedule will be longer, next start time: [%s]", startTime)
+			log.Info("Skipping defrag crud validation this time, will try to validate next time")
+			return
+		}
+
+		stepLog = fmt.Sprintf("Creating defrag schedule at start time: [%s]", startTime)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			Step(stepLog, func() {
+				storageNodes := node.GetStorageDriverNodes()
+				for _, node := range storageNodes {
+					nodeIds = append(nodeIds, node.Id)
+				}
+				defragJob = getDfragJob(uint32(len(nodeIds)), nodeIds, false)
+				resp, err := Inst().V.CreateDefragSchedule(startTime, &defragJob)
+				if err != nil {
+					log.Errorf("Failed to create defrag schedule. Error: %v", err)
+					UpdateOutcome(event, err)
+				}
+				scheduleId = resp.Schedule.Id
+			})
+		})
+
+		stepLog = fmt.Sprintf("Inspecting defrag schedule: [%s]", scheduleId)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			time.Sleep(3 * time.Second)
+			schedInfo, err := Inst().V.InspectDefragSchedules(scheduleId)
+			if err != nil {
+				log.Errorf("Failed to get defrag schedule info for schedule id: [%s].Error: %v", scheduleId, err)
+				UpdateOutcome(event, err)
+			}
+			if err = Inst().V.ValidateDefragScheduleInfo(schedInfo, startTime, &defragJob); err != nil {
+				log.Errorf("Defrag schedule info validation failed for schedule Id: [%s].Error: %v", scheduleId, err)
+				UpdateOutcome(event, err)
+			}
+		})
+
+		stepLog = fmt.Sprintf("Validate defrag schedule status: [%s]", scheduleId)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if err := Inst().V.ValidatesDefragSchedulesTrigger(scheduleId, nodeIds); err != nil {
+				log.Errorf("Defrag schedule not triggered for schedule Id: [%s].Error: %v", scheduleId, err)
+				UpdateOutcome(event, err)
+			}
+		})
+
+		stepLog = fmt.Sprintf("Deleting defrag schedule status: [%s]", scheduleId)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if err := Inst().V.DeleteDefragSchedule(scheduleId); err != nil {
+				log.Errorf("Failed to delete defrag schedule Id: [%s].Error: %v", scheduleId, err)
+				UpdateOutcome(event, err)
+
+			}
+			time.Sleep(3 * time.Second)
+			if err := Inst().V.ValidateDefragScheduleIdDeleted(scheduleId); err != nil {
+				log.Errorf("Defrag schedule still present after deletion: [%s].Error: %v", scheduleId, err)
+				UpdateOutcome(event, err)
+
+			}
+		})
+	})
+	updateMetrics(*event)
+}
+
+func TriggerDefragSchedules(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(DefragSchedules)
+	defer ginkgo.GinkgoRecover()
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DefragSchedules,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var defragJob opsapi.DefragJob
+	var startTime string
+	var err error
+	nodeIds := make([]string, 0)
+	stepLog := "Enabling and validating defrag schedules for all storage nodes"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		if !isDefragScheduleExist {
+			startTime, err = getDefragStartTime()
+			if err != nil {
+				log.Errorf("Failed to get start time. Error: %v", err)
+				UpdateOutcome(event, err)
+			}
+			log.Infof("Setting up defrag schedule at: [%s]", startTime)
+			storageNodes := node.GetStorageDriverNodes()
+			for _, node := range storageNodes {
+				nodeIds = append(nodeIds, node.Id)
+			}
+			defragJob = getDfragJob(uint32(len(nodeIds)), nodeIds, false)
+			resp, err := Inst().V.CreateDefragSchedule(startTime, &defragJob)
+			if err != nil {
+				log.Errorf("Failed to create defrag schedule. Error: %v", err)
+				UpdateOutcome(event, err)
+			}
+			defragScheduleID = resp.Schedule.Id
+			isDefragScheduleExist = true
+			schedInfo, err := Inst().V.InspectDefragSchedules(defragScheduleID)
+			if err != nil {
+				log.Errorf("Failed to get defrag schedule info for schedule id: [%s].Error: %v", defragScheduleID, err)
+				UpdateOutcome(event, err)
+			}
+			if err = Inst().V.ValidateDefragScheduleInfo(schedInfo, startTime, &defragJob); err != nil {
+				log.Errorf("Defrag schedule info validation failed for schedule Id: [%s].Error: %v", defragScheduleID, err)
+				UpdateOutcome(event, err)
+			}
+		}
+		stepLog := "Validate defrag schedules status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if isDefragScheduleExist {
+				schedInfo, err := Inst().V.InspectDefragSchedules(defragScheduleID)
+				if err != nil {
+					log.Errorf("Failed to get defrag schedule info for schedule id: [%s].Error: %v", defragScheduleID, err)
+					UpdateOutcome(event, err)
+				}
+				startTime = schedInfo.GetSchedule().StartTime
+			}
+			moreWait, err := doNeedToWaitMoreForSchedule(startTime)
+			if err != nil {
+				log.Errorf("Failed to get wait time for schedule. Error: %v", err)
+				UpdateOutcome(event, err)
+			}
+			// If schedule start time make function to wait more than 10 minutes
+			// then validates last schedules status
+			log.Infof("More wait time is: %t", moreWait)
+			if moreWait {
+				incompleteDefragNodes, err := Inst().V.ValidateLastDefragScheduleStatus(defragScheduleID, nodeIds)
+				if err != nil {
+					log.Errorf("defrag schedule is not completed on nodes: [%v].Error: %v", incompleteDefragNodes, err)
+					UpdateOutcome(event, err)
+				}
+				return
+			}
+			if err = Inst().V.ValidatesDefragSchedulesTrigger(defragScheduleID, nodeIds); err != nil {
+				log.Errorf("Defrag schedule not triggered for schedule Id: [%s].Error: %v", defragScheduleID, err)
+				UpdateOutcome(event, err)
+			}
+		})
+	})
+
+	updateMetrics(*event)
+}
+
+// getDefragStartTime return non-overlapping start time with another defrag schedule in a cluster
+func getDefragStartTime() (string, error) {
+	schedType := "daily"
+	schedHour, schedMinute, monthDay, weekDay := getCurrentTimes()
+	resp, err := Inst().V.GetAllDefragSchedules()
+	if err != nil {
+		return "", fmt.Errorf("failed to get all defrag schedules for a cluster. Err: %v", err)
+	}
+	for _, schedule := range resp.GetSchedules() {
+		schedStartTime := schedule.StartTime
+		thisSchedType, schedTime := getSchedTypeAndTime(schedStartTime)
+		// if schedules overlaps with current day and time then only update the schedule hour and minute
+		if thisSchedType == schedType || thisSchedType == monthDay || thisSchedType == weekDay {
+			if strconv.Itoa(schedHour) == schedTime[0] {
+				// if defrag schedule max duration is greater than 60 then
+				// need to find hour after that duration
+				if schedule.MaxDurationMinutes >= 60 {
+					schedHour += int(schedule.MaxDurationMinutes / 60)
+					schedHour %= 24
+				}
+				thisScheduleMinute, err := strconv.Atoi(schedTime[1])
+				if err != nil {
+					return "", fmt.Errorf("failed to parse int from string. Err: %v", err)
+				}
+				// if defrag schedule max duration plus schedule minutes >= 60. for an Example daily@19:30
+				// then after adding duration it will become 90 so need to increase schedule hour by one
+				// and need to update schedule minutes to 30
+				thisScheduleMinute += int(schedule.MaxDurationMinutes % 60)
+				if thisScheduleMinute >= 60 {
+					schedHour += thisScheduleMinute / 60
+					schedHour %= 24
+					thisScheduleMinute %= 60
+				}
+				schedMinute = thisScheduleMinute
+			}
+		}
+	}
+	// Scheduling after 2 minutes of current time or last schedule
+	schedMinute += 2
+	hour, min := strconv.Itoa(schedHour), strconv.Itoa(schedMinute)
+	if schedMinute < 10 {
+		min = fmt.Sprintf("0%s", min)
+	}
+	if schedHour < 10 {
+		hour = fmt.Sprintf("0%s", hour)
+	}
+	return fmt.Sprintf("%s=%s:%s", schedType, hour, min), nil
+}
+
+// getDfragJob return DefragJob object for defrag schedule
+func getDfragJob(maxNodesInParallel uint32, nodeIdList []string, onlyOneIteration bool) opsapi.DefragJob {
+	return opsapi.DefragJob{
+		MaxDurationMinutes:       defaultMaxDefragDuration,
+		MaxNodesInParallel:       maxNodesInParallel,
+		IncludeNodes:             nodeIdList,
+		ScheduleOneIterationOnly: onlyOneIteration,
+	}
+}
+
+// getCurrentTimes return current hour, minute, month day and week day
+func getCurrentTimes() (int, int, string, string) {
+	return time.Now().Hour(), time.Now().Minute(), strconv.Itoa(time.Now().Day()), time.Now().Weekday().String()
+}
+
+// getSchedTypeAndTime return schedule type like daily,weekly or monthly and schedule hour and minutes
+func getSchedTypeAndTime(defragSchedule string) (string, []string) {
+	fields := strings.Split(defragSchedule, equalSeparator)
+	schedTime := strings.Split(fields[1], colonSeparator)
+	return fields[0], schedTime
+}
+
+// doNeedToWaitMoreForSchedule return true if need to wait more than 10 minutes for schedule else false
+func doNeedToWaitMoreForSchedule(defragSchedule string) (bool, error) {
+	curHour, curMinute, _, _ := getCurrentTimes()
+	_, schedTime := getSchedTypeAndTime(defragSchedule)
+	schedHour, err := strconv.Atoi(schedTime[0])
+	if err != nil {
+		return true, fmt.Errorf("failed to parse schedule hour. Err: %v", err)
+	}
+	schedMinute, err := strconv.Atoi(schedTime[1])
+	if err != nil {
+		return true, fmt.Errorf("failed to parse schedule minute. Err: %v", err)
+	}
+	if curHour <= schedHour && (schedHour-curHour) <= 1 {
+		if curHour == schedHour && curMinute <= schedMinute && (schedMinute-curMinute) <= 10 {
+			return false, nil
+		} else {
+			curMinute += 10
+			if curMinute > 60 {
+				curMinute %= 60
+				if curMinute >= schedMinute {
+					return false, nil
+				}
+			}
+		}
+	}
+	return true, nil
+}
+
+// deployFadaApps deploy deployment using FADA volumes
+func deployFadaApps(scName string, pvcName string, ns string, depName string, wg *sync.WaitGroup, ctx *[]*scheduler.Context, event *EventRecord) {
+	defer wg.Done()
+
+	metadata := make(map[string]string, 0)
+	pvcSize := "1Gi"
+	metadata["app"] = "fada-data-app"
+
+	if err := createNameSpace(ns, metadata); err != nil {
+		UpdateOutcome(event, fmt.Errorf("failed to create namespace: %s. Err: %v", ns, err))
+	}
+	if err := createPVC(pvcName, scName, pvcSize, ns); err != nil {
+		UpdateOutcome(event, fmt.Errorf("failed to create pvc: [%s] in ns: [%s]. Err: %v", pvcName, ns, err))
+	}
+	if err := createDeployment(depName, ns, pvcName, ctx); err != nil {
+		UpdateOutcome(event, fmt.Errorf("failed to create deployment: %s. Err: %v", depName, err))
+	}
+}
+
+func createDeployment(depName string, ns string, pvcName string, ctx *[]*scheduler.Context) error {
+	request := make(map[v1.ResourceName]resource.Quantity, 0)
+	limit := make(map[v1.ResourceName]resource.Quantity, 0)
+	cpu, err := resource.ParseQuantity("50m")
+	if err != nil {
+		return fmt.Errorf("failed to parse cpu request size. Err: %v", err)
+	}
+	memory, err := resource.ParseQuantity("64Mi")
+	if err != nil {
+		return fmt.Errorf("failed to parse memory request size. Err: %v", err)
+	}
+	request["cpu"], request["memory"] = cpu, memory
+
+	cpuLimit, err := resource.ParseQuantity("100m")
+	if err != nil {
+		return fmt.Errorf("failed to parse cpu limit size. Err: %v", err)
+	}
+	memLimit, err := resource.ParseQuantity("128Mi")
+	if err != nil {
+		return fmt.Errorf("failed to parse memory limit size. Err: %v", err)
+	}
+	limit["cpu"], limit["memory"] = cpuLimit, memLimit
+	deployment := getDeploymentObject(depName, ns, pvcName, request, limit)
+	deployment, err = apps.Instance().CreateDeployment(deployment, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
+
+	(*ctx) = append(*ctx, &scheduler.Context{
+		App: &spec.AppSpec{
+			SpecList: []interface{}{deployment},
+		},
+	})
+	return nil
+}
+
+func getDeploymentObject(depName string, ns string, pvcName string, request, limit map[v1.ResourceName]resource.Quantity) *appsapi.Deployment {
+	var replica int32 = 1
+	label := make(map[string]string, 0)
+	label["app"] = "fada-data-app"
+	volMounts := []v1.VolumeMount{{
+		Name:      "fada-data-vol",
+		MountPath: "/mnt/data"},
+	}
+	volumes := []v1.Volume{{
+		Name: "fada-data-vol",
+		VolumeSource: v1.VolumeSource{
+			PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+				ClaimName: pvcName,
+			}}},
+	}
+	commands := []string{
+		"sh", "-c", "sleep 3600",
+	}
+
+	// containers spec
+	containers := []v1.Container{
+		{
+			Name:         "franzlaender",
+			Image:        "ubuntu:latest",
+			Command:      commands,
+			VolumeMounts: volMounts,
+			Resources: v1.ResourceRequirements{
+				Requests: request,
+				Limits:   limit,
+			},
+			ImagePullPolicy: v1.PullIfNotPresent,
+		},
+	}
+	return &appsapi.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      depName,
+			Namespace: ns,
+		},
+		Spec: appsapi.DeploymentSpec{
+			Replicas: &replica,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: label,
+			},
+			Template: v1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: label,
+				},
+				Spec: v1.PodSpec{
+					RestartPolicy: "Always",
+					Containers:    containers,
+					Volumes:       volumes,
+				},
+			},
+		},
+	}
+}
+
+func createNameSpace(namespace string, label map[string]string) error {
+	nsSpec := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   namespace,
+			Labels: label,
+		},
+	}
+	_, err := k8sCore.CreateNamespace(nsSpec)
+	return err
+}
+
+func createPVC(pvcName string, scName string, pvcSize string, ns string) error {
+	size, err := resource.ParseQuantity(pvcSize)
+	if err != nil {
+		return fmt.Errorf("failed to parse pvc size: %s", pvcSize)
+	}
+	pvcClaimSpec := k8s.MakePVC(size, ns, pvcName, scName)
+	_, err = k8sCore.CreatePersistentVolumeClaim(pvcClaimSpec)
+	return err
+}
+
+func cleanupDeployment(ctx *scheduler.Context, wg *sync.WaitGroup, event *EventRecord) {
+	defer wg.Done()
+	defer ginkgo.GinkgoRecover()
+	var deployment *appsapi.Deployment
+	var depname, namespace string
+	if len(ctx.App.SpecList) > 0 {
+		deployment = ctx.App.SpecList[0].(*appsapi.Deployment)
+		depname = deployment.ObjectMeta.Name
+		namespace = deployment.ObjectMeta.Namespace
+		if err := apps.Instance().DeleteDeployment(depname, namespace); err != nil {
+			UpdateOutcome(event, fmt.Errorf(
+				"failed to delete deployment: %s. Err: %v", depname, err))
+		}
+		if len(deployment.Spec.Template.Spec.Volumes) > 0 {
+			for _, vol := range deployment.Spec.Template.Spec.Volumes {
+				pvcName := vol.VolumeSource.PersistentVolumeClaim.ClaimName
+				if err := k8sCore.DeletePersistentVolumeClaim(pvcName, namespace); err != nil {
+					UpdateOutcome(event, err)
+				}
+			}
+		}
+	}
+	if err := k8sCore.DeleteNamespace(namespace); err != nil {
+		UpdateOutcome(event, err)
+	}
+}
+
+// CreateVclusterStorageClass method creates a storageclass using host's k8s clientset on host cluster
 func CreateVclusterStorageClass(scName string, opts ...storageClassOption) error {
 	params := make(map[string]string)
 	params["repl"] = "2"
 	params["priority_io"] = "high"
 	params["io_profile"] = "auto"
-	v1obj := meta_v1.ObjectMeta{
+	v1obj := metav1.ObjectMeta{
 		Name: scName,
 	}
 	reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
@@ -10504,11 +12306,11 @@ func CreateVclusterStorageClass(scName string, opts ...storageClassOption) error
 }
 
 // GetContextPVCs returns pvc from the given context
-func GetContextPVCs(context *scheduler.Context) ([]*corev1.PersistentVolumeClaim, error) {
-	updatedPVCs := make([]*corev1.PersistentVolumeClaim, 0)
+func GetContextPVCs(context *scheduler.Context) ([]*v1.PersistentVolumeClaim, error) {
+	updatedPVCs := make([]*v1.PersistentVolumeClaim, 0)
 	for _, specObj := range context.App.SpecList {
 
-		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+		if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
 			pvc, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, err
@@ -10574,7 +12376,7 @@ func createPureStorageClass(name string, params map[string]string) (*storageapi.
 	var bindMode storageapi.VolumeBindingMode
 	k8sStorage := storage.Instance()
 
-	v1obj := meta_v1.ObjectMeta{
+	v1obj := metav1.ObjectMeta{
 		Name: name,
 	}
 	reclaimPolicyDelete = v1.PersistentVolumeReclaimDelete
@@ -10604,17 +12406,6 @@ func setMetrics(event EventRecord) {
 func updateMetrics(event EventRecord) {
 	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
 	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
-}
-
-func isPoolRebalanceEnabled(poolUUID string) bool {
-	if autoPilotLabelNode.Name != "" {
-		for _, pool := range autoPilotLabelNode.Pools {
-			if pool.Uuid == poolUUID {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func getReblanceCoolOffPeriod(triggerType string) int {

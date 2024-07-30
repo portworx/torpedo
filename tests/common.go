@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bufio"
+	context1 "context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
@@ -9,8 +10,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/hashicorp/go-version"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -25,36 +26,79 @@ import (
 	"sync"
 	"time"
 
-	context1 "context"
-
 	"cloud.google.com/go/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
+	"github.com/Masterminds/semver/v3"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/devans10/pugo/flasharray"
+	"github.com/hashicorp/go-version"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
-	opsapi "github.com/libopenstorage/openstorage/api"
-	"github.com/libopenstorage/openstorage/pkg/sched"
-	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
-	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
-	optest "github.com/libopenstorage/operator/pkg/util/test"
-	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	"github.com/pborman/uuid"
-	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/sirupsen/logrus"
+	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
+
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	opsapi "github.com/libopenstorage/openstorage/api"
+	"github.com/libopenstorage/openstorage/pkg/sched"
+	pxapi "github.com/libopenstorage/operator/api/px"
+	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
+	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
+	optest "github.com/libopenstorage/operator/pkg/util/test"
+	"github.com/libopenstorage/stork/pkg/storkctl"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/k8s/operator"
 	policyops "github.com/portworx/sched-ops/k8s/policy"
 	k8sStorage "github.com/portworx/sched-ops/k8s/storage"
+	schedstorage "github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/sched-ops/k8s/stork"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
+
+	"go.uber.org/multierr"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"gopkg.in/natefinch/lumberjack.v2"
+	yaml "gopkg.in/yaml.v2"
+
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	appsapi "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	batchv1beta1 "k8s.io/api/batch/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
+	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	policyv1beta1 "k8s.io/api/policy/v1beta1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	storageapi "k8s.io/api/storage/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	rest "k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/strings/slices"
+	kubevirtv1 "kubevirt.io/api/core/v1"
+
 	"github.com/portworx/torpedo/drivers"
 	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
 	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
@@ -63,6 +107,8 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"github.com/portworx/torpedo/drivers/pds"
+	"github.com/portworx/torpedo/drivers/scheduler/aks"
+	"github.com/portworx/torpedo/drivers/scheduler/anthos"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	appUtils "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -77,34 +123,6 @@ import (
 	"github.com/portworx/torpedo/pkg/stats"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/portworx/torpedo/pkg/units"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	"github.com/sirupsen/logrus"
-	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
-	"go.uber.org/multierr"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"gopkg.in/natefinch/lumberjack.v2"
-	yaml "gopkg.in/yaml.v2"
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	appsapi "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
-	batchv1beta1 "k8s.io/api/batch/v1beta1"
-	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
-	netv1 "k8s.io/api/networking/v1"
-	networkingv1beta1 "k8s.io/api/networking/v1beta1"
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	storageapi "k8s.io/api/storage/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	// import ssh driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/node/ssh"
@@ -144,6 +162,8 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
 
+	_ "github.com/portworx/torpedo/drivers/scheduler/oke"
+
 	// import rke scheduler drivers to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/rke"
 
@@ -179,6 +199,8 @@ import (
 
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
+
+	newflasharray "github.com/portworx/torpedo/drivers/pure/flasharray"
 )
 
 const (
@@ -302,6 +324,12 @@ const (
 	anthosInstPathCliFlag            = "anthos-inst-path"
 	skipSystemCheckCliFlag           = "torpedo-skip-system-checks"
 	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
+	faSecretCliFlag                  = "fa-secret"
+
+	// PSA Specific
+	kubeApiServerConfigFilePath     = "/etc/kubernetes/manifests/kube-apiserver.yaml"
+	kubeApiServerConfigFilePathBkp  = "/etc/kubernetes/kube-apiserver.yaml.bkp"
+	KubeAdmissionControllerFilePath = "/etc/kubernetes/admission/admissioncontroller.yaml"
 )
 
 // Dashboard params
@@ -370,17 +398,21 @@ const (
 )
 
 const (
-	waitResourceCleanup       = 2 * time.Minute
-	defaultTimeout            = 5 * time.Minute
-	defaultVolScaleTimeout    = 4 * time.Minute
-	defaultIbmVolScaleTimeout = 8 * time.Minute
-	defaultRetryInterval      = 10 * time.Second
-	defaultCmdTimeout         = 20 * time.Second
-	defaultCmdRetryInterval   = 5 * time.Second
-	defaultDriverStartTimeout = 10 * time.Minute
-	defaultKvdbRetryInterval  = 5 * time.Minute
-	addDriveUpTimeOut         = 15 * time.Minute
-	podDestroyTimeout         = 5 * time.Minute
+	waitResourceCleanup         = 2 * time.Minute
+	defaultTimeout              = 5 * time.Minute
+	defaultVolScaleTimeout      = 4 * time.Minute
+	defaultIbmVolScaleTimeout   = 8 * time.Minute
+	defaultRetryInterval        = 10 * time.Second
+	defaultCmdTimeout           = 20 * time.Second
+	defaultCmdRetryInterval     = 5 * time.Second
+	defaultDriverStartTimeout   = 15 * time.Minute
+	defaultKvdbRetryInterval    = 5 * time.Minute
+	addDriveUpTimeOut           = 15 * time.Minute
+	podDestroyTimeout           = 5 * time.Minute
+	kubeApiServerBringUpTimeout = 20 * time.Minute
+	KubeApiServerWait           = 15 * time.Minute
+	NSWaitTimeout               = 10 * time.Minute
+	NSWaitTimeoutRetry          = 20 * time.Second
 )
 
 const (
@@ -397,9 +429,135 @@ const (
 	pxctlCDListCmd = "pxctl cd list"
 )
 
+const (
+	IBMHelmRepoName   = "ibm-helm-portworx"
+	IBMHelmRepoURL    = "https://raw.githubusercontent.com/portworx/ibm-helm/master/repo/stable"
+	IBMHelmValuesFile = "/tmp/values.yaml"
+)
+
+const (
+	ValidateStorageClusterTimeout = 40 * time.Minute
+)
+
+// LabLabel used to name the licensing features
+type LabLabel string
+
+const (
+	IBMTestLicenseSKU   = "PX-Enterprise IBM Cloud (test)"
+	IBMTestLicenseDRSKU = "PX-Enterprise IBM Cloud DR (test)"
+	IBMProdLicenseSKU   = "PX-Enterprise IBM Cloud"
+	IBMProdLicenseDRSKU = "PX-Enterprise IBM Cloud DR"
+)
+
+const (
+	// LabNodes - Number of nodes maximum
+	LabNodes LabLabel = "Nodes"
+	// LabVolumeSize - Volume capacity [TB] maximum
+	LabVolumeSize LabLabel = "VolumeSize"
+	// LabVolumes - Number of volumes per cluster maximum
+	LabVolumes LabLabel = "Volumes"
+	// LabSnapshots - Number of snapshots per volume maximum
+	LabSnapshots LabLabel = "Snapshots"
+	// LabHaLevel - Volume replica count
+	LabHaLevel LabLabel = "HaLevel"
+	// LabSharedVol - Shared volumes
+	LabSharedVol LabLabel = "SharedVolume"
+	// LabEncryptedVol - BYOK data encryption
+	LabEncryptedVol LabLabel = "EncryptedVolume"
+	// LabScaledVol - Volume sets
+	LabScaledVol LabLabel = "ScaledVolume"
+	// LabAggregatedVol - Storage aggregation
+	LabAggregatedVol LabLabel = "AggregatedVolume"
+	// LabResizeVolume - Resize volumes on demand
+	LabResizeVolume LabLabel = "ResizeVolume"
+	// LabCloudSnap - Snapshot to object store [CloudSnap]
+	LabCloudSnap LabLabel = "SnapshotToObjectStore"
+	// LabCloudSnapDaily - Number of CloudSnaps daily per volume maximum
+	LabCloudSnapDaily LabLabel = "SnapshotToObjectStoreDaily"
+	// LabCloudMigration -Cluster-level migration [Kube-motion/Data Migration]
+	LabCloudMigration LabLabel = "CloudMigration"
+	// LabDisasterRecovery - Disaster Recovery [PX-DR]
+	LabDisasterRecovery LabLabel = "DisasterRecovery"
+	// LabAUTCapacityMgmt - Autopilot Capacity Management
+	LabAUTCapacityMgmt LabLabel = "AUTCapacityManagement"
+	// LabPlatformBare - Bare-metal hosts
+	LabPlatformBare LabLabel = "EnablePlatformBare"
+	// LabPlatformVM - Virtual machine hosts
+	LabPlatformVM LabLabel = "EnablePlatformVM"
+	// LabNodeCapacity - Node disk capacity [TB] maximum
+	LabNodeCapacity LabLabel = "NodeCapacity"
+	// LabNodeCapacityExtend - Node disk capacity extension
+	LabNodeCapacityExtend LabLabel = "NodeCapacityExtension"
+	// LabLocalAttaches - Number of attached volumes per node maximum
+	LabLocalAttaches LabLabel = "LocalVolumeAttaches"
+	// LabOIDCSecurity - OIDC Security
+	LabOIDCSecurity LabLabel = "OIDCSecurity"
+	// LabGlobalSecretsOnly - Limit BYOK encryption to cluster-wide secrets
+	LabGlobalSecretsOnly LabLabel = "GlobalSecretsOnly"
+	// LabFastPath - FastPath extension [PX-FAST]
+	LabFastPath LabLabel = "FastPath"
+	// UnlimitedNumber represents the unlimited number of licensed resource.
+	// note - the max # Flex counts handle, is actually 999999999999999990
+	UnlimitedNumber = int64(0x7FFFFFFF) // C.FLX_FEATURE_UNCOUNTED_VALUE = 0x7FFFFFFF  (=2147483647)
+	Unlimited       = int64(0x7FFFFFFFFFFFFFFF)
+
+	// -- Testing maximums below
+
+	// MaxNumNodes is a maximum nodes in a cluster
+	MaxNumNodes = int64(1000)
+	// MaxNumVolumes is a maximum number of volumes in a cluster
+	MaxNumVolumes = int64(100000)
+	// MaxVolumeSize is a maximum volume size for single volume [in TB]
+	MaxVolumeSize = int64(40)
+	// MaxNodeCapacity defines the maximum node's disk capacity [in TB]
+	MaxNodeCapacity = int64(256)
+	// MaxLocalAttachCount is a maximum number of local volume attaches
+	MaxLocalAttachCount = int64(256)
+	// MaxHaLevel is a maximum replication factor
+	MaxHaLevel = int64(3)
+	// MaxNumSnapshots is a maximum number of snapshots
+	MaxNumSnapshots = int64(64)
+)
+
+var (
+	IBMLicense = map[LabLabel]interface{}{
+		LabNodes:              &pxapi.LicensedFeature_Count{Count: 1000},
+		LabVolumeSize:         &pxapi.LicensedFeature_CapacityTb{CapacityTb: 40},
+		LabVolumes:            &pxapi.LicensedFeature_Count{Count: 16384},
+		LabHaLevel:            &pxapi.LicensedFeature_Count{Count: MaxHaLevel},
+		LabSnapshots:          &pxapi.LicensedFeature_Count{Count: 64},
+		LabAggregatedVol:      &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabSharedVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabEncryptedVol:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabGlobalSecretsOnly:  &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabScaledVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabResizeVolume:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnap:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnapDaily:     &pxapi.LicensedFeature_Count{Count: Unlimited},
+		LabCloudMigration:     &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabDisasterRecovery:   &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabPlatformBare:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabPlatformVM:         &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabNodeCapacity:       &pxapi.LicensedFeature_CapacityTb{CapacityTb: 256},
+		LabNodeCapacityExtend: &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabLocalAttaches:      &pxapi.LicensedFeature_Count{Count: 256},
+		LabOIDCSecurity:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabAUTCapacityMgmt:    &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabFastPath:           &pxapi.LicensedFeature_Enabled{Enabled: false},
+	}
+)
+
 var pxRuntimeOpts string
 var pxClusterOpts string
 var PxBackupVersion string
+var (
+	secret                pureutils.PXPureSecret
+	PureFaClientVif       *newflasharray.Client
+	PureMgmtIpCounter     int
+	PureMgmtIPList        []string
+	PureFAMgmtMap         map[string]*newflasharray.Client
+	LastDisabledInterface string
+)
 
 var (
 	RunIdForSuite             int
@@ -451,11 +609,12 @@ var (
 )
 
 var (
-	includeResourcesFlag  = true
-	includeVolumesFlag    = true
-	startApplicationsFlag = true
-	tempDir               = "/tmp"
-	migrationList         []*storkapi.Migration
+	includeResourcesFlag        = true
+	includeVolumesFlag          = true
+	startApplicationsFlag       = true
+	tempDir                     = "/tmp"
+	bidirectionalClusterPairDir = "bidirectional-cluster-pair"
+	migrationList               []*storkapi.Migration
 )
 
 var (
@@ -536,6 +695,7 @@ func InitInstance() {
 		VaultToken:                       Inst().VaultToken,
 		PureVolumes:                      Inst().PureVolumes,
 		PureSANType:                      Inst().PureSANType,
+		PureFADAPod:                      Inst().PureFADAPod,
 		RunCSISnapshotAndRestoreManyTest: Inst().RunCSISnapshotAndRestoreManyTest,
 		HelmValuesConfigMapName:          Inst().HelmValuesConfigMap,
 		SecureApps:                       Inst().SecureAppList,
@@ -549,8 +709,11 @@ func InitInstance() {
 	if Inst().ConfigMap != "" {
 		log.Infof("Using Config Map: %s ", Inst().ConfigMap)
 		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-		log.FailOnError(err, "Error occured while getting token from config map")
+		log.FailOnError(err, "Error occurred while getting token from config map")
 		log.Infof("Token used for initializing: %s ", token)
+		err = os.Setenv("PXCTL_AUTH_TOKEN", token)
+		log.FailOnError(err, "Error occurred while setting PXCTL_AUTH_TOKEN")
+
 	} else {
 		token = ""
 	}
@@ -558,17 +721,17 @@ func InitInstance() {
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
 	})
-	log.FailOnError(err, "Error occured while Node Driver Initialization")
+	log.FailOnError(err, "Error occurred while Node Driver Initialization")
 
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
-	log.FailOnError(err, "Error occured while Volume Driver Initialization")
+	log.FailOnError(err, "Error occurred while Volume Driver Initialization")
 
 	err = Inst().M.Init(Inst().JobName, Inst().JobType)
-	log.FailOnError(err, "Error occured while monitor Initialization")
+	log.FailOnError(err, "Error occurred while monitor Initialization")
 
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
-		log.FailOnError(err, "Error occured while Backup Driver Initialization")
+		log.FailOnError(err, "Error occurred while Backup Driver Initialization")
 	}
 	SetupTestRail()
 
@@ -601,6 +764,10 @@ func PrintPxctlStatus() {
 	PrintCommandOutput("pxctl status")
 }
 
+func PrintInspectVolume(volID string) {
+	PrintCommandOutput(fmt.Sprintf("pxctl volume inspect %s", volID))
+}
+
 func PrintCommandOutput(cmnd string) {
 	output, err := Inst().N.RunCommand(node.GetStorageNodes()[0], cmnd, node.ConnectionOpts{
 		IgnoreError:     false,
@@ -616,7 +783,12 @@ func PrintCommandOutput(cmnd string) {
 }
 
 func PrintSvPoolStatus(node node.Node) {
-	runCmdGetOutput("pxctl sv pool show", node)
+	output, err := runCmdGetOutput("pxctl sv pool show", node)
+	if err != nil {
+		log.Warnf("error getting pool data on node [%s], cause: %v", node.Name, err)
+		return
+	}
+	log.Infof(output)
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -684,8 +856,43 @@ func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
 	})
 }
 
+func IsPoolAddDiskSupported() bool {
+	DMthin, err := IsDMthin()
+	log.FailOnError(err, "Error occured while checking if DMthin is enabled")
+	if DMthin {
+		dmthinSupportedPxVersion, px_err := semver.NewVersion("3.1.0")
+		if px_err != nil {
+			log.FailOnError(px_err, "Error occured :%s")
+		}
+		driverVersion, version_err := Inst().V.GetDriverVersion()
+		if version_err != nil {
+			log.FailOnError(version_err, "Error occured while fetching current version")
+		}
+		var new_trimmedVersion string
+		parts := strings.Split(driverVersion, "-")
+		trimmedVersion := strings.Split(parts[0], ".")
+		if len(trimmedVersion) > 3 {
+			new_trimmedVersion = strings.Join(trimmedVersion[:3], ".")
+		} else {
+			new_trimmedVersion = parts[0]
+		}
+		currentPxVersionOnCluster, semver_err := semver.NewVersion(new_trimmedVersion)
+		if semver_err != nil {
+			log.FailOnError(semver_err, "Error occured while comparing the current and expected version")
+		}
+		log.InfoD(fmt.Sprintf("The current version on the cluster is :%s", currentPxVersionOnCluster))
+		if currentPxVersionOnCluster.GreaterThan(dmthinSupportedPxVersion) {
+			log.Errorf("drive add to existing pool not supported for px-storev2 or px-cache pools as the current version is:%s", currentPxVersionOnCluster)
+			return false
+		}
+	}
+	return true
+}
+
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
+	// Apps for which we have to skip volume validation due to various limitations
+	excludeAppContextList := []string{"tektoncd", "pxb-singleapp-multivol", "pg-mysql-multiprov-ocp", "pg-mysql-multiprov-iks", "pg-mysql-multiprov-aks", "pg-mysql-multiprov-gke"}
 	defer func() {
 		if len(errChan) > 0 {
 			close(*errChan[0])
@@ -704,8 +911,8 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 		}
 
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
-			// In case of tektoncd skip the volume validation as the pods are created through jobs and not deployments or sts
-			if strings.Contains(ctx.App.Key, "tektoncd") {
+			// Check whether the given app should be excluded from volume validation.
+			if IsPresent(excludeAppContextList, ctx.App.Key) {
 				ctx.SkipVolumeValidation = true
 			}
 			if !ctx.SkipVolumeValidation {
@@ -718,11 +925,13 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
-			if err != nil {
-				PrintDescribeContext(ctx)
-				processError(err, errChan...)
-				return
+			if !ctx.SkipPodValidation {
+				err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+				if err != nil {
+					PrintDescribeContext(ctx)
+					processError(err, errChan...)
+					return
+				}
 			}
 		})
 
@@ -788,32 +997,54 @@ func ValidatePDB(pdbValue int, allowedDisruptions int, initialNumNodes int, isCl
 			close(*errChan[0])
 		}
 	}()
-
-	currentPdbValue, _ := GetPDBValue()
+	t := func() (interface{}, bool, error) {
+		currentPdbValue, _ := GetPDBValue()
+		if currentPdbValue == -1 {
+			return -1, true, fmt.Errorf("failed to get PDB value")
+		}
+		return currentPdbValue, false, nil
+	}
+	currentPdbValue, _ := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 	if currentPdbValue == -1 {
 		err := fmt.Errorf("failed to get PDB value")
 		processError(err, errChan...)
 	}
+
 	Step("Validate PDB minAvailable for px storage", func() {
 		if currentPdbValue != pdbValue {
 			err := fmt.Errorf("PDB minAvailable value has changed. Expected: %d, Actual: %d", pdbValue, currentPdbValue)
 			processError(err, errChan...)
 		}
+
 	})
-	Step("Validate number of disruptions ", func() {
-		nodes, err := Inst().V.GetDriverNodes()
-		if err != nil {
-			processError(err, errChan...)
-		}
-		currentNumNodes := len(nodes)
-		if allowedDisruptions < initialNumNodes-currentNumNodes {
-			err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
-			processError(err, errChan...)
-		}
-		if initialNumNodes-currentNumNodes > 1 {
-			*isClusterParallelyUpgraded = true
-		}
-	})
+	if Inst().S.String() != anthos.SchedName {
+		Step("Validate number of disruptions ", func() {
+			t := func() (interface{}, bool, error) {
+				nodes, err := Inst().V.GetDriverNodes()
+				if err != nil {
+					return nil, true, fmt.Errorf("failed to get portworx nodes due to %v. Retrying with timeout", err)
+				} else {
+					return nodes, false, nil
+				}
+			}
+			nodes, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+			if err != nil {
+				processError(err, errChan...)
+			} else {
+				currentNumNodes := len(nodes.([]*opsapi.StorageNode))
+				if allowedDisruptions < initialNumNodes-currentNumNodes {
+					err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
+					processError(err, errChan...)
+				}
+				if initialNumNodes-currentNumNodes > 1 {
+					*isClusterParallelyUpgraded = true
+
+				}
+			}
+
+		})
+	}
+
 }
 
 func GetPDBValue() (int, int) {
@@ -874,6 +1105,10 @@ func ValidatePureCloudDriveTopologies() error {
 		driveSet, err := Inst().V.GetDriveSet(&nodeFromMap)
 		if err != nil {
 			return err
+		}
+
+		if driveSet.Zone != nodeZone {
+			return fmt.Errorf("node %s is in zone %s, but drive set is in zone %s", node.SchedulerNodeName, nodeZone, driveSet.Zone)
 		}
 
 		for configID, driveConfig := range driveSet.Configs {
@@ -1186,6 +1421,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 	Step("For validation of an app's volumes", func() {
 		var err error
+		var snapshotVolNames []string
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, nil)
@@ -1211,7 +1447,7 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 				processError(err, errChan...)
 			})
 			Step(fmt.Sprintf("get %s app's volume: %s then create local snapshot", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateSnapshot(vol, params)
+				snapshotVolName, err := Inst().V.ValidateCreateSnapshot(vol, params)
 				if params["backend"] == k8s.PureBlock {
 					expect(err).To(beNil(), "unexpected error creating pure_block snapshot")
 				} else if params["backend"] == k8s.PureFile {
@@ -1220,19 +1456,27 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 						expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()), "incorrect error received creating pure_file snapshot")
 					}
 				}
+				snapshotVolNames = append(snapshotVolNames, snapshotVolName)
 			})
-			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateCloudsnap(vol, params)
-				expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")
-				if err != nil {
-					expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
-				}
-			})
+			// Temporarily disabled: PWX-37628
+			// Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap", ctx.App.Key, vol), func() {
+			// 	err = Inst().V.ValidateCreateCloudsnap(vol, params)
+			// 	expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")
+			// 	if err != nil {
+			// 		expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
+			// 	}
+			// })
 		}
 
-		Step("validate Pure local volume paths", func() {
-			err = Inst().V.ValidatePureLocalVolumePaths()
-			processError(err, errChan...)
+		// PWX-37645: Disabled while fixing partition edge cases
+		// Step("validate Pure local volume paths", func() {
+		// 	err = Inst().V.ValidatePureLocalVolumePaths()
+		// 	processError(err, errChan...)
+		// })
+		Step("Delete the snapshot that is created ", func() {
+			for _, vol := range snapshotVolNames {
+				err = Inst().V.DeleteVolume(vol)
+			}
 		})
 	})
 }
@@ -1264,6 +1508,7 @@ func ValidatePureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
 
 // ValidatePureSnapshotsPXCTL is the ginkgo spec for validating FADA volume snapshots using PXCTL for a context
 func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
+	var SnapshotVolumes []string
 	Step("For validation of an app's volumes", func() {
 		var (
 			err  error
@@ -1276,7 +1521,7 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 
 		for vol, params := range vols {
 			Step(fmt.Sprintf("get %s app's volume: %s then create snapshot using pxctl", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateSnapshotUsingPxctl(vol)
+				snapshotVolName, err := Inst().V.ValidateCreateSnapshotUsingPxctl(vol)
 				if params["backend"] == k8s.PureBlock {
 					expect(err).To(beNil(), "unexpected error creating pure_block snapshot")
 				} else if params["backend"] == k8s.PureFile {
@@ -1285,20 +1530,27 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 						expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()), "incorrect error received creating pure_file snapshot")
 					}
 				}
+				SnapshotVolumes = append(SnapshotVolumes, snapshotVolName)
 			})
-			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap using pxctl", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateCloudsnapUsingPxctl(vol)
-				expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")
-				if err != nil {
-					expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
-				}
-			})
+			// Temporarily disabled: PWX-37628
+			// Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap using pxctl", ctx.App.Key, vol), func() {
+			// 	err = Inst().V.ValidateCreateCloudsnapUsingPxctl(vol)
+			// 	expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")
+			// 	if err != nil {
+			// 		expect(err.Error()).To(contain(errPureCloudsnapNotSupported.Error()), "incorrect error received creating Pure cloudsnap")
+			// 	}
+			// })
+			// Step("validating groupsnap for using pxctl", func() {
+			// 	err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl(vol)
+			// 	expect(err).NotTo(beNil(), "error expected but no error received while creating Pure groupsnap")
+			// 	if err != nil {
+			// 		expect(err.Error()).To(contain(errPureGroupsnapNotSupported.Error()), "incorrect error received creating Pure groupsnap")
+			// 	}
+			// })
 		}
-		Step("validating groupsnap for using pxctl", func() {
-			err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl()
-			expect(err).NotTo(beNil(), "error expected but no error received while creating Pure groupsnap")
-			if err != nil {
-				expect(err.Error()).To(contain(errPureGroupsnapNotSupported.Error()), "incorrect error received creating Pure groupsnap")
+		Step("Delete the cloudsnaps created ", func() {
+			for _, vol := range SnapshotVolumes {
+				err = Inst().V.DeleteVolume(vol)
 			}
 		})
 	})
@@ -1322,10 +1574,11 @@ func ValidateResizePurePVC(ctx *scheduler.Context, errChan ...*chan error) {
 		// TODO: add more checks (is the PVC resized in the pod?), we currently only check that the
 		//       CSI resize succeeded.
 
-		Step("validate Pure local volume paths", func() {
-			err = Inst().V.ValidatePureLocalVolumePaths()
-			processError(err, errChan...)
-		})
+		// PWX-37645: Disabled while fixing partition edge cases
+		// Step("validate Pure local volume paths", func() {
+		// 	err = Inst().V.ValidatePureLocalVolumePaths()
+		// 	processError(err, errChan...)
+		// })
 	})
 }
 
@@ -1376,14 +1629,19 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 			mountPath, bytesToWrite := pureutils.GetAppDataDir(pods[0].Namespace)
 			mountPath = mountPath + "/myfile"
 
+			if bytesToWrite == 0 {
+				bytesToWrite = units.GiB
+			}
+
 			// write to the Direct Access volume
 			ddCmd := fmt.Sprintf("dd bs=512 count=%d if=/dev/urandom of=%s", bytesToWrite/512, mountPath)
 			cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", ddCmd}
 			err = osutils.Kubectl(cmdArgs)
 			processError(err, errChan...)
 			fmt.Println("sleeping to let volume usage get reflected")
-			// wait until the backends size is reflected before making the REST call
-			time.Sleep(time.Minute * 5)
+
+			// wait until the backends size is reflected before making the REST call, Max time for FBDA Update is 15 min
+			time.Sleep(time.Minute * 16)
 
 			byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
 			fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
@@ -1456,6 +1714,7 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 			log.Warnf("No FlashArray DirectAccess volumes, skipping")
 			processError(err, errChan...)
 		} else {
+			log.Infof("==== Cloning volume %s\n", vols[0].Name)
 			timestamp := strconv.Itoa(int(time.Now().Unix()))
 			request := scheduler.CSICloneRequest{
 				Timestamp:       timestamp,
@@ -1467,8 +1726,9 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 			err = Inst().S.CSICloneTest(ctx, request)
 			processError(err, errChan...)
 
-			err = Inst().V.ValidatePureLocalVolumePaths()
-			processError(err, errChan...)
+			// PWX-37645: Disabled while fixing partition edge cases
+			// err = Inst().V.ValidatePureLocalVolumePaths()
+			// processError(err, errChan...)
 		}
 	})
 }
@@ -1506,8 +1766,9 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 
 			// Note: the above only creates PVCs, it does not attach them to pods, so no extra care needs to be taken for local paths
 
-			err = Inst().V.ValidatePureLocalVolumePaths()
-			processError(err, errChan...)
+			// PWX-37645: Disabled while fixing partition edge cases
+			// err = Inst().V.ValidatePureLocalVolumePaths()
+			// processError(err, errChan...)
 		}
 	})
 }
@@ -1515,33 +1776,43 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 // ValidatePoolExpansionWithPureVolumes is the ginkgo spec for executing a pool expansion when FA/FB volumes is attached
 func ValidatePoolExpansionWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 	Step("For validation of an expanding storage pools while FA/FB volumes are attached", func() {
-		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-		if err != nil {
-			err = fmt.Errorf("error getting storage pools list. Err: %v", err)
-			log.Error(err.Error())
+		var vols []*volume.Volume
+		var err error
+		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
+			vols, err = Inst().S.GetPureVolumes(ctx, "pure_block")
 			processError(err, errChan...)
-		}
+		})
+		if len(vols) == 0 {
+			log.Warnf("No FlashArray DirectAccess volumes, skipping")
+		} else {
 
-		if len(pools) == 0 {
-			err = fmt.Errorf("length of pools should be greater than 0")
-			processError(err, errChan...)
-		}
-		for _, pool := range pools {
-			initialPoolSize := pool.TotalSize / units.GiB
-			err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 20)
+			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 			if err != nil {
-				err = fmt.Errorf("error initiating pool [%v ] %v: [%v]", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err.Error())
+				err = fmt.Errorf("error getting storage pools list. Err: %v", err)
 				log.Error(err.Error())
-			} else {
-				err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
+				processError(err, errChan...)
+			}
+
+			if len(pools) == 0 {
+				err = fmt.Errorf("length of pools should be greater than 0")
+				processError(err, errChan...)
+			}
+			for _, pool := range pools {
+				initialPoolSize := pool.TotalSize / units.GiB
+				err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 20)
 				if err != nil {
-					err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err)
-					log.Error(err)
+					err = fmt.Errorf("error initiating pool [%v ] %v: [%v]", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err.Error())
+					log.Error(err.Error())
+				} else {
+					err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
+					if err != nil {
+						err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err)
+						log.Error(err)
+					}
 				}
 			}
 		}
 	})
-
 }
 
 // ValidateMountOptionsWithPureVolumes is the ginkgo spec for executing a check for mountOptions flag
@@ -1559,10 +1830,18 @@ func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*cha
 			log.FailOnError(err, " Error Occured while getting storage class for pvc %s", pvcObj)
 		}
 		if strings.Contains(strings.Join(sc.MountOptions, ""), "nosuid") {
-			attachedNode, err := Inst().V.GetNodeForVolume(vol, defaultCmdTimeout*3, defaultCmdRetryInterval)
-			log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
-			err = Inst().V.ValidatePureFaFbMountOptions(vol.ID, requiredMountOptions, attachedNode)
-			dash.VerifySafely(err, nil, "Testing mount options are properly applied on pure volumes")
+			// Ignore mount path check if the volume type is purefile, https://purestorage.atlassian.net/issues/PWX-37040
+			isPureFile, err := Inst().V.IsPureFileVolume(vol)
+			log.FailOnError(err, "Failed to get details about PureFile")
+			log.Infof("Given Volume is [%v] and PureFile [%v]", vol.Name, isPureFile)
+
+			if !isPureFile {
+				attachedNode, err := Inst().V.GetNodeForVolume(vol, defaultCmdTimeout*3, defaultCmdRetryInterval)
+				log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
+
+				err = Inst().V.ValidatePureFaFbMountOptions(vol.ID, requiredMountOptions, attachedNode)
+				dash.VerifySafely(err, nil, "Testing mount options are properly applied on pure volumes")
+			}
 		} else {
 			log.Infof("There is no nosuid mount option in this volume %s", vol)
 		}
@@ -1588,23 +1867,28 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 			processError(err, errChan...)
 		}
 
-		attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
-		if err != nil {
-			err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
-			processError(err, errChan...)
-		}
-		if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
-			FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
-			if ok {
-				err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType, attachedNode)
-				dash.VerifySafely(err, nil, "File system create options specified in the storage class are properly applied to the pure volumes")
-			} else {
-				log.Infof("Storage class doesn't have key 'csi.storage.k8s.io/fstype' in parameters")
-			}
-		} else {
-			log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
-		}
+		isPureFile, err := Inst().V.IsPureFileVolume(v)
+		log.FailOnError(err, "Failed to get details about PureFile")
+		log.Infof("Given Volume is [%v] and PureFile [%v]", v.Name, isPureFile)
 
+		if !isPureFile {
+			attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
+			if err != nil {
+				err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
+				processError(err, errChan...)
+			}
+			if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
+				FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
+				if ok {
+					err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType, attachedNode)
+					dash.VerifySafely(err, nil, "File system create options specified in the storage class are properly applied to the pure volumes")
+				} else {
+					log.Infof("Storage class doesn't have key 'csi.storage.k8s.io/fstype' in parameters")
+				}
+			} else {
+				log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
+			}
+		}
 	}
 }
 
@@ -2239,6 +2523,128 @@ func CrashPXDaemonAndWait(appNodes []node.Node, errChan ...*chan error) {
 	})
 }
 
+// RestartKubelet stops kubelet service on given app nodes and waits till kubelet is back up
+func RestartKubelet(appNodes []node.Node, errChan ...*chan error) {
+	if Inst().S.String() == openshift.SchedName && len(os.Getenv("TORPEDO_SSH_KEY")) == 0 {
+		ginkgo.Skip("Cannot perform kubelet restart on openshift cluster without ssh key")
+	}
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+
+	nodeList, err := core.Instance().GetNodes()
+	processError(err, errChan...)
+	nodeSchedulableStatus := make(map[string]corev1.ConditionStatus)
+	for _, k8sNode := range nodeList.Items {
+		for _, status := range k8sNode.Status.Conditions {
+			if status.Type == corev1.NodeReady {
+				nodeSchedulableStatus[k8sNode.Name] = status.Status
+			}
+		}
+	}
+
+	for _, appNode := range appNodes {
+
+		log.InfoD("Stopping kubelet service on node %s", appNode.Name)
+
+		err := Inst().S.StopKubelet(appNode, node.SystemctlOpts{
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         1 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			}})
+		processError(err, errChan...)
+	}
+
+	log.InfoD("Waiting for kubelet service to stop on the give nodes %v", appNodes)
+
+	t := func() (interface{}, bool, error) {
+		nodeList, err = core.Instance().GetNodes()
+		if err != nil {
+			return "", true, err
+		}
+
+		for _, appNode := range appNodes {
+			for _, k8sNode := range nodeList.Items {
+				if k8sNode.Name == appNode.Name {
+					log.InfoD("Waiting for node [%s] in Not Ready state", appNode.Name)
+					for _, status := range k8sNode.Status.Conditions {
+						if status.Type == corev1.NodeReady {
+							if status.Status == corev1.ConditionTrue {
+								return "", true, fmt.Errorf("node [%s] is in Ready state, waiting for node to go down", appNode.Name)
+							} else {
+								if nodeSchedulableStatus[k8sNode.Name] == corev1.ConditionTrue {
+									log.Infof("Node [%s] is in Not Ready state with status [%s]", appNode.Name, status.Status)
+									nodeSchedulableStatus[k8sNode.Name] = status.Status
+								}
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 3*time.Minute, 10*time.Second)
+	processError(err, errChan...)
+	log.Infof("waiting for 5 mins before starting kubelet")
+	time.Sleep(5 * time.Minute)
+
+	waitTime := 3 * time.Minute
+
+	if Inst().S.String() != aks.SchedName {
+		for _, appNode := range appNodes {
+
+			log.InfoD("Starting kubelet service on node %s", appNode.Name)
+			err := Inst().S.StartKubelet(appNode, node.SystemctlOpts{
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         1 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				}})
+			processError(err, errChan...)
+		}
+	} else {
+		waitTime = 20 * time.Minute
+	}
+
+	log.InfoD("Waiting for kubelet service to start on nodes %v", appNodes)
+	t = func() (interface{}, bool, error) {
+		nodeList, err = core.Instance().GetNodes()
+		if err != nil {
+			return "", true, err
+		}
+
+		for _, appNode := range appNodes {
+			for _, k8sNode := range nodeList.Items {
+				if k8sNode.Name == appNode.Name {
+					log.InfoD("Waiting for node [%s] in Ready state", appNode.Name)
+					for _, status := range k8sNode.Status.Conditions {
+						if status.Type == corev1.NodeReady {
+							if status.Status != corev1.ConditionTrue {
+								return "", true, fmt.Errorf("node [%s] is in [%s] state, waiting for node to be Ready", appNode.Name, status.Status)
+							} else {
+								if nodeSchedulableStatus[k8sNode.Name] != corev1.ConditionTrue {
+									log.Infof("Node [%s] is in Ready state with status [%s]", appNode.Name, status.Status)
+									nodeSchedulableStatus[k8sNode.Name] = status.Status
+								}
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, waitTime, 10*time.Second)
+	processError(err, errChan...)
+
+}
+
 // ValidateAndDestroy validates application and then destroys them
 func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	Step("validate apps", func() {
@@ -2269,6 +2675,7 @@ func DestroyApps(contexts []*scheduler.Context, opts map[string]bool) {
 // DestroyApps destroy applications with data validation
 func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, controlChannel chan string, errGroup *errgroup.Group) error {
 
+	defer ginkgo.GinkgoRecover()
 	var allErrors string
 
 	log.InfoD("Validating apps data continuity")
@@ -2296,15 +2703,17 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 		TearDownContext(ctx, opts)
 	}
 
-	if allErrors != "" {
-		if IsReplacePolicySetToDelete {
-			log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
-			IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
-			return nil
-		} else {
-			return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
-		}
-	}
+	/* Removing Data error validation till PB-6271 is resolved.
+	   if allErrors != "" {
+	   	if IsReplacePolicySetToDelete {
+	   		log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
+	   		IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
+	   		return nil
+	   	} else {
+	   		return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
+	   	}
+	   }
+	*/
 
 	return nil
 }
@@ -2455,7 +2864,11 @@ func ToggleAutopilotInStc() error {
 	if err != nil {
 		return err
 	}
-	log.Infof("is autopilot enabled?: %t", stc.Spec.Autopilot.Enabled)
+	if stc.Spec.Autopilot != nil {
+		log.Infof("is autopilot enabled?: %t", stc.Spec.Autopilot.Enabled)
+	} else {
+		log.FailOnError(fmt.Errorf("Autopilot is not enabled in STC"), "Autopilot is not enabled in STC")
+	}
 	stc.Spec.Autopilot.Enabled = !stc.Spec.Autopilot.Enabled
 	pxOperator := operator.Instance()
 	_, err = pxOperator.UpdateStorageCluster(stc)
@@ -2466,8 +2879,10 @@ func ToggleAutopilotInStc() error {
 	checkPodIsDeleted := func() (interface{}, bool, error) {
 		autopilotLabels := make(map[string]string)
 		autopilotLabels["name"] = "autopilot"
-		pods, err := k8sCore.GetPods(pxNamespace, autopilotLabels)
-		expect(err).NotTo(haveOccurred())
+		autoPilotNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		pods, err := k8sCore.GetPods(autoPilotNamespace, autopilotLabels)
+		dash.VerifyFatal(err, nil, "Failed to get pods")
 		if stc.Spec.Autopilot.Enabled {
 			log.Infof("autopilot is active, checking is pod is present.")
 			if len(pods.Items) == 0 {
@@ -2590,41 +3005,77 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 // ValidateClusterSize validates number of storage nodes in given cluster
 // using total cluster size `count` and max_storage_nodes_per_zone
 func ValidateClusterSize(count int64) {
-	zones, err := Inst().N.GetZones()
+	zones, err := Inst().S.GetZones()
 	log.FailOnError(err, "Zones empty")
 	log.InfoD("ASG is running in [%+v] zones\n", zones)
-	perZoneCount := count / int64(len(zones))
+
+	volDriverSpec, err := Inst().V.GetDriver()
+	log.FailOnError(err, "error getting storage cluster volDriverSpec")
+	perZoneCount := *volDriverSpec.Spec.CloudStorage.MaxStorageNodesPerZone
 
 	// Validate total node count
-	currentNodeCount, err := Inst().N.GetASGClusterSize()
+	currentNodeCount, err := Inst().S.GetASGClusterSize()
 	log.FailOnError(err, "Failed to Get ASG Cluster Size")
 
-	dash.VerifyFatal(currentNodeCount, perZoneCount*int64(len(zones)), "ASG cluster size is as expected?")
+	if Inst().S.String() == openshift.SchedName || Inst().S.String() == anthos.SchedName {
+		isPxOnMaster, err := IsPxRunningOnMaster()
+		log.FailOnError(err, "Failed to check if px is running on master")
+		if !isPxOnMaster {
+			node.GetMasterNodes()
+			//Removing master nodes for currentNodeCount
+			currentNodeCount = currentNodeCount - int64(len(node.GetMasterNodes()))
+		}
+	}
+
+	dash.VerifyFatal(currentNodeCount, count, "ASG cluster size is as expected?")
 
 	// Validate storage node count
-	var expectedStorageNodesPerZone int
-	if Inst().MaxStorageNodesPerAZ <= int(perZoneCount) {
-		expectedStorageNodesPerZone = Inst().MaxStorageNodesPerAZ
-	} else {
-		expectedStorageNodesPerZone = int(perZoneCount)
+	totalStorageNodesAllowed := int(perZoneCount) * len(zones)
+	expectedStoragesNodes := totalStorageNodesAllowed
+
+	if totalStorageNodesAllowed > int(count) {
+		expectedStoragesNodes = int(count)
 	}
 	storageNodes := node.GetStorageNodes()
-	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones), "Storage nodes matches the expected number?")
+	dash.VerifyFatal(len(storageNodes), expectedStoragesNodes, "Storage nodes matches the expected number?")
+}
+
+func IsPxRunningOnMaster() (bool, error) {
+
+	var namespace string
+	var err error
+	if namespace, err = Inst().S.GetPortworxNamespace(); err != nil {
+		log.Errorf("Failed to get portworx namespace. Error : %v", err)
+		return false, nil
+	}
+	var isPXOnControlplane = false
+	pxOperator := operator.Instance()
+	stcList, err := pxOperator.ListStorageClusters(namespace)
+	if err == nil {
+		stc, err := pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
+		if err != nil {
+			return false, fmt.Errorf("failed to get StorageCluster [%s] from namespace [%s], Err: %v", stcList.Items[0].Name, stcList.Items[0].Namespace, err.Error())
+		}
+		isPXOnControlplane, _ = strconv.ParseBool(stc.Annotations["portworx.io/run-on-master"])
+	}
+
+	return isPXOnControlplane, nil
+
 }
 
 // GetStorageNodes get storage nodes in the cluster
 func GetStorageNodes() ([]node.Node, error) {
 
-	storageNodes := []node.Node{}
+	var storageNodes []node.Node
 	nodes := node.GetStorageDriverNodes()
 
-	for _, node := range nodes {
-		devices, err := Inst().V.GetStorageDevices(node)
+	for _, n := range nodes {
+		devices, err := Inst().V.GetStorageDevices(n)
 		if err != nil {
 			return nil, err
 		}
 		if len(devices) > 0 {
-			storageNodes = append(storageNodes, node)
+			storageNodes = append(storageNodes, n)
 		}
 	}
 	return storageNodes, nil
@@ -2710,7 +3161,9 @@ func runCmd(cmd string, n node.Node) error {
 
 func runCmdOnce(cmd string, n node.Node) (string, error) {
 	output, err := Inst().N.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
-		Sudo: true,
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
+		Sudo:            true,
 	})
 	if err != nil {
 		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
@@ -2743,6 +3196,21 @@ func runCmdWithNoSudo(cmd string, n node.Node) error {
 	}
 
 	return err
+
+}
+
+// runCmdOnceNonRoot runs a command once on given node as non-root user
+func runCmdOnceNonRoot(cmd string, n node.Node) (string, error) {
+	output, err := Inst().N.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
+		Sudo:            false,
+	})
+	if err != nil {
+		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+	}
+
+	return output, err
 
 }
 
@@ -3477,6 +3945,14 @@ func SetDestinationKubeConfig() error {
 	return SetClusterContext(destClusterConfigPath)
 }
 
+func SetCustomKubeConfig(clusterConfigIndex int) error {
+	customClusterConfigPath, err := GetCustomClusterConfigPath(clusterConfigIndex)
+	if err != nil {
+		return err
+	}
+	return SetClusterContext(customClusterConfigPath)
+}
+
 // ScheduleValidateClusterPair Schedule a clusterpair by creating a yaml file and validate it
 func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, clusterPairDir string, reverse bool) error {
 	var kubeConfigPath string
@@ -3606,6 +4082,154 @@ func CreateClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig 
 	}
 
 	return addStorageOptions(pairInfo, clusterPairFileName)
+}
+
+func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string, mode string, sourceCluster int, destCluster int) (err error) {
+	//var token string
+	// Setting kubeconfig to source because we will create bidirectional cluster pair based on source as reference
+	err = SetCustomKubeConfig(sourceCluster)
+	if err != nil {
+		return err
+	}
+
+	// Create namespace for the cluster pair on source cluster
+	_, err = core.Instance().CreateNamespace(&corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cpNamespace,
+			Labels: map[string]string{
+				"creator": "stork-test",
+			},
+		},
+	})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return fmt.Errorf("Failed to create namespace %s on source cluster", cpNamespace)
+	}
+
+	srcKubeConfigPath, err := GetCustomClusterConfigPath(sourceCluster)
+	if err != nil {
+		return fmt.Errorf("Failed to get config path for source cluster")
+	}
+
+	defer func() {
+		var config *rest.Config
+		config, err = clientcmd.BuildConfigFromFlags("", srcKubeConfigPath)
+		if err != nil {
+			return
+		}
+		core.Instance().SetConfig(config)
+		apps.Instance().SetConfig(config)
+		stork.Instance().SetConfig(config)
+	}()
+
+	err = SetCustomKubeConfig(destCluster)
+	if err != nil {
+		return err
+	}
+
+	// Create namespace for the cluster pair on destination cluster
+	_, err = core.Instance().CreateNamespace(&corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cpNamespace,
+			Labels: map[string]string{
+				"creator": "stork-test",
+			},
+		},
+	})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return fmt.Errorf("Failed to create namespace %s on destination cluster", cpNamespace)
+	}
+
+	destKubeConfigPath, err := GetCustomClusterConfigPath(destCluster)
+	if err != nil {
+		return fmt.Errorf("Failed to get config path for destination cluster")
+	}
+
+	err = SetCustomKubeConfig(sourceCluster)
+	if err != nil {
+		return err
+	}
+
+	// Create source --> destination and destination --> cluster pairs using storkctl
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
+	cmdArgs := []string{"create", "clusterpair", "-n", cpNamespace, cpName,
+		"--kubeconfig", srcKubeConfigPath,
+		"--src-kube-file", srcKubeConfigPath,
+		"--dest-kube-file", destKubeConfigPath,
+	}
+
+	if mode == "sync-dr" {
+		cmdArgs = []string{"create", "clusterpair", "-n", cpNamespace, cpName,
+			"--kubeconfig", srcKubeConfigPath,
+			"--src-kube-file", srcKubeConfigPath,
+			"--dest-kube-file", destKubeConfigPath,
+			"--mode", "sync-dr",
+		}
+	}
+
+	if projectMappings != "" {
+		cmdArgs = append(cmdArgs, "--project-mappings")
+		cmdArgs = append(cmdArgs, projectMappings)
+	}
+
+	// Get external object store details and append to the command accordingily
+	if objectStoreType != "" {
+		// Get external object store details and append to the command accordingily
+		objectStoreArgs, err := getObjectStoreArgs(objectStoreType, secretName)
+		if err != nil {
+			return fmt.Errorf("failed to get  %s secret in configmap secret-config in default namespace", objectStoreType)
+		}
+		cmdArgs = append(cmdArgs, objectStoreArgs...)
+	}
+
+	cmd.SetArgs(cmdArgs)
+	log.InfoD("Following is the bidirectional command: %v", cmdArgs)
+	if err := cmd.Execute(); err != nil {
+		return fmt.Errorf("Creation of bidirectional cluster pair using storkctl failed: %v", err)
+	}
+
+	return nil
+}
+
+func getObjectStoreArgs(objectStoreType storkv1.BackupLocationType, secretName string) ([]string, error) {
+	var objectStoreArgs []string
+	secretData, err := core.Instance().GetSecret(secretName, "default")
+	if err != nil {
+		return objectStoreArgs, fmt.Errorf("error getting secret %s in default namespace: %v", secretName, err)
+	}
+	if objectStoreType == storkv1.BackupLocationS3 {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "s3",
+				"--s3-access-key", string(secretData.Data["accessKeyID"]),
+				"--s3-secret-key", string(secretData.Data["secretAccessKey"]),
+				"--s3-region", string(secretData.Data["region"]),
+				"--s3-endpoint", string(secretData.Data["endpoint"]),
+			}...)
+		if val, ok := secretData.Data["disableSSL"]; ok && string(val) == "true" {
+			objectStoreArgs = append(objectStoreArgs, "--disable-ssl")
+		}
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	} else if objectStoreType == storkv1.BackupLocationAzure {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "azure", "--azure-account-name", string(secretData.Data["storageAccountName"]),
+				"--azure-account-key", string(secretData.Data["storageAccountKey"])}...)
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	} else if objectStoreType == storkv1.BackupLocationGoogle {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "google", "--google-project-id", string(secretData.Data["projectID"]), "--google-key-file-path", string(secretData.Data["accountKey"])}...)
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+	}
+
+	return objectStoreArgs, nil
 }
 
 func addStorageOptions(pairInfo map[string]string, clusterPairFileName string) error {
@@ -4599,7 +5223,7 @@ func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, buc
 	case drivers.ProviderAws:
 		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx, validate)
+		err = CreateAzureBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx, validate)
 	case drivers.ProviderGke:
 		err = CreateGCPBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, ctx, validate)
 	case drivers.ProviderNfs:
@@ -4972,6 +5596,11 @@ func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred str
 func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, validate bool) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
+	environmentType := api.S3Config_AzureEnvironmentType_AZURE_GLOBAL // Default value
+	if azureRegion == "CHINA" {
+		environmentType = api.S3Config_AzureEnvironmentType_AZURE_CHINA
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -4987,6 +5616,13 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 				Uid:  cloudCredUID,
 			},
 			Type: api.BackupLocationInfo_Azure,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					AzureEnvironment: &api.S3Config_AzureEnvironmentType{
+						Type: environmentType,
+					},
+				},
+			},
 		},
 	}
 	ctx, err := backup.GetAdminCtxFromSecret()
@@ -5003,6 +5639,11 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 // CreateAzureBackupLocationWithContext creates backup location for Azure using the given context
 func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context, validate bool) error {
 	backupDriver := Inst().Backup
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
+	environmentType := api.S3Config_AzureEnvironmentType_AZURE_GLOBAL // Default value
+	if azureRegion == "CHINA" {
+		environmentType = api.S3Config_AzureEnvironmentType_AZURE_CHINA
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -5018,6 +5659,13 @@ func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred str
 				Uid:  cloudCredUID,
 			},
 			Type: api.BackupLocationInfo_Azure,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					AzureEnvironment: &api.S3Config_AzureEnvironmentType{
+						Type: environmentType,
+					},
+				},
+			},
 		},
 	}
 	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
@@ -5408,6 +6056,22 @@ func GetDestinationClusterConfigPath() (string, error) {
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]), nil
 }
 
+func GetCustomClusterConfigPath(clusterConfigIndex int) (string, error) {
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	if kubeconfigs == "" {
+		return "", fmt.Errorf("empty KUBECONFIGS environment variable")
+	}
+
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	if len(kubeconfigList) < 2 {
+		return "", fmt.Errorf(`Failed to get source config path.
+				At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
+	}
+
+	log.Infof("config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[clusterConfigIndex]))
+	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[clusterConfigIndex]), nil
+}
+
 // GetAzureCredsFromEnv get creds for azure
 func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey string) {
 	accountName = os.Getenv("AZURE_ACCOUNT_NAME")
@@ -5560,8 +6224,11 @@ func DeleteGcpBucket(bucketName string) {
 func DeleteAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
-
-	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName)
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName) // Default value
+	if azureRegion == "CHINA" {
+		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, bucketName)
+	}
 	log.Infof("Delete container url %s", urlStr)
 	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
 	u, _ := url.Parse(urlStr)
@@ -6107,6 +6774,9 @@ func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 	case drivers.ProviderGke:
 		result, err := IsGCPBucketEmpty(bucketName)
 		return result, err
+	case drivers.ProviderAzure:
+		result, err := IsAzureBlobEmpty(bucketName)
+		return result, err
 	default:
 		return false, fmt.Errorf("function does not support %s provider", provider)
 	}
@@ -6209,6 +6879,42 @@ func IsGCPBucketEmpty(bucketName string) (bool, error) {
 	}
 
 	// Iterator didn't finish, bucket is not empty
+	return false, nil
+}
+
+// IsAzureBlobEmpty returns true if bucket empty else false
+func IsAzureBlobEmpty(containerName string) (bool, error) {
+	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
+	azureEndpoint := os.Getenv("AZURE_ENDPOINT")
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, containerName)
+	if azureEndpoint == AzureChinaEndpoint {
+		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, containerName)
+	}
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse URL [%v]: %v", urlStr, err)
+	}
+
+	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to create shared key credential [%v]", err))
+
+	containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
+	ctx := context1.Background() // This example uses a never-expiring context
+	listBlobsSegmentOptions := azblob.ListBlobsSegmentOptions{
+		MaxResults: 1,
+	}
+
+	listBlob, err := containerURL.ListBlobsFlatSegment(ctx, azblob.Marker{}, listBlobsSegmentOptions)
+	if err != nil {
+		return false, fmt.Errorf("failed to list blobs in container [%v]: %v", containerName, err)
+	}
+
+	if len(listBlob.Segment.BlobItems) == 0 {
+		// No blobs found, container is empty
+		return true, nil
+	}
+	// Blobs found, container is not empty
 	return false, nil
 }
 
@@ -6328,8 +7034,11 @@ func RemoveS3BucketPolicy(bucketName string) error {
 func CreateAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
-
-	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName)
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName) // Default value
+	if azureRegion == "CHINA" {
+		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, bucketName)
+	}
 	log.Infof("Create container url %s", urlStr)
 	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
 	u, _ := url.Parse(urlStr)
@@ -6423,6 +7132,7 @@ type Torpedo struct {
 	SecretType                          string
 	PureVolumes                         bool
 	PureSANType                         string
+	PureFADAPod                         string
 	RunCSISnapshotAndRestoreManyTest    bool
 	VaultAddress                        string
 	VaultToken                          string
@@ -6440,6 +7150,7 @@ type Torpedo struct {
 	AnthosAdminWorkStationNodeIP        string
 	AnthosInstPath                      string
 	SkipSystemChecks                    bool
+	FaSecret                            string
 }
 
 // ParseFlags parses command line flags
@@ -6485,6 +7196,7 @@ func ParseFlags() {
 	var secretType string
 	var pureVolumes bool
 	var pureSANType string
+	var pureFADAPod string
 	var runCSISnapshotAndRestoreManyTest bool
 	var vaultAddress string
 	var vaultToken string
@@ -6499,6 +7211,8 @@ func ParseFlags() {
 	var torpedoJobType string
 	var anthosWsNodeIp string
 	var anthosInstPath string
+	var faSecret string
+
 	log.Infof("The default scheduler is %v", defaultScheduler)
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -6538,6 +7252,7 @@ func ParseFlags() {
 	flag.StringVar(&secretType, "secret-type", scheduler.SecretK8S, "Path to custom configuration files")
 	flag.BoolVar(&pureVolumes, "pure-volumes", false, "To enable using Pure backend for shared volumes")
 	flag.StringVar(&pureSANType, "pure-san-type", "ISCSI", "If using Pure volumes, which SAN type is being used. ISCSI, FC, and NVMEOF-RDMA are all valid values.")
+	flag.StringVar(&pureFADAPod, "pure-fada-pod", "", "If using Pure FADA volumes, what FA Pod to place the volumes in. This Pod must already exist, and be in the same Realm matching the px-pure-secret")
 	flag.BoolVar(&runCSISnapshotAndRestoreManyTest, "pure-fa-snapshot-restore-to-many-test", false, "If using Pure volumes, to enable Pure clone many tests")
 	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
 	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
@@ -6572,6 +7287,8 @@ func ParseFlags() {
 	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, defaultPdsDriver, "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
+	flag.StringVar(&faSecret, faSecretCliFlag, "", "comma seperated list of famanagementip=tokenValue pairs")
+
 	// System checks https://github.com/portworx/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
 	// should be skipped from AfterSuite() if this flag is set to true. This is to avoid distracting test failures due to
 	// unstable testing environments.
@@ -6789,6 +7506,7 @@ func ParseFlags() {
 				SecretType:                          secretType,
 				PureVolumes:                         pureVolumes,
 				PureSANType:                         pureSANType,
+				PureFADAPod:                         pureFADAPod,
 				RunCSISnapshotAndRestoreManyTest:    runCSISnapshotAndRestoreManyTest,
 				VaultAddress:                        vaultAddress,
 				VaultToken:                          vaultToken,
@@ -6807,12 +7525,14 @@ func ParseFlags() {
 				AnthosInstPath:                      anthosInstPath,
 				IsPDSApps:                           deployPDSApps,
 				SkipSystemChecks:                    skipSystemChecks,
+				FaSecret:                            faSecret,
 			}
 			if instance.S.String() == "openshift" {
 				instance.LogLoc = "/mnt"
 			}
 		})
 	}
+
 	printFlags()
 }
 
@@ -7624,6 +8344,86 @@ func GetCloudDriveDeviceSpecs() ([]string, error) {
 	return deviceSpecs, nil
 }
 
+// getVifInterface is a function that retrieves the VIF (Virtual Interface) from a FlashArray client.
+// It loops through all network interfaces to find the VIF interface which is used in API calls for enabling/disabling interfaces.
+func GetVifInterface(faClient *newflasharray.Client, faMgmtIP, apiToken string) (*newflasharray.Client, error) {
+	// Loop through Network interfaces to find the VIF interface which we use in API calls for enabling/disabling interfaces
+	networkInterfaces, err := pureutils.ListAllInterfaces(faClient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list network interfaces on FA with IP [%s]: %v", faMgmtIP, err)
+	}
+	for _, nw := range networkInterfaces {
+		for _, networkInterface := range nw.Items {
+			if networkInterface.Eth.Subtype == "vif" && networkInterface.Enabled == true {
+				PureFaClientVif, err := pureutils.PureCreateClientAndConnectRest2_x(networkInterface.Eth.Address, apiToken)
+				if err != nil {
+					return nil, fmt.Errorf("failed to create client and connect to FA with IP [%s]: %v", networkInterface.Eth.Address, err)
+				}
+				return PureFaClientVif, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("no enabled vif interface found")
+}
+
+// toggleManagementInterface is a function that enables or disables the management interface on a FlashArray.
+// It takes a FlashArray client, a management IP address, and a boolean value to indicate whether to enable or disable the interface.
+// It returns the name of the last interface that was toggled and an error if any occurred during the process.
+func ToggleManagementInterface(PureFaClientVif *newflasharray.Client, faMgmtIP string, enabled bool) (string, error) {
+	var LastDisabledInterface string
+	networkInterfaces, err := pureutils.ListAllInterfaces(PureFaClientVif)
+	if err != nil {
+		return "", fmt.Errorf("failed to list network interfaces on FA with IP [%s]: %v", faMgmtIP, err)
+	}
+	for _, nw := range networkInterfaces {
+		for _, networkInterface := range nw.Items {
+			if networkInterface.Eth.Address == faMgmtIP {
+				for _, service := range networkInterface.Services {
+					if strings.Contains(service, "management") {
+						log.Infof("Toggling network interface on FA with IP [%s] to [%t]", faMgmtIP, enabled)
+						_, err := pureutils.SetInterfaceEnabled(PureFaClientVif, networkInterface.Name, enabled)
+						if err != nil {
+							return "", fmt.Errorf("failed to toggle network interfaces on FA with IP [%s]: %v to [%s]", faMgmtIP, err, enabled)
+						}
+						LastDisabledInterface = networkInterface.Name
+						log.Infof("Last disabled interface: %s", LastDisabledInterface)
+					}
+				}
+			}
+		}
+	}
+	return LastDisabledInterface, nil
+}
+
+// DisableManagementInterface is a function that enables or disables the management interface on a FlashArray.
+// It takes a FlashArray client, a management IP address, and a boolean value to indicate whether to enable or disable the interface.
+// It returns the name of the last interface that was toggled and an error if any occurred during the process.
+func DisableManagementInterface(PureFaClientVif *newflasharray.Client, faMgmtIP string, enabled bool) (string, error) {
+	var LastDisabledInterface string
+	networkInterfaces, err := pureutils.ListAllInterfaces(PureFaClientVif)
+	if err != nil {
+		return "", fmt.Errorf("failed to list network interfaces on FA with IP [%s]: %v", faMgmtIP, err)
+	}
+	for _, nw := range networkInterfaces {
+		for _, networkInterface := range nw.Items {
+			if networkInterface.Eth.Address == faMgmtIP {
+				for _, service := range networkInterface.Services {
+					if strings.Contains(service, "management") {
+						log.Infof("Toggling network interface on FA with IP [%s] to [%t]", faMgmtIP, enabled)
+						_, err := pureutils.SetInterfaceEnabled(PureFaClientVif, networkInterface.Name, enabled)
+						if err != nil {
+							return "", fmt.Errorf("failed to toggle network interfaces on FA with IP [%s]: %v to [%s]", faMgmtIP, err, enabled)
+						}
+						LastDisabledInterface = networkInterface.Name
+						log.Infof("Last disabled interface: %s", LastDisabledInterface)
+					}
+				}
+			}
+		}
+	}
+	return LastDisabledInterface, nil
+}
+
 // StartTorpedoTest starts the logging for torpedo test
 func StartTorpedoTest(testName, testDescription string, tags map[string]string, testRepoID int) {
 	TestLogger = CreateLogger(fmt.Sprintf("%s.log", testName))
@@ -7635,16 +8435,44 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	tags["storageProvisioner"] = Inst().Provisioner
 	tags["pureVolume"] = fmt.Sprintf("%t", Inst().PureVolumes)
 	tags["pureSANType"] = Inst().PureSANType
+	tags["pureFADAPod"] = Inst().PureFADAPod
 	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
 	if TestRailSetupSuccessful && testRepoID != 0 {
 		RunIdForSuite = testrailuttils.AddRunsToMilestone(testRepoID)
 		CurrentTestRailTestCaseId = testRepoID
 	}
+	log.Infof("TOGGLE_PURE_MGMT_IP: %v", os.Getenv("TOGGLE_PURE_MGMT_IP"))
+	if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
+		if PureMgmtIpCounter == 0 {
+			// Fetch the pure.json file and  implement methods to store FA multiple management endpoints in a map
+			// PureMgmtIPList consists List of Pure FA MGMT endpoints
+			// PureFAMgmtMap is a map and consists of FA MGMT IP as key and its corresponding client as value
+			// PureMgmtIpCounter is tracker which increments after each test case
+			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+			secret, err = pureutils.GetPXPureSecret(volDriverNamespace)
+			log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
+			PureFAMgmtMap, err = pureutils.GetFAMgmtIPFromPXPureSecret(secret)
+			log.FailOnError(err, "failed to get FA management map from secret [%s/%s]", PureSecretName, volDriverNamespace)
+			for mgmtIP := range PureFAMgmtMap {
+				PureMgmtIPList = append(PureMgmtIPList, mgmtIP)
+			}
+			faMgmtIP := PureMgmtIPList[PureMgmtIpCounter]
+			faClient := PureFAMgmtMap[faMgmtIP]
+			apiToken, err := pureutils.GetApiTokenForFAMgmtEndpoint(secret, faMgmtIP)
+			log.FailOnError(err, "failed to get API token for FA with IP [%s]", faMgmtIP)
+			PureFaClientVif, err = GetVifInterface(faClient, faMgmtIP, apiToken)
+			log.FailOnError(err, "failed to get vif interface for FA with IP [%s]", faMgmtIP)
+			LastDisabledInterface, err = DisableManagementInterface(PureFaClientVif, faMgmtIP, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("failed to toggle network interfaces on FA with IP [%s]", faMgmtIP))
+		}
+		PureMgmtIpCounter += 1
+	}
 }
 
 // enableAutoFSTrim on supported PX version.
 func EnableAutoFSTrim() {
-	nodes := node.GetWorkerNodes()
+	nodes := node.GetStorageDriverNodes()
 	var isPXNodeAvailable bool
 	for _, pxNode := range nodes {
 		isPxInstalled, err := Inst().V.IsDriverInstalled(pxNode)
@@ -7672,13 +8500,52 @@ func EnableAutoFSTrim() {
 			break
 		}
 	}
-	dash.VerifyFatal(isPXNodeAvailable, true, "No PX node available in the cluster")
+	if !isPXNodeAvailable {
+		log.FailOnError(fmt.Errorf("no px node available for enabling auto-fstrim"), "error in enabling auto-fstrim")
+	}
+}
+
+// ToggleMgmtNetworkInterfaces is a function that toggles the management network interfaces on a FlashArray.
+// It enables the last disabled interface and disables the current management interface.
+//
+// Parameters:
+// PureMgmtIpCounter: An integer representing the counter for the management IP.
+// PureMgmtIPList: A slice of strings representing the list of management IP addresses.
+// PureFaClientVif: A pointer to a newflasharray.Client object representing the FlashArray client.
+// LastDisabledInterface: A string representing the last disabled interface.
+//
+// Returns:
+// A string representing the last disabled interface and an error if any occurred during the process.
+func ToggleMgmtNetworkInterfaces(PureMgmtIpCounter int, PureMgmtIPList []string, PureFaClientVif *newflasharray.Client, LastDisabledInterface string) (string, error) {
+	prevMgmtIPIndex := (PureMgmtIpCounter - 1) % len(PureMgmtIPList)
+	prevMgmtIP := PureMgmtIPList[prevMgmtIPIndex]
+	log.InfoD("Enable the Last Disabled Interface")
+	_, err := pureutils.SetInterfaceEnabled(PureFaClientVif, LastDisabledInterface, true)
+	if err != nil {
+		return "", fmt.Errorf("failed to enable network interfaces on FA with IP [%s]: %v", prevMgmtIP, err)
+	}
+
+	// Disable the other MGMT interface that is provided in pure.json file
+	currMgmtIPIndex := PureMgmtIpCounter % len(PureMgmtIPList)
+	faMgmtIP := PureMgmtIPList[currMgmtIPIndex]
+	LastDisabledInterface, err = DisableManagementInterface(PureFaClientVif, faMgmtIP, false)
+	if err != nil {
+		return "", fmt.Errorf("failed to toggle network interfaces on FA with IP [%s]: %v", faMgmtIP, err)
+	}
+
+	return LastDisabledInterface, nil
 }
 
 // EndTorpedoTest ends the logging for torpedo test
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
+	if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
+		var err error
+		LastDisabledInterface, err = ToggleMgmtNetworkInterfaces(PureMgmtIpCounter, PureMgmtIPList, PureFaClientVif, LastDisabledInterface)
+		dash.VerifyFatal(err, nil, "Failed to Toggle the Management interface")
+	}
+
 }
 
 // StartPxBackupTorpedoTest starts the logging for Px Backup torpedo test
@@ -7691,6 +8558,10 @@ func StartPxBackupTorpedoTest(testName string, testDescription string, tags map[
 
 // EndPxBackupTorpedoTest ends the logging for Px Backup torpedo test and updates results in testrail
 func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
+	defer func() {
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	}()
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
 	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
@@ -7718,12 +8589,12 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
 	}
 
-	defer func() {
-		err := SetSourceKubeConfig()
-		log.FailOnError(err, "failed to switch context to source cluster")
-	}()
+	err = SetSourceKubeConfig()
+	log.FailOnError(err, "failed to switch context to source cluster")
+
 	masterNodes := node.GetMasterNodes()
-	if len(masterNodes) > 0 {
+	// TODO: enable the log collection for charmed k8s once we get the way to ssh into worker node from juju
+	if len(masterNodes) > 0 && GetClusterProvider() != "charmed" {
 		log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
 		testCaseName := currentSpecReport.FullText()
 		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(currentSpecReport.FullText())
@@ -7781,18 +8652,21 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 		}
 		if err != nil {
 			return createdVolIDs, fmt.Errorf("failed to creared volume %s, due to error : %v ", volName, err)
+
 		}
 		volPath = fmt.Sprintf("%v", out)
 		createdVolIDs[volId] = volPath
 		log.Infof("Volume %s attached to path %s", volId, volPath)
 		count--
+		log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s  after creating the volume", volName, volId)
+		PrintInspectVolume(volId)
 	}
 	return createdVolIDs, nil
 }
 
 // GetPoolsInUse lists all persistent volumes and returns the pool IDs
 func GetPoolsInUse() ([]string, error) {
-	var poolUuids []string
+	var poolsInUse []string
 	pvlist, err := k8sCore.GetPersistentVolumes()
 	if err != nil || pvlist == nil || len(pvlist.Items) == 0 {
 		return nil, fmt.Errorf("no persistent volume found. Error: %v", err)
@@ -7800,38 +8674,39 @@ func GetPoolsInUse() ([]string, error) {
 
 	for _, pv := range pvlist.Items {
 		volumeID := pv.GetName()
-		poolUuids, err = GetPoolIDsFromVolName(volumeID)
+		poolUuids, err := GetPoolIDsFromVolName(volumeID)
 		//Needed this logic as a workaround for PWX-35637
 		if err != nil && strings.Contains(err.Error(), "not found") {
 			continue
 		}
-		break
+		poolsInUse = append(poolsInUse, poolUuids...)
 	}
 
-	return poolUuids, err
+	return poolsInUse, err
 }
 
 // GetPoolIDWithIOs returns the pools with IOs happening
-func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
+func GetPoolIDWithIOs(contexts []*scheduler.Context) ([]string, error) {
 	// pick a  pool doing some IOs from a pools list
 	var err error
 	var isIOsInProgress bool
 	err = Inst().V.RefreshDriverEndpoints()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
+	poolIdsWithIOs := make([]string, 0)
 	for _, ctx := range contexts {
 		vols, err := Inst().S.GetVolumes(ctx)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		node := node.GetStorageDriverNodes()[0]
 		for _, vol := range vols {
 			appVol, err := Inst().V.InspectVolume(vol.ID)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 
 			t := func() (interface{}, bool, error) {
@@ -7844,23 +8719,15 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 
 			_, err = task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 
 			if isIOsInProgress {
 				log.Infof("IOs are in progress for [%v]", vol.Name)
 				poolUuids := appVol.ReplicaSets[0].PoolUuids
 				for _, p := range poolUuids {
-					n, err := GetNodeWithGivenPoolID(p)
-					if err != nil {
-						return "", err
-					}
-					eligibilityMap, err := GetPoolExpansionEligibility(n)
-					if err != nil {
-						return "", err
-					}
-					if eligibilityMap[n.Id] && eligibilityMap[p] {
-						return p, nil
+					if !slices.Contains(poolIdsWithIOs, p) {
+						poolIdsWithIOs = append(poolIdsWithIOs, p)
 					}
 
 				}
@@ -7868,14 +8735,17 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 		}
 
 	}
+	if len(poolIdsWithIOs) > 0 {
+		return poolIdsWithIOs, nil
+	}
 
-	return "", fmt.Errorf("no pools have IOs running,Err: %v", err)
+	return nil, fmt.Errorf("no pools have IOs running,Err: %v", err)
 }
 
 // GetPoolWithIOsInGivenNode returns the poolID in the given node with IOs happening
-func GetPoolWithIOsInGivenNode(stNode node.Node, contexts []*scheduler.Context) (*opsapi.StoragePool, error) {
+func GetPoolWithIOsInGivenNode(stNode node.Node, contexts []*scheduler.Context, expandType opsapi.SdkStoragePool_ResizeOperationType, targetSizeGiB uint64) (*opsapi.StoragePool, error) {
 
-	eligibilityMap, err := GetPoolExpansionEligibility(&stNode)
+	eligibilityMap, err := GetPoolExpansionEligibility(&stNode, expandType, targetSizeGiB)
 	if err != nil {
 		return nil, err
 	}
@@ -7978,7 +8848,7 @@ func GetNodeFromPoolUUID(poolUUID string) (*node.Node, error) {
 }
 
 // GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
-func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
+func GetPoolExpansionEligibility(stNode *node.Node, expandType opsapi.SdkStoragePool_ResizeOperationType, targetIncrementInGiB uint64) (map[string]bool, error) {
 	var err error
 
 	namespace, err := Inst().V.GetVolumeDriverNamespace()
@@ -7988,16 +8858,12 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 
 	var maxCloudDrives int
 
-	if _, err := core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
+	if _, err = core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
 		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
-	} else if _, err := core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
+	} else if _, err = core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
 		maxCloudDrives = FA_MAX_CLOUD_DRIVES
 	} else {
 		maxCloudDrives = CLOUD_PROVIDER_MAX_CLOUD_DRIVES
-	}
-
-	if err != nil {
-		return nil, err
 	}
 
 	var currentNodeDrives int
@@ -8022,18 +8888,59 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 		return nil, err
 	}
 
+	log.Infof("Node [%s] has [%d] pools", stNode.Name, len(stNode.StoragePools))
 	for _, pool := range stNode.StoragePools {
 		eligibilityMap[pool.Uuid] = true
 
 		d := drvM[fmt.Sprintf("%d", pool.ID)]
 		log.Infof("pool %s has %d drives", pool.Uuid, len(d))
-		if len(d) == POOL_MAX_CLOUD_DRIVES {
-			eligibilityMap[pool.Uuid] = false
-		}
-
 		if nodePoolStatus[pool.Uuid] == "Offline" {
 			eligibilityMap[pool.Uuid] = false
+		} else {
+			if expandType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+				if len(d) == POOL_MAX_CLOUD_DRIVES {
+					log.Infof("pool %s has reached max drives", pool.Uuid)
+					eligibilityMap[pool.Uuid] = false
+				} else {
+					baseDiskSizeInGib := d[0].SizeInGib
+					poolSize := uint64(0)
+					for _, drive := range d {
+						poolSize += drive.SizeInGib
+					}
+					if targetIncrementInGiB == 0 {
+						targetIncrementInGiB = baseDiskSizeInGib
+					}
+					targetSizeGiB := poolSize + targetIncrementInGiB
+					expectedPoolDrivesAfterExpansion := int(math.Ceil(float64(targetSizeGiB) / float64(baseDiskSizeInGib)))
+					if expectedPoolDrivesAfterExpansion > POOL_MAX_CLOUD_DRIVES {
+						log.Infof("pool %s will reach max drives if expanded to size [%v] using add-drive", pool.Uuid, targetSizeGiB)
+						eligibilityMap[pool.Uuid] = false
+					} else {
+						currentPoolDrives := len(d)
+						expectedNodeDrivesAfterExpansion := currentNodeDrives + (expectedPoolDrivesAfterExpansion - currentPoolDrives)
+						stc, err := Inst().V.GetDriver()
+						if err != nil {
+							return nil, err
+						}
+						if stc.Spec.CloudStorage.JournalDeviceSpec != nil {
+							expectedNodeDrivesAfterExpansion++
+						}
+						if stc.Spec.CloudStorage.KvdbDeviceSpec != nil || stc.Spec.CloudStorage.SystemMdDeviceSpec != nil {
+							expectedNodeDrivesAfterExpansion++
+						}
+						log.Infof("Expected node drives after pool [%s ] expansion for node [%s] is [%d], max cloud drives allowed [%d]", pool.Uuid, stNode.Name, expectedNodeDrivesAfterExpansion, maxCloudDrives)
+						if expectedNodeDrivesAfterExpansion > maxCloudDrives {
+							log.Infof("node %s  will reach max drives if pool %s expanded to size [%v] using add-drive", stNode.Name, pool.Uuid, targetSizeGiB)
+							eligibilityMap[pool.Uuid] = false
+							eligibilityMap[stNode.Id] = false
+						}
+
+					}
+
+				}
+			}
 		}
+
 	}
 
 	return eligibilityMap, nil
@@ -8336,6 +9243,7 @@ func WaitForPoolOffline(n node.Node) error {
 	return err
 }
 
+// GetPoolIDFromPoolUUID Returns Pool ID from Pool UUID
 func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {
 	nodesPresent := node.GetStorageNodes()
 	for _, each := range nodesPresent {
@@ -8350,6 +9258,20 @@ func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {
 		}
 	}
 	return -1, nil
+}
+
+// GetPoolObjFromPoolIdOnNode Returns pool object from pool ID on a specific Node
+func GetPoolObjFromPoolIdOnNode(n *node.Node, poolID int) (*opsapi.StoragePool, error) {
+	poolDetails, err := GetPoolsDetailsOnNode(n)
+	if err != nil {
+		return nil, err
+	}
+	for _, eachPool := range poolDetails {
+		if eachPool.ID == int32(poolID) {
+			return eachPool, nil
+		}
+	}
+	return nil, fmt.Errorf("Failed to get details of Storage Pool On specific Node ")
 }
 
 func GetAutoFsTrimStatusForCtx(ctx *scheduler.Context) (map[string]opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
@@ -8554,6 +9476,26 @@ func ExitPoolMaintenance(stNode node.Node) error {
 
 // DeleteGivenPoolInNode deletes pool with given ID in the given node
 func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) (err error) {
+
+	// Moving repls on the node before deletion
+	nodeVols, err := GetVolumesOnNode(stNode.VolDriverNodeID)
+	if err != nil {
+		return fmt.Errorf("error getting volumes node [%s],Err: %v ", stNode.Name, err)
+	}
+
+	for _, vol := range nodeVols {
+		newReplicaNode, err := GetNodeIdToMoveReplica(vol)
+		log.Infof("New Replica node is [%s]", newReplicaNode)
+		if err != nil {
+			return fmt.Errorf("error getting replica node for volume [%s],Err: %v ", vol, err)
+		}
+
+		err = MoveReplica(vol, stNode.VolDriverNodeID, newReplicaNode)
+		if err != nil {
+			return fmt.Errorf("error moving replica from node [%s] to volume [%s],Err: %v ", stNode.VolDriverNodeID, newReplicaNode, err)
+		}
+	}
+
 	if err := EnterPoolMaintenance(stNode); err != nil {
 		return err
 	}
@@ -8565,6 +9507,71 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) 
 
 	if err != nil && !strings.Contains(err.Error(), "not in pool maintenance mode") {
 		return err
+	}
+	return nil
+}
+
+func DeletePoolAndValidate(stNode node.Node, poolIDToDelete string) error {
+	isPureBackend := false
+	validateMultipath := []string{}
+	if IsPureCluster() {
+		isPureBackend = true
+	}
+
+	if isPureBackend {
+		// if pure backend , we get the list of all multipath devices used while creating the pool
+		// later check if those multipath devices are still exist post deleting the pool
+		multipathDevBeforeDelete, err := GetMultipathDeviceOnPool(&stNode)
+		log.FailOnError(err, fmt.Sprintf("Failed to get list of Multipath devices on Node [%v]", stNode.Name))
+		validateMultipath = multipathDevBeforeDelete[poolIDToDelete]
+	}
+
+	poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools, Err: %v", err)
+	}
+
+	poolsMap, err := Inst().V.GetPoolDrives(&stNode)
+	if err != nil {
+		return fmt.Errorf("error getting pool drive from the node [%s],Err: %v", stNode.Name, err)
+	}
+
+	log.InfoD(fmt.Sprintf("Delete poolID %s on node %s", poolIDToDelete, stNode.Name))
+	err = DeleteGivenPoolInNode(stNode, poolIDToDelete, true)
+	if err != nil {
+		return fmt.Errorf("error deleting pool [%s] in the node [%s], Err: %v", poolIDToDelete, stNode.Name, err)
+	}
+
+	poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools after pool deletion, Err: %v", err)
+	}
+
+	if len(poolsBfr) <= len(poolsAfr) {
+		return fmt.Errorf("pool count not matching after pool deletion. Pools before deletion:%d, pools after deletion %d", len(poolsBfr), len(poolsAfr))
+	}
+
+	poolsMap, err = Inst().V.GetPoolDrives(&stNode)
+	if err != nil {
+		return fmt.Errorf("error getting pool drive from the node [%s] after pool deletion,Err: %v", stNode.Name, err)
+	}
+	if _, ok := poolsMap[poolIDToDelete]; ok {
+		return fmt.Errorf("pool [%s] still exists on the node [%s]", poolIDToDelete, stNode.Name)
+	}
+
+	if isPureBackend {
+		// Get list of all Multipath devices after deleting the pool
+		allMultipathDev, err := GetMultipathDeviceIDsOnNode(&stNode)
+		if err != nil {
+			return fmt.Errorf("failed to get multipath devices on Node [%v],Err: %v", stNode.Name, err)
+		}
+		for _, eachMultipath := range allMultipathDev {
+			for _, validateEach := range validateMultipath {
+				if validateEach == eachMultipath {
+					return fmt.Errorf("multipath device [%v] did not delete on Deleting Pool", validateEach)
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -8648,7 +9655,7 @@ func AsgKillNode(nodeToKill node.Node) error {
 			})
 
 		} else {
-			err = Inst().N.DeleteNode(nodeToKill, 5*time.Minute)
+			err = Inst().S.DeleteNode(nodeToKill)
 		}
 
 	})
@@ -8840,11 +9847,13 @@ func GetAllKvdbNodes() ([]KvdbNode, error) {
 	var allKvdbNodes []KvdbNode
 	// Execute the command and check the alerts of type POOL
 	command := "pxctl service kvdb members list -j"
-	out, err := Inst().N.RunCommandWithNoRetry(randomNode, command, node.ConnectionOpts{
+	out, err := Inst().N.RunCommand(randomNode, command, node.ConnectionOpts{
 		Timeout:         2 * time.Minute,
 		TimeBeforeRetry: 10 * time.Second,
 	})
-	//log.FailOnError(err, "Unable to get KVDB members from the command [%s]", command)
+	if err != nil {
+		return nil, err
+	}
 	log.InfoD("List of KVDBMembers in the cluster [%v]", out)
 
 	// Convert KVDB members to map
@@ -8956,6 +9965,20 @@ func KillKvdbMemberUsingPid(kvdbNode node.Node) error {
 	return nil
 }
 
+// IsKVDBNode returns true if a node is kvdb node else it returns false
+func IsKVDBNode(n node.Node) (bool, error) {
+	KvdbNodes, err := GetAllKvdbNodes()
+	if err != nil {
+		return false, err
+	}
+	for _, each := range KvdbNodes {
+		if each.ID == n.Id {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // getReplicaNodes returns the list of nodes which has replicas
 func getReplicaNodes(vol *volume.Volume) ([]string, error) {
 	getReplicaSets, err := Inst().V.GetReplicaSets(vol)
@@ -9029,17 +10052,21 @@ func AddMetadataDisk(n node.Node) error {
 
 }
 
-// createNamespaces Create N number of namespaces and return namespace list
-func createNamespaces(numberOfNamespaces int) ([]string, error) {
+// CreateNamespaces Create N number of namespaces and return namespace list
+func CreateNamespaces(nsName string, numberOfNamespaces int) ([]string, error) {
 
 	// Create multiple namespaces in string
 	var (
 		namespaces []string
 	)
+	namespace := fmt.Sprintf("large-resource-%v", time.Now().Unix())
+	if nsName != "" {
+		namespace = fmt.Sprintf("%s", nsName)
+	}
 
 	// Create a good number of namespaces
-	for i := 0; i < numberOfNamespaces; i++ {
-		namespace := fmt.Sprintf("large-resource-%d-%v", i, time.Now().Unix())
+	for nsCount := 0; nsCount < numberOfNamespaces; nsCount++ {
+		namespace := fmt.Sprintf("%v-%v", namespace, nsCount)
 		nsName := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namespace,
@@ -10078,7 +11105,7 @@ func IsVolumeExits(volName string) bool {
 	return isVolExist
 }
 
-func ValidateCRMigration(pods *v1.PodList, appData *asyncdr.AppData) error {
+func ValidateCRMigration(pods *corev1.PodList, appData *asyncdr.AppData) error {
 	pods_created_len := len(pods.Items)
 	log.InfoD("Num of Pods on source: %v", pods_created_len)
 	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
@@ -10100,7 +11127,7 @@ func ValidateCRMigration(pods *v1.PodList, appData *asyncdr.AppData) error {
 	log.InfoD("Create cluster pair between source and destination clusters")
 	ScheduleValidateClusterPair(emptyCtx, false, true, defaultClusterPairDir, false)
 	migName := migrationKey + time.Now().Format("15h03m05s")
-	mig, err := asyncdr.CreateMigration(migName, appData.Ns, asyncdr.DefaultClusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+	mig, err := asyncdr.CreateMigration(migName, appData.Ns, asyncdr.DefaultClusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 	if err != nil {
 		return err
 	}
@@ -10747,7 +11774,7 @@ func KillPxStorageUsingPid(memberNode node.Node) error {
 }
 
 // GetAllPodsInNameSpace Returns list of pods running in the namespace
-func GetAllPodsInNameSpace(nameSpace string) ([]v1.Pod, error) {
+func GetAllPodsInNameSpace(nameSpace string) ([]corev1.Pod, error) {
 	pods, err := k8sCore.GetPods(nameSpace, nil)
 	if err != nil {
 		return nil, err
@@ -10790,10 +11817,11 @@ func installGrafana(namespace string) {
 }
 
 func SetupProxyServer(n node.Node) error {
-
 	createDirCommand := "mkdir -p /exports/testnfsexportdir"
 	output, err := Inst().N.RunCommandWithNoRetry(n, createDirCommand, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -10802,7 +11830,9 @@ func SetupProxyServer(n node.Node) error {
 
 	addVersionCmd := "echo -e \"MOUNTD_NFS_V4=\"yes\"\nRPCNFSDARGS=\"-N 2 -N 4\"\" >> /etc/sysconfig/nfs"
 	output, err = Inst().N.RunCommandWithNoRetry(n, addVersionCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -10811,15 +11841,65 @@ func SetupProxyServer(n node.Node) error {
 
 	updateExportsCmd := "echo \"/exports/testnfsexportdir *(rw,sync,no_root_squash)\" > /etc/exports"
 	output, err = Inst().N.RunCommandWithNoRetry(n, updateExportsCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
 	}
 	log.Infof(output)
+
+	checkExportfsCmd := "which exportfs"
+	output, err = Inst().N.RunCommandWithNoRetry(n, checkExportfsCmd, node.ConnectionOpts{
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	})
+	if err != nil || output == "" {
+		log.Warnf("The command exportfs not found")
+
+		var installNfsUtilsCmd string
+		checkDistroCmd := "source /etc/os-release && echo $ID"
+		output, err = Inst().N.RunCommandWithNoRetry(n, checkDistroCmd, node.ConnectionOpts{
+			Sudo:            true,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		})
+		if err != nil {
+			return err
+		}
+		log.Infof("The Linux distribution is %s", output)
+
+		switch strings.TrimSpace(output) {
+		case "ubuntu", "debian":
+			log.Infof("Installing nfs-common")
+			installNfsUtilsCmd = "apt-get update && apt-get install -y nfs-common"
+		case "centos", "rhel", "fedora":
+			log.Infof("Installing nfs-utils")
+			installNfsUtilsCmd = "yum install -y nfs-utils"
+		default:
+			return fmt.Errorf("unsupported Linux distribution")
+		}
+
+		output, err = Inst().N.RunCommandWithNoRetry(n, installNfsUtilsCmd, node.ConnectionOpts{
+			Sudo:            true,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		})
+		if err != nil {
+			return err
+		}
+		log.Infof(output)
+	} else {
+		log.Infof(output)
+	}
+
 	exportCmd := "exportfs -a"
 	output, err = Inst().N.RunCommandWithNoRetry(n, exportCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -10828,7 +11908,9 @@ func SetupProxyServer(n node.Node) error {
 
 	enableNfsServerCmd := "systemctl enable nfs-server"
 	output, err = Inst().N.RunCommandWithNoRetry(n, enableNfsServerCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -10837,7 +11919,9 @@ func SetupProxyServer(n node.Node) error {
 
 	startNfsServerCmd := "systemctl restart nfs-server"
 	output, err = Inst().N.RunCommandWithNoRetry(n, startNfsServerCmd, node.ConnectionOpts{
-		Sudo: true,
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
 	})
 	if err != nil {
 		return err
@@ -10857,7 +11941,7 @@ func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
 	v1obj := metav1.ObjectMeta{
 		Name: scName,
 	}
-	reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+	reclaimPolicyDelete := corev1.PersistentVolumeReclaimDelete
 	bindMode := storageapi.VolumeBindingImmediate
 	allowWxpansion := true
 	scObj := storageapi.StorageClass{
@@ -10874,82 +11958,8 @@ func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
 	return err
 }
 
-func GetClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
-	stNodes := node.GetStorageNodes()
-
-	nodeSchedulableStatus := make(map[string]string)
-	stNodeNames := make(map[string]bool)
-
-	for _, stNode := range stNodes {
-		stNodeNames[stNode.Name] = true
-	}
-
-	//Handling case where we have storageless node as kvdb node with dedicated kvdb device attached.
-	kvdbNodes, _ := GetAllKvdbNodes()
-	for _, kvdbNode := range kvdbNodes {
-		sNode, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
-		if err == nil {
-			stNodeNames[sNode.Name] = true
-		} else {
-			log.Errorf("got error while getting with id [%s]", kvdbNode.ID)
-		}
-	}
-
-	log.Infof("stnodes are %#v", stNodeNames)
-	itr := 1
-	for {
-		log.Infof("K8s node validation. iteration: #%d", itr)
-		select {
-		case <-stopSignal:
-			log.Infof("Exiting node validations routine")
-			return
-		default:
-			nodeList, err := core.Instance().GetNodes()
-			if err != nil {
-				log.Errorf("Got error : %s", err.Error())
-				*mError = err
-				return
-			}
-
-			nodeNotReadyeCount := 0
-			for _, k8sNode := range nodeList.Items {
-				for _, status := range k8sNode.Status.Conditions {
-					if status.Type == v1.NodeReady {
-						nodeSchedulableStatus[k8sNode.Name] = string(status.Status)
-						if status.Status != v1.ConditionTrue && stNodeNames[k8sNode.Name] {
-							nodeNotReadyeCount += 1
-						}
-						break
-					}
-				}
-
-			}
-			if nodeNotReadyeCount > 1 {
-				err = fmt.Errorf("multiple  nodes are Unschedulable at same time,"+
-					"node status:%#v", nodeSchedulableStatus)
-				log.Errorf("Got error : %s", err.Error())
-				log.Infof("Node Details: %#v", nodeList.Items)
-				output, err := Inst().N.RunCommand(stNodes[0], "pxctl status", node.ConnectionOpts{
-					IgnoreError:     false,
-					TimeBeforeRetry: defaultRetryInterval,
-					Timeout:         defaultTimeout,
-					Sudo:            true,
-				})
-				if err != nil {
-					log.Errorf("failed to get pxctl status, Err: %v", err)
-				}
-				log.Infof(output)
-				*mError = err
-				return
-			}
-		}
-		itr++
-		time.Sleep(30 * time.Second)
-	}
-}
-
 // PrintK8sClusterInfo prints info about K8s cluster nodes
-func PrintK8sCluterInfo() {
+func PrintK8sClusterInfo() {
 	log.Info("Get cluster info..")
 	t := func() (interface{}, bool, error) {
 		nodeList, err := core.Instance().GetNodes()
@@ -10957,16 +11967,16 @@ func PrintK8sCluterInfo() {
 			return "", true, fmt.Errorf("failed to get nodes, Err %v", err)
 		}
 		if len(nodeList.Items) > 0 {
-			for _, node := range nodeList.Items {
+			for _, n := range nodeList.Items {
 				nodeType := "Worker"
-				if core.Instance().IsNodeMaster(node) {
+				if core.Instance().IsNodeMaster(n) {
 					nodeType = "Master"
 				}
 				log.Infof(
 					"Node Name: %s, Node Type: %s, Kernel Version: %s, Kubernetes Version: %s, OS: %s, Container Runtime: %s",
-					node.Name, nodeType,
-					node.Status.NodeInfo.KernelVersion, node.Status.NodeInfo.KubeletVersion, node.Status.NodeInfo.OSImage,
-					node.Status.NodeInfo.ContainerRuntimeVersion)
+					n.Name, nodeType,
+					n.Status.NodeInfo.KernelVersion, n.Status.NodeInfo.KubeletVersion, n.Status.NodeInfo.OSImage,
+					n.Status.NodeInfo.ContainerRuntimeVersion)
 			}
 			return "", false, nil
 		}
@@ -10975,6 +11985,333 @@ func PrintK8sCluterInfo() {
 	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
 		log.Warnf("failed to get k8s cluster info, Err: %v", err)
 	}
+}
+
+func CreatePXCloudCredential() error {
+	/*
+		Creating a cloud credential for cloudsnap wit the given params
+		Deleting the existing cred if exists so that we can use same creds to delete the s3 bucket once test is completed.
+	*/
+	id, secret, endpoint, s3Region, disableSSl, err := getCreateCredParams()
+
+	if err != nil {
+		return err
+	}
+
+	n := node.GetStorageDriverNodes()[0]
+	uuidCmd := "cred list -j | grep uuid"
+
+	output, err := Inst().V.GetPxctlCmdOutputConnectionOpts(n, uuidCmd, node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}, false)
+	if err != nil {
+		log.Warnf("No creds found, creating new cred, Err: %v", err)
+	}
+
+	if output != "" {
+		log.Infof("Cloud Cred exists [%s]", output)
+		log.Warnf("Deleting existing cred and creating new cred with given params")
+		credUUID := strings.Split(output, ":")[1]
+		credUUID = strings.ReplaceAll(strings.TrimSpace(credUUID), "\"", "")
+		credDeleteCmd := fmt.Sprintf("cred delete %s", credUUID)
+		output, err = Inst().V.GetPxctlCmdOutputConnectionOpts(n, credDeleteCmd, node.ConnectionOpts{
+			IgnoreError:     false,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		}, false)
+
+		if err != nil {
+			err = fmt.Errorf("error deleting existing cred [%s], cause: %v", credUUID, err)
+			return err
+		}
+
+		log.Infof("Deleted exising cred [%s]", output)
+	}
+
+	cloudCredName := "px-cloud-cred"
+
+	credCreateCmd := fmt.Sprintf("cred create %s --provider s3 --s3-access-key %s --s3-secret-key %s --s3-endpoint %s --s3-region %s", cloudCredName, id, secret, endpoint, s3Region)
+
+	if disableSSl {
+		credCreateCmd = fmt.Sprintf("%s --s3-disable-ssl", credCreateCmd)
+	}
+
+	log.Infof("Running command [%s]", credCreateCmd)
+
+	// Execute the command and check get rebalance status
+	output, err = Inst().V.GetPxctlCmdOutputConnectionOpts(node.GetStorageNodes()[0], credCreateCmd, node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}, false)
+
+	if err != nil {
+		err = fmt.Errorf("error creating cloud cred, cause: %v", err)
+		return err
+	}
+
+	log.Infof(output)
+
+	return nil
+
+}
+
+func GetCloudsnapBucketName(contexts []*scheduler.Context) (string, error) {
+
+	var bucketName string
+	//Stopping cloudnsnaps before bucket deletion
+	for _, ctx := range contexts {
+		if strings.Contains(ctx.App.Key, "cloudsnap") {
+			if bucketName == "" {
+				vols, err := Inst().S.GetVolumeParameters(ctx)
+				if err != nil {
+					err = fmt.Errorf("error getting volume params for %s, cause: %v", ctx.App.Key, err)
+					return "", err
+				}
+				for vol, params := range vols {
+					csBksps, err := Inst().V.GetCloudsnaps(vol, params)
+					if err != nil {
+						err = fmt.Errorf("error getting cloud snaps for %s, cause: %v", vol, err)
+						return "", err
+					}
+					for _, csBksp := range csBksps {
+						bkid := csBksp.GetId()
+						bucketName = strings.Split(bkid, "/")[0]
+						break
+					}
+				}
+				log.Infof("Got Bucket Name [%s]", bucketName)
+			}
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				return "", err
+			}
+			for _, vol := range vols {
+				appVol, err := Inst().V.InspectVolume(vol.ID)
+				if err != nil {
+					return "", err
+				}
+				err = suspendCloudsnapBackup(appVol.Id)
+				if err != nil {
+					return "", err
+				}
+			}
+		}
+	}
+	return bucketName, nil
+}
+
+func DeleteCloudSnapBucket(bucketName string) error {
+
+	if bucketName != "" {
+		id, secret, endpoint, s3Region, _, err := getCreateCredParams()
+		if err != nil {
+			return err
+		}
+		var sess *session.Session
+		if strings.Contains(endpoint, "minio") {
+
+			sess, err = session.NewSessionWithOptions(session.Options{
+				Config: aws.Config{
+					Endpoint:         aws.String(endpoint),
+					Region:           aws.String(s3Region),
+					Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+					S3ForcePathStyle: aws.Bool(true),
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to initialize new session: %v", err)
+			}
+		}
+
+		if strings.Contains(endpoint, "amazonaws") {
+			sess, err = session.NewSessionWithOptions(session.Options{
+				Config: aws.Config{
+					Region:      aws.String(s3Region),
+					Credentials: credentials.NewStaticCredentials(id, secret, ""),
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to initialize new session: %v", err)
+			}
+		}
+
+		if sess == nil {
+			return fmt.Errorf("failed to initialize new session using endpoint [%s], Cause: %v", endpoint, err)
+		}
+
+		client := s3.New(sess)
+		err = deleteAndValidateBucketDeletion(client, bucketName)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func deleteAndValidateBucketDeletion(client *s3.S3, bucketName string) error {
+	// Delete all objects and versions in the bucket
+	log.Debugf("Deleting bucket [%s]", bucketName)
+	time.Sleep(5 * time.Minute)
+	err := client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+	}, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+		// Iterate through the objects in the bucket and delete them
+		var objects []*s3.ObjectIdentifier
+
+		for _, obj := range page.Contents {
+			objects = append(objects, &s3.ObjectIdentifier{
+				Key: obj.Key,
+			})
+		}
+
+		_, err := client.DeleteObjects(&s3.DeleteObjectsInput{
+			Bucket: aws.String(bucketName),
+			Delete: &s3.Delete{
+				Objects: objects,
+				Quiet:   aws.Bool(true),
+			},
+		})
+		if err != nil {
+			log.Warnf("failed to delete objects in bucket: %v", err)
+			return false
+		}
+
+		return true
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete objects in bucket: %v", err)
+	}
+
+	// List the objects in the bucket
+	listObjectsInput := s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+	}
+
+	listObjectsOutput, err := client.ListObjectsV2(&listObjectsInput)
+	if err != nil {
+		return err
+	}
+	if len(listObjectsOutput.Contents) == 0 {
+		log.Debugf("Bucket [%s] is empty", bucketName)
+	} else {
+		// Delete the objects
+		deleteObjectsInput := &s3.DeleteObjectsInput{
+			Bucket: aws.String(bucketName),
+			Delete: &s3.Delete{
+				Objects: make([]*s3.ObjectIdentifier, len(listObjectsOutput.Contents)),
+				Quiet:   aws.Bool(true),
+			},
+		}
+
+		for i, object := range listObjectsOutput.Contents {
+			deleteObjectsInput.Delete.Objects[i] = &s3.ObjectIdentifier{
+				Key: aws.String(*object.Key),
+			}
+		}
+
+		_, err = client.DeleteObjects(deleteObjectsInput)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Delete the bucket
+	_, err = client.DeleteBucket(&s3.DeleteBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		var aerr awserr.Error
+		if errors.As(err, &aerr) {
+			if aerr.Code() == s3.ErrCodeNoSuchBucket {
+				log.Infof("Bucket: %v doesn't exist.!!", bucketName)
+				return nil
+			}
+			return fmt.Errorf("couldn't delete bucket: %v", err)
+		}
+	}
+
+	log.Infof("Successfully deleted the bucket: %v", bucketName)
+	return nil
+}
+
+func suspendCloudsnapBackup(volId string) error {
+
+	isBackupActive, err := IsCloudsnapBackupActiveOnVolume(volId)
+	if err != nil {
+		return fmt.Errorf("error checking backup status  for volume  [%s],Err: %v ", volId, err)
+	}
+	log.Infof("Backup status for vol [%s]: %v", volId, isBackupActive)
+
+	if isBackupActive {
+		scheduleOfVol, err := GetVolumeSnapShotScheduleOfVol(volId)
+		if err != nil {
+			return fmt.Errorf("error getting volumes snapshot schedule for volume [%s],Err: %v ", volId, err)
+		}
+
+		if !*scheduleOfVol.Spec.Suspend {
+			log.Infof("Snapshot schedule is not suspended. Suspending it")
+			makeSuspend := true
+			scheduleOfVol.Spec.Suspend = &makeSuspend
+			_, err := storkops.Instance().UpdateSnapshotSchedule(scheduleOfVol)
+			if err != nil {
+				return fmt.Errorf("error suspending volumes snapshot schedule for volume  [%s],Err: %v ", volId, err)
+			}
+
+		}
+	}
+	return nil
+}
+
+func getCreateCredParams() (id, secret, endpoint, s3Region string, disableSSLBool bool, err error) {
+
+	id = os.Getenv("S3_AWS_ACCESS_KEY_ID")
+	if id == "" {
+		id = os.Getenv("AWS_ACCESS_KEY_ID")
+	}
+
+	if id == "" {
+		err = fmt.Errorf("S3_AWS_ACCESS_KEY_ID or AWS_ACCESS_KEY_ID Environment variable is not provided")
+		return
+
+	}
+
+	secret = os.Getenv("S3_AWS_SECRET_ACCESS_KEY")
+	if secret == "" {
+		secret = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	}
+	if secret == "" {
+		err = fmt.Errorf("S3_AWS_SECRET_ACCESS_KEY or AWS_SECRET_ACCESS_KEY Environment variable is not provided")
+		return
+	}
+
+	endpoint = os.Getenv("S3_ENDPOINT")
+	if endpoint == "" {
+		err = fmt.Errorf("S3_ENDPOINT Environment variable is not provided")
+		return
+	}
+
+	s3Region = os.Getenv("S3_REGION")
+	if s3Region == "" {
+		err = fmt.Errorf("S3_REGION Environment variable is not provided")
+		return
+	}
+
+	disableSSL := os.Getenv("S3_DISABLE_SSL")
+	disableSSLBool = false
+
+	if len(disableSSL) > 0 {
+		disableSSLBool, err = strconv.ParseBool(disableSSL)
+		if err != nil {
+			err = fmt.Errorf("S3_DISABLE_SSL=%s is not a valid boolean value,err: %v", disableSSL, err)
+			return
+		}
+	}
+
+	return
 }
 
 // ExportSourceKubeConfig changes the KUBECONFIG environment variable to the source cluster config path
@@ -11093,6 +12430,26 @@ func GetVolumesOnNode(nodeId string) ([]string, error) {
 	return volumes, nil
 }
 
+// IsKubevirtInstalled returns true if Kubevirt is installed else returns false
+func IsKubevirtInstalled() bool {
+	k8sApiExtensions := apiextensions.Instance()
+	crdList, err := k8sApiExtensions.ListCRDs()
+	if err != nil {
+		return false
+	}
+	for _, crd := range crdList.Items {
+		if crd.Name == "kubevirts.kubevirt.io" {
+			k8sKubevirt := kubevirt.Instance()
+			version, err := k8sKubevirt.GetVersion()
+			if err == nil && version != "" {
+				log.InfoD("Version %s", version)
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // IsCloudsnapBackupActiveOnVolume returns true is cloudsnap backup is active on the volume
 func IsCloudsnapBackupActiveOnVolume(volName string) (bool, error) {
 	params := make(map[string]string)
@@ -11102,7 +12459,7 @@ func IsCloudsnapBackupActiveOnVolume(volName string) (bool, error) {
 	}
 
 	for _, csBksp := range csBksps {
-		if csBksp.GetSrcVolumeName() == volName && csBksp.GetStatus() == opsapi.SdkCloudBackupStatusType_SdkCloudBackupStatusTypeActive {
+		if csBksp.GetSrcVolumeName() == volName && (csBksp.GetStatus() == opsapi.SdkCloudBackupStatusType_SdkCloudBackupStatusTypeActive || csBksp.GetStatus() == opsapi.SdkCloudBackupStatusType_SdkCloudBackupStatusTypeNotStarted) {
 
 			return true, nil
 		}
@@ -11222,7 +12579,12 @@ func PrereqForNodeDecomm(nodeToDecommission node.Node, suspendedScheds []*storka
 
 	credCmd := "cred list -j | grep uuid"
 
-	output, err := Inst().V.GetPxctlCmdOutput(nodeToDecommission, credCmd)
+	output, err := Inst().V.GetPxctlCmdOutputConnectionOpts(nodeToDecommission, credCmd, node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: 5 * time.Second,
+		Timeout:         30 * time.Second,
+	}, false)
+
 	if err == nil && len(output) > 0 {
 		log.InfoD("Cloudsnap is enabled. Checking if backup is active on volumes")
 		for _, vol := range nodeVols {
@@ -11266,4 +12628,1233 @@ func PrereqForNodeDecomm(nodeToDecommission node.Node, suspendedScheds []*storka
 		}
 	}
 	return nil
+}
+
+// ValidatePXStatus validates if PX is running on all nodes
+func ValidatePXStatus() error {
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := Inst().V.WaitDriverUpOnNode(n, 30*time.Second); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// GetNodeFromIPAddress returns node details from the provided IP Address
+func GetNodeFromIPAddress(ipaddress string) (*node.Node, error) {
+	for _, eachNode := range node.GetNodes() {
+		log.Infof(fmt.Sprintf("Comparing [%v] with [%v]", eachNode.GetMgmtIp(), ipaddress))
+		if eachNode.GetMgmtIp() == ipaddress {
+			log.Infof("Matched IP Address [%v]", eachNode.MgmtIp)
+			return &eachNode, nil
+		}
+	}
+	return nil, fmt.Errorf("Unable to fetch Node details from ipaddress [%v]", ipaddress)
+}
+
+// IsVolumeTypePureBlock Returns true if the volume type if pureBlock
+func IsVolumeTypePureBlock(ctx *scheduler.Context, volName string) (bool, error) {
+	vols, err := Inst().S.GetVolumeParameters(ctx)
+	if err != nil {
+		return false, err
+	}
+	for vol, params := range vols {
+		log.Infof(fmt.Sprintf("Checking for Volume [%v]", vol))
+		if vol == volName && params["backend"] == k8s.PureBlock {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// SetUnSetDiscardMountRTOptions Set discard mount run time options on the Node
+func SetUnSetDiscardMountRTOptions(n *node.Node, unset bool) error {
+	rtOptions := 1
+	if !unset {
+		rtOptions = 0
+	}
+	optionsMap := make(map[string]string)
+	optionsMap["discard_mount_force"] = fmt.Sprintf("%v", rtOptions)
+	err := Inst().V.SetClusterRunTimeOpts(*n, optionsMap)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ValidatePxLicenseSummary validates the license summary by comparing SKU and feature quantities
+func ValidatePxLicenseSummary() error {
+	summary, err := Inst().V.GetLicenseSummary()
+	if err != nil {
+		return fmt.Errorf("failed to get license summary. Err: [%v]", err)
+	}
+	log.Infof("License summary: %v", summary)
+	switch {
+	case IsIksCluster():
+		log.Infof("Get SKU and compare with IBM cloud license activated using catalog")
+		// Get SKU and compare with IBM cloud license
+		isValidLicense := summary.SKU == IBMTestLicenseSKU || summary.SKU == IBMTestLicenseDRSKU || summary.SKU == IBMProdLicenseSKU || summary.SKU == IBMProdLicenseDRSKU
+		if !isValidLicense {
+			return fmt.Errorf("license type is not valid: %v", summary.SKU)
+		}
+		log.InfoD("Compare with PX IBM cloud licensed features")
+		isTestOrProdSKU := summary.SKU == IBMTestLicenseSKU || summary.SKU == IBMProdLicenseSKU
+		for _, feature := range summary.Features {
+			if limit, ok := IBMLicense[LabLabel(feature.Name)]; ok {
+				// Special handling for DisasterRecovery feature and certain SKUs
+				if !isTestOrProdSKU && LabLabel(feature.Name) == LabDisasterRecovery {
+					limit = &pxapi.LicensedFeature_Enabled{Enabled: true}
+				}
+				if !reflect.DeepEqual(feature.Quantity, limit) {
+					return fmt.Errorf("verifying quantity for [%v]: actual [%v], expected [%v]", feature.Name, feature.Quantity, limit)
+				}
+			}
+		}
+		log.Infof("Validated IBM cloud license successfully")
+	case IsAksCluster():
+		return fmt.Errorf("license validation is not supported on AKS cluster")
+	case IsEksCluster():
+		return fmt.Errorf("license validation is not supported on EKS cluster")
+	case IsOkeCluster():
+		return fmt.Errorf("license validation is not supported on OKE cluster")
+	case IsPksCluster():
+		return fmt.Errorf("license validation is not supported on PKS cluster")
+	default:
+		return fmt.Errorf("license validation is not supported on Unknown cluster")
+	}
+	return nil
+}
+
+// SplitStorageDriverUpgradeURL splits the given storage driver upgrade URL into endpoint and version
+// For the upgradeURL https://install.portworx.com/3.1.1, this returns Endpoint: https://install.portworx.com and Version: 3.1.1
+func SplitStorageDriverUpgradeURL(upgradeURL string) (string, string, error) {
+	parsedURL, err := url.Parse(upgradeURL)
+	if err != nil {
+		return "", "", err
+	}
+	pathSegments := strings.Split(strings.TrimSuffix(parsedURL.Path, "/"), "/")
+	endpoint := *parsedURL
+	endpoint.Path = strings.Join(pathSegments[:len(pathSegments)-1], "/")
+	pxVersion := pathSegments[len(pathSegments)-1]
+	return endpoint.String(), pxVersion, nil
+}
+
+// GetIQNOfNode returns the IQN of the given node in a FA setup
+func GetIQNOfNode(n node.Node) (string, error) {
+	cmd := "cat /etc/iscsi/initiatorname.iscsi"
+	output, err := runCmdGetOutput(cmd, n)
+	if err != nil {
+		return "", err
+	}
+
+	for _, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, "InitiatorName") {
+			return strings.Split(line, "=")[1], nil
+		}
+	}
+	return "", fmt.Errorf("iqn not found")
+}
+
+// GetIQNOfFA gets the IQN of the FA
+func GetIQNOfFA(n node.Node, FAclient flasharray.Client) (string, error) {
+	//Run iscsiadm commands to login to the controllers
+	networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(&FAclient, "iscsi")
+	log.FailOnError(err, "Failed to get network interfaces based on service type")
+
+	for _, networkInterface := range networkInterfaces {
+		ip := networkInterface.Address
+		log.InfoD("IP address of the iscsi service: %v", ip)
+		cmd := fmt.Sprintf("iscsiadm -m discovery -t st -p %s", ip)
+		output, err := runCmdGetOutput(cmd, n)
+		if err != nil {
+			return "", err
+		}
+		log.InfoD("Output of iscsiadm discovery command: %v", output)
+		// Split the input text by newline character to get each line
+		controllers := strings.Split(output, "\n")
+		// Loop through each line
+		for _, controller := range controllers {
+			// Split the line by space
+			parts := strings.Split(controller, " ")
+			if len(parts) == 2 {
+				iqn := parts[1]
+				return iqn, nil
+			}
+		}
+
+	}
+	return "", fmt.Errorf("IQN not found")
+
+}
+
+func RefreshIscsiSession(n node.Node) error {
+	cmd := "iscsiadm -m session --rescan"
+	_, err := runCmdGetOutput(cmd, n)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetPVCObjFromVol Returns pvc object from Volume
+func GetPVCObjFromVol(vol *volume.Volume) (*corev1.PersistentVolumeClaim, error) {
+	return k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
+}
+
+// Enables and Sets trashcan on the cluster
+func EnableTrashcanOnCluster(size string) error {
+	currNode := node.GetStorageDriverNodes()[0]
+	log.Infof("setting value of trashcan (volume-expiration-minutes) to [%v] ", size)
+	err := Inst().V.SetClusterOptsWithConfirmation(currNode,
+		map[string]string{"--volume-expiration-minutes": fmt.Sprintf("%v", size)})
+	return err
+}
+
+// WaitForVolumeClean Returns True if Volume in clean state
+func WaitForVolumeClean(vol *volume.Volume) error {
+	t := func() (interface{}, bool, error) {
+		volDetails, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return nil, true, fmt.Errorf("error getting volume by using id %s", vol.ID)
+		}
+
+		for _, v := range volDetails.RuntimeState {
+			log.InfoD("RuntimeState is in state %s", v.GetRuntimeState()["RuntimeState"])
+			if v.GetRuntimeState()["RuntimeState"] == "clean" {
+				return nil, false, nil
+			}
+		}
+		return nil, true, fmt.Errorf("volume resync hasn't started")
+	}
+	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, 60*time.Second)
+	return err
+}
+
+// GetFADetailsUsed Returns list of FlashArrays used in the cluster
+func GetFADetailsUsed() ([]pureutils.FlashArrayEntry, error) {
+	//get the flash array details
+	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get details on FlashArray used in the cluster")
+	}
+
+	pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to get Px Pure Secret")
+	}
+	// This step we are particularly doing it for multiple Mgmt Endpoints where famgmtendpoint will have one or more endpoints so we are picking only one endpoint for testing
+	for i := range pxPureSecret.Arrays {
+		mgmtEndpointParts := strings.Split(pxPureSecret.Arrays[i].MgmtEndPoint, ",")
+		if len(mgmtEndpointParts) > 1 {
+			pxPureSecret.Arrays[i].MgmtEndPoint = mgmtEndpointParts[0]
+		}
+	}
+
+	if len(pxPureSecret.Arrays) > 0 {
+		return pxPureSecret.Arrays, nil
+	}
+	return nil, fmt.Errorf("Failed to list FA Arrays ")
+}
+
+func FlashArrayGetIscsiPorts() (map[string][]string, error) {
+	flashArrays, err := GetFADetailsUsed()
+	log.FailOnError(err, "Failed to get flasharray details")
+
+	faWithIscsi := make(map[string][]string)
+	for _, eachFaInt := range flashArrays {
+		// Connect to Flash Array using Mgmt IP and API Token
+		faClient, err := pureutils.PureCreateClientAndConnect(eachFaInt.MgmtEndPoint, eachFaInt.APIToken)
+		if err != nil {
+			return nil, err
+		}
+
+		// Get All Data Interfaces
+		faData, err := pureutils.GetSpecificInterfaceBasedOnServiceType(faClient, "iscsi")
+		if err != nil || len(faData) == 0 {
+			log.Infof("Failed to get data interface on to FA using Mgmt IP [%v]", eachFaInt.MgmtEndPoint)
+			return nil, err
+		}
+		log.InfoD("All FA Details [%v]", faData)
+
+		for _, eachFA := range faData {
+			log.Infof("Each FA Details [%v]", eachFA)
+			if eachFA.Enabled && eachFA.Address != "" {
+				log.Infof("Fa Interface with iscsi IP [%v]", eachFA.Name)
+				faWithIscsi[eachFaInt.MgmtEndPoint] = append(faWithIscsi[eachFaInt.MgmtEndPoint], eachFA.Name)
+			}
+		}
+	}
+	return faWithIscsi, nil
+}
+
+// DisableFlashArrayNetworkInterface Disables network interface provided fa Management IP and IFace to Disable on FA
+func DisableFlashArrayNetworkInterface(faMgmtIP string, iface string) error {
+	flashArrays, err := GetFADetailsUsed()
+	if err != nil {
+		return err
+	}
+
+	for _, eachFaInt := range flashArrays {
+		// Connect to Flash Array using Mgmt IP and API Token
+		faClient, err := pureutils.PureCreateClientAndConnect(eachFaInt.MgmtEndPoint, eachFaInt.APIToken)
+		if err != nil {
+			return err
+		}
+
+		if eachFaInt.MgmtEndPoint == faMgmtIP {
+			isEnabled, err := pureutils.IsNetworkInterfaceEnabled(faClient, iface)
+			log.FailOnError(err, fmt.Sprintf("Interface [%v] is not enabled on FA [%v]", iface, eachFaInt.MgmtEndPoint))
+			if err != nil {
+				log.Errorf("Interface [%v] is not enabled on FA [%v]", iface, eachFaInt.MgmtEndPoint)
+				return err
+			}
+			if !isEnabled {
+				log.Infof("Network interface is not enabled Ignoring...")
+				return nil
+			}
+
+			// Ignore the check here as there is an issue with API's that we are using
+			_, _ = pureutils.DisableNetworkInterface(faClient, iface)
+			time.Sleep(10 * time.Second)
+
+			isDisabled, errDis := pureutils.IsNetworkInterfaceEnabled(faClient, iface)
+			log.Infof("[%v] is Enabled [%v]", iface, isDisabled)
+			if !isDisabled && errDis == nil {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("Disabling Interface failed for interface [%v] on Mgmt Ip [%v]", iface, faMgmtIP)
+}
+
+// EnableFlashArrayNetworkInterface Enables network interface on FA Management IP
+func EnableFlashArrayNetworkInterface(faMgmtIP string, iface string) error {
+	flashArrays, err := GetFADetailsUsed()
+	if err != nil {
+		return err
+	}
+	for _, eachFaInt := range flashArrays {
+		// Connect to Flash Array using Mgmt IP and API Token
+		faClient, err := pureutils.PureCreateClientAndConnect(eachFaInt.MgmtEndPoint, eachFaInt.APIToken)
+		if err != nil {
+			log.Errorf("Failed to connect to FA using Mgmt IP [%v]", eachFaInt.MgmtEndPoint)
+			return err
+		}
+
+		if eachFaInt.MgmtEndPoint == faMgmtIP {
+			isEnabled, err := pureutils.IsNetworkInterfaceEnabled(faClient, iface)
+			if err != nil {
+				log.Errorf(fmt.Sprintf("Interface [%v] is not enabled on FA [%v]", iface, eachFaInt.MgmtEndPoint))
+				return err
+			}
+			if isEnabled {
+				log.Infof("Network Interface [%v] is already enabled on cluster [%v]", iface, eachFaInt.MgmtEndPoint)
+				return nil
+			}
+
+			// Ignore the check here as there is an issue with API's that we are using
+			_, _ = pureutils.EnableNetworkInterface(faClient, iface)
+			isEnabled, errDis := pureutils.IsNetworkInterfaceEnabled(faClient, iface)
+			if isEnabled && errDis == nil {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("Enabling Interface failed for interface [%v] on Mgmt Ip [%v]", iface, faMgmtIP)
+}
+
+// GetFBDetailsFromCluster Returns list of FlashBlades used in the cluster
+func GetFBDetailsFromCluster() ([]pureutils.FlashBladeEntry, error) {
+	//get the flash array details
+	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get details on FlashBlade used in the cluster")
+	}
+
+	pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to get Px Pure Secret")
+	}
+
+	if len(pxPureSecret.Blades) > 0 {
+		return pxPureSecret.Blades, nil
+	}
+	return nil, fmt.Errorf("Failed to list available blades from FB ")
+}
+
+// FilterAllPureVolumes returns filtered Pure Volumes from list of Volumes
+func FilterAllPureVolumes(volumes []*volume.Volume) ([]volume.Volume, error) {
+	pureVolumes := []volume.Volume{}
+	for _, eachVol := range volumes {
+		isPureVol, err := Inst().V.IsPureVolume(eachVol)
+		log.FailOnError(err, "validating pureVolume returned err")
+		if isPureVol {
+			pureVolumes = append(pureVolumes, *eachVol)
+		}
+	}
+	return pureVolumes, nil
+}
+
+// GetFADetailsFromVolumeName returns FA Struct of FA where the volume is created
+func GetFADetailsFromVolumeName(volumeName string) ([]pureutils.FlashArrayEntry, error) {
+	faEntries := []pureutils.FlashArrayEntry{}
+	allFAs, err := GetFADetailsUsed()
+	if err != nil {
+		return nil, err
+	}
+	for _, eachFA := range allFAs {
+		// Connect to FA Client
+		log.Info("Connecting to FA [%v]", eachFA.MgmtEndPoint)
+		faClient, err := pureutils.PureCreateClientAndConnect(eachFA.MgmtEndPoint, eachFA.APIToken)
+		if err != nil {
+			log.Errorf("Failed to connect to FA using Mgmt IP [%v]", eachFA.MgmtEndPoint)
+			return nil, err
+		}
+
+		// List all the Volumes present in FA
+		allVolumes, err := pureutils.ListAllTheVolumesFromSpecificFA(faClient)
+		if err != nil {
+			return nil, err
+		}
+		for _, eachVol := range allVolumes {
+			if strings.Contains(eachVol.Name, volumeName) {
+				log.Infof("Volume [%v] present on Host [%v]", eachVol.Name, eachFA.MgmtEndPoint)
+				faEntries = append(faEntries, eachFA)
+			}
+		}
+	}
+	return faEntries, nil
+}
+
+// GetVolumeCompleteNameOnFA returns volume Name with Prefix from FA
+func GetVolumeCompleteNameOnFA(faClient *flasharray.Client, volName string) (string, error) {
+	// List all the Volumes present in FA
+	allVolumes, err := pureutils.ListAllTheVolumesFromSpecificFA(faClient)
+	if err != nil {
+		return "", err
+	}
+	for _, eachVol := range allVolumes {
+		if strings.Contains(eachVol.Name, volName) {
+			return eachVol.Name, nil
+		}
+	}
+	return "", nil
+}
+
+// GetConnectedHostToVolume returns the host details attached to Volume
+func GetConnectedHostToVolume(faClient *flasharray.Client, volumeName string) (string, error) {
+	allHostVolumes, err := pureutils.ListVolumesFromHosts(faClient)
+	if err != nil {
+		return "", err
+	}
+	for eachHost, volumeDetails := range allHostVolumes {
+		for _, eachVol := range volumeDetails {
+			if eachVol.Vol == volumeName {
+				log.Infof("Volume [%v] is present in Host [%v]", eachVol.Vol, eachHost)
+				return eachHost, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("Failed to get details of Host for Volume [%v]", volumeName)
+}
+
+// DeleteVolumeFromFABackend returns true if volume is deleted from backend
+func DeleteVolumeFromFABackend(fa pureutils.FlashArrayEntry, volumeName string) (bool, error) {
+	faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
+	if err != nil {
+		log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+		return false, err
+	}
+
+	volName, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
+	if err != nil {
+		return false, err
+	}
+	log.Infof("Name of the Volume is [%v]", volName)
+
+	// Get details of Host from Volume Name
+	hostName, err := GetConnectedHostToVolume(faClient, volName)
+	if err != nil {
+		return false, err
+	}
+	log.Infof("Host Name attached to Volume [%v] is [%v]", volName, hostName)
+
+	// Disconnect Host from Volume
+	connVol, err := pureutils.DisConnectVolumeFromHost(faClient, hostName, volName)
+	if err != nil {
+		return false, err
+	}
+	log.Infof("Details of Disconnected Volume [%v]", connVol)
+
+	// Verify if volume exists in specific FA
+	isExists, err := pureutils.IsFAVolumeExists(faClient, volName)
+	if err != nil {
+		return false, err
+	}
+	if !isExists {
+		log.Infof("Volume [%v] doesn't exist on the FA Cluster [%v]", volName, fa.MgmtEndPoint)
+		return true, nil
+	}
+	// Delete the Volume from FA Backend
+	log.Infof("Deleting volume with Name [%v]", volName)
+	_, err = pureutils.DeleteVolumeOnFABackend(faClient, volName)
+	if err != nil {
+		return false, err
+	}
+	// Verify if the volume is still exists on FA
+	// Verify if volume exists in specific FA
+	isExists, err = pureutils.IsFAVolumeExists(faClient, volName)
+	if err != nil {
+		return false, err
+	}
+	if isExists {
+		return false, fmt.Errorf("Volume [%v] still exist in backend", volName)
+	}
+	return true, nil
+
+}
+
+type MultipathDevices struct {
+	DevId  string
+	DmID   string
+	Size   string
+	Status string
+	Type   string
+	Paths  []PathInfo
+}
+
+// PathInfo represents information about a path of a multipath device.
+type PathInfo struct {
+	Devnode string
+	Status  string
+}
+
+// Returns all the list of multipath devices present in the cluster nodes
+func GetAllMultipathDevicesPresent(n *node.Node) ([]MultipathDevices, error) {
+	multiPathDevs := []MultipathDevices{}
+	output, err := runCmdOnce(fmt.Sprintf("multipath -ll"), *n)
+	log.Infof("%v", err)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Output Details before parsing [%v]", output)
+
+	devDetailsPattern := regexp.MustCompile(`^(.*)\s+(dm-.*)\s+(.*)\,.*`)
+	sizeMatchPattern := regexp.MustCompile(`.*size=([0-9]+G)\s+.*`)
+	statusMatchPatern := regexp.MustCompile(`.*status\=(\w+)`)
+	sdMatchPattern := regexp.MustCompile(`.*\s+(\d+:\d+:\d+:\d+)+\s+(sd\w+)\s+([0-9:]+)\s+(.*)`)
+
+	// Create a Reader from the string
+	reader := strings.Split(output, "\n")
+	log.Infof("Output Details [%v]", reader)
+
+	initPatternFound := false
+	multipathDevices := MultipathDevices{}
+	for i, eachLine := range reader {
+		matched := devDetailsPattern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			if initPatternFound {
+				multiPathDevs = append(multiPathDevs, multipathDevices)
+			}
+			multipathDevices = MultipathDevices{}
+			multipathDevices.DevId = matched[1]
+			multipathDevices.DmID = matched[2]
+			multipathDevices.Type = matched[3]
+			initPatternFound = true
+		}
+
+		matched = sizeMatchPattern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			multipathDevices.Size = matched[1]
+		}
+
+		matched = statusMatchPatern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			multipathDevices.Status = matched[1]
+		}
+
+		matched = sdMatchPattern.FindStringSubmatch(eachLine)
+		if len(matched) > 1 {
+			paths := PathInfo{}
+			paths.Devnode = matched[2]
+			paths.Status = matched[4]
+			multipathDevices.Paths = append(multipathDevices.Paths, paths)
+		}
+		// Validate Last Line
+		if i == len(reader)-1 {
+			multiPathDevs = append(multiPathDevs, multipathDevices)
+		}
+	}
+
+	return multiPathDevs, nil
+}
+
+// GetMultipathDeviceIDsOnNode returns List of all Multipath Devices on Node
+func GetMultipathDeviceIDsOnNode(n *node.Node) ([]string, error) {
+	multiPathDev := []string{}
+	multiPathDevices, err := GetAllMultipathDevicesPresent(n)
+	if err != nil {
+		return nil, err
+	}
+	for _, eachMultipathDev := range multiPathDevices {
+		multiPathDev = append(multiPathDev, eachMultipathDev.DevId)
+	}
+	return multiPathDev, nil
+}
+
+// CreateFlashStorageClass Creates storage class for Purity Backend
+// ReclaimPolicy can be v1.PersistentVolumeReclaimDelete, v1.PersistentVolumeReclaimRetain, v1.PersistentVolumeReclaimRecycle
+// volumeBinding storageapi.VolumeBindingImmediate, storageapi.VolumeBindingWaitForFirstConsumer
+func CreateFlashStorageClass(scName string,
+	scType string,
+	ReclaimPolicy corev1.PersistentVolumeReclaimPolicy,
+	params map[string]string,
+	MountOptions []string,
+	AllowVolumeExpansion *bool,
+	VolumeBinding storageapi.VolumeBindingMode,
+	AllowedTopologies map[string][]string) error {
+
+	var reclaimPolicy corev1.PersistentVolumeReclaimPolicy
+	param := make(map[string]string)
+	for key, value := range params {
+		param[key] = value
+	}
+	// add pure backend type
+	param["backend"] = scType
+	param["repl"] = "1"
+
+	v1obj := metav1.ObjectMeta{
+		Name: scName,
+	}
+
+	if VolumeBinding != storageapi.VolumeBindingImmediate && VolumeBinding != storageapi.VolumeBindingWaitForFirstConsumer {
+		return fmt.Errorf("Unsupported binding mode specified , please use storageapi.VolumeBindingImmediate or storageapi.VolumeBindingWaitForFirstConsumer")
+	}
+
+	// Declare Reclaim Policies
+	switch ReclaimPolicy {
+	case corev1.PersistentVolumeReclaimDelete:
+		reclaimPolicy = corev1.PersistentVolumeReclaimDelete
+	case corev1.PersistentVolumeReclaimRetain:
+		reclaimPolicy = corev1.PersistentVolumeReclaimRetain
+	case corev1.PersistentVolumeReclaimRecycle:
+		reclaimPolicy = corev1.PersistentVolumeReclaimRecycle
+	}
+
+	var allowedTopologies []corev1.TopologySelectorTerm = nil
+	if AllowedTopologies != nil {
+		topologySelector := corev1.TopologySelectorTerm{}
+		topologyList := []corev1.TopologySelectorLabelRequirement{}
+		for key, value := range AllowedTopologies {
+			topology := corev1.TopologySelectorLabelRequirement{}
+			topology.Key = key
+			topology.Values = value
+			topologyList = append(topologyList, topology)
+		}
+		topologySelector.MatchLabelExpressions = topologyList
+		allowedTopologies = append(allowedTopologies, topologySelector)
+	}
+
+	scObj := storageapi.StorageClass{
+		ObjectMeta:           v1obj,
+		Provisioner:          k8s.CsiProvisioner,
+		Parameters:           param,
+		MountOptions:         MountOptions,
+		ReclaimPolicy:        &reclaimPolicy,
+		AllowVolumeExpansion: AllowVolumeExpansion,
+		VolumeBindingMode:    &VolumeBinding,
+		AllowedTopologies:    allowedTopologies,
+	}
+
+	k8storage := schedstorage.Instance()
+	_, err := k8storage.CreateStorageClass(&scObj)
+	return err
+}
+
+// CreateFlashPVCOnCluster Creates PVC on the Cluster
+func CreateFlashPVCOnCluster(pvcName string, scName string, nameSpace string, sizeGb string) error {
+	log.InfoD("creating PVC [%s] in namespace [%s]", pvcName, nameSpace)
+	pvcObj := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: nameSpace,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			StorageClassName: &scName,
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse(sizeGb),
+				},
+			},
+		},
+	}
+	_, err := core.Instance().CreatePersistentVolumeClaim(pvcObj)
+	return err
+}
+
+// GetAllPVCFromNs returns all PVC's Created on specific NameSpace
+func GetAllPVCFromNs(nsName string, labelSelector map[string]string) ([]corev1.PersistentVolumeClaim, error) {
+	pvcList, err := core.Instance().GetPersistentVolumeClaims(nsName, labelSelector)
+	if err != nil {
+		return nil, err
+	}
+	return pvcList.Items, nil
+}
+
+// Returns details about cloud drives present in the cluster
+type CloudConfig struct {
+	Type              string            `json:"Type"`
+	Size              int               `json:"Size"`
+	ID                string            `json:"ID"`
+	PoolID            string            `json:"PoolID"`
+	Path              string            `json:"Path"`
+	Iops              int               `json:"Iops"`
+	Vpus              int               `json:"Vpus"`
+	PXType            string            `json:"PXType"`
+	State             string            `json:"State"`
+	Labels            map[string]string `json:"labels"`
+	AttachOptions     interface{}       `json:"AttachOptions"`
+	Provisioner       string            `json:"Provisioner"`
+	EncryptionKeyInfo string            `json:"EncryptionKeyInfo"`
+}
+
+type CloudData struct {
+	Configs            map[string]CloudConfig `json:"Configs"`
+	NodeID             string                 `json:"NodeID"`
+	ReservedInstanceID string                 `json:"ReservedInstanceID"`
+	SchedulerNodeName  string                 `json:"SchedulerNodeName"`
+	NodeIndex          int                    `json:"NodeIndex"`
+	CreateTimestamp    time.Time              `json:"CreateTimestamp"`
+	InstanceID         string                 `json:"InstanceID"`
+	Zone               string                 `json:"Zone"`
+	State              string                 `json:"State"`
+	Labels             map[string]string      `json:"labels"`
+}
+
+// GetCloudDriveDetailsOnCluster returns list of cloud drives on the cluster
+func GetCloudDriveList() (*map[string]CloudData, error) {
+	var data map[string]CloudData
+	allNodes := node.GetStorageNodes()
+	for _, eachNode := range allNodes {
+
+		stNode, err := Inst().V.GetDriverNode(&eachNode)
+		if err != nil {
+			return nil, err
+		}
+		if stNode.Status != opsapi.Status_STATUS_OK {
+			continue
+		}
+		command := "pxctl cd list -j"
+		output, err := runCmdOnce(command, eachNode)
+		log.Infof("%v", err)
+		if err != nil {
+			return nil, err
+		}
+
+		err = json.Unmarshal([]byte(output), &data)
+		if err != nil {
+			fmt.Println("Error:", err)
+			return nil, err
+		}
+		break
+	}
+	log.Infof("%v", &data)
+	return &data, nil
+
+}
+
+// GetCloudDrivesOnSpecificNode Returns details of all Cloud drives from specific Node
+func GetCloudDrivesOnSpecificNode(n *node.Node) (*CloudData, error) {
+	allCloudDrives, err := GetCloudDriveList()
+	if err != nil {
+		return nil, err
+	}
+	for nodeId, cList := range *allCloudDrives {
+		if nodeId == n.Id {
+			return &cList, nil
+		}
+	}
+	return nil, fmt.Errorf("Failed to get Cloud Drive on Specific Node [%v]", n.Name)
+}
+
+// IsPureCluster returns True if backend Type is Pure
+func IsPureCluster() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsPure(stc) {
+			logrus.Infof("Pure installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
+}
+
+// IsPureCloudProvider Returns true if cloud Provider is Pure
+func IsPureCloudProvider() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.GetCloudProvider(stc) == "pure" {
+			return true
+		}
+	}
+	return false
+}
+
+// GetMultipathDeviceOnPool Returns list of multipath devices on Pool
+func GetMultipathDeviceOnPool(n *node.Node) (map[string][]string, error) {
+	multipathMap := make(map[string][]string)
+
+	// Get All Multipath Devices on the perticular Node
+	allMultipathDev, err := GetMultipathDeviceIDsOnNode(n)
+	if err != nil {
+		return nil, err
+	}
+
+	allPools, err := Inst().V.GetPoolDrives(n)
+	if err != nil {
+		return nil, err
+	}
+
+	for eachPoolId, eachDev := range allPools {
+		for _, dev := range eachDev {
+			for _, multiDev := range allMultipathDev {
+				if strings.Contains(dev.Device, multiDev) {
+					multipathMap[eachPoolId] = append(multipathMap[eachPoolId], multiDev)
+				}
+			}
+		}
+	}
+	return multipathMap, nil
+}
+
+func CreatePortworxStorageClass(scName string, ReclaimPolicy corev1.PersistentVolumeReclaimPolicy, VolumeBinding storageapi.VolumeBindingMode, params map[string]string) (*storageapi.StorageClass, error) {
+	v1obj := metav1.ObjectMeta{
+		Name: scName,
+	}
+	scObj := storageapi.StorageClass{
+		ObjectMeta:        v1obj,
+		Provisioner:       k8s.PortworxVolumeProvisioner,
+		Parameters:        params,
+		ReclaimPolicy:     &ReclaimPolicy,
+		VolumeBindingMode: &VolumeBinding,
+	}
+	k8sStorage := schedstorage.Instance()
+	sc, err := k8sStorage.CreateStorageClass(&scObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CsiSnapshot storage class: %s.Error: %v", scName, err)
+	}
+	return sc, err
+}
+
+// Checks if list of volumes are present in group of flash arrays declared in pure.json and vice versa
+func CheckVolumesExistinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, NoVolumeExists bool) error {
+	/*
+		pvcFadaMap is a map which has volume name as key and value will NoVolume boolean value , once we find volume we mark it as true and after the loop
+		we check if all volumes are marked as true and vice versa once we try to check deleted volumes
+	*/
+	/*
+		NoVolumeExists is a boolean value which is used to check if we are checking for volume existence or deleted volume existence
+		NoVolumeExists -- false , means all volume names initially marked false and if we find volume in FA mark it as true
+		NoVolumeExists -- true , means all volume names initially marked true and if we don't find volume in FA mark it as false
+	*/
+	pvcFadaMap := make(map[string]bool)
+	for _, volumeName := range listofFadaPvc {
+		pvcFadaMap[volumeName] = NoVolumeExists
+	}
+	for _, fa := range flashArrays {
+		faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
+		if err != nil {
+			log.InfoD("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+			return err
+		}
+		for _, volumeName := range listofFadaPvc {
+			if !NoVolumeExists {
+				//This is to make sure we dont iterate through volumes which are already found in one FA,which means the value for that volume name is already true
+				if pvcFadaMap[volumeName] {
+					continue
+				}
+			}
+			volName, err := GetVolumeCompleteNameOnFA(faClient, volumeName)
+			if volName != "" {
+				// As we found the volume we mark corresponding volume as true
+				log.Infof("Volume [%v] exists on FA [%v]", volName, fa.MgmtEndPoint)
+				pvcFadaMap[volumeName] = true
+
+			} else if err != nil && volName == "" {
+				log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v] on FA [%v]", volumeName, fa.MgmtEndPoint))
+
+			} else {
+				log.Infof("Volume [%v] does not exist on FA [%v]", volumeName, fa.MgmtEndPoint)
+				pvcFadaMap[volumeName] = false
+			}
+		}
+	}
+	// Loop through the map to check the volume status
+	for FadaVol, volStatus := range pvcFadaMap {
+		if NoVolumeExists {
+			// when NoVolumeExists is true, we dont want any volume to be present in FA
+			if volStatus {
+				return fmt.Errorf("PVC %s exists in FA", FadaVol)
+			}
+		} else {
+			// when Novolume is false, we want all volumes to be present in FA
+			if !volStatus {
+				return fmt.Errorf("PVC %s does not exist", FadaVol)
+			}
+		}
+	}
+	return nil
+}
+
+// Checks if list of volumes are present in group of flash blades declared in pure.json and vice versa
+func CheckVolumesExistinFB(flashBlades []pureutils.FlashBladeEntry, listofFbdaPvc []string, NoVolumeExists bool) error {
+	/*
+		pvcFbdaMap is a map which has volume name as key and value will NoVolume boolean value , once we find volume we mark it as true and after the loop
+		we check if all volumes are marked as true and vice versa once we try to check deleted volumes
+	*/
+	/*
+		NoVolumeExists is a boolean value which is used to check if we are checking for volume existence or deleted volume existence
+		NoVolumeExists -- false , means all volume names initially marked false and if we find volume in FA mark it as true
+		NoVolumeExists -- true , means all volume names initially marked true and if we don't find volume in FA mark it as false
+	*/
+	pvcFbdaMap := make(map[string]bool)
+	for _, volumeName := range listofFbdaPvc {
+		pvcFbdaMap[volumeName] = NoVolumeExists
+	}
+	for _, fb := range flashBlades {
+		fbClient, err := pureutils.PureCreateFbClientAndConnect(fb.MgmtEndPoint, fb.APIToken)
+		if err != nil {
+			return err
+		}
+		for _, volumeName := range listofFbdaPvc {
+			if !NoVolumeExists {
+				if pvcFbdaMap[volumeName] {
+					continue
+				}
+			}
+			FsFullName, nameErr := pureutils.GetFilesystemFullName(fbClient, volumeName)
+			log.FailOnError(nameErr, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
+			if FsFullName != "" {
+				log.Infof("Volume [%v] exists on FB [%v]", volumeName, fb.MgmtEndPoint)
+				pvcFbdaMap[volumeName] = true
+			} else if err != nil && FsFullName == "" {
+				log.FailOnError(err, fmt.Sprintf("Failed to get volume name for volume [%v] on FB [%v]", volumeName, fb.MgmtEndPoint))
+			} else {
+				log.Infof("Volume [%v] does not exist on FB [%v]", volumeName, fb.MgmtEndPoint)
+				pvcFbdaMap[volumeName] = false
+			}
+		}
+	}
+	for FbdaVol, volStatus := range pvcFbdaMap {
+		if NoVolumeExists {
+			if volStatus {
+				return fmt.Errorf("PVC %s exists in FB", FbdaVol)
+			}
+		} else {
+			if !volStatus {
+				return fmt.Errorf("PVC %s does not exist", FbdaVol)
+			}
+		}
+	}
+	return nil
+}
+func CheckIopsandBandwidthinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPvc []string, reqBandwidth uint64, reqIops uint64) error {
+	pvcFadaMap := make(map[string]bool)
+	for _, volumeName := range listofFadaPvc {
+		pvcFadaMap[volumeName] = false
+	}
+	for _, fa := range flashArrays {
+		faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+		log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
+		volumes, err := pureutils.ListAllVolumesFromFA(faClient)
+		log.FailOnError(err, "Failed to list all volumes from FA")
+		for _, volname := range listofFadaPvc {
+			if pvcFadaMap[volname] {
+				continue
+			}
+			for _, volume := range volumes {
+				for _, volItem := range volume.Items {
+					if strings.Contains(volItem.Name, volname) {
+						bandwidth := volItem.QoS.BandwidthLimit
+						bandwidth = bandwidth / units.GiB
+						log.InfoD("bandwidth for volume [%v] is [%v]", volname, bandwidth)
+						iops := volItem.QoS.IopsLimit
+						log.FailOnError(err, "Failed to convert iops to int")
+						log.InfoD("iops for volume [%v] is [%v]", volname, iops)
+						//compare bandwidth and iops with max_iops and max_bandwidth
+						if bandwidth < reqBandwidth || iops < reqIops {
+							pvcFadaMap[volname] = false
+						} else {
+							pvcFadaMap[volname] = true
+						}
+					}
+				}
+			}
+		}
+	}
+	for FadaVol, volStatus := range pvcFadaMap {
+		if !volStatus {
+			return fmt.Errorf("PVC %s does not have required iops and bandwidth", FadaVol)
+		}
+	}
+	return nil
+
+}
+
+// RunCmdsOnAllMasterNodes Runs a set of commands on all the master nodes
+func RunCmdsOnAllMasterNodes(cmds []string) error {
+	for _, node := range node.GetMasterNodes() {
+		for _, cmd := range cmds {
+			log.InfoD(fmt.Sprintf("Running command %s on %s", cmd, node.Name))
+			_, err := runCmdOnceNonRoot(cmd, node)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// ConfigureClusterLevelPSA Configure cluster level PSA settings where all newly created namespaces will be affected by
+// it and will exclude kube-system, default, px-backup and portworx namespace
+func ConfigureClusterLevelPSA(psaProfile string, skipNamespace []string) error {
+
+	// Get the namespace where portworx is present
+	pxNs, err := Inst().S.GetPortworxNamespace()
+	if err != nil {
+		return err
+	}
+
+	// Get the namespace where px-backup is present
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		log.InfoD("%s", err)
+	}
+
+	// Create a list of all the namespaces which need to be excluded
+	namespaces := []string{"default", "kube-system"}
+	if pxNs != "kube-system" {
+		namespaces = append(namespaces, pxNs)
+	}
+	if pxBackupNamespace != "" {
+		namespaces = append(namespaces, pxBackupNamespace)
+	}
+	namespaces = append(namespaces, skipNamespace...)
+	joined := "\"" + strings.Join(namespaces, "\",\"") + "\""
+
+	tempFilePath := kubeApiServerConfigFilePath + ".tmp"
+
+	cmds := []string{
+		fmt.Sprintf("mkdir -p /etc/kubernetes/admission"),
+		fmt.Sprintf("curl -o %s http://kubevirt-disk-registry.pwx.dev.purestorage.com/more_images/admissioncontroller.yaml", KubeAdmissionControllerFilePath),
+		fmt.Sprintf("sed -i 's/{Profile}/%s/' %s", psaProfile, KubeAdmissionControllerFilePath),
+		fmt.Sprintf("sed -i 's/{NS}/%s/' %s", joined, KubeAdmissionControllerFilePath),
+		fmt.Sprintf("cat  %s > %s", kubeApiServerConfigFilePath, tempFilePath),
+		fmt.Sprintf(`sed -i -e '/- kube-apiserver/a\ \ \  - --admission-control-config-file=/etc/kubernetes/admission/admissioncontroller.yaml' %s`, tempFilePath),
+		fmt.Sprintf(`sed -i -e '/volumeMounts:/a\ \ \  - mountPath: /etc/kubernetes/admission/\n\ \ \ \ \ \ name: admission-conf\n\ \ \ \ \ \ readOnly: true' %s`, tempFilePath),
+		fmt.Sprintf(`sed -i -e '/volumes:/a\  - hostPath:\n\ \ \ \ \ \ path: /etc/kubernetes/admission/\n\ \ \ \ \ \ type: DirectoryOrCreate\n\ \ \ \ name: admission-conf' %s`, tempFilePath),
+		fmt.Sprintf("cat  %s > %s", kubeApiServerConfigFilePath, kubeApiServerConfigFilePathBkp),
+		fmt.Sprintf("mv %s %s", tempFilePath, kubeApiServerConfigFilePath),
+	}
+	log.Infof(fmt.Sprintf("%s", strings.Join(cmds, "\n")))
+	// Run the above set of commands in all the master nodes
+	err = RunCmdsOnAllMasterNodes(cmds)
+	if err != nil {
+		return err
+	}
+
+	// Sleeping till the kubeAPI server comes up
+	time.Sleep(KubeApiServerWait)
+
+	// Wait for cluster to be in normal state
+	t := func() (interface{}, bool, error) {
+		if _, err := core.Instance().GetPods("kube-system", nil); err == nil {
+			return "", false, nil
+		}
+
+		return "", true, nil
+	}
+
+	_, err = task.DoRetryWithTimeout(t, kubeApiServerBringUpTimeout, KubeApiServerWait)
+	if err != nil {
+		return fmt.Errorf("API server didn't come up after change")
+	}
+	return nil
+}
+
+// RevertClusterLevelPSA Revert cluster level PSA settings set in the previous release
+func RevertClusterLevelPSA() error {
+
+	tempFilePath := kubeApiServerConfigFilePath + ".tmp"
+
+	cmds := []string{
+		fmt.Sprintf("mv %s %s", kubeApiServerConfigFilePath, tempFilePath),
+		fmt.Sprintf("mv %s %s", kubeApiServerConfigFilePathBkp, kubeApiServerConfigFilePath),
+		fmt.Sprintf("rm -rf %s", tempFilePath),
+		fmt.Sprintf("rm -rf /etc/kubernetes/admission"),
+	}
+
+	// Run the above set of commands in all the master nodes
+	err := RunCmdsOnAllMasterNodes(cmds)
+	if err != nil {
+		return err
+	}
+
+	// Sleeping till the kubeAPI server comes up
+	time.Sleep(KubeApiServerWait)
+
+	// Wait for cluster to be in normal state
+	t := func() (interface{}, bool, error) {
+		if _, err := core.Instance().GetPods("kube-system", nil); err == nil {
+			return "", false, nil
+		}
+
+		return "", true, nil
+	}
+
+	_, err = task.DoRetryWithTimeout(t, kubeApiServerBringUpTimeout, KubeApiServerWait)
+	if err != nil {
+		return fmt.Errorf("API server didn't come up after change")
+	}
+	return nil
+}
+
+// VerifyClusterLevelPSA Verify if the cluster level PSA settings are set correctly
+func VerifyClusterlevelPSA() error {
+	pods, err := core.Instance().GetPods("kube-system", map[string]string{"component": "kube-apiserver"})
+	if err != nil {
+		return err
+	}
+	command := pods.Items[0].Spec.Containers[0].Command
+	commandOpt := "--admission-control-config-file=/etc/kubernetes/admission/admissioncontroller.yaml"
+	if !strings.Contains(strings.Join(command, ""), commandOpt) {
+		return fmt.Errorf("PSA settings not reflecting in pod!")
+	}
+	return nil
+}
+
+// DeleteFilesFromS3Bucket deletes any supplied file from the supplied bucket
+func DeleteFilesFromS3Bucket(bucketName string, fileName string) error {
+	id, secret, endpoint, s3Region, disableSslBool := s3utils.GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSslBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	if err != nil {
+		return fmt.Errorf("Failed to get S3 session to remove specific files: [%v]", err)
+	}
+
+	s3Client := s3.New(sess)
+
+	// List objects in the bucket.
+	listInput := &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+	}
+	listOutput, err := s3Client.ListObjectsV2(listInput)
+	if err != nil {
+		return fmt.Errorf("Failed to list objects in S3 bucket: [%v]", err)
+	}
+
+	// Filter objects that contain the fileName in their key.
+	var objectsToDelete []*s3.ObjectIdentifier
+	for _, item := range listOutput.Contents {
+		if strings.Contains(*item.Key, fileName) {
+			objectsToDelete = append(objectsToDelete, &s3.ObjectIdentifier{
+				Key: item.Key,
+			})
+		}
+	}
+	if len(objectsToDelete) == 0 {
+		return nil
+	}
+
+	// Create a batch delete request.
+	deleteInput := &s3.DeleteObjectsInput{
+		Bucket: aws.String(bucketName),
+		Delete: &s3.Delete{
+			Objects: objectsToDelete,
+		},
+	}
+	keys := make([]string, len(deleteInput.Delete.Objects))
+	for i, obj := range deleteInput.Delete.Objects {
+		keys[i] = *obj.Key
+	}
+	bucket := *deleteInput.Bucket
+
+	// Delete the filtered objects.
+	_, err = s3Client.DeleteObjects(deleteInput)
+	if err != nil {
+		return fmt.Errorf("Failed to delete objects from S3 bucket: [%v]", err)
+	}
+	log.Infof("The files %v are successfully deleted from the bucket [%s]", keys, bucket)
+	return nil
+}
+
+// CreateNamespaceAndAssignLabels Creates a namespace and assigns labels to it
+func CreateNamespaceAndAssignLabels(namespace string, labels map[string]string) error {
+	t := func() (interface{}, bool, error) {
+		nsSpec := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   namespace,
+				Labels: labels,
+			},
+		}
+		ns, err := k8sCore.CreateNamespace(nsSpec)
+
+		if k8serrors.IsAlreadyExists(err) {
+			if ns, err = k8sCore.GetNamespace(namespace); err == nil {
+				return ns, false, nil
+			}
+		}
+		return ns, false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, NSWaitTimeout, NSWaitTimeoutRetry)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetClusterName method returns the cluster name whose kubeconfig is passed
+func GetClusterName(kubeConfigFile string) (string, error) {
+	cmd := fmt.Sprintf("kubectl config view  --kubeconfig=%v -o=json | jq -r '.clusters[].name'", kubeConfigFile)
+	output, _, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return "", err
+	}
+	return output, nil
+}
+
+// GetUniqueElementsFromList gets unique elements from a list
+func GetUniqueElementsFromList(input []string) []string {
+	uniqueMap := make(map[string]bool)
+	uniqueSlice := make([]string, 0)
+
+	for _, element := range input {
+		if !uniqueMap[element] {
+			uniqueMap[element] = true
+			uniqueSlice = append(uniqueSlice, element)
+		}
+	}
+
+	return uniqueSlice
+}
+
+func GetVolumeNamefromPVC(namespace string) ([]string, error) {
+	var pvclist []string
+	allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	if err != nil {
+		log.InfoD("error getting pvcs from namespace [%s]", namespace)
+		return nil, err
+	}
+	for _, p := range allPvcList.Items {
+		pvclist = append(pvclist, p.Spec.VolumeName)
+		return pvclist, nil
+	}
+	return nil, fmt.Errorf("No PVCs found in namespace [%s]", namespace)
 }

@@ -15,12 +15,18 @@ const (
 	LabelValueTrue = "true"
 	// AnnotationGarbageCollection is the annotation to let operator clean up external objects on uninstallation.
 	AnnotationGarbageCollection = OperatorPrefix + "/garbage-collection"
+	// AnnotationEvictVMsDuringUpdate is the annotation to let operator evict VMs during upgrade
+	AnnotationEvictVMsDuringUpdate = OperatorPrefix + "/evict-vms-during-update"
 	// AnnotationNodeLabels is the storage pod annotation that contains node labels
 	AnnotationNodeLabels = OperatorPrefix + "/node-labels"
 	// AnnotationDisableStorage annotation to disable the storage pods from running (default: false)
 	AnnotationDisableStorage = OperatorPrefix + "/disable-storage"
 	// AnnotationReconcileObject annotation to toggle reconciliation of operator created objects
 	AnnotationReconcileObject = OperatorPrefix + "/reconcile"
+	// AnnotationControllerRevisionHashKey has the controller revision hash for which a VM live migration was triggered
+	AnnotationControllerRevisionHashKey = OperatorPrefix + "/controller-revision-hash"
+	// AnnotationVMIMigrationSourceNode has the source node for the VM live migration triggered by the operator
+	AnnotationVMIMigrationSourceNode = OperatorPrefix + "/vmi-migration-source-node"
 	// AnnotationClusterAPIMachine is the annotation key name for the name of the
 	// machine that's backing the k8s node
 	AnnotationClusterAPIMachine = "cluster.k8s.io/machine"
@@ -30,6 +36,8 @@ const (
 	// AnnotationPodSafeToEvict annotation tells cluster autoscaler whether the
 	// pod is safe to be evicted when scaling down a node
 	AnnotationPodSafeToEvict = "cluster-autoscaler.kubernetes.io/safe-to-evict"
+	// AnnotationOpenshiftRequiredSCC is the annotation for the required SCC (Security Context Constraints) in OpenShift
+	AnnotationOpenshiftRequiredSCC = "openshift.io/required-scc"
 	// AnnotationForceContinueUpdate annotation to force continue paused updates of storage pods (default: false)
 	AnnotationForceContinueUpdate = OperatorPrefix + "/force-continue-update"
 	// AnnotationCommonImageRegistries annotation contains the common image registries, separated by comma.
@@ -37,11 +45,16 @@ const (
 	// the custom registry, there is a list of hardcoded common registries, however the list
 	// may not be complete, users can use this annotation to add more.
 	AnnotationCommonImageRegistries = OperatorPrefix + "/common-image-registries"
+	// AnnotationUnschedulable tells Stork to consider the node unschedulable
+	AnnotationUnschedulable = OperatorPrefix + "/unschedulable"
 	// OperatorLabelManagedByKey is a label key that is added to any object that is
 	// managed the Portworx operator.
 	OperatorLabelManagedByKey = OperatorPrefix + "/managed-by"
 	// OperatorLabelManagedByValue indicates that the object is managed by portworx.
 	OperatorLabelManagedByValue = "portworx"
+	// OperatorLabelNodeNameKey holds the value of the kubernetes node on whcih the portworx pod is running
+	// Used for creating a Node PDB
+	OperatorLabelNodeNameKey = OperatorPrefix + "/node-name"
 )
 
 const (
@@ -57,5 +70,6 @@ var (
 	KnownStoragePodAnnotations = []string{
 		AnnotationNodeLabels,
 		AnnotationPodSafeToEvict,
+		AnnotationOpenshiftRequiredSCC,
 	}
 )

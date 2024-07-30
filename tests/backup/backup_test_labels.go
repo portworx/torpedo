@@ -28,7 +28,6 @@ const (
 	ManualAndScheduledBackupUsingNamespaceAndResourceLabel                             TestCaseName = "ManualAndScheduledBackupUsingNamespaceAndResourceLabel"
 	ScheduleBackupWithAdditionAndRemovalOfNS                                           TestCaseName = "ScheduleBackupWithAdditionAndRemovalOfNS"
 	ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit                                TestCaseName = "ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit"
-	ManualAndScheduleBackupUsingNamespaceLabel                                         TestCaseName = "ManualAndScheduleBackupUsingNamespaceLabel"
 	NamespaceLabelledBackupOfEmptyNamespace                                            TestCaseName = "NamespaceLabelledBackupOfEmptyNamespace"
 	DeleteNfsExecutorPodWhileBackupAndRestoreInProgress                                TestCaseName = "DeleteNfsExecutorPodWhileBackupAndRestoreInProgress"
 	SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProject                   TestCaseName = "SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProject"
@@ -123,6 +122,18 @@ const (
 	BackupToLockedBucketWithSharedObjects                                              TestCaseName = "BackupToLockedBucketWithSharedObjects"
 	RemoveJSONFilesFromNFSBackupLocation                                               TestCaseName = "RemoveJSONFilesFromNFSBackupLocation"
 	CloudSnapshotMissingValidationForNFSLocation                                       TestCaseName = "CloudSnapshotMissingValidationForNFSLocation"
+	MultipleProvisionerCsiKdmpBackupAndRestore                                         TestCaseName = "MultipleProvisionerCsiKdmpBackupAndRestore"
+	KubevirtVMMigrationTest                                                            TestCaseName = "KubevirtVMMigrationTest"
+	EnableNsAndClusterLevelPSAWithBackupAndRestore                                     TestCaseName = "EnableNsAndClusterLevelPSAWithBackupAndRestore"
+	DummyPSATestcase                                                                   TestCaseName = "DummyPSATestcase"
+	BackupCSIVolumesWithPartialSuccess                                                 TestCaseName = "BackupCSIVolumesWithPartialSuccess"
+	RestoreFromHigherPrivilegedNamespaceToLower                                        TestCaseName = "RestoreFromHigherPrivilegedNamespaceToLower"
+	BackupStateTransitionForScheduledBackups                                           TestCaseName = "BackupStateTransitionForScheduledBackups"
+	PartialBackupSuccessWithPxVolumes                                                  TestCaseName = "PartialBackupSuccessWithPxVolumes"
+	PartialBackupSuccessWithPxAndKDMPVolumes                                           TestCaseName = "PartialBackupSuccessWithPxAndKDMPVolumes"
+	PartialBackupWithLowerStorkVersion                                                 TestCaseName = "PartialBackupWithLowerStorkVersion"
+	PartialBackupSuccessWithAzureEndpoint                                              TestCaseName = "PartialBackupSuccessWithAzureEndpoint"
+	PSALowerPrivilegeToHigherPrivilegeWithProjectMapping                               TestCaseName = "PSALowerPrivilegeToHigherPrivilegeWithProjectMapping"
 )
 
 // Test case labels
@@ -150,7 +161,6 @@ const (
 	ManualAndScheduledBackupUsingNamespaceAndResourceLabelLabel                             TestCaseLabel = "ManualAndScheduledBackupUsingNamespaceAndResourceLabel"
 	ScheduleBackupWithAdditionAndRemovalOfNSLabel                                           TestCaseLabel = "ScheduleBackupWithAdditionAndRemovalOfNS"
 	ManualAndScheduleBackupUsingNSLabelWithMaxCharLimitLabel                                TestCaseLabel = "ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit"
-	ManualAndScheduleBackupUsingNamespaceLabelLabel                                         TestCaseLabel = "ManualAndScheduleBackupUsingNamespaceLabel"
 	NamespaceLabelledBackupOfEmptyNamespaceLabel                                            TestCaseLabel = "NamespaceLabelledBackupOfEmptyNamespace"
 	DeleteNfsExecutorPodWhileBackupAndRestoreInProgressLabel                                TestCaseLabel = "DeleteNfsExecutorPodWhileBackupAndRestoreInProgress"
 	SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProjectLabel                   TestCaseLabel = "SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProject"
@@ -245,6 +255,18 @@ const (
 	BackupToLockedBucketWithSharedObjectsLabel                                              TestCaseLabel = "BackupToLockedBucketWithSharedObjects"
 	RemoveJSONFilesFromNFSBackupLocationLabel                                               TestCaseLabel = "RemoveJSONFilesFromNFSBackupLocation"
 	CloudSnapshotMissingValidationForNFSLocationLabel                                       TestCaseLabel = "CloudSnapshotMissingValidationForNFSLocation"
+	MultipleProvisionerCsiKdmpBackupAndRestoreLabel                                         TestCaseLabel = "MultipleProvisionerCsiKdmpBackupAndRestore"
+	KubevirtVMMigrationTestLabel                                                            TestCaseLabel = "KubevirtVMMigrationTest"
+	BackupCSIVolumesWithPartialSuccessLabel                                                 TestCaseLabel = "BackupCSIVolumesWithPartialSuccess"
+	BackupStateTransitionForScheduledBackupsLabel                                           TestCaseLabel = "BackupStateTransitionForScheduledBackups"
+	EnableNsAndClusterLevelPSAWithBackupAndRestoreLabel                                     TestCaseLabel = "EnableNsAndClusterLevelPSAWithBackupAndRestore"
+	RestoreFromHigherPrivilegedNamespaceToLowerLabel                                        TestCaseLabel = "RestoreFromHigherPrivilegedNamespaceToLower"
+	PartialBackupSuccessWithPxVolumesLabel                                                  TestCaseLabel = "PartialBackupSuccessWithPxVolumes"
+	PartialBackupSuccessWithPxAndKDMPVolumesLabel                                           TestCaseLabel = "PartialBackupSuccessWithPxAndKDMPVolumes"
+	PartialBackupWithLowerStorkVersionLabel                                                 TestCaseLabel = "PartialBackupWithLowerStorkVersion"
+	PartialBackupSuccessWithAzureEndpointLabel                                              TestCaseLabel = "PartialBackupSuccessWithAzureEndpoint"
+	PsaTakeBackupInLowerPrevilegeRestoreInHigherPrivilege                                   TestCaseLabel = "PsaTakeBackupInLowerPrevilegeRestoreInHigherPrivilege"
+	PSALowerPrivilegeToHigherPrivilegeWithProjectMappingLabel                               TestCaseLabel = "PSALowerPrivilegeToHigherPrivilegeWithProjectMapping"
 )
 
 // Common Labels
@@ -303,6 +325,7 @@ const (
 	ocpPxPipelineS3Upgrade                     = "ocp-px-pipeline-s3-upgrade"
 	ibmNonPxRoksPipelineS3Upgrade              = "ibm-nonpx-roks-pipeline-s3-upgrade"
 	VanillaPipelineS3StorkUpgrade              = "vanilla-pipeline-s3-stork-upgrade"
+	rkePipelineNightly                         = "rke-pipeline-nightly"
 )
 
 // Aetos lN labels
@@ -367,13 +390,19 @@ const (
 
 // Backup location labels
 const (
-	NfsBackupLocationLabel = "nfs"
-	S3BackupLocationLabel  = "s3"
+	NfsBackupLocationLabel   = "nfs"
+	S3BackupLocationLabel    = "s3"
+	AzureBackupLocationLabel = "Azure"
 )
 
 // App labels
 const (
 	KubevirtAppLabel = "kubevirt-app"
+)
+
+// Feature labels
+const (
+	PartialBackupLabel = "PartialBackup"
 )
 
 var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
@@ -397,10 +426,9 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	SwapShareBackup:                                                  {SwapShareBackupLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
 	NamespaceLabelledBackupSharedWithDifferentAccessMode:             {NamespaceLabelledBackupSharedWithDifferentAccessModeLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
 	BackupScheduleForOldAndNewNS:                                     {BackupScheduleForOldAndNewNSLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ManualAndScheduledBackupUsingNamespaceAndResourceLabel:           {ManualAndScheduledBackupUsingNamespaceAndResourceLabelLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
+	ManualAndScheduledBackupUsingNamespaceAndResourceLabel:           {ManualAndScheduledBackupUsingNamespaceAndResourceLabelLabel, aetosl1aws, aetosl1nfs, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
 	ScheduleBackupWithAdditionAndRemovalOfNS:                         {ScheduleBackupWithAdditionAndRemovalOfNSLabel, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
 	ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit:              {ManualAndScheduleBackupUsingNSLabelWithMaxCharLimitLabel, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ManualAndScheduleBackupUsingNamespaceLabel:                       {ManualAndScheduleBackupUsingNamespaceLabelLabel, aetosl1aws, aetosl1nfs, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3nfsrke, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
 	NamespaceLabelledBackupOfEmptyNamespace:                          {NamespaceLabelledBackupOfEmptyNamespaceLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmNonPxRoksPipelineS3, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
 	DeleteNfsExecutorPodWhileBackupAndRestoreInProgress:              {DeleteNfsExecutorPodWhileBackupAndRestoreInProgressLabel},
 	SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProject: {SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProjectLabel, aetosl3awsrke, aetosl3nfsrke},
@@ -489,9 +517,19 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	BackupNetworkErrorTest:                                           {BackupNetworkErrorTestLabel},
 	IssueMultipleBackupsAndRestoreInterleavedCopies:                  {IssueMultipleBackupsAndRestoreInterleavedCopiesLabel},
 	ValidateFiftyVolumeBackups:                                       {ValidateFiftyVolumeBackupsLabel},
-	BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResumeSuspendBackupPolicies: {BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResumeSuspendBackupPoliciesLabel},
-	PXBackupClusterUpgradeTest:                   {PXBackupClusterUpgradeTestLabel},
-	BackupToLockedBucketWithSharedObjects:        {BackupToLockedBucketWithSharedObjectsLabel, vanillaPipelineWithS3LockedBucket},
-	RemoveJSONFilesFromNFSBackupLocation:         {RemoveJSONFilesFromNFSBackupLocationLabel},
-	CloudSnapshotMissingValidationForNFSLocation: {CloudSnapshotMissingValidationForNFSLocationLabel},
+	PXBackupClusterUpgradeTest:                                       {PXBackupClusterUpgradeTestLabel},
+	BackupToLockedBucketWithSharedObjects:                            {BackupToLockedBucketWithSharedObjectsLabel, vanillaPipelineWithS3LockedBucket},
+	RemoveJSONFilesFromNFSBackupLocation:                             {RemoveJSONFilesFromNFSBackupLocationLabel},
+	CloudSnapshotMissingValidationForNFSLocation:                     {CloudSnapshotMissingValidationForNFSLocationLabel},
+	MultipleProvisionerCsiKdmpBackupAndRestore:                       {MultipleProvisionerCsiKdmpBackupAndRestoreLabel},
+	KubevirtVMMigrationTest:                                          {KubevirtVMMigrationTestLabel, KubevirtAppLabel},
+	BackupCSIVolumesWithPartialSuccess:                               {BackupCSIVolumesWithPartialSuccessLabel, PartialBackupLabel},
+	BackupStateTransitionForScheduledBackups:                         {BackupStateTransitionForScheduledBackupsLabel, PartialBackupLabel},
+	EnableNsAndClusterLevelPSAWithBackupAndRestore:                   {EnableNsAndClusterLevelPSAWithBackupAndRestoreLabel},
+	RestoreFromHigherPrivilegedNamespaceToLower:                      {RestoreFromHigherPrivilegedNamespaceToLowerLabel, rkePipelineNightly},
+	PartialBackupSuccessWithPxVolumes:                                {PartialBackupSuccessWithPxVolumesLabel, PartialBackupLabel},
+	PartialBackupSuccessWithPxAndKDMPVolumes:                         {PartialBackupSuccessWithPxAndKDMPVolumesLabel, PartialBackupLabel},
+	PartialBackupWithLowerStorkVersion:                               {PartialBackupWithLowerStorkVersionLabel, PartialBackupLabel},
+	PartialBackupSuccessWithAzureEndpoint:                            {PartialBackupSuccessWithAzureEndpointLabel, PartialBackupLabel, AzureBackupLocationLabel},
+	PSALowerPrivilegeToHigherPrivilegeWithProjectMapping:             {PSALowerPrivilegeToHigherPrivilegeWithProjectMappingLabel, rkePipelineNightly},
 }

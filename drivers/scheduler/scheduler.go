@@ -38,6 +38,8 @@ type Context struct {
 	ScheduleOptions ScheduleOptions
 	// SkipVolumeValidation for cases when use volume driver other than portworx
 	SkipVolumeValidation bool
+	// SkipPodValidation for cases when we expect the pods not be ready.
+	SkipPodValidation bool
 	// SkipClusterScopedObject for cases of multi-cluster backup when Storage class does not restored
 	SkipClusterScopedObject bool
 	// RefreshStorageEndpoint force refresh the storage driver endpoint
@@ -67,20 +69,25 @@ func (in *Context) GetID() string {
 
 // AppConfig custom settings
 type AppConfig struct {
-	Replicas             int      `yaml:"replicas"`
-	VolumeSize           string   `yaml:"volume_size"`
-	WorkloadSize         string   `yaml:"workload_size"`
-	ClaimsCount          int      `yaml:"claims_count"`
-	CustomCommand        []string `yaml:"custom_command"`
-	CustomArgs           []string `yaml:"custom_args"`
-	StorageClassSharedv4 string   `yaml:"storage_class_sharedv4"`
-	PVCAccessMode        string   `yaml:"pvc_access_mode"`
-	Repl                 string   `yaml:"repl"`
-	Fs                   string   `yaml:"fs"`
-	AggregationLevel     string   `yaml:"aggregation_level"`
-	IoProfile            string   `yaml:"io_profile"`
-	Journal              string   `yaml:"journal"`
-	DataSize             string   `yaml:"data_size"`
+	Replicas                    int      `yaml:"replicas"`
+	VolumeSize                  string   `yaml:"volume_size"`
+	WorkloadSize                string   `yaml:"workload_size"`
+	ClaimsCount                 int      `yaml:"claims_count"`
+	CustomCommand               []string `yaml:"custom_command"`
+	CustomArgs                  []string `yaml:"custom_args"`
+	StorageClassSharedv4        string   `yaml:"storage_class_sharedv4"`
+	StorageClassPureNfsEndpoint string   `yaml:"storage_class_pure_nfs_endpoint"`
+	PVCAccessMode               string   `yaml:"pvc_access_mode"`
+	Repl                        string   `yaml:"repl"`
+	Fs                          string   `yaml:"fs"`
+	AggregationLevel            string   `yaml:"aggregation_level"`
+	IoProfile                   string   `yaml:"io_profile"`
+	Journal                     string   `yaml:"journal"`
+	DataSize                    string   `yaml:"data_size"`
+	VmID                        string   `yaml:"vm_id"`
+	PureFaPodName               string   `yaml:"pure_fa_pod_name"`
+	FsType                      string   `yaml:"csi.storage.k8s.io/fstype"`
+	CreateOptions               string   `yaml:"createoptions"`
 }
 
 // InitOptions initialization options
@@ -112,6 +119,8 @@ type InitOptions struct {
 	PureVolumes bool
 	// PureSANType identifies which SAN type is being used for Pure volumes
 	PureSANType string
+	// PureFADAPod identifies what FA Pod to place FADA volumes in. This Pod must already exist, and be in the same Realm matching the px-pure-secret
+	PureFADAPod string
 	// RunCSISnapshotAndRestoreManyTest identifies if Pure clone many test is enabled
 	RunCSISnapshotAndRestoreManyTest bool
 	//SecureApps identifies apps to be deployed with secure annotation in storage class
@@ -152,6 +161,8 @@ type ScheduleOptions struct {
 	Namespace string
 	// TopoLogy Labels
 	TopologyLabels []map[string]string
+	// PureFAPodName is the pod name which resides in FlashArray
+	PureFAPodName string
 }
 
 // Driver must be implemented to provide test support to various schedulers.
@@ -223,7 +234,13 @@ type Driver interface {
 	DeleteSnapShot(ctx *Context, snapshotName, snapshotNameSpace string) error
 
 	// GetSnapshotsInNameSpace get the snapshots list for the namespace
-	GetSnapshotsInNameSpace(ctx *Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error)
+	GetSnapshotsInNameSpace(ctx *Context, snapshotNameSpace string) (*volsnapv1.VolumeSnapshotList, error)
+
+	//DeleteCsiSnapshotsFromNamespace deletes the all snapshots from a namespace
+	DeleteCsiSnapshotsFromNamespace(ctx *Context, namespace string) error
+
+	//IsCsiSnapshotExists checks if a snapshot exists in the particular namespace
+	IsCsiSnapshotExists(ctx *Context, snapshotName string, namespace string) (bool, error)
 
 	// DeleteVolumes will delete all storage volumes for the given context
 	DeleteVolumes(*Context, *VolumeOptions) ([]*volume.Volume, error)
@@ -349,6 +366,12 @@ type Driver interface {
 	// ValidateAutopilotRuleObject validates Autopilot rule object
 	ValidateAutopilotRuleObjects() error
 
+	//WaitForRebalanceAROToComplete waits for rebalance to start
+	WaitForRebalanceAROToComplete() error
+
+	//VerifyPoolResizeARO() error
+	VerifyPoolResizeARO(apRule apapi.AutopilotRule) (bool, error)
+
 	// GetWorkloadSizeFromAppSpec gets workload size from an application spec
 	GetWorkloadSizeFromAppSpec(ctx *Context) (uint64, error)
 
@@ -371,10 +394,19 @@ type Driver interface {
 	DeleteSecret(namespace, name string) error
 
 	// RecyleNode deletes nodes with given node
-	RecycleNode(n node.Node) error
+	DeleteNode(n node.Node) error
 
 	// CreateCsiSnapshotClass create csi snapshot class
 	CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error)
+
+	// CreateVolumeSnapshotClasses creates a volume snapshot class
+	CreateVolumeSnapshotClasses(snapClassName string, provisioner string, isDefault bool, deletePolicy string) (*volsnapv1.VolumeSnapshotClass, error)
+
+	// CreateVolumeSnapshotClassesWithParameters creates a volume snapshot class with additional parameters
+	CreateVolumeSnapshotClassesWithParameters(snapClassName string, provisioner string, isDefault bool, deletePolicy string, parameters map[string]string) (*volsnapv1.VolumeSnapshotClass, error)
+
+	// DeleteCsiSnapshotClass deletes csi snapshot class
+	DeleteCsiSnapshotClass(snapClassName string) error
 
 	// CreateCsiSnapshot create csi snapshot for given pvc
 	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.
@@ -395,7 +427,7 @@ type Driver interface {
 	CSICloneTest(*Context, CSICloneRequest) error
 
 	// WaitForSinglePVCToBound retries and waits up to 30 minutes for a single PVC to be bound
-	WaitForSinglePVCToBound(pvcName, namespace string) error
+	WaitForSinglePVCToBound(pvcName, namespace string, timeout int) error
 
 	// CreateCsiSnapsForVolumes create csi snapshots for all volumes in a context
 	CreateCsiSnapsForVolumes(*Context, string) (map[string]*volsnapv1.VolumeSnapshot, error)
@@ -430,8 +462,18 @@ type Driver interface {
 	// GetNamespaceLabel gets the labels on given namespace
 	GetNamespaceLabel(namespace string) (map[string]string, error)
 
-	// ScaleCluster scale the cluster to the given replicas
-	ScaleCluster(replicas int) error
+	// GetZones get the zones of cluster
+	GetZones() ([]string, error)
+	// GetASGClusterSize gets node count for an asg cluster
+	GetASGClusterSize() (int64, error)
+
+	// SetASGClusterSize sets node count for an asg cluster
+	SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
+
+	// StopKubelet stops kubelet on the given node
+	StopKubelet(appNode node.Node, opts node.SystemctlOpts) error
+	// StartKubelet starts kubelet on the given node
+	StartKubelet(appNode node.Node, opts node.SystemctlOpts) error
 }
 
 var (

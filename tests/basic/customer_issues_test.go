@@ -5,12 +5,14 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	corev1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math/rand"
 	"strings"
@@ -587,17 +589,10 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 	stepLog := "has to schedule cloud snap  and delete cloudsnaps"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		n := node.GetStorageDriverNodes()[0]
-		uuidCmd := "pxctl cred list -j | grep uuid"
-		output, err := runCmd(uuidCmd, n)
-		log.FailOnError(err, "error getting uuid for cloudsnap credential")
-		if output == "" {
-			log.FailOnError(fmt.Errorf("cloud cred is not created"), "Check for cloud cred exists?")
-		}
 
-		credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
-		credUUID = strings.ReplaceAll(credUUID, "\"", "")
-		log.Infof("Got Cred UUID: %s", credUUID)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
 		contexts = make([]*scheduler.Context, 0)
 		policyName := "intervalpolicy"
 		appScale := 5
@@ -626,6 +621,11 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
 			}
 
+			defer func() {
+				err := storkops.Instance().DeleteSchedulePolicy(policyName)
+				log.FailOnError(err, fmt.Sprintf("error deleting a SchedulePolicy [%s]", policyName))
+			}()
+
 			for i := 0; i < appScale; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cloudsnap-%d", i))...)
 			}
@@ -637,87 +637,109 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 			stepLog = "Verify that cloud snap status"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-
-				for _, ctx := range contexts {
-					var appVolumes []*volume.Volume
-					var err error
-					appNamespace := ctx.App.Key + "-" + ctx.UID
-					log.Infof("Namespace : %v", appNamespace)
-					stepLog = fmt.Sprintf("Getting app volumes for volume %s", ctx.App.Key)
-					Step(stepLog, func() {
-						log.InfoD(stepLog)
-						appVolumes, err = Inst().S.GetVolumes(ctx)
-						log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
-
-						if len(appVolumes) == 0 {
-							log.FailOnError(fmt.Errorf("no volumes found for [%s]", ctx.App.Key), "error getting volumes for [%s]", ctx.App.Key)
+				stopPXValidation := false
+				defer func() {
+					stopPXValidation = true
+				}()
+				go func() {
+					for {
+						err := ValidatePXStatus()
+						dash.VerifySafely(err, nil, "PX should be up on all the nodes")
+						if stopPXValidation {
+							break
 						}
-					})
-					log.Infof("Got volume count : %v", len(appVolumes))
-					scaleFactor := time.Duration(appScale * len(appVolumes))
-					err = Inst().S.ValidateVolumes(ctx, scaleFactor*4*time.Minute, defaultRetryInterval, nil)
-					log.FailOnError(err, "error validating volumes for [%s]", ctx.App.Key)
-
-					for _, v := range appVolumes {
-
-						isPureVol, err := Inst().V.IsPureVolume(v)
-						log.FailOnError(err, "error checking if volume is pure volume")
-						if isPureVol {
-							log.Warnf("Cloud snapshot is not supported for Pure DA volumes: [%s],Skipping cloud snapshot trigger for pure volume.", v.Name)
-							continue
-						}
-
-						snapshotScheduleName := v.Name + "-interval-schedule"
-						log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
-						resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
-						log.FailOnError(err, fmt.Sprintf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace))
-						dash.VerifyFatal(len(resp.Status.Items) > 0, true, fmt.Sprintf("verify snapshots exists for %s", snapshotScheduleName))
-						for _, snapshotStatuses := range resp.Status.Items {
-							if len(snapshotStatuses) > 0 {
-								status := snapshotStatuses[len(snapshotStatuses)-1]
-								if status == nil {
-									log.FailOnError(fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status"), fmt.Sprintf("error getting latest snapshot status for %s", snapshotScheduleName))
-								}
-								status, err = WaitForSnapShotToReady(snapshotScheduleName, status.Name, appNamespace)
-								log.Infof("Snapshot %s has status %v", status.Name, status.Status)
-
-								if status.Status == snapv1.VolumeSnapshotConditionError {
-									log.FailOnError(fmt.Errorf("snapshot: %s failed. status: %v", status.Name, status.Status), fmt.Sprintf("cloud snapshot for %s failed", snapshotScheduleName))
-								}
-								if status.Status != snapv1.VolumeSnapshotConditionPending {
-									log.FailOnError(fmt.Errorf("snapshot: %s not completed. status: %v", status.Name, status.Status), fmt.Sprintf("cloud snapshot for %s stuck in pending state", snapshotScheduleName))
-								}
-
-								if status.Status == snapv1.VolumeSnapshotConditionReady {
-									snapData, err := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
-									log.FailOnError(err, fmt.Sprintf("error getting snapshot data for [%s/%s]", appNamespace, status.Name))
-
-									snapType := snapData.Spec.PortworxSnapshot.SnapshotType
-									log.Infof("Snapshot Type: %v", snapType)
-									if snapType != "cloud" {
-										err = &scheduler.ErrFailedToGetVolumeParameters{
-											App:   ctx.App,
-											Cause: fmt.Sprintf("Snapshot Type: %s does not match", snapType),
-										}
-										log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, status.Name))
-									}
-
-									snapID := snapData.Spec.PortworxSnapshot.SnapshotID
-									log.Infof("Snapshot ID: %v", snapID)
-									if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
-										len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
-										err = &scheduler.ErrFailedToGetVolumeParameters{
-											App:   ctx.App,
-											Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
-										}
-										log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, status.Name))
-									}
-								}
-
-							}
-						}
-
 					}
+
+				}()
+				//validating cloudnsnaps for 30 iterations
+				for i := 1; i <= 30; i++ {
+					log.Infof("validating cloudsnaps iteration : %d", i)
+					for _, ctx := range contexts {
+						var appVolumes []*volume.Volume
+						var err error
+						appNamespace := ctx.App.Key + "-" + ctx.UID
+						log.Infof("Namespace: %v", appNamespace)
+						stepLog = fmt.Sprintf("Getting app volumes for volume %s", ctx.App.Key)
+						Step(stepLog, func() {
+							log.InfoD(stepLog)
+							appVolumes, err = Inst().S.GetVolumes(ctx)
+							log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+
+							if len(appVolumes) == 0 {
+								log.FailOnError(fmt.Errorf("no volumes found for [%s]", ctx.App.Key), "error getting volumes for [%s]", ctx.App.Key)
+							}
+						})
+						log.Infof("Got volume count : %v", len(appVolumes))
+						scaleFactor := time.Duration(appScale * len(appVolumes))
+						err = Inst().S.ValidateVolumes(ctx, scaleFactor*4*time.Minute, defaultRetryInterval, nil)
+						log.FailOnError(err, "error validating volumes for [%s]", ctx.App.Key)
+
+						for _, v := range appVolumes {
+
+							isPureVol, err := Inst().V.IsPureVolume(v)
+							log.FailOnError(err, "error checking if volume is pure volume")
+							if isPureVol {
+								log.Warnf("Cloud snapshot is not supported for Pure DA volumes: [%s],Skipping cloud snapshot trigger for pure volume.", v.Name)
+								continue
+							}
+
+							snapshotScheduleName := v.Name + "-interval-schedule"
+							log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+							resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+							log.FailOnError(err, fmt.Sprintf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace))
+							dash.VerifyFatal(len(resp.Status.Items) > 0, true, fmt.Sprintf("verify snapshots exists for %s", snapshotScheduleName))
+							for _, snapshotStatuses := range resp.Status.Items {
+								if len(snapshotStatuses) > 0 {
+									status := snapshotStatuses[len(snapshotStatuses)-1]
+									if status == nil {
+										log.FailOnError(fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status"), fmt.Sprintf("error getting latest snapshot status for %s", snapshotScheduleName))
+									}
+									status, err = WaitForSnapShotToReady(snapshotScheduleName, status.Name, appNamespace)
+									log.Infof("Snapshot %s has status %v", status.Name, status.Status)
+
+									if status.Status == snapv1.VolumeSnapshotConditionError {
+										resp, _ := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+										log.Infof("SnapshotSchedule resp: %v", resp)
+										snapData, _ := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
+										log.Infof("snapData : %v", snapData)
+										log.FailOnError(fmt.Errorf("snapshot: %s failed. status: %v", status.Name, status.Status), fmt.Sprintf("cloud snapshot for %s failed", snapshotScheduleName))
+									}
+									if status.Status == snapv1.VolumeSnapshotConditionPending {
+										log.FailOnError(fmt.Errorf("snapshot: %s not completed. status: %v", status.Name, status.Status), fmt.Sprintf("cloud snapshot for %s stuck in pending state", snapshotScheduleName))
+									}
+
+									if status.Status == snapv1.VolumeSnapshotConditionReady {
+										snapData, err := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
+										log.FailOnError(err, fmt.Sprintf("error getting snapshot data for [%s/%s]", appNamespace, status.Name))
+
+										snapType := snapData.Spec.PortworxSnapshot.SnapshotType
+										log.Infof("Snapshot Type: %v", snapType)
+										if snapType != "cloud" {
+											err = &scheduler.ErrFailedToGetVolumeParameters{
+												App:   ctx.App,
+												Cause: fmt.Sprintf("Snapshot Type: %s does not match", snapType),
+											}
+											log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, status.Name))
+										}
+
+										snapID := snapData.Spec.PortworxSnapshot.SnapshotID
+										log.Infof("Snapshot ID: %v", snapID)
+										if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
+											len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
+											err = &scheduler.ErrFailedToGetVolumeParameters{
+												App:   ctx.App,
+												Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
+											}
+											log.FailOnError(err, fmt.Sprintf("error validating snapshot data for [%s/%s]", appNamespace, status.Name))
+										}
+									}
+
+								}
+							}
+
+						}
+					}
+					time.Sleep(1 * time.Minute)
 				}
 			})
 
@@ -738,15 +760,11 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 							}
 							log.FailOnError(err, fmt.Sprintf("error deleting Cloudsnap %s", bk.Id))
 						}
-
 					}
-
 				}
-
-				opts := make(map[string]bool)
-				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-				ValidateAndDestroy(contexts, opts)
-
+				for _, ctx := range contexts {
+					ValidateContext(ctx)
+				}
 			})
 
 		})
@@ -754,6 +772,13 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		bucketName, err := GetCloudsnapBucketName(contexts)
+		log.FailOnError(err, "error getting cloud snap bucket name")
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		DestroyApps(contexts, opts)
+		err = DeleteCloudSnapBucket(bucketName)
+		log.FailOnError(err, "failed to delete cloud snap bucket")
 		AfterEachTest(contexts)
 	})
 })
@@ -968,6 +993,391 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 	})
 
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+// blockiSCSIInterfaceOnNode blockRules and unblockRules iscsi interface on Node
+func blockiSCSIPortOnNode(n *node.Node, block bool) error {
+
+	// Block all InComing requests from port 3260 on specific Node
+	command := fmt.Sprintf("iptables -A INPUT -p tcp -s %v --dport 3260 -j DROP ", n.MgmtIp)
+	if !block {
+		command = fmt.Sprintf("iptables -D INPUT -p tcp -s %v --dport 3260 -j DROP", n.MgmtIp)
+	}
+	log.InfoD("Triggering command [%s] from Node [%v]", command, n.Name)
+	err := runCommand(command, *n)
+	if err != nil {
+		return err
+	}
+
+	// Block all Outgoing requests from port 3260 from specific Node
+	command = fmt.Sprintf("iptables -A OUTPUT -p tcp -s %v --dport 3260 -j DROP ", n.MgmtIp)
+	if !block {
+		command = fmt.Sprintf("iptables -D OUTPUT -p tcp -s %v --dport 3260 -j DROP", n.MgmtIp)
+	}
+	log.InfoD("Triggering command [%s] from Node [%v]", command, n.Name)
+	err = runCommand(command, *n)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// getPVCAccessMode returns list of Accessmodes for the PVCs
+func getPVCAccessMode(pvcName string, pvcNameSpace string) ([]corev1.PersistentVolumeAccessMode, error) {
+	var k8sCore = core.Instance()
+	accessModes := []corev1.PersistentVolumeAccessMode{}
+	pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, pvcNameSpace)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, mode := range pvc.Spec.AccessModes {
+		log.Infof("Access Mode [%v]", mode)
+		accessModes = append(accessModes, mode)
+	}
+
+	return accessModes, nil
+}
+
+// Flush all IPTable Rules from all the Nodes Created
+func flushAllIPtableRulesOnAllNodes() {
+	for _, eachNode := range node.GetNodes() {
+		command := "iptables -F"
+		if !node.IsMasterNode(eachNode) {
+			err := runCommand(command, eachNode)
+			if err != nil {
+				log.FailOnError(err, "Failed to flush iptable rules")
+			}
+		}
+	}
+}
+
+var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
+
+	/*
+				PTX : https://purestorage.atlassian.net/browse/PWX-31647
+			Test to check if the Pod bounces and Places in the new node when iscsi port fails to Send / Receive Traffic
+			Specific to FADA Volumes with RWO type
+
+		Px Implementation :
+			A background task will periodically look for any readonly FADA volumes and those pods will be bounced.
+			The default period is 15 seconds and this period is configurable through a cluster option called ro-vol-pod-bounce-interval
+			If a volume was expected to be read-only during creation (e.g ReadOnlyMany PVCs), it’ll be excluded.
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("FADAPodRecoveryAfterBounce",
+			"Verify Pod Recovers from RO mode after Bounce",
+			nil, 0)
+	})
+
+	itLog := "FADAPodRecoveryAfterBounce"
+	It(itLog, func() {
+		var contexts []*scheduler.Context
+		var k8sCore = core.Instance()
+
+		// Pick all the Volumes with RWO Status, We check if the Volume is with Access Mode RWO and PureBlock Volume
+		vols := make([]*volume.Volume, 0)
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fapodrecovery-%d", i))...)
+			}
+		})
+
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+		defer flushAllIPtableRulesOnAllNodes()
+
+		stepLog = "Get all Pure Volumes and Validate "
+		Step(stepLog, func() {
+			for _, ctx := range contexts {
+				appVols, err := Inst().S.GetPureVolumes(ctx, "pure_block")
+				log.FailOnError(err, fmt.Sprintf("error getting volumes for app [%s]", ctx.App.Key))
+
+				for _, eachVol := range appVols {
+					accessModes, err := getPVCAccessMode(eachVol.Name, eachVol.Namespace)
+					log.FailOnError(err, "Failed to get AccessModes for the volume [%v]", eachVol.Name)
+					for _, eachAMode := range accessModes {
+						// Validate if the Volume is Pure Volume
+						boolVol, err := Inst().V.IsPureVolume(eachVol)
+						log.FailOnError(err, "Failed to get details on the volume [%v]", eachVol.Name)
+
+						// Get Details of the volume , check if the volume is PureBlock Volume
+						pureVol, err := IsVolumeTypePureBlock(ctx, eachVol.ID)
+						log.FailOnError(err, "Failed to get details on the volume [%v]", eachVol.Name)
+
+						if eachAMode == "ReadWriteOnce" && boolVol && pureVol {
+							vols = append(vols, eachVol)
+						}
+					}
+				}
+			}
+		})
+
+		stepLog = "Validate Pod Bounce on blocking network interface"
+		Step(stepLog, func() {
+			// Check if the Volume Counts matched criteria is > 0 , if not Fail the test
+			log.Infof("List of all volumes present in the cluster [%v]", vols)
+			dash.VerifyFatal(len(vols) != 0, true, fmt.Sprintf("failed to get list of Volumes belongs to Pure"))
+
+			// Pick a random Volume to check the pod bounce
+			randomIndex := rand.Intn(len(vols))
+			volPicked := vols[randomIndex]
+			log.Infof("Validating test scenario with Selected volumes [%v]", volPicked)
+
+			inspectVolume, err := Inst().V.InspectVolume(volPicked.ID)
+			log.FailOnError(err, "Volumes inspect errored out")
+			log.Infof("VOLUME Inspect output [%v]", inspectVolume)
+
+			pods, err := k8sCore.GetPodsUsingPVC(volPicked.Name, volPicked.Namespace)
+			log.FailOnError(err, "unable to find the node from the pod")
+
+			for _, eachPod := range pods {
+				log.Infof("Validating test on Pod [%v]", eachPod)
+				podNode, err := GetNodeFromIPAddress(eachPod.Status.HostIP)
+				log.FailOnError(err, "unable to find the node from the pod")
+				log.Infof("Pod with Name [%v] placed on Host [%v]", eachPod.Name, eachPod.Status.HostIP)
+
+				// Stop iscsi traffic on the Node
+				log.Infof("Blocking IPAddress on Node [%v]", podNode.Name)
+				err = blockiSCSIPortOnNode(podNode, true)
+				log.FailOnError(err, fmt.Sprintf("Failed to block iSCSI interface on Node [%v]", podNode.Name))
+
+				// Sleep for some time before checking the pod status
+				time.Sleep(180 * time.Second)
+
+				// Pod details after blocking IP
+				podsOnBlock, err := k8sCore.GetPodsUsingPVC(volPicked.Name, volPicked.Namespace)
+				log.FailOnError(err, "unable to find the node from the pod")
+
+				// Verify that Pod Bounces and not in Running state till the time iscsi rules are not reverted
+				for _, eachPodAfter := range podsOnBlock {
+					if eachPod.Name == eachPodAfter.Name &&
+						eachPodAfter.Status.Phase == "Running" {
+						log.FailOnError(fmt.Errorf("pod is in Running State  [%v]",
+							eachPodAfter.Status.HostIP), "Pod is in Running state")
+					}
+					log.Infof("Pod with Name [%v] placed on Host [%v] and Phase [%v]",
+						eachPod.Name, eachPodAfter.Status.HostIP, eachPodAfter.Status.Phase)
+				}
+
+				// Revert iscsi rules that was set on the node
+				err = blockiSCSIPortOnNode(podNode, false)
+
+				// Sleep for some time for Px to come up online and working
+				time.Sleep(10 * time.Minute)
+
+				// Pod details after blocking IP
+				podsAfterblk, err := k8sCore.GetPodsUsingPVC(volPicked.Name, volPicked.Namespace)
+				log.FailOnError(err, "unable to find the node from the pod")
+
+				for _, eachPodAfter := range podsAfterblk {
+					if eachPod.Name == eachPodAfter.Name &&
+						eachPod.Status.StartTime == eachPodAfter.Status.StartTime &&
+						eachPodAfter.Status.Phase != "Running" {
+						log.FailOnError(fmt.Errorf("Pod didn't bounce on the node [%v]",
+							eachPodAfter.Status.HostIP), "Pod didn't bounce on the node")
+					}
+					log.Infof("Pod with Name [%v] placed on Host [%v] and Phase [%v]",
+						eachPod.Name, eachPodAfter.Status.HostIP, eachPodAfter.Status.Phase)
+				}
+				// Enter and Exit maintenance mode to bring Node up
+				log.FailOnError(Inst().V.RecoverDriver(*podNode), "Failed during Node maintenance cycle ")
+
+				// Validate if Volume Driver is up on all the nodes
+				log.FailOnError(Inst().V.WaitDriverUpOnNode(*podNode, Inst().DriverStartTimeout),
+					"Node did not start within the time specified")
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{FADAPodRecoveryAllPathDownUsingIptableRule}", func() {
+
+	/*
+				PTX : https://purestorage.atlassian.net/browse/PTX-19192
+			Test to check if Pod recovers after blocking iptable Rules and later unblocking them
+
+		Px Scenario 1  :
+			ALL Path Down with FADA volumes test cases should be tested and automated
+			Expectation : PODS should be up and running after connection restored.
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("FADAPodRecoveryAllPathDownUsingIptableRule",
+			"Verify Pod Recovers from RO mode after Bounce after blocking iptable Rules",
+			nil, 0)
+	})
+
+	itLog := "FADAPodRecoveryAllPathDownUsingIptableRule"
+	It(itLog, func() {
+
+		var contexts []*scheduler.Context
+		var k8sCore = core.Instance()
+
+		// Pick all the Volumes with RWO Status, We check if the Volume is with Access Mode RWO and PureBlock Volume
+		vols := make([]*volume.Volume, 0)
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fapodrecovery-%d", i))...)
+			}
+		})
+
+		ValidateApplications(contexts)
+		defer flushAllIPtableRulesOnAllNodes()
+
+		stepLog = "Get all Pure Volumes and Validate "
+		Step(stepLog, func() {
+			for _, ctx := range contexts {
+				appVols, err := Inst().S.GetPureVolumes(ctx, "pure_block")
+				log.FailOnError(err, fmt.Sprintf("error getting volumes for app [%s]", ctx.App.Key))
+
+				for _, eachVol := range appVols {
+					accessModes, err := getPVCAccessMode(eachVol.Name, eachVol.Namespace)
+					log.FailOnError(err, "Failed to get AccessModes for the volume [%v]", eachVol.Name)
+					for _, eachAMode := range accessModes {
+						// Validate if the Volume is Pure Volume
+						boolVol, err := Inst().V.IsPureVolume(eachVol)
+						log.FailOnError(err, "Failed to get details on the volume [%v]", eachVol.Name)
+
+						// Get Details of the volume , check if the volume is PureBlock Volume
+						pureVol, err := IsVolumeTypePureBlock(ctx, eachVol.ID)
+						log.FailOnError(err, "Failed to get details on the volume [%v]", eachVol.Name)
+
+						if eachAMode == "ReadWriteOnce" && boolVol && pureVol {
+							vols = append(vols, eachVol)
+						}
+					}
+				}
+			}
+		})
+
+		stepLog = "Get List of all volumes present in the cluster "
+		Step(stepLog, func() {
+			// Check if the Volume Counts matched criteria is > 0 , if not Fail the test
+			log.Infof("List of all volumes present in the cluster [%v]", vols)
+			dash.VerifyFatal(len(vols) != 0, true, fmt.Sprintf("failed to get list of Volumes belongs to Pure"))
+
+			log.Infof("List of all volumes present in the cluster [%v]", vols)
+		})
+
+		podNodes := []*corev1.Pod{}
+		stepLog = "Block iscsi port on all the nodes where volume is placed"
+		Step(stepLog, func() {
+			for _, eachVol := range vols {
+				inspectVolume, err := Inst().V.InspectVolume(eachVol.ID)
+				log.FailOnError(err, "Volumes inspect errored out")
+				log.Infof("VOLUME Inspect output [%v]", inspectVolume)
+
+				pods, err := k8sCore.GetPodsUsingPVC(eachVol.Name, eachVol.Namespace)
+				log.FailOnError(err, "unable to find the node from the pod")
+
+				for _, eachPod := range pods {
+					log.Infof("Validating test on Pod [%v]", eachPod)
+					podNode, err := GetNodeFromIPAddress(eachPod.Status.HostIP)
+					log.FailOnError(err, "unable to find the node from the pod")
+					log.Infof("Pod with Name [%v] placed on Host [%v]", eachPod.Name, eachPod.Status.HostIP)
+
+					// Stop iscsi traffic on the Node
+					log.Infof("Blocking IPAddress on Node [%v]", podNode.Name)
+					err = blockiSCSIPortOnNode(podNode, true)
+					log.FailOnError(err, fmt.Sprintf("Failed to block iSCSI interface on Node [%v]", podNode.Name))
+					podNodes = append(podNodes, &eachPod)
+				}
+			}
+		})
+
+		// Sleep for sometime for PVC's to go in RO mode while data ingest in progress
+		time.Sleep(3 * time.Minute)
+
+		stepLog = "Verify if pods are not in Running state after blocking iptables"
+		Step(stepLog, func() {
+			for _, eachVol := range vols {
+				// Pod details after blocking IP
+				podsOnBlock, err := k8sCore.GetPodsUsingPVC(eachVol.Name, eachVol.Namespace)
+				log.FailOnError(err, "unable to find the node from the pod")
+
+				// Verify that Pod Bounces and not in Running state till the time iscsi rules are not reverted
+				for _, eachPodAfter := range podsOnBlock {
+					if eachPodAfter.Status.Phase == "Running" {
+						log.FailOnError(fmt.Errorf("pod is in Running State  [%v]",
+							eachPodAfter.Status.HostIP), "Pod is in Running state")
+					}
+					log.Infof("Pod with Name [%v] placed on Host [%v] and Phase [%v]",
+						eachPodAfter.Name, eachPodAfter.Status.HostIP, eachPodAfter.Status.Phase)
+				}
+			}
+
+		})
+
+		stepLog = "Unblock Iptable rules on all the nodes"
+		Step(stepLog, func() {
+			for _, eachPod := range podNodes {
+				log.Infof("Validating test on Pod [%v]", eachPod)
+				podNode, err := GetNodeFromIPAddress(eachPod.Status.HostIP)
+				log.FailOnError(err, "unable to find the node from the pod")
+				// Revert iscsi rules that was set on the node
+				err = blockiSCSIPortOnNode(podNode, false)
+			}
+		})
+
+		// Sleep for some time for Px to come up online and working
+		time.Sleep(10 * time.Minute)
+
+		stepLog = "Verify Each pod in Running State after bringing back iptable Rules"
+		Step(stepLog, func() {
+			for _, eachVol := range vols {
+				// Pod details after blocking IP
+				podsAfterRevert, err := k8sCore.GetPodsUsingPVC(eachVol.Name, eachVol.Namespace)
+				log.FailOnError(err, "unable to find the node from the pod")
+
+				for _, eachPod := range podsAfterRevert {
+					if eachPod.Status.Phase != "Running" {
+						log.FailOnError(fmt.Errorf("Pod didn't bounce on the node [%v]",
+							eachPod.Status.HostIP), "Pod didn't bounce on the node")
+					}
+				}
+
+			}
+		})
+
+		stepLog = "wait for driver Up on all the nodes where iptables were blocked and later recovered"
+		Step(stepLog, func() {
+			for _, eachPod := range podNodes {
+				log.Infof("Validating test on Pod [%v]", eachPod)
+				podNode, err := GetNodeFromIPAddress(eachPod.Status.HostIP)
+				log.FailOnError(err, "unable to find the node from the pod")
+
+				// Enter and Exit maintenance mode to bring Node up
+				log.FailOnError(Inst().V.RecoverDriver(*podNode), "Failed during Node maintenance cycle ")
+
+				// Validate if Volume Driver is up on all the nodes
+				log.FailOnError(Inst().V.WaitDriverUpOnNode(*podNode, Inst().DriverStartTimeout),
+					"Node did not start within the time specified")
+			}
+		})
+
+		// Destroy All applications if test Passes
+		DestroyApps(contexts, nil)
+
+	})
+
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
