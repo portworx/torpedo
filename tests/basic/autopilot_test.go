@@ -2084,7 +2084,7 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 			log.InfoD(stepLog)
 			stNodes := node.GetStorageDriverNodes()
 			for _, stnode := range stNodes {
-				volCreatecmd := "NODE=$(pxctl status | grep 'This node' | awk '{print $2}') && seq 1 30 | xargs -I {} pxctl volume create rebalance-${NODE}-{} --size 30 --nodes $NODE"
+				volCreatecmd := "NODE=$(pxctl status | grep 'This node' | awk '{print $2}') && seq 1 50 | xargs -I {} pxctl volume create rebalance-${NODE}-{} --size 30 --nodes $NODE"
 				ConnectionOpts := node.ConnectionOpts{
 					Timeout:         10 * time.Minute,
 					TimeBeforeRetry: defaultCommandRetry,
@@ -2146,7 +2146,7 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 
 			stNodes := node.GetStorageDriverNodes()
 			for _, stnode := range stNodes {
-				volDeletecmd := "NODE=$(pxctl status | grep 'This node' | awk '{print $2}') && seq 1 30 | xargs -I {} pxctl volume delete rebalance-${NODE}-{} --force"
+				volDeletecmd := "NODE=$(pxctl status | grep 'This node' | awk '{print $2}') && seq 1 50 | xargs -I {} pxctl volume delete rebalance-${NODE}-{} --force"
 				ConnectionOpts := node.ConnectionOpts{
 					Timeout:         10 * time.Minute,
 					TimeBeforeRetry: 5 * time.Second,
