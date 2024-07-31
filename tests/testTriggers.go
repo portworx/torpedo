@@ -805,8 +805,13 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 			}
 		} else {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				log.Infof("ScheduleApplications Iteration %d", i)
 				newContexts := ScheduleApplications(fmt.Sprintf("longevity-%d", i), &errorChan)
+				for err := range errorChan {
+					log.Infof("The error from ScheduleApplications [Iteration %d] ErrorChan: [%v]", i, err)
+				}
 				*contexts = append(*contexts, newContexts...)
+				log.Infof("The length of contexts after iteration %d is %d", i, len(*contexts))
 			}
 		}
 
@@ -10308,12 +10313,12 @@ func TriggerStorkVolumeSnapshotSchedule(contexts *[]*scheduler.Context, recordCh
 	setMetrics(*event)
 
 	var (
-		taskNamePrefix     = "stork-snaptest-cloud"
-		snapshotType       = "cloud"
-		snapInterval = 2
-		retain storkapi.Retain = 3
-		scpolName = "snap-policy-" + time.Now().Format("15h03m05s")
-		snapNs []string
+		taskNamePrefix                 = "stork-snaptest-cloud"
+		snapshotType                   = "cloud"
+		snapInterval                   = 2
+		retain         storkapi.Retain = 3
+		scpolName                      = "snap-policy-" + time.Now().Format("15h03m05s")
+		snapNs         []string
 	)
 
 	for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -10372,12 +10377,12 @@ func TriggerStorkVolumeSnapshotScheduleLocal(contexts *[]*scheduler.Context, rec
 	setMetrics(*event)
 
 	var (
-		taskNamePrefix     = "stork-snaptest-local"
-		snapshotType       = "local"
-		snapInterval = 2
-		retain storkapi.Retain = 3
-		scpolName = "snap-policy-" + time.Now().Format("15h03m05s")
-		snapNs []string
+		taskNamePrefix                 = "stork-snaptest-local"
+		snapshotType                   = "local"
+		snapInterval                   = 2
+		retain         storkapi.Retain = 3
+		scpolName                      = "snap-policy-" + time.Now().Format("15h03m05s")
+		snapNs         []string
 	)
 
 	for i := 0; i < Inst().GlobalScaleFactor; i++ {
