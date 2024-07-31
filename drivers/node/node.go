@@ -256,8 +256,8 @@ type Driver interface {
 	// GetSupportedDriveTypes returns the types of drives supported by the provider
 	GetSupportedDriveTypes() ([]string, error)
 
-	// VmRelocate selectively relocates specific disks of a virtual machine to a new datastore
-	VmRelocate(ctx context.Context, node Node, portworxNamespace string, moveAllDisks bool) error
+	// StorageVmotion selectively relocates specific disks of a virtual machine to a new datastore
+	StorageVmotion(ctx context.Context, node Node, portworxNamespace string, moveAllDisks bool) error
 
 	// findVMByName finds a virtual machine by its name
 	FindVMByName(vmName string) (*object.VirtualMachine, error)
@@ -581,10 +581,10 @@ func (d *notSupportedDriver) RemoveNonRootDisks(node Node) error {
 	}
 }
 
-func (d *notSupportedDriver) VmRelocate(ctx context.Context, node Node, portworxNamespace string, moveAllDisks bool) error {
+func (d *notSupportedDriver) StorageVmotion(ctx context.Context, node Node, portworxNamespace string, moveAllDisks bool) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "VmRelocate()",
+		Operation: "StorageVmotion()",
 	}
 }
 

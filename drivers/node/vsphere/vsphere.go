@@ -863,10 +863,11 @@ func (v *vsphere) RemoveNonRootDisks(n node.Node) error {
 	return nil
 }
 
-// VmRelocate relocates the largest disks of a VM from one datastore to another within the same prefix group
+// StorageVmotion relocates the largest disks of a VM from one datastore to another within the same prefix group
 // With moveAllDisks true we will be moving all disks attached to a VM onto same Datastore
 // If moveAllDisks is set to False then we will choose the largest sized disk and move that only to a new Datastore
-func (v *vsphere) VmRelocate(ctx context.Context, node node.Node, portworxNamespace string, moveAllDisks bool) error {
+func (v *vsphere) StorageVmotion(ctx context.Context, node node.Node, portworxNamespace string, moveAllDisks bool) error {
+	log.Infof("Trying to find the VM on vSphere: %v", node.Name)
 	vm, err := v.FindVMByIP(node)
 	if err != nil {
 		return fmt.Errorf("error retrieving VM: %v", err)
@@ -878,47 +879,61 @@ func (v *vsphere) VmRelocate(ctx context.Context, node node.Node, portworxNamesp
 		return fmt.Errorf("error retrieving VM properties: %v", err)
 	}
 
+	log.Infof("Trying to fetch all compatible Datastores with the prefix that is set in Px Storage Class spec")
 	compatibleDatastores, err := v.GetCompatibleDatastores(portworxNamespace, []string{})
 	if err != nil {
 		return fmt.Errorf("error retrieving compatible datastores: %v", err)
 	}
 
+	var stc *operatorcorev1.StorageCluster
+	pxOperator := operator.Instance()
+	stcList, err := pxOperator.ListStorageClusters(portworxNamespace)
+	if err != nil {
+		return fmt.Errorf("Failed to find storage clusters %v ", err)
+	}
+	stc, err = pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
+	if err != nil {
+		return fmt.Errorf("Failed to find storage cluster %v  in namespace  %s ", err, portworxNamespace)
+	}
+
+	preData, err := GetCloudDriveConfigmapData(stc)
+	if err != nil {
+		return fmt.Errorf("error fetching pre-vMotion cloud drive config: %v", err)
+	}
+
+	originalDatastoreIDs := map[string]string{}
+	for _, device := range vmProps.Config.Hardware.Device {
+		if disk, ok := device.(*types.VirtualDisk); ok {
+			if disk.DeviceInfo != nil {
+				if backing, ok := disk.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
+					originalDatastoreIDs[disk.DeviceInfo.GetDescription().Label] = backing.Datastore.Value
+				}
+			}
+		}
+	}
+
+	var targetDatastores []*object.Datastore
+
+	largestDisks := findLargestDisksOnDatastores(vmProps.Config.Hardware.Device, compatibleDatastores)
+	if len(largestDisks) == 0 {
+		return fmt.Errorf("no large disks found on specified prefix datastores")
+	}
+
+	sourceDatastore := object.NewDatastore(vm.Client(), largestDisks[0].Datastore)
+
+	targetDatastores, err = filterTargetDatastores(ctx, sourceDatastore, compatibleDatastores)
+	if err != nil {
+		return fmt.Errorf("error filtering target datastores: %v", err)
+	}
+
 	if !moveAllDisks {
-		largestDisks := findLargestDisksOnDatastores(vmProps.Config.Hardware.Device, compatibleDatastores)
-		if len(largestDisks) == 0 {
-			return fmt.Errorf("no large disks found on specified prefix datastores")
-		}
-
-		sourceDatastore := object.NewDatastore(vm.Client(), largestDisks[0].Datastore)
-
-		targetDatastores, err := filterTargetDatastores(ctx, sourceDatastore, compatibleDatastores)
-		if err != nil {
-			return fmt.Errorf("error filtering target datastores: %v", err)
-		}
-
+		log.Infof("Trying to Move largest disk on VM %v to Datastore : %v", node.Name, targetDatastores[0].Reference().Value)
 		err = initiateStorageVmotion(ctx, vm, largestDisks[:1], targetDatastores)
 		if err != nil {
 			return fmt.Errorf("error during storage vMotion: %v", err)
 		}
 	} else {
-		var targetDatastores []*object.Datastore
-		var temp *object.Datastore
-		maxAvailableSpace := int64(-1)
-		for _, ds := range compatibleDatastores {
-			var dsProps mo.Datastore
-			if err := ds.Properties(ctx, ds.Reference(), []string{"summary"}, &dsProps); err == nil {
-				if available := dsProps.Summary.FreeSpace; available > maxAvailableSpace {
-					maxAvailableSpace = available
-					temp = ds
-				}
-			}
-		}
-
-		if temp == nil {
-			return fmt.Errorf("failed to select a target datastore")
-		}
-		targetDatastores = append(targetDatastores, temp)
-
+		log.Infof("Trying to Move all disks from %v to Datastore : %v", node.Name, targetDatastores[0].Reference().Value)
 		diskLocators := make([]types.VirtualMachineRelocateSpecDiskLocator, 0)
 		for _, device := range vmProps.Config.Hardware.Device {
 			if disk, ok := device.(*types.VirtualDisk); ok {
@@ -928,17 +943,21 @@ func (v *vsphere) VmRelocate(ctx context.Context, node node.Node, portworxNamesp
 				})
 			}
 		}
-
 		if len(diskLocators) == 0 {
 			return fmt.Errorf("no disks found on the VM")
 		}
-
 		err = initiateStorageVmotion(ctx, vm, diskLocators, targetDatastores)
 		if err != nil {
 			return fmt.Errorf("error during storage vMotion: %v", err)
 		}
+		postData, err := GetCloudDriveConfigmapData(stc)
+		if err != nil {
+			return fmt.Errorf("error fetching post-vMotion cloud drive config: %v", err)
+		}
+		if !v.ValidateDatastoreUpdate(preData, postData, node.VolDriverNodeID, targetDatastores[0].Reference().Value) {
+			return fmt.Errorf("validation failed: datastore updates are not as expected")
+		}
 	}
-
 	return nil
 }
 
@@ -1133,4 +1152,46 @@ func (v *vsphere) FindVMByIP(node node.Node) (*object.VirtualMachine, error) {
 		}
 	}
 	return nil, fmt.Errorf("no VM found with the given IP addresses: %v", node.Addresses)
+}
+
+// ValidateDatastoreUpdate validates the cloud drive configmap after Storage vmotion is done
+func (v *vsphere) ValidateDatastoreUpdate(preData, postData map[string]DriveSet, nodeUUID string, targetDatastoreID string) bool {
+	preNodeData, preExists := preData[nodeUUID]
+	postNodeData, postExists := postData[nodeUUID]
+
+	if !preExists || !postExists {
+		return false
+	}
+
+	postDiskDatastores := make(map[string]string)
+	for _, postDrive := range postNodeData.Configs {
+		postDiskDatastores[postDrive.DiskUUID] = postDrive.Labels["datastore"]
+	}
+
+	allMoved := true
+	for _, preDrive := range preNodeData.Configs {
+		postDSName, exists := postDiskDatastores[preDrive.DiskUUID]
+		if !exists {
+			log.Infof("No post-migration data found for disk with UUID %v", preDrive.DiskUUID)
+			return false
+		}
+
+		postDS, err := v.FindDatastoreByName(postDSName)
+		if err != nil {
+			log.Errorf("Failed to find datastore with name %v: %v", postDSName, err)
+			return false
+		}
+		postDSID := postDS.Reference().Value
+
+		if postDSID != targetDatastoreID || preDrive.Labels["datastore"] == postDSName {
+			log.Infof("Disk with UUID %v did not move to the target datastore %v as expected, or did not change from the original", preDrive.DiskUUID, targetDatastoreID)
+			allMoved = false
+		}
+	}
+
+	if allMoved {
+		log.Infof("Storage vMotion happened successfully for all disks")
+	}
+
+	return allMoved
 }
