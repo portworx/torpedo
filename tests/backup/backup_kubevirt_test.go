@@ -1736,7 +1736,11 @@ var _ = Describe("{KubevirtVMRestoreWithAfterChangingVMConfig}", Label(TestCaseL
 		appList := Inst().AppList
 		numberOfVolumes = 5
 		defer func() {
+			log.Infof("Resetting applist and removing the custom app config")
 			Inst().AppList = appList
+			delete(Inst().CustomAppConfig, "kubevirt-cirros-cd-with-pvc")
+			err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+			log.FailOnError(err, "Failed while rescanning specs")
 		}()
 		Inst().AppList = []string{"kubevirt-cirros-cd-with-pvc"}
 		Inst().CustomAppConfig["kubevirt-cirros-cd-with-pvc"] = scheduler.AppConfig{

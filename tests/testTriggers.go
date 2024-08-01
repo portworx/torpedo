@@ -555,6 +555,10 @@ const (
 	AsyncDRMigrationSchedule = "asyncdrmigrationschedule"
 	// ConfluentAsyncDR runs Async DR between two clusters for Confluent kafka CRD
 	ConfluentAsyncDR = "confluentasyncdr"
+	// Storkvolumesnapshotschedule creates stork snapshot schedules
+	StorkVolumeSnapshotSchedule = "storkvolumesnapshotschedule"
+	// StorkVolumeSnapshotScheduleLocal triggers stork snapshot schedule for local volumes
+	StorkVolumeSnapshotScheduleLocal = "storkvolumesnapshotschedulelocal"
 	// KafkaAsyncDR runs Async DR between two clusters for kafka CRD
 	KafkaAsyncDR = "kafkaasyncdr"
 	// MongoAsyncDR runs Async DR between two clusters for kafka CRD
@@ -10281,6 +10285,134 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 			}
 		}
 	})
+}
+
+func TriggerStorkVolumeSnapshotSchedule(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(StorkVolumeSnapshotSchedule)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Stork volume snapshot schedule triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: StorkVolumeSnapshotSchedule,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var (
+		taskNamePrefix     = "stork-snaptest-cloud"
+		snapshotType       = "cloud"
+		snapInterval = 2
+		retain storkapi.Retain = 3
+		scpolName = "snap-policy-" + time.Now().Format("15h03m05s")
+		snapNs []string
+	)
+
+	for i := 0; i < Inst().GlobalScaleFactor; i++ {
+		taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+		log.Infof("Task name %s\n", taskName)
+		appContexts := ScheduleApplications(taskName)
+		for _, ctx := range appContexts {
+			// Override default App readiness time out of 5 mins with 10 mins
+			ctx.ReadinessTimeout = appReadinessTimeout
+			namespace := GetAppNamespace(ctx, taskName)
+			snapNs = append(snapNs, namespace)
+		}
+		*contexts = append(*contexts, appContexts...)
+	}
+	ValidateApplications(*contexts)
+
+	schdPol, err := asyncdr.CreateSchedulePolicyWithRetain(scpolName, snapInterval, retain)
+	if err != nil {
+		UpdateOutcome(event, fmt.Errorf("Failed to create schedule policy"))
+		return
+	}
+
+	for _, ns := range snapNs {
+		pvcNames, err := GetPVCListForNamespace(ns)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to get pvc list for namespace"))
+			return
+		}
+		log.InfoD("creating and validating cloud snapshots for pvcs [%v] in namespace %v", pvcNames, ns)
+		err = asyncdr.ValidateSnapshotScheduleCount(pvcNames, ns, schdPol.Name, snapshotType, snapInterval, retain)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to validate snapshot schedule count"))
+			return
+		}
+	}
+}
+
+func TriggerStorkVolumeSnapshotScheduleLocal(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(StorkVolumeSnapshotScheduleLocal)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Stork volume snapshot schedule triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: StorkVolumeSnapshotScheduleLocal,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var (
+		taskNamePrefix     = "stork-snaptest-local"
+		snapshotType       = "local"
+		snapInterval = 2
+		retain storkapi.Retain = 3
+		scpolName = "snap-policy-" + time.Now().Format("15h03m05s")
+		snapNs []string
+	)
+
+	for i := 0; i < Inst().GlobalScaleFactor; i++ {
+		taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+		log.Infof("Task name %s\n", taskName)
+		appContexts := ScheduleApplications(taskName)
+		for _, ctx := range appContexts {
+			// Override default App readiness time out of 5 mins with 10 mins
+			ctx.ReadinessTimeout = appReadinessTimeout
+			namespace := GetAppNamespace(ctx, taskName)
+			snapNs = append(snapNs, namespace)
+		}
+		*contexts = append(*contexts, appContexts...)
+	}
+	ValidateApplications(*contexts)
+
+	schdPol, err := asyncdr.CreateSchedulePolicyWithRetain(scpolName, snapInterval, retain)
+	if err != nil {
+		UpdateOutcome(event, fmt.Errorf("Failed to create schedule policy"))
+		return
+	}
+
+	for _, ns := range snapNs {
+		pvcNames, err := GetPVCListForNamespace(ns)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to get pvc list for namespace"))
+			return
+		}
+		log.InfoD("creating and validating local snapshots for pvcs [%v] in namespace %v", pvcNames, ns)
+		err = asyncdr.ValidateSnapshotScheduleCount(pvcNames, ns, schdPol.Name, snapshotType, snapInterval, retain)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to validate snapshot schedule count"))
+			return
+		}
+	}
 }
 
 func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {

@@ -2,16 +2,20 @@ package tests
 
 import (
 	"fmt"
-
 	"github.com/devans10/pugo/flasharray"
+	"github.com/ghodss/yaml"
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	v12 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 
 	"math/rand"
 	"sort"
@@ -4321,6 +4325,211 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 	})
 
 })
+
+var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeDeletionInProgress}", func() {
+
+	/*
+			https://purestorage.atlassian.net/browse/PTX-25060
+
+		Expand multiple pools in parallel , when lots of FADA and FBDA Volumes are being deleted
+
+	*/
+	var testrailID = 86018
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/86018
+	var runID int
+	JustBeforeEach(func() {
+
+		StartTorpedoTest("CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress",
+			"Automate Scenario Create new pools when new Pools when lots of FADA / FBDA Volumes are getting deleted",
+			nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	itLog := "CreateNewPoolsWhenFadaFbdaVolumeDeletionInProgress"
+	It(itLog, func() {
+
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+		pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+		log.FailOnError(err, "failed to get secret [%s]  in namespace [%s]", PureSecretName, volDriverNamespace)
+		listFB := pxPureSecret.Blades
+
+		// Create Namespace on the cluster
+		nsuuid := uuid.New()
+		nsName := fmt.Sprintf("fbda-ns-%s", nsuuid.String())
+
+		log.Infof("Create Namespace with Name [%v]", nsName)
+		namespace, err := CreateNamespaces(nsName, 1)
+		log.FailOnError(err, "Failed to create Namespace")
+
+		deleteNamespaces := func() {
+			log.Infof("Deleting Namespaces created during test [%v]", namespace)
+			err := DeleteNamespaces(namespace)
+			log.FailOnError(err, fmt.Sprintf("Failed to Delete namespaces [%v]", namespace))
+		}
+		defer deleteNamespaces()
+
+		var nodesToUse []node.Node
+		for _, each := range node.GetStorageNodes() {
+			sPools, err := GetPoolsDetailsOnNode(&each)
+			if err != nil {
+				fmt.Printf("[%v]", err)
+			}
+			if len(sPools) < 8 {
+				nodesToUse = append(nodesToUse, each)
+			}
+		}
+
+		// Create Storage Class for FA
+		scNameFA := fmt.Sprintf("fada-sc-%s", nsuuid.String())
+		log.Infof("Create Storage class with Name [%v]", scNameFA)
+		var allowVolExpansionFA bool = true
+		err = CreateFlashStorageClass(scNameFA,
+			"pure_block",
+			v1.PersistentVolumeReclaimDelete,
+			nil, nil, &allowVolExpansionFA,
+			storageApi.VolumeBindingImmediate,
+			nil)
+		log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", scNameFA))
+
+		if len(listFB) > 1 {
+			// Create Storage Class FB
+			scNameFB := fmt.Sprintf("fbda-sc-%s", nsuuid.String())
+			log.Infof("Create Storage class with Name [%v]", scNameFB)
+
+			params := make(map[string]string)
+			params["pure_export_rules"] = "*(rw)"
+
+			mountOptions := []string{"nfsvers=4.1", "tcp"}
+			var allowVolExpansion bool = true
+			err = CreateFlashStorageClass(scNameFB,
+				"pure_file",
+				v1.PersistentVolumeReclaimDelete,
+				nil, mountOptions, &allowVolExpansion,
+				storageApi.VolumeBindingImmediate,
+				nil)
+			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", scNameFB))
+		}
+		pvcsCreated := make(map[string][]string)
+
+		// Create Continuous FADA Volumes on the cluster
+		var wgfada sync.WaitGroup
+		wgfada.Add(1)
+		createFADAVolumes := func(wg *sync.WaitGroup) {
+			defer GinkgoRecover()
+			defer wg.Done()
+			for _, eachNs := range namespace {
+				// Create 100 PVCs on the Namespace
+				for i := 0; i < 100; i++ {
+					pvcName := fmt.Sprintf("fada-pvc-%d-%s", i, nsuuid.String())
+					log.FailOnError(CreateFlashPVCOnCluster(pvcName, scNameFA, eachNs, "100"),
+						"Failed to create PVC on the cluster")
+
+					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs, 15),
+						"Errored occured while checking if PVC Bounded")
+					pvcsCreated[eachNs] = append(pvcsCreated[eachNs], pvcName)
+				}
+			}
+		}
+
+		var wgfbda sync.WaitGroup
+		createFBDAVolumes := func(wg *sync.WaitGroup) {
+			defer GinkgoRecover()
+			defer wg.Done()
+			for _, eachNs := range namespace {
+				// Create 100 PVCs on the Namespace
+				for i := 0; i < 100; i++ {
+					pvcName := fmt.Sprintf("fbda-pvc-%d-%s", i, nsuuid.String())
+					log.FailOnError(CreateFlashPVCOnCluster(pvcName, scNameFA, eachNs, "100"),
+						"Failed to create PVC on the cluster")
+					log.FailOnError(Inst().S.WaitForSinglePVCToBound(pvcName, eachNs, 15),
+						"Errored occured while checking if PVC Bounded")
+					pvcsCreated[eachNs] = append(pvcsCreated[eachNs], pvcName)
+				}
+			}
+		}
+
+		go createFADAVolumes(&wgfada)
+		if len(listFB) > 1 {
+			// Create Continuous FADA Volumes on the cluster
+			wgfbda.Add(1)
+			go createFBDAVolumes(&wgfbda)
+		}
+		wgfada.Wait()
+		if len(listFB) > 1 {
+			wgfbda.Wait()
+		}
+		// formatVolNotFoundErrorMessage formats the error message when the volume is not found
+		formatVolNotFoundErrorMessage := func(volId string) string {
+			return "rpc error: code = NotFound desc = Volume id " + volId + " not found"
+		}
+
+		deletePVC := func(ns, pvcName string) error {
+			pvcSpec, err := k8sCore.GetPersistentVolumeClaim(pvcName, ns)
+			vol, err := Inst().V.InspectVolume(pvcSpec.Spec.VolumeName)
+			if err != nil {
+				return fmt.Errorf("failed to inspect pvc [%s/%s]", namespace, pvcName)
+			}
+			volId := ""
+			if vol != nil {
+				volId = vol.Id
+			}
+
+			err = core.Instance().DeletePersistentVolumeClaim(pvcName, ns)
+			if err != nil {
+				return fmt.Errorf("failed to delete pvc [%s/%s]", namespace, pvcName)
+			}
+			waitForVolumeDeletion := func() (interface{}, bool, error) {
+				_, err := Inst().V.InspectVolume(pvcSpec.Spec.VolumeName)
+				if err != nil {
+					switch err.Error() {
+					case formatVolNotFoundErrorMessage(pvcSpec.Spec.VolumeName):
+						return nil, false, nil
+					default:
+						return nil, false, err
+					}
+				}
+				return nil, true, fmt.Errorf("[%s] volume still exists in namespace [%s]", pvcName, ns)
+			}
+			_, err = task.DoRetryWithTimeout(waitForVolumeDeletion, 5*time.Minute, 30*time.Second)
+			if err != nil {
+				return fmt.Errorf("failed to wait for [%s/%s] volume deletion. Err: [%v]", pvcName, volId, err)
+			}
+			return nil
+		}
+
+		var wg sync.WaitGroup
+		log.InfoD("Deleting volumes in parallel")
+		for ns, vols := range pvcsCreated {
+			log.Infof("List of all [%d] volumes [%s] in namespace [%s]", len(vols), vols, ns)
+
+			for _, vol := range vols {
+				wg.Add(1)
+				go func(ns, pvcName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					log.InfoD("Delete [%s] volume in namespace [%s]", pvcName, ns)
+					deletePvcErr := deletePVC(ns, pvcName)
+					log.FailOnError(deletePvcErr, "failed to delete [%s] volume", pvcName)
+				}(ns, vol)
+			}
+
+		}
+
+		log.Infof("Create new pools on multiple Nodes in Parallel")
+		poolCreationErr := CreateNewPoolsOnMultipleNodesInParallel(nodesToUse)
+		wg.Wait()
+		log.FailOnError(poolCreationErr, "Failed to Create New Pools")
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+})
+
 var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 	/*
 				https://purestorage.atlassian.net/browse/PTX-23995
@@ -6747,3 +6956,439 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{LocalSnapAndValidateRestore}", func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-25043
+		1. Creates an app that writes approx 50000 files in a multi directory structure
+		2. Create a local snap of this app's volume
+		3. Restore the volume in same namespace and attach it to another app
+		4. The restored app validates the md5sum of all 50000 restored files
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("LocalSnapAndValidateRestore", "Validate localsnap creation and restore. Validate data consistency post restore", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to schedule apps, create scheduled local snap and restore it"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		retain := 8
+		interval := 3
+		var writeAppNS string
+		contexts = make([]*scheduler.Context, 0)
+		policyName := "localintervalpolicydv"
+
+		stepLog = fmt.Sprintf("create schedule policy %s for local snapshots", policyName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+			if err != nil {
+				log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+				schedPolicy = &storkv1.SchedulePolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: policyName,
+					},
+					Policy: storkv1.SchedulePolicyItem{
+						Interval: &storkv1.IntervalPolicy{
+							Retain:          storkv1.Retain(retain),
+							IntervalMinutes: interval,
+						},
+					}}
+				_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
+			}
+		})
+
+		stepLog = fmt.Sprintf("Create an Application that does writes for snapshots to happen")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			appList := Inst().AppList
+			defer func() {
+				Inst().AppList = appList
+			}()
+			Inst().AppList = []string{"data-validation-write-job"}
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("localsnaprestore-%d", i))...)
+			}
+			for _, ctx := range contexts {
+				writeAppNS = ctx.App.Key + "-" + ctx.UID
+				err := batch.Instance().ValidateJob("write-and-checksum-job", writeAppNS, 20*time.Minute)
+				if err != nil {
+					log.FailOnError(err, "Write job has failed")
+				}
+				log.Infof("Write job is completed....")
+			}
+			log.Infof("Waiting for %d minutes to let one more snapshot happen", interval)
+			time.Sleep(5 * time.Minute)
+		})
+
+		volSnapMap := make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
+		stepLog = "Verify that local snap status and wait for new snapshot"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				var appVolumes []*volume.Volume
+				var err error
+				appNamespace := ctx.App.Key + "-" + ctx.UID
+				log.Infof("Namespace: %v", appNamespace)
+				stepLog = fmt.Sprintf("Getting app volumes for volume %s", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+
+					if len(appVolumes) == 0 {
+						log.FailOnError(fmt.Errorf("no volumes found for [%s]", ctx.App.Key), "error getting volumes for [%s]", ctx.App.Key)
+					}
+				})
+				log.Infof("Got volume count : %v", len(appVolumes))
+
+				snapMap := make(map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
+				for _, v := range appVolumes {
+					snapshotScheduleName := v.Name + "-interval-schedule"
+					log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+
+					var latestSnapshot *storkv1.ScheduledVolumeSnapshotStatus
+					// Polling for the new snapshot
+					_, err = task.DoRetryWithTimeout(func() (interface{}, bool, error) {
+						resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+						if err != nil {
+							return nil, false, fmt.Errorf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+						}
+						if len(resp.Status.Items) == 0 {
+							return nil, true, fmt.Errorf("waiting for new snapshot schedules for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+						}
+
+						// Find the latest snapshot
+						for _, item := range resp.Status.Items {
+							for _, status := range item {
+								if latestSnapshot == nil || status.CreationTimestamp.After(latestSnapshot.CreationTimestamp.Time) {
+									latestSnapshot = status
+								}
+							}
+						}
+
+						if latestSnapshot != nil && latestSnapshot.Status == snapv1.VolumeSnapshotConditionReady {
+							return latestSnapshot, false, nil
+						}
+						return nil, true, fmt.Errorf("latest snapshot %s is not ready yet", latestSnapshot.Name)
+					}, time.Duration(5*15)*defaultCommandTimeout, defaultReadynessTimeout)
+					if err != nil {
+						log.FailOnError(err, "Failed to get a ready snapshot")
+					}
+
+					log.Infof("Latest snapshot %s in ready state for volume: %s", latestSnapshot.Name, v.Name)
+					snapMap[v] = latestSnapshot
+				}
+				volSnapMap[appNamespace] = snapMap
+			}
+		})
+
+		stepLog := "Verify local snap restore to new PVC"
+		Step(stepLog, func() {
+			storageClassName := "stork-snapshot-sc"
+			for _, volSnap := range volSnapMap {
+				for vol, snap := range volSnap {
+					pvc := v1.PersistentVolumeClaim{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "data-validation-verify-pvc",
+							Namespace: vol.Namespace,
+							Annotations: map[string]string{
+								"snapshot.alpha.kubernetes.io/snapshot": snap.Name,
+							},
+						},
+						Spec: v1.PersistentVolumeClaimSpec{
+							AccessModes:      []v1.PersistentVolumeAccessMode{"ReadWriteMany"},
+							StorageClassName: &storageClassName,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceStorage: resource.MustParse("120Gi"),
+								},
+							},
+						},
+					}
+					_, err := k8sCore.CreatePersistentVolumeClaim(&pvc)
+					if err != nil {
+						log.FailOnError(err, fmt.Sprintf("error creating PVC from snapshot for volume %s in namespace %s", vol.Name, vol.Namespace))
+					} else {
+						log.Infof("Successfully created PVC %s from snapshot in namespace %s", pvc.Name, vol.Namespace)
+					}
+					Inst().AppList = []string{"data-validation-verify-job"}
+					contexts = append(contexts, ScheduleApplicationsOnNamespace(writeAppNS, "restorelocalsnap")...)
+					err = batch.Instance().ValidateJob("verify-job", writeAppNS, 20*time.Minute)
+					if err != nil {
+						log.FailOnError(err, "Verify job has failed")
+					}
+					log.Infof("Verify Job is successfully completed....")
+				}
+			}
+		})
+		stepLog = "Destroying apps"
+		Step(stepLog, func() {
+			DestroyApps(contexts, make(map[string]bool))
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{ChainedLocalSnapAndValidateRestore}", func() {
+	/*
+			https://purestorage.atlassian.net/browse/PTX-25051
+			1. Creates an app that writes approx 50000 files in a multi directory structure
+			2. Create a local snap of this app's volume
+			3. Restore the volume in same namespace and attach it to another app
+			4. The restored app validates the md5sum of all 50000 restored files
+		    5. The restored app then writes approx 20000 more files in the same volume
+			6. Take local snapshot of restored volume and restore this new snapshot in the same namespace
+			7. Attach this volume to a new app and validate md5sum of all the files
+			8. Repeat Steps 5, 6, and 7 atleast 5 more times forming a snapshot chain.
+			9. Each time we ensure that more data is written and all data is validated using md5sum
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ChainedLocalSnapAndValidateRestore", "Validate localsnap creation and restore. Validate data consistency post restore", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to schedule apps, create scheduled local snap and restore it"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		retain := 8
+		interval := 3
+		var writeAppNS string
+		contexts = make([]*scheduler.Context, 0)
+		policyName := "localintervalpolicydv"
+		chainSize := 5
+		latestApp := make([]*scheduler.Context, 0)
+
+		stepLog = fmt.Sprintf("create schedule policy %s for local snapshots", policyName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+			if err != nil {
+				log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+				schedPolicy = &storkv1.SchedulePolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: policyName,
+					},
+					Policy: storkv1.SchedulePolicyItem{
+						Interval: &storkv1.IntervalPolicy{
+							Retain:          storkv1.Retain(retain),
+							IntervalMinutes: interval,
+						},
+					}}
+				_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
+			}
+		})
+
+		stepLog = fmt.Sprintf("Create an Application that does writes for snapshots to happen")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			appList := Inst().AppList
+			defer func() {
+				Inst().AppList = appList
+			}()
+			Inst().AppList = []string{"data-validation-write-job"}
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("localsnaprestore-%d", i))...)
+			}
+
+			for _, ctx := range contexts {
+				writeAppNS = ctx.App.Key + "-" + ctx.UID
+				err := batch.Instance().ValidateJob("write-and-checksum-job", writeAppNS, 20*time.Minute)
+				if err != nil {
+					log.FailOnError(err, "Write job has failed")
+				}
+				log.Infof("Write job is completed....")
+				latestApp = append(latestApp, ctx)
+			}
+			log.Infof("Waiting for 5 minutes to let one more snapshot happen")
+			time.Sleep(5 * time.Minute)
+		})
+
+		for i := 0; i < chainSize; i++ {
+			volSnapMap := make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
+			stepLog = "Verify that local snap status and wait for new snapshot"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, ctx := range latestApp {
+					var appVolumes []*volume.Volume
+					var err error
+					appNamespace := writeAppNS
+					log.Infof("Namespace: %v", appNamespace)
+					stepLog = fmt.Sprintf("Getting app volumes for volume %s", ctx.App.Key)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						appVolumes, err = Inst().S.GetVolumes(ctx)
+						log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+
+						if len(appVolumes) == 0 {
+							log.FailOnError(fmt.Errorf("no volumes found for [%s]", ctx.App.Key), "error getting volumes for [%s]", ctx.App.Key)
+						}
+					})
+					log.Infof("Got volume count : %v", len(appVolumes))
+
+					snapMap := make(map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
+					for _, v := range appVolumes {
+						snapshotScheduleName := v.Name + "-interval-schedule"
+						log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+
+						var latestSnapshot *storkv1.ScheduledVolumeSnapshotStatus
+						_, err = task.DoRetryWithTimeout(func() (interface{}, bool, error) {
+							resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+							if err != nil {
+								return nil, false, fmt.Errorf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+							}
+							if len(resp.Status.Items) == 0 {
+								return nil, true, fmt.Errorf("waiting for new snapshot schedules for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+							}
+
+							for _, item := range resp.Status.Items {
+								for _, status := range item {
+									if latestSnapshot == nil || status.CreationTimestamp.After(latestSnapshot.CreationTimestamp.Time) {
+										latestSnapshot = status
+									}
+								}
+							}
+
+							if latestSnapshot != nil && latestSnapshot.Status == snapv1.VolumeSnapshotConditionReady {
+								return latestSnapshot, false, nil
+							}
+							return nil, true, fmt.Errorf("latest snapshot %s is not ready yet", latestSnapshot.Name)
+						}, time.Duration(5*15)*defaultCommandTimeout, defaultReadynessTimeout)
+						if err != nil {
+							log.FailOnError(err, "Failed to get a ready snapshot")
+						}
+
+						log.Infof("Latest snapshot %s in ready state for volume: %s", latestSnapshot.Name, v.Name)
+						snapMap[v] = latestSnapshot
+					}
+					volSnapMap[appNamespace] = snapMap
+				}
+			})
+
+			stepLog := "Verify local snap restore to new PVC"
+			Step(stepLog, func() {
+				storageClassName := "data-validation-sc-ss"
+				randomSuffix := rand.Intn(10000)
+				pvcName := fmt.Sprintf("data-validation-verify-pvc-%d", randomSuffix)
+				for _, volSnap := range volSnapMap {
+					for vol, snap := range volSnap {
+						pvc := v1.PersistentVolumeClaim{
+							TypeMeta: metav1.TypeMeta{
+								APIVersion: "v1",
+								Kind:       "PersistentVolumeClaim",
+							},
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      pvcName,
+								Namespace: vol.Namespace,
+								Annotations: map[string]string{
+									"snapshot.alpha.kubernetes.io/snapshot": snap.Name,
+								},
+							},
+							Spec: v1.PersistentVolumeClaimSpec{
+								AccessModes:      []v1.PersistentVolumeAccessMode{"ReadWriteMany"},
+								StorageClassName: &storageClassName,
+								Resources: v1.ResourceRequirements{
+									Requests: v1.ResourceList{
+										v1.ResourceStorage: resource.MustParse("120Gi"),
+									},
+								},
+							},
+						}
+						currentDir, err := os.Getwd()
+						appFilePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "data-validation-verify-job", "dd-app.yaml")
+						pvcFilePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "data-validation-verify-job", "pvc.yaml")
+						log.Infof("Current path is: %v", currentDir)
+						log.Infof("Abs App Path is: %v", appFilePath)
+						err = DumpPVCToYAML(&pvc, pvcFilePath)
+						log.FailOnError(err, "Failed to dump PVC to yaml")
+						err = modifyPVCName(appFilePath, pvcName)
+						log.FailOnError(err, "Failed to modify PVC name in the app yaml")
+						err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+						log.FailOnError(err, "Failed to rescan specs")
+						Inst().AppList = []string{"data-validation-verify-job"}
+						newApp := ScheduleApplicationsOnNamespace(writeAppNS, "restorelocalsnap")
+						contexts = append(contexts, newApp...)
+						latestApp = newApp
+						err = batch.Instance().ValidateJob(pvcName, writeAppNS, 20*time.Minute)
+						if err != nil {
+							log.FailOnError(err, "Verify job has failed")
+						}
+						log.Infof("Verify Job is successfully completed....")
+						log.Infof("Waiting for 5 minutes to let one more snapshot happen")
+						time.Sleep(5 * time.Minute)
+					}
+				}
+			})
+		}
+
+		stepLog = "Destroying apps"
+		Step(stepLog, func() {
+			DestroyApps(contexts, make(map[string]bool))
+		})
+
+	})
+	JustAfterEach(func() {
+
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+func DumpPVCToYAML(pvc *v1.PersistentVolumeClaim, filePath string) error {
+	yamlData, err := yaml.Marshal(pvc)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filePath, yamlData, 0644)
+}
+
+func modifyPVCName(filePath, newPVCName string) error {
+	data, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	var config map[string]interface{}
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		return err
+	}
+
+	if metadata, ok := config["metadata"].(map[string]interface{}); ok {
+		metadata["name"] = newPVCName
+	}
+
+	spec := config["spec"].(map[string]interface{})
+	template := spec["template"].(map[string]interface{})
+	templateSpec := template["spec"].(map[string]interface{})
+	volumes := templateSpec["volumes"].([]interface{})
+	for _, v := range volumes {
+		volume := v.(map[string]interface{})
+		if volume["name"] == "data-volume" {
+			pvc := volume["persistentVolumeClaim"].(map[string]interface{})
+			pvc["claimName"] = newPVCName
+		}
+	}
+
+	updatedData, err := yaml.Marshal(config)
+	if err != nil {
+		return err
+	}
+
+	err = os.WriteFile(filePath, updatedData, 0644)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

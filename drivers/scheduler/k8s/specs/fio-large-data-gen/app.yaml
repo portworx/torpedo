@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fio-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: fio
+  template:
+    metadata:
+      labels:
+        app: fio
+    spec:
+      volumes:
+        - name: fio-data
+          persistentVolumeClaim:
+            claimName: large-data-gen-pvc
+      containers:
+        - name: fio-test
+          image: xridge/fio
+          command: ["fio"]
+          args: ["--name=generate_large_data", "--ioengine=libaio", "--iodepth=128", "--rw=write", "--bs=16k", "--direct=1", "--size=100G", "--numjobs=8", "--runtime=604800", "--group_reporting"]
+          volumeMounts:
+            - name: fio-data
+              mountPath: /data
+          workingDir: /data
+      restartPolicy: Always
