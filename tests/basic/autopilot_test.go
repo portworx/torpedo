@@ -2056,7 +2056,6 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 	It("has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps", func() {
 		log.InfoD("has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps")
 		var contexts []*scheduler.Context
-		var volumeSize int64
 		testName := strings.ToLower(fmt.Sprintf("%srebalance", testSuiteName))
 		poolLabel := map[string]string{"autopilot": "resizedisk"}
 		storageNodes := node.GetStorageNodes()
@@ -2077,13 +2076,15 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 		}
 
 		numberOfVolumes := 100
-		volumeSize = 20 * units.GiB
+		// 0.35 value is the 35% of total provisioned size which will trigger rebalance for above autopilot rule
+		volumeSize := getVolumeSizeByProvisionedPercentage(storageNodes[0], numberOfVolumes, 0.35)
+
 		stepLog = "Create Volumes on each node  in order to achieve pool re-balance"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			stNodes := node.GetStorageDriverNodes()
 			for _, stnode := range stNodes {
-				volCreatecmd := "NODE=$(pxctl status | grep 'This node' | awk '{print $2}') && seq 1 50 | xargs -I {} pxctl volume create rebalance-${NODE}-{} --size 30 --nodes $NODE"
+				volCreatecmd := "NODE=$(pxctl status | grep 'This node' | awk '{print $2}') && seq 1 50 | xargs -I {} pxctl volume create rebalance-${NODE}-{} --repl 3 --size 30 --nodes $NODE"
 				ConnectionOpts := node.ConnectionOpts{
 					Timeout:         10 * time.Minute,
 					TimeBeforeRetry: defaultCommandRetry,
