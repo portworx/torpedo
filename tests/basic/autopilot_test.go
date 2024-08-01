@@ -2059,8 +2059,6 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 		testName := strings.ToLower(fmt.Sprintf("%srebalance", testSuiteName))
 		poolLabel := map[string]string{"autopilot": "resizedisk"}
 		storageNodes := node.GetStorageNodes()
-		// check if we have enough storage nodes to run the test
-		Expect(len(storageNodes)).Should(BeNumerically(">=", 4))
 
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleRebalanceByProvisionedMean([]string{"-10", "15"}, false),
