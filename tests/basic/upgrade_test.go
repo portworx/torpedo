@@ -157,11 +157,13 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				close(stopSignal)
 			}()
 
+			var vQourumError error
 			opver, err := optest.GetPxOperatorVersion()
 			if err == nil && opver.GreaterThanOrEqual(ParallelUpgradeVersion) {
-				var volumeError error
+				log.Info("Starting volume quorum validation for Portworx upgrade .......")
+
 				stopVolumeQuorumValidationSignal := make(chan struct{})
-				go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &volumeError)
+				go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQourumError)
 				defer func() {
 					close(stopVolumeQuorumValidationSignal)
 				}()
@@ -240,8 +242,12 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				if mError != nil {
 					break
 				}
+				if vQourumError != nil {
+					break
+				}
 			}
 			dash.VerifyFatal(mError, nil, "validate apps during PX upgrade")
+			dash.VerifyFatal(vQourumError, nil, "validate volume quorum during PX upgrade")
 		})
 
 		Step("Destroy apps", func() {

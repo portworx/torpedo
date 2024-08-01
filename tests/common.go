@@ -13863,16 +13863,19 @@ func GetVolumeNamefromPVC(namespace string) ([]string, error) {
 func DoVolumeQuorumValidation(volumeQuorumValidationStopSignal chan struct{}, vQourumError *error) {
 	itr := 1
 	for {
-		log.Infof("Volume quorum validation iteration: #%d", itr)
 		select {
 		case <-volumeQuorumValidationStopSignal:
 			log.Infof("Exiting volume quorum validation routine")
 			return
 		default:
+			log.Infof("Volume quorum validation iteration: #%d", itr)
 			errorChan := make(chan error, 50)
 			ValidateVolumeQuorum(&errorChan)
+			close(errorChan) // Close the channel to signal completion
 			for err := range errorChan {
-				*vQourumError = multierr.Append(*vQourumError, err)
+				if err != nil {
+					*vQourumError = multierr.Append(*vQourumError, err)
+				}
 			}
 			if *vQourumError != nil {
 				return
@@ -13889,14 +13892,18 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 		// add to errChan
 		err := fmt.Errorf("error listing volumes, Err: %v", err)
 		processError(err, errChan...)
+		return
 	}
 
 	for _, volID := range volIDs {
 		apiVol, err := Inst().V.InspectVolume(volID)
 		if err != nil {
 			err = fmt.Errorf("error inspecting volume [%s], Err: %v", volID, err)
+			processError(err, errChan...)
+			return
 		}
 		// check if volume is up
+		log.Infof("Volume [%s] status: %v", volID, apiVol.Status)
 		if apiVol.Status != opsapi.VolumeStatus_VOLUME_STATUS_UP {
 			// check if volume replicas are on different nodes
 			// get all the nodes where replicas are present
@@ -13904,6 +13911,7 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 			if len(replicas) == 0 {
 				err := fmt.Errorf("volume [%s] does not have any replicas", volID)
 				processError(err, errChan...)
+				return
 			}
 
 			replicaNodes := replicas[0].Nodes
@@ -13915,6 +13923,7 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 				continue
 			} else {
 				err = fmt.Errorf("volume [%s] is not up", volID)
+				processError(err, errChan...)
 				return
 			}
 		}

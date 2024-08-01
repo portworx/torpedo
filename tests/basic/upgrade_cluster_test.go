@@ -92,10 +92,10 @@ var _ = Describe("{UpgradeCluster}", func() {
 				// validate volume quorum during upgrade
 				if opver.GreaterThanOrEqual(ParallelUpgradeVersion) {
 					var vQourumError error
-					stopVolumeValidationSignal := make(chan struct{})
-					go DoVolumeQuorumValidation(stopVolumeValidationSignal, &vQourumError)
+					stopVolumeQuorumValidationSignal := make(chan struct{})
+					go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQourumError)
 					defer func() {
-						close(stopVolumeValidationSignal)
+						close(stopVolumeQuorumValidationSignal)
 					}()
 				} else {
 					log.Warnf("Volume quorum validation skipped. Current Px-Operator version: [%s], minimum required: [%s]. Error: [%v].", opver, ParallelUpgradeVersion, err)
