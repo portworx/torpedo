@@ -31,11 +31,11 @@ const (
 
 // BearerToken struct
 type BearerToken struct {
-	AccessToken  string `json:"access_token"`
-	IDToken      string `json:"id_token"`
-	TokenType    string `json:"token_type"`
-	ExpiresIn    uint64 `json:"expires_in"`
-	RefreshToken string `json:"refresh_token"`
+	SUCCESS        bool   `json:"SUCCESS"`
+	SUCCESSMESSAGE string `json:"SUCCESSMESSAGE"`
+	DATA           struct {
+		Token string `json:"token"`
+	} `json:"DATA"`
 }
 
 var (
@@ -79,40 +79,44 @@ func GetContext() (context.Context, error) {
 func getBearerToken() (string, error) {
 	username := os.Getenv(envUsername)
 	password := os.Getenv(envPassword)
-	clientID := os.Getenv(envPDSClientID)
-	clientSecret := os.Getenv(envPDSClientSecret)
 	issuerURL := os.Getenv(envPDSISSUERURL)
-	url := fmt.Sprintf("%s/protocol/openid-connect/token", issuerURL)
-	grantType := "password"
+	url := fmt.Sprintf("%s/login", issuerURL)
+
+	log.Debugf("username [%s]", username)
+	log.Debugf("password [%s]", password)
+	log.Debugf("url [%s]", url)
 
 	postBody, err := json.Marshal(map[string]string{
-		"grant_type":    grantType,
-		"client_id":     clientID,
-		"client_secret": clientSecret,
-		"username":      username,
-		"password":      password,
+		"email":    username,
+		"password": password,
 	})
 	if err != nil {
 		return "", err
 	}
-
 	requestBody := bytes.NewBuffer(postBody)
 	resp, err := http.Post(url, "application/json", requestBody)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error while fetching bearer token %v", err)
 	}
-	defer resp.Body.Close()
+	log.Infof("response %s", resp.Status)
+
 	//Read the response body
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
+
+	defer resp.Body.Close()
+
 	var bearerToken = new(BearerToken)
+
 	err = json.Unmarshal(body, &bearerToken)
 	if err != nil {
 		return "", err
 	}
 
-	return bearerToken.AccessToken, nil
+	log.Debugf("token [%s]", bearerToken.DATA.Token)
+
+	return bearerToken.DATA.Token, nil
 
 }
