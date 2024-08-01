@@ -921,19 +921,19 @@ func (v *vsphere) StorageVmotion(ctx context.Context, node node.Node, portworxNa
 
 	sourceDatastore := object.NewDatastore(vm.Client(), largestDisks[0].Datastore)
 
-	targetDatastores, err = filterTargetDatastores(ctx, sourceDatastore, compatibleDatastores)
+	targetDatastores, err = filterTargetDatastores(ctx, sourceDatastore, compatibleDatastores, &vmProps)
 	if err != nil {
 		return fmt.Errorf("error filtering target datastores: %v", err)
 	}
 
 	if !moveAllDisks {
-		log.Infof("Trying to Move largest disk on VM %v to Datastore : %v", node.Name, targetDatastores[0].Reference().Value)
+		log.Infof("Trying to Move largest disk on VM %v from Datastore %v to Datastore : %v", node.Name, sourceDatastore.Name(), targetDatastores[0].Name())
 		err = initiateStorageVmotion(ctx, vm, largestDisks[:1], targetDatastores)
 		if err != nil {
 			return fmt.Errorf("error during storage vMotion: %v", err)
 		}
 	} else {
-		log.Infof("Trying to Move all disks from %v to Datastore : %v", node.Name, targetDatastores[0].Reference().Value)
+		log.Infof("Trying to Move all disks of %v from Datastore %v to Datastore : %v", node.Name, sourceDatastore.Name(), targetDatastores[0].Name())
 		diskLocators := make([]types.VirtualMachineRelocateSpecDiskLocator, 0)
 		for _, device := range vmProps.Config.Hardware.Device {
 			if disk, ok := device.(*types.VirtualDisk); ok {
@@ -946,10 +946,13 @@ func (v *vsphere) StorageVmotion(ctx context.Context, node node.Node, portworxNa
 		if len(diskLocators) == 0 {
 			return fmt.Errorf("no disks found on the VM")
 		}
+		log.Infof("Going to trigger Storage Vmotion for %v", node.Name)
 		err = initiateStorageVmotion(ctx, vm, diskLocators, targetDatastores)
 		if err != nil {
 			return fmt.Errorf("error during storage vMotion: %v", err)
 		}
+		log.Infof("Sleeping for a minute to let config map be updated with latest changes")
+		time.Sleep(1 * time.Minute)
 		postData, err := GetCloudDriveConfigmapData(stc)
 		if err != nil {
 			return fmt.Errorf("error fetching post-vMotion cloud drive config: %v", err)
@@ -981,24 +984,52 @@ func getDatastoreCluster(ctx context.Context, ds *object.Datastore) (*object.Sto
 
 // filterTargetDatastores filters from list of Datastores available with the prefix defined in Storageclass
 // If source DS is in a cluster with another DS, then this method skips the other DS and chooses a DS outside this cluster
-func filterTargetDatastores(ctx context.Context, sourceDatastore *object.Datastore, allDatastores []*object.Datastore) ([]*object.Datastore, error) {
+func filterTargetDatastores(ctx context.Context, sourceDatastore *object.Datastore, allDatastores []*object.Datastore, vmProps *mo.VirtualMachine) ([]*object.Datastore, error) {
 	sourceCluster, err := getDatastoreCluster(ctx, sourceDatastore)
 	if err != nil {
 		return nil, err
 	}
 	var filteredDatastores []*object.Datastore
 
+	totalDiskSizeToMove := int64(0)
+	for _, device := range vmProps.Config.Hardware.Device {
+		if disk, ok := device.(*types.VirtualDisk); ok {
+			totalDiskSizeToMove += disk.CapacityInKB
+		}
+	}
+
 	for _, ds := range allDatastores {
 		if ds.Reference().Value == sourceDatastore.Reference().Value {
 			continue
 		}
+
 		targetCluster, err := getDatastoreCluster(ctx, ds)
 		if err != nil {
 			continue
 		}
+
+		var dsProps mo.Datastore
+		err = ds.Properties(ctx, ds.Reference(), []string{"summary"}, &dsProps)
+		if err != nil {
+			log.Errorf("Failed to get properties for datastore %v: %v", ds.Name(), err)
+			continue
+		}
+
+		availableSpace := dsProps.Summary.FreeSpace / 1024
+		spaceAfterMove := availableSpace - totalDiskSizeToMove
+		maxAllowedUsage := (dsProps.Summary.Capacity / 1024) * 90 / 100
+
+		if spaceAfterMove < 0 || spaceAfterMove > maxAllowedUsage {
+			log.Infof("Datastore %v does not have enough space or will exceed 90 percent capacity.", ds.Name())
+			continue
+		}
+
 		if sourceCluster == nil || targetCluster == nil || sourceCluster.Reference() != targetCluster.Reference() {
 			filteredDatastores = append(filteredDatastores, ds)
 		}
+	}
+	if len(filteredDatastores) == 0 {
+		return nil, fmt.Errorf("no suitable datastores found that meet the space requirements")
 	}
 	return filteredDatastores, nil
 }
@@ -1183,8 +1214,8 @@ func (v *vsphere) ValidateDatastoreUpdate(preData, postData map[string]DriveSet,
 		}
 		postDSID := postDS.Reference().Value
 
-		if postDSID != targetDatastoreID || preDrive.Labels["datastore"] == postDSName {
-			log.Infof("Disk with UUID %v did not move to the target datastore %v as expected, or did not change from the original", preDrive.DiskUUID, targetDatastoreID)
+		if !(postDSID == targetDatastoreID || (preDrive.Labels["datastore"] == postDSName && postDSID == targetDatastoreID)) {
+			log.Infof("Disk with UUID %v did not move to the target datastore %v as expected, or was not already there. This is for Node %v", preDrive.DiskUUID, targetDatastoreID, nodeUUID)
 			allMoved = false
 		}
 	}
