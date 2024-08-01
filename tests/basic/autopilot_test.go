@@ -2085,7 +2085,7 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 			stNodes := node.GetStorageDriverNodes()
 			lenstNodes := len(stNodes) / 2
 			for _, stnode := range stNodes[:1] {
-				volCreatecmd := fmt.Sprintf("NODES=$(pxctl status | grep Online | tail -%d | awk '{print $2}'); for i in $(seq 1 50); do pxctl volume create rebalance-$i --size 30 --repl 3 --nodes $(echo $NODES | sed 's/ /,/g'); done", lenstNodes)
+				volCreatecmd := fmt.Sprintf("NODES=$(pxctl status | grep Online | tail -%d | awk '{print $2}'); for i in $(seq 1 50); do pxctl volume create rebalance-$i --size 30 --repl %d --nodes $(echo $NODES | sed 's/ /,/g'); done", lenstNodes, lenstNodes)
 				ConnectionOpts := node.ConnectionOpts{
 					Timeout:         10 * time.Minute,
 					TimeBeforeRetry: defaultCommandRetry,
