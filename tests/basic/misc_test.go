@@ -1808,10 +1808,11 @@ var _ = Describe("{KubeClusterRestart}", func() {
 var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 	JustBeforeEach(func() {
 		// https://purestorage.atlassian.net/browse/PTX-24859
-		StartTorpedoTest("VerifyNoPxRestartDueToPxPodStop", "Verify that px serivce remain up even if px pod got deleted ", nil, 87311294)
+		// https://portworx.testrail.net/index.php?/cases/view/300005
+		StartTorpedoTest("VerifyNoPxRestartDueToPxPodStop", "Verify that px serivce remain up even if px pod got deleted ", nil, 300005)
 	})
 
-	It("has to setup, validate and teardown apps", func() {
+	It("Delete px pods and validate px service", func() {
 		// Get uptime for px service on each node
 		stepLog = "Getting PID of Px process before and after restarting PX pods on all the nodes"
 		Step(stepLog, func() {
@@ -1822,23 +1823,21 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 			}
 
 			namespace, err := Inst().S.GetPortworxNamespace()
-			log.FailOnError(err, "We have not Px pods in any of the namespace")
+			log.FailOnError(err, "Error getting portworx namespace")
 
 			//Deleting px pods from all the node
 			err = DeletePXPods(namespace)
-			log.FailOnError(err, "We have come across error while deleting PX pod ")
+			log.FailOnError(err, "Error deleting px pods")
 
 			//Capturing PID of PX after stopping PX pods
 			processPidPostRestart, err := GetPxPIDMap(node.GetStorageDriverNodes())
-			if err != nil {
-				log.FailOnError(err, "Failed while getting PID of PX process")
-			}
+			log.FailOnError(err, "Failed while getting PID of PX process")
 			log.Infof("Process IDs for px after stopping portworx pod  %s", processPidPostRestart)
 
 			//Verify PID before and after for PX process
 			for nodeId, beforePID := range processPid {
 				afterPID, _ := processPidPostRestart[nodeId]
-				dash.VerifyFatal(beforePID, afterPID, fmt.Sprintf("Process ID of PX process before and after PX pod restart is different"))
+				dash.VerifyFatal(beforePID, afterPID, fmt.Sprintf("Validate Process ID of PX process before and after PX pod restart"))
 			}
 		})
 	})
