@@ -13,6 +13,9 @@ parameters:
   createoptions:  "{{ .CreateOptions }}"
   {{ else }}
   createoptions: -b size=2048 {{ end }}
+  {{ if .PureFaPodName }}
+  pure_fa_pod_name: "{{ .PureFaPodName }}"
+  {{ end }}
 provisioner: pxd.portworx.com
 reclaimPolicy: Delete
 volumeBindingMode: Immediate
@@ -28,6 +31,9 @@ parameters:
   backend: "pure_block"
   csi.storage.k8s.io/fstype: ext4
   createoptions: -b 2048
+  {{ if .PureFaPodName }}
+  pure_fa_pod_name: "{{ .PureFaPodName }}"
+  {{ end }}
 provisioner: pxd.portworx.com 
 reclaimPolicy: Delete
 volumeBindingMode: Immediate
