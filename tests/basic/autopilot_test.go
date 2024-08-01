@@ -2083,8 +2083,9 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			stNodes := node.GetStorageDriverNodes()
-			for _, stnode := range stNodes {
-				volCreatecmd := "NODE=$(pxctl status | grep 'This node' | awk '{print $2}') && seq 1 50 | xargs -I {} pxctl volume create rebalance-${NODE}-{} --repl 3 --size 30 --nodes $NODE"
+			lenstNodes := len(stNodes) / 2
+			for _, stnode := range stNodes[:1] {
+				volCreatecmd := fmt.Sprintf("NODES=$(pxctl status | grep Online | tail -%d | awk '{print $2}'); for i in $(seq 1 50); do pxctl volume create rebalance-$i --size 30 --repl 3 --nodes $(echo $NODES | sed 's/ /,/g'); done", lenstNodes)
 				ConnectionOpts := node.ConnectionOpts{
 					Timeout:         10 * time.Minute,
 					TimeBeforeRetry: defaultCommandRetry,
@@ -2145,8 +2146,8 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 			log.InfoD(stepLog)
 
 			stNodes := node.GetStorageDriverNodes()
-			for _, stnode := range stNodes {
-				volDeletecmd := "NODE=$(pxctl status | grep 'This node' | awk '{print $2}') && seq 1 50 | xargs -I {} pxctl volume delete rebalance-${NODE}-{} --force"
+			for _, stnode := range stNodes[:1] {
+				volDeletecmd := "NODE=$(pxctl status | grep 'This node' | awk '{print $2}') && seq 1 50 | xargs -I {} pxctl volume delete rebalance-{} --force"
 				ConnectionOpts := node.ConnectionOpts{
 					Timeout:         10 * time.Minute,
 					TimeBeforeRetry: 5 * time.Second,
