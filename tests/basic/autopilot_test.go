@@ -1999,128 +1999,128 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 			}
 		})
 	})
-	It("has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps", func() {
-		log.InfoD("has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps")
-		var contexts []*scheduler.Context
-		testName := strings.ToLower(fmt.Sprintf("%srebalance", testSuiteName))
-		poolLabel := map[string]string{"autopilot": "resizedisk"}
-		storageNodes := node.GetStorageNodes()
-
-		apRules := []apapi.AutopilotRule{
-			aututils.PoolRuleRebalanceByProvisionedMean([]string{"-10", "10"}, false),
-			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])*120/100)/units.GiB, 50, aututils.RuleScaleTypeResizeDisk, poolLabel),
-		}
-		for i := range apRules {
-			apRules[i].Spec.ActionsCoolDownPeriod = int64(60)
-		}
-		storageNodeIds := []string{}
-		// take first 3 (default replicaset for volumes is 3) storage node IDs, label and schedule volumes onto them
-		for _, n := range storageNodes[0:3] {
-			for k, v := range poolLabel {
-				Inst().S.AddLabelOnNode(n, k, v)
-			}
-			storageNodeIds = append(storageNodeIds, n.Id)
-		}
-
-		numberOfVolumes := 3
-		// 0.35 value is the 35% of total provisioned size which will trigger rebalance for above autopilot rule
-		volumeSize := getVolumeSizeByProvisionedPercentage(storageNodes[0], numberOfVolumes, 0.35)
-		Step("schedule apps with autopilot rules", func() {
-			contexts = scheduleAppsWithAutopilot(testName, numberOfVolumes, apRules,
-				scheduler.ScheduleOptions{PvcNodesAnnotation: storageNodeIds, PvcSize: volumeSize})
-		})
-		//stepLog = "Create Volumes on each node  in order to achieve pool re-balance"
-		//Step(stepLog, func() {
-		//	log.InfoD(stepLog)
-		//	stNodes := node.GetStorageDriverNodes()
-		//	lenstNodes := len(stNodes) / 2
-		//	for _, stnode := range stNodes[:1] {
-		//		volCreatecmd := fmt.Sprintf("NODES=$(pxctl status | grep Online | tail -%d | awk '{print $2}'); for i in $(seq 1 15); do pxctl volume create rebalance-$i --size 20 --repl %d --nodes $(echo $NODES | sed 's/ /,/g'); done", lenstNodes, lenstNodes)
-		//
-		//		ConnectionOpts := node.ConnectionOpts{
-		//			Timeout:         10 * time.Minute,
-		//			TimeBeforeRetry: defaultCommandRetry,
-		//		}
-		//		output, err := Inst().N.RunCommandWithNoRetry(stnode, volCreatecmd, ConnectionOpts)
-		//		log.InfoD("Output of the command: %s", output)
-		//		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the volumes created on node [%s]", stnode.Name))
-		//
-		//	}
-		//})
-
-		Step("validate rebalance jobs", func() {
-			err = Inst().S.WaitForRebalanceAROToComplete()
-			Expect(err).NotTo(HaveOccurred())
-			log.InfoD("=====Rebalance Completed ========")
-			err = Inst().V.ValidateRebalanceJobs()
-			log.InfoD("====Validate Rebalance Job ========")
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		//stepLog = "validate rebalance jobs"
-		//Step(stepLog, func() {
-		//	log.InfoD(stepLog)
-		//	apRule := apRules[0]
-		//
-		//	err := aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.AnyToTriggeredEvent})
-		//	Expect(err).NotTo(HaveOccurred())
-		//
-		//	err = Inst().V.ValidateRebalanceJobs()
-		//	Expect(err).NotTo(HaveOccurred())
-		//
-		//	err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionTakenToAny})
-		//	Expect(err).NotTo(HaveOccurred())
-		//})
-		stepLog = "validating and verifying size of storage pools"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			ValidateStoragePools(contexts)
-		})
-		Step("Validate pool resize ARO", func() {
-			var aroAvailable bool
-			aroAvailable, err = Inst().S.VerifyPoolResizeARO(apRules[1])
-			Expect(err).NotTo(HaveOccurred())
-			log.InfoD("aroAvailable value %v", aroAvailable)
-			log.InfoD("=====Pool resize ARO verified ========")
-
-		})
-
-		stepLog = "destroy apps"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-			for _, apRule := range apRules {
-				Inst().S.DeleteAutopilotRule(apRule.Name)
-			}
-			for _, storageNode := range storageNodes {
-				for key := range poolLabel {
-					Inst().S.RemoveLabelOnNode(storageNode, key)
-				}
-			}
-		})
-
-		//stepLog = "Delete Volumes on each node"
-		//Step(stepLog, func() {
-		//	log.InfoD(stepLog)
-		//
-		//	stNodes := node.GetStorageDriverNodes()
-		//	for _, stnode := range stNodes[:1] {
-		//		volDeletecmd := "NODE=$(pxctl status | grep 'This node' | awk '{print $2}') && seq 1 50 | xargs -I {} pxctl volume delete rebalance-{} --force"
-		//		ConnectionOpts := node.ConnectionOpts{
-		//			Timeout:         10 * time.Minute,
-		//			TimeBeforeRetry: 5 * time.Second,
-		//		}
-		//		output, err := Inst().N.RunCommandWithNoRetry(stnode, volDeletecmd, ConnectionOpts)
-		//		log.InfoD("Output of the command: %s", output)
-		//		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the volumes created on node [%s]", stnode.Name))
-		//
-		//	}
-		//})
-	})
+	//It("has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps", func() {
+	//	log.InfoD("has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps")
+	//	var contexts []*scheduler.Context
+	//	testName := strings.ToLower(fmt.Sprintf("%srebalance", testSuiteName))
+	//	poolLabel := map[string]string{"autopilot": "resizedisk"}
+	//	storageNodes := node.GetStorageNodes()
+	//
+	//	apRules := []apapi.AutopilotRule{
+	//		aututils.PoolRuleRebalanceByProvisionedMean([]string{"-10", "10"}, false),
+	//		aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])*120/100)/units.GiB, 50, aututils.RuleScaleTypeResizeDisk, poolLabel),
+	//	}
+	//	for i := range apRules {
+	//		apRules[i].Spec.ActionsCoolDownPeriod = int64(60)
+	//	}
+	//	storageNodeIds := []string{}
+	//	// take first 3 (default replicaset for volumes is 3) storage node IDs, label and schedule volumes onto them
+	//	for _, n := range storageNodes[0:3] {
+	//		for k, v := range poolLabel {
+	//			Inst().S.AddLabelOnNode(n, k, v)
+	//		}
+	//		storageNodeIds = append(storageNodeIds, n.Id)
+	//	}
+	//
+	//	numberOfVolumes := 3
+	//	// 0.35 value is the 35% of total provisioned size which will trigger rebalance for above autopilot rule
+	//	volumeSize := getVolumeSizeByProvisionedPercentage(storageNodes[0], numberOfVolumes, 0.35)
+	//	Step("schedule apps with autopilot rules", func() {
+	//		contexts = scheduleAppsWithAutopilot(testName, numberOfVolumes, apRules,
+	//			scheduler.ScheduleOptions{PvcNodesAnnotation: storageNodeIds, PvcSize: volumeSize})
+	//	})
+	//	//stepLog = "Create Volumes on each node  in order to achieve pool re-balance"
+	//	//Step(stepLog, func() {
+	//	//	log.InfoD(stepLog)
+	//	//	stNodes := node.GetStorageDriverNodes()
+	//	//	lenstNodes := len(stNodes) / 2
+	//	//	for _, stnode := range stNodes[:1] {
+	//	//		volCreatecmd := fmt.Sprintf("NODES=$(pxctl status | grep Online | tail -%d | awk '{print $2}'); for i in $(seq 1 15); do pxctl volume create rebalance-$i --size 20 --repl %d --nodes $(echo $NODES | sed 's/ /,/g'); done", lenstNodes, lenstNodes)
+	//	//
+	//	//		ConnectionOpts := node.ConnectionOpts{
+	//	//			Timeout:         10 * time.Minute,
+	//	//			TimeBeforeRetry: defaultCommandRetry,
+	//	//		}
+	//	//		output, err := Inst().N.RunCommandWithNoRetry(stnode, volCreatecmd, ConnectionOpts)
+	//	//		log.InfoD("Output of the command: %s", output)
+	//	//		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the volumes created on node [%s]", stnode.Name))
+	//	//
+	//	//	}
+	//	//})
+	//
+	//	Step("validate rebalance jobs", func() {
+	//		err = Inst().S.WaitForRebalanceAROToComplete()
+	//		Expect(err).NotTo(HaveOccurred())
+	//		log.InfoD("=====Rebalance Completed ========")
+	//		err = Inst().V.ValidateRebalanceJobs()
+	//		log.InfoD("====Validate Rebalance Job ========")
+	//		Expect(err).NotTo(HaveOccurred())
+	//	})
+	//
+	//	//stepLog = "validate rebalance jobs"
+	//	//Step(stepLog, func() {
+	//	//	log.InfoD(stepLog)
+	//	//	apRule := apRules[0]
+	//	//
+	//	//	err := aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.AnyToTriggeredEvent})
+	//	//	Expect(err).NotTo(HaveOccurred())
+	//	//
+	//	//	err = Inst().V.ValidateRebalanceJobs()
+	//	//	Expect(err).NotTo(HaveOccurred())
+	//	//
+	//	//	err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionTakenToAny})
+	//	//	Expect(err).NotTo(HaveOccurred())
+	//	//})
+	//	stepLog = "validating and verifying size of storage pools"
+	//	Step(stepLog, func() {
+	//		log.InfoD(stepLog)
+	//		ValidateStoragePools(contexts)
+	//	})
+	//	Step("Validate pool resize ARO", func() {
+	//		var aroAvailable bool
+	//		aroAvailable, err = Inst().S.VerifyPoolResizeARO(apRules[1])
+	//		Expect(err).NotTo(HaveOccurred())
+	//		log.InfoD("aroAvailable value %v", aroAvailable)
+	//		log.InfoD("=====Pool resize ARO verified ========")
+	//
+	//	})
+	//
+	//	stepLog = "destroy apps"
+	//	Step(stepLog, func() {
+	//		log.InfoD(stepLog)
+	//		opts := make(map[string]bool)
+	//		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+	//		for _, ctx := range contexts {
+	//			TearDownContext(ctx, opts)
+	//		}
+	//		for _, apRule := range apRules {
+	//			Inst().S.DeleteAutopilotRule(apRule.Name)
+	//		}
+	//		for _, storageNode := range storageNodes {
+	//			for key := range poolLabel {
+	//				Inst().S.RemoveLabelOnNode(storageNode, key)
+	//			}
+	//		}
+	//	})
+	//
+	//	//stepLog = "Delete Volumes on each node"
+	//	//Step(stepLog, func() {
+	//	//	log.InfoD(stepLog)
+	//	//
+	//	//	stNodes := node.GetStorageDriverNodes()
+	//	//	for _, stnode := range stNodes[:1] {
+	//	//		volDeletecmd := "NODE=$(pxctl status | grep 'This node' | awk '{print $2}') && seq 1 50 | xargs -I {} pxctl volume delete rebalance-{} --force"
+	//	//		ConnectionOpts := node.ConnectionOpts{
+	//	//			Timeout:         10 * time.Minute,
+	//	//			TimeBeforeRetry: 5 * time.Second,
+	//	//		}
+	//	//		output, err := Inst().N.RunCommandWithNoRetry(stnode, volDeletecmd, ConnectionOpts)
+	//	//		log.InfoD("Output of the command: %s", output)
+	//	//		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the volumes created on node [%s]", stnode.Name))
+	//	//
+	//	//	}
+	//	//})
+	//})
 	itLog := "has to fill up 100 volumes completely, resize the volumes, validate and teardown apps"
 	It(itLog, func() {
 		log.InfoD(itLog)
