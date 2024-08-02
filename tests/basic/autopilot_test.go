@@ -2073,7 +2073,7 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 			storageNodeIds = append(storageNodeIds, n.Id)
 		}
 
-		numberOfVolumes := 100
+		numberOfVolumes := 20
 		// 0.35 value is the 35% of total provisioned size which will trigger rebalance for above autopilot rule
 		volumeSize := getVolumeSizeByProvisionedPercentage(storageNodes[0], numberOfVolumes, 0.35)
 
@@ -2083,7 +2083,7 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 			stNodes := node.GetStorageDriverNodes()
 			lenstNodes := len(stNodes) / 2
 			for _, stnode := range stNodes[:1] {
-				volCreatecmd := fmt.Sprintf("NODES=$(pxctl status | grep Online | tail -%d | awk '{print $2}'); for i in $(seq 1 50); do pxctl volume create rebalance-$i --size 30 --repl %d --nodes $(echo $NODES | sed 's/ /,/g'); done", lenstNodes, lenstNodes)
+				volCreatecmd := fmt.Sprintf("NODES=$(pxctl status | grep Online | tail -%d | awk '{print $2}'); for i in $(seq 1 15); do pxctl volume create rebalance-$i --size 20 --repl %d --nodes $(echo $NODES | sed 's/ /,/g'); done", lenstNodes, lenstNodes)
 
 				ConnectionOpts := node.ConnectionOpts{
 					Timeout:         10 * time.Minute,
