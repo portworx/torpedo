@@ -1963,15 +1963,6 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 			contexts = scheduleAppsWithAutopilot(testName, numberOfVolumes, apRules,
 				scheduler.ScheduleOptions{PvcNodesAnnotation: storageNodeIds, PvcSize: volumeSize})
 		})
-
-		Step("validate rebalance jobs", func() {
-			err = Inst().S.WaitForRebalanceAROToComplete()
-			Expect(err).NotTo(HaveOccurred())
-			log.InfoD("=====Rebalance Completed ========")
-			err = Inst().V.ValidateRebalanceJobs()
-			log.InfoD("====Validate Rebalance Job ========")
-			Expect(err).NotTo(HaveOccurred())
-		})
 		Step("validating and verifying size of storage pools", func() {
 			ValidateStoragePools(contexts)
 		})
@@ -1982,6 +1973,14 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 			log.InfoD("aroAvailable value %v", aroAvailable)
 			log.InfoD("=====Pool resize ARO verified ========")
 
+		})
+		Step("validate rebalance jobs", func() {
+			err = Inst().S.WaitForRebalanceAROToComplete()
+			Expect(err).NotTo(HaveOccurred())
+			log.InfoD("=====Rebalance Completed ========")
+			err = Inst().V.ValidateRebalanceJobs()
+			log.InfoD("====Validate Rebalance Job ========")
+			Expect(err).NotTo(HaveOccurred())
 		})
 		Step("destroy apps", func() {
 			opts := make(map[string]bool)
