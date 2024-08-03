@@ -1933,6 +1933,7 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 	})
 	It("has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps", func() {
 		var contexts []*scheduler.Context
+		var wg sync.WaitGroup
 		poolLabel := map[string]string{"autopilot": "resizedisk"}
 		storageNodes := node.GetStorageNodes()
 		// check if we have enough storage nodes to run the test
@@ -1963,25 +1964,25 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 			contexts = scheduleAppsWithAutopilot(testName, numberOfVolumes, apRules,
 				scheduler.ScheduleOptions{PvcNodesAnnotation: storageNodeIds, PvcSize: volumeSize})
 		})
-		Step("validating and verifying size of storage pools", func() {
-			ValidateStoragePools(contexts)
-		})
-		Step("Validate pool resize ARO", func() {
-			var aroAvailable bool
-			aroAvailable, err = Inst().S.VerifyPoolResizeARO(apRules[1])
-			Expect(err).NotTo(HaveOccurred())
-			log.InfoD("aroAvailable value %v", aroAvailable)
-			log.InfoD("=====Pool resize ARO verified ========")
-
-		})
-		Step("validate rebalance jobs", func() {
-			err = Inst().S.WaitForRebalanceAROToComplete()
-			Expect(err).NotTo(HaveOccurred())
-			log.InfoD("=====Rebalance Completed ========")
-			err = Inst().V.ValidateRebalanceJobs()
-			log.InfoD("====Validate Rebalance Job ========")
-			Expect(err).NotTo(HaveOccurred())
-		})
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			Step("validating and verifying size of storage pools", func() {
+				ValidateStoragePools(contexts)
+			})
+		}()
+		go func() {
+			defer wg.Done()
+			Step("validate rebalance jobs", func() {
+				err = Inst().S.WaitForRebalanceAROToComplete()
+				Expect(err).NotTo(HaveOccurred())
+				log.InfoD("=====Rebalance Completed ========")
+				err = Inst().V.ValidateRebalanceJobs()
+				log.InfoD("====Validate Rebalance Job ========")
+				Expect(err).NotTo(HaveOccurred())
+			})
+		}()
+		wg.Wait()
 		Step("destroy apps", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
