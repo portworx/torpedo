@@ -473,7 +473,7 @@ var _ = Describe("{PoolExpandDiskResizePXRestart}", func() {
 	})
 
 	It("Restart PX after pool expansion", func() {
-		StartTorpedoTest("RestartAfterPoolExpansion",
+		StartTorpedoTest("PoolExpandDiskResizePXRestart",
 			"Restart PX after pool expansion", nil, testrailID)
 
 		Step("Select a pool that has I/O and expand it by 100 GiB with resize-disk type. ", func() {
@@ -502,7 +502,7 @@ var _ = Describe("{PoolExpandDiskResizePXRestart}", func() {
 			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 		})
 
-		Step("Expansioin successful. Restart PX", func() {
+		Step("Expansion successful. Restart PX", func() {
 			err = Inst().V.RestartDriver(*storageNode, nil)
 			log.FailOnError(err, fmt.Sprintf("Error restarting px on node [%s]", storageNode.Name))
 			err = Inst().V.WaitDriverUpOnNode(*storageNode, addDriveUpTimeOut)
@@ -535,7 +535,7 @@ var _ = Describe("{PoolExpandDiskAddPXRestart}", func() {
 	})
 
 	It("Restart PX after pool expansion", func() {
-		StartTorpedoTest("RestartAfterPoolExpansion",
+		StartTorpedoTest("PoolExpandDiskAddPXRestart",
 			"Restart PX after pool expansion", nil, testrailID)
 
 		Step("Select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {

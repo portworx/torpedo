@@ -6084,20 +6084,9 @@ func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, a
 
 	log.Infof("Create creds for azure")
 	tenantID = os.Getenv("AZURE_TENANT_ID")
-	expect(tenantID).NotTo(equal(""),
-		"AZURE_TENANT_ID Environment variable should not be empty")
-
 	clientID = os.Getenv("AZURE_CLIENT_ID")
-	expect(clientID).NotTo(equal(""),
-		"AZURE_CLIENT_ID Environment variable should not be empty")
-
 	clientSecret = os.Getenv("AZURE_CLIENT_SECRET")
-	expect(clientSecret).NotTo(equal(""),
-		"AZURE_CLIENT_SECRET Environment variable should not be empty")
-
 	subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID")
-	expect(clientSecret).NotTo(equal(""),
-		"AZURE_SUBSCRIPTION_ID Environment variable should not be empty")
 
 	return tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey
 }
