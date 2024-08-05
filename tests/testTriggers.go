@@ -789,7 +789,6 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		UpdateOutcome(event, updatePxRuntimeOpts())
 	})
 
-	errorChan := make(chan error, errorChannelSize)
 	labels := Inst().TopologyLabels
 	dashStats := make(map[string]string)
 	dashStats["app-list"] = strings.Join(Inst().AppList, ", ")
@@ -798,6 +797,7 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 	Step("Deploy applications", func() {
 		if len(labels) > 0 {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				errorChan := make(chan error, errorChannelSize)
 				newContexts := ScheduleAppsInTopologyEnabledCluster(
 					fmt.Sprintf("longevity-%d", i), labels, &errorChan,
 				)
@@ -805,8 +805,10 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 			}
 		} else {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				log.Infof("ScheduleApplications Iteration %d", i)
+				errorChan := make(chan error, errorChannelSize)
+				log.Infof("Before ScheduleApplications Iteration %d", i)
 				newContexts := ScheduleApplications(fmt.Sprintf("longevity-%d", i), &errorChan)
+				log.Infof("After ScheduleApplications Iteration %d", i)
 				for err := range errorChan {
 					log.Infof("The error from ScheduleApplications [Iteration %d] ErrorChan: [%v]", i, err)
 				}
@@ -818,7 +820,7 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		for _, ctx := range *contexts {
 			log.Infof("Validating context: %v", ctx.App.Key)
 			ctx.SkipVolumeValidation = false
-			errorChan = make(chan error, errorChannelSize)
+			errorChan := make(chan error, errorChannelSize)
 			ValidateContext(ctx, &errorChan)
 			for err := range errorChan {
 				log.Infof("Error: %v", err)
