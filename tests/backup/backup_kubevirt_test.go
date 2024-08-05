@@ -2123,16 +2123,14 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 		testAppList                []string
 	)
 
-	backupLocationMap = make(map[string]string)
-	backupNames = make([]string, 0)
-	labelSelectors = make(map[string]string)
-	appNamespaces = make([]string, 0)
-	backupNamespaceMap := make(map[string]string)
-	periodicPolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(6))
-	testAppList = []string{"mysql-backup", "kubevirt-cirros-cd-with-pvc"}
-
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("DefaultBackupRestoreWithKubevirtAndNonKubevirtNS", "Verify default backup & restore with both Kubevirt and Non-Kubevirt namespaces", nil, 93006, Vpinisetti, Q1FY25)
+		backupLocationMap = make(map[string]string)
+		backupNames = make([]string, 0)
+		labelSelectors = make(map[string]string)
+		appNamespaces = make([]string, 0)
+		periodicPolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(6))
+		testAppList = []string{"mysql-backup", "kubevirt-cirros-cd-with-pvc"}
 		providers = GetBackupProviders()
 		actualAppList := Inst().AppList
 		defer func() {
@@ -2459,8 +2457,9 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 			for i, bkpName := range backupNames {
 				restoreName = fmt.Sprintf("rretain-%v-%s-%s", i, bkpName, RandomString(6))
 				log.InfoD("Restoring from the backup - [%s]", bkpName)
-				bkpNamespace := backupNamespaceMap[bkpName]
-				appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespace})
+				namespaceList, err := FetchNamespacesFromBackup(ctx, bkpName, BackupOrgID)
+				log.FailOnError(err, "Fetching namespaces from backup")
+				appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, namespaceList)
 				err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsExpectedInBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s] from backup [%s]", restoreName, backupNames[i]))
 			}
@@ -2471,11 +2470,11 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			for i, bkpName := range backupNames {
+				namespaceMapping := make(map[string]string)
 				restoreName = fmt.Sprintf("rreplace-ns-%v-%s-%s", i, bkpName, RandomString(6))
 				log.InfoD("Restoring from the backup - [%s]", bkpName)
 				actualBackupNamespaces, err := FetchNamespacesFromBackup(ctx, bkpName, BackupOrgID)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching namespaces from schedule backup %v - [%v]", actualBackupNamespaces, bkpName))
-				namespaceMapping := make(map[string]string)
 				for _, namespace := range actualBackupNamespaces {
 					if _, ok := namespaceMapping[namespace]; !ok {
 						namespaceMapping[namespace] = namespace + "-new"
@@ -2533,7 +2532,22 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 			err := DeleteRule(ruleName, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of rule [%s]", ruleName))
 		}
+
+		log.InfoD("Cleaning up cloud settings and application clusters")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		err = DeleteTorpedoApps()
+		dash.VerifySafely(err, nil, "Deleting applications on source cluster")
+
+		log.InfoD("switching to destination context")
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "failed to switch to context to destination cluster")
+
+		log.InfoD("Destroying restored apps on destination clusters")
+		err = DeleteTorpedoApps()
+		dash.VerifySafely(err, nil, "Deleting applications on destination cluster")
 	})
 })
 
@@ -2843,17 +2857,19 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 		preRuleList                []*api.RulesInfo_RuleItem
 		postRuleList               []*api.RulesInfo_RuleItem
 		testAppList                []string
+		restoreContextMap          map[string][]*scheduler.Context
 	)
-
-	backupLocationMap = make(map[string]string)
-	backupNames = make([]string, 0)
-	labelSelectors = make(map[string]string)
-	appNamespaces = make([]string, 0)
-	periodicPolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(6))
-	testAppList = []string{"mysql-backup", "kubevirt-cirros-cd-with-pvc"}
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("CustomBackupRestoreWithKubevirtAndNonKubevirtNS", "Verify custom backup & restore with both Kubevirt and Non-Kubevirt namespaces", nil, 93007, Vpinisetti, Q1FY25)
+		backupLocationMap = make(map[string]string)
+		backupNames = make([]string, 0)
+		labelSelectors = make(map[string]string)
+		appNamespaces = make([]string, 0)
+		periodicPolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(6))
+		testAppList = []string{"mysql-backup", "kubevirt-cirros-cd-with-pvc"}
+		restoreContextMap = make(map[string][]*scheduler.Context)
+
 		numOfDeployments = Inst().GlobalScaleFactor
 		providers = GetBackupProviders()
 		actualAppList := Inst().AppList
@@ -3179,10 +3195,17 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			log.InfoD("Total backups to restore : %v", backupNames)
 			for i, bkpName := range backupNames {
+				restoreContextMap = make(map[string][]*scheduler.Context)
 				restoreName = fmt.Sprintf("rreplace-%v-%s-%s", i, bkpName, RandomString(6))
 				log.InfoD("Restoring from the backup - [%s]", bkpName)
-				err = CreateRestoreWithReplacePolicyWithValidation(restoreName, bkpName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), 2, scheduledAppContexts)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Default restore of backups by replacing the existing resources [%s]", restoreName))
+				namespaceList, err := FetchNamespacesFromBackup(ctx, bkpName, BackupOrgID)
+				log.FailOnError(err, "Fetching namespaces from backup")
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, namespaceList)
+				restoreContextMap[restoreName] = appContextsToBackup
+				err = CreateRestoreWithReplacePolicy(restoreName, bkpName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), 2)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore: %s from backup: %s", restoreName, bkpName))
+				err = ValidateCustomResourceRestores(ctx, BackupOrgID, []string{"PersistentVolumeClaim"}, restoreContextMap, DestinationClusterName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating custom resource restore without namespace mapping"))
 			}
 		})
 
@@ -3192,19 +3215,23 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			log.InfoD("Total backups to restore : %v", backupNames)
 			for i, bkpName := range backupNames {
+				restoreContextMap = make(map[string][]*scheduler.Context)
+				namespaceMapping := make(map[string]string)
 				restoreName = fmt.Sprintf("rreplace-ns-%v-%s-%s", i, bkpName, RandomString(6))
 				log.InfoD("Restoring from the backup - [%s]", bkpName)
-				actualBackupNamespaces, err := FetchNamespacesFromBackup(ctx, bkpName, BackupOrgID)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching namespaces from schedule backup %v - [%v]", actualBackupNamespaces, bkpName))
-				namespaceMapping := make(map[string]string)
-				for _, namespace := range actualBackupNamespaces {
-					if _, ok := namespaceMapping[namespace]; !ok {
-						namespaceMapping[namespace] = namespace + "-new"
-					}
+				namespaceList, err := FetchNamespacesFromBackup(ctx, bkpName, BackupOrgID)
+				log.FailOnError(err, "Fetching namespaces from backup")
+				for _, namespace := range namespaceList {
+					restoredNameSpace := fmt.Sprintf("%s-%s", RandomString(10), "restored")
+					namespaceMapping[namespace] = restoredNameSpace
 				}
-				log.InfoD("Backup namespace mapping : %v", namespaceMapping)
-				err = CreateRestoreWithReplacePolicyWithValidation(restoreName, bkpName, namespaceMapping, DestinationClusterName, BackupOrgID, ctx, make(map[string]string), 2, scheduledAppContexts)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Default restore of backups by replacing to a new namespace [%s]", restoreName))
+				log.InfoD("Namespace mapping is %v:", namespaceMapping)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, namespaceList)
+				restoreContextMap[restoreName] = appContextsToBackup
+				err = CreateRestoreWithReplacePolicy(restoreName, bkpName, namespaceMapping, SourceClusterName, BackupOrgID, ctx, make(map[string]string), 2)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore: %s from backup: %s", restoreName, bkpName))
+				err = ValidateCustomResourceRestores(ctx, BackupOrgID, []string{"PersistentVolumeClaim"}, restoreContextMap, SourceClusterName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating custom resource restore with namespace mapping"))
 			}
 		})
 	})
@@ -3253,8 +3280,22 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 			err := DeleteRule(ruleName, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of rule [%s]", ruleName))
 		}
+
 		log.InfoD("Cleaning up cloud settings and application clusters")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		err = DeleteTorpedoApps()
+		dash.VerifySafely(err, nil, "Deleting applications on source cluster")
+
+		log.InfoD("switching to destination context")
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "failed to switch to context to destination cluster")
+
+		log.InfoD("Destroying restored apps on destination clusters")
+		err = DeleteTorpedoApps()
+		dash.VerifySafely(err, nil, "Deleting applications on destination cluster")
 	})
 })
 

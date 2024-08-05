@@ -13847,3 +13847,21 @@ func GetVolumeNamefromPVC(namespace string) ([]string, error) {
 	}
 	return nil, fmt.Errorf("No PVCs found in namespace [%s]", namespace)
 }
+
+// DeleteTorpedoApps deletes all the namespaces which are created by torpedo which has the label creator=torpedo
+func DeleteTorpedoApps() error {
+	nsList, err := core.Instance().ListNamespaces(map[string]string{"creator": "torpedo"})
+	if err != nil {
+		return err
+	}
+	for _, ns := range nsList.Items {
+		log.Infof("Deleting namespace [%s]", ns.Name)
+		err = k8sCore.DeleteNamespace(ns.Name)
+		if err != nil {
+			// Not returning anything as it's the best case effort
+			// Namespace may be in Terminating state sometimes when there are pending finalizers
+			log.InfoD("Error in deleting namespace [%s]. Err: %v", ns.Name, err.Error())
+		}
+	}
+	return nil
+}
