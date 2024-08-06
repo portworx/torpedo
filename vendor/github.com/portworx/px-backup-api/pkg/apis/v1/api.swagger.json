@@ -2871,6 +2871,60 @@
         ]
       }
     },
+    "/v1/sharecluster": {
+      "patch": {
+        "summary": "ShareCluster shares access to the cluster to the user(s) or group(s)",
+        "operationId": "ShareCluster",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ShareClusterResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ShareClusterRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Cluster"
+        ]
+      }
+    },
+    "/v1/unsharecluster": {
+      "patch": {
+        "summary": "UnShareCluster removes shared access for the user(s) or group(s) to the cluster",
+        "operationId": "UnShareCluster",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/UnShareClusterResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/UnShareClusterRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Cluster"
+        ]
+      }
+    },
     "/v1/version": {
       "get": {
         "summary": "gets the version of the server",
@@ -3544,9 +3598,11 @@
         "Valid",
         "DeletePending",
         "ValidationInProgress",
-        "ValidationFailed"
+        "ValidationFailed",
+        "LimitedAvailability"
       ],
-      "default": "Invalid"
+      "default": "Invalid",
+      "description": " - LimitedAvailability: If a BL is being used for partial backup, mark it as LimitedAvailability."
     },
     "BackupLocationInfoType": {
       "type": "string",
@@ -4954,6 +5010,12 @@
         "total_count": {
           "type": "string",
           "format": "uint64"
+        },
+        "account_id": {
+          "type": "string"
+        },
+        "subscription_id": {
+          "type": "string"
         }
       }
     },
@@ -6630,6 +6692,39 @@
       "type": "object",
       "title": "Define SchedulePolicyUpdateResponse struct"
     },
+    "ShareClusterRequest": {
+      "type": "object",
+      "properties": {
+        "org_id": {
+          "type": "string"
+        },
+        "cluster_ref": {
+          "$ref": "#/definitions/ObjectRef"
+        },
+        "users": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "userid(s) of the user to share the cluster with"
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "group(s) to share the cluster with"
+        },
+        "share_cluster_backup": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "share_cluster_backup share is optional, if set to true, it will additionally share backups of cluster owner"
+        }
+      }
+    },
+    "ShareClusterResponse": {
+      "type": "object"
+    },
     "SuspendedBySource": {
       "type": "string",
       "enum": [
@@ -6651,6 +6746,34 @@
           "format": "date-time"
         }
       }
+    },
+    "UnShareClusterRequest": {
+      "type": "object",
+      "properties": {
+        "org_id": {
+          "type": "string"
+        },
+        "cluster_ref": {
+          "$ref": "#/definitions/ObjectRef"
+        },
+        "users": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "userid(s) of the user to share the cluster with"
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "group(s) to share the cluster with"
+        }
+      }
+    },
+    "UnShareClusterResponse": {
+      "type": "object"
     },
     "VersionGetResponse": {
       "type": "object",

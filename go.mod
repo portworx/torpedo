@@ -37,7 +37,7 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae
-	github.com/portworx/px-backup-api v1.2.2-0.20240513165102-9eda9e2fc169
+	github.com/portworx/px-backup-api v1.2.2-0.20240717111040-e2486ca8612f
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20240625095951-0b38bc239d01
 	github.com/portworx/talisman v1.1.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0

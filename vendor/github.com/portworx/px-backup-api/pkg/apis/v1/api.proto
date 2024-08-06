@@ -465,6 +465,8 @@ message BackupLocationInfo {
             DeletePending = 2;
             ValidationInProgress = 3;
             ValidationFailed = 4;
+            // If a BL is being used for partial backup, mark it as LimitedAvailability.
+            LimitedAvailability = 5;
         }
     }
 
@@ -1188,6 +1190,22 @@ service Cluster {
             body : "*"
         };
     }
+
+    // ShareCluster shares access to the cluster to the user(s) or group(s)
+    rpc ShareCluster(ShareClusterRequest) returns (ShareClusterResponse) {
+        option (google.api.http) = {
+            patch : "/v1/sharecluster"
+            body : "*"
+        };
+    }
+
+    // UnShareCluster removes shared access for the user(s) or group(s) to the cluster
+    rpc UnShareCluster(UnShareClusterRequest) returns (UnShareClusterResponse) {
+        option (google.api.http) = {
+            patch : "/v1/unsharecluster"
+            body : "*"
+        };
+    }
 }
 
 message ClusterBackupShareUpdateRequest {
@@ -1301,6 +1319,31 @@ message ClusterDeleteRequest {
 
 // Define ClusterInspectResponse struct
 message ClusterDeleteResponse {}
+
+message ShareClusterRequest{
+    string org_id = 1;
+    ObjectRef cluster_ref = 2;
+    // userid(s) of the user to share the cluster with
+    repeated string users = 3;
+    // group(s) to share the cluster with
+    repeated string groups = 4;
+    // share_cluster_backup share is optional, if set to true, it will additionally share backups of cluster owner
+    bool share_cluster_backup = 5;
+}
+
+message ShareClusterResponse{}
+
+message UnShareClusterRequest{
+    string org_id = 1;
+    ObjectRef cluster_ref = 2;
+    // userid(s) of the user to share the cluster with
+    repeated string users = 3;
+    // group(s) to share the cluster with
+    repeated string groups = 4;
+}
+
+message UnShareClusterResponse{}
+
 
 service CloudCredential {
     // Creates new cloud credential
@@ -2424,6 +2467,8 @@ message LicenseUsageAirgappedResponse {
     repeated LicenseUsageAirgappedObject licenseUsageAirgapped = 1;
     bool complete = 2;
     uint64 total_count = 3;
+    string account_id = 4;
+    string subscription_id = 5;
 }
 
 service License {
