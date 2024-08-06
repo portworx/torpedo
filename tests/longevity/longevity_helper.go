@@ -623,6 +623,8 @@ func populateIntervals() {
 	triggerInterval[PoolDelete] = make(map[int]time.Duration)
 	triggerInterval[DefragScheduleCRUDOperations] = make(map[int]time.Duration)
 	triggerInterval[DefragSchedules] = make(map[int]time.Duration)
+	triggerInterval[SVMotionSingleNode] = make(map[int]time.Duration)
+	triggerInterval[SVMotionMultipleNodes] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -965,6 +967,17 @@ func populateIntervals() {
 	triggerInterval[StorkVolumeSnapshotScheduleLocal][1] = 27 * baseInterval
 
 	baseInterval = 60 * time.Minute
+
+	triggerInterval[SVMotionSingleNode][10] = 1 * baseInterval
+	triggerInterval[SVMotionSingleNode][9] = 2 * baseInterval
+	triggerInterval[SVMotionSingleNode][8] = 3 * baseInterval
+	triggerInterval[SVMotionSingleNode][7] = 4 * baseInterval
+	triggerInterval[SVMotionSingleNode][6] = 5 * baseInterval
+	triggerInterval[SVMotionSingleNode][5] = 6 * baseInterval
+	triggerInterval[SVMotionSingleNode][4] = 7 * baseInterval
+	triggerInterval[SVMotionSingleNode][3] = 8 * baseInterval
+	triggerInterval[SVMotionSingleNode][2] = 9 * baseInterval
+	triggerInterval[SVMotionSingleNode][1] = 10 * baseInterval
 
 	triggerInterval[AppTasksDown][10] = 1 * baseInterval
 	triggerInterval[AppTasksDown][9] = 2 * baseInterval
@@ -1546,6 +1559,17 @@ func populateIntervals() {
 	triggerInterval[ResetDiscardMounts][1] = 27 * baseInterval
 
 	baseInterval = 300 * time.Minute
+
+	triggerInterval[SVMotionMultipleNodes][10] = 1 * baseInterval
+	triggerInterval[SVMotionMultipleNodes][9] = 2 * baseInterval
+	triggerInterval[SVMotionMultipleNodes][8] = 3 * baseInterval
+	triggerInterval[SVMotionMultipleNodes][7] = 4 * baseInterval
+	triggerInterval[SVMotionMultipleNodes][6] = 5 * baseInterval
+	triggerInterval[SVMotionMultipleNodes][5] = 6 * baseInterval
+	triggerInterval[SVMotionMultipleNodes][4] = 7 * baseInterval
+	triggerInterval[SVMotionMultipleNodes][3] = 8 * baseInterval
+	triggerInterval[SVMotionMultipleNodes][2] = 9 * baseInterval
+	triggerInterval[SVMotionMultipleNodes][1] = 10 * baseInterval
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
 	triggerInterval[UpgradeStork][9] = 2 * baseInterval
