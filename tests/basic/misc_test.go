@@ -1837,7 +1837,7 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 			//Verify PID before and after for PX process
 			for nodeId, beforePID := range processPid {
 				afterPID, _ := processPidPostRestart[nodeId]
-				dash.VerifyFatal(beforePID, afterPID, fmt.Sprintf("Validate Process ID of PX process before and after PX pod restart"))
+				dash.VerifyFatal(beforePID, afterPID, fmt.Sprintf("Validate Process ID of PX process before and after PX pod restart on node %s", nodeId))
 			}
 		})
 	})
