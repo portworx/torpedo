@@ -81,6 +81,8 @@ var _ = Describe("{Longevity}", func() {
 		StorkAppBkpHaUpdate:               TriggerStorkAppBkpHaUpdate,
 		StorkAppBkpPxRestart:              TriggerStorkAppBkpPxRestart,
 		StorkAppBkpPoolResize:             TriggerStorkAppBkpPoolResize,
+		StorkVolumeSnapshotSchedule:       TriggerStorkVolumeSnapshotSchedule,
+		StorkVolumeSnapshotScheduleLocal:  TriggerStorkVolumeSnapshotScheduleLocal,
 		RestartKvdbVolDriver:              TriggerRestartKvdbVolDriver,
 		HAIncreaseAndReboot:               TriggerHAIncreaseAndReboot,
 		AddDiskAndReboot:                  TriggerPoolAddDiskAndReboot,
@@ -113,6 +115,8 @@ var _ = Describe("{Longevity}", func() {
 		PoolDelete:                        TriggerPoolDelete,
 		DefragScheduleCRUDOperations:      TriggerDefragScheduleCRUDOps,
 		DefragSchedules:                   TriggerDefragSchedules,
+		SVMotionSingleNode:                TriggerSvMotionSingleNode,
+		SVMotionMultipleNodes:             TriggerSvMotionMultipleNodes,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/hashicorp/go-version"
 	k8score "github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers/node"
 	corev1 "k8s.io/api/core/v1"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -1341,11 +1341,11 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 					err = Inst().V.RefreshDriverEndpoints()
 					log.FailOnError(err, "Refresh Driver Endpoints failed")
 
-					urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
-					u, err := url.Parse(urlToParse)
-					log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
-					err = Inst().V.ValidateDriver(u.String(), true)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
+					storageNodes := node.GetStorageDriverNodes()
+					for index := range storageNodes {
+						err = Inst().V.WaitDriverUpOnNode(storageNodes[index], time.Minute*5)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Validate if PX is UP on %s", storageNodes[index].Name))
+					}
 
 					// Printing cluster node info after the upgrade
 					PrintK8sClusterInfo()
@@ -1361,11 +1361,11 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 					err = Inst().V.RefreshDriverEndpoints()
 					log.FailOnError(err, "Refresh Driver Endpoints failed")
 
-					urlToParse = fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
-					u, err = url.Parse(urlToParse)
-					log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
-					err = Inst().V.ValidateDriver(u.String(), true)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
+					storageNodes = node.GetStorageDriverNodes()
+					for index := range storageNodes {
+						err = Inst().V.WaitDriverUpOnNode(storageNodes[index], time.Minute*5)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Validate if PX is UP on %s", storageNodes[index].Name))
+					}
 
 					// Printing cluster node info after the upgrade
 					PrintK8sClusterInfo()

@@ -1,12 +1,14 @@
 package node
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/vmware/govmomi/object"
 )
 
 // Type identifies the type of the cluster node
@@ -217,6 +219,12 @@ type Driver interface {
 	// DetachDisk vdisk from node.
 	DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string) error
 
+	//GetCompatibleDatastores
+	GetCompatibleDatastores(portworxNamespace string, datastoreNames []string) ([]*object.Datastore, error)
+
+	//Get All datastores
+	GetDatastoresFromDatacenter() ([]*object.Datastore, error)
+
 	// PowerOnVMByName power on the VM using the vm name
 	PowerOnVMByName(vmName string) error
 
@@ -247,6 +255,15 @@ type Driver interface {
 	GetNodeState(n Node) (string, error)
 	// GetSupportedDriveTypes returns the types of drives supported by the provider
 	GetSupportedDriveTypes() ([]string, error)
+
+	// StorageVmotion selectively relocates specific disks of a virtual machine to a new datastore
+	StorageVmotion(ctx context.Context, node Node, portworxNamespace string, moveAllDisks bool) error
+
+	// findVMByName finds a virtual machine by its name
+	FindVMByName(vmName string) (*object.VirtualMachine, error)
+
+	// findDatastoreByName finds a datastore by its name
+	FindDatastoreByName(dsName string) (*object.Datastore, error)
 }
 
 // Register registers the given node driver
@@ -298,6 +315,20 @@ func (d *notSupportedDriver) DetachDrivesFromVM(stc *corev1.StorageCluster, node
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "DetachDrivesFromVM()",
+	}
+}
+
+func (d *notSupportedDriver) GetDatastoresFromDatacenter() ([]*object.Datastore, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDatastoresFromDatacenter()",
+	}
+}
+
+func (d *notSupportedDriver) GetCompatibleDatastores(portworxNamespace string, datastoreNames []string) ([]*object.Datastore, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetDatastoresFromDatacenter()",
 	}
 }
 
@@ -547,5 +578,26 @@ func (d *notSupportedDriver) RemoveNonRootDisks(node Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RemoveNonRootDisks()",
+	}
+}
+
+func (d *notSupportedDriver) StorageVmotion(ctx context.Context, node Node, portworxNamespace string, moveAllDisks bool) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StorageVmotion()",
+	}
+}
+
+func (d *notSupportedDriver) FindVMByName(vmName string) (*object.VirtualMachine, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "FindVMByName()",
+	}
+}
+
+func (d *notSupportedDriver) FindDatastoreByName(dsName string) (*object.Datastore, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "FindDatastoreByName()",
 	}
 }

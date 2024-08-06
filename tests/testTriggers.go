@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"container/ring"
+	ctxt "context"
 	"fmt"
 	"math"
 	"math/rand"
@@ -555,6 +556,10 @@ const (
 	AsyncDRMigrationSchedule = "asyncdrmigrationschedule"
 	// ConfluentAsyncDR runs Async DR between two clusters for Confluent kafka CRD
 	ConfluentAsyncDR = "confluentasyncdr"
+	// Storkvolumesnapshotschedule creates stork snapshot schedules
+	StorkVolumeSnapshotSchedule = "storkvolumesnapshotschedule"
+	// StorkVolumeSnapshotScheduleLocal triggers stork snapshot schedule for local volumes
+	StorkVolumeSnapshotScheduleLocal = "storkvolumesnapshotschedulelocal"
 	// KafkaAsyncDR runs Async DR between two clusters for kafka CRD
 	KafkaAsyncDR = "kafkaasyncdr"
 	// MongoAsyncDR runs Async DR between two clusters for kafka CRD
@@ -671,6 +676,12 @@ const (
 
 	// DefragSchedules setup defrag schedules in a cluster once and validates it
 	DefragSchedules = "defragSchedules"
+
+	// SVMotionSingleNode does a storage vmotion of a randomly selected Storage Node
+	SVMotionSingleNode = "svmotionSingleNode"
+
+	// SVMotionMultipleNodes does storage vmotions for 50% of the worker nodes in parallel (Max 20 at a time)
+	SVMotionMultipleNodes = "svmotionMultipleNodes"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -10283,6 +10294,134 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 	})
 }
 
+func TriggerStorkVolumeSnapshotSchedule(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(StorkVolumeSnapshotSchedule)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Stork volume snapshot schedule triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: StorkVolumeSnapshotSchedule,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var (
+		taskNamePrefix                 = "stork-snaptest-cloud"
+		snapshotType                   = "cloud"
+		snapInterval                   = 2
+		retain         storkapi.Retain = 3
+		scpolName                      = "snap-policy-" + time.Now().Format("15h03m05s")
+		snapNs         []string
+	)
+
+	for i := 0; i < Inst().GlobalScaleFactor; i++ {
+		taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+		log.Infof("Task name %s\n", taskName)
+		appContexts := ScheduleApplications(taskName)
+		for _, ctx := range appContexts {
+			// Override default App readiness time out of 5 mins with 10 mins
+			ctx.ReadinessTimeout = appReadinessTimeout
+			namespace := GetAppNamespace(ctx, taskName)
+			snapNs = append(snapNs, namespace)
+		}
+		*contexts = append(*contexts, appContexts...)
+	}
+	ValidateApplications(*contexts)
+
+	schdPol, err := asyncdr.CreateSchedulePolicyWithRetain(scpolName, snapInterval, retain)
+	if err != nil {
+		UpdateOutcome(event, fmt.Errorf("Failed to create schedule policy"))
+		return
+	}
+
+	for _, ns := range snapNs {
+		pvcNames, err := GetPVCListForNamespace(ns)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to get pvc list for namespace"))
+			return
+		}
+		log.InfoD("creating and validating cloud snapshots for pvcs [%v] in namespace %v", pvcNames, ns)
+		err = asyncdr.ValidateSnapshotScheduleCount(pvcNames, ns, schdPol.Name, snapshotType, snapInterval, retain)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to validate snapshot schedule count"))
+			return
+		}
+	}
+}
+
+func TriggerStorkVolumeSnapshotScheduleLocal(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(StorkVolumeSnapshotScheduleLocal)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Stork volume snapshot schedule triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: StorkVolumeSnapshotScheduleLocal,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	var (
+		taskNamePrefix                 = "stork-snaptest-local"
+		snapshotType                   = "local"
+		snapInterval                   = 2
+		retain         storkapi.Retain = 3
+		scpolName                      = "snap-policy-" + time.Now().Format("15h03m05s")
+		snapNs         []string
+	)
+
+	for i := 0; i < Inst().GlobalScaleFactor; i++ {
+		taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+		log.Infof("Task name %s\n", taskName)
+		appContexts := ScheduleApplications(taskName)
+		for _, ctx := range appContexts {
+			// Override default App readiness time out of 5 mins with 10 mins
+			ctx.ReadinessTimeout = appReadinessTimeout
+			namespace := GetAppNamespace(ctx, taskName)
+			snapNs = append(snapNs, namespace)
+		}
+		*contexts = append(*contexts, appContexts...)
+	}
+	ValidateApplications(*contexts)
+
+	schdPol, err := asyncdr.CreateSchedulePolicyWithRetain(scpolName, snapInterval, retain)
+	if err != nil {
+		UpdateOutcome(event, fmt.Errorf("Failed to create schedule policy"))
+		return
+	}
+
+	for _, ns := range snapNs {
+		pvcNames, err := GetPVCListForNamespace(ns)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to get pvc list for namespace"))
+			return
+		}
+		log.InfoD("creating and validating local snapshots for pvcs [%v] in namespace %v", pvcNames, ns)
+		err = asyncdr.ValidateSnapshotScheduleCount(pvcNames, ns, schdPol.Name, snapshotType, snapInterval, retain)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to validate snapshot schedule count"))
+			return
+		}
+	}
+}
+
 func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer endLongevityTest()
 	startLongevityTest(MetroDRMigrationSchedule)
@@ -11880,6 +12019,140 @@ func TriggerDefragSchedules(contexts *[]*scheduler.Context, recordChan *chan *Ev
 				UpdateOutcome(event, err)
 			}
 		})
+	})
+
+	updateMetrics(*event)
+}
+
+func TriggerSvMotionSingleNode(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(SVMotionSingleNode)
+	defer ginkgo.GinkgoRecover()
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: SVMotionSingleNode,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	var randomIndex int
+	var namespace string
+	var err error
+	var moveAllDisks bool
+	stepLog := "Choosing a single Storage Node randomly and performing SV Motion on it"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+
+		if namespace, err = Inst().S.GetPortworxNamespace(); err != nil {
+			log.Errorf("Failed to get portworx namespace. Error : %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
+		workerNodes := node.GetStorageNodes()
+		if len(workerNodes) > 0 {
+			randomIndex = rand.Intn(len(workerNodes))
+			log.Infof("Selected worker node %v for storage vmotion", workerNodes[randomIndex].Name)
+		} else {
+			log.Infof("No worker nodes available")
+			UpdateOutcome(event, fmt.Errorf("No worker nodes available for svmotion"))
+			return
+		}
+		moveAllDisks = rand.Intn(2) == 0
+		if moveAllDisks {
+			log.Infof("Moving all disks on worker node %v", workerNodes[randomIndex].Name)
+		} else {
+			log.Infof("Moving only largest sized disk(s) on worker node %v", workerNodes[randomIndex].Name)
+		}
+		ctx := ctxt.Background()
+		err = Inst().N.StorageVmotion(ctx, workerNodes[randomIndex], namespace, moveAllDisks)
+		UpdateOutcome(event, err)
+	})
+	updateMetrics(*event)
+}
+
+func TriggerSvMotionMultipleNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(SVMotionMultipleNodes)
+	defer ginkgo.GinkgoRecover()
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: SVMotionMultipleNodes,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	stepLog := "Choosing 50% of the worker nodes randomly (max 20) and then performing svmotion on them randomly"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+
+		var namespace string
+		var err error
+		maxNodes := 20
+
+		if namespace, err = Inst().S.GetPortworxNamespace(); err != nil {
+			log.Errorf("Failed to get portworx namespace. Error: %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
+
+		workerNodes := node.GetStorageNodes()
+		if len(workerNodes) == 0 {
+			log.Infof("No worker nodes available")
+			UpdateOutcome(event, fmt.Errorf("No worker nodes available for svmotion"))
+			return
+		}
+
+		rand.Shuffle(len(workerNodes), func(i, j int) {
+			workerNodes[i], workerNodes[j] = workerNodes[j], workerNodes[i]
+		})
+
+		numSelectedNodes := len(workerNodes) / 2
+		if numSelectedNodes > maxNodes {
+			numSelectedNodes = maxNodes
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(numSelectedNodes)
+
+		for i := 0; i < numSelectedNodes; i++ {
+			go func(node node.Node) {
+				defer wg.Done()
+
+				moveAllDisks := rand.Intn(2) == 0
+				if moveAllDisks {
+					log.Infof("Moving all disks on worker node %v", node.Name)
+				} else {
+					log.Infof("Moving only largest sized disk(s) on worker node %v", node.Name)
+				}
+
+				ctx := ctxt.Background()
+				if err := Inst().N.StorageVmotion(ctx, node, namespace, moveAllDisks); err != nil {
+					log.Errorf("Storage vMotion failed for node %v. Error: %v", node.Name, err)
+					UpdateOutcome(event, err)
+				}
+			}(workerNodes[i])
+		}
+
+		wg.Wait()
+		UpdateOutcome(event, nil)
 	})
 
 	updateMetrics(*event)
