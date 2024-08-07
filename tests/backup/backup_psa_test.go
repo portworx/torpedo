@@ -1543,7 +1543,7 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 
 		log.Info("Deleting schedules")
 		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting schedule [%s]", scheduleName))
 		}
 		err = DeleteBackupSchedulePolicyWithContext(BackupOrgID, []string{periodicSchedulePolicyName}, ctx)
@@ -1971,7 +1971,7 @@ var _ = Describe("{PSALowerPrivilegeToHigherPrivilegeWithProjectMapping}", Label
 		DestroyApps(scheduledAppContexts, opts)
 		log.Info("Deleting schedules")
 		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting schedule [%s]", scheduleName))
 		}
 		log.Infof("Deleting pre & post exec rules")

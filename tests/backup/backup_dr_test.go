@@ -338,7 +338,7 @@ var _ = Describe("{BackupAndRestoreSyncDR}", Label(TestCaseLabelsMap[BackupAndRe
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		}
 		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting schedule [%s]", scheduleName))
 		}
 		for migrationName, migrationNamespace := range migrationNamespaceMap {

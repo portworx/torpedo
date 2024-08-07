@@ -208,7 +208,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", Label(TestCaseLabelsMap[StorkUpgrad
 		log.InfoD("Clean up objects after test execution")
 		log.Infof("Deleting backup schedule")
 		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		log.Infof("Deleting backup schedule policy")
@@ -1014,15 +1014,15 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		deleteSingleNSScheduleTask := func(scheduleName string) {
 			log.InfoD("Deleting single namespace backup schedule [%s]", scheduleName)
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", scheduleName))
 		}
 		_ = TaskHandler(singleNSScheduleNames, deleteSingleNSScheduleTask, Parallel)
 		log.InfoD("Deleting all namespaces backup schedule [%s]", allNSScheduleName)
-		err = DeleteSchedule(allNSScheduleName, SourceClusterName, BackupOrgID, ctx)
+		err = DeleteSchedule(allNSScheduleName, SourceClusterName, BackupOrgID, ctx, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", allNSScheduleName))
 		log.InfoD("Deleting partial backup schedule [%s]", partialScheduledBackupName)
-		err = DeleteSchedule(partialScheduledBackupName, SourceClusterName, BackupOrgID, ctx)
+		err = DeleteSchedule(partialScheduledBackupName, SourceClusterName, BackupOrgID, ctx, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", partialScheduledBackupName))
 		log.InfoD("Deleting pre exec rules %s", preRuleNames)
 		for _, preRuleName := range preRuleNames {
@@ -1516,7 +1516,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		deleteSingleNSScheduleTask := func(scheduleName string) {
 			log.InfoD("Deleting single namespace backup schedule [%s]", scheduleName)
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", scheduleName))
 		}
 		_ = TaskHandler(singleNSScheduleNames, deleteSingleNSScheduleTask, Parallel)

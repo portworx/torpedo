@@ -240,7 +240,7 @@ var _ = Describe("{BackupCSIVolumesWithPartialSuccess}", Label(TestCaseLabelsMap
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 
 		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 
@@ -712,7 +712,7 @@ var _ = Describe("{PartialBackupSuccessWithPxAndKDMPVolumes}", Label(TestCaseLab
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, []string{schedulePolicyName})
@@ -966,7 +966,7 @@ var _ = Describe("{BackupStateTransitionForScheduledBackups}", Label(TestCaseLab
 		DestroyApps(scheduledAppContexts, opts)
 		log.InfoD("Deleting all the backup schedules")
 		for _, schBkpName := range scheduledNames {
-			err = DeleteSchedule(schBkpName, SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(schBkpName, SourceClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", schBkpName))
 		}
 		log.InfoD("Deleting all the backups")
@@ -1199,7 +1199,7 @@ var _ = Describe("{PartialBackupWithLowerStorkVersion}", Label(TestCaseLabelsMap
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		// Cleanup all backups

@@ -2506,7 +2506,7 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 			go func(scheduleName string) {
 				defer GinkgoRecover()
 				defer wg.Done()
-				err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+				err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedules [%s]", scheduleName))
 				if err != nil {
 					mutex.Lock()
@@ -2811,7 +2811,7 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		log.Infof("Deleting backup schedule policy")
@@ -3254,7 +3254,7 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 			go func(scheduleName string) {
 				defer GinkgoRecover()
 				defer wg.Done()
-				err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+				err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedules [%s]", scheduleName))
 				if err != nil {
 					mutex.Lock()
