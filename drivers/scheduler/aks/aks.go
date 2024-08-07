@@ -3,13 +3,13 @@ package aks
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node"
 	"os"
 	"time"
 
 	"github.com/libopenstorage/cloudops"
 	"github.com/libopenstorage/cloudops/azure"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
@@ -30,6 +30,9 @@ const (
 
 	defaultGetAksClusterTimeout  = 5 * time.Minute
 	defaultGetAksClusterInterval = 20 * time.Second
+
+	defaultAksNodePoolUpdateTimeout  = 60 * time.Minute
+	defaultAksNodePoolUpdateInterval = 2 * time.Minute
 
 	expectedProvisioningState = "Succeeded"
 	updatingProvisioningState = "Updating"
@@ -413,13 +416,77 @@ func (a *aks) UpgradeControlPlane(version string) error {
 // UpgradeNodePool Upgrades Node Pool to specified version
 func (a *aks) UpgradeNodePool(nodePoolName, version string) error {
 	log.Infof("Upgrade AKS Node Pool [%s] to [%s]", nodePoolName, version)
+
+	// Update GKE Node Group Upgrade Strategy
 	cmd := fmt.Sprintf("%s aks nodepool upgrade --resource-group %s --cluster-name %s --nodepool-name %s  --kubernetes-version %s --no-wait --yes", azCli, a.clusterName, a.clusterName, nodePoolName, version)
+
+	// maxSurgeUpgradeValue (--max-surge) to set extra nodes used to speed upgrade. When specified, it represents the number or percent used, eg. 5 or 33%.
+	maxSurgeUpgradeValue := os.Getenv("AKS_SURGE_UPGRADE_VALUE")
+	if maxSurgeUpgradeValue != "" {
+		log.Infof("Will use MaxSurge upgrade value [%s]", maxSurgeUpgradeValue)
+		if err := a.SetMaxSurgeForNodePool(maxSurgeUpgradeValue); err != nil {
+			return fmt.Errorf("failed to set MaxSurge for Node Pool [%s], Err: %v ", nodePoolName, err)
+		}
+	}
 	stdout, stderr, err := osutils.ExecShell(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to set cluser [%s] version to [%s], Err: %v %v %v", a.clusterName, version, stderr, err, stdout)
 	}
 	log.Infof("Initiated AKS Node Pool [%s] upgrade to [%s] successfully", nodePoolName, version)
 	return nil
+}
+
+// SetMaxSurgeForNodePool Sets MaxSurge for a node pool so extra nodes used to speed AKS upgrades
+func (a *aks) SetMaxSurgeForNodePool(maxSurge string) error {
+	_, err := a.GetAKSCluster()
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Setting MaxSurge to [%s] for Node Pool [%s]", maxSurge, a.instanceGroup)
+	cmd := fmt.Sprintf("%s aks nodepool update --resource-group %s --cluster-name %s --nodepool-name %s --max-surge %s --no-wait", azCli, a.clusterName, a.clusterName, a.instanceGroup, maxSurge)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to set MaxSurge for AKS Node Pool [%s] to [%s], Err: %v %v %v", a.instanceGroup, maxSurge, stderr, err, stdout)
+	}
+
+	if err := a.waitForNodePoolToSetMaxSurge(maxSurge); err != nil {
+		return fmt.Errorf("failed to set MaxSurge for AKS Node Pool [%s] to [%s], Err: %v", a.instanceGroup, maxSurge, err)
+	}
+
+	log.Infof("Successfully set MaxSurge to [%s] for AKS Node Pool [%s]", a.instanceGroup, maxSurge)
+	return nil
+}
+
+func (a *aks) waitForNodePoolToSetMaxSurge(maxSurge string) error {
+	t := func() (interface{}, bool, error) {
+		aksCluster, err := a.GetAKSCluster()
+		if err != nil {
+			return nil, false, err
+		}
+
+		for _, profile := range aksCluster.AgentPoolProfiles {
+			if profile.Name == a.instanceGroup {
+				if profile.ProvisioningState == failedProvisioningState {
+					return nil, false, fmt.Errorf("AKS Node Pool [%s] failed to set MaxSurge to [%s], expected status [%s], actual status [%s]", a.instanceGroup, maxSurge, expectedProvisioningState, profile.ProvisioningState)
+				}
+
+				if profile.ProvisioningState == updatingProvisioningState {
+					return nil, true, fmt.Errorf("waiting for AKS Node Pool [%s] to set MaxSurge to [%s], expected status [%s], actual status [%s]", a.instanceGroup, maxSurge, expectedProvisioningState, profile.ProvisioningState)
+				}
+
+				if profile.UpgradeSettings.MaxSurge == maxSurge && profile.ProvisioningState == expectedProvisioningState {
+					log.Infof("AKS Node Pool [%s] curret ProvisioningState is [%s] and MaxSurge got updated to [%s]", a.instanceGroup, profile.ProvisioningState, profile.UpgradeSettings.MaxSurge)
+					return nil, false, nil
+				}
+			}
+		}
+
+		return nil, true, fmt.Errorf("AKS Node Pool [%s] MaxSurge is not yet updated to [%s]", a.instanceGroup, maxSurge)
+	}
+	_, err := task.DoRetryWithTimeout(t, defaultAksNodePoolUpdateTimeout, defaultAksNodePoolUpdateInterval)
+
+	return err
 }
 
 // GetAKSCluster Gets and return AKS cluster object
