@@ -86,6 +86,25 @@ func pureWriteRoutine(ctx *scheduler.Context, podName string, dataDir string, sh
 	}
 }
 
+// GetPxPIDMap returns a map of node ID to PX rpocess PID
+func GetPxPIDMap(nodes []node.Node) (map[string]string, error) {
+	pxPIDMap := make(map[string]string)
+	getPxPidCmd := "pidof px"
+
+	for _, n := range nodes {
+		err := Inst().V.WaitForPxPodsToBeUp(n)
+		if err != nil {
+			return nil, fmt.Errorf("failed to wait for PX pod to be up in node [%s]. Err: [%v]", n.Name, err)
+		}
+		output, err := Inst().N.RunCommand(n, getPxPidCmd, node.ConnectionOpts{Timeout: 30 * time.Second, TimeBeforeRetry: 20 * time.Second, Sudo: true})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get PX PID on node [%s]. Err: [%v]", n.Name, err)
+		}
+		pxPIDMap[n.Id] = output
+	}
+	return pxPIDMap, nil
+}
+
 func StartPureBackgroundWriteRoutines() func() {
 	pureStopWriteRoutine := false
 	pureErrOutChan := make(chan error, 1) // We only need one failure to fail the entire test: no reason to store more than we need
@@ -1764,7 +1783,7 @@ var _ = Describe("{KubeClusterRestart}", func() {
 				log.InfoD("Waiting for node [%s] to be back up", stNode.Name)
 				err := Inst().N.TestConnection(stNode, node.ConnectionOpts{
 					Timeout:         15 * time.Minute,
-					TimeBeforeRetry: 10 * time.Second,
+					TimeBeforeRetry: 30 * time.Second,
 				})
 				log.FailOnError(err, "error while testing node status [%s]", stNode.Name)
 				err = Inst().S.IsNodeReady(stNode)
@@ -1783,5 +1802,47 @@ var _ = Describe("{KubeClusterRestart}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
+	JustBeforeEach(func() {
+		// https://purestorage.atlassian.net/browse/PTX-24859
+		// https://portworx.testrail.net/index.php?/cases/view/300005
+		StartTorpedoTest("VerifyNoPxRestartDueToPxPodStop", "Verify that px serivce remain up even if px pod got deleted ", nil, 300005)
+	})
+
+	It("Delete px pods and validate px service", func() {
+		// Get uptime for px service on each node
+		stepLog = "Getting PID of Px process before and after restarting PX pods on all the nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			processPid, err := GetPxPIDMap(node.GetStorageDriverNodes())
+			if err != nil {
+				log.FailOnError(err, "Failed while getting PID of PX process")
+			}
+
+			namespace, err := Inst().S.GetPortworxNamespace()
+			log.FailOnError(err, "Error getting portworx namespace")
+
+			//Deleting px pods from all the node
+			err = DeletePXPods(namespace)
+			log.FailOnError(err, "Error deleting px pods")
+
+			//Capturing PID of PX after stopping PX pods
+			processPidPostRestart, err := GetPxPIDMap(node.GetStorageDriverNodes())
+			log.FailOnError(err, "Failed while getting PID of PX process")
+			log.Infof("Process IDs for px after stopping portworx pod  %s", processPidPostRestart)
+
+			//Verify PID before and after for PX process
+			for nodeId, beforePID := range processPid {
+				afterPID, _ := processPidPostRestart[nodeId]
+				dash.VerifyFatal(beforePID, afterPID, fmt.Sprintf("Validate Process ID of PX process before and after PX pod restart on node %s", nodeId))
+			}
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+
 	})
 })

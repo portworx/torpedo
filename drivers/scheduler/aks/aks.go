@@ -417,9 +417,6 @@ func (a *aks) UpgradeControlPlane(version string) error {
 func (a *aks) UpgradeNodePool(nodePoolName, version string) error {
 	log.Infof("Upgrade AKS Node Pool [%s] to [%s]", nodePoolName, version)
 
-	// Update GKE Node Group Upgrade Strategy
-	cmd := fmt.Sprintf("%s aks nodepool upgrade --resource-group %s --cluster-name %s --nodepool-name %s  --kubernetes-version %s --no-wait --yes", azCli, a.clusterName, a.clusterName, nodePoolName, version)
-
 	// maxSurgeUpgradeValue (--max-surge) to set extra nodes used to speed upgrade. When specified, it represents the number or percent used, eg. 5 or 33%.
 	maxSurgeUpgradeValue := os.Getenv("AKS_SURGE_UPGRADE_VALUE")
 	if maxSurgeUpgradeValue != "" {
@@ -428,6 +425,9 @@ func (a *aks) UpgradeNodePool(nodePoolName, version string) error {
 			return fmt.Errorf("failed to set MaxSurge for Node Pool [%s], Err: %v ", nodePoolName, err)
 		}
 	}
+
+	// Update AKS Node Group
+	cmd := fmt.Sprintf("%s aks nodepool upgrade --resource-group %s --cluster-name %s --nodepool-name %s --kubernetes-version %s --no-wait --yes", azCli, a.clusterName, a.clusterName, nodePoolName, version)
 	stdout, stderr, err := osutils.ExecShell(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to set cluser [%s] version to [%s], Err: %v %v %v", a.clusterName, version, stderr, err, stdout)
