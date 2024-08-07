@@ -6751,6 +6751,36 @@ func CreateBucket(provider string, bucketName string) {
 	})
 }
 
+// CreateLockedBucket creates buckets with all the different modes for locked s3 bucket or immutable azure bucket
+func CreateLockedBucket(provider string, retentionPeriod int, softDelete bool) (map[string]string, error) {
+	log.Info(fmt.Sprintf("Creating multiple locked buckets with different modes on %s", provider))
+	bucketMap := make(map[string]string)
+	switch provider {
+	case drivers.ProviderAws:
+		modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
+		for _, mode := range modes {
+			lockedBucketName := fmt.Sprintf("%s-%s-%s-locked", provider, getGlobalLockedBucketName(provider), strings.ToLower(mode))
+			CreateS3Bucket(lockedBucketName, true, int64(retentionPeriod), mode)
+			bucketMap[mode] = lockedBucketName
+		}
+		return bucketMap, nil
+	case drivers.ProviderAzure:
+		modes := [2]Mode{SA_level, Container_level}
+		for _, mode := range modes {
+			lockedBucketName := fmt.Sprintf("%s-%s-%s-locked", provider, getGlobalLockedBucketName(provider), strings.ToLower(string(mode)))
+			CreateAzureBucket(lockedBucketName, true, mode, retentionPeriod, false)
+			bucketMap[string(mode)] = lockedBucketName
+		}
+		if softDelete {
+			lockedBucketName := fmt.Sprintf("%s-%s-soft-locked", provider, getGlobalLockedBucketName(provider))
+			CreateAzureBucket(lockedBucketName, true, SA_level, retentionPeriod, true)
+			bucketMap[string(SA_level)+"_soft"] = lockedBucketName
+		}
+		return bucketMap, nil
+	}
+	return nil, fmt.Errorf("function does not support %s provider", provider)
+}
+
 // IsBackupLocationEmpty returns true if the bucket for a provider is empty
 func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 	switch provider {
@@ -7062,7 +7092,7 @@ const (
 )
 
 // CreateAzureBucket creates bucket in Azure
-func CreateAzureBucket(bucketName string, objectlock bool, mode Mode, retentionDays int, safeMode bool) {
+func CreateAzureBucket(bucketName string, objectlock bool, mode Mode, retentionDays int, softDeleteMode bool) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
 	azureRegion := os.Getenv("AZURE_ENDPOINT")
@@ -7097,7 +7127,7 @@ func CreateAzureBucket(bucketName string, objectlock bool, mode Mode, retentionD
 		}
 		if mode == SA_level {
 			// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
-			if safeMode == true {
+			if softDeleteMode {
 				accountName, accountKey = safeAccountLevelSA, safeAccountLevelSAKey
 			} else {
 				accountName, accountKey = storageAccountLevelSA, storageAccountLevelSAKey
