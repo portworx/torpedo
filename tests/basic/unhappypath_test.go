@@ -2,10 +2,12 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"math"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
+	"golang.org/x/net/context"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -32,6 +34,29 @@ const (
 	snapshotScheduleRetryTimeout  = 15 * time.Minute
 	waitTimeForPXAfterError       = 20 * time.Minute
 )
+
+var _ = Describe("{SvmotionTest}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("SvmotionTest", "StorageVmotion", nil, 0)
+	})
+
+	//var contexts []*scheduler.Context
+
+	It("has to setup, validate and teardown apps", func() {
+		workerNodes := node.GetStorageNodes()
+		log.Infof(workerNodes[0].Name)
+		ctx := context.Background()
+		err := Inst().N.StorageVmotion(ctx, workerNodes[0], "portworx", true)
+		if err != nil {
+			log.Infof("Failed to relocate VM: %v\n", err)
+		} else {
+			log.Infof("VM relocation successful")
+		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
 
 // This test is to verify stability of the system when there is a network error on the system.
 var _ = Describe("{NetworkErrorInjection}", func() {
