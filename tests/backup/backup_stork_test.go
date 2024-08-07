@@ -15,6 +15,7 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -143,7 +144,11 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 				},
 			}
 			ns, err := core.Instance().CreateNamespace(nsSpec)
-			log.FailOnError(err, fmt.Sprintf("Unable to create namespace [%s]", newAdminNamespace))
+			if k8serrors.IsAlreadyExists(err) {
+				log.InfoD("Skipping creation of Namespace [%s] as it Already Exists", ns.Name)
+			} else {
+				log.FailOnError(err, fmt.Sprintf("Unable to create namespace [%s]", newAdminNamespace))
+			}
 			log.InfoD("Created Namespace - %v", ns.Name)
 		})
 		Step("Modifying Admin Namespace for Stork", func() {
