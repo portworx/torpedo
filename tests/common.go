@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"maps"
 	"math"
 	"math/rand"
 	"net/http"
@@ -367,6 +368,7 @@ const (
 	mongodbStatefulset                = "pxc-backup-mongodb"
 	AwsS3encryptionPolicy             = "s3:x-amz-server-side-encryption=AES256"
 	AwsS3Sid                          = "DenyNonAES256Uploads"
+	defaulttorpedoNamespace           = "default"
 )
 
 const (
@@ -7062,11 +7064,11 @@ const (
 )
 
 // CreateAzureBucket creates bucket in Azure
-func CreateAzureBucket(bucketName string, objectlock bool, mode Mode, retentionDays int, safeMode bool) {
+func CreateAzureBucket(bucketName string, immutability bool, mode Mode, retentionDays int, safeMode bool) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
 	azureRegion := os.Getenv("AZURE_ENDPOINT")
-	if objectlock == true {
+	if immutability {
 		tenantID, clientID, clientSecret, _, _, _ := GetAzureCredsFromEnv()
 		resourceGroup, containerLevelSA, _, storageAccountLevelSA, storageAccountLevelSAKey, safeAccountLevelSA, safeAccountLevelSAKey := GetAzureImmutabilityCredsFromEnv()
 		if mode == Container_level {
@@ -7142,6 +7144,34 @@ func CreateAzureBucket(bucketName string, objectlock bool, mode Mode, retentionD
 			fmt.Sprintf("Failed to create container. Error: [%v]", err))
 	}
 
+}
+
+// UpdateConfigmap creates or updates an existing configmap with the given data
+func UpdateConfigmap(configMapName string, data map[string]string) error {
+	configmap, err := k8sCore.GetConfigMap(configMapName, defaulttorpedoNamespace)
+	if k8serrors.IsNotFound(err) {
+		log.InfoD("Creating Configmap: %v", configMapName)
+		metaObj := metaV1.ObjectMeta{
+			Name:      configMapName,
+			Namespace: defaulttorpedoNamespace,
+		}
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metaObj,
+			Data:       data,
+		}
+		configmap, err = k8sCore.CreateConfigMap(obj)
+		if err != nil {
+			return fmt.Errorf("failed to create configmap [%s] with data [%v]. Error : [%v]", configMapName, data, err)
+		}
+	} else {
+		log.InfoD("Updating Configmap: %v", configMapName)
+		maps.Copy(configmap.Data, data)
+		_, err = k8sCore.UpdateConfigMap(configmap)
+		if err != nil {
+			return fmt.Errorf("failed to update configmap [%s] with data [%v]. Error : [%v]", configMapName, data, err)
+		}
+	}
+	return nil
 }
 
 func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
