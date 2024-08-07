@@ -428,3 +428,120 @@ var _ = Describe("{ValidateFiftyVolumeBackups}", Label(TestCaseLabelsMap[Validat
 		log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
 	})
 })
+
+var _ = Describe("{CreateMultipleBackupsPerDeployment}", func() {
+	var (
+		appNamespaces             []string
+		backupAppContexts         []*scheduler.Context
+		cloudAccountName          string
+		cloudAccountUid           string
+		backupLocationName        string
+		backupLocationUid         string
+		backupLocationMap         map[string]string
+		backupNameList            []string
+		srcClusterUid             string
+		destClusterUid            string
+		numDeployments            = 20
+		numOfBackupsPerDeployment = 5
+		snapshotLimit             = 4
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("CreateMultipleBackupsPerDeployment", "TC to verify multiple backups", nil, 0, Sabrarhussaini, Q2FY25)
+		log.Infof("Scheduling applications")
+	})
+
+	It("TC to verify multiple backups", func() {
+		Step("Provision apps for validation", func() {
+			log.InfoD("Provisioning apps for validation")
+			appList := Inst().AppList
+			defer func() {
+				Inst().AppList = appList
+			}()
+			Inst().AppList = []string{"postgres-backup"}
+			backupAppContexts = make([]*scheduler.Context, 0)
+			appNamespaces = make([]string, 0)
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+			log.Infof("Scheduling applications")
+			for i := 0; i < numDeployments; i++ {
+				taskName := fmt.Sprintf("multiple-%d", i)
+				appContexts := ScheduleApplications(taskName)
+				for _, appCtx := range appContexts {
+					namespace := GetAppNamespace(appCtx, taskName)
+					appNamespaces = append(appNamespaces, namespace)
+					backupAppContexts = append(backupAppContexts, appCtx)
+					appCtx.ReadinessTimeout = AppReadinessTimeout
+				}
+			}
+		})
+
+		Step("Validating applications ", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(backupAppContexts)
+		})
+
+		Step("Create cloud credentials and backup locations", func() {
+			log.InfoD("Create cloud credentials and backup locations")
+			providers := GetBackupProviders()
+			backupLocationMap = make(map[string]string)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudAccountUid = uuid.New()
+				cloudAccountName = fmt.Sprintf("%s-%s-%v", "cred-partial-bkp", provider, time.Now().Unix())
+				log.Infof("Creating a cloud credential for partial backup [%s] with UID [%s] using [%s] as the provider", cloudAccountUid, cloudAccountName, provider)
+				err := CreateCloudCredential(provider, cloudAccountName, cloudAccountUid, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential [%s] with UID [%s] using [%s] as the provider", cloudAccountName, BackupOrgID, provider))
+				backupLocationName = fmt.Sprintf("%s-partial-bl-%v", getGlobalBucketName(provider), time.Now().Unix())
+				backupLocationUid = uuid.New()
+				backupLocationMap[backupLocationUid] = backupLocationName
+				bucketName := getGlobalBucketName(provider)
+				log.Infof("Creating a backup location [%s] with UID [%s] using the [%s] bucket", backupLocationName, backupLocationUid, bucketName)
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUid, cloudAccountName, cloudAccountUid, bucketName, BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location [%s] with UID [%s] using the bucket [%s]", backupLocationName, backupLocationUid, bucketName))
+			}
+		})
+
+		Step("Create source and destination clusters", func() {
+			log.InfoD("Creating source and destination clusters")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.Infof("Creating source [%s] and destination [%s] clusters", SourceClusterName, DestinationClusterName)
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, DestinationClusterName))
+			srcClusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.Infof("Cluster [%s] uid: [%s]", SourceClusterName, srcClusterUid)
+			dstClusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(dstClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+			log.Infof("Cluster [%s] uid: [%s]", DestinationClusterName, destClusterUid)
+		})
+
+		Step("Taking multiple backups of each namespace for the application cluster", func() {
+			log.InfoD("Taking backup of application for the clusters")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupNameList, err = TakeMultipleBackupsPerDeployment(ctx, BackupOrgID, SourceClusterName, numOfBackupsPerDeployment, snapshotLimit, backupLocationName, backupLocationUid, backupAppContexts, BackupNamePrefix)
+			log.FailOnError(err, "Taking backup of cluster failed")
+			log.Infof("Backups taken: %v", backupNameList)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(backupAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		err = SetSourceKubeConfig()
+		log.FailOnError(err, "Switching context to source cluster failed")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(backupAppContexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUid, ctx)
+	})
+})

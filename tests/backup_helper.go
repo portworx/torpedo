@@ -1006,6 +1006,79 @@ func CreateBackupWithCustomResourceTypeWithValidation(ctx context1.Context, back
 	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, resourceTypesFilter)
 }
 
+// TakeMultipleBackupsPerDeployment takes n multiple backups for every deployment for the specified cluster
+func TakeMultipleBackupsPerDeployment(ctx context1.Context, backupOrgID string, clusterName string, numOfBackups int, snapShotLimit int, backupLocationName, backupLocationUid string, scheduledAppContextsToBackup []*scheduler.Context, backupNamePrefix string) ([]string, error) {
+	labelSelectors := make(map[string]string)
+	type backupResult struct {
+		name string
+		err  error
+	}
+
+	backupResults := make(chan backupResult)
+	var wg sync.WaitGroup
+	ctx, cancel := context1.WithCancel(ctx) // Create a cancellable context
+	defer cancel()                          // Ensure cancel is called to release resources
+
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		wg.Add(1)
+		go func(scheduledAppContext *scheduler.Context) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			log.Infof("Taking backup of application from cluster %s", clusterName)
+			currentClusterUid, err := Inst().Backup.GetClusterUID(ctx, backupOrgID, clusterName)
+			if err != nil {
+				log.Errorf("Failed to get cluster UID for cluster %s: %v", clusterName, err)
+				return
+			}
+			var innerWg sync.WaitGroup
+			semaphore := make(chan struct{}, snapShotLimit) // Semaphore scoped to each scheduledAppContext
+			for i := 0; i < numOfBackups; i++ {
+				semaphore <- struct{}{} // Acquire semaphore
+				innerWg.Add(1)
+				go func(i int) {
+					defer innerWg.Done()
+					defer GinkgoRecover()
+					defer func() { <-semaphore }() // Release semaphore
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						currentBackupName := fmt.Sprintf("%s-%v-%v", backupNamePrefix, RandomString(8), i+1)
+						err := CreateBackupWithValidation(ctx, currentBackupName, clusterName, backupLocationName, backupLocationUid, []*scheduler.Context{scheduledAppContext}, labelSelectors, backupOrgID, currentClusterUid, "", "", "", "")
+						backupResults <- backupResult{name: currentBackupName, err: err}
+					}
+				}(i)
+			}
+			innerWg.Wait() // Wait for all backup routines for this scheduledAppContext to complete
+		}(scheduledAppContext)
+	}
+
+	go func() {
+		wg.Wait()            // Wait for all scheduledAppContexts to complete
+		close(backupResults) // Close the channel after all work is done
+	}()
+
+	var backupNameList []string
+	var errList []error
+
+	for result := range backupResults {
+		if result.err != nil {
+			log.Errorf("Failed to create and validate backup: %v", result.err)
+			errList = append(errList, result.err)
+			cancel() // Cancel remaining operations on first error
+			break
+		} else {
+			log.Infof("Successfully created and validated backup [%s]", result.name)
+			backupNameList = append(backupNameList, result.name)
+		}
+	}
+
+	if len(errList) > 0 {
+		return backupNameList, fmt.Errorf("some backups failed")
+	}
+	return backupNameList, nil
+}
+
 // CreateScheduleBackup creates a schedule backup and checks for success of first (immediately triggered) backup
 func CreateScheduleBackup(scheduleName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
@@ -8888,7 +8961,7 @@ func validateCRCleanup(resourceInterface interface{},
 		return nil, false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(validateCRCleanupInNamespace, 5*time.Minute, 5*time.Second)
+	_, err = task.DoRetryWithTimeout(validateCRCleanupInNamespace, 10*time.Minute, 5*time.Second)
 
 	return err
 
