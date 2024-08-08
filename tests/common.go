@@ -208,6 +208,8 @@ const (
 	// SkipClusterScopedObjects describes option for skipping deletion of cluster wide objects
 	SkipClusterScopedObjects   = "skipClusterScopedObjects"
 	CreateCloudCredentialError = "PermissionDenied desc = Access denied for [Resource: cloudcredential]"
+	VolumeRuntimeStateKey      = "RuntimeState"
+	VoumeRuntimeStatusClean    = "clean"
 )
 
 // PDS params
@@ -14120,7 +14122,18 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 		}
 		// check if volume is up
 		log.Infof("Volume [%s] status: %v", volID, apiVol.Status)
-		if apiVol.Status != opsapi.VolumeStatus_VOLUME_STATUS_UP {
+
+		if len(apiVol.RuntimeState) == 0 {
+			err := fmt.Errorf("volume [%s] does not have runtime state", volID)
+			processError(err, errChan...)
+			return
+		}
+
+		runTimeState := apiVol.RuntimeState[0].RuntimeState[VolumeRuntimeStateKey]
+		// check if runtime status is clean
+		log.Infof("Volume [%s] runtime state: %v", volID, runTimeState)
+
+		if apiVol.Status != opsapi.VolumeStatus_VOLUME_STATUS_UP || runTimeState != VoumeRuntimeStatusClean {
 			// check if volume replicas are on different nodes
 			// get all the nodes where replicas are present
 			replicas := apiVol.ReplicaSets
@@ -14133,9 +14146,8 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 			replicaNodes := replicas[0].Nodes
 
 			// if it is repl-2 volume and replicas are on same node, do not fail the test
-			// if it is repl-3 volume and replicas or either on same or 2 different nodes, do not fail the test
-			if len(replicaNodes) == 1 || (len(replicaNodes) == 2 && len(apiVol.ReplicaSets) == 3) {
-				log.Warnf("volume [%s] replicas are on same or 2 different nodes [%v]", volID, replicaNodes)
+			if len(replicaNodes) == 1 {
+				log.Warnf("volume [%s] replicas are on same nodes [%v]", volID, replicaNodes)
 				continue
 			} else {
 				err = fmt.Errorf("volume [%s] is not up", volID)
