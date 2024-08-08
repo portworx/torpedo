@@ -14120,8 +14120,6 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 			processError(err, errChan...)
 			return
 		}
-		// check if volume is up
-		log.Infof("Volume [%s] status: %v", volID, apiVol.Status)
 
 		if len(apiVol.RuntimeState) == 0 {
 			err := fmt.Errorf("volume [%s] does not have runtime state", volID)
@@ -14130,9 +14128,9 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 		}
 
 		runTimeState := apiVol.RuntimeState[0].RuntimeState[VolumeRuntimeStateKey]
-		// check if runtime status is clean
-		log.Infof("Volume [%s] runtime state: %v", volID, runTimeState)
 
+		// check if volume is up and runtime status is clean
+		log.Infof("Volume [%s] status : %v, runtime state: %v", volID, runTimeState)
 		if apiVol.Status != opsapi.VolumeStatus_VOLUME_STATUS_UP || runTimeState != VoumeRuntimeStatusClean {
 			// check if volume replicas are on different nodes
 			// get all the nodes where replicas are present
