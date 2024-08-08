@@ -726,7 +726,7 @@ func InitInstance() {
 	log.FailOnError(err, "Error occurred while Node Driver Initialization")
 
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
-	log.FailOnError(err, "Error occurred while Volume Driver Initialization")
+	//log.FailOnError(err, "Error occurred while Volume Driver Initialization")
 
 	err = Inst().M.Init(Inst().JobName, Inst().JobType)
 	log.FailOnError(err, "Error occurred while monitor Initialization")
