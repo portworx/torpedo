@@ -280,12 +280,12 @@ type K8s struct {
 // IsNodeReady  Check whether the cluster node is ready
 func (k *K8s) IsNodeReady(n node.Node) error {
 	t := func() (interface{}, bool, error) {
-		if err := k8sCore.IsNodeReady(n.Name); err != nil {
-			return "", true, &scheduler.ErrNodeNotReady{
-				Node:  n,
-				Cause: err.Error(),
-			}
-		}
+		// if err := k8sCore.IsNodeReady(n.Name); err != nil {
+		// 	return "", true, &scheduler.ErrNodeNotReady{
+		// 		Node:  n,
+		// 		Cause: err.Error(),
+		// 	}
+		// }
 
 		return "", false, nil
 	}
