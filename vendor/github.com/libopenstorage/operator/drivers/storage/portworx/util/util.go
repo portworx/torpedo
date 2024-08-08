@@ -74,6 +74,8 @@ const (
 	PortworxSDKPortName = "px-sdk"
 	// PortworxKVDBPortName name of the Portworx internal KVDB port
 	PortworxKVDBPortName = "px-kvdb"
+	// PortworxServiceAccountTokenSecretName is the secret name for storing the service account token for px to communicate with k8s
+	PortworxServiceAccountTokenSecretName = "px-sa-token-secret"
 	// EssentialsSecretName name of the Portworx Essentials secret
 	EssentialsSecretName = "px-essential"
 	// EssentialsUserIDKey is the secret key for Essentials user ID
@@ -179,6 +181,9 @@ const (
 	// EnvKeyPortworxServiceAccount key for the env var which tells custom Portworx
 	// service account
 	EnvKeyPortworxServiceAccount = "PX_SERVICE_ACCOUNT"
+	// EnvKeyPortworxServiceAccountTokenExpirationMinutes key for the env var which tells after how
+	// many minutes thg service account token will expire
+	EnvKeyPortworxServiceAccountTokenExpirationMinutes = "PX_SERVICE_ACCOUNT_TOKEN_EXPIRATION_MINUTES"
 	// EnvKeyPortworxServiceName key for the env var which tells the name of the
 	// portworx service to be used
 	EnvKeyPortworxServiceName = "PX_SERVICE_NAME"
@@ -335,6 +340,9 @@ var (
 
 	// ConfigMapNameRegex regex of configMap.
 	ConfigMapNameRegex = regexp.MustCompile("[^a-zA-Z0-9]+")
+
+	// ParallelUpgradePDBVersion is the portworx version from which parallel upgrades is supported
+	ParallelUpgradePDBVersion, _ = version.NewVersion("3.1.2")
 )
 
 func getStrippedClusterName(cluster *corev1.StorageCluster) string {
@@ -1090,6 +1098,8 @@ func GenerateToken(
 	token, err := auth.Token(claims, signature, &auth.Options{
 		Expiration: time.Now().
 			Add(duration).Unix(),
+		// set IAT to 10 minutes in the past to avoid clock skew issues
+		IATSubtract: 10 * time.Minute,
 	})
 	if err != nil {
 		return "", err
@@ -1396,6 +1406,7 @@ func CountStorageNodes(
 	cluster *corev1.StorageCluster,
 	sdkConn *grpc.ClientConn,
 	k8sClient client.Client,
+	nodeEnumerateResponse *api.SdkNodeEnumerateWithFiltersResponse,
 ) (int, error) {
 	nodeClient := api.NewOpenStorageNodeClient(sdkConn)
 	ctx, err := SetupContextWithToken(context.Background(), cluster, k8sClient, false)
@@ -1408,14 +1419,6 @@ func CountStorageNodes(
 	clusterDomainClient := api.NewOpenStorageClusterDomainsClient(sdkConn)
 	clusterDomains, err := clusterDomainClient.Enumerate(ctx, &api.SdkClusterDomainsEnumerateRequest{})
 	isDRSetup = err == nil && len(clusterDomains.ClusterDomainNames) > 1
-
-	nodeEnumerateResponse, err := nodeClient.EnumerateWithFilters(
-		ctx,
-		&api.SdkNodeEnumerateWithFiltersRequest{},
-	)
-	if err != nil {
-		return -1, fmt.Errorf("failed to enumerate nodes: %v", err)
-	}
 
 	// Use the quorum member flag from the node enumerate response if all the nodes are upgraded to the
 	// newer version. The Enumerate response could be coming from any node and we want to make sure that
@@ -1947,4 +1950,79 @@ func ShouldUseClusterDomain(node *api.StorageNode) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+// Get list of storagenodes that are a part of the current cluster that need a node PDB
+func NodesNeedingPDB(k8sClient client.Client, nodeEnumerateResponse *api.SdkNodeEnumerateWithFiltersResponse, k8sNodeList *v1.NodeList) ([]string, error) {
+
+	// Get list of kubernetes nodes that are a part of the current cluster
+	k8sNodesStoragePodCouldRun := make(map[string]bool)
+	for _, node := range k8sNodeList.Items {
+		k8sNodesStoragePodCouldRun[node.Name] = true
+	}
+
+	// Create a list of nodes that are part of quorum to create node PDB for them
+	nodesNeedingPDB := make([]string, 0)
+	for _, node := range nodeEnumerateResponse.Nodes {
+		// Do not add node if its not part of quorum or is decomissioned
+		if node.Status == api.Status_STATUS_DECOMMISSION || node.NonQuorumMember {
+			logrus.Debugf("Node %s is not a quorum member or is decomissioned, skipping", node.Id)
+			continue
+		}
+
+		if _, ok := k8sNodesStoragePodCouldRun[node.SchedulerNodeName]; ok {
+			nodesNeedingPDB = append(nodesNeedingPDB, node.SchedulerNodeName)
+		}
+	}
+
+	return nodesNeedingPDB, nil
+}
+
+// List of nodes that have an existing pdb but are no longer in k8s cluster or not a portworx storage node
+func NodesToDeletePDB(k8sClient client.Client, nodeEnumerateResponse *api.SdkNodeEnumerateWithFiltersResponse, k8sNodeList *v1.NodeList) ([]string, error) {
+	// nodeCounts map is used to find the elements that are uncommon between list of k8s nodes in cluster
+	// and list of portworx storage nodes. Used to find nodes where PDB needs to be deleted
+	nodeCounts := make(map[string]int)
+
+	// Increase count of each node
+	for _, node := range k8sNodeList.Items {
+		nodeCounts[node.Name]++
+	}
+
+	// Get list of storage nodes that are part of quorum and increment count of each node
+	nodesToDeletePDB := make([]string, 0)
+	for _, node := range nodeEnumerateResponse.Nodes {
+		if node.Status == api.Status_STATUS_DECOMMISSION || node.NonQuorumMember {
+			continue
+		}
+		nodeCounts[node.SchedulerNodeName]++
+	}
+
+	// Nodes with count 1 might have a node PDB but should not, so delete the PDB for such nodes
+	for node, count := range nodeCounts {
+		if count == 1 {
+			nodesToDeletePDB = append(nodesToDeletePDB, node)
+		}
+	}
+	return nodesToDeletePDB, nil
+
+}
+
+func ClusterSupportsParallelUpgrade(nodeEnumerateResponse *api.SdkNodeEnumerateWithFiltersResponse) bool {
+
+	for _, node := range nodeEnumerateResponse.Nodes {
+		if node.Status == api.Status_STATUS_DECOMMISSION {
+			continue
+		}
+		v := node.NodeLabels[NodeLabelPortworxVersion]
+		nodeVersion, err := version.NewVersion(v)
+		if err != nil {
+			logrus.Warnf("Failed to parse node version %s for node %s: %v", v, node.Id, err)
+			return false
+		}
+		if nodeVersion.LessThan(ParallelUpgradePDBVersion) {
+			return false
+		}
+	}
+	return true
 }
