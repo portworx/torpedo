@@ -4575,6 +4575,20 @@
         },
         "k8s_version": {
           "type": "string"
+        },
+        "add_user_backup_share": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/BackupShare"
+          },
+          "title": "map[user]BackupShare details for shared user of the cluster\ncontains cluster level backup shared by non owner of the cluster"
+        },
+        "del_user_backup_share": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/BackupShare"
+          },
+          "title": "contains map[user]BackupShare details to be deleted for cluster level backups of\nnon owner of the cluster"
         }
       }
     },
@@ -6706,7 +6720,7 @@
           "items": {
             "type": "string"
           },
-          "title": "userid(s) of the user to share the cluster with"
+          "title": "userid of the user(s) to share the cluster with"
         },
         "groups": {
           "type": "array",
@@ -6715,10 +6729,10 @@
           },
           "title": "group(s) to share the cluster with"
         },
-        "share_cluster_backup": {
+        "share_cluster_backups": {
           "type": "boolean",
           "format": "boolean",
-          "title": "share_cluster_backup share is optional, if set to true, it will additionally share backups of cluster owner"
+          "title": "share_cluster_backups share is optional, if set to true, it will additionally share existing backups"
         }
       }
     },
@@ -6761,7 +6775,7 @@
           "items": {
             "type": "string"
           },
-          "title": "userid(s) of the user to share the cluster with"
+          "title": "userid of the user(s) to share the cluster with"
         },
         "groups": {
           "type": "array",
