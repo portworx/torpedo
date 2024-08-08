@@ -68,6 +68,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
 	affinityhelper "k8s.io/component-helpers/scheduling/corev1/nodeaffinity"
+	"k8s.io/kubernetes/pkg/apis/core"
 	cluster_v1alpha1 "sigs.k8s.io/cluster-api/pkg/apis/deprecated/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -198,6 +199,8 @@ const (
 
 	etcHostsFile       = "/etc/hosts"
 	tempEtcHostsMarker = "### px-operator unit-test"
+
+	pxSaTokenSecretName = "px-sa-token-secret"
 )
 
 // TestSpecPath is the path for all test specs. Due to currently functional test and
@@ -217,6 +220,7 @@ var (
 	opVer23_10_2, _ = version.NewVersion("23.10.2-")
 	OpVer23_10_3, _ = version.NewVersion("23.10.3-")
 	opVer24_1_0, _  = version.NewVersion("24.1.0-")
+	opVer24_2_0, _  = version.NewVersion("24.2.0-")
 
 	minOpVersionForKubeSchedConfig, _ = version.NewVersion("1.10.2-")
 	minimumCcmGoVersionCO, _          = version.NewVersion("1.2.3")
@@ -227,9 +231,11 @@ var (
 	// OCP Dynamic Plugin is only supported in starting with OCP 4.12+ which is k8s v1.25.0+
 	minK8sVersionForDynamicPlugin, _ = version.NewVersion("1.25.0")
 
-	pxVer2_13, _ = version.NewVersion("2.13")
-	pxVer3_0, _  = version.NewVersion("3.0")
-	pxVer3_1, _  = version.NewVersion("3.1")
+	pxVer2_13, _  = version.NewVersion("2.13")
+	pxVer3_0, _   = version.NewVersion("3.0")
+	pxVer3_1, _   = version.NewVersion("3.1")
+	pxVer3_1_2, _ = version.NewVersion("3.1.2")
+	pxVer3_2, _   = version.NewVersion("3.2")
 
 	// minimumPxVersionCCMJAVA minimum PX version to install ccm-java
 	minimumPxVersionCCMJAVA, _ = version.NewVersion("2.8")
@@ -765,13 +771,13 @@ func reconstructSpecURL(cluster *corev1.StorageCluster) string {
 
 func validateTelemetrySecret(cluster *corev1.StorageCluster, timeout, interval time.Duration, force bool) error {
 	t := func() (interface{}, bool, error) {
-		secret, err := coreops.Instance().GetSecret("pure-telemetry-certs", cluster.Namespace)
+		secret, err := coreops.Instance().GetSecret(TelemetryCertName, cluster.Namespace)
 		if err != nil {
 			if errors.IsNotFound(err) && !force {
 				// Skip secret existence validation
 				return nil, false, nil
 			}
-			return nil, true, fmt.Errorf("failed to get secret pure-telemetry-certs: %v", err)
+			return nil, true, fmt.Errorf("failed to get secret %s: %v", TelemetryCertName, err)
 		}
 		logrus.Debugf("Found secret %s", secret.Name)
 
@@ -1026,6 +1032,11 @@ func ValidateStorageCluster(
 
 	// Validate Portworx API Service
 	if err = validatePortworxAPIService(liveCluster, timeout, interval); err != nil {
+		return err
+	}
+
+	// Validate Portworx ServiceAccount Token
+	if err = validatePortworxTokenRefresh(liveCluster, timeout, interval); err != nil {
 		return err
 	}
 
@@ -1488,15 +1499,20 @@ func ValidateUninstallStorageCluster(
 		return err
 	}
 
+	// Validate deletion of Px ServiceAccount Token Secret
+	if err := validatePortworxSaTokenSecretDeleted(cluster, timeout, interval); err != nil {
+		return err
+	}
+
 	// Verify telemetry secret is deleted on UninstallAndWipe when telemetry is enabled
 	if cluster.Spec.DeleteStrategy != nil && cluster.Spec.DeleteStrategy.Type == corev1.UninstallAndWipeStorageClusterStrategyType {
-		secret, err := coreops.Instance().GetSecret("pure-telemetry-certs", cluster.Namespace)
+		secret, err := coreops.Instance().GetSecret(TelemetryCertName, cluster.Namespace)
 		if err != nil && !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to get secret pure-telemetry-certs: %v", err)
+			return fmt.Errorf("failed to get secret %s: %v", TelemetryCertName, err)
 		} else if err == nil {
 			// Secret found, only do the validation when telemetry is enabled, since if it's disabled, there's a chance secret owner is not set yet
 			if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Telemetry != nil && cluster.Spec.Monitoring.Telemetry.Enabled {
-				return fmt.Errorf("telemetry secret pure-telemetry-certs was found when shouldn't have been")
+				return fmt.Errorf("telemetry secret %s was found when shouldn't have been", TelemetryCertName)
 			}
 			// Delete stale telemetry secret
 			if err := coreops.Instance().DeleteSecret(secret.Name, cluster.Namespace); err != nil {
@@ -1540,6 +1556,33 @@ func validatePortworxConfigMapsDeleted(cluster *corev1.StorageCluster, timeout, 
 	}
 
 	logrus.Debug("Portworx ConfigMaps have been deleted successfully")
+	return nil
+}
+
+func validatePortworxSaTokenSecretDeleted(cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	pxVersion := GetPortworxVersion(cluster)
+	opVersion, err := GetPxOperatorVersion()
+	if err != nil {
+		return err
+	}
+	if pxVersion.LessThan(pxVer3_2) || opVersion.LessThan(opVer24_2_0) {
+		logrus.Infof("pxVersion: %v, opVersion: %v. Skip verification because px token refresh is not supported with these versions.", pxVersion, opVersion)
+		return nil
+	}
+	t := func() (interface{}, bool, error) {
+		secret, err := coreops.Instance().GetSecret(pxSaTokenSecretName, cluster.Namespace)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return nil, false, nil
+			}
+			return nil, true, err
+		}
+		return nil, true, fmt.Errorf("px ServiceAccount Token Secret exists: %v", secret)
+	}
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+	logrus.Debug("Portworx ServiceAccount Token Secret has been deleted successfully")
 	return nil
 }
 
@@ -1789,6 +1832,58 @@ func validatePortworxAPIService(cluster *corev1.StorageCluster, timeout, interva
 		return err
 	}
 
+	return nil
+}
+
+func validatePortworxTokenRefresh(cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	pxVersion := GetPortworxVersion(cluster)
+	opVersion, err := GetPxOperatorVersion()
+	if err != nil {
+		return err
+	}
+	if pxVersion.LessThan(pxVer3_2) || opVersion.LessThan(opVer24_2_0) {
+		logrus.Infof("pxVersion: %v, opVersion: %v. Skip verification because px token refresh is not supported with these versions.", pxVersion, opVersion)
+		return nil
+	}
+	logrus.Infof("Verifying px runc container token...")
+	// Get one Portworx pod to run commands inside the px runc container on the same node
+	pxPods, err := coreops.Instance().GetPods(cluster.Namespace, map[string]string{"name": "portworx"})
+	if err != nil {
+		return fmt.Errorf("failed to get PX pods, Err: %w", err)
+	}
+	pxPod := pxPods.Items[0]
+	t := func() (interface{}, bool, error) {
+		pxSaSecret, err := coreops.Instance().GetSecret(pxSaTokenSecretName, cluster.Namespace)
+		if err != nil {
+			return nil, true, err
+		}
+		expectedToken := string(pxSaSecret.Data[core.ServiceAccountTokenKey])
+		if !coreops.Instance().IsPodReady(pxPod) {
+			return nil, true, fmt.Errorf("[%s] PX pod is not in Ready state to run command inside", pxPod.Name)
+		}
+		actualToken, err := runCmdInsidePxPod(&pxPod, "runc exec portworx cat /var/run/secrets/kubernetes.io/serviceaccount/token", cluster.Namespace, false)
+		if err != nil {
+			return nil, true, err
+		}
+		if expectedToken != actualToken {
+			return nil, true, fmt.Errorf("the token inside px runc container is different from the token in the k8s secret")
+		}
+		return actualToken, false, nil
+	}
+	token, err := task.DoRetryWithTimeout(t, timeout, interval)
+	if err != nil {
+		return err
+	}
+	secretList, err := runCmdInsidePxPod(&pxPod, fmt.Sprintf("runc exec portworx "+
+		"curl -s https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT/api/v1/namespaces/$(runc exec portworx cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)/secrets "+
+		"--header 'Authorization: Bearer %s' --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt", token), cluster.Namespace, false)
+	if err != nil {
+		return fmt.Errorf("failed to verify px ServiceAccount token: %w", err)
+	}
+	if !strings.Contains(secretList, pxSaTokenSecretName) {
+		return fmt.Errorf("the secret list returned from k8s api server does not contain %s. Output: %s", pxSaTokenSecretName, secretList)
+	}
+	logrus.Infof("token is created and verified: %s", token)
 	return nil
 }
 
@@ -5337,7 +5432,7 @@ func ValidateTelemetryV1Enabled(pxImageList map[string]string, cluster *corev1.S
 
 // ValidatePodDisruptionBudget validates the value of minavailable and number of disruptions for px-storage poddisruptionbudget
 func ValidatePodDisruptionBudget(cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
-	logrus.Info("Validate px-storage poddisruptionbudget minAvailable and allowed disruptions")
+	logrus.Info("Validate portworx storage poddisruptionbudget")
 
 	kbVer, err := GetK8SVersion()
 	if err != nil {
@@ -5348,10 +5443,48 @@ func ValidatePodDisruptionBudget(cluster *corev1.StorageCluster, timeout, interv
 	if err != nil {
 		return err
 	}
+	pxVersion := GetPortworxVersion(cluster)
 
 	// PodDisruptionBudget is supported for k8s version greater than or equal to 1.21 and operator version greater than or equal to 1.5.0
 	// Changing opVersion to 23.10.0 for PTX-23350 | TODO: add better logic with PTX-23407
-	if k8sVersion.GreaterThanOrEqual(minSupportedK8sVersionForPdb) && opVersion.GreaterThanOrEqual(opVer23_10) {
+	// Smart and parallel upgrades is supported from px version 3.1.2 and operator version 24.2.0
+	if k8sVersion.GreaterThanOrEqual(minSupportedK8sVersionForPdb) && opVersion.GreaterThanOrEqual(opVer24_2_0) && pxVersion.GreaterThanOrEqual(pxVer3_1_2) {
+		t := func() (interface{}, bool, error) {
+			nodes, err := operatorops.Instance().ListStorageNodes(cluster.Namespace)
+			if err != nil {
+				return nil, true, fmt.Errorf("failed to get storage nodes, Err: %v", err)
+			}
+			availableNodes := 0
+			for _, node := range nodes.Items {
+				if *node.Status.NodeAttributes.Storage {
+					if node.Status.Phase == "Online" {
+						availableNodes++
+					} else {
+						logrus.Infof("Node %s is in state [%s], PDB might be incorrect", node.Name, node.Status.Phase)
+					}
+				}
+			}
+			pdbs, err := policyops.Instance().ListPodDisruptionBudget(cluster.Namespace)
+			if err != nil {
+				return nil, true, fmt.Errorf("failed to list all poddisruptionbudgets, Err: %v", err)
+			}
+			actualNodePDBCount := 0
+			for _, pdb := range pdbs.Items {
+				if strings.HasPrefix(pdb.Name, "px-") && pdb.Name != "px-kvdb" {
+					actualNodePDBCount++
+				}
+			}
+			if actualNodePDBCount == availableNodes {
+				return nil, false, nil
+			}
+			return nil, true, fmt.Errorf("incorrect node PDB count. Expected node PDB count [%d], Actual node PDB count [%d]", availableNodes, actualNodePDBCount)
+
+		}
+		if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+			return err
+		}
+		return nil
+	} else if k8sVersion.GreaterThanOrEqual(minSupportedK8sVersionForPdb) && opVersion.GreaterThanOrEqual(opVer23_10) {
 		// This is only for non async DR setup
 		t := func() (interface{}, bool, error) {
 
@@ -5361,16 +5494,16 @@ func ValidatePodDisruptionBudget(cluster *corev1.StorageCluster, timeout, interv
 			}
 
 			nodeslen := 0
-			availablenodes := 0
+			availableNodes := 0
 			for _, node := range nodes.Items {
 				if *node.Status.NodeAttributes.Storage {
 					nodeslen++
 					if node.Status.Phase == "Online" {
-						availablenodes++
+						availableNodes++
 					}
 				}
 			}
-			nodesUnavailable := nodeslen - availablenodes
+			nodesUnavailable := nodeslen - availableNodes
 			// Skip PDB validation for px-storage if number of storage nodes is lesser than or equal to 2
 			if nodeslen <= 2 {
 				logrus.Infof("Storage PDB does not exist for storage nodes lesser than or equal to 2, skipping PDB validattion")
@@ -5947,4 +6080,94 @@ func RestoreEtcHosts(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, bb.Len(), n, "short write")
 	fd.Close()
+}
+
+func ValidateNodePDB(cluster *corev1.StorageCluster, timeout, interval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		nodes, err := coreops.Instance().GetNodes()
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get k8s nodes, Err: %v", err)
+		}
+		nodesPDBMap := make(map[string]bool)
+
+		pdbs, err := policyops.Instance().ListPodDisruptionBudget(cluster.Namespace)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get px-storage poddisruptionbudget, Err: %v", err)
+		}
+
+		for _, pdb := range pdbs.Items {
+			if strings.HasPrefix(pdb.Name, "px-") && pdb.Name != "px-kvdb" {
+				nodesPDBMap[pdb.Name] = true
+				if pdb.Spec.MinAvailable.IntValue() != 1 {
+					return nil, true, fmt.Errorf("incorrect PDB minAvailable value for node %s. Expected PDB [%d], Actual PDB [%d]", strings.TrimPrefix(pdb.Name, "px-"), 1, pdb.Spec.MinAvailable.IntValue())
+				}
+			}
+		}
+		// create map of storage nodes as well
+		storagenodes, err := operatorops.Instance().ListStorageNodes(cluster.Namespace)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get storage nodes, Err: %v", err)
+		}
+		storageNodesMap := make(map[string]bool)
+		for _, node := range storagenodes.Items {
+			if *node.Status.NodeAttributes.Storage {
+				storageNodesMap[node.Name] = true
+			}
+		}
+
+		for _, node := range nodes.Items {
+			if coreops.Instance().IsNodeMaster(node) {
+				continue
+			}
+			if _, ok := nodesPDBMap["px-"+node.Name]; !ok {
+				// return error only if the k8s node has a storage node in it
+				if _, ok := storageNodesMap[node.Name]; ok {
+					return nil, true, fmt.Errorf("PDB for node %s is missing", node.Name)
+				}
+			}
+		}
+		return nil, false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ValidateNodesSelectedForUpgrade(cluster *corev1.StorageCluster, minAvailable int, timeout, interval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		nodes, err := operatorops.Instance().ListStorageNodes(cluster.Namespace)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get storage nodes, Err: %v", err)
+		}
+		totalStorageNodes := 0
+		for _, node := range nodes.Items {
+			if *node.Status.NodeAttributes.Storage {
+				totalStorageNodes++
+			}
+		}
+		if minAvailable == -1 {
+			// Setting minAvailable to quorum value
+			minAvailable = (totalStorageNodes / 2) + 1
+		}
+
+		pdbs, err := policyops.Instance().ListPodDisruptionBudget(cluster.Namespace)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get px-storage poddisruptionbudget, Err: %v", err)
+		}
+		nodesReadyForUpgrade := 0
+		for _, pdb := range pdbs.Items {
+			if strings.HasPrefix(pdb.Name, "px-") && pdb.Spec.MinAvailable.IntValue() == 0 {
+				nodesReadyForUpgrade++
+			}
+		}
+		if nodesReadyForUpgrade <= (totalStorageNodes - minAvailable) {
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("nodes available for upgrade [%d] are more than expected [%d]", nodesReadyForUpgrade, totalStorageNodes-minAvailable)
+	}
+	if _, err := task.DoRetryWithTimeout(t, timeout, interval); err != nil {
+		return err
+	}
+	return nil
 }
