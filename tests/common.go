@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"maps"
 	"math"
 	"math/rand"
 	"net/http"
@@ -368,6 +369,7 @@ const (
 	mongodbStatefulset                = "pxc-backup-mongodb"
 	AwsS3encryptionPolicy             = "s3:x-amz-server-side-encryption=AES256"
 	AwsS3Sid                          = "DenyNonAES256Uploads"
+	defaulttorpedoNamespace           = "default"
 )
 
 const (
@@ -5201,6 +5203,60 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 	return nil
 }
 
+// AddAzureApplicationClusters adds azure application cluster using the given cloud credential
+func AddAzureApplicationClusters(orgID string, clusterCredName string, clusterCredUid string, ctx context1.Context) error {
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	// Validate user has provided at least 2 kubeconfigs for source and destination cluster
+	if len(kubeconfigList) < 2 {
+		return fmt.Errorf("minimum 2 kubeconfigs are required for source and destination cluster")
+	}
+	err := dumpKubeConfigs(configMapName, kubeconfigList)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Create cluster [%s] in org [%s]", SourceClusterName, orgID)
+	srcClusterConfigPath, err := GetSourceClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
+
+	log.InfoD("Create cluster [%s] in org [%s]", destinationClusterName, orgID)
+	dstClusterConfigPath, err := GetDestinationClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
+
+	ClusterConfigPathMap[SourceClusterName] = srcClusterConfigPath
+	ClusterConfigPathMap[destinationClusterName] = dstClusterConfigPath
+
+	for _, kubeconfig := range kubeconfigList {
+		clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+		clusterStatus := func() (interface{}, bool, error) {
+			err = CreateCluster(clusterName, ClusterConfigPathMap[clusterName], orgID, clusterCredName, clusterCredUid, ctx)
+			if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
+				return "", true, err
+			}
+			srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			if err != nil {
+				return "", true, err
+			}
+			if srcClusterStatus == api.ClusterInfo_StatusInfo_Online {
+				return "", false, nil
+			}
+			return "", true, fmt.Errorf("the %s cluster state is not Online yet", SourceClusterName)
+		}
+		_, err = task.DoRetryWithTimeout(clusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // CreateBackupLocation creates backup location
 func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID, encryptionKey string, validate bool) error {
 	var err error
@@ -5436,6 +5492,50 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 			return nil
 		}
 		log.Warnf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider with error [%v]", credName, orgID, provider, err)
+		return err
+	}
+	// check for cloud cred status
+	cloudCredStatus := func() (interface{}, bool, error) {
+		status, err := IsCloudCredPresent(credName, ctx, orgID)
+		if err != nil {
+			return "", true, fmt.Errorf("cloud cred %s present with error %v", credName, err)
+		}
+		if status {
+			return "", true, nil
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(cloudCredStatus, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateAzureCloudCredential creates azure cloud credentials
+func CreateAzureCloudCredential(credName string, uid, orgID string, azConfig *api.AzureConfig, ctx context1.Context) error {
+	log.Infof("Create azure cloud credential with name [%s] for org [%s]", credName, orgID)
+	var credCreateRequest *api.CloudCredentialCreateRequest
+	credCreateRequest = &api.CloudCredentialCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  credName,
+			Uid:   uid,
+			OrgId: orgID,
+		},
+		CloudCredential: &api.CloudCredentialInfo{
+			Type: api.CloudCredentialInfo_Azure,
+			Config: &api.CloudCredentialInfo_AzureConfig{
+				AzureConfig: azConfig,
+			},
+		},
+	}
+
+	_, err := Inst().Backup.CreateCloudCredential(ctx, credCreateRequest)
+	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		log.Warnf("failed to create cloud credential with name [%s] in org [%s] with  as provider with error [%v]", credName, orgID, err)
 		return err
 	}
 	// check for cloud cred status
@@ -6088,7 +6188,6 @@ func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, a
 	clientID = os.Getenv("AZURE_CLIENT_ID")
 	clientSecret = os.Getenv("AZURE_CLIENT_SECRET")
 	subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID")
-
 	return tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey
 }
 
@@ -7063,11 +7162,11 @@ const (
 )
 
 // CreateAzureBucket creates bucket in Azure
-func CreateAzureBucket(bucketName string, objectlock bool, mode Mode, retentionDays int, safeMode bool) {
+func CreateAzureBucket(bucketName string, immutability bool, mode Mode, retentionDays int, safeMode bool) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
 	azureRegion := os.Getenv("AZURE_ENDPOINT")
-	if objectlock == true {
+	if immutability {
 		tenantID, clientID, clientSecret, _, _, _ := GetAzureCredsFromEnv()
 		resourceGroup, containerLevelSA, _, storageAccountLevelSA, storageAccountLevelSAKey, safeAccountLevelSA, safeAccountLevelSAKey := GetAzureImmutabilityCredsFromEnv()
 		if mode == Container_level {
@@ -7143,6 +7242,34 @@ func CreateAzureBucket(bucketName string, objectlock bool, mode Mode, retentionD
 			fmt.Sprintf("Failed to create container. Error: [%v]", err))
 	}
 
+}
+
+// UpdateConfigmap creates or updates an existing configmap with the given data
+func UpdateConfigmap(configMapName string, data map[string]string) error {
+	configmap, err := k8sCore.GetConfigMap(configMapName, defaulttorpedoNamespace)
+	if k8serrors.IsNotFound(err) {
+		log.InfoD("Creating Configmap: %v", configMapName)
+		metaObj := metaV1.ObjectMeta{
+			Name:      configMapName,
+			Namespace: defaulttorpedoNamespace,
+		}
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metaObj,
+			Data:       data,
+		}
+		configmap, err = k8sCore.CreateConfigMap(obj)
+		if err != nil {
+			return fmt.Errorf("failed to create configmap [%s] with data [%v]. Error : [%v]", configMapName, data, err)
+		}
+	} else {
+		log.InfoD("Updating Configmap: %v", configMapName)
+		maps.Copy(configmap.Data, data)
+		_, err = k8sCore.UpdateConfigMap(configmap)
+		if err != nil {
+			return fmt.Errorf("failed to update configmap [%s] with data [%v]. Error : [%v]", configMapName, data, err)
+		}
+	}
+	return nil
 }
 
 func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
