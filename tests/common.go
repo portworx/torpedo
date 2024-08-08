@@ -13949,7 +13949,7 @@ func GetVolumeNamefromPVC(namespace string) ([]string, error) {
 	return nil, fmt.Errorf("No PVCs found in namespace [%s]", namespace)
 }
 
-func DoVolumeQuorumValidation(volumeQuorumValidationStopSignal chan struct{}, vQourumError *error) {
+func DoVolumeQuorumValidation(volumeQuorumValidationStopSignal chan struct{}, vQuorumError *error) {
 	itr := 1
 	for {
 		select {
@@ -13963,10 +13963,10 @@ func DoVolumeQuorumValidation(volumeQuorumValidationStopSignal chan struct{}, vQ
 			close(errorChan) // Close the channel to signal completion
 			for err := range errorChan {
 				if err != nil {
-					*vQourumError = multierr.Append(*vQourumError, err)
+					*vQuorumError = multierr.Append(*vQuorumError, err)
 				}
 			}
-			if *vQourumError != nil {
+			if *vQuorumError != nil {
 				return
 			}
 			itr++
