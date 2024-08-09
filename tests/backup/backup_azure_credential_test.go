@@ -229,3 +229,93 @@ var _ = Describe("{AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields}"
 		log.FailOnError(err, "Data validations failed")
 	})
 })
+
+// This testcase creates Azure cloud account with mandatory and non-mandatory fields and take backup & restore
+var _ = Describe("{AzureCloudAccountForAzureLockedBucket}", Label(TestCaseLabelsMap[AzureCloudAccountForAzureLockedBucket]...), func() {
+
+	var (
+		credUidWithMandatoryFields                 string
+		azureCredNameWithMandatoryFields           string
+		azureBackupLocationNameWithMandatoryFields string
+		backupLocationMandatoryFieldsUID           string
+
+		containerLevelStorageAccount    string
+		containerLevelStorageAccountKey string
+		azureImmutableBucket            string
+
+		appNamespaces []string
+
+		backupLocationMap2  map[string]string
+		cloudCredentialMap2 map[string]string
+
+		azureConfigFields    *api.AzureConfig
+		scheduledAppContexts []*scheduler.Context
+		contexts             []*scheduler.Context
+		appContexts          []*scheduler.Context
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields", "Azure cloud account with mandatory and non mandatory fields", nil, 31661, Sagrawal, Q2FY25)
+
+		backupLocationMap2 = make(map[string]string)
+		cloudCredentialMap2 = make(map[string]string)
+		log.InfoD("Deploying applications required for the testcase")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = AppReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+	})
+
+	It("Azure cloud account with mandatory and non mandatory fields", func() {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		_, containerLevelStorageAccount, containerLevelStorageAccountKey, _, _, _, _ = GetAzureImmutabilityCredsFromEnv()
+
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+		})
+
+		Step("Creating azure cloud account and backup location with only mandatory fields", func() {
+			log.InfoD("Creating azure cloud account with only mandatory fields")
+			credUidWithMandatoryFields = uuid.New()
+			azureConfigFields = &api.AzureConfig{
+				AccountName: containerLevelStorageAccount,
+				AccountKey:  containerLevelStorageAccountKey,
+			}
+			azureCredNameWithMandatoryFields = fmt.Sprintf("%s-azure-cred-with-mandatory-fields-immutable", RandomString(5))
+			err = CreateAzureCloudCredential(azureCredNameWithMandatoryFields, credUidWithMandatoryFields, BackupOrgID, azureConfigFields, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of azure cloud credential named [%s] for org [%s] having only mandatory fields", azureCredNameWithMandatoryFields, BackupOrgID))
+			cloudCredentialMap2[azureCredNameWithMandatoryFields] = credUidWithMandatoryFields
+
+			log.InfoD("Creating azure immutable bucket")
+			azureImmutableBucket = RandomString(5) + "azure-immutable-bucket"
+			CreateAzureBucket(azureImmutableBucket, true, Container_level, 2, true)
+
+			log.InfoD("Creating azure immutable backup location with mandatory fields in azure credentials")
+			azureBackupLocationNameWithMandatoryFields = fmt.Sprintf("azure-immutable-bkp-loc-mandatory-fields-%v", RandomString(5))
+			backupLocationMandatoryFieldsUID = uuid.New()
+			backupLocationMap2[backupLocationMandatoryFieldsUID] = azureBackupLocationNameWithMandatoryFields
+			err = CreateBackupLocation("azure", azureBackupLocationNameWithMandatoryFields, backupLocationMandatoryFieldsUID, azureCredNameWithMandatoryFields, credUidWithMandatoryFields, azureImmutableBucket, BackupOrgID, "", true)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Creating backup location %s with mandatory fields in azure credentials", azureBackupLocationNameWithMandatoryFields))
+
+			log.InfoD("Updating the azure cloud account with all parameter for immutable bucket")
+			err = UpdateCloudCredential("azure", azureCredNameWithMandatoryFields, credUidWithMandatoryFields, BackupOrgID, ctx, containerLevelStorageAccount, containerLevelStorageAccountKey)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of azure cloud credential named [%s] for org [%s] having only mandatory fields", azureCredNameWithMandatoryFields, BackupOrgID))
+
+		})
+	})
+
+	JustAfterEach(func() {
+
+	})
+})
