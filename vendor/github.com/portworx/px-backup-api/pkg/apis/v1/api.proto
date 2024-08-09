@@ -67,6 +67,13 @@ message ClusterInfo {
     ];
     Provider provider = 17;
     string k8s_version = 18;
+    // map[user]BackupShare details for shared user of the cluster
+    // contains cluster level backup shared by non owner of the cluster
+    map<string, BackupShare> add_user_backup_share = 19;
+    // contains map[user]BackupShare details to be deleted for cluster level backups of
+    // non owner of the cluster
+    map<string, BackupShare> del_user_backup_share = 20;
+
 
     // Message for maintaining status of the cluster.
     message StatusInfo {
@@ -465,6 +472,8 @@ message BackupLocationInfo {
             DeletePending = 2;
             ValidationInProgress = 3;
             ValidationFailed = 4;
+            // If a BL is being used for partial backup, mark it as LimitedAvailability.
+            LimitedAvailability = 5;
         }
     }
 
@@ -1188,6 +1197,22 @@ service Cluster {
             body : "*"
         };
     }
+
+    // ShareCluster shares access to the cluster to the user(s) or group(s)
+    rpc ShareCluster(ShareClusterRequest) returns (ShareClusterResponse) {
+        option (google.api.http) = {
+            patch : "/v1/sharecluster"
+            body : "*"
+        };
+    }
+
+    // UnShareCluster removes shared access for the user(s) or group(s) to the cluster
+    rpc UnShareCluster(UnShareClusterRequest) returns (UnShareClusterResponse) {
+        option (google.api.http) = {
+            patch : "/v1/unsharecluster"
+            body : "*"
+        };
+    }
 }
 
 message ClusterBackupShareUpdateRequest {
@@ -1197,6 +1222,7 @@ message ClusterBackupShareUpdateRequest {
     BackupShare del_backup_share = 4;
     string uid = 5;
 }
+
 
 message ClusterBackupShareUpdateResponse {}
 
@@ -1301,6 +1327,31 @@ message ClusterDeleteRequest {
 
 // Define ClusterInspectResponse struct
 message ClusterDeleteResponse {}
+
+
+message ShareClusterRequest{
+    string org_id = 1;
+    ObjectRef cluster_ref = 2;
+    // userid of the user(s) to share the cluster with
+    repeated string users = 3;
+    // group(s) to share the cluster with
+    repeated string groups = 4;
+    // share_cluster_backups share is optional, if set to true, it will additionally share existing backups
+    bool share_cluster_backups = 5;
+}
+
+message ShareClusterResponse{}
+
+message UnShareClusterRequest{
+    string org_id = 1;
+    ObjectRef cluster_ref = 2;
+    // userid of the user(s) to share the cluster with
+    repeated string users = 3;
+    // group(s) to share the cluster with
+    repeated string groups = 4;
+}
+
+message UnShareClusterResponse{}
 
 service CloudCredential {
     // Creates new cloud credential
@@ -2424,6 +2475,8 @@ message LicenseUsageAirgappedResponse {
     repeated LicenseUsageAirgappedObject licenseUsageAirgapped = 1;
     bool complete = 2;
     uint64 total_count = 3;
+    string account_id = 4;
+    string subscription_id = 5;
 }
 
 service License {
