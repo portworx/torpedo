@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${PDS_CLUSTER}-bench
+  labels:
+    app: ${PDS_CLUSTER}-bench
+  namespace: ${PDS_NS}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${PDS_CLUSTER}-bench
+  template:
+    metadata:
+      labels: 
+        app: ${PDS_CLUSTER}-bench
+    spec:
+      containers:
+      - name: consul-agent
+        image: portworx/pds-loadtests:consul-agent-${VERSION}
+        imagePullPolicy: Always
+        env:
+        - name: AGENT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: "${PDS_CLUSTER}-creds"
+              key: master_token
+        - name: PDS_CLUSTER
+          value: ${PDS_CLUSTER}
+        - name: PDS_NS
+          value: ${PDS_NS}
+      - name: consul-kv-workload
+        image: portworx/pds-loadtests:consul-agent-${VERSION}
+        imagePullPolicy: Always
+        command:
+          - "/bin/kv-workload.sh"
+        env:
+        - name: AGENT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: "${PDS_CLUSTER}-creds"
+              key: master_token
+      - name: consul-bench
+        image: portworx/pds-loadtests:consul-bench-${VERSION}
+        imagePullPolicy: Always
+        env:
+        - name: CONSUL_HTTP_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: "${PDS_CLUSTER}-creds"
+              key: master_token
+        - name: SERVICE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: SERVICE_INSTANCES
+          value: "10"
+        - name: SERVICE_FLAP_SECONDS
+          value: "10"
+        - name: SERVICE_WATCHERS
+          value: "10"
