@@ -962,6 +962,41 @@ func GetMembersOfGroup(group string) ([]string, error) {
 	return members, nil
 }
 
+// GetMembersOfGroupWithID fetches all available members of the group with groupID
+func GetMembersOfGroupWithID(groupID string) ([]string, error) {
+	fn := "GetMembersOfGroup"
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return nil, err
+	}
+
+	reqURL := fmt.Sprintf("%s/groups/%s/members", keycloakEndPoint, groupID)
+	method := "GET"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+
+	response, err := processHTTPRequest(method, reqURL, headers, nil)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	var members []string
+	var users []KeycloakGroupMemberRepresentation
+	err = json.Unmarshal(response, &users)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	for _, userName := range users {
+		members = append(members, userName.Name)
+	}
+	log.Debugf("list of members : %v", members)
+	return members, nil
+}
+
 // AddGroup adds a new group
 func AddGroup(group string) error {
 	fn := "AddGroup"
