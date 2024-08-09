@@ -5555,6 +5555,79 @@ func CreateAzureCloudCredential(credName string, uid, orgID string, azConfig *ap
 	return nil
 }
 
+// UpdateCloudCredential updates cloud credentials
+func UpdateCloudCredential(provider, credName string, uid, orgID string, ctx context1.Context, azureStorageAccount string, azureStorageAccountKey string, kubeconfig ...string) error {
+	log.Infof("Create cloud credential with name [%s] for org [%s] with [%s] as provider", credName, orgID, provider)
+	var credUpdateRequest *api.CloudCredentialUpdateRequest
+	switch provider {
+	case drivers.ProviderAws:
+		log.Infof("Update creds for Aws")
+
+	case drivers.ProviderAzure:
+		log.Infof("Update creds for azure")
+		tenantID, clientID, clientSecret, subscriptionID, _, _ := GetAzureCredsFromEnv()
+		credUpdateRequest = &api.CloudCredentialUpdateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  CredName,
+				Uid:   uid,
+				OrgId: BackupOrgID,
+			},
+			CloudCredential: &api.CloudCredentialInfo{
+				Type: api.CloudCredentialInfo_Azure,
+				Config: &api.CloudCredentialInfo_AzureConfig{
+					AzureConfig: &api.AzureConfig{
+						TenantId:       tenantID,
+						ClientId:       clientID,
+						ClientSecret:   clientSecret,
+						AccountName:    azureStorageAccount,
+						AccountKey:     azureStorageAccountKey,
+						SubscriptionId: subscriptionID,
+					},
+				},
+			},
+		}
+
+	case drivers.ProviderNfs:
+		log.Warnf("provider [%s] does not require creating cloud credential", provider)
+		return nil
+
+	case drivers.ProviderRke:
+		log.Infof("Update creds for RKE")
+
+	case drivers.ProviderIbm:
+		log.Infof("Update creds for IBM")
+
+	case drivers.ProviderGke:
+		log.Infof("Update creds for GKE")
+	default:
+		return fmt.Errorf("provider [%s] not supported for creating cloud credential", provider)
+	}
+	_, err := Inst().Backup.UpdateCloudCredential(ctx, credUpdateRequest)
+	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		log.Warnf("failed to update cloud credential with name [%s] in org [%s] with [%s] as provider with error [%v]", credName, orgID, provider, err)
+		return err
+	}
+	// check for cloud cred status
+	cloudCredStatus := func() (interface{}, bool, error) {
+		status, err := IsCloudCredPresent(credName, ctx, orgID)
+		if err != nil {
+			return "", true, fmt.Errorf("cloud cred %s present with error %v", credName, err)
+		}
+		if status {
+			return "", true, nil
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(cloudCredStatus, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // CreateS3BackupLocation creates backup location for S3
 func CreateS3BackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgID, encryptionKey string, validate bool, sseS3EncryptionType ...api.S3Config_Sse) error {
 	ctx, err := backup.GetAdminCtxFromSecret()
@@ -7121,10 +7194,12 @@ func RemoveS3BucketPolicy(bucketName string) error {
 // GetAzureImmutabilityCredsFromEnv get creds for azure immutability
 func GetAzureImmutabilityCredsFromEnv() (resourceGroup, containerLevelSA, containerLevelSAKey, storageAccountLevelSA, storageAccountLevelSAKey, safeAccountLevelSA, safeAccountLevelSAKey string) {
 	resourceGroup = os.Getenv("AZURE_RESOURCE_GROUP")
+	log.InfoD("The value of AZURE_RESOURCE_GROUP is %v", resourceGroup)
 	expect(resourceGroup).NotTo(equal(""),
 		"AZURE_RESOURCE_GROUP Environment variable should not be empty")
 
 	containerLevelSA = os.Getenv("AZURE_STORAGE_ACCOUNT_NAME_CONTAINER_LEVEL")
+	log.InfoD("The value of AZURE_STORAGE_ACCOUNT_NAME_CONTAINER_LEVEL is %v", containerLevelSA)
 	expect(containerLevelSA).NotTo(equal(""),
 		"AZURE_STORAGE_ACCOUNT_NAME_CONTAINER_LEVEL Environment variable should not be empty")
 
