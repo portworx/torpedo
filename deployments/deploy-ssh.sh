@@ -822,6 +822,8 @@ spec:
       value: "${GKE_UPGRADE_STRATEGY}"
     - name: GKE_SURGE_VALUE
       value: "${GKE_SURGE_VALUE}"
+    - name: AKS_SURGE_UPGRADE_VALUE
+      value: "${AKS_SURGE_UPGRADE_VALUE}"
     - name: GOOGLE_APPLICATION_CREDENTIALS
       value: "${GOOGLE_APPLICATION_CREDENTIALS}"
     - name: TOGGLE_PURE_MGMT_IP
