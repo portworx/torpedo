@@ -209,7 +209,7 @@ const (
 	SkipClusterScopedObjects   = "skipClusterScopedObjects"
 	CreateCloudCredentialError = "PermissionDenied desc = Access denied for [Resource: cloudcredential]"
 	VolumeRuntimeStateKey      = "RuntimeState"
-	VoumeRuntimeStatusClean    = "clean"
+	VolumeRuntimeStatusClean   = "clean"
 )
 
 // PDS params
@@ -14115,10 +14115,35 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 
 	for _, volID := range volIDs {
 		apiVol, err := Inst().V.InspectVolume(volID)
+
 		if err != nil {
 			err = fmt.Errorf("error inspecting volume [%s], Err: %v", volID, err)
 			processError(err, errChan...)
 			return
+		}
+
+		// check if volume replicas are on different nodes
+		// get all the nodes where replicas are present
+		if len(apiVol.ReplicaSets) == 0 {
+			err := fmt.Errorf("volume [%s] does not have any replicas", volID)
+			processError(err, errChan...)
+			return
+		}
+		replicaNodes := apiVol.ReplicaSets[0].Nodes
+
+		// check if volume is up and runtime status is clean
+		log.Infof("Volume [%s] status : %v, runtime state: %v", volID, runTimeState)
+		if apiVol.Status != opsapi.VolumeStatus_VOLUME_STATUS_UP {
+
+			// if it is repl-2 volume and replicas are on same node, do not fail the test
+			if len(replicaNodes) == 1 {
+				log.Warnf("volume [%s] replicas are on same nodes [%v]", volID, replicaNodes)
+				continue
+			} else {
+				err = fmt.Errorf("volume [%s] is not up", volID)
+				processError(err, errChan...)
+				return
+			}
 		}
 
 		if len(apiVol.RuntimeState) == 0 {
@@ -14129,28 +14154,32 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 
 		runTimeState := apiVol.RuntimeState[0].RuntimeState[VolumeRuntimeStateKey]
 
-		// check if volume is up and runtime status is clean
-		log.Infof("Volume [%s] status : %v, runtime state: %v", volID, runTimeState)
-		if apiVol.Status != opsapi.VolumeStatus_VOLUME_STATUS_UP || runTimeState != VoumeRuntimeStatusClean {
-			// check if volume replicas are on different nodes
-			// get all the nodes where replicas are present
-			replicas := apiVol.ReplicaSets
-			if len(replicas) == 0 {
-				err := fmt.Errorf("volume [%s] does not have any replicas", volID)
-				processError(err, errChan...)
-				return
-			}
+		// if volume is not in clean state, check if all the nodes are in storage up state
+		if runTimeState != VolumeRuntimeStatusClean {
+			err = fmt.Errorf("volume [%s] runtime state is not clean", volID)
+			for i := range replicaNodes {
+				nodeInfo, err := node.GetNodeDetailsByNodeID(replicaNodes[i])
+				if err != nil {
+					err = fmt.Errorf("error getting node details for node [%s], Err: %v", replicaNodes[i], err)
+					processError(err, errChan...)
+					return
+				}
 
-			replicaNodes := replicas[0].Nodes
+				// check if node is in storage up state
+				nodeStatus, err := Inst().V.GetNodeStatus(nodeInfo)
+				if err != nil {
+					err = fmt.Errorf("error getting node status for node [%s], Err: %v", replicaNodes[i], err)
+					processError(err, errChan...)
+					return
+				}
 
-			// if it is repl-2 volume and replicas are on same node, do not fail the test
-			if len(replicaNodes) == 1 {
-				log.Warnf("volume [%s] replicas are on same nodes [%v]", volID, replicaNodes)
-				continue
-			} else {
-				err = fmt.Errorf("volume [%s] is not up", volID)
-				processError(err, errChan...)
-				return
+				// if node is in storage down state and runtime state is not clean, fail the test
+				log.Infof("Node [%s] status: %v", replicaNodes[i], nodeStatus)
+				if reflect.DeepEqual(nodeStatus, opsapi.Status_STATUS_STORAGE_DOWN) {
+					err = fmt.Errorf("node [%s] is storage down state with Runtime state %v ", replicaNodes[i], runTimeState)
+					processError(err, errChan...)
+					return
+				}
 			}
 		}
 	}
