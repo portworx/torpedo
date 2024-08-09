@@ -14131,8 +14131,6 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 		}
 		replicaNodes := apiVol.ReplicaSets[0].Nodes
 
-		// check if volume is up and runtime status is clean
-		log.Infof("Volume [%s] status : %v, runtime state: %v", volID, runTimeState)
 		if apiVol.Status != opsapi.VolumeStatus_VOLUME_STATUS_UP {
 
 			// if it is repl-2 volume and replicas are on same node, do not fail the test
@@ -14153,6 +14151,8 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 		}
 
 		runTimeState := apiVol.RuntimeState[0].RuntimeState[VolumeRuntimeStateKey]
+		// check if volume is up and runtime status is clean
+		log.Infof("Volume [%s] status : %v, runtime state: %v", volID, runTimeState)
 
 		// if volume is not in clean state, check if all the nodes are in storage up state
 		if runTimeState != VolumeRuntimeStatusClean {
