@@ -2457,6 +2457,38 @@ func GetAllBackupsAdmin() ([]string, error) {
 	return backupNames, nil
 }
 
+// GetAllOwnedBackupsFromCluster returns all the backups from a cluster owned by the user.
+func GetAllOwnedBackupsFromCluster(ctx context1.Context, clusterName string, clusterUid string) ([]string, error) {
+	backupNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	userName, err := portworx.GetPreferredUsernameFromCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ownerID, err := backup.FetchIDOfGroup(userName)
+	if err != nil {
+		return nil, err
+	}
+	backupEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: BackupOrgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			Owners:            []string{ownerID},
+			ClusterNameFilter: clusterName,
+			ClusterUidFilter:  clusterUid,
+		},
+	}
+	backupEnumerateResp, err := backupDriver.EnumerateBackup(ctx, backupEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, backupObj := range backupEnumerateResp.GetBackups() {
+		if backupObj.GetOwnership().GetOwner() == ownerID {
+			backupNames = append(backupNames, backupObj.GetName())
+		}
+	}
+	return backupNames, nil
+}
+
 // GetAllRestoresAdmin returns all the backups that px-central-admin has access to
 func GetAllRestoresAdmin() ([]string, error) {
 	restoreNames := make([]string, 0)
@@ -10470,4 +10502,359 @@ func UpdateDriverWithEnvVariable(envVariables map[string]string) error {
 func IsPxInstalled() bool {
 	numOfNodes := len(node.GetStorageDriverNodes())
 	return numOfNodes > 0
+}
+
+// ShareCluster shares a cluster with users and groups and optionally shares existing backups.
+func ShareCluster(ctx context1.Context, clusterName string, clusterUid string, userNames []string, groupNames []string, shareClusterBackups bool) (*api.ShareClusterResponse, error) {
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return nil, err
+		}
+		userIDs = append(userIDs, userID)
+	}
+	shareClusterRequest := &api.ShareClusterRequest{
+		OrgId: BackupOrgID,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
+		// userid of the user(s) to share the cluster with
+		Users: userIDs,
+		// group(s) to share the cluster with
+		Groups: groupNames,
+		// share_cluster_backups share is optional, if set to true, it will additionally share existing backups
+		ShareClusterBackups: shareClusterBackups,
+	}
+	resp, err := backupDriver.ShareCluster(ctx, shareClusterRequest)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// ShareClusterWithValidation shares a cluster with users and groups and optionally shares existing backups and validates the share.
+func ShareClusterWithValidation(ctx context1.Context, clusterName string, clusterUid string, userNames []string, groupNames []string, shareClusterBackups bool) (*api.ShareClusterResponse, error) {
+	resp, err := ShareCluster(ctx, clusterName, clusterUid, userNames, groupNames, shareClusterBackups)
+	if err != nil {
+		return resp, err
+	}
+	// Validate the share cluster
+	err = ValidateShareCluster(ctx, clusterName, clusterUid, userNames, groupNames)
+	if err != nil {
+		return nil, err
+	}
+
+	if shareClusterBackups {
+		err = ValidateShareClusterBackup(ctx, clusterName, clusterUid, userNames, groupNames)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return resp, nil
+}
+
+// UnShareCluster unshares a cluster with users and groups.
+func UnShareCluster(ctx context1.Context, clusterName string, clusterUid string, userNames []string, groupNames []string) (*api.UnShareClusterResponse, error) {
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return nil, err
+		}
+		userIDs = append(userIDs, userID)
+	}
+	unshareClusterRequest := &api.UnShareClusterRequest{
+		OrgId: BackupOrgID,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
+		// userid of the user(s) to share the cluster with
+		Users: userIDs,
+		// group(s) to share the cluster with
+		Groups: groupNames,
+	}
+	resp, err := backupDriver.UnShareCluster(ctx, unshareClusterRequest)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// UnShareClusterWithValidation unshares a cluster with users and groups and validates the unshare.
+func UnShareClusterWithValidation(ctx context1.Context, clusterName string, clusterUid string, userNames []string, groupNames []string) (*api.UnShareClusterResponse, error) {
+	resp, err := UnShareCluster(ctx, clusterName, clusterUid, userNames, groupNames)
+	if err != nil {
+		return resp, err
+	}
+
+	err = ValidateUnShareCluster(ctx, clusterName, clusterUid, userNames, groupNames)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// ValidateShareCluster validates that a cluster is shared with users and groups by validating collaborators list and inspecting cluster from user.
+func ValidateShareCluster(ctx context1.Context, clusterName string, clusterUid string, userNames []string, groupNames []string) error {
+	backupDriver := Inst().Backup
+	userIds := []string{}
+	groupIds := []string{}
+	req := &api.ClusterInspectRequest{
+		Name:  clusterName,
+		OrgId: BackupOrgID,
+		Uid:   clusterUid,
+	}
+
+	// Inspect cluster to retrieve collaborators
+	clusterObject, err := backupDriver.InspectCluster(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	// Extract collaborator user and group IDs
+	clusterCollaborators := clusterObject.GetCluster().Ownership
+	for _, user := range clusterCollaborators.Collaborators {
+		userIds = append(userIds, user.Id)
+	}
+	for _, group := range clusterCollaborators.Groups {
+		groupIds = append(groupIds, group.Id)
+	}
+
+	users := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		users = append(users, userID)
+	}
+
+	// Validate that users and groups are present in the collaborators list
+	for _, user := range users {
+		if !IsPresent(userIds, user) {
+			return fmt.Errorf("User with id [%s] is not present in the list of collaborators for cluster [%s]", user, clusterName)
+		}
+	}
+	for _, groupName := range groupNames {
+		if !IsPresent(groupIds, groupName) {
+			return fmt.Errorf("Group with id [%s] is not present in the list of collaborators for cluster [%s]", groupName, clusterName)
+		}
+	}
+
+	// Validate that the entire list matches
+	if !AreStringSlicesEqual(userIds, users) {
+		return fmt.Errorf("User list [%v] does not match the collaborators users list [%v] for cluster [%s]", users, userIds, clusterName)
+	}
+
+	if !AreStringSlicesEqual(groupIds, groupNames) {
+		return fmt.Errorf("Group list [%v] does not match the collaborators group list [%v] for cluster [%s]", groupNames, groupIds, clusterName)
+	}
+
+	// Expand the users list with members from groups
+	for _, groupName := range groupNames {
+		usersFromGroup, _ := backup.GetMembersOfGroup(groupName)
+		for _, user := range usersFromGroup {
+			if !IsPresent(users, user) {
+				userNames = append(userNames, user)
+			}
+		}
+	}
+
+	// Validation that the cluster is accessible to shared users
+	errorChan := make(chan error, len(users))
+	defer close(errorChan)
+
+	var wg sync.WaitGroup
+	for _, user := range userNames {
+		wg.Add(1)
+		go func(user string) {
+			defer wg.Done()
+			nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+			if err != nil {
+				errorChan <- err
+				return
+			}
+			log.Infof("Inspecting cluster [%s] with user [%s]", clusterName, user)
+			_, err = backupDriver.InspectCluster(nonAdminCtx, req)
+			if err != nil {
+				errorChan <- fmt.Errorf("User with id [%s] is not able to access the cluster [%s]", user, clusterName)
+			}
+		}(user)
+	}
+
+	wg.Wait()
+
+	// Collect errors from the channel
+	var errorMessages []string
+	for err := range errorChan {
+		errorMessages = append(errorMessages, err.Error())
+	}
+
+	if len(errorMessages) > 0 {
+		return fmt.Errorf("ValidateShareCluster Errors: %s", strings.Join(errorMessages, "; "))
+	}
+
+	return nil
+}
+
+// ValidateShareClusterBackup validates that a cluster's backups are shared with users and groups by validating the backup's access.
+func ValidateShareClusterBackup(ctx context1.Context, clusterName string, clusterUid string, userNames []string, groupNames []string) error {
+	backupDriver := Inst().Backup
+	clusterBackups, err := GetAllOwnedBackupsFromCluster(ctx, clusterName, clusterUid)
+	if err != nil {
+		return err
+	}
+	// Combine users from groups into the users slice
+	for _, groupName := range groupNames {
+		usersFromGroup, _ := backup.GetMembersOfGroup(groupName)
+		for _, user := range usersFromGroup {
+			if !IsPresent(userNames, user) {
+				userNames = append(userNames, user)
+			}
+		}
+	}
+	users := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		users = append(users, userID)
+	}
+
+	errChan := make(chan error, len(clusterBackups)*len(users))
+	var wg sync.WaitGroup
+	for _, backupName := range clusterBackups {
+		for _, user := range users {
+			wg.Add(1)
+			go func(backupName, user string) {
+				defer wg.Done()
+				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				backupInspectRequest := &api.BackupInspectRequest{
+					OrgId: BackupOrgID,
+					Name:  backupName,
+				}
+				log.Infof("Inspecting backup [%s] with user [%s]", backupName, user)
+				backupObj, err := backupDriver.InspectBackup(nonAdminCtx, backupInspectRequest)
+				if err != nil {
+					errChan <- fmt.Errorf("User with id [%s] is not able to access the backup [%s]", user, backupName)
+					return
+				}
+
+				if backupObj.GetBackup().UserBackupshareAccess != api.BackupShare_Restorable {
+					errChan <- fmt.Errorf("User with id [%s] is expected to have Restore access for the backup [%s] but got [%s]", user, backupName, backupObj.GetBackup().UserBackupshareAccess)
+				}
+			}(backupName, user)
+		}
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	var errorMessages []string
+	for err := range errChan {
+		errorMessages = append(errorMessages, err.Error())
+	}
+	if len(errorMessages) > 0 {
+		return fmt.Errorf("ValidateShareClusterBackup Errors: %s", strings.Join(errorMessages, "; "))
+	}
+	return nil
+}
+
+// ValidateUnShareCluster validates that a cluster is unshared with users and groups by validating collaborators list and inspecting cluster from user.
+func ValidateUnShareCluster(ctx context1.Context, clusterName string, clusterUid string, userNames []string, groupNames []string) error {
+	backupDriver := Inst().Backup
+	req := &api.ClusterInspectRequest{
+		Name:  clusterName,
+		OrgId: BackupOrgID,
+		Uid:   clusterUid,
+	}
+
+	// Inspect the cluster to get the collaborators list
+	clusterObject, err := backupDriver.InspectCluster(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	// Extract collaborator user and group IDs
+	collaboratorMap := make(map[string]bool)
+	for _, user := range clusterObject.GetCluster().Ownership.Collaborators {
+		collaboratorMap[user.Id] = true
+	}
+	for _, group := range clusterObject.GetCluster().Ownership.Groups {
+		collaboratorMap[group.Id] = true
+	}
+
+	// Validate that users and groups are NOT present in the collaborators list
+	for _, user := range userNames {
+		if collaboratorMap[user] {
+			return fmt.Errorf("User with id [%s] is present in the list of collaborators for cluster [%s]", user, clusterName)
+		}
+	}
+	for _, groupName := range groupNames {
+		if collaboratorMap[groupName] {
+			return fmt.Errorf("Group with id [%s] is present in the list of collaborators for cluster [%s]", groupName, clusterName)
+		}
+	}
+
+	// Combine users from groups into the users slice
+	for _, groupName := range groupNames {
+		usersFromGroup, _ := backup.GetMembersOfGroup(groupName)
+		for _, user := range usersFromGroup {
+			if !IsPresent(userNames, user) {
+				userNames = append(userNames, user)
+			}
+		}
+	}
+	users := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		users = append(users, userID)
+	}
+
+	// Validation that the cluster is not accessible to previously shared users
+	errorChan := make(chan error, len(users))
+	var wg sync.WaitGroup
+
+	for _, user := range users {
+		wg.Add(1)
+		go func(user string) {
+			defer wg.Done()
+			nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+			if err != nil {
+				errorChan <- err
+				return
+			}
+			// If the user can access the cluster, it's an error
+			if _, err := backupDriver.InspectCluster(nonAdminCtx, req); err == nil {
+				errorChan <- fmt.Errorf("User with id [%s] is able to access the cluster [%s]", user, clusterName)
+			}
+		}(user)
+	}
+
+	wg.Wait()
+	close(errorChan)
+
+	var errorMessages []string
+	for err := range errorChan {
+		errorMessages = append(errorMessages, err.Error())
+	}
+
+	if len(errorMessages) > 0 {
+		return fmt.Errorf("ValidateUnShareCluster Errors: %s", strings.Join(errorMessages, "; "))
+	}
+
+	return nil
 }
