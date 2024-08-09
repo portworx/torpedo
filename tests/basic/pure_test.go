@@ -307,10 +307,13 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 		allVolumes := []*volume.Volume{}
 		for _, eachContext := range contexts {
 			vols, err := Inst().S.GetVolumes(eachContext)
+			//print each volume
+
 			if err != nil {
 				log.Errorf("Failed to get app %s's volumes", eachContext.App.Key)
 			}
 			for _, eachVol := range vols {
+				log.InfoD("Volumes [%s]", eachVol.Name)
 				allVolumes = append(allVolumes, eachVol)
 			}
 		}
