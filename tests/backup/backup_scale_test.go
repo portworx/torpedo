@@ -441,8 +441,8 @@ var _ = Describe("{CreateMultipleBackupsPerDeployment}", func() {
 		backupNameList            []string
 		srcClusterUid             string
 		destClusterUid            string
-		numDeployments            = 50
-		numOfBackupsPerDeployment = 5
+		numDeployments            = 25
+		numOfBackupsPerDeployment = 10
 		snapshotLimit             = 4
 	)
 	JustBeforeEach(func() {
