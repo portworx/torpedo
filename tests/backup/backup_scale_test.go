@@ -441,9 +441,9 @@ var _ = Describe("{CreateMultipleBackupsPerDeployment}", func() {
 		backupNameList            []string
 		srcClusterUid             string
 		destClusterUid            string
-		numDeployments            = 50
-		numOfBackupsPerDeployment = 5
-		snapshotLimit             = 4
+		numDeployments            = 25
+		numOfBackupsPerDeployment = 10
+		snapshotLimit             = 3
 	)
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("CreateMultipleBackupsPerDeployment", "TC to verify multiple backups", nil, 0, Sabrarhussaini, Q2FY25)
