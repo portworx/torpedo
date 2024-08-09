@@ -17,6 +17,9 @@ before_install:
   - sudo apt-get update -yq
   - sudo apt-get install apt-transport-https ca-certificates mongodb-org -y 
   - sudo update-ca-certificates
+before_script:
+  - echo "TRAVIS_BRANCH=$TRAVIS_BRANCH"
+  - echo "TRAVIS_PULL_REQUEST=$TRAVIS_PULL_REQUEST"
 script:
   - make all
 after_success:
@@ -39,6 +42,9 @@ after_success:
       sudo docker push "${DOCKER_HUB_REPO}/torpedo-longevity:${DOCKER_HUB_TAG}";
       sudo docker push "${DOCKER_HUB_REPO}/torpedo-longevity:${TRAVIS_BRANCH}";
     fi
+branches:
+  only:
+    - master
 notifications:
   email:
     recipients:
