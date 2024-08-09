@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"container/ring"
+	ctxt "context"
 	"fmt"
 	"math"
 	"math/rand"
@@ -675,6 +676,12 @@ const (
 
 	// DefragSchedules setup defrag schedules in a cluster once and validates it
 	DefragSchedules = "defragSchedules"
+
+	// SVMotionSingleNode does a storage vmotion of a randomly selected Storage Node
+	SVMotionSingleNode = "svmotionSingleNode"
+
+	// SVMotionMultipleNodes does storage vmotions for 50% of the worker nodes in parallel (Max 20 at a time)
+	SVMotionMultipleNodes = "svmotionMultipleNodes"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -789,7 +796,6 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		UpdateOutcome(event, updatePxRuntimeOpts())
 	})
 
-	errorChan := make(chan error, errorChannelSize)
 	labels := Inst().TopologyLabels
 	dashStats := make(map[string]string)
 	dashStats["app-list"] = strings.Join(Inst().AppList, ", ")
@@ -798,25 +804,35 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 	Step("Deploy applications", func() {
 		if len(labels) > 0 {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				errorChan := make(chan error, errorChannelSize)
 				newContexts := ScheduleAppsInTopologyEnabledCluster(
 					fmt.Sprintf("longevity-%d", i), labels, &errorChan,
 				)
+				for err := range errorChan {
+					log.Errorf("failed to deploy apps in iteration [%d] with error [%v]", i, err)
+					UpdateOutcome(event, err)
+				}
 				*contexts = append(*contexts, newContexts...)
 			}
 		} else {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				errorChan := make(chan error, errorChannelSize)
 				newContexts := ScheduleApplications(fmt.Sprintf("longevity-%d", i), &errorChan)
+				for err := range errorChan {
+					log.Errorf("failed to deploy apps in iteration [%d] with error [%v]", i, err)
+					UpdateOutcome(event, err)
+				}
 				*contexts = append(*contexts, newContexts...)
 			}
 		}
 
-		for _, ctx := range *contexts {
-			log.Infof("Validating context: %v", ctx.App.Key)
+		for i, ctx := range *contexts {
+			log.Infof("Validating context[%d]: %v", i, ctx.App.Key)
 			ctx.SkipVolumeValidation = false
-			errorChan = make(chan error, errorChannelSize)
+			errorChan := make(chan error, errorChannelSize)
 			ValidateContext(ctx, &errorChan)
 			for err := range errorChan {
-				log.Infof("Error: %v", err)
+				log.Errorf("failed to validate context[%d] [%s] with error [%v]", i, ctx.App.Key, err)
 				UpdateOutcome(event, err)
 			}
 		}
@@ -10308,12 +10324,12 @@ func TriggerStorkVolumeSnapshotSchedule(contexts *[]*scheduler.Context, recordCh
 	setMetrics(*event)
 
 	var (
-		taskNamePrefix     = "stork-snaptest-cloud"
-		snapshotType       = "cloud"
-		snapInterval = 2
-		retain storkapi.Retain = 3
-		scpolName = "snap-policy-" + time.Now().Format("15h03m05s")
-		snapNs []string
+		taskNamePrefix                 = "stork-snaptest-cloud"
+		snapshotType                   = "cloud"
+		snapInterval                   = 2
+		retain         storkapi.Retain = 3
+		scpolName                      = "snap-policy-" + time.Now().Format("15h03m05s")
+		snapNs         []string
 	)
 
 	for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -10372,12 +10388,12 @@ func TriggerStorkVolumeSnapshotScheduleLocal(contexts *[]*scheduler.Context, rec
 	setMetrics(*event)
 
 	var (
-		taskNamePrefix     = "stork-snaptest-local"
-		snapshotType       = "local"
-		snapInterval = 2
-		retain storkapi.Retain = 3
-		scpolName = "snap-policy-" + time.Now().Format("15h03m05s")
-		snapNs []string
+		taskNamePrefix                 = "stork-snaptest-local"
+		snapshotType                   = "local"
+		snapInterval                   = 2
+		retain         storkapi.Retain = 3
+		scpolName                      = "snap-policy-" + time.Now().Format("15h03m05s")
+		snapNs         []string
 	)
 
 	for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -12012,6 +12028,140 @@ func TriggerDefragSchedules(contexts *[]*scheduler.Context, recordChan *chan *Ev
 				UpdateOutcome(event, err)
 			}
 		})
+	})
+
+	updateMetrics(*event)
+}
+
+func TriggerSvMotionSingleNode(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(SVMotionSingleNode)
+	defer ginkgo.GinkgoRecover()
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: SVMotionSingleNode,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	var randomIndex int
+	var namespace string
+	var err error
+	var moveAllDisks bool
+	stepLog := "Choosing a single Storage Node randomly and performing SV Motion on it"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+
+		if namespace, err = Inst().S.GetPortworxNamespace(); err != nil {
+			log.Errorf("Failed to get portworx namespace. Error : %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
+		workerNodes := node.GetStorageNodes()
+		if len(workerNodes) > 0 {
+			randomIndex = rand.Intn(len(workerNodes))
+			log.Infof("Selected worker node %v for storage vmotion", workerNodes[randomIndex].Name)
+		} else {
+			log.Infof("No worker nodes available")
+			UpdateOutcome(event, fmt.Errorf("No worker nodes available for svmotion"))
+			return
+		}
+		moveAllDisks = rand.Intn(2) == 0
+		if moveAllDisks {
+			log.Infof("Moving all disks on worker node %v", workerNodes[randomIndex].Name)
+		} else {
+			log.Infof("Moving only largest sized disk(s) on worker node %v", workerNodes[randomIndex].Name)
+		}
+		ctx := ctxt.Background()
+		err = Inst().N.StorageVmotion(ctx, workerNodes[randomIndex], namespace, moveAllDisks)
+		UpdateOutcome(event, err)
+	})
+	updateMetrics(*event)
+}
+
+func TriggerSvMotionMultipleNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(SVMotionMultipleNodes)
+	defer ginkgo.GinkgoRecover()
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: SVMotionMultipleNodes,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	stepLog := "Choosing 50% of the worker nodes randomly (max 20) and then performing svmotion on them randomly"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+
+		var namespace string
+		var err error
+		maxNodes := 20
+
+		if namespace, err = Inst().S.GetPortworxNamespace(); err != nil {
+			log.Errorf("Failed to get portworx namespace. Error: %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
+
+		workerNodes := node.GetStorageNodes()
+		if len(workerNodes) == 0 {
+			log.Infof("No worker nodes available")
+			UpdateOutcome(event, fmt.Errorf("No worker nodes available for svmotion"))
+			return
+		}
+
+		rand.Shuffle(len(workerNodes), func(i, j int) {
+			workerNodes[i], workerNodes[j] = workerNodes[j], workerNodes[i]
+		})
+
+		numSelectedNodes := len(workerNodes) / 2
+		if numSelectedNodes > maxNodes {
+			numSelectedNodes = maxNodes
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(numSelectedNodes)
+
+		for i := 0; i < numSelectedNodes; i++ {
+			go func(node node.Node) {
+				defer wg.Done()
+
+				moveAllDisks := rand.Intn(2) == 0
+				if moveAllDisks {
+					log.Infof("Moving all disks on worker node %v", node.Name)
+				} else {
+					log.Infof("Moving only largest sized disk(s) on worker node %v", node.Name)
+				}
+
+				ctx := ctxt.Background()
+				if err := Inst().N.StorageVmotion(ctx, node, namespace, moveAllDisks); err != nil {
+					log.Errorf("Storage vMotion failed for node %v. Error: %v", node.Name, err)
+					UpdateOutcome(event, err)
+				}
+			}(workerNodes[i])
+		}
+
+		wg.Wait()
+		UpdateOutcome(event, nil)
 	})
 
 	updateMetrics(*event)

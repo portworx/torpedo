@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -254,6 +255,15 @@ type Driver interface {
 	GetNodeState(n Node) (string, error)
 	// GetSupportedDriveTypes returns the types of drives supported by the provider
 	GetSupportedDriveTypes() ([]string, error)
+
+	// StorageVmotion selectively relocates specific disks of a virtual machine to a new datastore
+	StorageVmotion(ctx context.Context, node Node, portworxNamespace string, moveAllDisks bool) error
+
+	// findVMByName finds a virtual machine by its name
+	FindVMByName(vmName string) (*object.VirtualMachine, error)
+
+	// findDatastoreByName finds a datastore by its name
+	FindDatastoreByName(dsName string) (*object.Datastore, error)
 }
 
 // Register registers the given node driver
@@ -568,5 +578,26 @@ func (d *notSupportedDriver) RemoveNonRootDisks(node Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RemoveNonRootDisks()",
+	}
+}
+
+func (d *notSupportedDriver) StorageVmotion(ctx context.Context, node Node, portworxNamespace string, moveAllDisks bool) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StorageVmotion()",
+	}
+}
+
+func (d *notSupportedDriver) FindVMByName(vmName string) (*object.VirtualMachine, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "FindVMByName()",
+	}
+}
+
+func (d *notSupportedDriver) FindDatastoreByName(dsName string) (*object.Datastore, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "FindDatastoreByName()",
 	}
 }

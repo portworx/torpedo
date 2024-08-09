@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"maps"
 	"math"
 	"math/rand"
 	"net/http"
@@ -367,6 +368,7 @@ const (
 	mongodbStatefulset                = "pxc-backup-mongodb"
 	AwsS3encryptionPolicy             = "s3:x-amz-server-side-encryption=AES256"
 	AwsS3Sid                          = "DenyNonAES256Uploads"
+	defaulttorpedoNamespace           = "default"
 )
 
 const (
@@ -5200,6 +5202,60 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 	return nil
 }
 
+// AddAzureApplicationClusters adds azure application cluster using the given cloud credential
+func AddAzureApplicationClusters(orgID string, clusterCredName string, clusterCredUid string, ctx context1.Context) error {
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	// Validate user has provided at least 2 kubeconfigs for source and destination cluster
+	if len(kubeconfigList) < 2 {
+		return fmt.Errorf("minimum 2 kubeconfigs are required for source and destination cluster")
+	}
+	err := dumpKubeConfigs(configMapName, kubeconfigList)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Create cluster [%s] in org [%s]", SourceClusterName, orgID)
+	srcClusterConfigPath, err := GetSourceClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
+
+	log.InfoD("Create cluster [%s] in org [%s]", destinationClusterName, orgID)
+	dstClusterConfigPath, err := GetDestinationClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
+
+	ClusterConfigPathMap[SourceClusterName] = srcClusterConfigPath
+	ClusterConfigPathMap[destinationClusterName] = dstClusterConfigPath
+
+	for _, kubeconfig := range kubeconfigList {
+		clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+		clusterStatus := func() (interface{}, bool, error) {
+			err = CreateCluster(clusterName, ClusterConfigPathMap[clusterName], orgID, clusterCredName, clusterCredUid, ctx)
+			if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
+				return "", true, err
+			}
+			srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			if err != nil {
+				return "", true, err
+			}
+			if srcClusterStatus == api.ClusterInfo_StatusInfo_Online {
+				return "", false, nil
+			}
+			return "", true, fmt.Errorf("the %s cluster state is not Online yet", SourceClusterName)
+		}
+		_, err = task.DoRetryWithTimeout(clusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // CreateBackupLocation creates backup location
 func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID, encryptionKey string, validate bool) error {
 	var err error
@@ -5435,6 +5491,50 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 			return nil
 		}
 		log.Warnf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider with error [%v]", credName, orgID, provider, err)
+		return err
+	}
+	// check for cloud cred status
+	cloudCredStatus := func() (interface{}, bool, error) {
+		status, err := IsCloudCredPresent(credName, ctx, orgID)
+		if err != nil {
+			return "", true, fmt.Errorf("cloud cred %s present with error %v", credName, err)
+		}
+		if status {
+			return "", true, nil
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(cloudCredStatus, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateAzureCloudCredential creates azure cloud credentials
+func CreateAzureCloudCredential(credName string, uid, orgID string, azConfig *api.AzureConfig, ctx context1.Context) error {
+	log.Infof("Create azure cloud credential with name [%s] for org [%s]", credName, orgID)
+	var credCreateRequest *api.CloudCredentialCreateRequest
+	credCreateRequest = &api.CloudCredentialCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  credName,
+			Uid:   uid,
+			OrgId: orgID,
+		},
+		CloudCredential: &api.CloudCredentialInfo{
+			Type: api.CloudCredentialInfo_Azure,
+			Config: &api.CloudCredentialInfo_AzureConfig{
+				AzureConfig: azConfig,
+			},
+		},
+	}
+
+	_, err := Inst().Backup.CreateCloudCredential(ctx, credCreateRequest)
+	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		log.Warnf("failed to create cloud credential with name [%s] in org [%s] with  as provider with error [%v]", credName, orgID, err)
 		return err
 	}
 	// check for cloud cred status
@@ -6084,21 +6184,9 @@ func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, a
 
 	log.Infof("Create creds for azure")
 	tenantID = os.Getenv("AZURE_TENANT_ID")
-	expect(tenantID).NotTo(equal(""),
-		"AZURE_TENANT_ID Environment variable should not be empty")
-
 	clientID = os.Getenv("AZURE_CLIENT_ID")
-	expect(clientID).NotTo(equal(""),
-		"AZURE_CLIENT_ID Environment variable should not be empty")
-
 	clientSecret = os.Getenv("AZURE_CLIENT_SECRET")
-	expect(clientSecret).NotTo(equal(""),
-		"AZURE_CLIENT_SECRET Environment variable should not be empty")
-
 	subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID")
-	expect(clientSecret).NotTo(equal(""),
-		"AZURE_SUBSCRIPTION_ID Environment variable should not be empty")
-
 	return tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey
 }
 
@@ -6757,7 +6845,7 @@ func CreateBucket(provider string, bucketName string) {
 		case drivers.ProviderAws:
 			CreateS3Bucket(bucketName, false, 0, "")
 		case drivers.ProviderAzure:
-			CreateAzureBucket(bucketName)
+			CreateAzureBucket(bucketName, false, "", 0, false)
 		}
 	})
 }
@@ -7030,29 +7118,157 @@ func RemoveS3BucketPolicy(bucketName string) error {
 	return nil
 }
 
+// GetAzureImmutabilityCredsFromEnv get creds for azure immutability
+func GetAzureImmutabilityCredsFromEnv() (resourceGroup, containerLevelSA, containerLevelSAKey, storageAccountLevelSA, storageAccountLevelSAKey, safeAccountLevelSA, safeAccountLevelSAKey string) {
+	resourceGroup = os.Getenv("AZURE_RESOURCE_GROUP")
+	expect(resourceGroup).NotTo(equal(""),
+		"AZURE_RESOURCE_GROUP Environment variable should not be empty")
+
+	containerLevelSA = os.Getenv("AZURE_STORAGE_ACCOUNT_NAME_CONTAINER_LEVEL")
+	expect(containerLevelSA).NotTo(equal(""),
+		"AZURE_STORAGE_ACCOUNT_NAME_CONTAINER_LEVEL Environment variable should not be empty")
+
+	containerLevelSAKey = os.Getenv("AZURE_STORAGE_ACCOUNT_KEY_CONTAINER_LEVEL")
+	expect(containerLevelSAKey).NotTo(equal(""),
+		"AZURE_STORAGE_ACCOUNT_KEY_CONTAINER_LEVEL Environment variable should not be empty")
+
+	storageAccountLevelSA = os.Getenv("AZURE_STORAGE_ACCOUNT_NAME_SA_LEVEL")
+	expect(storageAccountLevelSA).NotTo(equal(""),
+		"AZURE_STORAGE_ACCOUNT_NAME_SA_LEVEL Environment variable should not be empty")
+
+	storageAccountLevelSAKey = os.Getenv("AZURE_STORAGE_ACCOUNT_KEY_SA_LEVEL")
+	expect(storageAccountLevelSAKey).NotTo(equal(""),
+		"AZURE_STORAGE_ACCOUNT_KEY_SA_LEVEL Environment variable should not be empty")
+
+	safeAccountLevelSA = os.Getenv("AZURE_STORAGE_ACCOUNT_NAME_SA_LEVEL_SAFE")
+	expect(safeAccountLevelSA).NotTo(equal(""),
+		"AZURE_STORAGE_ACCOUNT_NAME_SA_LEVEL_SAFE Environment variable should not be empty")
+
+	safeAccountLevelSAKey = os.Getenv("AZURE_STORAGE_ACCOUNT_KEY_SA_LEVEL_SAFE")
+	expect(safeAccountLevelSAKey).NotTo(equal(""),
+		"AZURE_STORAGE_ACCOUNT_KEY_SA_LEVEL_SAFE Environment variable should not be empty")
+
+	return resourceGroup, containerLevelSA, containerLevelSAKey, storageAccountLevelSA, storageAccountLevelSAKey, safeAccountLevelSA, safeAccountLevelSAKey
+}
+
+// Define a custom type for the mode
+type Mode string
+
+// Define constants for the possible values
+const (
+	SA_level        Mode = "sa_level"
+	Container_level Mode = "container_level"
+)
+
 // CreateAzureBucket creates bucket in Azure
-func CreateAzureBucket(bucketName string) {
+func CreateAzureBucket(bucketName string, immutability bool, mode Mode, retentionDays int, safeMode bool) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
 	azureRegion := os.Getenv("AZURE_ENDPOINT")
-	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName) // Default value
-	if azureRegion == "CHINA" {
-		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, bucketName)
+	if immutability {
+		tenantID, clientID, clientSecret, _, _, _ := GetAzureCredsFromEnv()
+		resourceGroup, containerLevelSA, _, storageAccountLevelSA, storageAccountLevelSAKey, safeAccountLevelSA, safeAccountLevelSAKey := GetAzureImmutabilityCredsFromEnv()
+		if mode == Container_level {
+			cmd := fmt.Sprintf("az login --service-principal --username %s --password %s --tenant %s",
+				clientID, clientSecret, tenantID)
+			_, stdErr, err := osutils.ExecShell(cmd)
+			expect(err).NotTo(haveOccurred(),
+				fmt.Sprintf("Failed to login to azure. Error: [%v] [%v]", err, stdErr))
+
+			if azureRegion == "CHINA" {
+				cmd = fmt.Sprintf("az cloud set --name AzureChinaCloud")
+				_, stdErr, err = osutils.ExecShell(cmd)
+				expect(err).NotTo(haveOccurred(),
+					fmt.Sprintf("Failed to set cloud account to AzureChina. Error: [%v] [%v]", err, stdErr))
+			}
+			cmd = fmt.Sprintf("az storage container-rm create --name %s  --storage-account %s --resource-group %s "+
+				"--enable-vlw", bucketName, containerLevelSA, resourceGroup)
+			_, stdErr, err = osutils.ExecShell(cmd)
+			expect(err).NotTo(haveOccurred(),
+				fmt.Sprintf("Failed to create bucket with Versioning Enabled. Error: [%v] [%v]", err, stdErr))
+
+			cmd = fmt.Sprintf("az storage container immutability-policy create "+
+				"--resource-group %s --account-name %s --container-name %s --period %d",
+				resourceGroup, containerLevelSA, bucketName, retentionDays)
+			_, stdErr, err = osutils.ExecShell(cmd)
+			expect(err).NotTo(haveOccurred(),
+				fmt.Sprintf("Failed to enable immutability-policy on the bucket. Error: [%v] [%v]", err, stdErr))
+		}
+		if mode == SA_level {
+			// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
+			if safeMode == true {
+				accountName, accountKey = safeAccountLevelSA, safeAccountLevelSAKey
+			} else {
+				accountName, accountKey = storageAccountLevelSA, storageAccountLevelSAKey
+			}
+			urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName) // Default value
+			if azureRegion == "CHINA" {
+				urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, bucketName)
+			}
+			log.Infof("Create container url %s", urlStr)
+			u, _ := url.Parse(urlStr)
+			credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
+			expect(err).NotTo(haveOccurred(),
+				fmt.Sprintf("Failed to create shared key credential [%v]", err))
+
+			containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
+			ctx := context1.Background() // This example uses a never-expiring context
+
+			_, err = containerURL.Create(ctx, azblob.Metadata{}, azblob.PublicAccessNone)
+
+			expect(err).NotTo(haveOccurred(),
+				fmt.Sprintf("Failed to create container. Error: [%v]", err))
+		}
+
+	} else {
+		urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName) // Default value
+		if azureRegion == "CHINA" {
+			urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, bucketName)
+		}
+		log.Infof("Create container url %s", urlStr)
+		// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
+		u, _ := url.Parse(urlStr)
+		credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to create shared key credential [%v]", err))
+
+		containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
+		ctx := context1.Background() // This example uses a never-expiring context
+
+		_, err = containerURL.Create(ctx, azblob.Metadata{}, azblob.PublicAccessNone)
+
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to create container. Error: [%v]", err))
 	}
-	log.Infof("Create container url %s", urlStr)
-	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
-	u, _ := url.Parse(urlStr)
-	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to create shared key credential [%v]", err))
 
-	containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
-	ctx := context1.Background() // This example uses a never-expiring context
+}
 
-	_, err = containerURL.Create(ctx, azblob.Metadata{}, azblob.PublicAccessNone)
-
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to create container. Error: [%v]", err))
+// UpdateConfigmap creates or updates an existing configmap with the given data
+func UpdateConfigmap(configMapName string, data map[string]string) error {
+	configmap, err := k8sCore.GetConfigMap(configMapName, defaulttorpedoNamespace)
+	if k8serrors.IsNotFound(err) {
+		log.InfoD("Creating Configmap: %v", configMapName)
+		metaObj := metaV1.ObjectMeta{
+			Name:      configMapName,
+			Namespace: defaulttorpedoNamespace,
+		}
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metaObj,
+			Data:       data,
+		}
+		configmap, err = k8sCore.CreateConfigMap(obj)
+		if err != nil {
+			return fmt.Errorf("failed to create configmap [%s] with data [%v]. Error : [%v]", configMapName, data, err)
+		}
+	} else {
+		log.InfoD("Updating Configmap: %v", configMapName)
+		maps.Copy(configmap.Data, data)
+		_, err = k8sCore.UpdateConfigMap(configmap)
+		if err != nil {
+			return fmt.Errorf("failed to update configmap [%s] with data [%v]. Error : [%v]", configMapName, data, err)
+		}
+	}
+	return nil
 }
 
 func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
@@ -13857,4 +14073,22 @@ func GetVolumeNamefromPVC(namespace string) ([]string, error) {
 		return pvclist, nil
 	}
 	return nil, fmt.Errorf("No PVCs found in namespace [%s]", namespace)
+}
+
+// DeleteTorpedoApps deletes all the namespaces which are created by torpedo which has the label creator=torpedo
+func DeleteTorpedoApps() error {
+	nsList, err := core.Instance().ListNamespaces(map[string]string{"creator": "torpedo"})
+	if err != nil {
+		return err
+	}
+	for _, ns := range nsList.Items {
+		log.Infof("Deleting namespace [%s]", ns.Name)
+		err = k8sCore.DeleteNamespace(ns.Name)
+		if err != nil {
+			// Not returning anything as it's the best case effort
+			// Namespace may be in Terminating state sometimes when there are pending finalizers
+			log.InfoD("Error in deleting namespace [%s]. Err: %v", ns.Name, err.Error())
+		}
+	}
+	return nil
 }
