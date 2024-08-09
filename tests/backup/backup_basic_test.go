@@ -2,13 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/rke"
-	"os"
-	"strconv"
-	"strings"
-	"testing"
-	"time"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -18,10 +11,16 @@ import (
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/rke"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/s3utils"
 	. "github.com/portworx/torpedo/tests"
+	"os"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
 )
 
 func getBucketNameSuffix() string {

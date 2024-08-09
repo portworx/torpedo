@@ -796,7 +796,6 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		UpdateOutcome(event, updatePxRuntimeOpts())
 	})
 
-	errorChan := make(chan error, errorChannelSize)
 	labels := Inst().TopologyLabels
 	dashStats := make(map[string]string)
 	dashStats["app-list"] = strings.Join(Inst().AppList, ", ")
@@ -805,25 +804,35 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 	Step("Deploy applications", func() {
 		if len(labels) > 0 {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				errorChan := make(chan error, errorChannelSize)
 				newContexts := ScheduleAppsInTopologyEnabledCluster(
 					fmt.Sprintf("longevity-%d", i), labels, &errorChan,
 				)
+				for err := range errorChan {
+					log.Errorf("failed to deploy apps in iteration [%d] with error [%v]", i, err)
+					UpdateOutcome(event, err)
+				}
 				*contexts = append(*contexts, newContexts...)
 			}
 		} else {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				errorChan := make(chan error, errorChannelSize)
 				newContexts := ScheduleApplications(fmt.Sprintf("longevity-%d", i), &errorChan)
+				for err := range errorChan {
+					log.Errorf("failed to deploy apps in iteration [%d] with error [%v]", i, err)
+					UpdateOutcome(event, err)
+				}
 				*contexts = append(*contexts, newContexts...)
 			}
 		}
 
-		for _, ctx := range *contexts {
-			log.Infof("Validating context: %v", ctx.App.Key)
+		for i, ctx := range *contexts {
+			log.Infof("Validating context[%d]: %v", i, ctx.App.Key)
 			ctx.SkipVolumeValidation = false
-			errorChan = make(chan error, errorChannelSize)
+			errorChan := make(chan error, errorChannelSize)
 			ValidateContext(ctx, &errorChan)
 			for err := range errorChan {
-				log.Infof("Error: %v", err)
+				log.Errorf("failed to validate context[%d] [%s] with error [%v]", i, ctx.App.Key, err)
 				UpdateOutcome(event, err)
 			}
 		}
@@ -2584,6 +2593,8 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 		}
 		err = Inst().S.RefreshNodeRegistry()
 		UpdateOutcome(event, err)
+		err = Inst().V.RefreshDriverEndpoints()
+		UpdateOutcome(event, err)
 		stNodes := node.GetNodesByVoDriverNodeID()
 		nodeContexts := make([]*scheduler.Context, 0)
 		for _, kvdbNode := range kvdbNodes {
@@ -2591,7 +2602,7 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 			appNode, ok := stNodes[kvdbNode.ID]
 			if !ok {
 				UpdateOutcome(event, fmt.Errorf("node with id %s not found in the nodes list", kvdbNode.ID))
-				log.InfoD("current node registry..")
+				log.InfoD("current node registry: [%v]", node.GetNodeRegistry())
 				for _, n := range stNodes {
 					log.InfoD("node volume driver id: %s, node name: %s", n.VolDriverNodeID, n.Name)
 				}
