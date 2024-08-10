@@ -299,7 +299,7 @@ TORPEDO_CUSTOM_PARAM_VOLUME=""
 TORPEDO_CUSTOM_PARAM_MOUNT=""
 CUSTOM_APP_CONFIG_PATH=""
 if [ -n "${CUSTOM_APP_CONFIG}" ]; then
-    kubectl -n default create configmap custom-app-config --from-file=custom_app_config.yml=${CUSTOM_APP_CONFIG}
+    kubectl -n default create configmap custom-app-config --from-file=custom_app_config.yml=${CUSTOM_APP_CONFIG} -o yaml --dry-run=client | kubectl apply -f -
     CUSTOM_APP_CONFIG_PATH="/mnt/torpedo/custom_app_config.yml"
     TORPEDO_CUSTOM_PARAM_VOLUME="{ \"name\": \"custom-app-config-volume\", \"configMap\": { \"name\": \"custom-app-config\", \"items\": [{\"key\": \"custom_app_config.yml\", \"path\": \"custom_app_config.yml\"}] } }"
     TORPEDO_CUSTOM_PARAM_MOUNT="{ \"name\": \"custom-app-config-volume\", \"mountPath\": \"${CUSTOM_APP_CONFIG_PATH}\", \"subPath\": \"custom_app_config.yml\" }"
@@ -308,7 +308,7 @@ fi
 TORPEDO_SSH_KEY_VOLUME=""
 TORPEDO_SSH_KEY_MOUNT=""
 if [ -n "${TORPEDO_SSH_KEY}" ]; then
-    kubectl -n default create secret generic key4torpedo --from-file=${TORPEDO_SSH_KEY}
+    kubectl -n default create secret generic key4torpedo --from-file=${TORPEDO_SSH_KEY} -o yaml --dry-run=client | kubectl apply -f -
     TORPEDO_SSH_KEY_VOLUME="{ \"name\": \"ssh-key-volume\", \"secret\": { \"secretName\": \"key4torpedo\", \"defaultMode\": 256 }}"
     TORPEDO_SSH_KEY_MOUNT="{ \"name\": \"ssh-key-volume\", \"mountPath\": \"/home/torpedo/\" }"
 fi
@@ -387,7 +387,7 @@ if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
     TORPEDO_IMG="${INTERNAL_DOCKER_REGISTRY}/${TORPEDO_IMG}"
 fi
 
-kubectl -n default create configmap cloud-config --from-file=/config/cloud-json
+kubectl -n default create configmap cloud-config --from-file=/config/cloud-json -o yaml --dry-run=client | kubectl apply -f -
 
 # List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
 FROM_FILE=""
@@ -402,7 +402,7 @@ if [ -n "${KUBECONFIGS}" ]; then
        CLUSTER_CONFIGS="${CLUSTER_CONFIGS},`basename ${i}`"
      fi
   done
-  kubectl -n default create configmap kubeconfigs ${FROM_FILE}
+  kubectl -n default create configmap kubeconfigs ${FROM_FILE} -o yaml --dry-run=client | kubectl apply -f -
 fi
 
 K8S_VENDOR_KEY=""
@@ -818,6 +818,8 @@ spec:
       value: "${GKE_UPGRADE_STRATEGY}"
     - name: GKE_SURGE_VALUE
       value: "${GKE_SURGE_VALUE}"
+    - name: AKS_SURGE_UPGRADE_VALUE
+      value: "${AKS_SURGE_UPGRADE_VALUE}"
     - name: GOOGLE_APPLICATION_CREDENTIALS
       value: "${GOOGLE_APPLICATION_CREDENTIALS}"
     - name: TOGGLE_PURE_MGMT_IP
