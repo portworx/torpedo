@@ -1018,8 +1018,13 @@ func filterTargetDatastores(ctx context.Context, sourceDatastore *object.Datasto
 		availableSpace := dsProps.Summary.FreeSpace / 1024
 		spaceAfterMove := availableSpace - totalDiskSizeToMove
 		maxAllowedUsage := (dsProps.Summary.Capacity / 1024) * 90 / 100
+		log.Infof("Available Space is: %v", availableSpace)
+		log.Infof("Total Disk size to move is: %v", totalDiskSizeToMove)
+		log.Infof("Space after move is: %v", spaceAfterMove)
+		log.Infof("Max Allowed Usage is: %v", maxAllowedUsage)
 
-		if spaceAfterMove < 0 || spaceAfterMove > maxAllowedUsage {
+		usedSpace := (dsProps.Summary.Capacity / 1024) - availableSpace
+		if spaceAfterMove < 0 || (usedSpace+totalDiskSizeToMove > maxAllowedUsage) {
 			log.Infof("Datastore %v does not have enough space or will exceed 90 percent capacity.", ds.Name())
 			continue
 		}
