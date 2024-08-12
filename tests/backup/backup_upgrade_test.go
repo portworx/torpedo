@@ -1546,3 +1546,340 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUid, ctx)
 	})
 })
+
+// This testcase validates Azure cred change after upgrading Px-Backup from pre-2.7.0 to latest
+var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap[PXBackupUpgradeWithAzureCredChange]...), func() {
+	var (
+		scheduledAppContexts      []*scheduler.Context
+		controlChannel            chan string
+		errorGroup                *errgroup.Group
+		cloudCredName             string
+		backupLocationName        string
+		cloudCredUID              string
+		backupLocationUID         string
+		backupLocationMap         map[string]string
+		providers                 []string
+		sourceClusterUid          string
+		preUpgradeBackupName      string
+		postUpgradeBackupName     string
+		namespaceMap              map[string]string
+		labelSelectors            map[string]string
+		upgradeStorkImageStr      string
+		pxbackupVersion           string
+		preUpgradePxBackupVersion *version.Version
+		pxbackupVersion270        *version.Version
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("PXBackupUpgradeWithAzureCredChange", "Verify that upgrading Px-Backup and updating the azure cred change does not affect backup and "+
+			"restore operations", nil, 300038, Mkoppal, Q3FY25)
+		backupLocationMap = make(map[string]string)
+		log.InfoD("scheduling applications")
+		providers = GetBackupProviders()
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		labelSelectors = make(map[string]string)
+		namespaceMap = make(map[string]string)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
+		}
+	})
+	It("Verify that upgrading Px-Backup and updating the azure cred change does not affect backup and restore operations", func() {
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+		})
+
+		Step("Get the pre upgrade Px-Backup version", func() {
+			log.InfoD("Get the pre upgrade Px-Backup version")
+			var err error
+			pxbackupVersion, err = GetPxBackupVersionSemVer()
+			log.FailOnError(err, "Fetching Px-Backup version")
+			log.InfoD("Px-Backup version [%s]", pxbackupVersion)
+			preUpgradePxBackupVersion, err = version.NewSemver(pxbackupVersion)
+			log.FailOnError(err, "Parsing Px-Backup version")
+
+			pxbackupVersion270, err = version.NewSemver("2.7.0")
+			log.FailOnError(err, "Parsing Px-Backup version 2.7.0")
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				backupLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = AddAzureApplicationClusters(BackupOrgID, cloudCredName, cloudCredUID, ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
+			clusterNames := []string{SourceClusterName, DestinationClusterName}
+			for _, clusterName := range clusterNames {
+				clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, clusterName, ctx)
+				log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", clusterName))
+				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", clusterName))
+			}
+
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+
+		Step("Taking backup of application from source cluster before upgrade", func() {
+			log.InfoD("Taking backup of application from source cluster before upgrade")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			if preUpgradePxBackupVersion.GreaterThanOrEqual(pxbackupVersion270) {
+				err = os.Setenv("BACKUP_TYPE", "native_csi")
+			} else {
+				err = os.Setenv("BACKUP_TYPE", "azure")
+			}
+			log.FailOnError(err, "Setting BACKUP_TYPE env variable")
+
+			preUpgradeBackupName = fmt.Sprintf("%s-%s", "autogenerated-backup-pre-upgrade", RandomString(4))
+			log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], in backup location [%s]", preUpgradeBackupName, SourceClusterName, sourceClusterUid, BackupOrgID, backupLocationName)
+			err = CreateBackupWithValidation(ctx, preUpgradeBackupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", preUpgradeBackupName))
+		})
+
+		Step("Upgrade Px Backup", func() {
+			log.InfoD("Upgrade Px Backup to version %s", LatestPxBackupVersion)
+			err := PxBackupUpgrade(LatestPxBackupVersion)
+			dash.VerifyFatal(err, nil, "Verifying Px Backup upgrade completion")
+		})
+
+		Step("Upgrade the stork version", func() {
+			log.InfoD("Upgrade the stork version")
+			upgradeStorkImageStr = LatestStorkImage
+			log.Infof("Upgrading stork version on source cluster to %s ", upgradeStorkImageStr)
+			err := UpgradeStorkVersion(upgradeStorkImageStr)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of stork version upgrade to - %s on source cluster", upgradeStorkImageStr))
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			log.Infof("Upgrading stork version on destination cluster to %s ", upgradeStorkImageStr)
+			err = UpgradeStorkVersion(upgradeStorkImageStr)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of stork version upgrade to - %s on destination cluster", upgradeStorkImageStr))
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+		})
+
+		Step("Update the azure cloud account creds to have only the mandatory fields", func() {
+			var credInspectRequest *api.CloudCredentialInspectRequest
+			var credUpdateRequest *api.CloudCredentialUpdateRequest
+			log.InfoD("Update the azure cloud account creds to have only the mandatory fields")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			// Create the inspect request for cloud credential
+			credInspectRequest = &api.CloudCredentialInspectRequest{
+				OrgId:          BackupOrgID,
+				Name:           cloudCredName,
+				IncludeSecrets: true,
+			}
+			cloudCred, err := Inst().Backup.InspectCloudCredential(ctx, credInspectRequest)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching cloud credential [%s] for org [%s]", cloudCredName, BackupOrgID))
+			azureCredConfig := cloudCred.CloudCredential.CloudCredentialInfo.GetAzureConfig()
+
+			// Update the cloud credential with only the mandatory fields
+			credUpdateRequest = &api.CloudCredentialUpdateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  cloudCred.GetCloudCredential().GetName(),
+					OrgId: BackupOrgID,
+					Uid:   cloudCred.GetCloudCredential().GetUid(),
+				},
+				CloudCredential: &api.CloudCredentialInfo{
+					Type: api.CloudCredentialInfo_Azure,
+					Config: &api.CloudCredentialInfo_AzureConfig{
+						AzureConfig: &api.AzureConfig{
+							TenantId:       "",
+							ClientId:       "",
+							ClientSecret:   "",
+							AccountName:    azureCredConfig.GetAccountName(),
+							AccountKey:     azureCredConfig.GetAccountKey(),
+							SubscriptionId: "",
+						},
+					},
+				},
+			}
+			_, err = Inst().Backup.UpdateCloudCredential(ctx, credUpdateRequest)
+			log.FailOnError(err, fmt.Sprintf("Updating cloud credential [%s] for org [%s]", cloudCredName, BackupOrgID))
+		})
+
+		Step("Restoring the backed up namespaces from backup taken before upgrade", func() {
+			if preUpgradePxBackupVersion.GreaterThanOrEqual(pxbackupVersion270) {
+				// Restore should be successful if the backup was taken before 2.7.0 because there is no dependency on the azure creds since the backup will be csi based
+				log.InfoD("Restoring the backed up namespaces from backup taken before upgrade and expecting success")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				restoreName := fmt.Sprintf("%s-%s", "restore-pre-upgrade-backup", RandomString(4))
+				for _, appCtx := range scheduledAppContexts {
+					namespaceMap[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-res-old"
+				}
+				log.InfoD("Restoring from the [%s] backup", preUpgradeBackupName)
+				err = CreateRestoreWithValidation(ctx, restoreName, preUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
+			} else {
+				// Restore should fail because backups taken before 2.7.0 will be azure native driver based which require all the non-mandatory fields to be present
+				log.InfoD("Restoring the backed up namespaces from backup taken before upgrade and expecting it to fail since it is a azure native driver based backup")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				restoreName := fmt.Sprintf("%s-%s", "restore-pre-upgrade-backup", RandomString(4))
+				for _, appCtx := range scheduledAppContexts {
+					namespaceMap[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-res-old"
+				}
+				log.InfoD("Restoring from the [%s] backup", preUpgradeBackupName)
+				err = CreateRestoreWithValidation(ctx, restoreName, preUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+				dash.VerifyFatal(strings.Contains(err.Error(), "Multiple user assigned identities exist, please specify the clientId / resourceId of the identity in the token request"), true, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
+				log.Infof("Error message is [%s]", err.Error())
+			}
+		})
+
+		Step("Taking backup of application from source cluster after upgrade", func() {
+			log.InfoD("Taking backup of application from source cluster after upgrade")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = os.Setenv("BACKUP_TYPE", "native_csi")
+			log.FailOnError(err, "Setting BACKUP_TYPE env variable")
+			postUpgradeBackupName = fmt.Sprintf("%s-%s", "autogenerated-backup-post-upgrade", RandomString(4))
+			log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], in backup location [%s]", postUpgradeBackupName, SourceClusterName, sourceClusterUid, BackupOrgID, backupLocationName)
+			err = CreateBackupWithValidation(ctx, postUpgradeBackupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", postUpgradeBackupName))
+		})
+
+		Step("Restoring the backed up namespaces from backup taken after upgrade", func() {
+			if preUpgradePxBackupVersion.GreaterThanOrEqual(pxbackupVersion270) {
+				log.InfoD("Restoring the backed up namespaces from backup taken after upgrade")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				restoreName := fmt.Sprintf("%s-%s", "restore-post-upgrade-backup", RandomString(4))
+				namespaceMap = make(map[string]string)
+				for _, appCtx := range scheduledAppContexts {
+					namespaceMap[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-res-new"
+				}
+				log.InfoD("Restoring from the [%s] backup", postUpgradeBackupName)
+				err = CreateRestoreWithValidation(ctx, restoreName, postUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
+			} else {
+				// Updating the azure creds to have all the fields and then restoring the backups taken before and after upgrade
+				log.InfoD("Update the azure cloud account creds to have all the fields")
+				tenantID, clientID, clientSecret, subscriptionID, _, _ := GetAzureCredsFromEnv()
+				var credInspectRequest *api.CloudCredentialInspectRequest
+				var credUpdateRequest *api.CloudCredentialUpdateRequest
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+
+				// Create the inspect request for cloud credential
+				credInspectRequest = &api.CloudCredentialInspectRequest{
+					OrgId:          BackupOrgID,
+					Name:           cloudCredName,
+					IncludeSecrets: true,
+				}
+				cloudCred, err := Inst().Backup.InspectCloudCredential(ctx, credInspectRequest)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching cloud credential [%s] for org [%s]", cloudCredName, BackupOrgID))
+				azureCredConfig := cloudCred.CloudCredential.CloudCredentialInfo.GetAzureConfig()
+				log.Infof("Cred details before update: %v", azureCredConfig)
+
+				// Update the cloud credential with only the mandatory fields
+				credUpdateRequest = &api.CloudCredentialUpdateRequest{
+					CreateMetadata: &api.CreateMetadata{
+						Name:  cloudCred.GetCloudCredential().GetName(),
+						OrgId: BackupOrgID,
+						Uid:   cloudCred.GetCloudCredential().GetUid(),
+					},
+					CloudCredential: &api.CloudCredentialInfo{
+						Type: api.CloudCredentialInfo_Azure,
+						Config: &api.CloudCredentialInfo_AzureConfig{
+							AzureConfig: &api.AzureConfig{
+								TenantId:       tenantID,
+								ClientId:       clientID,
+								ClientSecret:   clientSecret,
+								AccountName:    azureCredConfig.GetAccountName(),
+								AccountKey:     azureCredConfig.GetAccountKey(),
+								SubscriptionId: subscriptionID,
+							},
+						},
+					},
+				}
+				_, err = Inst().Backup.UpdateCloudCredential(ctx, credUpdateRequest)
+				log.FailOnError(err, fmt.Sprintf("Updating cloud credential [%s] for org [%s]", cloudCredName, BackupOrgID))
+
+				credInspectRequest = &api.CloudCredentialInspectRequest{
+					OrgId:          BackupOrgID,
+					Name:           cloudCredName,
+					IncludeSecrets: true,
+				}
+				cloudCred, err = Inst().Backup.InspectCloudCredential(ctx, credInspectRequest)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching cloud credential [%s] for org [%s]", cloudCredName, BackupOrgID))
+				azureCredConfig = cloudCred.CloudCredential.CloudCredentialInfo.GetAzureConfig()
+				log.Infof("Cred details after update: %v", azureCredConfig)
+
+				log.InfoD("Restoring the backed up namespaces from backup taken before and after upgrade")
+				restoreName := fmt.Sprintf("%s-%s", "restore-pre-upgrade-backup", RandomString(4))
+				namespaceMap = make(map[string]string)
+				for _, appCtx := range scheduledAppContexts {
+					namespaceMap[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-res-old"
+				}
+				log.InfoD("Restoring from the [%s] backup", preUpgradeBackupName)
+				err = os.Setenv("BACKUP_TYPE", "azure")
+				log.FailOnError(err, "Setting BACKUP_TYPE env variable to azure")
+				err = CreateRestoreWithValidation(ctx, restoreName, preUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
+
+				restoreName = fmt.Sprintf("%s-%s", "restore-post-upgrade-backup", RandomString(4))
+				namespaceMap = make(map[string]string)
+				for _, appCtx := range scheduledAppContexts {
+					namespaceMap[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-res-new"
+				}
+				log.InfoD("Restoring from the [%s] backup", postUpgradeBackupName)
+				err = os.Setenv("BACKUP_TYPE", "native_csi")
+				log.FailOnError(err, "Setting BACKUP_TYPE env variable to native_csi")
+				err = CreateRestoreWithValidation(ctx, restoreName, postUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
+
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
+		defer func() {
+			log.Infof("Unsetting BACKUP_TYPE env variable")
+			err := os.Unsetenv("BACKUP_TYPE")
+			log.FailOnError(err, "Unsetting BACKUP_TYPE env variable")
+		}()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.Info("Destroying scheduled apps on source cluster")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
+		// Need to delete the cluster before deleting the cloud credential
+		clusterNames := []string{SourceClusterName, DestinationClusterName}
+		for _, clusterName := range clusterNames {
+			err := DeleteCluster(clusterName, BackupOrgID, ctx, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cluster [%s]", clusterName))
+			err = Inst().Backup.WaitForClusterDeletion(ctx, clusterName, BackupOrgID, ClusterDeleteTimeout, ClusterCreationRetryTime)
+			log.FailOnError(err, fmt.Sprintf("waiting for cluster [%s] deletion", clusterName))
+		}
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+
+})
