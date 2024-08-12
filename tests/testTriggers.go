@@ -2593,6 +2593,8 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 		}
 		err = Inst().S.RefreshNodeRegistry()
 		UpdateOutcome(event, err)
+		err = Inst().V.RefreshDriverEndpoints()
+		UpdateOutcome(event, err)
 		stNodes := node.GetNodesByVoDriverNodeID()
 		nodeContexts := make([]*scheduler.Context, 0)
 		for _, kvdbNode := range kvdbNodes {
@@ -2600,7 +2602,7 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 			appNode, ok := stNodes[kvdbNode.ID]
 			if !ok {
 				UpdateOutcome(event, fmt.Errorf("node with id %s not found in the nodes list", kvdbNode.ID))
-				log.InfoD("current node registry..")
+				log.InfoD("current node registry: [%v]", node.GetNodeRegistry())
 				for _, n := range stNodes {
 					log.InfoD("node volume driver id: %s, node name: %s", n.VolDriverNodeID, n.Name)
 				}
