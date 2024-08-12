@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"sync"
@@ -1335,3 +1336,26 @@ func WithVolumeExpansion(allowExpansion bool) StorageClassOption {
 		sc.AllowVolumeExpansion = &allowExpansion
 	}
 }
+
+var _ = Describe("{DhruvTest}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("DhruvTest", "StorageVmotion", nil, 0)
+	})
+
+	//var contexts []*scheduler.Context
+
+	It("has to setup, validate and teardown apps", func() {
+		workerNodes := node.GetStorageNodes()
+		log.Infof(workerNodes[0].Name)
+		ctx := context.Background()
+		err := Inst().N.StorageVmotion(ctx, workerNodes[0], "portworx", true)
+		if err != nil {
+			log.Infof("Failed to relocate VM: %v\n", err)
+		} else {
+			log.Infof("VM relocation successful")
+		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
