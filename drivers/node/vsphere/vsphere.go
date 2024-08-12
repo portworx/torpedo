@@ -1023,6 +1023,7 @@ func filterTargetDatastores(ctx context.Context, sourceDatastore *object.Datasto
 		log.Infof("Space after move is: %v", spaceAfterMove)
 		log.Infof("Max Allowed Usage is: %v", maxAllowedUsage)
 
+		log.Infof("New Change is in....")
 		if spaceAfterMove < 0 || ((availableSpace - spaceAfterMove) < maxAllowedUsage) {
 			log.Infof("Datastore %v does not have enough space or will exceed 90 percent capacity.", ds.Name())
 			continue
