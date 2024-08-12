@@ -14157,30 +14157,18 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 
 		// if volume is not in clean state, check if all the nodes of it's repilcas are in storage up state
 		if runTimeState != VolumeRuntimeStatusClean {
-			logrus.Infof("volume [%s] runtime state is %v which is not clean, validating the node state...", volID, runTimeState)
+			dash.Infof("volume [%s] runtime state is %v which is not clean, validating the node state...", volID, runTimeState)
 			for i := range replicaNodes {
 				nodeInfo, err := node.GetNodeDetailsByNodeID(replicaNodes[i])
-				if err != nil {
-					err = fmt.Errorf("error getting node details for node [%s], Err: %v", replicaNodes[i], err)
-					processError(err, errChan...)
-					return
-				}
+				log.FailOnError(err, fmt.Sprintf("error getting node details for node [%s]", replicaNodes[i]))
 
 				// check if node is in storage up state
 				nodeStatus, err := Inst().V.GetNodeStatus(nodeInfo)
-				if err != nil {
-					err = fmt.Errorf("error getting node status for node [%s], Err: %v", replicaNodes[i], err)
-					processError(err, errChan...)
-					return
-				}
+				log.FailOnError(err, fmt.Sprintf("error getting node status for node [%s]", replicaNodes[i]))
 
 				// if node is in storage down state and runtime state is not clean, fail the test
 				log.Infof("Node [%s] status: %v", replicaNodes[i], nodeStatus)
-				if reflect.DeepEqual(nodeStatus, opsapi.Status_STATUS_STORAGE_DOWN) {
-					err = fmt.Errorf("node [%s] is in %v Runtime state ", replicaNodes[i], runTimeState)
-					processError(err, errChan...)
-					return
-				}
+				dash.VerifyFatal(nodeStatus, opsapi.Status_STATUS_STORAGE_DOWN, fmt.Sprintf("Validating the node [%s ] state where volume [%s] has %s", replicaNodes[i], apiVol.Id, runTimeState))
 			}
 		}
 	}
