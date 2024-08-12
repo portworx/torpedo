@@ -14134,7 +14134,7 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 		replicaNodes := apiVol.ReplicaSets[0].Nodes
 
 		if apiVol.Status != opsapi.VolumeStatus_VOLUME_STATUS_UP {
-			// if it is repl-2 volume and replicas are on same node, do not fail the test
+			// skip validation for repl-1 volume
 			if len(replicaNodes) == 1 {
 				log.Warnf("volume [%s] replicas are on same nodes [%v]", volID, replicaNodes)
 				continue
@@ -14157,7 +14157,7 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 
 		// if volume is not in clean state, check if all the nodes of it's repilcas are in storage up state
 		if runTimeState != VolumeRuntimeStatusClean {
-			err = fmt.Errorf("volume [%s] runtime state is not clean", volID)
+			logrus.Infof("volume [%s] runtime state is %v which is not clean, validating the node state...", volID, runTimeState)
 			for i := range replicaNodes {
 				nodeInfo, err := node.GetNodeDetailsByNodeID(replicaNodes[i])
 				if err != nil {

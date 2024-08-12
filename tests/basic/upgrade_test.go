@@ -159,8 +159,10 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 			}()
 
 			var vQuorumError error
-			opver, _ := optest.GetPxOperatorVersion()
-			pxver, _ := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+			opver, err := optest.GetPxOperatorVersion()
+			log.FailOnError(err, "error getting operator version")
+			pxver, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+			log.FailOnError(err, "error getting driver version")
 			pxVersion, _ := version.NewVersion(pxver)
 
 			if opver.GreaterThanOrEqual(ParallelUpgradeOperatorVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradePXVersion) {

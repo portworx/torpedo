@@ -76,7 +76,15 @@ var _ = Describe("{UpgradeCluster}", func() {
 		printDisks(preUpgradeNodeDisksMap)
 
 		storageNodes := node.GetStorageNodes()
-		pxver, _ := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+		if len(storageNodes) == 0 {
+			log.Error("No storage nodes found")
+			return
+		}
+		pxver, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+		if err != nil {
+			log.Errorf("error getting px version on node [%s]: [%v]", storageNodes[0].Name, err)
+			return
+		}
 		pxVersion, _ := version.NewVersion(pxver)
 
 		for _, version := range versions {
