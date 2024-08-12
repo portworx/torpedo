@@ -1348,7 +1348,10 @@ var _ = Describe("{DhruvTest}", func() {
 		workerNodes := node.GetStorageNodes()
 		log.Infof(workerNodes[0].Name)
 		ctx := context.Background()
-		err := Inst().N.StorageVmotion(ctx, workerNodes[0], "portworx", true)
+		namespace, err := Inst().S.GetPortworxNamespace()
+		log.FailOnError(err, "Failed to get Px namespace")
+		log.Infof("Found Px namespace to be : %v ", namespace)
+		err = Inst().N.StorageVmotion(ctx, workerNodes[0], namespace, true)
 		if err != nil {
 			log.Infof("Failed to relocate VM: %v\n", err)
 		} else {
