@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/hashicorp/go-version"
 	"net/url"
 	"strings"
 	"time"
@@ -74,6 +75,10 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 		printDisks(preUpgradeNodeDisksMap)
 
+		storageNodes := node.GetStorageNodes()
+		pxver, _ := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+		pxVersion, _ := version.NewVersion(pxver)
+
 		for _, version := range versions {
 			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), version), func() {
 				stopSignal := make(chan struct{})
@@ -89,16 +94,17 @@ var _ = Describe("{UpgradeCluster}", func() {
 					log.Warnf("PDB validation skipped. Current Px-Operator version: [%s], minimum required: [%s]. Error: [%v].", opver, PDBValidationMinOpVersion, err)
 				}
 
+				var vQuorumError error
 				// validate volume quorum during upgrade
-				if opver.GreaterThanOrEqual(ParallelUpgradeVersion) {
-					var vQourumError error
+				if opver.GreaterThanOrEqual(ParallelUpgradeOperatorVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradePXVersion) {
+					log.Info("Starting volume quorum validation for Portworx upgrade .......")
 					stopVolumeQuorumValidationSignal := make(chan struct{})
-					go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQourumError)
-					defer func() {
-						close(stopVolumeQuorumValidationSignal)
-					}()
+					go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQuorumError)
+					defer close(stopVolumeQuorumValidationSignal)
 				} else {
-					log.Warnf("Volume quorum validation skipped. Current Px-Operator version: [%s], minimum required: [%s]. Error: [%v].", opver, ParallelUpgradeVersion, err)
+					log.Warnf("Skipping volume quorum validation due to version constraints.......")
+					log.Warnf("Required Operator version: %s, actual Operator version: %s", ParallelUpgradeOperatorVersion, opver)
+					log.Warnf("Required PX version: %s, actual PX version: %s", ParallelUpgradePXVersion, pxVersion)
 				}
 
 				err = Inst().S.UpgradeScheduler(version)

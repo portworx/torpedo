@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/hashicorp/go-version"
 
 	"go.uber.org/multierr"
 	"math/rand"
@@ -157,18 +158,20 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				close(stopSignal)
 			}()
 
-			var vQourumError error
-			opver, err := optest.GetPxOperatorVersion()
-			if err == nil && opver.GreaterThanOrEqual(ParallelUpgradeVersion) {
-				log.Info("Starting volume quorum validation for Portworx upgrade .......")
+			var vQuorumError error
+			opver, _ := optest.GetPxOperatorVersion()
+			pxver, _ := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+			pxVersion, _ := version.NewVersion(pxver)
 
+			if opver.GreaterThanOrEqual(ParallelUpgradeOperatorVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradePXVersion) {
+				log.Info("Starting volume quorum validation for Portworx upgrade")
 				stopVolumeQuorumValidationSignal := make(chan struct{})
-				go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQourumError)
-				defer func() {
-					close(stopVolumeQuorumValidationSignal)
-				}()
+				go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQuorumError)
+				defer close(stopVolumeQuorumValidationSignal)
 			} else {
-				log.Infof("Skipping volume quorum validation as operator version is less than %s", ParallelUpgradeVersion)
+				log.Warnf("Skipping volume quorum validation due to version constraints.......")
+				log.Warnf("Required Operator version: %s, actual Operator version: %s", ParallelUpgradeOperatorVersion, opver)
+				log.Warnf("Required PX version: %s, actual PX version: %s", ParallelUpgradePXVersion, pxVersion)
 			}
 
 			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
@@ -242,12 +245,12 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				if mError != nil {
 					break
 				}
-				if vQourumError != nil {
+				if vQuorumError != nil {
 					break
 				}
 			}
 			dash.VerifyFatal(mError, nil, "validate apps during PX upgrade")
-			dash.VerifyFatal(vQourumError, nil, "validate volume quorum during PX upgrade")
+			dash.VerifyFatal(vQuorumError, nil, "validate volume quorum during PX upgrade")
 		})
 
 		Step("Destroy apps", func() {
