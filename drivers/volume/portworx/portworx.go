@@ -5436,6 +5436,7 @@ func (d *portworx) GetPxctlStatus(n node.Node) (string, error) {
 
 	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s -j status", pxctlPath), opts)
 	if err != nil {
+		log.Warnf("The output of pxctl status is: \n[%s]", out)
 		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
 	}
 

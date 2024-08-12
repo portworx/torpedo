@@ -596,6 +596,7 @@ func (s *SSH) RunCommand(n node.Node, command string, options node.ConnectionOpt
 	}
 
 	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
+	log.Warnf("RunCommand The output of pxctl status is: \n[%s]", output)
 	if err != nil {
 		return "", err
 	}
