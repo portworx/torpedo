@@ -8887,11 +8887,9 @@ func validateCRCleanup(resourceInterface interface{},
 
 		return nil, false, nil
 	}
-
-	_, err = task.DoRetryWithTimeout(validateCRCleanupInNamespace, 5*time.Minute, 5*time.Second)
-
+	// CR cleanup process starts immediately after backup/restore completion but the total deletion process takes 5-10 minutes
+	_, err = task.DoRetryWithTimeout(validateCRCleanupInNamespace, 10*time.Minute, 1*time.Minute)
 	return err
-
 }
 
 // SuspendAndDeleteAllSchedulesForUsers suspends and delete the backup schedule for a give list of users
