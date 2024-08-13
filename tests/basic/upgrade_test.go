@@ -165,15 +165,15 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 			log.FailOnError(err, "error getting driver version")
 			pxVersion, _ := version.NewVersion(pxver)
 
-			if opver.GreaterThanOrEqual(ParallelUpgradeOperatorVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradePXVersion) {
+			if opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
 				log.Info("Starting volume quorum validation for Portworx upgrade")
 				stopVolumeQuorumValidationSignal := make(chan struct{})
 				go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQuorumError)
 				defer close(stopVolumeQuorumValidationSignal)
 			} else {
 				log.Warnf("Skipping volume quorum validation due to version constraints.......")
-				log.Warnf("Required Operator version: %s, actual Operator version: %s", ParallelUpgradeOperatorVersion, opver)
-				log.Warnf("Required PX version: %s, actual PX version: %s", ParallelUpgradePXVersion, pxVersion)
+				log.Warnf("Required Operator version: %s, actual Operator version: %s", ParallelUpgradeMinOpVersion, opver)
+				log.Warnf("Required PX version: %s, actual PX version: %s", ParallelUpgradeMinPxVersion, pxVersion)
 			}
 
 			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
