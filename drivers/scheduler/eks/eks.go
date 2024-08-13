@@ -3,6 +3,11 @@ package eks
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
@@ -19,9 +24,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
-	"os"
-	"strings"
-	"time"
 )
 
 const (
@@ -140,6 +142,96 @@ func (e *EKS) UpgradeNodeGroup(nodeGroupName string, version string) error {
 		return fmt.Errorf("failed to upgrade EKS cluster [%s] node group [%s] version to [%s], Err: [%v]", e.clusterName, nodeGroupName, version, err)
 	}
 	log.Infof("Initiated EKS cluster [%s] node group [%s] upgrade to version [%s] successfully", e.clusterName, nodeGroupName, version)
+	return nil
+}
+
+// SetMaxUnavailableForUpgradeInNodeGroup updates Max Unavailable values for upgrades for a given node group
+func (e *EKS) SetMaxUnavailableForUpgradeInNodeGroup(nodeGroupName string) error {
+	updateNodeGroup := false
+
+	log.Info("Checking if we need to configure EKS Node Group Max Unavailable values for surge upgrade..")
+	// Get Max Unavailable values from ENV vars, if present
+	maxUnavailableNodes := os.Getenv("EKS_MAX_UNAVAILABLE_NODES_VALUE")
+	maxUnavailablePercentage := os.Getenv("EKS_MAX_UNAVAILABLE_PERCENTAGE_VALUE")
+
+	// MaxUnavailable:           aws.Int32(1),  // Set the maximum number of nodes that can be unavailable during the update
+	// MaxUnavailablePercentage: aws.Int32(25), // Set the maximum percentage of nodes that can be unavailable during the update
+	updateConfig := &types.NodegroupUpdateConfig{}
+
+	if maxUnavailableNodes != "" {
+		log.Infof("Setting MaxUnavailable to [%s]", maxUnavailableNodes)
+		maxUnavailableNodesInt, err := strconv.Atoi(maxUnavailableNodes)
+		if err != nil {
+			return fmt.Errorf("failed to convert maxUnavailableNode string [%s] to int, Err: %v", maxUnavailableNodes, err)
+		}
+		updateConfig.MaxUnavailable = aws.Int32(int32(maxUnavailableNodesInt))
+		updateNodeGroup = true
+	}
+
+	if maxUnavailablePercentage != "" {
+		log.Infof("Setting MaxUnavailablePercentage to [%s]", maxUnavailablePercentage)
+		maxUnavailablePercentageInt, err := strconv.Atoi(maxUnavailablePercentage)
+		if err != nil {
+			return fmt.Errorf("failed to convert maxUnavailablePercentage string [%s] to int, Err: %v", maxUnavailablePercentage, err)
+		}
+		updateConfig.MaxUnavailablePercentage = aws.Int32(int32(maxUnavailablePercentageInt))
+		updateNodeGroup = true
+	}
+
+	if !updateNodeGroup {
+		log.Info("Skipping updating Node Group Max Unavailable values as none were passed..")
+		return nil
+	}
+
+	log.Infof("Updating Node Group [%s] with Max Unavailable values for surge upgrade for EKS cluster [%s]", nodeGroupName, e.clusterName)
+	_, err := e.eksClient.UpdateNodegroupConfig(context.TODO(), &eks.UpdateNodegroupConfigInput{
+		ClusterName:   aws.String(e.clusterName),
+		NodegroupName: aws.String(nodeGroupName),
+		UpdateConfig:  updateConfig,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to configure Max Unavailable for EKS cluster [%s] node group [%s], Err: [%v]", e.clusterName, nodeGroupName, err)
+	}
+
+	if err := e.WaitForNodeGroupUpdate(nodeGroupName); err != nil {
+		return err
+	}
+
+	log.Infof("Successfully configured EKS cluster [%s] node group [%s] with Max Unavailable values for surge upgrade", e.clusterName, nodeGroupName)
+	return nil
+}
+
+// WaitForNodeGroupUpdate waits for Node Group to be updated and have expected status
+func (e *EKS) WaitForNodeGroupUpdate(nodeGroupName string) error {
+	log.Infof("Waiting for EKS cluster [%s] Node Group [%s] to be updated", e.clusterName, nodeGroupName)
+	expectedUpgradeStatus := types.NodegroupStatusActive
+	t := func() (interface{}, bool, error) {
+		eksDescribeNodegroupOutput, err := e.eksClient.DescribeNodegroup(
+			context.TODO(),
+			&eks.DescribeNodegroupInput{
+				ClusterName:   aws.String(e.clusterName),
+				NodegroupName: aws.String(nodeGroupName),
+			},
+		)
+		if err != nil {
+			return nil, false, err
+		}
+		if eksDescribeNodegroupOutput.Nodegroup == nil {
+			return nil, false, fmt.Errorf("failed to describe EKS cluster [%s] Node Group [%s], node group not found", e.clusterName, nodeGroupName)
+		}
+		status := eksDescribeNodegroupOutput.Nodegroup.Status
+		if status == expectedUpgradeStatus {
+			return nil, false, nil
+		} else {
+			return nil, true, fmt.Errorf("waiting for EKS cluster [%s] Node Group [%s] update to complete, expected status [%s], actual status [%s]", e.clusterName, nodeGroupName, expectedUpgradeStatus, status)
+		}
+	}
+	_, err := task.DoRetryWithTimeout(t, defaultEKSUpgradeTimeout, defaultEKSUpgradeRetryInterval)
+	if err != nil {
+		return fmt.Errorf("failed to update EKS cluster [%s] Node Group [%s], Err: [%v]", e.clusterName, nodeGroupName, err)
+	}
+
+	log.Infof("Successfully updated EKS cluster [%s] Node Group [%s]", e.clusterName, nodeGroupName)
 	return nil
 }
 
@@ -323,6 +415,12 @@ func (e *EKS) UpgradeScheduler(version string) error {
 	err = e.WaitForControlPlaneToUpgrade(version)
 	if err != nil {
 		return fmt.Errorf("failed to wait for EKS cluster [%s] control plane to be upgraded to [%s], Err: [%v]", e.clusterName, version, err)
+	}
+
+	// Update Max Unavailable values for Node Group
+	err = e.SetMaxUnavailableForUpgradeInNodeGroup(e.pxNodeGroupName)
+	if err != nil {
+		return fmt.Errorf("failed to configure EKS cluster [%s] node group [%s] Max Unavailable values, Err: [%v]", e.clusterName, e.pxNodeGroupName, err)
 	}
 
 	// Upgrade Node Group
