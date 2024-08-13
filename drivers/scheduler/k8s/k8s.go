@@ -281,6 +281,16 @@ type K8s struct {
 
 // IsNodeReady  Check whether the cluster node is ready
 func (k *K8s) IsNodeReady(n node.Node) error {
+	nodeLabels, err := k8sCore.GetLabelsOnNode(n.Name)
+	if err != nil {
+		return err
+	}
+
+	// Check if the node has the "skipTorpedo" label set to "true"
+	if value, ok := nodeLabels["skipTorpedo"]; ok && value == "true" {
+		return nil
+	}
+
 	t := func() (interface{}, bool, error) {
 		if err := k8sCore.IsNodeReady(n.Name); err != nil {
 			return "", true, &scheduler.ErrNodeNotReady{
