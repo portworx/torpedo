@@ -14157,7 +14157,7 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 
 		// if volume is not in clean state, check if all the nodes of it's repilcas are in storage up state
 		if runTimeState != VolumeRuntimeStatusClean {
-			dash.Infof("volume [%s] runtime state is %v which is not clean, validating the node state...", volID, runTimeState)
+			log.InfoD("volume [%s] runtime state is %v which is not clean, validating the node state...", volID, runTimeState)
 			for i := range replicaNodes {
 				nodeInfo, err := node.GetNodeDetailsByNodeID(replicaNodes[i])
 				log.FailOnError(err, fmt.Sprintf("error getting node details for node [%s]", replicaNodes[i]))
