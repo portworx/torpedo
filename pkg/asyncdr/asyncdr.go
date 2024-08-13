@@ -2,6 +2,7 @@ package asyncdr
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -10,11 +11,15 @@ import (
 	"time"
 
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	oputils "github.com/libopenstorage/operator/drivers/storage/portworx/util"
+	opcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	storkdriver "github.com/libopenstorage/stork/drivers/volume"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
@@ -58,9 +63,9 @@ const (
 	tempDir                = "/tmp"
 	portworxProvisioner    = "kubernetes.io/portworx-volume"
 	DefaultScName          = "async-sc"
-	FirstCluster = 0
-	SecondCluster = 1
-	ThirdCluster = 2
+	FirstCluster           = 0
+	SecondCluster          = 1
+	ThirdCluster           = 2
 )
 
 var (
@@ -287,7 +292,7 @@ func CreateSnapshotSchedule(
 	pvcName string,
 	scheduleName string,
 	policyName string,
-	snapshotType string,) (*storkapi.VolumeSnapshotSchedule, error) {
+	snapshotType string) (*storkapi.VolumeSnapshotSchedule, error) {
 
 	snapSched := &storkapi.VolumeSnapshotSchedule{
 		ObjectMeta: meta_v1.ObjectMeta{
@@ -320,7 +325,7 @@ func CreateSchedulePolicyWithRetain(policyName string, interval int, retain stor
 			Policy: storkapi.SchedulePolicyItem{
 				Interval: &storkapi.IntervalPolicy{
 					IntervalMinutes: interval,
-					Retain: retain,
+					Retain:          retain,
 				},
 			}}
 		schedPolicy, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
@@ -338,12 +343,12 @@ func ValidateSnapshotScheduleCount(pvcs []string, schedNs, schedPol, snapshotTyp
 			return fmt.Errorf("Error creating snapshot schedule: %v", err)
 		}
 		log.InfoD("SnapSchedule is %v", snapSchedule)
-		time.Sleep(30*time.Second)
+		time.Sleep(30 * time.Second)
 		err = WaitForRetainSnapshotsSuccessful(scheduleName, schedNs, int(retain), snapInterval)
 		if err != nil {
 			return fmt.Errorf("Error waiting for retain snapshots: %v", err)
 		}
-		time.Sleep(30*time.Second)
+		time.Sleep(30 * time.Second)
 		schedule, err := storkops.Instance().GetSnapshotSchedule(scheduleName, schedNs)
 		if err != nil {
 			return fmt.Errorf("Failed to get snapshot schedule")
@@ -358,39 +363,39 @@ func ValidateSnapshotScheduleCount(pvcs []string, schedNs, schedPol, snapshotTyp
 
 // WaitForRetainSnapshotsSuccessful waits for a certain number of snapshots to complete.
 func WaitForRetainSnapshotsSuccessful(snapSchedName string, schedNs string, retain int, snapInterval int) error {
-    for i := 0; i < retain + 1; i++ {
-        checkSuccessfulSnapshots := func() (interface{}, bool, error) {
-            snapSchedule, err := storkops.Instance().GetSnapshotSchedule(snapSchedName, schedNs)
-            if err != nil {
-                return nil, true, fmt.Errorf("failed to get snapshot schedule: %v", snapSchedName)
-            }
+	for i := 0; i < retain+1; i++ {
+		checkSuccessfulSnapshots := func() (interface{}, bool, error) {
+			snapSchedule, err := storkops.Instance().GetSnapshotSchedule(snapSchedName, schedNs)
+			if err != nil {
+				return nil, true, fmt.Errorf("failed to get snapshot schedule: %v", snapSchedName)
+			}
 			currentIndex := i
-            if currentIndex >= len(snapSchedule.Status.Items["Interval"]) {
-                currentIndex = len(snapSchedule.Status.Items["Interval"]) - 1
-            }
-            if snapSchedule.Status.Items["Interval"][currentIndex].Status != crdv1.VolumeSnapshotConditionReady {
-                return nil, true, fmt.Errorf("snapshot %v failed with status: %v", snapSchedule.Status.Items["Interval"][currentIndex].Name, snapSchedule.Status.Items["Interval"][currentIndex].Status)
-            }
-            return nil, false, nil
-        }
+			if currentIndex >= len(snapSchedule.Status.Items["Interval"]) {
+				currentIndex = len(snapSchedule.Status.Items["Interval"]) - 1
+			}
+			if snapSchedule.Status.Items["Interval"][currentIndex].Status != crdv1.VolumeSnapshotConditionReady {
+				return nil, true, fmt.Errorf("snapshot %v failed with status: %v", snapSchedule.Status.Items["Interval"][currentIndex].Name, snapSchedule.Status.Items["Interval"][currentIndex].Status)
+			}
+			return nil, false, nil
+		}
 
-        snapStartTime := time.Now()
-        _, err := task.DoRetryWithTimeout(checkSuccessfulSnapshots, time.Minute*time.Duration(snapInterval*2), time.Second*10)
-        if err != nil {
-            return err
-        }
-        snapEndTime := time.Now()
-        snapTimeTaken := snapEndTime.Sub(snapStartTime)
-        snapIntervalMins := time.Minute * time.Duration(snapInterval)
+		snapStartTime := time.Now()
+		_, err := task.DoRetryWithTimeout(checkSuccessfulSnapshots, time.Minute*time.Duration(snapInterval*2), time.Second*10)
+		if err != nil {
+			return err
+		}
+		snapEndTime := time.Now()
+		snapTimeTaken := snapEndTime.Sub(snapStartTime)
+		snapIntervalMins := time.Minute * time.Duration(snapInterval)
 
 		if i == retain {
 			break
 		}
 
-        log.Infof("Waiting for next snapshot interval to start. Time pending to start next snap trigger: %v", snapIntervalMins-snapTimeTaken)
-        time.Sleep(snapIntervalMins - snapTimeTaken + 10*time.Second)
-    }
-    return nil
+		log.Infof("Waiting for next snapshot interval to start. Time pending to start next snap trigger: %v", snapIntervalMins-snapTimeTaken)
+		time.Sleep(snapIntervalMins - snapTimeTaken + 10*time.Second)
+	}
+	return nil
 }
 
 func CreateSchedulePolicy(policyName string, interval int) (pol *storkapi.SchedulePolicy, err error) {
@@ -755,4 +760,108 @@ func CheckDefaultPxStorageClass(name string) error {
 		return fmt.Errorf("failed to create storage class: %s.Error: %v", name, err)
 	}
 	return nil
+}
+
+func ChangePxServiceToLoadBalancer(internalLB bool) error {
+	// Check if service is already of type loadbalancer
+	const (
+		pxStcServiceTypeKey  = "portworx.io/service-type"
+		stcLoadBalancerValue = "LoadBalancer"
+		pxStcServiceKey      = "service/portworx-service"
+		awsInternalLBKey     = "service.beta.kubernetes.io/aws-load-balancer-internal"
+		awsInternalLBValue   = "true"
+		awsLBTypeKey         = "service.beta.kubernetes.io/aws-load-balancer-type"
+		awsLBTypeVal         = "nlb"
+		awsNLBTargetTypeKey  = "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type"
+		awsNLBTargetTypeVal  = "ip"
+		awsLBSubnetKey       = "service.beta.kubernetes.io/aws-load-balancer-subnets"
+		pxServiceName        = "portworx-service"
+		pxNamespace          = "kube-system"
+	)
+
+	pxService, err := core.Instance().GetService(pxServiceName, pxNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to get portworx service before changing it to load balancer: %v", err)
+	}
+	log.Infof("Current Service Type is %v, pxService.Spec.Type")
+	if pxService.Spec.Type == v1.ServiceTypeLoadBalancer {
+		log.InfoD("portworx service is already of type LoadBalancer")
+		return nil
+	}
+
+	storageDriverName := flag.Lookup("storage-driver").Value.(flag.Getter).Get().(string)
+	log.Infof("Storage driver name: %v", storageDriverName)
+
+	if storageDriverName == storkdriver.PortworxDriverName {
+		stc, err := operator.Instance().ListStorageClusters(pxNamespace)
+		if err != nil {
+			return fmt.Errorf("failed to list PX storage cluster on EKS/AKS/GKE: %v", err)
+		}
+		if len(stc.Items) > 0 {
+			pxStc := (*stc).Items[0]
+			// Change portworx service to LoadBalancer, since this is an EKS/AKS/GKE with PX operator install for Portworx
+			if pxStc.ObjectMeta.Annotations == nil {
+				pxStc.ObjectMeta.Annotations = make(map[string]string)
+			}
+			pxStc.ObjectMeta.Annotations[pxStcServiceTypeKey] = stcLoadBalancerValue
+
+			if internalLB {
+				// Add LoadBalancer annotations specific to EKS ELB
+				if pxStc.Spec.Metadata == nil {
+					pxStc.Spec.Metadata = &opcorev1.Metadata{}
+					pxStc.Spec.Metadata.Annotations = make(map[string]map[string]string)
+					pxStc.Spec.Metadata.Annotations[pxStcServiceKey] = make(map[string]string)
+				}
+				if pxStc.Spec.Metadata.Annotations == nil {
+					pxStc.Spec.Metadata.Annotations = make(map[string]map[string]string)
+				}
+				pxStc.Spec.Metadata.Annotations[pxStcServiceKey] = make(map[string]string)
+				pxStc.Spec.Metadata.Annotations[pxStcServiceKey][awsInternalLBKey] = awsInternalLBValue
+				pxStc.Spec.Metadata.Annotations[pxStcServiceKey][awsLBTypeKey] = awsLBTypeVal
+				pxStc.Spec.Metadata.Annotations[pxStcServiceKey][awsNLBTargetTypeKey] = awsNLBTargetTypeVal
+				pxStc.Spec.Metadata.Annotations[pxStcServiceKey][awsLBSubnetKey] = os.Getenv("LB_SUBNET_KEY")
+			}
+			_, err = operator.Instance().UpdateStorageCluster(&pxStc)
+
+			if err != nil {
+				return fmt.Errorf("failed to update PX service type to LoadBalancer on EKS: %v", err)
+			}
+
+		} else {
+			return fmt.Errorf("No storage clusters found")
+		}
+
+		time.Sleep(1 * time.Minute)
+
+		// Check if service has been changed to type loadbalancer
+		pxService, err := core.Instance().GetService(pxServiceName, pxNamespace)
+		if err != nil {
+			return fmt.Errorf("failed to get portworx service after changing it to load balancer: %v", err)
+		}
+		if pxService.Spec.Type != v1.ServiceTypeLoadBalancer {
+			return fmt.Errorf("failed to set portworx service to type %s", v1.ServiceTypeLoadBalancer)
+		}
+
+	}
+	return nil
+}
+
+func IsCloud() (bool, string) {
+	stc, err := operator.Instance().ListStorageClusters("kube-system")
+	if len(stc.Items) > 0 && err == nil {
+		log.InfoD("Storage cluster name: %s", stc.Items[0].Name)
+		if len(stc.Items) > 0 {
+			if oputils.IsEKS(&stc.Items[0]) {
+				log.InfoD("EKS installation detected.")
+				return true, "eks"
+			} else if oputils.IsAKS(&stc.Items[0]) {
+				log.InfoD("AKS installation detected.")
+				return true, "aks"
+			} else if oputils.IsGKE(&stc.Items[0]) {
+				log.InfoD("GKE installation detected.")
+				return true, "gke"
+			}
+		}
+	}
+	return false, ""
 }

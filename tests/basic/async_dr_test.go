@@ -45,8 +45,10 @@ const (
 	defaultClusterPairDirNew  = "cluster-pair-new"
 	defaultClusterPairName    = "remoteclusterpair"
 	defaultClusterPairNameNew = "remoteclusterpairnew"
-	defaultBackupLocation     = "s3"
-	defaultSecret             = "s3secret"
+	azureSecret               = "azuresecret"
+	azureBackupLocation       = "azure"
+	googleSecret              = "googlesecret"
+	googleBackupLocation      = "google"
 	defaultMigSchedName       = "automation-migration-schedule-"
 	migrationKey              = "async-dr-"
 	migrationSchedKey         = "mig-sched-"
@@ -55,7 +57,9 @@ const (
 )
 
 var (
-	kubeConfigWritten bool
+	kubeConfigWritten     bool
+	defaultBackupLocation = "s3"
+	defaultSecret         = "s3secret"
 )
 
 type failoverFailbackParam struct {
@@ -647,6 +651,36 @@ var _ = Describe("{StorkctlPerformFailoverFailbackeckEsClusterwide}", func() {
 	})
 })
 
+var _ = Describe("{ChangePXSvc}", func() {
+	// testrailID = 297921
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/297921
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+
+	// JustBeforeEach(func() {
+	// 	StartTorpedoTest("Change PX Svc", "Change PX Svc", nil, testrailID)
+	// 	runID = testrailuttils.AddRunsToMilestone(testrailID)
+	// })
+
+	It("Change PX service type", func() {
+		Step("Change PX service type", func() {
+			err := asyncdr.ChangePxServiceToLoadBalancer(false)
+			log.Infof("Error is: %v", err)
+		})
+	})
+
+	// JustAfterEach(func() {
+	// 	defer EndTorpedoTest()
+	// 	AfterEachTest(contexts, testrailID, runID)
+	// })
+})
+
 var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", func() {
 	BeforeEach(func() {
 		if !kubeConfigWritten {
@@ -676,7 +710,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", func() {
 			backupName         = "storkbackup-" + time.Now().Format("15h03m05s")
 			taskNamePrefix     = "appbkprest-upgradepx"
 			defaultNs          = "kube-system"
-			timeout            = 10 * time.Minute	
+			timeout            = 10 * time.Minute
 		)
 		bkpNs, contexts := initialSetupApps(taskNamePrefix, true)
 		storageNodes := node.GetStorageNodes()
@@ -806,7 +840,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", func() {
 			kubeConfigPath[cluster], err = GetCustomClusterConfigPath(cluster)
 			log.FailOnError(err, "Getting error while fetching path for %v cluster, error is %v", cluster, err)
 		}
-		
+
 		var migrationSchedName string
 		var schdPol *storkapi.SchedulePolicy
 		cpName := defaultClusterPairName + time.Now().Format("15h03m05s")
@@ -1010,14 +1044,48 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 		"namespaces": migNamespaces,
 		"kubeconfig": kubeConfigPathSrc,
 	}
+
+	isCloud, cloudName := asyncdr.IsCloud()
+
+	if isCloud {
+		if err = asyncdr.ChangePxServiceToLoadBalancer(false); err != nil {
+			log.FailOnError(err, "failed to change PX service to LoadBalancer on source cluster")
+		}
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "Failed to set destination kubeconfig")
+		if err = asyncdr.ChangePxServiceToLoadBalancer(false); err != nil {
+			log.FailOnError(err, "failed to change PX service to LoadBalancer on destination cluster")
+		}
+		err = SetSourceKubeConfig()
+		log.FailOnError(err, "Failed to set source kubeconfig")
+	}
+
+	if cloudName == "aks" {
+		defaultSecret = azureSecret
+		defaultBackupLocation = azureBackupLocation
+	} else if cloudName == "gke" {
+		defaultSecret = googleSecret
+		defaultBackupLocation = googleBackupLocation
+	}
+
 	log.Infof("Creating clusterpair between first and second cluster")
 	cpName := defaultClusterPairName + time.Now().Format("15h03m05s")
+
 	if clusterType == "asyncdr" {
 		err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster)
 	} else {
 		err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", "", "", "sync-dr", asyncdr.FirstCluster, asyncdr.SecondCluster)
 	}
+
 	log.FailOnError(err, "Failed creating bidirectional cluster pair")
+
+	if isCloud {
+		err := patchClusterPair(cpName, defaultNs, kubeConfigPathSrc)
+		log.FailOnError(err, "Failed patching cluster pair")
+		err = patchClusterPair(cpName, defaultNs, kubeConfigPathDest)
+		log.FailOnError(err, "Failed patching cluster pair")
+	}
+
 	log.Infof("Start migration schedule and perform failover")
 	migrationSchedName := migrationSchedKey + time.Now().Format("15h03m05s")
 	createMigSchdAndValidateMigration(migrationSchedName, cpName, defaultNs, kubeConfigPathSrc, extraArgs)
@@ -1580,6 +1648,18 @@ func patchStashStrategy(crName string) error {
 		return err
 	}
 	cmd := fmt.Sprintf(`kubectl patch applicationregistration %v --type='json' -p='%s'`, crName, string(patchBytes))
+	log.Infof("Running command: %v", cmd)
+	_, err = exec.Command("sh", "-c", cmd).CombinedOutput()
+	if err != nil {
+		log.Infof("Error running command: %v and err is: %v", cmd, err)
+		return err
+	}
+	return nil
+}
+
+func patchClusterPair(cpName, cpNs, configPath string) error {
+	patch := []byte(`[{"op": "remove", "path": "/spec/options/mode"}]`)
+	cmd := fmt.Sprintf(`kubectl --kubeconfig %v patch clusterpair %v -n %v --type='json' -p='%s'`, configPath, cpName, cpNs, string(patch))
 	log.Infof("Running command: %v", cmd)
 	_, err = exec.Command("sh", "-c", cmd).CombinedOutput()
 	if err != nil {
