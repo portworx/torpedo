@@ -2,8 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/torpedo/drivers"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -24,15 +24,20 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
+const (
+	defaultTorpedoNamespace = "default"
+)
+
 // This testcase verifies alternating backups between locked and unlocked bucket
 var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", Label(TestCaseLabelsMap[BackupAlternatingBetweenLockedAndUnlockedBuckets]...), func() {
 	var (
-		appList          = Inst().AppList
-		credName         string
-		restoreNames     []string
-		controlChannel   chan string
-		errorGroup       *errgroup.Group
-		cloudCredentials map[string]string
+		appList              = Inst().AppList
+		credName             string
+		restoreNames         []string
+		controlChannel       chan string
+		errorGroup           *errgroup.Group
+		cloudCredentialNames = make(map[Mode]string)
+		cloudCredentialUids  = make(map[Mode]string)
 	)
 	var preRuleNameList []string
 	var postRuleNameList []string
@@ -111,7 +116,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", Label(Tes
 					err := CreateCloudCredential(provider, credName, CloudCredUID, BackupOrgID, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, BackupOrgID, provider))
 				} else if provider == drivers.ProviderAzure {
-					cloudCredentials, err = CreateAzureCredentialsForImmutableBackupLocations(ctx, false)
+					cloudCredentialNames, cloudCredentialUids, err = CreateAzureCredentialsForImmutableBackupLocations(ctx, false)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credentials"))
 					credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
 					CloudCredUID = uuid.New()
@@ -138,14 +143,10 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", Label(Tes
 						BackupLocationMap[BackupLocationUID] = backupLocation
 					}
 				} else if drivers.ProviderAzure == provider {
-					modes := reflect.ValueOf(bucketMap).MapKeys()
-					credentials := reflect.ValueOf(cloudCredentials).MapKeys()
-					dash.VerifyFatal(len(modes), len(credentials), "Checking if length of creds and modes are same or not")
-					for i := 0; i < len(modes); i++ {
-						mode := modes[i].String()
-						bucketName := bucketMap[mode]
-						lockedCredName := credentials[i].String()
-						lockedCredUid := cloudCredentials[lockedCredName]
+					for _, mode := range [2]Mode{SA_level, Container_level} {
+						bucketName := bucketMap[string(mode)]
+						lockedCredName := cloudCredentialNames[mode]
+						lockedCredUid := cloudCredentialUids[mode]
 						backupLocation = fmt.Sprintf("%s%v", getGlobalLockedBucketName(provider), time.Now().Unix())
 						BackupLocationUID = uuid.New()
 						err = CreateAzureBackupLocation(backupLocation, BackupLocationUID, lockedCredName, lockedCredUid, bucketName, BackupOrgID, true, true)
@@ -263,7 +264,8 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", Label(TestCaseLabelsMap
 		restoreNames         []string
 		controlChannel       chan string
 		errorGroup           *errgroup.Group
-		cloudCredentials     map[string]string
+		cloudCredentialNames = make(map[Mode]string)
+		cloudCredentialUids  = make(map[Mode]string)
 	)
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
@@ -342,7 +344,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", Label(TestCaseLabelsMap
 					err := CreateCloudCredential(provider, credName, CloudCredUID, BackupOrgID, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, BackupOrgID, provider))
 				} else if provider == drivers.ProviderAzure {
-					cloudCredentials, err = CreateAzureCredentialsForImmutableBackupLocations(ctx, false)
+					cloudCredentialNames, cloudCredentialUids, err = CreateAzureCredentialsForImmutableBackupLocations(ctx, false)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credentials"))
 
 				}
@@ -364,14 +366,10 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", Label(TestCaseLabelsMap
 						BackupLocationMap[BackupLocationUID] = backupLocation
 					}
 				} else if drivers.ProviderAzure == provider {
-					modes := reflect.ValueOf(bucketMap).MapKeys()
-					credentials := reflect.ValueOf(cloudCredentials).MapKeys()
-					dash.VerifyFatal(len(modes), len(credentials), "Checking if length of creds and modes are same or not")
-					for i := 0; i < len(modes); i++ {
-						mode := modes[i].String()
-						bucketName := bucketMap[mode]
-						lockedCredName := credentials[i].String()
-						lockedCredUid := cloudCredentials[lockedCredName]
+					for _, mode := range [2]Mode{SA_level, Container_level} {
+						bucketName := bucketMap[string(mode)]
+						lockedCredName := cloudCredentialNames[mode]
+						lockedCredUid := cloudCredentialUids[mode]
 						backupLocation = fmt.Sprintf("%s%v", getGlobalLockedBucketName(provider), time.Now().Unix())
 						BackupLocationUID = uuid.New()
 						err = CreateAzureBackupLocation(backupLocation, BackupLocationUID, lockedCredName, lockedCredUid, bucketName, BackupOrgID, true, true)
@@ -541,7 +539,8 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", Label(TestCaseLab
 		podList                    []v1.Pod
 		controlChannel             chan string
 		errorGroup                 *errgroup.Group
-		cloudCredentials           map[string]string
+		cloudCredentailNames       = make(map[Mode]string)
+		cloudCredentailUids        = make(map[Mode]string)
 	)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
@@ -612,7 +611,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", Label(TestCaseLab
 					err := CreateCloudCredential(provider, credName, CloudCredUID, BackupOrgID, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, BackupOrgID, provider))
 				} else if provider == drivers.ProviderAzure {
-					cloudCredentials, err = CreateAzureCredentialsForImmutableBackupLocations(ctx, false)
+					cloudCredentailNames, cloudCredentailUids, err = CreateAzureCredentialsForImmutableBackupLocations(ctx, false)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credentials"))
 				}
 			}
@@ -632,14 +631,10 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", Label(TestCaseLab
 						backupLocationMap[BackupLocationUID] = backupLocation
 					}
 				} else if drivers.ProviderAzure == provider {
-					modes := reflect.ValueOf(bucketMap).MapKeys()
-					credentials := reflect.ValueOf(cloudCredentials).MapKeys()
-					dash.VerifyFatal(len(modes), len(credentials), "Checking if length of creds and modes are same or not")
-					for i := 0; i < len(modes); i++ {
-						mode := modes[i].String()
-						bucketName := bucketMap[mode]
-						lockedCredName := credentials[i].String()
-						lockedCredUid := cloudCredentials[lockedCredName]
+					for _, mode := range [2]Mode{SA_level, Container_level} {
+						bucketName := bucketMap[string(mode)]
+						lockedCredName := cloudCredentailNames[mode]
+						lockedCredUid := cloudCredentailUids[mode]
 						backupLocation = fmt.Sprintf("%s%v", getGlobalLockedBucketName(provider), time.Now().Unix())
 						BackupLocationUID = uuid.New()
 						err = CreateAzureBackupLocation(backupLocation, BackupLocationUID, lockedCredName, lockedCredUid, bucketName, BackupOrgID, true, true)
@@ -977,7 +972,7 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", Label(TestCaseLabel
 				log.FailOnError(err, "failed to fetch user %s ctx", user)
 				var wg sync.WaitGroup
 				var mu sync.RWMutex
-				userRestoreMap[user] = make(map[string]string, 0)
+				userRestoreMap[user] = make(map[string]string)
 				createRestore := func(backupName string, restoreName string, namespace string) {
 					defer GinkgoRecover()
 					defer wg.Done()
@@ -1190,7 +1185,8 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", Label(TestCaseLabels
 		clusterUid            string
 		scheduleList          []string
 		clusterStatus         api.ClusterInfo_StatusInfo_Status
-		cloudCredentials      map[string]string
+		cloudCredentialNames  = make(map[Mode]string)
+		cloudCredentalUids    = make(map[Mode]string)
 		labelSelectors        = make(map[string]string)
 		CloudCredUIDMap       = make(map[string]string)
 		BackupLocationMap     = make(map[string]string)
@@ -1280,7 +1276,7 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", Label(TestCaseLabels
 					err := CreateCloudCredential(provider, credName, CloudCredUID, BackupOrgID, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, BackupOrgID, provider))
 				} else if provider == drivers.ProviderAzure {
-					cloudCredentials, err = CreateAzureCredentialsForImmutableBackupLocations(ctx, false)
+					cloudCredentialNames, cloudCredentalUids, err = CreateAzureCredentialsForImmutableBackupLocations(ctx, false)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credentials"))
 
 				}
@@ -1302,14 +1298,10 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", Label(TestCaseLabels
 						BackupLocationMap[BackupLocationUID] = backupLocation
 					}
 				} else if drivers.ProviderAzure == provider {
-					modes := reflect.ValueOf(bucketMap).MapKeys()
-					credentials := reflect.ValueOf(cloudCredentials).MapKeys()
-					dash.VerifyFatal(len(modes), len(credentials), "Checking if length of creds and modes are same or not")
-					for i := 0; i < len(modes); i++ {
-						mode := modes[i].String()
-						bucketName := bucketMap[mode]
-						lockedCredName := credentials[i].String()
-						lockedCredUid := cloudCredentials[lockedCredName]
+					for _, mode := range [2]Mode{SA_level, Container_level} {
+						bucketName := bucketMap[string(mode)]
+						lockedCredName := cloudCredentialNames[mode]
+						lockedCredUid := cloudCredentalUids[mode]
 						backupLocation = fmt.Sprintf("%s%v", getGlobalLockedBucketName(provider), time.Now().Unix())
 						BackupLocationUID = uuid.New()
 						err = CreateAzureBackupLocation(backupLocation, BackupLocationUID, lockedCredName, lockedCredUid, bucketName, BackupOrgID, true, true)
@@ -1509,5 +1501,612 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", Label(TestCaseLabels
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cluster [%s] of the user %s", clusterName, customUser))
 			}
 		}
+	})
+})
+
+// reconstructBackupNsMap reconstruct
+func reconstructBackupNsMap(baackupNames, Namespaces []string) map[string]string {
+	backupMap := make(map[string]string)
+	if len(baackupNames) != len(Namespaces) {
+		return backupMap
+	}
+	for index := 0; index < len(baackupNames); index++ {
+		backupMap[baackupNames[index]] = Namespaces[index]
+	}
+	return backupMap
+}
+
+// VerifyBackupDeletionWhenRetentionIsMet checks if the backup is deleted when the retention is met
+var _ = Describe("{VerifyBackupDeletionWhenRetentionIsMet}", Label(TestCaseLabelsMap[VerifyBackupDeletionWhenRetentionIsMet]...), func() {
+	var (
+		preRuleNameList                []string
+		postRuleNameList               []string
+		credName                       string
+		schedulePolicyNames            []string
+		scheduledAppContexts           []*scheduler.Context
+		backupLocation                 string
+		cloudCredentialNames           = make(map[Mode]string)
+		cloudCredentialUids            = make(map[Mode]string)
+		CloudCredUIDMap                = make(map[string]string)
+		BackupLocationMap              = make(map[string]string)
+		BackupLocationMapCustom        = make(map[string]string)
+		bkpNamespaces                  = make([]string, 0)
+		appList                        = Inst().AppList
+		backupNames                    []string
+		backupNSMap                    = make(map[string]string)
+		userName                       []string
+		scheduleList                   []string
+		restoreNames                   []string
+		storageClassMapping            = make(map[string]string)
+		data                           = make(map[string]string)
+		scheduleNameListWithAutoDelete []string
+		scheduleNameListNonDelete      []string
+		backupNamesToDelete            []string
+		customBuckets                  []string
+	)
+	numberOfUsers := 100
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyBackupDeletionWhenRetentionIsMet", "Verify Backup Deletion when retention is met", nil, 300679, Kshithijiyer, Q3FY25)
+
+		log.InfoD("Deploy applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		scale := 4
+		if Inst().GlobalScaleFactor > scale {
+			scale = Inst().GlobalScaleFactor
+		}
+		for i := 0; i < scale; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = AppReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+	})
+	It("Verify Backup Deletion when retention is met", func() {
+
+		providers := GetBackupProviders()
+
+		Step("Validate applications", func() {
+			log.InfoD("Validating apps")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Creating rules for backup", func() {
+			log.InfoD("Creating pre rule for deployed apps")
+			for i := 0; i < len(appList); i++ {
+				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], BackupOrgID, "pre")
+				log.FailOnError(err, "Creating pre rule for deployed apps failed")
+				dash.VerifyFatal(preRuleStatus, true, fmt.Sprintf("Verifying pre rule %s for backup", ruleName))
+				if ruleName != "" {
+					preRuleNameList = append(preRuleNameList, ruleName)
+				}
+			}
+
+			log.InfoD("Creating post rule for deployed apps")
+			for i := 0; i < len(appList); i++ {
+				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], BackupOrgID, "post")
+				log.FailOnError(err, "Creating post rule for deployed apps failed")
+				dash.VerifyFatal(postRuleStatus, true, fmt.Sprintf("Verifying post rule %s for backup", ruleName))
+				if ruleName != "" {
+					postRuleNameList = append(postRuleNameList, ruleName)
+				}
+			}
+		})
+
+		Step(fmt.Sprintf("Create a schedule policy with and without auto delete enabled"), func() {
+			log.InfoD("Create a schedule policy with and without auto delete enabled")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "failed to fetch px-admin ctx")
+			for _, autoDelete := range []bool{true, false} {
+				periodicSchedulePolicyName := fmt.Sprintf("%s-%v-auto-%v", "periodic", RandomString(5), autoDelete)
+				periodicSchedulePolicyUid := uuid.New()
+				err = CreateBackupScheduleIntervalPolicy(5, int64(15), 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, ctx, true, autoDelete)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s]", int64(15), periodicSchedulePolicyName))
+				schedulePolicyNames = append(schedulePolicyNames, periodicSchedulePolicyName)
+			}
+		})
+
+		Step("Creating cloud credentials", func() {
+			log.InfoD("Creating cloud credentials")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				if provider == drivers.ProviderAws {
+					credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+					CloudCredUID = uuid.New()
+					CloudCredUIDMap[CloudCredUID] = credName
+					err := CreateCloudCredential(provider, credName, CloudCredUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, BackupOrgID, provider))
+				} else if provider == drivers.ProviderAzure {
+					cloudCredentialNames, cloudCredentialUids, err = CreateAzureCredentialsForImmutableBackupLocations(ctx, false)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, BackupOrgID, provider))
+					credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+					CloudCredUID = uuid.New()
+					CloudCredUIDMap[CloudCredUID] = credName
+					err = CreateCloudCredential(provider, credName, CloudCredUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, BackupOrgID, provider))
+
+				}
+			}
+		})
+
+		Step("Creating a locked bucket and backup location", func() {
+			log.InfoD("Creating locked buckets and backup location")
+			for _, provider := range providers {
+				bucketMap, err := CreateLockedBucket(provider, 3, false)
+				dash.VerifyFatal(err, nil, "Check if locked buckets are created or not")
+				if drivers.ProviderAws == provider {
+					for mode, bucketName := range bucketMap {
+						backupLocation = fmt.Sprintf("%s-%s-lock-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
+						BackupLocationUID = uuid.New()
+						err = CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID, bucketName, BackupOrgID, "", true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+						BackupLocationMap[BackupLocationUID] = backupLocation
+					}
+				} else if drivers.ProviderAzure == provider {
+					for _, mode := range [2]Mode{SA_level, Container_level} {
+						bucketName := bucketMap[string(mode)]
+						lockedCredName := cloudCredentialNames[mode]
+						lockedCredUid := cloudCredentialUids[mode]
+						backupLocation = fmt.Sprintf("%s-%s-lock-%v", getGlobalLockedBucketName(provider), strings.Split(string(mode), "_")[0], time.Now().Unix())
+						BackupLocationUID = uuid.New()
+						err = CreateAzureBackupLocation(backupLocation, BackupLocationUID, lockedCredName, lockedCredUid, bucketName, BackupOrgID, true, true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+						BackupLocationMap[BackupLocationUID] = backupLocation
+					}
+				}
+			}
+			log.InfoD("Successfully created locked buckets and backup location")
+		})
+
+		Step("Adding Clusters for backup", func() {
+			log.InfoD("Adding Clusters for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating source - %s and destination - %s clusters", SourceClusterName, DestinationClusterName))
+			for _, cluster := range []string{SourceClusterName, DestinationClusterName} {
+				clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, cluster, ctx)
+				log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", cluster))
+				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", cluster))
+				_, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, cluster)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", cluster))
+			}
+		})
+
+		Step("Taking backup of all the namespaces created and checking if all of them or full backup or not", func() {
+			log.InfoD("Taking backup of all the namespaces created and checking if all of them or full backup or not")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			var wg sync.WaitGroup
+			var mutex sync.Mutex
+			var sem = make(chan struct{}, 10)
+			labelSelectors := make(map[string]string)
+			sourceClusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", sourceClusterUid))
+			for backupLocationUID, backupLocationName := range BackupLocationMap {
+				for _, namespace := range bkpNamespaces {
+					wg.Add(1)
+					sem <- struct{}{}
+					backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, RandomString(10))
+					go func(namespace, backupLocationName, backupLocationUID string) {
+						defer wg.Done()
+						defer GinkgoRecover()
+						defer func() { <-sem }()
+						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+						preRuleUid, preRule := "", ""
+						if len(preRuleNameList) > 0 {
+							preRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleNameList[0])
+							log.FailOnError(err, "Fetching pre backup rule [%s] uid", preRuleNameList[0])
+							preRule = preRuleNameList[0]
+						}
+						postRuleUid, postRule := "", ""
+						if len(postRuleNameList) > 0 {
+							postRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleNameList[0])
+							log.FailOnError(err, "Fetching post backup rule [%s] uid", postRuleNameList[0])
+							postRule = postRuleNameList[0]
+						}
+						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, sourceClusterUid, preRule, preRuleUid, postRule, postRuleUid)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] of namespace [%s]", backupName, namespace))
+						check, err := IsAllVolumesBackupFull(ctx, backupName, BackupOrgID)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Check if backup [%s] is full or not", backupName))
+						dash.VerifyFatal(check, true, fmt.Sprintf("Check if backup [%s] is full or not", backupName))
+						mutex.Lock()
+						backupNames = append(backupNames, backupName)
+						backupNSMap[backupName] = namespace
+						mutex.Unlock()
+					}(namespace, backupLocationName, backupLocationUID)
+				}
+			}
+			wg.Wait()
+		})
+
+		Step("Create users on the backup cluster", func() {
+			log.InfoD("Create users")
+			userName = CreateUsers(numberOfUsers)
+			log.Infof("Created %v users and users list is %v", numberOfUsers, userName)
+		})
+
+		Step("Create new storage class for restore", func() {
+			log.InfoD("Getting storage class of the source cluster")
+			err := SetDestinationKubeConfig()
+			dash.VerifyFatal(err, nil, "Setting destination kubeconfig")
+			pvcs, err := core.Instance().GetPersistentVolumeClaims(bkpNamespaces[0], make(map[string]string))
+			log.FailOnError(err, "Getting PVC on source cluster")
+			for _, singlePvc := range pvcs.Items {
+				storageClass, err := core.Instance().GetStorageClassForPVC(&singlePvc)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting SC %v from PVC in source cluster",
+					storageClass.Name))
+				oldScName := storageClass.Name
+				storageClass.Name += "-new-sc"
+				_, err = storage.Instance().CreateStorageClass(storageClass)
+				log.FailOnError(err, "Creating sc on dest cluster")
+				storageClassMapping[oldScName] = storageClass.Name
+			}
+			err = SetSourceKubeConfig()
+			dash.VerifyFatal(err, nil, "Setting source kubeconfig")
+		})
+
+		Step("Share and update the backup ownership with a set of users and check if retentionTimestamp is updated or not", func() {
+			log.InfoD("Share and update the backup ownership with a set of users and check if retentionTimestamp is updated or not")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "failed to fetch px-admin ctx")
+			for backupName := range backupNSMap {
+				oldTimeStamp, err := GetRetentionTimeStamp(ctx, backupName, BackupOrgID)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Checking if retention timestamp is updated for backup [%s]", backupName))
+
+				err = ShareBackup(backupName, nil, userName, FullAccess, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Share backup %s with  user %s having FullAccess", backupName, userName))
+
+				check, err := IsRetentionTimestampUpdated(ctx, backupName, BackupOrgID, oldTimeStamp)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Checking if retention timestamp is updated for backup [%s]", backupName))
+				dash.VerifyFatal(check, false, fmt.Sprintf("Check if retention timestamp is updated for backup [%s]", backupName))
+
+				err = UpdateBackupWithLabel(ctx, backupName, BackupOrgID, "backup-update", "retentionTimeStamp")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Updating backup [%s] with labels", backupName))
+
+				check, err = IsRetentionTimestampUpdated(ctx, backupName, BackupOrgID, oldTimeStamp)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Checking if retention timestamp is updated for backup [%s]", backupName))
+				dash.VerifyFatal(check, false, fmt.Sprintf("Check if retention timestamp is updated for backup [%s]", backupName))
+			}
+		})
+		Step("Setup Schedules for all namespaces", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "failed to fetch px-admin ctx")
+			if len(bkpNamespaces)%4 == 0 {
+				start := 0
+				partSize := len(bkpNamespaces) / 4
+				for backupLocationUID, backupLocationName := range BackupLocationMap {
+					for _, schedulePolicyName := range schedulePolicyNames {
+						scheduleName := fmt.Sprintf("backup-schedule-%v-%s", time.Now().Unix(), backupLocationName)
+						preRuleUid, preRule := "", ""
+						if len(preRuleNameList) > 0 {
+							preRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleNameList[0])
+							log.FailOnError(err, "Fetching pre backup rule [%s] uid", preRuleNameList[0])
+							preRule = preRuleNameList[0]
+						}
+						postRuleUid, postRule := "", ""
+						if len(postRuleNameList) > 0 {
+							postRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleNameList[0])
+							log.FailOnError(err, "Fetching post backup rule [%s] uid", postRuleNameList[0])
+							postRule = postRuleNameList[0]
+						}
+						schedulePolicyUid, err := Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, schedulePolicyName)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Getting schedulepolicy object for  - %s", schedulePolicyName))
+						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces[start:start+partSize])
+						_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), BackupOrgID, preRule, preRuleUid, postRule, postRuleUid, schedulePolicyName, schedulePolicyUid)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", schedulePolicyName))
+						scheduleList = append(scheduleList, scheduleName)
+						autoDeleteEnabled, err := IsSchedulePolicyAutoDelete(schedulePolicyName, BackupOrgID, schedulePolicyUid, ctx)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Checking if auto delete is enabled for schedule policy [%s]", schedulePolicyName))
+						if autoDeleteEnabled {
+							scheduleNameListWithAutoDelete = append(scheduleNameListWithAutoDelete, scheduleName)
+						} else {
+							scheduleNameListNonDelete = append(scheduleNameListNonDelete, scheduleName)
+						}
+						start += partSize
+					}
+				}
+			} else {
+				log.InfoD("The number of namespaces isn't divisible by 4, hence skipping the step")
+			}
+		})
+
+		Step("Restoring the manual and scheduled backup with NS mapping on the same cluster", func() {
+			log.InfoD("Restoring manual backup on the same cluster with NS mapping")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for backupName, namespace := range backupNSMap {
+				restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				customNamespace := fmt.Sprintf("%s-%d", namespace, time.Now().Unix())
+				namespaceMapping := map[string]string{namespace: customNamespace}
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), SourceClusterName, BackupOrgID, appContextsToBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
+				restoreNames = append(restoreNames, restoreName)
+			}
+			log.InfoD("Restoring schedule backup on the same cluster with NS mapping")
+			start := 0
+			partSize := len(bkpNamespaces) / 4
+			for _, scheduleName := range scheduleList {
+				firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, BackupOrgID)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces[start:start+partSize])
+				restoreName := fmt.Sprintf("%s-restore-%v", firstScheduleBackupName, time.Now().Unix())
+				namespaceMapping := make(map[string]string)
+				for _, namespace := range bkpNamespaces[start : start+partSize] {
+					customNamespace := fmt.Sprintf("%s-%d", namespace, time.Now().Unix())
+					namespaceMapping[namespace] = customNamespace
+				}
+				err = CreateRestoreWithValidation(ctx, restoreName, firstScheduleBackupName, namespaceMapping, make(map[string]string), SourceClusterName, BackupOrgID, appContextsToBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
+				restoreNames = append(restoreNames, restoreName)
+				start += partSize
+			}
+		})
+
+		Step("Restoring backups with namespace and storage class mapping", func() {
+			log.InfoD("Restoring manual backups with namespace and storage class mapping")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for backupName, namespace := range backupNSMap {
+				restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				customNamespace := fmt.Sprintf("%s-%d", namespace, time.Now().Unix())
+				namespaceMapping := map[string]string{namespace: customNamespace}
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, appContextsToBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
+				restoreNames = append(restoreNames, restoreName)
+			}
+			log.InfoD("Restoring schedule backups with namespace and storage class mapping")
+			ctx, err = backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			start := 0
+			partSize := len(bkpNamespaces) / 4
+			for _, scheduleName := range scheduleList {
+				firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, BackupOrgID)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces[start:start+partSize])
+				restoreName := fmt.Sprintf("%s-restore-%v", firstScheduleBackupName, time.Now().Unix())
+				namespaceMapping := make(map[string]string)
+				for _, namespace := range bkpNamespaces[start : start+partSize] {
+					customNamespace := fmt.Sprintf("%s-%d", namespace, time.Now().Unix())
+					namespaceMapping[namespace] = customNamespace
+				}
+				err = CreateRestoreWithValidation(ctx, restoreName, firstScheduleBackupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, appContextsToBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
+				restoreNames = append(restoreNames, restoreName)
+				start += partSize
+			}
+		})
+
+		Step("Restore from default ns with replace backup", func() {
+			log.InfoD("Restore from schedule backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "failed to fetch px-admin ctx")
+			start := 0
+			partSize := len(bkpNamespaces) / 4
+			for _, scheduleName := range scheduleList {
+				firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, BackupOrgID)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces[start:start+partSize])
+				restoreName := fmt.Sprintf("%s-restore-%v-%s", firstScheduleBackupName, time.Now().Unix(), SourceClusterName)
+				err = CreateRestoreWithReplacePolicyWithValidation(restoreName, firstScheduleBackupName, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete, appContextsToBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
+				restoreNames = append(restoreNames, restoreName)
+				start += partSize
+			}
+			log.InfoD("Restore from manual backup")
+			for backupName, namespace := range backupNSMap {
+				restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				customNamespace := fmt.Sprintf("%s-%d-rest", namespace, time.Now().Unix())
+				err = CreateRestoreWithReplacePolicyWithValidation(customNamespace, backupName, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete, appContextsToBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
+				restoreNames = append(restoreNames, restoreName)
+			}
+		})
+
+		Step("Creating a locked bucket and backup location", func() {
+			log.InfoD("Creating locked buckets and backup location")
+			bucketMap := make(map[string]string)
+			for _, provider := range providers {
+				if drivers.ProviderAws == provider {
+					modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
+					for _, mode := range modes {
+						bucketName := fmt.Sprintf("custom-bucket-%s-%v", strings.ToLower(mode), time.Now().Unix())
+						customBuckets = append(customBuckets, bucketName)
+						err := CreateS3Bucket(bucketName, true, 3, mode)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Check if bucket %s is created or not", bucketName))
+						bucketMap[mode] = bucketName
+					}
+				} else if drivers.ProviderAzure == provider {
+					modes := [2]Mode{SA_level, Container_level}
+					for _, mode := range modes {
+						bucketName := fmt.Sprintf("custom-bucket-%v", RandomString(10))
+						customBuckets = append(customBuckets, bucketName)
+						CreateAzureBucket(bucketName, true, mode, 3, false)
+						bucketMap[string(mode)] = bucketName
+					}
+				}
+			}
+			for _, provider := range providers {
+				if drivers.ProviderAws == provider {
+					modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
+					for _, mode := range modes {
+						backupLocation = fmt.Sprintf("custom-bucket-%s-lock-%v", strings.ToLower(mode), time.Now().Unix())
+						BackupLocationUID = uuid.New()
+						bucketName := bucketMap[mode]
+						err := CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID, bucketName, BackupOrgID, "", true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+						BackupLocationMapCustom[BackupLocationUID] = backupLocation
+					}
+				} else if drivers.ProviderAzure == provider {
+					for _, mode := range [2]Mode{SA_level, Container_level} {
+						lockedCredName := cloudCredentialNames[mode]
+						lockedCredUid := cloudCredentialUids[mode]
+						bucketName := bucketMap[string(mode)]
+						backupLocation = fmt.Sprintf("custom-bucket-%s-lock-%v", strings.Split(string(mode), "_")[0], time.Now().Unix())
+						BackupLocationUID = uuid.New()
+						err := CreateAzureBackupLocation(backupLocation, BackupLocationUID, lockedCredName, lockedCredUid, bucketName, BackupOrgID, true, true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+						BackupLocationMapCustom[BackupLocationUID] = backupLocation
+					}
+				}
+			}
+			log.InfoD("Successfully created locked buckets and backup location")
+		})
+
+		Step("Taking backup of all the namespaces created to custom bucket to check for delete", func() {
+			log.InfoD("Taking backup of all the namespaces created to custom bucket to check for delete")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			var wg sync.WaitGroup
+			var mutex sync.Mutex
+			labelSelectors := make(map[string]string)
+			sourceClusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", sourceClusterUid))
+			for backupLocationUID, backupLocationName := range BackupLocationMapCustom {
+				for _, namespace := range bkpNamespaces {
+					wg.Add(1)
+					go func(namespace string) {
+						defer wg.Done()
+						defer GinkgoRecover()
+						backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, RandomString(10))
+						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+						preRuleUid, preRule := "", ""
+						if len(preRuleNameList) > 0 {
+							preRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleNameList[0])
+							log.FailOnError(err, "Fetching pre backup rule [%s] uid", preRuleNameList[0])
+							preRule = preRuleNameList[0]
+						}
+						postRuleUid, postRule := "", ""
+						if len(postRuleNameList) > 0 {
+							postRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleNameList[0])
+							log.FailOnError(err, "Fetching post backup rule [%s] uid", postRuleNameList[0])
+							postRule = postRuleNameList[0]
+						}
+						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, sourceClusterUid, preRule, preRuleUid, postRule, postRuleUid)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] of namespace [%s]", backupName, namespace))
+
+						mutex.Lock()
+						backupNamesToDelete = append(backupNamesToDelete, backupName)
+						backupNSMap[backupName] = namespace
+						mutex.Unlock()
+					}(namespace)
+				}
+			}
+			wg.Wait()
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		log.InfoD("Dump info in configmap")
+		data["backups"] = strings.Join(backupNames, ",")
+		data["CustomBucketBackups"] = strings.Join(backupNamesToDelete, ",")
+		data["customBuckets"] = strings.Join(customBuckets, ",")
+		data["namespaces"] = strings.Join(bkpNamespaces, ",")
+		data["scheduleWithAutoDelete"] = strings.Join(scheduleNameListWithAutoDelete, ",")
+		data["schedulesWithoutAutoDelete"] = strings.Join(scheduleNameListNonDelete, ",")
+		data["schedulesWithoutAutoDelete"] = strings.Join(scheduleNameListNonDelete, ",")
+
+		err := UpdateConfigmap(strings.ToLower("VerifyBackupDeletionWhenRetentionIsMet"), data)
+		dash.VerifyFatal(err, nil, "Updating configmap with first test data")
+
+		// The test has followed by test DeleteVerifyBackupDeletionWhenRetentionIsMet hence there will be no cleanup
+	})
+})
+
+var _ = Describe("{DeleteVerifyBackupDeletionWhenRetentionIsMet}", Label(TestCaseLabelsMap[DeleteVerifyBackupDeletionWhenRetentionIsMet]...), func() {
+	var (
+		backupList                     []string
+		namespaces                     []string
+		backupNSMap                    = make(map[string]string)
+		scheduleNameListWithAutoDelete []string
+		schedulesWithoutAutoDelete     []string
+		customBucketBackups            []string
+		customBuckets                  []string
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("DeleteVerifyBackupDeletionWhenRetentionIsMet", "Verify Backup Deletion when retention is met", nil, 300679, Kshithijiyer, Q3FY25)
+		k8sCore := core.Instance()
+		configmap, err := k8sCore.GetConfigMap(strings.ToLower("VerifyBackupDeletionWhenRetentionIsMet"), defaultTorpedoNamespace)
+		dash.VerifySafely(err, nil, "Fetching configmap")
+		backupList = strings.Split(configmap.Data["backups"], ",")
+		namespaces = strings.Split(configmap.Data["namespaces"], ",")
+		scheduleNameListWithAutoDelete = strings.Split(configmap.Data["scheduleWithAutoDelete"], ",")
+		schedulesWithoutAutoDelete = strings.Split(configmap.Data["schedulesWithoutAutoDelete"], ",")
+		customBucketBackups = strings.Split(configmap.Data["CustomBucketBackups"], ",")
+		customBuckets = strings.Split(configmap.Data["customBuckets"], ",")
+		backupNSMap = reconstructBackupNsMap(backupList, namespaces)
+	})
+	It("Verify if backups delete of VerifyBackupDeletionWhenRetentionIsMet case ", func() {
+		providers := GetBackupProviders()
+		Step("Check if schedules backups with auto delete true  where retention is met were deleted or not", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "failed to fetch px-admin ctx")
+			for _, scheduleName := range scheduleNameListWithAutoDelete {
+				allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, BackupOrgID)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups for schedule [%s]", scheduleName))
+				for _, backup := range allScheduleBackupNames[0:10] {
+					check := IsBackupPresent(ctx, backup, BackupOrgID)
+					dash.VerifyFatal(check, false, fmt.Sprintf("Checking if backup [%s] is present", backup))
+				}
+			}
+		})
+
+		Step("Check if backups where retentions is met can be restored or not", func() {
+			log.InfoD("Restoring manual backup and checking if it's working or not")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "failed to fetch px-admin ctx")
+			for backupName, namespace := range backupNSMap {
+				restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
+				customNamespace := fmt.Sprintf("%s-%d-rest", namespace, time.Now().Unix())
+				err = CreateRestoreWithReplacePolicy(customNamespace, backupName, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
+			}
+
+			log.InfoD("Restore from schedule backup")
+			ctx, err = backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "failed to fetch px-admin ctx")
+
+			for _, scheduleName := range schedulesWithoutAutoDelete {
+				firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, BackupOrgID)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+				restoreName := fmt.Sprintf("%s-restore-%v-%s", firstScheduleBackupName, time.Now().Unix(), SourceClusterName)
+				err = CreateRestoreWithReplacePolicy(restoreName, firstScheduleBackupName, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
+			}
+		})
+		Step("Check if backups where retention is met are deleted or not", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range customBucketBackups {
+				backupDriver := Inst().Backup
+				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+				log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+				_, err = DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s from the backup cluster", backupName))
+			}
+			for _, provider := range providers {
+				if drivers.ProviderAzure == provider {
+					modes := [2]Mode{SA_level, Container_level}
+					for i := 0; i < len(modes); i++ {
+						mode := modes[i]
+						customBucket := customBuckets[i]
+						check, err := IsAzureBlobEmpty(customBucket, mode, true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Check if we were able to fetch data from azure container %s", customBucket))
+						dash.VerifyFatal(check, true, fmt.Sprintf("Checking if %s container is empty or not", customBucket))
+					}
+				}
+			}
+		})
+	})
+	JustAfterEach(func() {
+
 	})
 })

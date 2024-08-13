@@ -137,6 +137,8 @@ const (
 	AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields                        TestCaseName = "AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields"
 	AzureCloudAccountForLockedBucket                                                   TestCaseName = "AzureCloudAccountForLockedBucket"
 	PXBackupUpgradeWithAzureCredChange                                                 TestCaseName = "PXBackupUpgradeWithAzureCredChange"
+	VerifyBackupDeletionWhenRetentionIsMet                                             TestCaseName = "VerifyBackupDeletionWhenRetentionIsMet"
+	DeleteVerifyBackupDeletionWhenRetentionIsMet                                       TestCaseName = "DeleteVerifyBackupDeletionWhenRetentionIsMet"
 )
 
 // Test case labels
