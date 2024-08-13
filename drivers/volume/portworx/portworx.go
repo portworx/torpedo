@@ -2750,6 +2750,16 @@ func (d *portworx) PrintCommandOutput(cmnd string, n node.Node) {
 
 // WaitDriverUpOnNode waits for PX to be up on a given node
 func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
+	nodeLabels, err := k8sCore.GetLabelsOnNode(n.Name)
+	if err != nil {
+		return err
+	}
+	// Check if the node has the "skipTorpedo" label set to "true"
+	if value, ok := nodeLabels["skipTorpedo"]; ok && value == "true" {
+		log.Infof("Found skipTorpedo label on node %s , hence not checking if Px is up", n.Name)
+		return nil
+	}
+
 	log.Debugf("Waiting for PX node to be up [%s/%s]", n.Name, n.VolDriverNodeID)
 	t := func() (interface{}, bool, error) {
 		log.Debugf("Getting node info for node [%s/%s]", n.Name, n.VolDriverNodeID)
