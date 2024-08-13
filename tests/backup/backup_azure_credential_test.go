@@ -5,11 +5,13 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"golang.org/x/sync/errgroup"
+	"strings"
 )
 
 // This testcase creates Azure cloud account with mandatory and non-mandatory fields and take backup & restore
@@ -227,5 +229,79 @@ var _ = Describe("{AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields}"
 		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
 		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
 		log.FailOnError(err, "Data validations failed")
+	})
+})
+
+// This testcase verifies the error message while creating immutable backup location with few mandatory parameters missing for immutable backup location while creating cloud cred
+var _ = Describe("{AzureCloudAccountForLockedBucket}", Label(TestCaseLabelsMap[AzureCloudAccountForLockedBucket]...), func() {
+
+	var (
+		credUidWithMandatoryFields                 string
+		azureCredNameWithMandatoryFields           string
+		azureBackupLocationNameWithMandatoryFields string
+		backupLocationMandatoryFieldsUID           string
+		containerLevelStorageAccount               string
+		containerLevelStorageAccountKey            string
+		azureImmutableBucket                       string
+		backupLocationMap                          map[string]string
+		cloudCredentialMap                         map[string]string
+		azureConfigFields                          *api.AzureConfig
+		scheduledAppContexts                       []*scheduler.Context
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("AzureCloudAccountForLockedBucket", "Azure cloud account for immutable bucket", nil, 31661, Sagrawal, Q2FY25)
+		backupLocationMap = make(map[string]string)
+		cloudCredentialMap = make(map[string]string)
+	})
+
+	It("Azure cloud account with mandatory and non mandatory fields", func() {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		_, containerLevelStorageAccount, containerLevelStorageAccountKey, _, _, _, _ = GetAzureImmutabilityCredsFromEnv()
+
+		Step("Creating azure cloud account with only mandatory fields", func() {
+			log.InfoD("Creating azure cloud account with only mandatory fields")
+			credUidWithMandatoryFields = uuid.New()
+			azureConfigFields = &api.AzureConfig{
+				AccountName: containerLevelStorageAccount,
+				AccountKey:  containerLevelStorageAccountKey,
+			}
+			azureCredNameWithMandatoryFields = fmt.Sprintf("%s-azure-cred-with-mandatory-fields-immutable", RandomString(5))
+			err = CreateAzureCloudCredential(azureCredNameWithMandatoryFields, credUidWithMandatoryFields, BackupOrgID, azureConfigFields, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of azure cloud credential named [%s] for org [%s] having only mandatory fields for immutable bucket", azureCredNameWithMandatoryFields, BackupOrgID))
+			cloudCredentialMap[azureCredNameWithMandatoryFields] = credUidWithMandatoryFields
+
+			log.InfoD("Creating azure immutable bucket")
+			azureImmutableBucket = RandomString(5) + "azure-immutable-bucket"
+			CreateAzureBucket(azureImmutableBucket, true, Container_level, 2, true)
+
+			log.InfoD("Creating azure immutable backup location with mandatory fields in azure credentials")
+			azureBackupLocationNameWithMandatoryFields = fmt.Sprintf("azure-immutable-bkp-loc-mandatory-fields-%v", RandomString(5))
+			backupLocationMandatoryFieldsUID = uuid.New()
+			backupLocationMap[backupLocationMandatoryFieldsUID] = azureBackupLocationNameWithMandatoryFields
+			err = CreateBackupLocation("azure", azureBackupLocationNameWithMandatoryFields, backupLocationMandatoryFieldsUID, azureCredNameWithMandatoryFields, credUidWithMandatoryFields, azureImmutableBucket, BackupOrgID, "", true)
+			dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("error in obtaining object-lock info for the bucket %v: secret can't be empty string", azureBackupLocationNameWithMandatoryFields)), true, fmt.Sprintf("Verifying message while creating immutable backup location %v with few mandatory parameters missing for immutable backup location while creating cloud cred", azureBackupLocationNameWithMandatoryFields))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		err = DeleteCloudCredentialWithContext(azureCredNameWithMandatoryFields, BackupOrgID, credUidWithMandatoryFields, ctx)
+		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cloud cred [%s]", azureCredNameWithMandatoryFields))
+		cloudCredDeleteStatus := func() (interface{}, bool, error) {
+			status, err := IsCloudCredPresent(azureCredNameWithMandatoryFields, ctx, BackupOrgID)
+			if err != nil {
+				return "", true, fmt.Errorf("cloud cred %s still present with error %v", azureCredNameWithMandatoryFields, err)
+			}
+			if status {
+				return "", true, fmt.Errorf("cloud cred %s is not deleted yet", azureCredNameWithMandatoryFields)
+			}
+			return "", false, nil
+		}
+		_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, CloudAccountDeleteTimeout, CloudAccountDeleteRetryTime)
+		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", azureCredNameWithMandatoryFields))
 	})
 })
