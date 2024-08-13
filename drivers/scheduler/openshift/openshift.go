@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -327,6 +328,29 @@ func (k *openshift) createTorpedoSecurityContextConstraints() (*ocpsecurityv1api
 	return torpedoScc, err
 }
 
+func updateMaxUnavailableWorkerMCP() error {
+
+	maxUnavailable := os.Getenv("OCP_SURGE_UPGRADE_VALUE")
+	log.Info("Setting maxUnavailable value for worker MCP to [%s]", maxUnavailable)
+	patchData := fmt.Sprintf(`{"spec":{"maxUnavailable":"%s"}}`, maxUnavailable)
+
+	t := func() (interface{}, bool, error) {
+		var output []byte
+		args := []string{"patch", "mcp", "worker", "--type=merge", "--patch", patchData}
+		if output, err := exec.Command("oc", args...).CombinedOutput(); err != nil {
+			return nil, true, fmt.Errorf("failed to update machine config pool - worker, Err: %v %v", string(output), err)
+		}
+		log.Info(string(output))
+
+		log.Infof("Successfully updated maxUnavailable for worker MCP to [%s]", maxUnavailable)
+		return nil, false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (k *openshift) UpgradeScheduler(version string) error {
 	if err := downloadOCP4Client(version); err != nil {
 		return err
@@ -358,6 +382,10 @@ func (k *openshift) UpgradeScheduler(version string) error {
 	}
 
 	if err := ackAPIRemoval(upgradeVersion); err != nil {
+		return err
+	}
+
+	if err := updateMaxUnavailableWorkerMCP(); err != nil {
 		return err
 	}
 
