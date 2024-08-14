@@ -91,6 +91,7 @@ const (
 	Sabrarhussaini TestcaseAuthor = "sabrarhussaini"
 	ATrivedi       TestcaseAuthor = "atrivedi-px"
 	Dbinnal        TestcaseAuthor = "dbinnal-px"
+	Sgajawada      TestcaseAuthor = "sgajawada-px"
 )
 
 // TestcaseQuarter List
@@ -1664,6 +1665,72 @@ func ShareBackup(backupName string, groupNames []string, userNames []string, acc
 	_, err = backupDriver.UpdateBackupShare(ctx, shareBackupRequest)
 	return err
 
+}
+
+// ShareCluster provides access to the mentioned groups or/add users
+func ShareCluster(clusterName string, groupNames []string, userNames []string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+
+	clusterUid, err := backupDriver.GetClusterUID(ctx, BackupOrgID, clusterName)
+	if err != nil {
+		return err
+	}
+	log.Infof("Cluster UID for %s - %s", clusterName, clusterUid)
+
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	shareBackupRequest := &api.ShareClusterRequest{
+		OrgId: BackupOrgID,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
+		Users:  userIDs,
+		Groups: groupNames,
+	}
+
+	_, err = backupDriver.ShareCluster(ctx, shareBackupRequest)
+	return err
+}
+
+// ShareCluster provides access to the mentioned groups or/add users
+func UnShareCluster(clusterName string, groupNames []string, userNames []string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+
+	clusterUid, err := backupDriver.GetClusterUID(ctx, BackupOrgID, clusterName)
+	if err != nil {
+		return err
+	}
+	log.Infof("Cluster UID for %s - %s", clusterName, clusterUid)
+
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	shareBackupRequest := &api.UnShareClusterRequest{
+		OrgId: BackupOrgID,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
+		Users:  userIDs,
+		Groups: groupNames,
+	}
+
+	_, err = backupDriver.UnShareCluster(ctx, shareBackupRequest)
+	return err
 }
 
 // ClusterUpdateBackupShare shares all backup with the users and/or groups provided for a given cluster
