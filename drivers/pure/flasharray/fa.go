@@ -133,8 +133,8 @@ func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 	defer resp.Body.Close()
 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
 	bodyString := string(bodyBytes)
-	// This is for Deletepod where we are returning nil if we are retention-lock  which is expected error (This is Because SafeMode enabled on Array)
-	if strings.Contains(bodyString, "retention-locked") && strings.Contains(bodyString, "Cannot eradicate pod") {
+	// This is for Deletepod where we are returning nil if we are retention-locked which is expected error (This is Because SafeMode enabled on Array)
+	if strings.Contains(bodyString, "retention-locked") || strings.Contains(bodyString, "Cannot eradicate pod") || strings.Contains(bodyString, "Eradication is disabled.") {
 		return resp, nil
 	}
 	if resp.StatusCode != http.StatusOK {

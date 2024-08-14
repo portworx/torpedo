@@ -4548,7 +4548,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 	itLog := "CreateAndValidatePVCWithIopsAndBandwidth"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		numberOfPvc := 10
+		numberOfPvc := 50
 		var (
 			k8sCore       = core.Instance()
 			wg            sync.WaitGroup
@@ -5008,7 +5008,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 				appsvols, err := Inst().S.GetVolumes(context)
 				log.FailOnError(err, "Failed to get volumes for app %s", context.App.Key)
 				log.InfoD("Starting the Clone of the Volume")
-				for _, vol := range appsvols[:1] {
+				for _, vol := range appsvols {
 					cloneVolumeId, err = Inst().V.CloneVolume(vol.ID)
 					log.FailOnError(err, "Failed to clone volume [%v]", vol.ID)
 					clonevol, err := Inst().V.InspectVolume(cloneVolumeId)
@@ -5021,7 +5021,6 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 		})
 		checkVolumeExistsInFlashArrays := func(volumeName string, flashArrays []pureutils.FlashArrayEntry) error {
 			cloneVolFound := false
-
 			for _, fa := range flashArrays {
 				faClient, err := pureutils.PureCreateClientAndConnect(fa.MgmtEndPoint, fa.APIToken)
 				log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint))
@@ -5032,7 +5031,6 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 					cloneVolFound = true
 					break
 				}
-
 			}
 			if !cloneVolFound {
 				return fmt.Errorf("volume %s does not exist in any of the FlashArrays", volumeName)
