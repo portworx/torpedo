@@ -4999,7 +4999,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 			contexts = append(contexts, context...)
 		})
 		ValidateApplications(contexts)
-		defer DestroyApps(contexts, nil)
+		//defer DestroyApps(contexts, nil)
 
 		stepLog = "Get the corresponding Px volume for the PVC and clone the volume "
 		Step(stepLog, func() {
