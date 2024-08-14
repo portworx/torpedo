@@ -341,6 +341,14 @@ func updateMaxUnavailableWorkerMCP() error {
 			return nil, true, fmt.Errorf("failed to update machine config pool - worker, Err: %v %v", string(output), err)
 		}
 		log.Info(string(output))
+		args = []string{"get", "mcp", "worker", "-o", "jsonpath={.spec.maxUnavailable}"}
+		output, err := exec.Command("oc", args...).CombinedOutput()
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get maxUnavailable for worker MCP, Err: %v %v", string(output), err)
+		}
+		if string(output) != maxUnavailable {
+			return nil, true, fmt.Errorf("maxUnavailable for worker MCP does not match, expected: %s, got: %s", maxUnavailable, string(output))
+		}
 
 		log.Infof("Successfully updated maxUnavailable for worker MCP to [%s]", maxUnavailable)
 		return nil, false, nil
