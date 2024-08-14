@@ -600,6 +600,8 @@ spec:
       value: "${K8S_VENDOR}"
     - name: TORPEDO_SSH_USER
       value: "${TORPEDO_SSH_USER}"
+    - name: LB_SUBNET_KEY
+      value: "${LB_SUBNET_KEY}"
     - name: TORPEDO_SSH_PASSWORD
       value: "${TORPEDO_SSH_PASSWORD}"
     - name: TORPEDO_SSH_KEY
@@ -806,6 +808,10 @@ spec:
       value: "${EKS_CLUSTER_REGION}"
     - name: EKS_PX_NODEGROUP_NAME
       value: "${EKS_PX_NODEGROUP_NAME}"
+    - name: EKS_MAX_UNAVAILABLE_NODES_VALUE
+      value: "${EKS_MAX_UNAVAILABLE_NODES_VALUE}"
+    - name: EKS_MAX_UNAVAILABLE_PERCENTAGE_VALUE
+      value: "${EKS_MAX_UNAVAILABLE_PERCENTAGE_VALUE}"
     - name: IKS_CLUSTER_NAME
       value: "${IKS_CLUSTER_NAME}"
     - name: IKS_PX_WORKERPOOL_NAME

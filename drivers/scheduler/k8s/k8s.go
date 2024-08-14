@@ -5593,10 +5593,17 @@ func (k *K8s) createVirtualMachineObjects(
 			if err != nil {
 				return nil, fmt.Errorf("failed to retrieve VM after creating/waiting for DataVolumes: %v", err)
 			}
-			// Check if the VM is in 'Running' phase.
-			if !vm.Status.Ready {
-				return nil, fmt.Errorf("VM is not in the expected 'Running' state")
+			t := func() (interface{}, bool, error) {
+				vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace)
+				if err != nil {
+					return nil, true, err
+				}
+				if vm.Status.Ready {
+					return nil, false, nil
+				}
+				return nil, true, fmt.Errorf("waiting for VM [%s] in namespace [%s] to be ready", obj.Name, obj.Namespace)
 			}
+			_, err = task.DoRetryWithTimeout(t, cdiImageImportTimeout, cdiImageImportRetry)
 			return vm, nil
 		}
 	}
