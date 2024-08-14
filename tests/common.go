@@ -14168,7 +14168,11 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 
 				// if node is in storage down state and runtime state is not clean, fail the test
 				log.Infof("Node [%s] status: %v", replicaNodes[i], nodeStatus)
-				dash.VerifyFatal(nodeStatus, opsapi.Status_STATUS_STORAGE_DOWN, fmt.Sprintf("Validating the node [%s ] state where volume [%s] has %s", replicaNodes[i], apiVol.Id, runTimeState))
+				if reflect.DeepEqual(nodeStatus, opsapi.Status_STATUS_STORAGE_DOWN) {
+					err = fmt.Errorf("node [%s] is in %v Runtime state ", replicaNodes[i], runTimeState)
+					processError(err, errChan...)
+					return
+				}
 			}
 		}
 	}
