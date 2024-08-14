@@ -114,7 +114,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 				err = Inst().S.UpgradeScheduler(version)
 				if err != nil {
-					err = Inst().S.RefreshNodeRegistry()
+					err := Inst().S.RefreshNodeRegistry()
 					log.FailOnError(err, "Refresh Node Registry failed")
 					err = Inst().V.RefreshDriverEndpoints()
 					log.FailOnError(err, "Refresh Driver Endpoints failed")
