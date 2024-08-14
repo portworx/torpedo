@@ -53,7 +53,7 @@ var _ = Describe("{AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields}"
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields", "Azure cloud account with mandatory and non mandatory fields", nil, 31661, Sagrawal, Q2FY25)
+		StartPxBackupTorpedoTest("AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields", "Azure cloud account with mandatory and non mandatory fields", nil, 300036, Sagrawal, Q2FY25)
 		backupLocationMap1 = make(map[string]string)
 		cloudCredentialMap1 = make(map[string]string)
 		backupLocationMap2 = make(map[string]string)
@@ -250,7 +250,7 @@ var _ = Describe("{AzureCloudAccountForLockedBucket}", Label(TestCaseLabelsMap[A
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("AzureCloudAccountForLockedBucket", "Azure cloud account for immutable bucket", nil, 31661, Sagrawal, Q2FY25)
+		StartPxBackupTorpedoTest("AzureCloudAccountForLockedBucket", "Azure cloud account for immutable bucket", nil, 300037, Sagrawal, Q2FY25)
 		backupLocationMap = make(map[string]string)
 		cloudCredentialMap = make(map[string]string)
 	})
