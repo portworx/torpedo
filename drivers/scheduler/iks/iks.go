@@ -18,7 +18,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -178,35 +177,14 @@ func (i *IKS) UpgradeWorkerPool(workerPoolName string, version string) error {
 	if err != nil {
 		return fmt.Errorf("failed to list workers for pool [%s] in cluster [%s]. Err: %v", workerPoolName, i.clusterName, err)
 	}
-	locationWorkerMap := make(map[string][]containerv2.Worker)
 	for _, worker := range workers {
-		locationWorkerMap[worker.Location] = append(locationWorkerMap[worker.Location], worker)
+		log.Infof("Replacing worker [%s] in location [%s] to upgrade to version [%s]", worker.ID, worker.Location, version)
+		err = i.ReplaceWorker(worker.ID)
+		if err != nil {
+			return fmt.Errorf("failed to replace worker [%s] in location [%s]. Err: %v", worker.ID, worker.Location, err)
+		}
 	}
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(workers))
-	for location, workers := range locationWorkerMap {
-		wg.Add(1)
-		go func(location string, workers []containerv2.Worker) {
-			defer wg.Done()
-			for _, worker := range workers {
-				log.Infof("Replacing worker [%s] in location [%s] to upgrade to version [%s]", worker.ID, location, version)
-				err = i.ReplaceWorker(worker.ID)
-				if err != nil {
-					errChan <- err
-				}
-			}
-		}(location, workers)
-	}
-	wg.Wait()
-	close(errChan)
-	var errors []string
-	for e := range errChan {
-		errors = append(errors, e.Error())
-	}
-	if len(errors) > 0 {
-		return fmt.Errorf("failed to upgrade IKS cluster [%s] worker pool [%s] to version [%s]. Errs: [%v]", i.clusterName, workerPoolName, version, errors)
-	}
-	log.Infof("Initiated IKS cluster [%s] worker pool [%s] upgrade version to [%s] successfully", i.clusterName, workerPoolName, version)
+	log.Infof("IKS cluster [%s] worker pool [%s] upgrade to version [%s] completed successfully", i.clusterName, workerPoolName, version)
 	return nil
 }
 
