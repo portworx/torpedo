@@ -30,7 +30,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/storkctlcli"
-
 	//"github.com/portworx/torpedo/driver	"github.com/portworx/torpedo/drivers/scheduler"
 	//"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -368,6 +367,29 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncIncludeNs}", func(
 	})
 })
 
+var _ = Describe("{ScheduleTestApps}", func() {
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+
+	It("Schedule Apps", func() {
+		taskNamePrefix := "async"
+		Step("Deploy app", func() {
+			ns, _ := initialSetupApps(taskNamePrefix, true)
+			log.Infof("NS are %v", ns)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
 var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncExcludeNs}", func() {
 	testrailID = 296367
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296367
@@ -676,7 +698,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", func() {
 			backupName         = "storkbackup-" + time.Now().Format("15h03m05s")
 			taskNamePrefix     = "appbkprest-upgradepx"
 			defaultNs          = "kube-system"
-			timeout            = 10 * time.Minute	
+			timeout            = 10 * time.Minute
 		)
 		bkpNs, contexts := initialSetupApps(taskNamePrefix, true)
 		storageNodes := node.GetStorageNodes()
@@ -806,7 +828,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", func() {
 			kubeConfigPath[cluster], err = GetCustomClusterConfigPath(cluster)
 			log.FailOnError(err, "Getting error while fetching path for %v cluster, error is %v", cluster, err)
 		}
-		
+
 		var migrationSchedName string
 		var schdPol *storkapi.SchedulePolicy
 		cpName := defaultClusterPairName + time.Now().Format("15h03m05s")
