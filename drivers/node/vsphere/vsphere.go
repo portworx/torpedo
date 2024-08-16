@@ -2,7 +2,6 @@ package vsphere
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -12,11 +11,6 @@ import (
 	"strings"
 	"time"
 
-	pxutil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
-	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	coreops "github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/ssh"
@@ -26,7 +20,6 @@ import (
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
-	v1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -51,64 +44,6 @@ const (
 	// VMReadyRetryInterval interval for retry when checking VM power state
 	VMReadyRetryInterval = 5 * time.Second
 )
-
-type DriveSet struct {
-	// Configs describes the configuration of the drives present in this set
-	// The key is the volumeID
-	Configs map[string]DriveConfig
-	// NodeID is the id of the node where the drive set is being used/last
-	// used
-	NodeID string
-	// ReservedInstanceID if set is the instance ID of the node that's attempting to transfer the driveset to itself
-	ReservedInstanceID string
-	// SchedulerNodeName is the name of the node in scheduler context
-	SchedulerNodeName string
-	// NodeIndex is the index of the node where the drive set is being
-	// used/last used
-	NodeIndex int
-	// CreateTimestamp is the timestamp when the drive set was created
-	CreateTimestamp time.Time
-	// InstanceID is the cloud provider id of the instance using this drive set
-	InstanceID string
-	// Zone defines the zone in which the node exists
-	Zone string
-	// State state of the drive set from the well defined states
-	State string
-	// Labels associated with this drive set
-	Labels *map[string]string `json:"labels"`
-}
-
-// DriveConfig defines the configuration for a cloud drive
-type DriveConfig struct {
-	// Type defines the type of cloud drive
-	Type string
-	// Size defines the size of the cloud drive in Gi
-	Size int64
-	// ID is the cloud drive id
-	ID string
-	// Path is the path where the drive is attached
-	Path string
-	// Iops is the iops that the drive supports
-	Iops int64
-	// Vpus provide a measure of disk resources available for
-	// performance (IOPS/GBs) of Oracle drives.
-	// Oracle uses VPU in lieu of disk types.
-	Vpus int64
-	// PXType indicates how this drive is being used by PX
-	PXType string
-	// State state of the drive config from the well defined states
-	State string
-	// Labels associated with this drive config
-	Labels map[string]string `json:"labels"`
-	// AttachOptions for cloud drives to be attached
-	AttachOptions map[string]string
-	// Provisioner is a name of provisioner which was used to create a drive
-	Provisioner string
-	// Encryption Key string to be passed in device specs
-	EncryptionKeyInfo string
-	// UUID of VMDK
-	DiskUUID string
-}
 
 // DrivePaths stores the device paths of the disks which will be used by PX.
 type DrivePaths struct {
@@ -269,35 +204,17 @@ func (v *vsphere) getVMFinder() (*find.Finder, error) {
 }
 
 // GetCompatibleDatastores get matching prefix datastores
-func (v *vsphere) GetCompatibleDatastores(portworxNamespace string, datastoreNames []string) ([]*object.Datastore, error) {
+func (v *vsphere) GetCompatibleDatastores(prefixName string, datastoreNames []string) ([]*object.Datastore, error) {
 	var err error
 	datastores, err := v.GetDatastoresFromDatacenter()
 	if err != nil {
 		return nil, err
 	}
-	var stc *operatorcorev1.StorageCluster
-	pxOperator := operator.Instance()
-	stcList, err := pxOperator.ListStorageClusters(portworxNamespace)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to find storage clusters %v ", err)
-	}
-	var selectedDatastore []*object.Datastore
-	stc, err = pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to find storage cluster %v  in namespace  %s ", err, portworxNamespace)
-	}
-	var envVariables []v1.EnvVar
-	envVariables = stc.Spec.CommonConfig.Env
-	var prefixName string
-	for _, envVar := range envVariables {
-		if envVar.Name == "VSPHERE_DATASTORE_PREFIX" {
-			prefixName = envVar.Value
-			log.Infof("prefixName   %s ", prefixName)
-		}
-	}
+
 	if prefixName == "" {
 		return nil, fmt.Errorf("Failed to find VSPHERE_DATASTORE_PREFIX  prefix ")
 	}
+	var selectedDatastore []*object.Datastore
 	for _, ds := range datastores {
 		if strings.HasPrefix(ds.Name(), prefixName) {
 			log.Infof("Prefix match found for datastore Name %v ", ds.Name())
@@ -380,13 +297,9 @@ func (v *vsphere) connect() error {
 	return nil
 }
 
-// DetachDisk vdisks from node.
-func (v *vsphere) DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string) error {
-	configData, err := GetCloudDriveConfigmapData(stc)
-	if err != nil {
-		err = fmt.Errorf("Failed to find configData: err %w", err)
-		return err
-	}
+// DetachDrivesFromVM detach vdisks from node.
+func (v *vsphere) DetachDrivesFromVM(nodeName string, configData map[string]node.DriveSet) error {
+
 	//Find out the instance VMUUID and then dettach.
 	for _, nodeConfigData := range configData {
 		if nodeName == nodeConfigData.SchedulerNodeName {
@@ -394,7 +307,7 @@ func (v *vsphere) DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string
 			instanceId := nodeConfigData.InstanceID
 			for i := 0; i < len(allDiskPaths); i++ {
 				log.Infof("Diskpath for %v is %v and instance id is %v", nodeConfigData.NodeID, allDiskPaths[i], instanceId)
-				err = v.DetachDisk(instanceId, allDiskPaths[i])
+				err := v.DetachDisk(instanceId, allDiskPaths[i])
 				if err != nil {
 					//log.InfoD("Detach drives from the node failed %v", err)
 					err = fmt.Errorf("Detaching disk: %s on node %s failed: %w", allDiskPaths[i], nodeName, err)
@@ -402,7 +315,7 @@ func (v *vsphere) DetachDrivesFromVM(stc *corev1.StorageCluster, nodeName string
 				}
 			}
 		} else {
-			log.Infof(" Node Name from config %s, expected %s ", nodeConfigData.SchedulerNodeName, nodeName)
+			log.Infof("Node Name from config %s, expected %s ", nodeConfigData.SchedulerNodeName, nodeName)
 		}
 	}
 	return nil
@@ -467,10 +380,10 @@ func matchVirtualDiskAndVolPath(diskPath, volPath string) bool {
 	return diskPath == volPath
 }
 
-// Get virtual disk path.
+// GetDiskPaths return virtual disks path.
 // TODO need to filter only of type: DrivePaths
-func GetDiskPaths(driveset DriveSet) []string {
-	diskPaths := []string{}
+func GetDiskPaths(driveset node.DriveSet) []string {
+	var diskPaths []string
 	for vmdkPath, configs := range driveset.Configs {
 		//TODO need to change later
 		log.InfoD("PX type %s ", configs.PXType)
@@ -491,26 +404,13 @@ func GetDiskPaths(driveset DriveSet) []string {
 }
 
 // GetDatastore
-func GetDatastore(configs DriveConfig) string {
+func GetDatastore(configs node.DriveConfig) string {
 	for key, val := range configs.Labels {
 		if key == "datastore" {
 			return val
 		}
 	}
 	return ""
-}
-
-// GetCloudDriveConfigmapData Get clouddrive configMap data.
-func GetCloudDriveConfigmapData(cluster *corev1.StorageCluster) (map[string]DriveSet, error) {
-	cloudDriveConfigmapName := pxutil.GetCloudDriveConfigMapName(cluster)
-	var PortworxNamespace = "kube-system"
-	cloudDriveConfifmap, _ := coreops.Instance().GetConfigMap(cloudDriveConfigmapName, PortworxNamespace)
-	var configData map[string]DriveSet
-	err := json.Unmarshal([]byte(cloudDriveConfifmap.Data["cloud-drive"]), &configData)
-	if err != nil {
-		return nil, err
-	}
-	return configData, nil
 }
 
 // AddVM adds a new VM object to vmMap
@@ -866,39 +766,23 @@ func (v *vsphere) RemoveNonRootDisks(n node.Node) error {
 // StorageVmotion relocates the largest disks of a VM from one datastore to another within the same prefix group
 // With moveAllDisks true we will be moving all disks attached to a VM onto same Datastore
 // If moveAllDisks is set to False then we will choose the largest sized disk and move that only to a new Datastore
-func (v *vsphere) StorageVmotion(ctx context.Context, node node.Node, portworxNamespace string, moveAllDisks bool) error {
+func (v *vsphere) StorageVmotion(ctx context.Context, node node.Node, datastorePrefix string, moveAllDisks bool) (*object.Datastore, error) {
 	log.Infof("Trying to find the VM on vSphere: %v", node.Name)
 	vm, err := v.FindVMByIP(node)
 	if err != nil {
-		return fmt.Errorf("error retrieving VM: %v", err)
+		return nil, fmt.Errorf("error retrieving VM: %v", err)
 	}
 
 	var vmProps mo.VirtualMachine
 	err = vm.Properties(ctx, vm.Reference(), []string{"config.hardware"}, &vmProps)
 	if err != nil {
-		return fmt.Errorf("error retrieving VM properties: %v", err)
+		return nil, fmt.Errorf("error retrieving VM properties: %v", err)
 	}
 
 	log.Infof("Trying to fetch all compatible Datastores with the prefix that is set in Px Storage Class spec")
-	compatibleDatastores, err := v.GetCompatibleDatastores(portworxNamespace, []string{})
+	compatibleDatastores, err := v.GetCompatibleDatastores(datastorePrefix, []string{})
 	if err != nil {
-		return fmt.Errorf("error retrieving compatible datastores: %v", err)
-	}
-
-	var stc *operatorcorev1.StorageCluster
-	pxOperator := operator.Instance()
-	stcList, err := pxOperator.ListStorageClusters(portworxNamespace)
-	if err != nil {
-		return fmt.Errorf("Failed to find storage clusters %v ", err)
-	}
-	stc, err = pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
-	if err != nil {
-		return fmt.Errorf("Failed to find storage cluster %v  in namespace  %s ", err, portworxNamespace)
-	}
-
-	preData, err := GetCloudDriveConfigmapData(stc)
-	if err != nil {
-		return fmt.Errorf("error fetching pre-vMotion cloud drive config: %v", err)
+		return nil, fmt.Errorf("error retrieving compatible datastores: %v", err)
 	}
 
 	originalDatastoreIDs := map[string]string{}
@@ -916,24 +800,47 @@ func (v *vsphere) StorageVmotion(ctx context.Context, node node.Node, portworxNa
 
 	largestDisks := findLargestDisksOnDatastores(vmProps.Config.Hardware.Device, compatibleDatastores)
 	if len(largestDisks) == 0 {
-		return fmt.Errorf("no large disks found on specified prefix datastores")
+		return nil, fmt.Errorf("no large disks found on specified prefix datastores")
 	}
 
 	sourceDatastore := object.NewDatastore(vm.Client(), largestDisks[0].Datastore)
 
 	targetDatastores, err = filterTargetDatastores(ctx, sourceDatastore, compatibleDatastores, &vmProps)
 	if err != nil {
-		return fmt.Errorf("error filtering target datastores: %v", err)
+		return nil, fmt.Errorf("error filtering target datastores: %v", err)
+	}
+
+	var targetDatastore *object.Datastore
+	if len(targetDatastores) == 0 {
+		return nil, fmt.Errorf("no compatible datastores available for storage vMotion")
+	}
+	if len(targetDatastores) > 1 {
+		maxAvailableSpace := int64(-1)
+		for _, ds := range targetDatastores {
+			var dsProps mo.Datastore
+			if err := ds.Properties(ctx, ds.Reference(), []string{"summary"}, &dsProps); err == nil {
+				if available := dsProps.Summary.FreeSpace; available > maxAvailableSpace {
+					maxAvailableSpace = available
+					targetDatastore = ds
+				}
+			}
+		}
+	} else {
+		targetDatastore = targetDatastores[0]
+	}
+
+	if targetDatastore == nil {
+		return nil, fmt.Errorf("failed to select a target datastore")
 	}
 
 	if !moveAllDisks {
-		log.Infof("Trying to Move largest disk on VM %v from Datastore %v to Datastore : %v", node.Name, sourceDatastore.Name(), targetDatastores[0].Name())
-		err = initiateStorageVmotion(ctx, vm, largestDisks[:1], targetDatastores)
+		log.Infof("Trying to Move largest disk on VM %v from Datastore %v to Datastore : %v", node.Name, sourceDatastore.Name(), targetDatastore.Name())
+		err = initiateStorageVmotion(ctx, vm, largestDisks[:1], targetDatastore)
 		if err != nil {
-			return fmt.Errorf("error during storage vMotion: %v", err)
+			return nil, fmt.Errorf("error during storage vMotion: %v", err)
 		}
 	} else {
-		log.Infof("Trying to Move all disks of %v from Datastore %v to Datastore : %v", node.Name, sourceDatastore.Name(), targetDatastores[0].Name())
+		log.Infof("Trying to Move all disks of %v from Datastore %v to Datastore : %v", node.Name, sourceDatastore.Name(), targetDatastore.Name())
 		diskLocators := make([]types.VirtualMachineRelocateSpecDiskLocator, 0)
 		for _, device := range vmProps.Config.Hardware.Device {
 			if disk, ok := device.(*types.VirtualDisk); ok {
@@ -944,24 +851,63 @@ func (v *vsphere) StorageVmotion(ctx context.Context, node node.Node, portworxNa
 			}
 		}
 		if len(diskLocators) == 0 {
-			return fmt.Errorf("no disks found on the VM")
+			return nil, fmt.Errorf("no disks found on the VM")
 		}
 		log.Infof("Going to trigger Storage Vmotion for %v", node.Name)
-		err = initiateStorageVmotion(ctx, vm, diskLocators, targetDatastores)
+		err = initiateStorageVmotion(ctx, vm, diskLocators, targetDatastore)
 		if err != nil {
-			return fmt.Errorf("error during storage vMotion: %v", err)
+			return nil, fmt.Errorf("error during storage vMotion: %v", err)
 		}
 		log.Infof("Sleeping for a minute to let config map be updated with latest changes")
 		time.Sleep(1 * time.Minute)
-		postData, err := GetCloudDriveConfigmapData(stc)
-		if err != nil {
-			return fmt.Errorf("error fetching post-vMotion cloud drive config: %v", err)
-		}
-		if !v.ValidateDatastoreUpdate(preData, postData, node.VolDriverNodeID, targetDatastores[0].Reference().Value) {
-			return fmt.Errorf("validation failed: datastore updates are not as expected")
+	}
+	return targetDatastore, nil
+}
+
+func (v *vsphere) GetUUIDFromVMDKPath(ctx context.Context, node node.Node, vmdkPath string) (string, error) {
+
+	log.Infof("Trying to find the VM on vSphere: %v", node.Name)
+	vm, err := v.FindVMByIP(node)
+	if err != nil {
+		return "", fmt.Errorf("error retrieving VM: %v", err)
+	}
+
+	var vmProps mo.VirtualMachine
+	err = vm.Properties(ctx, vm.Reference(), []string{"config.hardware"}, &vmProps)
+	if err != nil {
+		return "", fmt.Errorf("error retrieving VM properties: %v", err)
+	}
+
+	diskUUID := ""
+	log.Infof("Getting UUID for disk %v on node %s", vmdkPath, node.VolDriverNodeID)
+
+	for _, device := range vmProps.Config.Hardware.Device {
+		if disk, ok := device.(*types.VirtualDisk); ok {
+			if backing, ok := disk.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
+				if backing.FileName == vmdkPath {
+					diskUUID = backing.Uuid
+					break
+				}
+			}
 		}
 	}
-	return nil
+
+	if len(diskUUID) > 0 {
+		// Remove whitespace character
+		uuidWithoutSpaces := strings.ReplaceAll(diskUUID, " ", "")
+		//Remove Hyphen
+		uuidWithoutSpacesAndHyphens := strings.ReplaceAll(uuidWithoutSpaces, "-", "")
+		// Check if the UUID length is valid
+		if len(uuidWithoutSpacesAndHyphens) != 32 {
+			return "", fmt.Errorf("invalid UUID length.Expected UUID to be of length 32bytes, got %v: %v", len(uuidWithoutSpacesAndHyphens), uuidWithoutSpacesAndHyphens)
+		}
+
+		// Insert hyphens at specific positions to match standard UUID format
+		formattedUUID := fmt.Sprintf("%s-%s-%s-%s-%s", uuidWithoutSpacesAndHyphens[0:8], uuidWithoutSpacesAndHyphens[8:12], uuidWithoutSpacesAndHyphens[12:16], uuidWithoutSpacesAndHyphens[16:20], uuidWithoutSpacesAndHyphens[20:])
+		return strings.ToLower(formattedUUID), nil
+	}
+	return "", fmt.Errorf("failed to find UUID for disk %v on node %s", vmdkPath, node.VolDriverNodeID)
+
 }
 
 // Function to get the datastore's cluster
@@ -1089,29 +1035,7 @@ func findLargestDisksOnDatastores(devices []types.BaseVirtualDevice, datastores 
 }
 
 // initiateStorageVmotion starts the Storage vMotion process for the disks, targeting a specific datastore.
-func initiateStorageVmotion(ctx context.Context, vm *object.VirtualMachine, diskLocators []types.VirtualMachineRelocateSpecDiskLocator, datastores []*object.Datastore) error {
-	var targetDatastore *object.Datastore
-	if len(datastores) == 0 {
-		return fmt.Errorf("no compatible datastores available for storage vMotion")
-	}
-	if len(datastores) > 1 {
-		maxAvailableSpace := int64(-1)
-		for _, ds := range datastores {
-			var dsProps mo.Datastore
-			if err := ds.Properties(ctx, ds.Reference(), []string{"summary"}, &dsProps); err == nil {
-				if available := dsProps.Summary.FreeSpace; available > maxAvailableSpace {
-					maxAvailableSpace = available
-					targetDatastore = ds
-				}
-			}
-		}
-	} else {
-		targetDatastore = datastores[0]
-	}
-
-	if targetDatastore == nil {
-		return fmt.Errorf("failed to select a target datastore")
-	}
+func initiateStorageVmotion(ctx context.Context, vm *object.VirtualMachine, diskLocators []types.VirtualMachineRelocateSpecDiskLocator, targetDatastore *object.Datastore) error {
 
 	for i := range diskLocators {
 		diskLocators[i].Datastore = targetDatastore.Reference()
@@ -1121,11 +1045,11 @@ func initiateStorageVmotion(ctx context.Context, vm *object.VirtualMachine, disk
 		Disk: diskLocators,
 	}
 
-	task, err := vm.Relocate(ctx, relocateSpec, types.VirtualMachineMovePriorityDefaultPriority)
+	vcTask, err := vm.Relocate(ctx, relocateSpec, types.VirtualMachineMovePriorityDefaultPriority)
 	if err != nil {
 		return fmt.Errorf("error initiating VM relocate: %v", err)
 	}
-	return task.Wait(ctx)
+	return vcTask.Wait(ctx)
 }
 
 // FindVMByName finds a virtual machine by its name.
@@ -1188,46 +1112,4 @@ func (v *vsphere) FindVMByIP(node node.Node) (*object.VirtualMachine, error) {
 		}
 	}
 	return nil, fmt.Errorf("no VM found with the given IP addresses: %v", node.Addresses)
-}
-
-// ValidateDatastoreUpdate validates the cloud drive configmap after Storage vmotion is done
-func (v *vsphere) ValidateDatastoreUpdate(preData, postData map[string]DriveSet, nodeUUID string, targetDatastoreID string) bool {
-	preNodeData, preExists := preData[nodeUUID]
-	postNodeData, postExists := postData[nodeUUID]
-
-	if !preExists || !postExists {
-		return false
-	}
-
-	postDiskDatastores := make(map[string]string)
-	for _, postDrive := range postNodeData.Configs {
-		postDiskDatastores[postDrive.DiskUUID] = postDrive.Labels["datastore"]
-	}
-
-	allMoved := true
-	for _, preDrive := range preNodeData.Configs {
-		postDSName, exists := postDiskDatastores[preDrive.DiskUUID]
-		if !exists {
-			log.Infof("No post-migration data found for disk with UUID %v", preDrive.DiskUUID)
-			return false
-		}
-
-		postDS, err := v.FindDatastoreByName(postDSName)
-		if err != nil {
-			log.Errorf("Failed to find datastore with name %v: %v", postDSName, err)
-			return false
-		}
-		postDSID := postDS.Reference().Value
-
-		if !(postDSID == targetDatastoreID || (preDrive.Labels["datastore"] == postDSName && postDSID == targetDatastoreID)) {
-			log.Infof("Disk with UUID %v did not move to the target datastore %v as expected, or was not already there. This is for Node %v", preDrive.DiskUUID, targetDatastoreID, nodeUUID)
-			allMoved = false
-		}
-	}
-
-	if allMoved {
-		log.Infof("Storage vMotion happened successfully for all disks")
-	}
-
-	return allMoved
 }

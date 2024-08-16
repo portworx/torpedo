@@ -3,6 +3,7 @@ package dcos
 import (
 	"encoding/json"
 	"fmt"
+	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -1187,6 +1188,13 @@ func (d *dcos) StartKubelet(n node.Node, options node.SystemctlOpts) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "StartKubelet()",
+	}
+}
+
+func (d *dcos) GetPXCloudDriveConfigMap(cluster *v1.StorageCluster) (map[string]node.DriveSet, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPXCloudDriveConfigMap()",
 	}
 }
 
