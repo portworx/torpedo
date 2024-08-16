@@ -30,6 +30,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/storkctlcli"
+
 	//"github.com/portworx/torpedo/driver	"github.com/portworx/torpedo/drivers/scheduler"
 	//"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -467,6 +468,29 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroSingle}", func() {
 	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
 		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
 			validateFailoverFailback("metrodr", "metrodr-failover-failback", true, false, false, false)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{ScheduleAppsTest}", func() {
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+
+	It("has to deploy app", func() {
+		Step("Deploy app", func() {
+			taskNamePrefix := "asyncscapps"
+			ns, _ := initialSetupApps(taskNamePrefix, true)
+			log.Infof("*******************Namespaces are: %v*******************", ns)
 		})
 	})
 	JustAfterEach(func() {
