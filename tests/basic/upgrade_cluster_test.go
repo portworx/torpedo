@@ -77,8 +77,9 @@ var _ = Describe("{UpgradeCluster}", func() {
 		pxVersionString, err := Inst().V.GetDriverVersion()
 		var pxVersion *version.Version
 		if err == nil {
-			pxVersion, _ = version.NewVersion(pxVersionString)
+			pxVersion, err = version.NewVersion(pxVersionString)
 		}
+		log.FailOnError(err, "failed to get px version")
 		for _, version := range versions {
 			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), version), func() {
 				stopSignal := make(chan struct{})

@@ -14298,6 +14298,4 @@ func ValidateNodePDB(minAvailable int, totalNodes int, errChan ...*chan error) {
 			processError(err, errChan...)
 		}
 	})
-
-	// PTX-25027: Validate that volume quorum is maintained here
 }
