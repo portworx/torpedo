@@ -124,6 +124,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 				}
 				dash.VerifyFatal(mError, nil, "validation of PDB of px-storage during cluster upgrade successful")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
+				dash.VerifyFatal(vQuorumError, nil, "validate volume quorum during kubernetes upgrade")
 
 				// Sleep needed for AKS cluster upgrades
 				if Inst().S.String() == aks.SchedName {
