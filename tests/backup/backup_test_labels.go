@@ -135,6 +135,7 @@ const (
 	PartialBackupSuccessWithAzureEndpoint                                              TestCaseName = "PartialBackupSuccessWithAzureEndpoint"
 	PSALowerPrivilegeToHigherPrivilegeWithProjectMapping                               TestCaseName = "PSALowerPrivilegeToHigherPrivilegeWithProjectMapping"
 	AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields                        TestCaseName = "AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields"
+	AzureCloudAccountForLockedBucket                                                   TestCaseName = "AzureCloudAccountForLockedBucket"
 )
 
 // Test case labels
@@ -269,6 +270,7 @@ const (
 	PsaTakeBackupInLowerPrevilegeRestoreInHigherPrivilege                                   TestCaseLabel = "PsaTakeBackupInLowerPrevilegeRestoreInHigherPrivilege"
 	PSALowerPrivilegeToHigherPrivilegeWithProjectMappingLabel                               TestCaseLabel = "PSALowerPrivilegeToHigherPrivilegeWithProjectMapping"
 	AzureCloudAccountCreationWithMandatoryAndNonMandatoryFieldsLabel                        TestCaseLabel = "AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields"
+	AzureCloudAccountForLockedBucketLabel                                                   TestCaseLabel = "AzureCloudAccountForLockedBucket"
 )
 
 // Common Labels
