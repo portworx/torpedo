@@ -707,11 +707,25 @@ func downloadOCP4Client(ocpVersion string) error {
 		return fmt.Errorf("failed to construct URL [%s] and/or client package name [%s] for OCP [%s]", downloadURL, clientName, ocpVersion)
 	}
 
+	stdoutx, errx := exec.Command("ls", "-ltr").CombinedOutput()
+	log.Infof("stdoutx2: %s", stdoutx)
+	if errx != nil {
+		return fmt.Errorf(" stdoutx1 failed to download OpenShift [%s] client from [%s]", clientName, downloadURL)
+	}
+
 	log.Infof("Downloading OCP [%s] client from URL [%s] to [%s]...", ocpVersion, downloadURL, clientName)
-	stdout, err := exec.Command("curl", "-o", "-L", clientName, downloadURL).CombinedOutput()
+	stdout, err := exec.Command("curl", "-o", clientName, "-L", downloadURL).CombinedOutput()
+	log.Infof("stdout0: %s", stdout)
 	if err != nil {
 		return fmt.Errorf("failed to download OpenShift [%s] client from [%s], Err %v %v", clientName, downloadURL, stdout, err)
 	}
+
+	stdoutx, errx = exec.Command("ls", "-ltr").CombinedOutput()
+	log.Infof("stdoutx2: %s", stdoutx)
+	if errx != nil {
+		return fmt.Errorf(" stdoutx2 failed to download OpenShift [%s] client from [%s]", clientName, downloadURL)
+	}
+
 	log.Infof("Openshift [%s] client successfully downloaded from [%s] and saved as [%s]", ocpVersion, downloadURL, clientName)
 
 	log.Infof("Executing command [tar -xvf %s]...", clientName)

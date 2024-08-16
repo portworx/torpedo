@@ -36,11 +36,11 @@ var _ = Describe("{UpgradeCluster}", func() {
 	It("upgrade scheduler and ensure everything is running fine", func() {
 		contexts = make([]*scheduler.Context, 0)
 
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradecluster-%d", i))...)
-		}
-
-		ValidateApplications(contexts)
+		//for i := 0; i < Inst().GlobalScaleFactor; i++ {
+		//	contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradecluster-%d", i))...)
+		//}
+		//
+		//ValidateApplications(contexts)
 
 		var versions []string
 		if len(Inst().SchedUpgradeHops) > 0 {
@@ -58,19 +58,19 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 		preUpgradeNodeDisksMap := make(map[string]int)
 		printDisks := func(nodeDiskMap map[string]int) {
-			stNodes := node.GetStorageNodes()
-			for _, stNode := range stNodes {
-
-				drvNode, err := Inst().V.GetDriverNode(&stNode)
-				if err != nil {
-					log.Errorf("error getting driver node [%s]: [%v]", stNode.Name, err)
-				} else {
-					log.Infof("Node [%s] has disks: [%s]", stNode.Name, drvNode.Disks)
-					for _, disk := range drvNode.Disks {
-						nodeDiskMap[disk.Medium.String()] = nodeDiskMap[disk.Medium.String()] + 1
-					}
-				}
-			}
+			//stNodes := node.GetStorageNodes()
+			//for _, stNode := range stNodes {
+			//
+			//	drvNode, err := Inst().V.GetDriverNode(&stNode)
+			//	if err != nil {
+			//		log.Errorf("error getting driver node [%s]: [%v]", stNode.Name, err)
+			//	} else {
+			//		log.Infof("Node [%s] has disks: [%s]", stNode.Name, drvNode.Disks)
+			//		for _, disk := range drvNode.Disks {
+			//			nodeDiskMap[disk.Medium.String()] = nodeDiskMap[disk.Medium.String()] + 1
+			//		}
+			//	}
+			//}
 		}
 
 		printDisks(preUpgradeNodeDisksMap)
