@@ -91,7 +91,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 					defer func() {
 						close(stopSignal)
 					}()
-				} else if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) && opver.LessThan(ParallelUpgradeMinOpVersion) {
+				} else if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) && (opver.LessThan(ParallelUpgradeMinOpVersion) || pxVersion.LessThan(ParallelUpgradeMinPxVersion)) {
 					go DoPDBValidation(stopSignal, &mError)
 					defer func() {
 						close(stopSignal)

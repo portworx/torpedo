@@ -1080,7 +1080,7 @@ func ListNodePDBs() ([]*v1.PodDisruptionBudget, error) {
 	}
 	pdbList := make([]*v1.PodDisruptionBudget, 0)
 	for _, pdb := range pdbs.Items {
-		if strings.HasPrefix(pdb.Name, "px") && pdb.Name != "px-storage" && pdb.Name != "px-kvdb" {
+		if strings.HasPrefix(pdb.Name, "px") && pdb.Name != "px-kvdb" {
 			pdbList = append(pdbList, &pdb)
 		}
 	}
@@ -14283,6 +14283,8 @@ func ValidateNodePDB(minAvailable int, totalNodes int, errChan ...*chan error) {
 				nodesDown++
 			}
 		}
+		// NodesDown only counts nodes which have PDB minAvailable 0. There can be nodes which are in the process of upgrade
+		// Such nodes do not have any PDB and that count is got by the difference of total nodes in the cluster and nodes that have a pdb
 		nodesDown = nodesDown + (totalNodes - len(pdblist))
 		return nodesDown, false, nil
 	}
