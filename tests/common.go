@@ -14274,7 +14274,7 @@ func ValidateNodePDB(minAvailable int, totalNodes int, errChan ...*chan error) {
 	}()
 	t := func() (interface{}, bool, error) {
 		pdblist, err := ListNodePDBs()
-		if pdblist == nil {
+		if pdblist == nil || len(pdblist) == 0 {
 			return nil, true, fmt.Errorf("error listing node PDBs :%s", err)
 		}
 		nodesDown := 0
@@ -14285,6 +14285,8 @@ func ValidateNodePDB(minAvailable int, totalNodes int, errChan ...*chan error) {
 		}
 		// NodesDown only counts nodes which have PDB minAvailable 0. There can be nodes which are in the process of upgrade
 		// Such nodes do not have any PDB and that count is got by the difference of total nodes in the cluster and nodes that have a pdb
+		log.Debugf("Nodes with minAvailable 0: %d", nodesDown)
+		log.Debugf("Total nodes in the cluster: %d, and nodes with PDB: %d", totalNodes, len(pdblist))
 		nodesDown = nodesDown + (totalNodes - len(pdblist))
 		return nodesDown, false, nil
 	}

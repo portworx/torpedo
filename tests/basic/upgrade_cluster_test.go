@@ -2,10 +2,11 @@ package tests
 
 import (
 	"fmt"
-	"github.com/hashicorp/go-version"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/go-version"
 
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
 	. "github.com/onsi/ginkgo/v2"
@@ -103,7 +104,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 				var vQuorumError error
 				// validate volume quorum during upgrade
 				if opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
-					log.Info("Starting volume quorum validation for Portworx upgrade .......")
+					log.Info("Starting volume quorum validation for cluster upgrade .......")
 					stopVolumeQuorumValidationSignal := make(chan struct{})
 					go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQuorumError)
 					defer close(stopVolumeQuorumValidationSignal)
