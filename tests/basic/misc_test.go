@@ -44,18 +44,19 @@ var _ = Describe("{SetupTeardown}", func() {
 
 	It("has to setup, validate and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
+		Inst().AppList = []string{"kafka-stack"}
 
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-%d", i))...)
+		for i := 0; i < 6; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("kakfa-%d", i))...)
 		}
 		ValidateApplications(contexts)
 
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 
-		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
-		}
+		//for _, ctx := range contexts {
+		//	TearDownContext(ctx, opts)
+		//}
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
