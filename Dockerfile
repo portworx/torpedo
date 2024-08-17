@@ -22,7 +22,7 @@ RUN curl -fsSL https://clis.cloud.ibm.com/install/linux | sh && \
     ibmcloud plugin install -f container-service
 
 # Install vCluster binary
-RUN curl -L -o vcluster "https://github.com/loft-sh/vcluster/releases/latest/download/vcluster-linux-amd64"  \
+RUN curl -L -o vcluster "https://github.com/loft-sh/vcluster/releases/download/v0.15.7/vcluster-linux-amd64"  \
     && install -c -m 0755 vcluster /usr/local/bin  \
     && rm -f vcluster
 
