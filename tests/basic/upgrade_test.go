@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/hashicorp/go-version"
 
 	"go.uber.org/multierr"
 	"math/rand"
@@ -119,7 +120,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		storageNodes := node.GetStorageNodes()
 		numOfNodes := len(node.GetStorageDriverNodes())
 
-		//AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
+		// AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
 		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
 		log.FailOnError(err, "Cloud drive installation failed")
 
@@ -156,6 +157,24 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 			defer func() {
 				close(stopSignal)
 			}()
+
+			var vQuorumError error
+			opver, err := optest.GetPxOperatorVersion()
+			log.FailOnError(err, "error getting operator version")
+			pxver, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+			log.FailOnError(err, "error getting driver version")
+			pxVersion, _ := version.NewVersion(pxver)
+
+			if opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
+				log.Info("Starting volume quorum validation for Portworx upgrade")
+				stopVolumeQuorumValidationSignal := make(chan struct{})
+				go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQuorumError)
+				defer close(stopVolumeQuorumValidationSignal)
+			} else {
+				log.Warnf("Skipping volume quorum validation due to version constraints.......")
+				log.Warnf("Required Operator version: %s, actual Operator version: %s", ParallelUpgradeMinOpVersion, opver)
+				log.Warnf("Required PX version: %s, actual PX version: %s", ParallelUpgradeMinPxVersion, pxVersion)
+			}
 
 			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
 			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
@@ -228,8 +247,12 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				if mError != nil {
 					break
 				}
+				if vQuorumError != nil {
+					break
+				}
 			}
 			dash.VerifyFatal(mError, nil, "validate apps during PX upgrade")
+			dash.VerifyFatal(vQuorumError, nil, "validate volume quorum during PX upgrade")
 		})
 
 		Step("Destroy apps", func() {
@@ -617,7 +640,7 @@ var _ = Describe("{UpgradePxKvdbMemberDown}", func() {
 						dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Upgrade took more than expected time to complete")
 						upgradeStatus = "FAIL"
 					}
-					//check if all the versions are updated except one node.
+					// check if all the versions are updated except one node.
 					var count = 0
 					for _, n := range storageNodes {
 						updatedPXVersion, err := Inst().V.GetDriverVersionOnNode(n)

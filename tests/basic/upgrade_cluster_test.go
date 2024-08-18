@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-version"
+
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -73,14 +75,24 @@ var _ = Describe("{UpgradeCluster}", func() {
 		}
 
 		printDisks(preUpgradeNodeDisksMap)
-
+		pxVersionString, err := Inst().V.GetDriverVersion()
+		var pxVersion *version.Version
+		if err == nil {
+			pxVersion, err = version.NewVersion(pxVersionString)
+		}
+		log.FailOnError(err, "failed to get px version")
 		for _, version := range versions {
 			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), version), func() {
 				stopSignal := make(chan struct{})
 
 				var mError error
 				opver, err := oputil.GetPxOperatorVersion()
-				if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) {
+				if err == nil && opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
+					go DoParallelUpgradePDBValidation(stopSignal, &mError)
+					defer func() {
+						close(stopSignal)
+					}()
+				} else if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) && (opver.LessThan(ParallelUpgradeMinOpVersion) || pxVersion.LessThan(ParallelUpgradeMinPxVersion)) {
 					go DoPDBValidation(stopSignal, &mError)
 					defer func() {
 						close(stopSignal)
@@ -89,9 +101,22 @@ var _ = Describe("{UpgradeCluster}", func() {
 					log.Warnf("PDB validation skipped. Current Px-Operator version: [%s], minimum required: [%s]. Error: [%v].", opver, PDBValidationMinOpVersion, err)
 				}
 
+				var vQuorumError error
+				// validate volume quorum during upgrade
+				if opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
+					log.Info("Starting volume quorum validation for cluster upgrade .......")
+					stopVolumeQuorumValidationSignal := make(chan struct{})
+					go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQuorumError)
+					defer close(stopVolumeQuorumValidationSignal)
+				} else {
+					log.Warnf("Skipping volume quorum validation due to version constraints.......")
+					log.Warnf("Required Operator version: %s, actual Operator version: %s", PDBValidationMinOpVersion, opver)
+					log.Warnf("Required PX version: %s, actual PX version: %s", ParallelUpgradeMinPxVersion, pxVersion)
+				}
+
 				err = Inst().S.UpgradeScheduler(version)
 				if err != nil {
-					err = Inst().S.RefreshNodeRegistry()
+					err := Inst().S.RefreshNodeRegistry()
 					log.FailOnError(err, "Refresh Node Registry failed")
 					err = Inst().V.RefreshDriverEndpoints()
 					log.FailOnError(err, "Refresh Driver Endpoints failed")
@@ -100,6 +125,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 				}
 				dash.VerifyFatal(mError, nil, "validation of PDB of px-storage during cluster upgrade successful")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
+				dash.VerifyFatal(vQuorumError, nil, "validate volume quorum during kubernetes upgrade")
 
 				// Sleep needed for AKS cluster upgrades
 				if Inst().S.String() == aks.SchedName {
@@ -212,7 +238,7 @@ func validateClusterNodes(stopSignal <-chan struct{}, mError *error) {
 		stNodeNames[stNode.Name] = true
 	}
 
-	//Handling case where we have storageless node as kvdb node with dedicated kvdb device attached.
+	// Handling case where we have storageless node as kvdb node with dedicated kvdb device attached.
 	kvdbNodes, _ := GetAllKvdbNodes()
 	for _, kvdbNode := range kvdbNodes {
 		sNode, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
