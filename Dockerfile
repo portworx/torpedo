@@ -50,7 +50,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
 # Build a fresh container with just the binaries
 FROM alpine:3.18.5
 
-RUN apk add --no-cache ca-certificates bash curl jq libc6-compat coreutils
+RUN apk add --no-cache ca-certificates bash curl jq libc6-compat coreutils git
 
  # Install Azure Cli
 RUN apk add --no-cache --update python3 py3-pip
@@ -69,10 +69,24 @@ COPY --from=lachlanevenson/k8s-kubectl:latest /usr/local/bin/kubectl /usr/local/
 # Install helm from Docker Hub
 COPY --from=alpine/helm:latest /usr/bin/helm /usr/local/bin/helm
 
+WORKDIR /github.com/clone
+
+RUN ls
+
+RUN git clone --single-branch --branch master https://github.com/portworx/torpedo.git . 2>/dev/null
+
+RUN ls
+
+RUN git status
+
+RUN git --no-pager log -1 --oneline
+
 # Copy scripts into container
 WORKDIR /torpedo
 COPY deployments deployments
 COPY scripts scripts
+
+RUN chmod +x /torpedo/scripts/*.sh
 
 # Install Postman-Newman Dependencies
 RUN apk update && apk upgrade \
@@ -108,5 +122,17 @@ COPY --from=build /usr/local/bin/vcluster /bin/vcluster
 COPY --from=build /root/.bluemix/plugins /root/.bluemix/plugins
 COPY drivers drivers
 
-ENTRYPOINT ["ginkgo", "--fail-fast", "--poll-progress-after", "3m", "-v", "-trace", "--junit-report=/testresults/junit_basic.xml"]
+COPY --from=build /usr/local/go /usr/local/go
+COPY --from=build /go /go
+# COPY --from=build /root/.cache/go-build /root/.cache/go-build
+ENV GOPATH=/go
+ENV GOROOT=/usr/local/go
+# ENV GOCACHE=/root/.cache/go-build
+ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH
+
+# RUN ls /root/.cache/go-build
+
+RUN if [ -d /root/.cache/go-build ]; then echo "Directory exists"; else echo "Directory does not exist"; fi
+
+ENTRYPOINT ["/torpedo/scripts/git-checkout.sh"]
 CMD []

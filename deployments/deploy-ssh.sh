@@ -47,7 +47,7 @@ if [ -z "${OBJECT_STORE_PROVIDER}" ]; then
 fi
 
 if [ -z "${SPEC_DIR}" ]; then
-    SPEC_DIR="../drivers/scheduler/k8s/specs"
+    SPEC_DIR="../../drivers/scheduler/k8s/specs"
 fi
 
 if [ -z "${SCHEDULER}" ]; then
@@ -273,6 +273,7 @@ if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]]
     TEST_SUITE='"bin/basic.test"'
 fi
 
+TEST_SUITE="./tests/basic"
 echo "Using test suite: ${TEST_SUITE}"
 
 if [ -z "${AUTOPILOT_UPGRADE_VERSION}" ]; then
@@ -509,8 +510,8 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: [ "ginkgo" ]
-    args: [ "--trace",
+    command: [ "/torpedo/scripts/git-checkout.sh" ]
+    args: [ "ginkgo", "--trace",
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
             "--poll-progress-after", "20m",
@@ -596,6 +597,8 @@ spec:
       valueFrom:
         fieldRef:
           fieldPath: spec.nodeName
+    - name: BRANCH
+      value: "${BRANCH}"
     - name: K8S_VENDOR
       value: "${K8S_VENDOR}"
     - name: TORPEDO_SSH_USER

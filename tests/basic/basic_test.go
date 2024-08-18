@@ -44,6 +44,7 @@ func TestBasic(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	log.Infof("It works!")
 	dash = Inst().Dash
 	log.Infof("Init instance")
 	value, exists := os.LookupEnv("NOMAD_ADDR")
