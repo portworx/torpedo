@@ -2,10 +2,11 @@ package tests
 
 import (
 	"fmt"
-	"github.com/hashicorp/go-version"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/go-version"
 
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
 	. "github.com/onsi/ginkgo/v2"
@@ -74,24 +75,24 @@ var _ = Describe("{UpgradeCluster}", func() {
 		}
 
 		printDisks(preUpgradeNodeDisksMap)
-
-		storageNodes := node.GetStorageNodes()
-		if len(storageNodes) == 0 {
-			log.FailOnError(fmt.Errorf("No storage nodes found"), "error getting px storage nodes")
+		pxVersionString, err := Inst().V.GetDriverVersion()
+		var pxVersion *version.Version
+		if err == nil {
+			pxVersion, err = version.NewVersion(pxVersionString)
 		}
-		pxver, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
-		if err != nil {
-			log.Errorf("error getting px version on node [%s]: [%v]", storageNodes[0].Name, err)
-		}
-		pxVersion, _ := version.NewVersion(pxver)
-
+		log.FailOnError(err, "failed to get px version")
 		for _, version := range versions {
 			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), version), func() {
 				stopSignal := make(chan struct{})
 
 				var mError error
 				opver, err := oputil.GetPxOperatorVersion()
-				if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) {
+				if err == nil && opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
+					go DoParallelUpgradePDBValidation(stopSignal, &mError)
+					defer func() {
+						close(stopSignal)
+					}()
+				} else if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) && (opver.LessThan(ParallelUpgradeMinOpVersion) || pxVersion.LessThan(ParallelUpgradeMinPxVersion)) {
 					go DoPDBValidation(stopSignal, &mError)
 					defer func() {
 						close(stopSignal)
@@ -102,20 +103,20 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 				var vQuorumError error
 				// validate volume quorum during upgrade
-				if opver.GreaterThanOrEqual(ParallelUpgradeOperatorVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradePXVersion) {
-					log.Info("Starting volume quorum validation for Portworx upgrade .......")
+				if opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
+					log.Info("Starting volume quorum validation for cluster upgrade .......")
 					stopVolumeQuorumValidationSignal := make(chan struct{})
 					go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQuorumError)
 					defer close(stopVolumeQuorumValidationSignal)
 				} else {
 					log.Warnf("Skipping volume quorum validation due to version constraints.......")
-					log.Warnf("Required Operator version: %s, actual Operator version: %s", ParallelUpgradeOperatorVersion, opver)
-					log.Warnf("Required PX version: %s, actual PX version: %s", ParallelUpgradePXVersion, pxVersion)
+					log.Warnf("Required Operator version: %s, actual Operator version: %s", PDBValidationMinOpVersion, opver)
+					log.Warnf("Required PX version: %s, actual PX version: %s", ParallelUpgradeMinPxVersion, pxVersion)
 				}
 
 				err = Inst().S.UpgradeScheduler(version)
 				if err != nil {
-					err = Inst().S.RefreshNodeRegistry()
+					err := Inst().S.RefreshNodeRegistry()
 					log.FailOnError(err, "Refresh Node Registry failed")
 					err = Inst().V.RefreshDriverEndpoints()
 					log.FailOnError(err, "Refresh Driver Endpoints failed")

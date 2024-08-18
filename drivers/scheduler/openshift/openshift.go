@@ -744,7 +744,7 @@ func downloadOCP4Client(ocpVersion string) error {
 	}
 
 	log.Infof("Downloading OCP [%s] client from URL [%s] to [%s]...", ocpVersion, downloadURL, clientName)
-	stdout, err := exec.Command("curl", "-o", clientName, downloadURL).CombinedOutput()
+	stdout, err := exec.Command("curl", "-o", clientName, "-L", downloadURL).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to download OpenShift [%s] client from [%s], Err %v %v", clientName, downloadURL, stdout, err)
 	}

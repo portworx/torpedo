@@ -65,6 +65,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/stork"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
+	v1 "k8s.io/api/policy/v1"
 
 	"go.uber.org/multierr"
 	"golang.org/x/sync/errgroup"
@@ -231,9 +232,11 @@ var (
 
 var (
 	// PDBValidationMinOpVersion specifies the minimum PX Operator version required to enable PDB validation in the UpgradeCluster
-	PDBValidationMinOpVersion, _      = version.NewVersion("24.1.0-")
-	ParallelUpgradeOperatorVersion, _ = version.NewVersion("24.2.0-")
-	ParallelUpgradePXVersion, _       = version.NewVersion("3.1.2")
+	PDBValidationMinOpVersion, _ = version.NewVersion("24.1.0-")
+	// ParallelUpgradeMinOpVersion specifies the minimum operator version that supports smart and parallel upgrades
+	ParallelUpgradeMinOpVersion, _ = version.NewVersion("24.2.0-")
+	// ParallelUpgradePxVersion specifies minimum portworx version that supports parallel upgrade
+	ParallelUpgradeMinPxVersion, _ = version.NewVersion("3.1.2")
 )
 
 type OwnershipAccessType int32
@@ -1064,6 +1067,25 @@ func GetPDBValue() (int, int) {
 		return -1, -1
 	}
 	return pdb.Spec.MinAvailable.IntValue(), int(pdb.Status.DisruptionsAllowed)
+}
+
+// Return a list of PodDisruptionBudegts of type PodDisruptionBudget
+func ListNodePDBs() ([]*v1.PodDisruptionBudget, error) {
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		return nil, err
+	}
+	pdbs, err := policyops.Instance().ListPodDisruptionBudget(stc.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	pdbList := make([]*v1.PodDisruptionBudget, 0)
+	for _, pdb := range pdbs.Items {
+		if strings.HasPrefix(pdb.Name, "px") && pdb.Name != "px-kvdb" {
+			pdbList = append(pdbList, &pdb)
+		}
+	}
+	return pdbList, nil
 }
 
 func ValidatePureCloudDriveTopologies() error {
@@ -14209,6 +14231,55 @@ func DoVolumeQuorumValidation(volumeQuorumValidationStopSignal chan struct{}, vQ
 		}
 	}
 }
+func DoParallelUpgradePDBValidation(stopSignal <-chan struct{}, mError *error) {
+
+	nodes, err := Inst().V.GetDriverNodes()
+	if err != nil {
+		*mError = multierr.Append(*mError, err)
+		return
+	}
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		*mError = multierr.Append(*mError, err)
+		return
+	}
+	userMinAvailable, err := oputil.MinAvailableForStoragePDB(stc)
+	if err != nil {
+		userMinAvailable = -1
+	}
+	quorumValue := (len(nodes) / 2) + 1
+
+	if stc.Annotations != nil {
+		if userMinAvailable >= quorumValue && userMinAvailable < len(nodes) {
+			quorumValue = userMinAvailable
+		} else if stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] == "true" {
+			log.Infof("Non Disruptive Upgrade is disabled without providing valid minAvailable. Upgrading 1 node at a time")
+			quorumValue = len(nodes) - 1
+		}
+
+	}
+
+	itr := 1
+	for {
+		log.Infof("PDB validation iteration: #%d", itr)
+		select {
+		case <-stopSignal:
+			log.Infof("Exiting PDB validation routine")
+			return
+		default:
+			errorChan := make(chan error, 50)
+			ValidateNodePDB(quorumValue, len(nodes), &errorChan)
+			for err := range errorChan {
+				*mError = multierr.Append(*mError, err)
+			}
+			if *mError != nil {
+				return
+			}
+			itr++
+			time.Sleep(10 * time.Second)
+		}
+	}
+}
 
 func ValidateVolumeQuorum(errChan ...*chan error) {
 	volIDs, err := Inst().V.ListAllVolumes()
@@ -14299,4 +14370,41 @@ func DeleteTorpedoApps() error {
 		}
 	}
 	return nil
+}
+func ValidateNodePDB(minAvailable int, totalNodes int, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	t := func() (interface{}, bool, error) {
+		pdblist, err := ListNodePDBs()
+		if pdblist == nil || len(pdblist) == 0 {
+			return nil, true, fmt.Errorf("error listing node PDBs :%s", err)
+		}
+		nodesDown := 0
+		for _, pdb := range pdblist {
+			if pdb.Spec.MinAvailable.IntValue() == 0 {
+				nodesDown++
+			}
+		}
+		// NodesDown only counts nodes which have PDB minAvailable 0. There can be nodes which are in the process of upgrade
+		// Such nodes do not have any PDB and that count is got by the difference of total nodes in the cluster and nodes that have a pdb
+		log.Debugf("Nodes with minAvailable 0: %d", nodesDown)
+		log.Debugf("Total nodes in the cluster: %d, and nodes with PDB: %d", totalNodes, len(pdblist))
+		nodesDown = nodesDown + (totalNodes - len(pdblist))
+		return nodesDown, false, nil
+	}
+	nodesDown, err := task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
+	if err != nil {
+		processError(err, errChan...)
+	}
+	nodesDownInt := nodesDown.(int)
+
+	Step("Validate PDB minAvailable for px storage", func() {
+		if nodesDownInt > totalNodes-minAvailable {
+			err := fmt.Errorf("nodes down [%d] is more than allowed disruptions [%d]", nodesDownInt, totalNodes-minAvailable)
+			processError(err, errChan...)
+		}
+	})
 }
