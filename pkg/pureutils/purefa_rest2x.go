@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	RestAPI = "2.8"
+	RestAPI = "2.35"
 )
 
 // PureCreateClientAndConnect Create FA Client and Connect
