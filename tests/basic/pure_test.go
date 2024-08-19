@@ -4548,7 +4548,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 	itLog := "CreateAndValidatePVCWithIopsAndBandwidth"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		numberOfPvc := 50
+		numberOfPvc := 500
 		var (
 			k8sCore       = core.Instance()
 			wg            sync.WaitGroup
