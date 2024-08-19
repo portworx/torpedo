@@ -26,8 +26,6 @@ RUN curl -L -o vcluster "https://github.com/loft-sh/vcluster/releases/latest/dow
     && install -c -m 0755 vcluster /usr/local/bin  \
     && rm -f vcluster
 
-
-
 # No need to copy *everything*. This keeps the cache useful
 COPY vendor vendor
 COPY Makefile Makefile
@@ -62,7 +60,6 @@ RUN bash -c "$(curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/s
     chmod a+x /root/bin/oci && \
     mv -f /root/bin/oci /usr/bin/oci
 
-
 # Install kubectl from Docker Hub.
 COPY --from=lachlanevenson/k8s-kubectl:latest /usr/local/bin/kubectl /usr/local/bin/kubectl
 
@@ -94,6 +91,9 @@ RUN apk add --no-cache openssh sshpass
 
 # Install dependancy for OCP 4.14 CLI
 RUN apk --update add gcompat
+
+#Install aws-cli    
+RUN apk add aws-cli && aws --version
 
 # Install yq
 RUN wget https://github.com/mikefarah/yq/releases/download/v4.25.1/yq_linux_amd64 -O /usr/bin/yq && \

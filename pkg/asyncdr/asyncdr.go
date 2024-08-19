@@ -805,7 +805,9 @@ func ChangePxServiceToLoadBalancer(internalLB bool) error {
 			}
 			pxStc.ObjectMeta.Annotations[pxStcServiceTypeKey] = stcLoadBalancerValue
 
-			if internalLB {
+			_, cloudName := IsCloud()
+
+			if internalLB || cloudName == "eks" {
 				// Add LoadBalancer annotations specific to EKS ELB
 				if pxStc.Spec.Metadata == nil {
 					pxStc.Spec.Metadata = &opcorev1.Metadata{}
@@ -831,7 +833,7 @@ func ChangePxServiceToLoadBalancer(internalLB bool) error {
 			return fmt.Errorf("No storage clusters found")
 		}
 
-		time.Sleep(1 * time.Minute)
+		time.Sleep(2 * time.Minute)
 
 		// Check if service has been changed to type loadbalancer
 		pxService, err := core.Instance().GetService(pxServiceName, pxNamespace)
