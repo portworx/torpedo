@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -426,5 +428,643 @@ var _ = Describe("{ValidateFiftyVolumeBackups}", Label(TestCaseLabelsMap[Validat
 		log.InfoD("Switching back context to Source cluster")
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+	})
+})
+
+var _ = Describe("{ClusterSharingWithConcurrentBackupOperations}", func() {
+	var (
+		appNamespaces             []string
+		backupAppContexts         []*scheduler.Context
+		namespaceAppContextMap    = make(map[string][]*scheduler.Context)
+		cloudAccountName          string
+		cloudAccountUid           string
+		backupLocationName        string
+		backupLocationUid         string
+		backupLocationMap         map[string]string
+		backupResults             = make(map[string][]string)
+		newBackupResults          = make(map[string][]string)
+		srcClusterUid             string
+		destClusterUid            string
+		newBackupMap              = make(map[string][]string)
+		newestBackupMap           = make(map[string][]string)
+		newBackupNameList         []string
+		newestBackupNameList      []string
+		numDeployments            = 10
+		numOfBackupsPerDeployment = 2
+		snapshotLimit             = 4
+		numOfPrimaryUsers         = 10
+		primaryUserList           []string
+		numOfSharedUsers          = 10
+		sharedUserList            []string
+		userRoleMap               = make(map[string]backup.PxBackupRole)
+		numberOfGroups            = 10
+		groupList                 = make([]string, 0)
+		splitIndexForUsers        = 5
+		splitIndexForGroups       = 5
+		firstUserList             []string
+		secondUserList            []string
+		firstGroupList            []string
+		secondGroupList           []string
+		restoreNames              []string
+		numOfRestores             = 5
+		firstRandomUser           string
+		secondRandomUser          string
+		backupDriver              = Inst().Backup
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("ClusterSharingWithConcurrentBackupOperations", "TC to verify Concurrent Backup and Restore Operations with Cluster Sharing", nil, 0, Sabrarhussaini, Q2FY25)
+		log.Infof("Scheduling applications")
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"postgres-backup"}
+		backupAppContexts = make([]*scheduler.Context, 0)
+		appNamespaces = make([]string, 0)
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "Switching context to source cluster failed")
+		log.Infof("Scheduling applications")
+		for i := 0; i < numDeployments; i++ {
+			taskName := fmt.Sprintf("multiple-%d", i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				namespace := GetAppNamespace(appCtx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+				backupAppContexts = append(backupAppContexts, appCtx)
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				namespaceAppContextMap[namespace] = append(namespaceAppContextMap[namespace], appCtx)
+			}
+		}
+	})
+
+	It("TC to verify Concurrent Backup and Restore Operations with Cluster Sharing", func() {
+		Step("Validating applications ", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(backupAppContexts)
+		})
+
+		Step("Create a set of primary users with different roles", func() {
+			log.Infof("Creating %d primary users with different roles", numOfPrimaryUsers)
+			primaryUserList = CreateUsers(numOfPrimaryUsers)
+			roles := []backup.PxBackupRole{
+				//backup.SuperAdmin,
+				backup.ApplicationUser,
+				backup.ApplicationOwner,
+				backup.InfrastructureOwner,
+			}
+			for i, user := range primaryUserList {
+				role := roles[i%len(roles)]
+				err := backup.AddRoleToUser(user, role, fmt.Sprintf("Adding %v role to %s", role, user))
+				log.FailOnError(err, "failed to add role %s to the user %s", role, user)
+				userRoleMap[user] = role
+			}
+			for user, role := range userRoleMap {
+				log.Infof("User %s has been assigned role %v", user, role)
+			}
+		})
+
+		Step("Create a set of users to share clusters with", func() {
+			log.Infof("Creating %d secondary users to share the clusters with", numOfSharedUsers)
+			sharedUserList = CreateUsers(numOfSharedUsers)
+			roles := []backup.PxBackupRole{
+				//backup.SuperAdmin,
+				backup.ApplicationUser,
+				backup.ApplicationOwner,
+				backup.InfrastructureOwner,
+			}
+			for i, user := range sharedUserList {
+				role := roles[i%len(roles)]
+				err := backup.AddRoleToUser(user, role, fmt.Sprintf("Adding %v role to %s", role, user))
+				log.FailOnError(err, "failed to add role %s to the user %s", role, user)
+			}
+			firstUserList = sharedUserList[:splitIndexForUsers]
+			secondUserList = sharedUserList[splitIndexForUsers:]
+		})
+
+		Step("Create Groups to share clusters with", func() {
+			log.InfoD("Creating %d groups to share the clusters with", numberOfGroups)
+			var wg sync.WaitGroup
+			var mutex sync.Mutex
+			for i := 1; i <= numberOfGroups; i++ {
+				groupName := fmt.Sprintf("testGroup%v", i)
+				wg.Add(1)
+				go func(groupName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := backup.AddGroup(groupName)
+					log.FailOnError(err, "Failed to create group - %v", groupName)
+					mutex.Lock()
+					groupList = append(groupList, groupName)
+					mutex.Unlock()
+				}(groupName)
+			}
+			wg.Wait()
+			firstGroupList = groupList[:splitIndexForGroups]
+			secondGroupList = groupList[splitIndexForGroups:]
+		})
+
+		Step(fmt.Sprintf("Adding Credentials and BackupLocation from px-admin user and making it public"), func() {
+			log.InfoD(fmt.Sprintf("Adding Credentials and BackupLocation from px-admin user and making it public"))
+			providers := GetBackupProviders()
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-admin ctx")
+			for _, provider := range providers {
+				cloudAccountUid = uuid.New()
+				cloudAccountName = fmt.Sprintf("autogenerated-cred-%v", RandomString(5))
+				if provider != drivers.ProviderNfs {
+					err = CreateCloudCredential(provider, cloudAccountName, cloudAccountUid, BackupOrgID, ctx)
+					log.FailOnError(err, "Failed to create cloud credential - %s", err)
+					err = AddCloudCredentialOwnership(cloudAccountName, cloudAccountUid, nil, nil, Invalid, Read, ctx, BackupOrgID)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying public ownership update for cloud credential %s ", cloudAccountName))
+				}
+				backupLocationName = fmt.Sprintf("autogenerated-backup-location-%v", RandomString(5))
+				backupLocationUid = uuid.New()
+				err = CreateBackupLocationWithContext(provider, backupLocationName, backupLocationUid, cloudAccountName, cloudAccountUid, getGlobalBucketName(provider), BackupOrgID, "", ctx, true)
+				log.FailOnError(err, "Failed to add backup location %s using provider %s for px-admin user", backupLocationName, provider)
+				err = AddBackupLocationOwnership(backupLocationName, backupLocationUid, nil, nil, Invalid, Read, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying public ownership update for backup location %s", backupLocationName))
+			}
+		})
+
+		Step("Create source and destination clusters for all primary users", func() {
+			log.InfoD("Creating source and destination clusters for all primary users")
+			var wg sync.WaitGroup
+			for _, user := range primaryUserList {
+				wg.Add(1)
+				go func(user string) {
+					defer wg.Done()
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					if err != nil {
+						log.Errorf("Failed to fetch user %s ctx: %v", user, err)
+						return
+					}
+					log.Infof("Creating source [%s] and destination [%s] clusters for user [%s]", SourceClusterName, DestinationClusterName, user)
+					err = CreateApplicationClusters(BackupOrgID, "", "", nonAdminCtx)
+					if err != nil {
+						log.Errorf("Failed to create source [%s] and destination [%s] clusters with user [%s] ctx: %v", SourceClusterName, DestinationClusterName, user, err)
+						return
+					}
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with user [%s] ctx", SourceClusterName, DestinationClusterName, user))
+					srcClusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, nonAdminCtx)
+					if err != nil {
+						log.Errorf("Failed to fetch [%s] cluster status for user [%s]: %v", SourceClusterName, user, err)
+						return
+					}
+					dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online for user [%s]", SourceClusterName, user))
+					srcClusterUid, err = Inst().Backup.GetClusterUID(nonAdminCtx, BackupOrgID, SourceClusterName)
+					if err != nil {
+						log.Errorf("Failed to fetch [%s] cluster UID for user [%s]: %v", SourceClusterName, user, err)
+						return
+					}
+					log.Infof("User [%s]: Cluster [%s] UID: [%s]", user, SourceClusterName, srcClusterUid)
+					dstClusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, nonAdminCtx)
+					if err != nil {
+						log.Errorf("Failed to fetch [%s] cluster status for user [%s]: %v", DestinationClusterName, user, err)
+						return
+					}
+					dash.VerifyFatal(dstClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online for user [%s]", DestinationClusterName, user))
+					destClusterUid, err = Inst().Backup.GetClusterUID(nonAdminCtx, BackupOrgID, DestinationClusterName)
+					if err != nil {
+						log.Errorf("Failed to fetch [%s] cluster UID for user [%s]: %v", DestinationClusterName, user, err)
+						return
+					}
+					log.Infof("User [%s]: Cluster [%s] UID: [%s]", user, DestinationClusterName, destClusterUid)
+				}(user)
+			}
+			wg.Wait()
+		})
+
+		Step("Taking multiple backups for all primary users", func() {
+			log.InfoD("Taking backup for all primary users")
+			var wg sync.WaitGroup
+			var mu sync.Mutex
+
+			for _, user := range primaryUserList {
+				wg.Add(1)
+				go func(user string) {
+					defer wg.Done()
+					ctx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "Failed to fetch context for user")
+					backupNameList, err := TakeMultipleBackupsPerDeployment(ctx, BackupOrgID, SourceClusterName, numOfBackupsPerDeployment, snapshotLimit, backupLocationName, backupLocationUid, backupAppContexts, BackupNamePrefix)
+					if err != nil {
+						log.Errorf("Failed to take backups for user %s: %v", user, err)
+						return
+					}
+					mu.Lock()
+					backupResults[user] = backupNameList
+					mu.Unlock()
+				}(user)
+			}
+			wg.Wait()
+			for user, backupNameList := range backupResults {
+				log.Infof("User %s: All backups taken: %v", user, backupNameList)
+			}
+		})
+
+		Step("Initiate additional backups and restores for all primary users for validation", func() {
+			log.InfoD("Initiating additional backups and restores for all primary users validation")
+			var wg sync.WaitGroup
+
+			for _, user := range primaryUserList {
+				wg.Add(1)
+				go func(user string) {
+					defer wg.Done()
+					defer GinkgoRecover()
+
+					ctx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					if err != nil {
+						log.Errorf("Failed to fetch context for user %s: %v", user, err)
+						return
+					}
+
+					for _, scheduledAppContext := range backupAppContexts {
+						var innerWg sync.WaitGroup
+						semaphore := make(chan struct{}, snapshotLimit)
+
+						for i := 0; i < numOfBackupsPerDeployment; i++ {
+							innerWg.Add(1)
+							go func(i int, scheduledAppContext *scheduler.Context) {
+								defer innerWg.Done()
+								defer GinkgoRecover()
+
+								semaphore <- struct{}{}
+								defer func() { <-semaphore }()
+								currentBackupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, RandomString(8), i+1)
+								_, err := CreateBackupByNamespacesWithoutCheck(currentBackupName, SourceClusterName, backupLocationName, backupLocationUid, []string{scheduledAppContext.ScheduleOptions.Namespace}, make(map[string]string), BackupOrgID, srcClusterUid, "", "", "", "", ctx)
+								if err != nil {
+									log.Errorf("Failed to create backup %s: %v", currentBackupName, err)
+									return
+								}
+								log.Infof("Backup %s triggered for user %s", currentBackupName, user)
+								newBackupNameList = append(newBackupNameList, currentBackupName)
+							}(i, scheduledAppContext)
+						}
+						newBackupMap[user] = newBackupNameList
+						innerWg.Wait()
+					}
+
+					// Initiate restore for the backup
+					backups, exists := backupResults[user]
+					if !exists {
+						log.Errorf("No backups found for user %s", user)
+						return
+					}
+					for i, backupName := range backups {
+						if i >= numOfRestores {
+							break
+						}
+						restoreName := fmt.Sprintf("%s-restore-%d", user, i+1)
+						_, err := CreateRestoreWithoutCheck(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx)
+						log.FailOnError(err, "Failed to create restore %s for user %s: %v", restoreName, user)
+						log.Infof("Successfully created restore %s for user %s", restoreName, user)
+
+						restoreNames = append(restoreNames, restoreName)
+					}
+				}(user)
+			}
+			log.Info("All additional backups and restores have been initiated for all primary users.")
+		})
+
+		Step("Share the clusters from each user with other users and groups", func() {
+			log.InfoD("Sharing the clusters from each user with other users and groups")
+			var wg sync.WaitGroup
+
+			for _, user := range primaryUserList {
+				wg.Add(1)
+				go func(user string) {
+					defer wg.Done()
+					ctx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "Failed to fetch context for user")
+					clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+					_, err = ShareClusterWithValidation(ctx, SourceClusterName, clusterUid, sharedUserList, groupList, true)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster for user %s", SourceClusterName, user))
+				}(user)
+			}
+			wg.Wait()
+		})
+
+		Step("Verify the shared backups for a random user", func() {
+			log.InfoD("Verifying the shared backups for the user")
+			firstUserIndex := rand.Intn(len(sharedUserList))
+			firstRandomUser = sharedUserList[firstUserIndex]
+			fmt.Printf("Randomly selected user: %s\n", firstRandomUser)
+			for {
+				secondUserIndex := rand.Intn(len(sharedUserList))
+				if secondUserIndex != firstUserIndex {
+					secondRandomUser = sharedUserList[secondUserIndex]
+					break
+				}
+			}
+			ctx, err := backup.GetNonAdminCtx(firstRandomUser, CommonPassword)
+			log.FailOnError(err, "Fetching user ctx")
+			backups, exists := newBackupMap[primaryUserList[0]]
+			if !exists {
+				log.Errorf("No backups found for user %s", primaryUserList[0])
+			}
+			for _, backupName := range backups {
+				err = BackupSuccessCheck(backupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] success check", backupName))
+				log.Infof("Backup [%s] created successfully", backupName)
+			}
+			// Validate restore for one of the backup
+			backupUID, err := Inst().Backup.GetBackupUID(ctx, backups[0], BackupOrgID)
+			log.FailOnError(err, fmt.Sprintf("Getting UID for backup %v", backups[0]))
+			backupInspectRequest := &api.BackupInspectRequest{
+				Name:  backups[0],
+				Uid:   backupUID,
+				OrgId: BackupOrgID,
+			}
+			resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+			log.FailOnError(err, "Inspect each backup from list")
+			namespaces := resp.GetBackup().GetNamespaces()
+			var collectedAppContexts []*scheduler.Context
+			for _, namespace := range namespaces {
+				if appContexts, exists := namespaceAppContextMap[namespace]; exists {
+					collectedAppContexts = append(collectedAppContexts, appContexts...)
+				} else {
+					fmt.Printf("No app contexts found for namespace: %s\n", namespace)
+				}
+			}
+			restoreName := fmt.Sprintf("%s-restore", firstRandomUser)
+			// double-check the implementation
+			err = CreateRestoreWithValidation(ctx, restoreName, backups[0], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, collectedAppContexts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to restore backup [%s", restoreName))
+			//Validate backup deletion
+			var wg sync.WaitGroup
+			for _, backupName := range backups {
+				wg.Add(1)
+				go func(backupName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+					log.FailOnError(err, "Failed to fetch the backup %s uid of the user %s", backupName, firstRandomUser)
+					_, err = DeleteBackup(backupName, backupUid, BackupOrgID, ctx)
+					log.FailOnError(err, "Failed to delete the backup %s of the user %s", backupName, firstRandomUser)
+				}(backupName)
+			}
+			wg.Wait()
+			// validate the backup deletion from second random user
+			ctx, err = backup.GetNonAdminCtx(secondRandomUser, CommonPassword)
+			log.FailOnError(err, "Fetching user ctx")
+			for _, backupName := range backups {
+				wg.Add(1)
+				go func(backupName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err = DeleteBackupAndWait(backupName, ctx)
+					log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
+				}(backupName)
+			}
+			wg.Wait()
+		})
+
+		Step("Initiate additional backups and restores for all primary users for validation", func() {
+			log.InfoD("Initiating additional backups and restores for all primary users validation")
+			var wg sync.WaitGroup
+
+			for _, user := range primaryUserList {
+				wg.Add(1)
+				go func(user string) {
+					defer wg.Done()
+					defer GinkgoRecover()
+
+					ctx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "Failed to fetch context for user")
+
+					for _, scheduledAppContext := range backupAppContexts {
+						var innerWg sync.WaitGroup
+						semaphore := make(chan struct{}, snapshotLimit)
+
+						for i := 0; i < numOfBackupsPerDeployment; i++ {
+							innerWg.Add(1)
+							go func(i int, scheduledAppContext *scheduler.Context) {
+								defer innerWg.Done()
+								defer GinkgoRecover()
+
+								semaphore <- struct{}{}
+								defer func() { <-semaphore }()
+								currentBackupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, RandomString(8), i+1)
+								_, err := CreateBackupByNamespacesWithoutCheck(currentBackupName, SourceClusterName, backupLocationName, backupLocationUid, []string{scheduledAppContext.ScheduleOptions.Namespace}, make(map[string]string), BackupOrgID, srcClusterUid, "", "", "", "", ctx)
+								if err != nil {
+									log.Errorf("Failed to create backup %s: %v", currentBackupName, err)
+									return
+								}
+								log.Infof("Backup %s triggered for user %s", currentBackupName, user)
+								newestBackupNameList = append(newestBackupNameList, currentBackupName)
+							}(i, scheduledAppContext)
+						}
+						newestBackupMap[user] = newestBackupNameList
+						innerWg.Wait()
+					}
+
+					// Initiate restore for the backup
+					backups, exists := backupResults[user]
+					if !exists {
+						log.Errorf("No backups found for user %s", user)
+						return
+					}
+					for i, backupName := range backups {
+						if i >= numOfRestores {
+							break
+						}
+						restoreName := fmt.Sprintf("%s-restore-%d", user, i+1)
+						_, err := CreateRestoreWithoutCheck(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx)
+						if err != nil {
+							log.Errorf("Failed to create restore %s for user %s: %v", restoreName, user, err)
+						} else {
+							log.Infof("Successfully created restore %s for user %s", restoreName, user)
+						}
+					}
+				}(user)
+			}
+			log.Info("All additional backups and restores have been initiated for all primary users.")
+		})
+
+		Step("Unshare the clusters for a set of users and groups", func() {
+			log.InfoD("Unsharing the clusters from each user with other users and groups")
+			var wg sync.WaitGroup
+
+			for _, user := range primaryUserList {
+				wg.Add(1)
+				go func(user string) {
+					defer wg.Done()
+					ctx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "Failed to fetch context for user")
+					clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+					_, err = UnShareClusterWithValidation(ctx, SourceClusterName, clusterUid, firstUserList, firstGroupList)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster for user %s", SourceClusterName, user))
+				}(user)
+			}
+			wg.Wait()
+		})
+
+		Step("Verify the newly shared backups", func() {
+			log.InfoD("Verifying the newly shared backups")
+			firstUserIndex := rand.Intn(len(firstUserList))
+			firstRandomUser = firstUserList[firstUserIndex]
+			fmt.Printf("Randomly selected user from unshared list of users: %s\n", firstRandomUser)
+			backups := newBackupMap[primaryUserList[0]]
+			ctx, err := backup.GetNonAdminCtx(firstRandomUser, CommonPassword)
+			log.FailOnError(err, "Fetching user ctx")
+			for _, backupName := range backups {
+				err = BackupSuccessCheck(backupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] success check", backupName))
+				log.Infof("Backup [%s] created successfully", backupName)
+			}
+			//Validate backup deletion
+			var wg sync.WaitGroup
+			for _, backupName := range backups {
+				wg.Add(1)
+				go func(backupName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+					log.FailOnError(err, "Failed to fetch the backup %s uid of the user %s", backupName, firstRandomUser)
+					_, err = DeleteBackup(backupName, backupUid, BackupOrgID, ctx)
+					log.FailOnError(err, "Failed to delete the backup %s of the user %s", backupName, firstRandomUser)
+					err = DeleteBackupAndWait(backupName, ctx)
+					log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
+				}(backupName)
+			}
+			wg.Wait()
+		})
+
+		Step("Unshare the clusters from admin for other set of users and groups", func() {
+			log.InfoD("Unsharing the clusters from admin for other set of users and groups")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-admin ctx")
+			clusterEnumerateRequest := &api.ClusterEnumerateRequest{
+				OrgId:          BackupOrgID,
+				IncludeSecrets: false,
+			}
+			clusterObjs, err := Inst().Backup.EnumerateCluster(ctx, clusterEnumerateRequest)
+			log.FailOnError(err, "Fetching cluster objects")
+			for _, clusterObj := range clusterObjs.GetClusters() {
+				clusterUid := clusterObj.GetUid()
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+				_, err = UnShareClusterWithValidation(ctx, SourceClusterName, clusterUid, secondUserList, secondGroupList)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying un-share of source [%s] cluster for px-admin", SourceClusterName))
+			}
+		})
+
+		Step("Initiate additional backups for all primary users for validation", func() {
+			log.InfoD("Taking additional backups for all primary users")
+			var wg sync.WaitGroup
+			var mu sync.Mutex
+
+			for _, user := range primaryUserList {
+				wg.Add(1)
+				go func(user string) {
+					defer wg.Done()
+					ctx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "Failed to fetch context for user")
+					backupNameList, err := TakeMultipleBackupsPerDeployment(ctx, BackupOrgID, SourceClusterName, numOfBackupsPerDeployment, snapshotLimit, backupLocationName, backupLocationUid, backupAppContexts, BackupNamePrefix)
+					if err != nil {
+						log.Errorf("Failed to take backups for user %s: %v", user, err)
+						return
+					}
+					mu.Lock()
+					newBackupResults[user] = backupNameList
+					mu.Unlock()
+				}(user)
+			}
+			wg.Wait()
+			for user, backupNameList := range newBackupResults {
+				log.Infof("User %s: All backups taken: %v", user, backupNameList)
+			}
+		})
+
+		Step("Share the clusters from each user with other users and groups", func() {
+			log.InfoD("Sharing the clusters from each user with other users and groups")
+			var wg sync.WaitGroup
+
+			for _, user := range primaryUserList {
+				wg.Add(1)
+				go func(user string) {
+					defer wg.Done()
+					ctx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "Failed to fetch context for user")
+					clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+					_, err = ShareClusterWithValidation(ctx, SourceClusterName, clusterUid, sharedUserList, groupList, false)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster for user %s", SourceClusterName, user))
+				}(user)
+			}
+			wg.Wait()
+		})
+
+		Step("Verify the if the latest backups are not seen", func() {
+			log.InfoD("Verify the if the latest backups are not seen")
+			randomUserIndex := rand.Intn(len(firstUserList))
+			randomUser := firstUserList[randomUserIndex]
+			fmt.Printf("Randomly selected user from shared list of users: %s\n", randomUser)
+			backups := newBackupResults[primaryUserList[0]]
+			ctx, err := backup.GetNonAdminCtx(firstRandomUser, CommonPassword)
+			log.FailOnError(err, "Fetching user ctx")
+			bkpEnumerateReq := &api.BackupEnumerateRequest{
+				OrgId: BackupOrgID}
+			curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+			log.FailOnError(err, "Fetching backups for user")
+			nonePresent := true
+			for _, backup := range backups {
+				for _, current := range curBackups.GetBackups() {
+					if backup == current.Name {
+						nonePresent = false
+						break
+					}
+				}
+				if !nonePresent {
+					break
+				}
+			}
+			if nonePresent {
+				log.InfoD("None of the backups are shared.")
+			} else {
+				log.Errorf("Backups are shared with the cluster.")
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(backupAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		err = SetSourceKubeConfig()
+		log.FailOnError(err, "Switching context to source cluster failed")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(backupAppContexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUid, ctx)
+		log.InfoD("Deleting the backups")
+		bkpEnumerateReq := &api.BackupEnumerateRequest{
+			OrgId: BackupOrgID}
+		allBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+		var wg sync.WaitGroup
+		for _, bkp := range allBackups.GetBackups() {
+			wg.Add(1)
+			go func(bkp *api.BackupObject) {
+				defer wg.Done()
+				backupUID, err := Inst().Backup.GetBackupUID(ctx, bkp.Name, BackupOrgID)
+				_, err = DeleteBackup(bkp.Name, backupUID, BackupOrgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", bkp.Name))
+			}(bkp)
+		}
+		wg.Wait()
+		log.InfoD("Deleting the restores")
+		for _, restoreName := range restoreNames {
+			err = DeleteRestore(restoreName, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		}
+		log.InfoD("Switching context to destination cluster for clean up")
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "Unable to switch context to destination cluster [%s]", DestinationClusterName)
+		DestroyApps(backupAppContexts, opts)
+		log.InfoD("Switching back context to Source cluster")
+		err = SetSourceKubeConfig()
+		log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+
 	})
 })
