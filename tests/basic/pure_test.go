@@ -4793,7 +4793,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 			return pvclist
 		}
 		log.InfoD("waiting for a minute for volume name to populate")
-		time.Sleep(1 * time.Minute)
+		time.Sleep(3 * time.Minute)
 		//collect volumes names which are required to find out the volumes in FA and FB backend
 		listofFadaPvc = GetVolumeNameFromPvc(FadaAppNameSpace, listofFadaPvc)
 		listofFbdaPvc = GetVolumeNameFromPvc(FbdaAppNameSpace, listofFbdaPvc)
@@ -4839,7 +4839,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				log.FailOnError(err, fmt.Sprintf("Failed to delete storageclass [%s]", storageclass))
 			}
 			log.InfoD("waiting for a minute for pvc deletion in flash backend")
-			time.Sleep(1 * time.Minute)
+			time.Sleep(3 * time.Minute)
 			log.InfoD("Check if the volumes are deleted in FA and FB backend")
 			if isFAexists {
 				err := CheckVolumesExistinFA(flashArrays, listofFadaPvc, true)
