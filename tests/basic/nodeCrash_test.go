@@ -106,10 +106,10 @@ var _ = Describe("{CrashOneNode}", func() {
 
 var _ = Describe("{NodeRebootForOneDay}", func() {
 	/* https://purestorage.atlassian.net/browse/PTX-25705
-	  1. Schedule applications
-	  2. Reboot node(s) for one day
-	  3. Validate applications
-	  4. Destroy applications
+	1. Schedule applications
+	2. Reboot node(s) for one day
+	3. Validate applications
+	4. Destroy applications
 	*/
 
 	JustBeforeEach(func() {
@@ -145,7 +145,8 @@ var _ = Describe("{NodeRebootForOneDay}", func() {
 				case <-timer.C:
 					break
 				default:
-					{       err = Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
+					{
+						err = Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
 							Force: false,
 							ConnectionOpts: node.ConnectionOpts{
 								Timeout:         defaultCommandTimeout,
@@ -168,8 +169,8 @@ var _ = Describe("{NodeRebootForOneDay}", func() {
 
 						ValidateApplications(contexts) // Validate applications
 					}
-					}
 				}
+			}
 		})
 	})
 
