@@ -49,7 +49,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	storageapi "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/portworx/torpedo/drivers/backup"
@@ -919,7 +918,12 @@ func TriggerDetachDrives(contexts *[]*scheduler.Context, recordChan *chan *Event
 				var nodeId string
 				storageNodes := node.GetStorageNodes()
 				nodeId = storageNodes[0].VolDriverNodeID
-				err = Inst().N.DetachDrivesFromVM(stc, storageNodes[0].Name)
+				pxCloudDriveConfigMap, err := Inst().S.GetPXCloudDriveConfigMap(stc)
+				if err != nil {
+					UpdateOutcome(event, err)
+					return
+				}
+				err = Inst().N.DetachDrivesFromVM(storageNodes[0].Name, pxCloudDriveConfigMap)
 				UpdateOutcome(event, err)
 				time.Sleep(1 * time.Minute)
 				statusErr := Inst().V.WaitDriverUpOnNode(storageNodes[0], 10*time.Minute)
@@ -12056,18 +12060,11 @@ func TriggerSvMotionSingleNode(contexts *[]*scheduler.Context, recordChan *chan 
 
 	setMetrics(*event)
 	var randomIndex int
-	var namespace string
-	var err error
 	var moveAllDisks bool
 	stepLog := "Choosing a single Storage Node randomly and performing SV Motion on it"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 
-		if namespace, err = Inst().S.GetPortworxNamespace(); err != nil {
-			log.Errorf("Failed to get portworx namespace. Error : %v", err)
-			UpdateOutcome(event, err)
-			return
-		}
 		workerNodes := node.GetStorageNodes()
 		if len(workerNodes) > 0 {
 			randomIndex = rand.Intn(len(workerNodes))
@@ -12083,8 +12080,43 @@ func TriggerSvMotionSingleNode(contexts *[]*scheduler.Context, recordChan *chan 
 		} else {
 			log.Infof("Moving only largest sized disk(s) on worker node %v", workerNodes[randomIndex].Name)
 		}
+
+		stc, err := Inst().V.GetDriver()
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+
+		}
+
+		preData, err := Inst().S.GetPXCloudDriveConfigMap(stc)
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+		}
+
+		var envVariables []v1.EnvVar
+		envVariables = stc.Spec.CommonConfig.Env
+		var prefixName string
+		for _, envVar := range envVariables {
+			if envVar.Name == "VSPHERE_DATASTORE_PREFIX" {
+				prefixName = envVar.Value
+				log.Infof("prefixName   %s ", prefixName)
+			}
+		}
+
 		ctx := ctxt.Background()
-		err = Inst().N.StorageVmotion(ctx, workerNodes[randomIndex], namespace, moveAllDisks)
+		targetDatastore, err := Inst().N.StorageVmotion(ctx, workerNodes[randomIndex], prefixName, moveAllDisks)
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+		}
+
+		postData, err := Inst().S.GetPXCloudDriveConfigMap(stc)
+		if err != nil {
+			err = fmt.Errorf("error fetching post-vMotion cloud drive config: %v", err)
+			UpdateOutcome(event, err)
+		}
+		err = ValidateDatastoreUpdate(preData, postData, workerNodes[randomIndex].VolDriverNodeID, targetDatastore)
 		UpdateOutcome(event, err)
 	})
 	updateMetrics(*event)
@@ -12114,15 +12146,8 @@ func TriggerSvMotionMultipleNodes(contexts *[]*scheduler.Context, recordChan *ch
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 
-		var namespace string
 		var err error
 		maxNodes := 20
-
-		if namespace, err = Inst().S.GetPortworxNamespace(); err != nil {
-			log.Errorf("Failed to get portworx namespace. Error: %v", err)
-			UpdateOutcome(event, err)
-			return
-		}
 
 		workerNodes := node.GetStorageNodes()
 		if len(workerNodes) == 0 {
@@ -12139,9 +12164,31 @@ func TriggerSvMotionMultipleNodes(contexts *[]*scheduler.Context, recordChan *ch
 		if numSelectedNodes > maxNodes {
 			numSelectedNodes = maxNodes
 		}
+		stc, err := Inst().V.GetDriver()
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+
+		}
+
+		preData, err := Inst().S.GetPXCloudDriveConfigMap(stc)
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+		}
 
 		var wg sync.WaitGroup
 		wg.Add(numSelectedNodes)
+
+		var envVariables []v1.EnvVar
+		envVariables = stc.Spec.CommonConfig.Env
+		var prefixName string
+		for _, envVar := range envVariables {
+			if envVar.Name == "VSPHERE_DATASTORE_PREFIX" {
+				prefixName = envVar.Value
+				log.Infof("prefixName   %s ", prefixName)
+			}
+		}
 
 		for i := 0; i < numSelectedNodes; i++ {
 			go func(node node.Node) {
@@ -12155,15 +12202,25 @@ func TriggerSvMotionMultipleNodes(contexts *[]*scheduler.Context, recordChan *ch
 				}
 
 				ctx := ctxt.Background()
-				if err := Inst().N.StorageVmotion(ctx, node, namespace, moveAllDisks); err != nil {
+				targetDatastore, err := Inst().N.StorageVmotion(ctx, node, prefixName, moveAllDisks)
+				if err != nil {
 					log.Errorf("Storage vMotion failed for node %v. Error: %v", node.Name, err)
 					UpdateOutcome(event, err)
 				}
+
+				postData, err := Inst().S.GetPXCloudDriveConfigMap(stc)
+				if err != nil {
+					err = fmt.Errorf("error fetching post-vMotion cloud drive config: %v", err)
+					UpdateOutcome(event, err)
+				}
+				err = ValidateDatastoreUpdate(preData, postData, node.VolDriverNodeID, targetDatastore)
+				UpdateOutcome(event, err)
+
 			}(workerNodes[i])
 		}
 
 		wg.Wait()
-		UpdateOutcome(event, nil)
+
 	})
 
 	updateMetrics(*event)

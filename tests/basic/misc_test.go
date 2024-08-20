@@ -1,8 +1,10 @@
 package tests
 
 import (
+	ctxt "context"
 	"fmt"
 	"github.com/google/uuid"
+	v1 "k8s.io/api/core/v1"
 	"math/rand"
 	"path"
 	"strings"
@@ -1844,5 +1846,91 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 	JustAfterEach(func() {
 		EndTorpedoTest()
 
+	})
+})
+
+// Kubelet stopped on the nodes - and the client container should not be impacted.
+var _ = Describe("{PerformStorageVMotions}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PerformStorageVMotions", "Perform Storage Vmotion and Validate PX", nil, 0)
+
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "has to schedule apps and perform storage vmotion"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("svmotion-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		stepLog = "Choosing a single Storage Node randomly and performing SV Motion on it"
+		var randomIndex int
+		var moveAllDisks bool
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			workerNodes := node.GetStorageNodes()
+			if len(workerNodes) > 0 {
+				randomIndex = rand.Intn(len(workerNodes))
+				log.Infof("Selected worker node %v for storage vmotion", workerNodes[randomIndex].Name)
+			} else {
+				log.FailOnError(fmt.Errorf("no worker nodes available for svmotion"), "No worker nodes available")
+
+			}
+			moveAllDisks = rand.Intn(2) == 0
+			if moveAllDisks {
+				log.Infof("Moving all disks on worker node %v", workerNodes[randomIndex].Name)
+			} else {
+				log.Infof("Moving only largest sized disk(s) on worker node %v", workerNodes[randomIndex].Name)
+			}
+
+			stc, err := Inst().V.GetDriver()
+			log.FailOnError(err, "Failed to get storage driver")
+
+			preData, err := Inst().S.GetPXCloudDriveConfigMap(stc)
+			log.FailOnError(err, "Failed to get pre-vMotion cloud drive config")
+
+			var envVariables []v1.EnvVar
+			envVariables = stc.Spec.CommonConfig.Env
+			var prefixName string
+			for _, envVar := range envVariables {
+				if envVar.Name == "VSPHERE_DATASTORE_PREFIX" {
+					prefixName = envVar.Value
+					log.Infof("prefixName   %s ", prefixName)
+				}
+			}
+
+			ctx := ctxt.Background()
+			targetDatastore, err := Inst().N.StorageVmotion(ctx, workerNodes[randomIndex], prefixName, moveAllDisks)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("validate storage vmotion on node [%s]", workerNodes[randomIndex].Name))
+
+			postData, err := Inst().S.GetPXCloudDriveConfigMap(stc)
+			log.FailOnError(err, "Failed to get post-vMotion cloud drive config")
+			err = ValidateDatastoreUpdate(preData, postData, workerNodes[randomIndex].VolDriverNodeID, targetDatastore)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("validate datastore update in cloud drive config after storage vmotion on node [%s]", workerNodes[randomIndex].Name))
+		})
+
+		stepLog = "Validate PX on all nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, node := range node.GetStorageDriverNodes() {
+				status, err := IsPxRunningOnNode(&node)
+				log.FailOnError(err, fmt.Sprintf("Failed to check if PX is running on node [%s]", node.Name))
+				dash.VerifySafely(status, true, fmt.Sprintf("PX is not running on node [%s]", node.Name))
+			}
+		})
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		ValidateAndDestroy(contexts, opts)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })

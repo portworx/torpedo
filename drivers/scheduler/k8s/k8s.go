@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	baseErrors "errors"
 	"fmt"
+	pxutil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	"io"
 	"io/ioutil"
 	random "math/rand"
@@ -36,6 +37,7 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	osapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/units"
+	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	admissionregistration "github.com/portworx/sched-ops/k8s/admissionregistration"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -8755,6 +8757,18 @@ func rotateTopologyArray(options *scheduler.ScheduleOptions) {
 		arr = append(arr, firstElem)
 		options.TopologyLabels = arr
 	}
+}
+
+// GetPXCloudDriveConfigMap retruns px cloud derive config map data
+func (k *K8s) GetPXCloudDriveConfigMap(cluster *operatorcorev1.StorageCluster) (map[string]node.DriveSet, error) {
+	cloudDriveConfigmapName := pxutil.GetCloudDriveConfigMapName(cluster)
+	cloudDriveConfifmap, _ := k8sCore.GetConfigMap(cloudDriveConfigmapName, cluster.Namespace)
+	var configData map[string]node.DriveSet
+	err := json.Unmarshal([]byte(cloudDriveConfifmap.Data["cloud-drive"]), &configData)
+	if err != nil {
+		return nil, err
+	}
+	return configData, nil
 }
 
 func init() {
