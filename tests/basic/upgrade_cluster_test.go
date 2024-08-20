@@ -116,10 +116,10 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 				err = Inst().S.UpgradeScheduler(version)
 				if err != nil {
-					err := Inst().S.RefreshNodeRegistry()
-					log.FailOnError(err, "Refresh Node Registry failed")
-					err = Inst().V.RefreshDriverEndpoints()
-					log.FailOnError(err, "Refresh Driver Endpoints failed")
+					neErr := Inst().S.RefreshNodeRegistry()
+					log.FailOnError(neErr, "Refresh Node Registry failed")
+					neErr = Inst().V.RefreshDriverEndpoints()
+					log.FailOnError(neErr, "Refresh Driver Endpoints failed")
 					PrintPxctlStatus()
 					PrintK8sClusterInfo()
 				}

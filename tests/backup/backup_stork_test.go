@@ -355,7 +355,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 		opts[SkipClusterScopedObjects] = true
 		log.Infof("Deleting backup schedule policy")
 		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		log.InfoD("Deleting deployed applications")

@@ -522,7 +522,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		}
 		// Delete backup schedule
 		log.Infof("Deleting backup schedule")
-		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 		// Delete custom buckets

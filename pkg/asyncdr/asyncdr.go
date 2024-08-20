@@ -806,6 +806,9 @@ func ChangePxServiceToLoadBalancer(internalLB bool) error {
 			pxStc.ObjectMeta.Annotations[pxStcServiceTypeKey] = stcLoadBalancerValue
 
 			if internalLB {
+				if os.Getenv("LB_SUBNET_KEY") == "" {
+					return fmt.Errorf("We need subnet for setting up Internal LB, Please set LB_SUBNET_KEY")
+				}
 				// Add LoadBalancer annotations specific to EKS ELB
 				if pxStc.Spec.Metadata == nil {
 					pxStc.Spec.Metadata = &opcorev1.Metadata{}
@@ -846,8 +849,8 @@ func ChangePxServiceToLoadBalancer(internalLB bool) error {
 	return nil
 }
 
-func IsCloud() (bool, string) {
-	stc, err := operator.Instance().ListStorageClusters("kube-system")
+func IsCloud(portworxNs string) (bool, string) {
+	stc, err := operator.Instance().ListStorageClusters(portworxNs)
 	if len(stc.Items) > 0 && err == nil {
 		log.InfoD("Storage cluster name: %s", stc.Items[0].Name)
 		if len(stc.Items) > 0 {

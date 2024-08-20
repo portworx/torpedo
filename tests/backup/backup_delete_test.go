@@ -580,7 +580,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", Label(TestCaseLabelsM
 		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
 		log.FailOnError(err, "Data validations failed")
 		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		log.Infof("Deleting backup schedule policy")

@@ -765,7 +765,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", Label(TestCaseLabelsMap[Schedu
 		log.InfoD("Clean up objects after test execution")
 		log.Infof("Deleting backup schedules")
 		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		log.Infof("Deleting backup schedule policy")
@@ -1849,7 +1849,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", Label(TestCaseLabelsMap[AddMult
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Unable to px-central-admin ctx")
-		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, []string{periodicSchedulePolicyName})
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchedulePolicyName}))
@@ -2497,7 +2497,7 @@ var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", Label(TestCaseLabelsMa
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 		log.InfoD("Deleting schedule named [%s] along with its backups [%v] and schedule policies [%v]", scheduleName, allScheduleBackupNames, []string{periodicSchedulePolicyName})
-		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, []string{periodicSchedulePolicyName})
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchedulePolicyName}))
@@ -3192,7 +3192,7 @@ var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", Label(TestCaseLabelsMap[
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		log.Infof("Deleting backup schedule policy")
 		err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, []string{schedulePolicyName})
@@ -4126,7 +4126,7 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", Label(TestCaseLabelsM
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "failed to switch context to source cluster")
 
-		err = DeleteSchedule(scheduleName, DestinationClusterName, BackupOrgID, ctx)
+		err = DeleteSchedule(scheduleName, DestinationClusterName, BackupOrgID, ctx, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		log.Infof("Deleting backup schedule policy")
 

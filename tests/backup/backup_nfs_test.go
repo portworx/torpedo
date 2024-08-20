@@ -206,7 +206,7 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", Label(
 			err = DeleteRestore(restoreName, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore %s", restoreName))
 		}
-		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, []string{schedulePolicyName})
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{schedulePolicyName}))
@@ -664,7 +664,7 @@ var _ = Describe("{CloudSnapshotMissingValidationForNFSLocation}", Label(TestCas
 			go func(schedule string) {
 				defer GinkgoRecover()
 				defer wg.Done()
-				err = DeleteSchedule(schedule, SourceClusterName, BackupOrgID, ctx)
+				err = DeleteSchedule(schedule, SourceClusterName, BackupOrgID, ctx, true)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s]", schedule))
 			}(schedule)
 		}

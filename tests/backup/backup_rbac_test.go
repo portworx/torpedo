@@ -260,7 +260,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", Label(TestCaseLabelsMap[VerifyRBAC
 			log.InfoD(fmt.Sprintf("Delete Infra Admin %s backup schedule ", infraAdminUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(infraAdminUser, CommonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", infraAdminUser)
-			err = DeleteSchedule(backupScheduleWithLabel, SourceClusterName, BackupOrgID, nonAdminCtx)
+			err = DeleteSchedule(backupScheduleWithLabel, SourceClusterName, BackupOrgID, nonAdminCtx, true)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", backupScheduleWithLabel, infraAdminUser))
 		})
 
@@ -421,7 +421,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", Label(TestCaseLabelsMap[VerifyRBAC
 				log.InfoD(fmt.Sprintf("Delete user %s backup schedule ", user))
 				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
 				log.FailOnError(err, "failed to fetch user %s ctx", user)
-				err = DeleteSchedule(scheduleNameMap[user], SourceClusterName, BackupOrgID, nonAdminCtx)
+				err = DeleteSchedule(scheduleNameMap[user], SourceClusterName, BackupOrgID, nonAdminCtx, true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", scheduleNameMap[user], user))
 			})
 			Step(fmt.Sprintf("Delete user %s source and destination cluster from the user context", user), func() {
@@ -639,7 +639,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", Label(TestCaseLabelsMap[VerifyRBAC
 			log.InfoD(fmt.Sprintf("Delete custom user %s backup schedule ", customUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(customUser, CommonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
-			err = DeleteSchedule(backupScheduleWithLabel, SourceClusterName, BackupOrgID, nonAdminCtx)
+			err = DeleteSchedule(backupScheduleWithLabel, SourceClusterName, BackupOrgID, nonAdminCtx, true)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", backupScheduleWithLabel, customUser))
 		})
 
@@ -733,7 +733,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", Label(TestCaseLabelsMap[VerifyRBAC
 		currentSchedulesForCustomUser, err := backupDriver.EnumerateBackupSchedule(nonAdminCtx, bkpScheduleEnumerateReq)
 		log.FailOnError(err, "Getting a list of all schedules for Custom user")
 		for _, sch := range currentSchedulesForCustomUser.GetBackupSchedules() {
-			err = DeleteSchedule(sch.Name, sch.Cluster, BackupOrgID, nonAdminCtx)
+			err = DeleteSchedule(sch.Name, sch.Cluster, BackupOrgID, nonAdminCtx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", sch.Name, customUser))
 		}
 		nonAdminCtx, err = backup.GetNonAdminCtx(infraAdminUser, CommonPassword)
@@ -741,7 +741,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", Label(TestCaseLabelsMap[VerifyRBAC
 		currentSchedulesForInfraAdmin, err := backupDriver.EnumerateBackupSchedule(nonAdminCtx, bkpScheduleEnumerateReq)
 		log.FailOnError(err, "Getting a list of all schedules for Infra admin")
 		for _, sch := range currentSchedulesForInfraAdmin.GetBackupSchedules() {
-			err = DeleteSchedule(sch.Name, sch.Cluster, BackupOrgID, nonAdminCtx)
+			err = DeleteSchedule(sch.Name, sch.Cluster, BackupOrgID, nonAdminCtx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", sch.Name, infraAdminUser))
 		}
 		log.InfoD("Deleting the deployed apps after the testcase")
@@ -1033,7 +1033,7 @@ var _ = Describe("{VerifyRBACForPxAdmin}", Label(TestCaseLabelsMap[VerifyRBACFor
 				log.InfoD(fmt.Sprintf("Delete user %s backup schedule ", user))
 				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
 				log.FailOnError(err, "failed to fetch user %s ctx", user)
-				err = DeleteSchedule(scheduleNameMap[user], SourceClusterName, BackupOrgID, nonAdminCtx)
+				err = DeleteSchedule(scheduleNameMap[user], SourceClusterName, BackupOrgID, nonAdminCtx, true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", scheduleNameMap[user], user))
 			})
 			Step(fmt.Sprintf("Delete user %s source and destination cluster from the user context", user), func() {
@@ -1410,7 +1410,7 @@ var _ = Describe("{VerifyRBACForAppAdmin}", Label(TestCaseLabelsMap[VerifyRBACFo
 				log.InfoD(fmt.Sprintf("Delete user %s backup schedule ", user))
 				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
 				log.FailOnError(err, "failed to fetch user %s ctx", user)
-				err = DeleteSchedule(scheduleNameMap[user], SourceClusterName, BackupOrgID, nonAdminCtx)
+				err = DeleteSchedule(scheduleNameMap[user], SourceClusterName, BackupOrgID, nonAdminCtx, true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", scheduleNameMap[user], user))
 			})
 			Step(fmt.Sprintf("Delete user %s source and destination cluster from the user context", user), func() {
@@ -1578,9 +1578,9 @@ var _ = Describe("{VerifyRBACForAppAdmin}", Label(TestCaseLabelsMap[VerifyRBACFo
 			log.InfoD(fmt.Sprintf("Delete App-admin user %s backup schedule ", appAdminUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(appAdminUser, CommonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", appAdminUser)
-			err = DeleteSchedule(scheduleNameMap[appAdminUser], SourceClusterName, BackupOrgID, nonAdminCtx)
+			err = DeleteSchedule(scheduleNameMap[appAdminUser], SourceClusterName, BackupOrgID, nonAdminCtx, true)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", scheduleNameMap[appAdminUser], appAdminUser))
-			err = DeleteSchedule(backupScheduleWithLabel, SourceClusterName, BackupOrgID, nonAdminCtx)
+			err = DeleteSchedule(backupScheduleWithLabel, SourceClusterName, BackupOrgID, nonAdminCtx, true)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", backupScheduleWithLabel, appAdminUser))
 		})
 
@@ -1633,7 +1633,7 @@ var _ = Describe("{VerifyRBACForAppAdmin}", Label(TestCaseLabelsMap[VerifyRBACFo
 		currentSchedules, err := backupDriver.EnumerateBackupSchedule(nonAdminCtx, bkpScheduleEnumerateReq)
 		log.FailOnError(err, "Getting a list of all schedules")
 		for _, sch := range currentSchedules.GetBackupSchedules() {
-			err = DeleteSchedule(sch.Name, SourceClusterName, BackupOrgID, nonAdminCtx)
+			err = DeleteSchedule(sch.Name, SourceClusterName, BackupOrgID, nonAdminCtx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", sch.Name, appAdminUser))
 		}
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -1999,7 +1999,7 @@ var _ = Describe("{VerifyRBACForAppUser}", Label(TestCaseLabelsMap[VerifyRBACFor
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, CommonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
 			for _, scheduleName := range scheduleNames {
-				err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, nonAdminCtx)
+				err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, nonAdminCtx, true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", scheduleName, appUser))
 			}
 		})
@@ -2032,7 +2032,7 @@ var _ = Describe("{VerifyRBACForAppUser}", Label(TestCaseLabelsMap[VerifyRBACFor
 		currentSchedules, err := backupDriver.EnumerateBackupSchedule(nonAdminCtx, bkpScheduleEnumerateReq)
 		log.FailOnError(err, "Getting a list of all schedules")
 		for _, sch := range currentSchedules.GetBackupSchedules() {
-			err = DeleteSchedule(sch.Name, SourceClusterName, BackupOrgID, nonAdminCtx)
+			err = DeleteSchedule(sch.Name, SourceClusterName, BackupOrgID, nonAdminCtx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", sch.Name, appUser))
 		}
 		ctx, err := backup.GetAdminCtxFromSecret()

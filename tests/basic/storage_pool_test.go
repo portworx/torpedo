@@ -9601,7 +9601,7 @@ func pickPoolToResize(contexts []*scheduler.Context, expandType api.SdkStoragePo
 	}
 
 	for _, poolID := range poolsWithIO {
-		log.Infof("checking pool expansion eliginblity of pool [%s] with IOs", poolID)
+		log.Infof("checking pool expansion eligibility of pool [%s] with IOs", poolID)
 		n, err := GetNodeWithGivenPoolID(poolID)
 		if err != nil {
 			continue

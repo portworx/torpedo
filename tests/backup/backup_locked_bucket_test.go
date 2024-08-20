@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -25,11 +27,12 @@ import (
 // This testcase verifies alternating backups between locked and unlocked bucket
 var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", Label(TestCaseLabelsMap[BackupAlternatingBetweenLockedAndUnlockedBuckets]...), func() {
 	var (
-		appList        = Inst().AppList
-		credName       string
-		restoreNames   []string
-		controlChannel chan string
-		errorGroup     *errgroup.Group
+		appList          = Inst().AppList
+		credName         string
+		restoreNames     []string
+		controlChannel   chan string
+		errorGroup       *errgroup.Group
+		cloudCredentials map[string]string
 	)
 	var preRuleNameList []string
 	var postRuleNameList []string
@@ -44,7 +47,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", Label(Tes
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("BackupAlternatingBetweenLockedAndUnlockedBuckets", "Deploying backup", nil, 60018, Kshithijiyer, Q4FY23)
+		StartPxBackupTorpedoTest("BackupAlternatingBetweenLockedAndUnlockedBuckets", "Alternate backup between locked and unlocked buckets", nil, 60018, Kshithijiyer, Q4FY23)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(PostRuleApp, appList[i]) {
@@ -101,27 +104,54 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", Label(Tes
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
-				credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
-				CloudCredUID = uuid.New()
-				CloudCredUIDMap[CloudCredUID] = credName
-				err := CreateCloudCredential(provider, credName, CloudCredUID, BackupOrgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, BackupOrgID, provider))
+				if provider == drivers.ProviderAws {
+					credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+					CloudCredUID = uuid.New()
+					CloudCredUIDMap[CloudCredUID] = credName
+					err := CreateCloudCredential(provider, credName, CloudCredUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, BackupOrgID, provider))
+				} else if provider == drivers.ProviderAzure {
+					cloudCredentials, err = CreateAzureCredentialsForImmutableBackupLocations(ctx, false)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credentials"))
+					credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+					CloudCredUID = uuid.New()
+					CloudCredUIDMap[CloudCredUID] = credName
+					err = CreateCloudCredential(provider, credName, CloudCredUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, BackupOrgID, provider))
+
+				}
 			}
 		})
 
 		Step("Creating a locked bucket and backup location", func() {
 			log.InfoD("Creating locked buckets and backup location")
-			modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
 			for _, provider := range providers {
-				for _, mode := range modes {
-					bucketName := fmt.Sprintf("%s-%s-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
-					backupLocation = fmt.Sprintf("%s-%s-lock-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
-					err := CreateS3Bucket(bucketName, true, 3, mode)
-					log.FailOnError(err, "Unable to create locked s3 bucket %s", bucketName)
-					BackupLocationUID = uuid.New()
-					err = CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID, bucketName, BackupOrgID, "", true)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
-					BackupLocationMap[BackupLocationUID] = backupLocation
+				bucketMap, err := CreateLockedBucket(provider, 3, false)
+				dash.VerifyFatal(err, nil, "Check if locked buckets are created or not")
+				if drivers.ProviderAws == provider {
+					for mode, bucketName := range bucketMap {
+						backupLocation = fmt.Sprintf("%s-%s-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
+						log.FailOnError(err, "Unable to create locked s3 bucket %s", bucketName)
+						BackupLocationUID = uuid.New()
+						err = CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID, bucketName, BackupOrgID, "", true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+						BackupLocationMap[BackupLocationUID] = backupLocation
+					}
+				} else if drivers.ProviderAzure == provider {
+					modes := reflect.ValueOf(bucketMap).MapKeys()
+					credentials := reflect.ValueOf(cloudCredentials).MapKeys()
+					dash.VerifyFatal(len(modes), len(credentials), "Checking if length of creds and modes are same or not")
+					for i := 0; i < len(modes); i++ {
+						mode := modes[i].String()
+						bucketName := bucketMap[mode]
+						lockedCredName := credentials[i].String()
+						lockedCredUid := cloudCredentials[lockedCredName]
+						backupLocation = fmt.Sprintf("%s%v", getGlobalLockedBucketName(provider), time.Now().Unix())
+						BackupLocationUID = uuid.New()
+						err = CreateAzureBackupLocation(backupLocation, BackupLocationUID, lockedCredName, lockedCredUid, bucketName, BackupOrgID, true, true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+						BackupLocationMap[BackupLocationUID] = backupLocation
+					}
 				}
 			}
 			log.InfoD("Successfully created locked buckets and backup location")
@@ -209,10 +239,8 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", Label(Tes
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 
 		log.Infof("Deleting registered clusters for admin context")
-		err = DeleteCluster(SourceClusterName, BackupOrgID, ctx, true)
+		err = DeleteCluster(SourceClusterName, BackupOrgID, ctx, false)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-		err = DeleteCluster(DestinationClusterName, BackupOrgID, ctx, true)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", DestinationClusterName))
 	})
 })
 
@@ -235,6 +263,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", Label(TestCaseLabelsMap
 		restoreNames         []string
 		controlChannel       chan string
 		errorGroup           *errgroup.Group
+		cloudCredentials     map[string]string
 	)
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
@@ -306,27 +335,49 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", Label(TestCaseLabelsMap
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
-				credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
-				CloudCredUID = uuid.New()
-				CloudCredUIDMap[CloudCredUID] = credName
-				err := CreateCloudCredential(provider, credName, CloudCredUID, BackupOrgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", credName, BackupOrgID, provider))
+				if provider == drivers.ProviderAws {
+					credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+					CloudCredUID = uuid.New()
+					CloudCredUIDMap[CloudCredUID] = credName
+					err := CreateCloudCredential(provider, credName, CloudCredUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, BackupOrgID, provider))
+				} else if provider == drivers.ProviderAzure {
+					cloudCredentials, err = CreateAzureCredentialsForImmutableBackupLocations(ctx, false)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credentials"))
+
+				}
 			}
 		})
 
 		Step("Creating a locked bucket and backup location", func() {
 			log.InfoD("Creating locked buckets and backup location")
-			modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
 			for _, provider := range providers {
-				for _, mode := range modes {
-					bucketName := fmt.Sprintf("%s-%v", getGlobalLockedBucketName(provider), time.Now().Unix())
-					backupLocation = fmt.Sprintf("%s-%s-lock-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
-					err := CreateS3Bucket(bucketName, true, 3, mode)
-					log.FailOnError(err, "Unable to create locked s3 bucket %s", bucketName)
-					BackupLocationUID = uuid.New()
-					err = CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID, bucketName, BackupOrgID, "", true)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
-					BackupLocationMap[BackupLocationUID] = backupLocation
+				bucketMap, err := CreateLockedBucket(provider, 3, false)
+				dash.VerifyFatal(err, nil, "Check if locked buckets are created or not")
+				if drivers.ProviderAws == provider {
+					for mode, bucketName := range bucketMap {
+						backupLocation = fmt.Sprintf("%s-%s-lock-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
+						log.FailOnError(err, "Unable to create locked s3 bucket %s", bucketName)
+						BackupLocationUID = uuid.New()
+						err = CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID, bucketName, BackupOrgID, "", true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+						BackupLocationMap[BackupLocationUID] = backupLocation
+					}
+				} else if drivers.ProviderAzure == provider {
+					modes := reflect.ValueOf(bucketMap).MapKeys()
+					credentials := reflect.ValueOf(cloudCredentials).MapKeys()
+					dash.VerifyFatal(len(modes), len(credentials), "Checking if length of creds and modes are same or not")
+					for i := 0; i < len(modes); i++ {
+						mode := modes[i].String()
+						bucketName := bucketMap[mode]
+						lockedCredName := credentials[i].String()
+						lockedCredUid := cloudCredentials[lockedCredName]
+						backupLocation = fmt.Sprintf("%s%v", getGlobalLockedBucketName(provider), time.Now().Unix())
+						BackupLocationUID = uuid.New()
+						err = CreateAzureBackupLocation(backupLocation, BackupLocationUID, lockedCredName, lockedCredUid, bucketName, BackupOrgID, true, true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+						BackupLocationMap[BackupLocationUID] = backupLocation
+					}
 				}
 			}
 			log.InfoD("Successfully created locked buckets and backup location")
@@ -461,7 +512,12 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", Label(TestCaseLabelsMap
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err = backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		CleanupCloudSettingsAndClusters(BackupLocationMap, credName, CloudCredUID, ctx)
+
+		log.Infof("Deleting registered clusters for admin context")
+		err = DeleteCluster(SourceClusterName, BackupOrgID, ctx, false)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+		err = DeleteCluster(DestinationClusterName, BackupOrgID, ctx, false)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", DestinationClusterName))
 	})
 })
 
@@ -473,7 +529,6 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", Label(TestCaseLab
 		periodicSchedulePolicyName string
 		periodicSchedulePolicyUid  string
 		scheduleName               string
-		cloudCredUID               string
 		backupLocation             string
 		appList                    = Inst().AppList
 		scheduledAppContexts       []*scheduler.Context
@@ -486,6 +541,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", Label(TestCaseLab
 		podList                    []v1.Pod
 		controlChannel             chan string
 		errorGroup                 *errgroup.Group
+		cloudCredentials           map[string]string
 	)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
@@ -495,7 +551,6 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", Label(TestCaseLab
 	AppContextsMapping := make(map[string]*scheduler.Context)
 	volListBeforeSizeMap := make(map[string]int)
 	volListAfterSizeMap := make(map[string]int)
-	modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("LockedBucketResizeVolumeOnScheduleBackup", "Verify schedule backups are successful while volume resize is in progress for locked bucket", nil, 59899, Apimpalgaonkar, Q1FY24)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
@@ -550,25 +605,47 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", Label(TestCaseLab
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to px-central-admin ctx")
 			for _, provider := range providers {
-				credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
-				cloudCredUID = uuid.New()
-				cloudCredUIDMap[cloudCredUID] = credName
-				err = CreateCloudCredential(provider, credName, cloudCredUID, BackupOrgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating cloud credentials %v", credName))
+				if provider == drivers.ProviderAws {
+					credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+					CloudCredUID = uuid.New()
+					cloudCredUIDMap[CloudCredUID] = credName
+					err := CreateCloudCredential(provider, credName, CloudCredUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, BackupOrgID, provider))
+				} else if provider == drivers.ProviderAzure {
+					cloudCredentials, err = CreateAzureCredentialsForImmutableBackupLocations(ctx, false)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credentials"))
+				}
 			}
 		})
 		Step("Creating a locked bucket and backup location", func() {
 			log.InfoD("Creating a locked bucket and backup location")
 			for _, provider := range providers {
-				for _, mode := range modes {
-					bucketName := fmt.Sprintf("%s-%v", getGlobalLockedBucketName(provider), time.Now().Unix())
-					backupLocation = fmt.Sprintf("%s-%s-lock-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
-					err := CreateS3Bucket(bucketName, true, 3, mode)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating locked s3 bucket %s", bucketName))
-					BackupLocationUID = uuid.New()
-					backupLocationMap[BackupLocationUID] = backupLocation
-					err = CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, cloudCredUID, bucketName, BackupOrgID, "", true)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+				bucketMap, err := CreateLockedBucket(provider, 3, false)
+				dash.VerifyFatal(err, nil, "Check if locked buckets are created or not")
+				if drivers.ProviderAws == provider {
+					for mode, bucketName := range bucketMap {
+						backupLocation = fmt.Sprintf("%s-%s-lock-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
+						log.FailOnError(err, "Unable to create locked s3 bucket %s", bucketName)
+						BackupLocationUID = uuid.New()
+						err = CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID, bucketName, BackupOrgID, "", true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+						backupLocationMap[BackupLocationUID] = backupLocation
+					}
+				} else if drivers.ProviderAzure == provider {
+					modes := reflect.ValueOf(bucketMap).MapKeys()
+					credentials := reflect.ValueOf(cloudCredentials).MapKeys()
+					dash.VerifyFatal(len(modes), len(credentials), "Checking if length of creds and modes are same or not")
+					for i := 0; i < len(modes); i++ {
+						mode := modes[i].String()
+						bucketName := bucketMap[mode]
+						lockedCredName := credentials[i].String()
+						lockedCredUid := cloudCredentials[lockedCredName]
+						backupLocation = fmt.Sprintf("%s%v", getGlobalLockedBucketName(provider), time.Now().Unix())
+						BackupLocationUID = uuid.New()
+						err = CreateAzureBackupLocation(backupLocation, BackupLocationUID, lockedCredName, lockedCredUid, bucketName, BackupOrgID, true, true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+						backupLocationMap[BackupLocationUID] = backupLocation
+					}
 				}
 			}
 		})
@@ -714,7 +791,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", Label(TestCaseLab
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Unable to px-central-admin ctx")
 		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, false)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, []string{periodicSchedulePolicyName})
@@ -723,10 +800,16 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", Label(TestCaseLab
 		opts[SkipClusterScopedObjects] = true
 		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
 		log.FailOnError(err, "Data validations failed")
-		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+
+		log.Infof("Deleting registered clusters for admin context")
+		err = DeleteCluster(SourceClusterName, BackupOrgID, ctx, false)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+		err = DeleteCluster(DestinationClusterName, BackupOrgID, ctx, false)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", DestinationClusterName))
 	})
 })
 
+// TODO: Split this testcase according to the new architecture and mark it automated
 // DeleteLockedBucketUserObjectsFromAdmin delete backups, backup schedules, restore and cluster objects created with locked bucket from the admin
 var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", Label(TestCaseLabelsMap[DeleteLockedBucketUserObjectsFromAdmin]...), func() {
 	var (
@@ -786,19 +869,17 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", Label(TestCaseLabel
 				log.InfoD(fmt.Sprintf("Creating cloud credential and locked bucket backup location from the user %s", user))
 				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
 				log.FailOnError(err, "failed to fetch user %s ctx", user)
-				modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
 				for _, provider := range providers {
 					userCloudCredentialName := fmt.Sprintf("autogenerated-cred-%v", time.Now().Unix())
 					userCloudCredentialUID := uuid.New()
 					err = CreateCloudCredential(provider, userCloudCredentialName, userCloudCredentialUID, BackupOrgID, nonAdminCtx)
 					log.FailOnError(err, "failed to create cloud credential %s using provider %s for the user", userCloudCredentialName, provider)
 					userCloudCredentialMap[user] = map[string]string{userCloudCredentialUID: userCloudCredentialName}
-					for _, mode := range modes {
+					bucketMap, err := CreateLockedBucket(provider, 3, false)
+					dash.VerifyFatal(err, nil, "Check if locked buckets are created or not")
+					for _, lockedBucketName := range bucketMap {
 						userBackupLocationName := fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
 						userBackupLocationUID := uuid.New()
-						lockedBucketName := fmt.Sprintf("%s-%s-%s-locked", provider, getGlobalLockedBucketName(provider), strings.ToLower(mode))
-						err := CreateS3Bucket(lockedBucketName, true, 3, mode)
-						log.FailOnError(err, "failed to create locked s3 bucket %s", lockedBucketName)
 						err = CreateBackupLocationWithContext(provider, userBackupLocationName, userBackupLocationUID, userCloudCredentialName, userCloudCredentialUID, lockedBucketName, BackupOrgID, "", nonAdminCtx, true)
 						log.FailOnError(err, "failed to create locked bucket backup location %s using provider %s for the user", userBackupLocationName, provider)
 						userBackupLocationMap[user] = map[string]string{userBackupLocationUID: userBackupLocationName}
@@ -1109,6 +1190,7 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", Label(TestCaseLabels
 		clusterUid            string
 		scheduleList          []string
 		clusterStatus         api.ClusterInfo_StatusInfo_Status
+		cloudCredentials      map[string]string
 		labelSelectors        = make(map[string]string)
 		CloudCredUIDMap       = make(map[string]string)
 		BackupLocationMap     = make(map[string]string)
@@ -1191,30 +1273,49 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", Label(TestCaseLabels
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
-				credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
-				CloudCredUID = uuid.New()
-				CloudCredUIDMap[CloudCredUID] = credName
-				err := CreateCloudCredential(provider, credName, CloudCredUID, BackupOrgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, BackupOrgID, provider))
+				if provider == drivers.ProviderAws {
+					credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+					CloudCredUID = uuid.New()
+					CloudCredUIDMap[CloudCredUID] = credName
+					err := CreateCloudCredential(provider, credName, CloudCredUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, BackupOrgID, provider))
+				} else if provider == drivers.ProviderAzure {
+					cloudCredentials, err = CreateAzureCredentialsForImmutableBackupLocations(ctx, false)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credentials"))
+
+				}
 			}
 		})
 
 		Step("Creating a locked bucket and backup location", func() {
 			log.InfoD("Creating locked buckets and backup location")
-			modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
 			for _, provider := range providers {
-				for _, mode := range modes {
-
-					bucketName := fmt.Sprintf("%s-%s-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
-					backupLocation = fmt.Sprintf("%s-%s-lock-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
-					err := CreateS3Bucket(bucketName, true, 3, mode)
-					log.FailOnError(err, "Unable to create locked s3 bucket %s", bucketName)
-
-					BackupLocationUID = uuid.New()
-					err = CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID, bucketName, BackupOrgID, "", true)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
-
-					BackupLocationMap[BackupLocationUID] = backupLocation
+				bucketMap, err := CreateLockedBucket(provider, 3, false)
+				dash.VerifyFatal(err, nil, "Check if locked buckets are created or not")
+				if drivers.ProviderAws == provider {
+					for mode, bucketName := range bucketMap {
+						backupLocation = fmt.Sprintf("%s-%s-lock-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
+						log.FailOnError(err, "Unable to create locked s3 bucket %s", bucketName)
+						BackupLocationUID = uuid.New()
+						err = CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID, bucketName, BackupOrgID, "", true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+						BackupLocationMap[BackupLocationUID] = backupLocation
+					}
+				} else if drivers.ProviderAzure == provider {
+					modes := reflect.ValueOf(bucketMap).MapKeys()
+					credentials := reflect.ValueOf(cloudCredentials).MapKeys()
+					dash.VerifyFatal(len(modes), len(credentials), "Checking if length of creds and modes are same or not")
+					for i := 0; i < len(modes); i++ {
+						mode := modes[i].String()
+						bucketName := bucketMap[mode]
+						lockedCredName := credentials[i].String()
+						lockedCredUid := cloudCredentials[lockedCredName]
+						backupLocation = fmt.Sprintf("%s%v", getGlobalLockedBucketName(provider), time.Now().Unix())
+						BackupLocationUID = uuid.New()
+						err = CreateAzureBackupLocation(backupLocation, BackupLocationUID, lockedCredName, lockedCredUid, bucketName, BackupOrgID, true, true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+						BackupLocationMap[BackupLocationUID] = backupLocation
+					}
 				}
 			}
 			log.InfoD("Successfully created locked buckets and backup location")

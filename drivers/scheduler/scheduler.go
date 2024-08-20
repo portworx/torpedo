@@ -11,6 +11,7 @@ import (
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
@@ -474,6 +475,9 @@ type Driver interface {
 	StopKubelet(appNode node.Node, opts node.SystemctlOpts) error
 	// StartKubelet starts kubelet on the given node
 	StartKubelet(appNode node.Node, opts node.SystemctlOpts) error
+
+	// GetPXCloudDriveConfigMap gets the PX-Cloud drive config map
+	GetPXCloudDriveConfigMap(cluster *operatorcorev1.StorageCluster) (map[string]node.DriveSet, error)
 }
 
 var (
