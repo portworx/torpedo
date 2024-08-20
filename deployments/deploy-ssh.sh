@@ -983,35 +983,34 @@ trap terminate_pod_then_exit SIGTERM
 # The for loop is run in a background process (subshell) to allow the main script
 # to remain responsive to signals (SIGTERM, SIGINT) while the loop is executing.
 (
-  sleep 1000
-#    first_iteration=true
-#    for i in $(seq 1 900); do
-#        echo "Iteration: $i"
-#        state=$(kubectl -n default get pod torpedo | grep -v NAME | awk '{print $3}')
-#
-#        if [ "$state" == "Error" ]; then
-#            echo "Error: Torpedo finished with $state state"
-#            describe_pod_then_exit
-#        elif [ "$state" == "Running" ]; then
-#            # For the first iteration, display all logs. Later, only from 1 minute ago
-#            if [ "$first_iteration" = true ]; then
-#                echo "Logs from first iteration"
-#                kubectl -n default logs -f torpedo
-#                first_iteration=false
-#            else
-#                echo "Logs from iteration: $i"
-#                kubectl -n default logs -f --since=1m torpedo
-#            fi
-#        elif [ "$state" == "Completed" ]; then
-#            echo "Success: Torpedo finished with $state state"
-#            exit 0
-#        fi
-#
-#        sleep 1
-#    done
-#
-#    echo "Error: Failed to wait for torpedo to start running..."
-#    describe_pod_then_exit
+   first_iteration=true
+   for i in $(seq 1 900); do
+       echo "Iteration: $i"
+       state=$(kubectl -n default get pod torpedo | grep -v NAME | awk '{print $3}')
+
+       if [ "$state" == "Error" ]; then
+           echo "Error: Torpedo finished with $state state"
+           describe_pod_then_exit
+       elif [ "$state" == "Running" ]; then
+           # For the first iteration, display all logs. Later, only from 1 minute ago
+           if [ "$first_iteration" = true ]; then
+               echo "Logs from first iteration"
+               kubectl -n default logs -f torpedo
+               first_iteration=false
+           else
+               echo "Logs from iteration: $i"
+               kubectl -n default logs -f --since=1m torpedo
+           fi
+       elif [ "$state" == "Completed" ]; then
+           echo "Success: Torpedo finished with $state state"
+           exit 0
+       fi
+
+       sleep 1
+   done
+
+   echo "Error: Failed to wait for torpedo to start running..."
+   describe_pod_then_exit
 ) &
 
 wait $!
