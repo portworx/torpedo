@@ -8,6 +8,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
+	"time"
 )
 
 var _ = Describe("{CrashOneNode}", func() {
@@ -101,4 +102,79 @@ var _ = Describe("{CrashOneNode}", func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
+})
+
+var _ = Describe("{NodeRebootForOneDay}", func() {
+	/* https://purestorage.atlassian.net/browse/PTX-25705
+	  1. Schedule applications
+	  2. Reboot node(s) for one day
+	  3. Validate applications
+	  4. Destroy applications
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("NodeRebootForOneDay", "Reboot node(s) for one day", nil, 0)
+	})
+
+	itLog := "Reboot node(s) for one day"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var err error
+		contexts := make([]*scheduler.Context, 0)
+		stepLog := "schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("noderebootoneday-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "reboot node(s) for one day"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			nodeToReboot := node.GetStorageDriverNodes()[0]
+			// Start a timer for 24 hours
+			timer := time.NewTimer(24 * time.Hour)
+			go func() {
+				<-timer.C
+				nodeToReboot.IsStorageDriverInstalled = false
+			}()
+			for {
+				select {
+				case <-timer.C:
+					break
+				default:
+					{       err = Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
+							Force: false,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         defaultCommandTimeout,
+								TimeBeforeRetry: defaultCommandRetry,
+							},
+						})
+						dash.VerifySafely(err, nil, "Validate node is rebooted")
+						// Wait for node to be back up
+						err = Inst().N.TestConnection(nodeToReboot, node.ConnectionOpts{
+							Timeout:         defaultTestConnectionTimeout,
+							TimeBeforeRetry: defaultWaitRebootRetry,
+						})
+
+						dash.VerifyFatal(err, nil, "Validate node is back up")
+						// Wait for scheduler and volume driver to start
+						err = Inst().S.IsNodeReady(nodeToReboot)
+						dash.VerifyFatal(err, nil, "Validate node is ready")
+						err = Inst().V.WaitDriverUpOnNode(nodeToReboot, Inst().DriverStartTimeout)
+						dash.VerifyFatal(err, nil, "Validate volume is driver up")
+
+						ValidateApplications(contexts) // Validate applications
+					}
+					}
+				}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+
 })
