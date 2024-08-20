@@ -4898,7 +4898,7 @@ func DeleteBackupLocationWithContext(name string, backupLocationUID string, orgI
 }
 
 // DeleteSchedule deletes backup schedule
-func DeleteSchedule(backupScheduleName string, clusterName string, orgID string, ctx context1.Context) error {
+func DeleteSchedule(backupScheduleName string, clusterName string, orgID string, ctx context1.Context, deleteBackups bool) error {
 	backupDriver := Inst().Backup
 	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
 		Name:  backupScheduleName,
@@ -4915,7 +4915,7 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 		Name:  backupScheduleName,
 		// DeleteBackups indicates whether the cloud backup files need to
 		// be deleted or retained.
-		DeleteBackups: true,
+		DeleteBackups: deleteBackups,
 		Uid:           backupScheduleUID,
 	}
 	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
@@ -5394,7 +5394,7 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 	case drivers.ProviderAws:
 		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate)
+		err = CreateAzureBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate, false)
 	case drivers.ProviderGke:
 		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate)
 	case drivers.ProviderNfs:
@@ -5642,6 +5642,40 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 	return nil
 }
 
+// CreateAzureCredentialsForImmutableBackupLocations creates azure cloud credentials for immutable backup locations
+func CreateAzureCredentialsForImmutableBackupLocations(ctx context1.Context, softDelete bool) (map[string]string, error) {
+	tenantID, clientID, clientSecret, subscriptionID, _, _ := GetAzureCredsFromEnv()
+	_, containerLevelSA, containerLevelSAKey, storageAccountLevelSA, storageAccountLevelSAKey, softDeleteAccountLevelSA, softAccountLevelSAKey := GetAzureImmutabilityCredsFromEnv()
+
+	// Creating a key Value par of StorageAccount and its keys
+	storageAccountKeys := map[string]string{
+		storageAccountLevelSA: storageAccountLevelSAKey,
+		containerLevelSA:      containerLevelSAKey,
+	}
+	if softDelete {
+		storageAccountKeys[softDeleteAccountLevelSA] = softAccountLevelSAKey
+	}
+	storageAccountWithKey := make(map[string]string)
+	for storageAccount, storageAccountKey := range storageAccountKeys {
+		credUidWithAllFields := uuid.New()
+		azureConfigFields := &api.AzureConfig{
+			TenantId:       tenantID,
+			ClientId:       clientID,
+			ClientSecret:   clientSecret,
+			AccountName:    storageAccount,
+			AccountKey:     storageAccountKey,
+			SubscriptionId: subscriptionID,
+		}
+		azureCredNameWithAllFields := fmt.Sprintf("azure-cloud-cred-%s-%s", storageAccount, RandomString(10))
+		err := CreateAzureCloudCredential(azureCredNameWithAllFields, credUidWithAllFields, BackupOrgID, azureConfigFields, ctx)
+		if err != nil {
+			return nil, err
+		}
+		storageAccountWithKey[azureCredNameWithAllFields] = credUidWithAllFields
+	}
+	return storageAccountWithKey, nil
+}
+
 // CreateAzureCloudCredential creates azure cloud credentials
 func CreateAzureCloudCredential(credName string, uid, orgID string, azConfig *api.AzureConfig, ctx context1.Context) error {
 	log.Infof("Create azure cloud credential with name [%s] for org [%s]", credName, orgID)
@@ -5824,7 +5858,8 @@ func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred str
 }
 
 // CreateAzureBackupLocation creates backup location for Azure
-func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, validate bool) error {
+func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, validate bool, immutability bool) error {
+	var bLocationCreateReq *api.BackupLocationCreateRequest
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
 	azureRegion := os.Getenv("AZURE_ENDPOINT")
@@ -5832,29 +5867,58 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 	if azureRegion == "CHINA" {
 		environmentType = api.S3Config_AzureEnvironmentType_AZURE_CHINA
 	}
-	bLocationCreateReq := &api.BackupLocationCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  name,
-			OrgId: orgID,
-			Uid:   uid,
-		},
-		BackupLocation: &api.BackupLocationInfo{
-			Path:                    bucketName,
-			EncryptionKey:           encryptionKey,
-			ValidateCloudCredential: validate,
-			CloudCredentialRef: &api.ObjectRef{
-				Name: cloudCred,
-				Uid:  cloudCredUID,
+	if immutability {
+		resourceGroup := os.Getenv("AZURE_RESOURCE_GROUP")
+		bLocationCreateReq = &api.BackupLocationCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  name,
+				OrgId: orgID,
+				Uid:   uid,
 			},
-			Type: api.BackupLocationInfo_Azure,
-			Config: &api.BackupLocationInfo_S3Config{
-				S3Config: &api.S3Config{
-					AzureEnvironment: &api.S3Config_AzureEnvironmentType{
-						Type: environmentType,
+			BackupLocation: &api.BackupLocationInfo{
+				Path:                    bucketName,
+				EncryptionKey:           encryptionKey,
+				ValidateCloudCredential: validate,
+				CloudCredentialRef: &api.ObjectRef{
+					Name: cloudCred,
+					Uid:  cloudCredUID,
+				},
+				Type: api.BackupLocationInfo_Azure,
+				Config: &api.BackupLocationInfo_S3Config{
+					S3Config: &api.S3Config{
+						AzureEnvironment: &api.S3Config_AzureEnvironmentType{
+							Type: environmentType,
+						},
+						AzureResourceGroupName: resourceGroup,
 					},
 				},
 			},
-		},
+		}
+	} else {
+		bLocationCreateReq = &api.BackupLocationCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  name,
+				OrgId: orgID,
+				Uid:   uid,
+			},
+			BackupLocation: &api.BackupLocationInfo{
+				Path:                    bucketName,
+				EncryptionKey:           encryptionKey,
+				ValidateCloudCredential: validate,
+				CloudCredentialRef: &api.ObjectRef{
+					Name: cloudCred,
+					Uid:  cloudCredUID,
+				},
+				Type: api.BackupLocationInfo_Azure,
+				Config: &api.BackupLocationInfo_S3Config{
+					S3Config: &api.S3Config{
+						AzureEnvironment: &api.S3Config_AzureEnvironmentType{
+							Type: environmentType,
+						},
+					},
+				},
+			},
+		}
 	}
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
@@ -6981,6 +7045,36 @@ func CreateBucket(provider string, bucketName string) {
 	})
 }
 
+// CreateLockedBucket creates buckets with all the different modes for locked s3 bucket or immutable azure bucket
+func CreateLockedBucket(provider string, retentionPeriod int, softDelete bool) (map[string]string, error) {
+	log.Info(fmt.Sprintf("Creating multiple locked buckets with different modes on %s", provider))
+	bucketMap := make(map[string]string)
+	switch provider {
+	case drivers.ProviderAws:
+		modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
+		for _, mode := range modes {
+			lockedBucketName := fmt.Sprintf("%s-%s-%v", getGlobalLockedBucketName(provider), strings.ToLower(mode), time.Now().Unix())
+			CreateS3Bucket(lockedBucketName, true, int64(retentionPeriod), mode)
+			bucketMap[mode] = lockedBucketName
+		}
+		return bucketMap, nil
+	case drivers.ProviderAzure:
+		modes := [2]Mode{SA_level, Container_level}
+		for _, mode := range modes {
+			lockedBucketName := fmt.Sprintf("%s%v", getGlobalLockedBucketName(provider), time.Now().Unix())
+			CreateAzureBucket(lockedBucketName, true, mode, retentionPeriod, false)
+			bucketMap[string(mode)] = lockedBucketName
+		}
+		if softDelete {
+			lockedBucketName := fmt.Sprintf("%ssoft-%v", getGlobalLockedBucketName(provider), time.Now().Unix())
+			CreateAzureBucket(lockedBucketName, true, SA_level, retentionPeriod, true)
+			bucketMap[string(SA_level)+"_soft"] = lockedBucketName
+		}
+		return bucketMap, nil
+	}
+	return nil, fmt.Errorf("function does not support %s provider", provider)
+}
+
 // IsBackupLocationEmpty returns true if the bucket for a provider is empty
 func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 	switch provider {
@@ -7292,9 +7386,9 @@ const (
 )
 
 // CreateAzureBucket creates bucket in Azure
-func CreateAzureBucket(bucketName string, immutability bool, mode Mode, retentionDays int, safeMode bool) {
+func CreateAzureBucket(bucketName string, immutability bool, mode Mode, retentionDays int, softDeleteMode bool) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
-	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
+	accountName, accountKey := "", ""
 	azureRegion := os.Getenv("AZURE_ENDPOINT")
 	if immutability {
 		tenantID, clientID, clientSecret, _, _, _ := GetAzureCredsFromEnv()
@@ -7327,7 +7421,7 @@ func CreateAzureBucket(bucketName string, immutability bool, mode Mode, retentio
 		}
 		if mode == SA_level {
 			// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
-			if safeMode == true {
+			if softDeleteMode {
 				accountName, accountKey = safeAccountLevelSA, safeAccountLevelSAKey
 			} else {
 				accountName, accountKey = storageAccountLevelSA, storageAccountLevelSAKey
@@ -7352,6 +7446,7 @@ func CreateAzureBucket(bucketName string, immutability bool, mode Mode, retentio
 		}
 
 	} else {
+		_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
 		urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName) // Default value
 		if azureRegion == "CHINA" {
 			urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, bucketName)

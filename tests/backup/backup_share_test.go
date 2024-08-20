@@ -2420,7 +2420,7 @@ var _ = Describe("{ClusterBackupShareToggle}", Label(TestCaseLabelsMap[ClusterBa
 		//Delete Schedule Backup-
 		log.Infof("Deleting backup schedule")
 		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, backupClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleName, backupClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		log.Infof("Deleting backup schedule policy")

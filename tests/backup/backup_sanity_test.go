@@ -26,16 +26,8 @@ var _ = Describe("{BackupClusterVerification}", Label(TestCaseLabelsMap[BackupCl
 	It("Backup Cluster Verification", func() {
 		Step("Check the status of backup pods", func() {
 			log.InfoD("Check the status of backup pods")
-			//err := ValidateAllPodsInPxBackupNamespace()
-			//dash.VerifyFatal(err, nil, "Backup Cluster Verification successful")
-			data := make(map[string]string)
-			data["backups"] = "backupA,backupB,backupC"
-			data["restores"] = "restore1,backupB,backupC"
-			log.InfoD("%s", data)
-			err := UpdateConfigmap("backupclusterverification", data)
-			data["kshithij"] = "restore1,backupB,backupC"
-			err = UpdateConfigmap("backupclusterverification", data)
-			log.InfoD("%s", err)
+			err := ValidateAllPodsInPxBackupNamespace()
+			dash.VerifyFatal(err, nil, "Backup Cluster Verification successful")
 		})
 	})
 	JustAfterEach(func() {

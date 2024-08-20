@@ -496,10 +496,14 @@ func getGlobalBucketName(provider string) string {
 	return bucketName
 }
 
+// getGlobalLockedBucketName Returns a global locked bucket string
 func getGlobalLockedBucketName(provider string) string {
-	if provider == drivers.ProviderAws {
+	switch provider {
+	case drivers.ProviderAws:
 		return GlobalAWSLockedBucketName
-	} else {
+	case drivers.ProviderAzure:
+		return GlobalAzureLockedBucketName
+	default:
 		log.Errorf("environment variable [%s] not provided with valid values", "PROVIDERS")
 		return ""
 	}

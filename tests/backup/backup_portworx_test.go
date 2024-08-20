@@ -943,7 +943,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", Label(TestCaseLabelsMap[Resiz
 		ctx, err := backup.GetAdminCtxFromSecret()
 		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
 		for i := 0; i < len(scheduleNames); i++ {
-			err = DeleteSchedule(scheduleNames[i], SourceClusterName, BackupOrgID, ctx)
+			err = DeleteSchedule(scheduleNames[i], SourceClusterName, BackupOrgID, ctx, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule named [%s] and schedule policies [%v]", scheduleNames[i], periodicSchedulePolicyNames[i]))
 		}
 		log.InfoD("Deleting created restores")
