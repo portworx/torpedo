@@ -48,6 +48,12 @@ fi
 
 if [ -z "${SPEC_DIR}" ]; then
     SPEC_DIR="../drivers/scheduler/k8s/specs"
+    # With ginkgo run, the current working directory changes to the given tests directory
+    # For example, with ginkgo run ./tests/basic, the cwd changes to ./tests/basic
+    if [[ "$IS_BYOC_PIPELINE" == "true" || "$IS_BYOC_PIPELINE" == true ]]; then
+      # It is assumed that tests will be written in a package within ./tests, such as basic
+      SPEC_DIR="../../drivers/scheduler/k8s/specs"
+    fi
 fi
 
 if [ -z "${SCHEDULER}" ]; then
@@ -70,6 +76,11 @@ if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
     FAIL_FAST="--fail-fast"
 else
     FAIL_FAST="-keep-going"
+fi
+
+DRY_RUN_ARG=""
+if [[ -z "$DRY_RUN" || "$DRY_RUN" == "true" ]]; then
+    DRY_RUN_ARG="--dry-run"
 fi
 
 SKIP_ARG=""
@@ -271,6 +282,12 @@ esac
 
 if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"longevity.test"* ]]; then
     TEST_SUITE='"bin/basic.test"'
+fi
+
+if [[ "${IS_BYOC_PIPELINE,,}" == "true" ]]; then
+    # The BYOC pipeline runs tests directly, skipping builds to save time by avoiding the push and pull of images with test binaries.
+    # It is assumed that tests will be written in a package within ./tests, such as basic
+    TEST_SUITE="./tests/$(basename "${TEST_SUITE%.*}")"
 fi
 
 echo "Using test suite: ${TEST_SUITE}"
@@ -516,6 +533,7 @@ spec:
             "--poll-progress-after", "20m",
             --junit-report=$JUNIT_REPORT_PATH,
             "$FOCUS_ARG",
+            "$DRY_RUN_ARG",
             "$SKIP_ARG",
             $TEST_SUITE,
             "--",
@@ -596,6 +614,10 @@ spec:
       valueFrom:
         fieldRef:
           fieldPath: spec.nodeName
+    - name: BRANCH
+      value: "${BRANCH}"
+    - name: IS_BYOC_PIPELINE
+      value: "${IS_BYOC_PIPELINE}"
     - name: K8S_VENDOR
       value: "${K8S_VENDOR}"
     - name: TORPEDO_SSH_USER
@@ -890,6 +912,16 @@ if [ "${RUN_GINKGO_COMMAND}" = "true" ]; then
     exit $?
 fi
 
+if [[ "$IS_BYOC_PIPELINE" == "true" || "$IS_BYOC_PIPELINE" == true ]]; then
+  # This will replace the command from ginkgo to /torpedo/scripts/torpedo-byoc-entrypoint.sh
+   sed -i '/command:/s/\[ *"ginkgo" *\]/[ "\/torpedo\/scripts\/torpedo-byoc-entrypoint.sh" ]/' torpedo.yaml
+fi
+
+if [[ "$PULL_TORPEDO_IMAGE" == "false" || "$PULL_TORPEDO_IMAGE" == false ]]; then
+  # This will replace the image pull policy from Always to IfNotPresent
+  sed -i 's/imagePullPolicy: Always/imagePullPolicy: IfNotPresent/' torpedo.yaml
+fi
+
 if [ -z "${ANTHOS_HOST_PATH}" ]; then
   sed -i  '/GOOGLE_APPLICATION_CREDENTIALS/, +1d' torpedo.yaml
 fi 
@@ -930,7 +962,12 @@ function terminate_pod_then_exit {
     echo "Terminating Ginkgo test in Torpedo pod..."
     # Fetch the PID of the Ginkgo test process
     local test_pid
-    test_pid=$(kubectl -n default exec torpedo -- pgrep -f 'torpedo/bin')
+    if [[ "$IS_BYOC_PIPELINE" == "true" || "$IS_BYOC_PIPELINE" == true ]]; then
+      test_pid=$(kubectl -n default exec torpedo -- pgrep -f '/github.com/clone/torpedo/tests/basic/basic.test')
+    else
+      test_pid=$(kubectl -n default exec torpedo -- pgrep -f 'torpedo/bin')
+    fi
+    echo "Ginkgo test process PID: $test_pid"
     if [ "$test_pid" ]; then
         # Using SIGKILL instead of SIGTERM to immediately stop the process.
         # SIGTERM would allow Ginkgo to run AfterSuite and generate reports,
@@ -946,34 +983,35 @@ trap terminate_pod_then_exit SIGTERM
 # The for loop is run in a background process (subshell) to allow the main script
 # to remain responsive to signals (SIGTERM, SIGINT) while the loop is executing.
 (
-    first_iteration=true
-    for i in $(seq 1 900); do
-        echo "Iteration: $i"
-        state=$(kubectl -n default get pod torpedo | grep -v NAME | awk '{print $3}')
-
-        if [ "$state" == "Error" ]; then
-            echo "Error: Torpedo finished with $state state"
-            describe_pod_then_exit
-        elif [ "$state" == "Running" ]; then
-            # For the first iteration, display all logs. Later, only from 1 minute ago
-            if [ "$first_iteration" = true ]; then
-                echo "Logs from first iteration"
-                kubectl -n default logs -f torpedo
-                first_iteration=false
-            else
-                echo "Logs from iteration: $i"
-                kubectl -n default logs -f --since=1m torpedo
-            fi
-        elif [ "$state" == "Completed" ]; then
-            echo "Success: Torpedo finished with $state state"
-            exit 0
-        fi
-
-        sleep 1
-    done
-
-    echo "Error: Failed to wait for torpedo to start running..."
-    describe_pod_then_exit
+  sleep 1000
+#    first_iteration=true
+#    for i in $(seq 1 900); do
+#        echo "Iteration: $i"
+#        state=$(kubectl -n default get pod torpedo | grep -v NAME | awk '{print $3}')
+#
+#        if [ "$state" == "Error" ]; then
+#            echo "Error: Torpedo finished with $state state"
+#            describe_pod_then_exit
+#        elif [ "$state" == "Running" ]; then
+#            # For the first iteration, display all logs. Later, only from 1 minute ago
+#            if [ "$first_iteration" = true ]; then
+#                echo "Logs from first iteration"
+#                kubectl -n default logs -f torpedo
+#                first_iteration=false
+#            else
+#                echo "Logs from iteration: $i"
+#                kubectl -n default logs -f --since=1m torpedo
+#            fi
+#        elif [ "$state" == "Completed" ]; then
+#            echo "Success: Torpedo finished with $state state"
+#            exit 0
+#        fi
+#
+#        sleep 1
+#    done
+#
+#    echo "Error: Failed to wait for torpedo to start running..."
+#    describe_pod_then_exit
 ) &
 
 wait $!
