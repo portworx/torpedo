@@ -766,7 +766,7 @@ func ChangePxServiceToLoadBalancer(internalLB bool) error {
 	// Check if service is already of type loadbalancer
 	const (
 		pxStcServiceTypeKey  = "portworx.io/service-type"
-		stcLoadBalancerValue = "LoadBalancer"
+		stcLoadBalancerValue = "portworx-service:LoadBalancer"
 		pxStcServiceKey      = "service/portworx-service"
 		awsInternalLBKey     = "service.beta.kubernetes.io/aws-load-balancer-internal"
 		awsInternalLBValue   = "true"
