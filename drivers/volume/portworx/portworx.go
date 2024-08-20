@@ -5901,7 +5901,7 @@ func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]torpedovolume.DiskR
 		log.Debugf("Extracting pool details from [%s]", match)
 		poolDiskResource := torpedovolume.DiskResource{}
 		tempVals := strings.Fields(match)
-		tempSizeVal := uint64(0)
+		tempSizeVal := float64(0)
 
 		for _, tv := range tempVals {
 			if poolDiskResource.PoolId == "" && strings.Contains(tv, ":") {
@@ -5910,7 +5910,7 @@ func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]torpedovolume.DiskR
 				poolDiskResource.Device = tv
 			} else if strings.Contains(tv, "_") {
 				poolDiskResource.MediaType = tv
-			} else if val, err := strconv.ParseUint(tv, 10, 64); err == nil {
+			} else if val, err := strconv.ParseFloat(tv, 64); err == nil {
 				if tempSizeVal == 0 {
 					tempSizeVal = val
 				}
@@ -5918,7 +5918,7 @@ func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]torpedovolume.DiskR
 				if strings.Contains(tv, "TiB") {
 					tempSizeVal = tempSizeVal * 1024
 				}
-				poolDiskResource.SizeInGib = tempSizeVal
+				poolDiskResource.SizeInGib = uint64(tempSizeVal)
 			}
 		}
 		nodePoolResources = append(nodePoolResources, poolDiskResource)
