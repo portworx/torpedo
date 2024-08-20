@@ -43,7 +43,7 @@ timestamped_exec git status 2>/dev/null
 timestamped_exec git --no-pager log -1 --oneline
 
 # Runs pre-torpedo script before running Ginkgo command
-if [[ "$RUN_PRE_TORPEDO_SCRIPT" == "true" && "$RUN_PRE_TORPEDO_SCRIPT" == true ]]; then
+if [[ "$RUN_PRE_TORPEDO_SCRIPT" == "true" || "$RUN_PRE_TORPEDO_SCRIPT" == true ]]; then
   timestamped_exec chmod +x /scripts/pre-torpedo-script.sh
   timestamped_exec /scripts/pre-torpedo-script.sh
   exit $?
@@ -53,7 +53,7 @@ fi
 timestamped_exec ginkgo "$@"
 
 # Runs post-torpedo script after running Ginkgo command
-if [[ "$RUN_POST_TORPEDO_SCRIPT" == "true" && "$RUN_POST_TORPEDO_SCRIPT" == true ]]; then
+if [[ "$RUN_POST_TORPEDO_SCRIPT" == "true" || "$RUN_POST_TORPEDO_SCRIPT" == true ]]; then
   timestamped_exec chmod +x /scripts/post-torpedo-script.sh
   timestamped_exec /scripts/post-torpedo-script.sh
   exit $?
