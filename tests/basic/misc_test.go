@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"math/rand"
+	"os"
 	"path"
 	"strings"
 	"sync"
@@ -43,6 +44,10 @@ var _ = Describe("{SetupTeardown}", func() {
 	var contexts []*scheduler.Context
 
 	It("has to setup, validate and teardown apps", func() {
+
+		helloWorld := os.Getenv("HELLO_WORLD")
+		log.Infof("HELLO_WORLD: %s", helloWorld)
+
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
