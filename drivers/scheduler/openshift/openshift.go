@@ -331,8 +331,12 @@ func (k *openshift) createTorpedoSecurityContextConstraints() (*ocpsecurityv1api
 func updateMaxUnavailableWorkerMCP() error {
 
 	maxUnavailable := os.Getenv("OCP_SURGE_UPGRADE_VALUE")
+	if maxUnavailable == "" {
+		log.Warnf("OCP_SURGE_UPGRADE_VALUE is not set!")
+		return nil
+	}
 	log.Info("Setting maxUnavailable value for worker MCP to [%s]", maxUnavailable)
-	patchData := fmt.Sprintf(`{"spec":{"maxUnavailable":"%s"}}`, maxUnavailable)
+	patchData := fmt.Sprintf(`{"spec":{"maxUnavailable":%s}}`, maxUnavailable)
 
 	t := func() (interface{}, bool, error) {
 		var output []byte
