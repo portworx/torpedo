@@ -426,6 +426,47 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncMultiple}", func()
 	})
 })
 
+var _ = Describe("{CreateSnapSchedule}", func() {
+	var (
+		taskNamePrefix                 = "stork-snaptest-cloud"
+		snapshotType                   = "cloud"
+		snapInterval                   = 2
+		retain         storkapi.Retain = 3
+		scpolName                      = "snap-policy-" + time.Now().Format("15h03m05s")
+		snapNs         []string
+		contexts       []*scheduler.Context
+	)
+
+	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
+		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+				log.Infof("Task name %s\n", taskName)
+				appContexts := ScheduleApplications(taskName)
+				for _, ctx := range appContexts {
+					// Override default App readiness time out of 5 mins with 10 mins
+					ctx.ReadinessTimeout = appReadinessTimeout
+					namespace := GetAppNamespace(ctx, taskName)
+					snapNs = append(snapNs, namespace)
+				}
+				contexts = append(contexts, appContexts...)
+			}
+			ValidateApplications(contexts)
+
+			schdPol, err := asyncdr.CreateSchedulePolicyWithRetain(scpolName, snapInterval, retain)
+			log.FailOnError(err, "Failed to create schedule policy %s", scpolName)
+
+			for _, ns := range snapNs {
+				pvcNames, err := GetPVCListForNamespace(ns)
+				log.FailOnError(err, "Failed to get pvc list for namespace %s", ns)
+				log.InfoD("creating and validating cloud snapshots for pvcs [%v] in namespace %v", pvcNames, ns)
+				err = asyncdr.ValidateSnapshotScheduleCount(pvcNames, ns, schdPol.Name, snapshotType, snapInterval, retain)
+				log.FailOnError(err, "Failed to validate snapshot schedule count for namespace %s", ns)
+			}
+		})
+	})
+})
+
 var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroSingle}", func() {
 	testrailID = 296291
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296291
@@ -454,6 +495,34 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroSingle}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{CheckClusterDomains}", func() {
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296291
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+	JustBeforeEach(func() {
+		skipFlag := getClusterDomainsInfo()
+		if skipFlag {
+			Skip("Skip test because cluster domains are not set")
+		}
+	})
+
+	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
+		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
+			srcDomainStatus, destDomainStatus, witnesDomainStatus, err := storkctlcli.GetActualClusterDomainStatus()
+			log.FailOnError(err, "Failed to validate cluster domain status")
+			log.Infof("Source Domain Status: %v", srcDomainStatus)
+			log.Infof("Destination Domain Status: %v", destDomainStatus)
+			log.Infof("Witness Domain Status: %v", witnesDomainStatus)
+		})
 	})
 })
 
@@ -1101,6 +1170,9 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 		contexts:                  contexts,
 	}
 	performFailoverFailback(failoverParam)
+	if clusterType != "asyncdr" {
+		validateDomains("failover")
+	}
 	if skipSourceOp {
 		err = hardSetConfig(kubeConfigPathSrc)
 		log.FailOnError(err, "Error setting source config: %v", err)
@@ -1133,6 +1205,9 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 			contexts:                  contexts,
 		}
 		performFailoverFailback(failoverback)
+		if clusterType != "asyncdr" {
+			validateDomains("failback")
+		}
 	}
 	err = asyncdr.WaitForNamespaceDeletion(migrationNamespaces)
 	if err != nil {
@@ -1145,6 +1220,23 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 	err = asyncdr.WaitForNamespaceDeletion(migrationNamespaces)
 	if err != nil {
 		log.Infof("Failed to delete namespaces: %v", err)
+	}
+}
+
+func validateDomains(failoverfailback string) {
+	if failoverfailback == "failover" {
+		src, dest, witness, err := storkctlcli.GetActualClusterDomainStatus()
+		log.FailOnError(err, "Failed to get actual cluster domain status")
+		dash.VerifyFatal(src == "Inactive", true, "source cluster domain should not active")
+		dash.VerifyFatal(dest == "Active", true, "destination cluster domain should active")
+		dash.VerifyFatal(witness == "Active", true, "witness cluster domain should active")
+	}
+	if failoverfailback == "failback" {
+		src, dest, witness, err := storkctlcli.GetActualClusterDomainStatus()
+		log.FailOnError(err, "Failed to get actual cluster domain status")
+		dash.VerifyFatal(src == "Active", true, "source cluster domain should active")
+		dash.VerifyFatal(dest == "Active", true, "destination cluster domain should active")
+		dash.VerifyFatal(witness == "Active", true, "witness cluster domain should active")
 	}
 }
 

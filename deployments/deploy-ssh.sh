@@ -602,6 +602,8 @@ spec:
       value: "${TORPEDO_SSH_USER}"
     - name: LB_SUBNET_KEY
       value: "${LB_SUBNET_KEY}"
+    - name: TEST_CLUSTER_DOMAIN
+      value: "${TEST_CLUSTER_DOMAIN}"
     - name: TORPEDO_SSH_PASSWORD
       value: "${TORPEDO_SSH_PASSWORD}"
     - name: TORPEDO_SSH_KEY

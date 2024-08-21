@@ -2,6 +2,7 @@ package storkctlcli
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -13,13 +14,14 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 var dash *aetosutil.Dashboard
 
 const (
-	drPrefix = "automation-"
-	actionRetryTimeout = 10 * time.Minute
+	drPrefix            = "automation-"
+	actionRetryTimeout  = 10 * time.Minute
 	actionRetryInterval = 10 * time.Second
 )
 
@@ -29,11 +31,11 @@ var (
 
 func ScheduleStorkctlMigrationSched(schedName, clusterPair, namespace string, extraArgs map[string]string) error {
 	if namespace != "" {
-		migSchedNs = namespace 
+		migSchedNs = namespace
 	}
 	cmdArgs := map[string]string{
 		"cluster-pair": clusterPair,
-		"namespace":   migSchedNs,
+		"namespace":    migSchedNs,
 	}
 	err := createMigrationScheduleCli(schedName, cmdArgs, extraArgs)
 	return err
@@ -73,7 +75,7 @@ func createMigrationScheduleCli(schedName string, cmdArgs map[string]string, ext
 func PerformFailoverOrFailback(action, namespace, migSchdRef string, skipSourceOp bool, extraArgs map[string]string) (error, string) {
 	failoverFailbackCmdArgs := []string{"perform", action, "--migration-reference", migSchdRef, "--namespace", migSchedNs}
 	if namespace != "" {
-		migSchedNs = namespace 
+		migSchedNs = namespace
 	}
 
 	factory := storkctl.NewFactory()
@@ -132,4 +134,77 @@ func WaitForActionSuccessful(actionName string, actionNamespace string, timeoutS
 	actionTimeout := actionRetryTimeout * time.Duration(timeoutScale)
 	_, err := task.DoRetryWithTimeout(checkMigrations, actionTimeout, actionRetryInterval)
 	return err
+}
+
+func GetActualClusterDomainStatus() (string, string, string, error) {
+	type ClusterDomainStatusOutput struct {
+		Kind       string `json:"kind"`
+		APIVersion string `json:"apiVersion"`
+		Metadata   struct {
+			ResourceVersion string `json:"resourceVersion"`
+		} `json:"metadata"`
+		Items []struct {
+			Kind       string `json:"kind"`
+			APIVersion string `json:"apiVersion"`
+			Metadata   struct {
+				Name              string    `json:"name"`
+				UID               string    `json:"uid"`
+				ResourceVersion   string    `json:"resourceVersion"`
+				Generation        int       `json:"generation"`
+				CreationTimestamp time.Time `json:"creationTimestamp"`
+			} `json:"metadata"`
+			Status struct {
+				LocalDomain        string `json:"localDomain"`
+				ClusterDomainInfos []struct {
+					Name       string `json:"name"`
+					State      string `json:"state"`
+					SyncStatus string `json:"syncStatus"`
+				} `json:"clusterDomainInfos"`
+			} `json:"status"`
+		} `json:"items"`
+	}
+
+	// Get the actual clusterdomain status.
+	factory := storkctl.NewFactory()
+	var outputBuffer bytes.Buffer
+	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
+	cmdArgs := []string{"get", "clusterdomainsstatus", "-o", "json"}
+	cmd.SetArgs(cmdArgs)
+	// execute the command
+	log.Infof("The storkctl command being executed is %v", cmdArgs)
+	if err := cmd.Execute(); err != nil {
+		return "", "", "", fmt.Errorf("Error in executing get cluster domain status command: %v", err)
+	}
+	actualOutput := outputBuffer.String()
+	log.InfoD("Actual output is: %s\n", actualOutput)
+
+	// Parse the JSON output to check the status of the witness node.
+	domainStatus := ClusterDomainStatusOutput{}
+	err := json.Unmarshal([]byte(actualOutput), &domainStatus)
+	if err != nil {
+		return "", "", "", fmt.Errorf("Error in unmarshalling the cluster domain status output: %v", err)
+	}
+
+	testClusterDomain := os.Getenv("TEST_CLUSTER_DOMAIN")
+
+	var actualSrcDomainStatus, actualDestDomainStatus, witnessNodeDomainStatus string
+	var sourceClusterDomain = fmt.Sprintf("%s1", testClusterDomain)
+	var destClusterDomain = fmt.Sprintf("%s2", testClusterDomain)
+
+	log.Infof("*******************domainInfos: %v*******************", domainStatus.Items[0].Status.ClusterDomainInfos)
+
+	for _, info := range domainStatus.Items[0].Status.ClusterDomainInfos {
+		switch info.Name {
+		case "witness":
+			witnessNodeDomainStatus = info.State
+			log.Infof("*******************Witness node domain status: %v*******************", witnessNodeDomainStatus)
+		case sourceClusterDomain:
+			actualSrcDomainStatus = info.State
+			log.Infof("*******************Source cluster domain status: %v*******************", actualSrcDomainStatus)
+		case destClusterDomain:
+			actualDestDomainStatus = info.State
+			log.Infof("*******************Destination cluster domain status: %v*******************", actualDestDomainStatus)
+		}
+	}
+	return actualSrcDomainStatus, actualDestDomainStatus, witnessNodeDomainStatus, nil
 }
