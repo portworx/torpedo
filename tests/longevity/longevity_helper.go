@@ -1933,9 +1933,7 @@ func backupEventTrigger(wg *sync.WaitGroup,
 
 			triggerFunc(contexts, triggerEventsChan)
 			log.Infof("Trigger Function completed for [%s]\n", triggerType)
-
-			triggerFunc(contexts, triggerEventsChan)
-			log.Infof("Trigger Function completed for [%s]\n", triggerType)
+			
 			triggerLoc.Unlock()
 			log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
 
