@@ -1186,6 +1186,14 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "delete_all_cluster_backups",
+            "description": "delete_all_cluster_backup if set will delete all backups on the cluster\nallowed only to super admin Role.",
+            "in": "query",
+            "required": false,
+            "type": "boolean",
+            "format": "boolean"
           }
         ],
         "tags": [
@@ -3346,6 +3354,11 @@
           "type": "boolean",
           "format": "boolean",
           "title": "option to take backup as direct kdmp"
+        },
+        "retention_time": {
+          "type": "string",
+          "format": "date-time",
+          "title": "this will store the timestamp, when the retention period of locked backup will be expired"
         }
       }
     },
@@ -4528,7 +4541,7 @@
         "delete_backups": {
           "type": "boolean",
           "format": "boolean",
-          "description": "delete_backups will determine whether the backups\nbelong to given cluster needs to be deleted or not."
+          "title": "delete_backups indicates whether  backups created by cluster owner that belong to the cluster need to\nbe deleted or retained. This flag can be set by cluster owner with any role during cluster deletion"
         },
         "delete_restores": {
           "type": "boolean",
@@ -4589,6 +4602,15 @@
             "$ref": "#/definitions/BackupShare"
           },
           "title": "contains map[user]BackupShare details to be deleted for cluster level backups of\nnon owner of the cluster"
+        },
+        "deleted_by": {
+          "type": "string",
+          "title": "deleted_by uid of the user who initiated cluster delete"
+        },
+        "delete_all_cluster_backups": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "delete_all_cluster_backups indicates whether all the backups(created by cluster owner, super admins and all the shared users)\non the cluster need to be deleted or retained. This flag can be set only by SuperAdmin while deleting the cluster"
         }
       }
     },
