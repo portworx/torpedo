@@ -618,6 +618,8 @@ spec:
       value: "${BRANCH}"
     - name: IS_BYOC_PIPELINE
       value: "${IS_BYOC_PIPELINE}"
+    - name: RUN_PRE_TORPEDO_SCRIPT
+      value: "${RUN_PRE_TORPEDO_SCRIPT}"
     - name: K8S_VENDOR
       value: "${K8S_VENDOR}"
     - name: TORPEDO_SSH_USER
