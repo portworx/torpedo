@@ -54,8 +54,14 @@ var _ = Describe("{SetupTeardown}", func() {
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 
 		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
+			vols, err := Inst().S.GetVolumes(ctx)
+			log.Infof("Length of volumes for app %s: %d", ctx.App.Key, len(vols))
+			log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
 		}
+
+		//for _, ctx := range contexts {
+		//	TearDownContext(ctx, opts)
+		//}
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
