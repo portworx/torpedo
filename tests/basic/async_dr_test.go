@@ -1175,7 +1175,6 @@ func validateFailoverFailbackWithDataIntegrity(clusterType, taskNamePrefix strin
 
 	migNamespaces := strings.Join(migrationNamespaces, ",")
 
-	pod, err := k8sCore.GetPodByName(contexts[0].App.Key, migNamespaces)
 	log.FailOnError(err, "Failed to get pod name for fio app")
 	log.Infof(pod.Name)
 
@@ -1226,8 +1225,13 @@ func validateFailoverFailbackWithDataIntegrity(clusterType, taskNamePrefix strin
 		contexts:                  contexts,
 	}
 	performFailoverFailback(failoverParam)
+
+	podList, _ := core.Instance().GetPods(migNamespaces, nil)
+	log.Infof(podList.Items[0].Name)
+	firstPod := podList.Items[0].Name
+	//pod, err := k8sCore.GetPodByName(podlist, migNamespaces)
 	cmd := []string{"fio", "--blocksize=32k", "--directory=/data", "--filename=test", "--ioengine=libaio", "--readwrite=read", "--size=5120M", "--name=test", "--verify=meta", "--do_verify=1", "--verify_pattern=0xDeadBeef", "--direct=1", "--randrepeat=1", "--output=fio-log_read.txt;", "cat", "fio-log_read.txt"}
-	output, err := core.Instance().RunCommandInPod(cmd, pod.Name, "compute", pod.Namespace)
+	output, err := core.Instance().RunCommandInPod(cmd, firstPod, "compute", migNamespaces)
 	log.Infof(output)
 	log.FailOnError(err, "More about error %s", output)
 
