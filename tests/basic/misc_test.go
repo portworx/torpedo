@@ -55,9 +55,9 @@ var _ = Describe("{SetupTeardown}", func() {
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 
-		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
-		}
+		//for _, ctx := range contexts {
+		//	TearDownContext(ctx, opts)
+		//}
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
