@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fio-write-test-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fio-write-test
+  template:
+    metadata:
+      labels:
+        app: fio-write-test
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: fio-write-test-container
+          image: xridge/fio
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              fio --blocksize=32k --directory=/data --filename=test \
+                  --ioengine=libaio --readwrite=write --size=5120M --name=test \
+                  --verify=meta --do_verify=1 --verify_pattern=0xDeadBeef --direct=1 \
+                  --gtod_reduce=1 --iodepth=32 --rate_iops=4000 --randrepeat=1 \
+                  --disable_lat=0
+          volumeMounts:
+            - name: fio-data
+              mountPath: /data
+      volumes:
+        - name: fio-data
+          persistentVolumeClaim:
+            claimName: fio-pvc

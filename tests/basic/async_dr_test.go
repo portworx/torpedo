@@ -56,6 +56,7 @@ const (
 
 var (
 	kubeConfigWritten bool
+	//k8sCore           = core.Instance()
 )
 
 type failoverFailbackParam struct {
@@ -70,6 +71,118 @@ type failoverFailbackParam struct {
 	extraArgsFailoverFailback map[string]string
 	contexts                  []*scheduler.Context
 }
+
+var _ = Describe("{MigrateDeploymentWithIntegrityCheck}", func() {
+	testrailID = 50803
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/50803
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+	JustBeforeEach(func() {
+		StartTorpedoTest("MigrateDeployment", "Migration of application to destination cluster", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var (
+		contexts              []*scheduler.Context
+		migrationNamespaces   []string
+		taskNamePrefix        = "async-dr-mig"
+		allMigrations         []*storkapi.Migration
+		includeResourcesFlag  = true
+		startApplicationsFlag = false
+	)
+
+	It("has to deploy app, create cluster pair, migrate app", func() {
+		Step("Deploy applications", func() {
+
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+			// Schedule applications
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+				log.Infof("Task name %s\n", taskName)
+				appContexts := ScheduleApplications("fio-async-dr")
+				contexts = append(contexts, appContexts...)
+				ValidateApplications(contexts)
+
+				for _, ctx := range appContexts {
+					// Override default App readiness time out of 5 mins with 10 mins
+					//What is appReadinessTimeout?
+					ctx.ReadinessTimeout = appReadinessTimeout
+					namespace := GetAppNamespace(ctx, taskName)
+					migrationNamespaces = append(migrationNamespaces, namespace)
+				}
+				Step("Create cluster pair between source and destination clusters", func() {
+					// Set cluster context to cluster where torpedo is running
+					ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+				})
+			}
+
+			log.Infof("Migration Namespaces: %v", migrationNamespaces)
+
+		})
+
+		time.Sleep(5 * time.Minute)
+		log.Info("Start migration")
+
+		for i, currMigNamespace := range migrationNamespaces {
+			migrationName := migrationKey + fmt.Sprintf("%d", i)
+			currMig, err := CreateMigration(migrationName, currMigNamespace, defaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("failed to create migration: %s in namespace %s. Error: [%v]",
+					migrationKey, currMigNamespace, err))
+			allMigrations = append(allMigrations, currMig)
+		}
+
+		for _, mig := range allMigrations {
+			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("failed to validate migration: %s in namespace %s. Error: [%v]",
+					mig.Name, mig.Namespace, err))
+		}
+
+		log.InfoD("Start volume only migration")
+		includeResourcesFlag = false
+		for i, currMigNamespace := range migrationNamespaces {
+			migrationName := migrationKey + "volumeonly-" + fmt.Sprintf("%d", i)
+			currMig, createMigErr := CreateMigration(migrationName, currMigNamespace, defaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
+			allMigrations = append(allMigrations, currMig)
+			log.FailOnError(createMigErr, "Failed to create %s migration in %s namespace", migrationName, currMigNamespace)
+			err := storkops.Instance().ValidateMigration(currMig.Name, currMig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+			dash.VerifyFatal(err, nil, "Migration successful?")
+			resp, getMigErr := storkops.Instance().GetMigration(currMig.Name, currMig.Namespace)
+			dash.VerifyFatal(getMigErr, nil, "Received migration response?")
+			dash.VerifyFatal(resp.Status.Summary.NumberOfMigratedResources == 0, true, "Validate no resources migrated")
+		}
+
+		Step("teardown all applications on source cluster before switching context to destination cluster", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, map[string]bool{
+					SkipClusterScopedObjects:                    true,
+					scheduler.OptionsWaitForResourceLeakCleanup: true,
+					scheduler.OptionsWaitForDestroy:             true,
+				})
+			}
+		})
+
+		Step("teardown migrations", func() {
+			for _, mig := range allMigrations {
+				err := DeleteAndWaitForMigrationDeletion(mig.Name, mig.Namespace)
+				Expect(err).NotTo(HaveOccurred(),
+					fmt.Sprintf("failed to delete migration: %s in namespace %s. Error: [%v]",
+						mig.Name, mig.Namespace, err))
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
 
 // This test performs basic test of starting an application, creating cluster pair,
 // and migrating application to the destination clsuter
@@ -109,6 +222,7 @@ var _ = Describe("{MigrateDeployment}", func() {
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
 				ValidateApplications(contexts)
+
 				for _, ctx := range appContexts {
 					// Override default App readiness time out of 5 mins with 10 mins
 					ctx.ReadinessTimeout = appReadinessTimeout
@@ -281,6 +395,52 @@ var _ = Describe("{MigrateDeploymentMetroAsync}", func() {
 		}
 	})
 
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Data integrity by Arpit
+var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncSingleWithDataIntegrityVerification}", func() {
+	testrailID = 296255
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296255
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+	JustBeforeEach(func() {
+		StartTorpedoTest("StorkctlPerformFailoverFailbackDefaultAsyncSingle", "Failover and Failback using storkctl on async cluster for single NS", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
+		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
+			validateFailoverFailbackWithDataIntegrity("asyncdr", "asyncdr-failover-failback", true, false, false, false)
+
+		})
+	})
+
+	//// Add logic to verify data integrity
+	var contexts []*scheduler.Context
+	stepLog := "Schedule fio app"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fio-async-dr-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		stepLog = "Choosing a single Storage Node randomly and performing SV Motion on it"
+
+	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
@@ -676,7 +836,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", func() {
 			backupName         = "storkbackup-" + time.Now().Format("15h03m05s")
 			taskNamePrefix     = "appbkprest-upgradepx"
 			defaultNs          = "kube-system"
-			timeout            = 10 * time.Minute	
+			timeout            = 10 * time.Minute
 		)
 		bkpNs, contexts := initialSetupApps(taskNamePrefix, true)
 		storageNodes := node.GetStorageNodes()
@@ -806,7 +966,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", func() {
 			kubeConfigPath[cluster], err = GetCustomClusterConfigPath(cluster)
 			log.FailOnError(err, "Getting error while fetching path for %v cluster, error is %v", cluster, err)
 		}
-		
+
 		var migrationSchedName string
 		var schdPol *storkapi.SchedulePolicy
 		cpName := defaultClusterPairName + time.Now().Format("15h03m05s")
@@ -992,6 +1152,126 @@ func upgradePX(upgradeHop string, storageNodes []node.Node) (string, string, int
 	dash.VerifyFatal(errDmthinCheck, nil, "verified is setup dmthin after upgrade? ")
 	dash.VerifyFatal(isDmthinBeforeUpgrade, isDmthinAfterUpgrade, "setup type remained same pre and post upgrade")
 	return upgradeStatus, updatedPXVersion, durationInMins
+}
+
+func validateFailoverFailbackWithDataIntegrity(clusterType, taskNamePrefix string, single, skipSourceOp, includeNs, excludeNs bool) {
+	defaultNs := "kube-system"
+	migrationNamespaces, contexts := initialSetupApps(taskNamePrefix, single)
+
+	// Approach without Fio to verify
+	// 1.Get volumes
+	// 2. Identify node where volume exists
+	// 3. With the help of ip of node and path , either mount or not to get md5sum
+	// 4. Post failover, repeat above 3 steps
+	// 5. Compare md5 sum obtained in the last pre and post migration
+
+	// Approach with Fio to verify
+	// Run Fio app
+	// Generate dataset
+	// Run migrationSchedule
+	// Run failover on source
+	// Post failover run fio command in read mode
+	// Verify no err
+
+	migNamespaces := strings.Join(migrationNamespaces, ",")
+	kubeConfigPathSrc, err := GetCustomClusterConfigPath(asyncdr.FirstCluster)
+	log.FailOnError(err, "Failed to get source configPath: %v", err)
+	kubeConfigPathDest, err := GetCustomClusterConfigPath(asyncdr.SecondCluster)
+	log.FailOnError(err, "Failed to get destination configPath: %v", err)
+	if single {
+		defaultNs = migrationNamespaces[0]
+		migNamespaces = defaultNs
+	}
+	extraArgs := map[string]string{
+		"namespaces": migNamespaces,
+		"kubeconfig": kubeConfigPathSrc,
+	}
+	log.Infof("Creating clusterpair between first and second cluster")
+	cpName := defaultClusterPairName + time.Now().Format("15h03m05s")
+	if clusterType == "asyncdr" {
+		err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster)
+	} else {
+		err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", "", "", "sync-dr", asyncdr.FirstCluster, asyncdr.SecondCluster)
+	}
+	log.FailOnError(err, "Failed creating bidirectional cluster pair")
+	log.Infof("Start migration schedule and perform failover")
+	migrationSchedName := migrationSchedKey + time.Now().Format("15h03m05s")
+	createMigSchdAndValidateMigration(migrationSchedName, cpName, defaultNs, kubeConfigPathSrc, extraArgs)
+	err = SetCustomKubeConfig(asyncdr.SecondCluster)
+	log.FailOnError(err, "Switching context to second cluster failed")
+	extraArgsFailoverFailback := map[string]string{
+		"kubeconfig": kubeConfigPathDest,
+	}
+	if includeNs {
+		extraArgsFailoverFailback["include-namespaces"] = migrationNamespaces[0]
+	}
+	if excludeNs {
+		extraArgsFailoverFailback["exclude-namespaces"] = migrationNamespaces[0]
+	}
+	failoverParam := failoverFailbackParam{
+		action:                    "failover",
+		failoverOrFailbackNs:      defaultNs,
+		migrationSchedName:        migrationSchedName,
+		configPath:                kubeConfigPathDest,
+		single:                    single,
+		skipSourceOp:              skipSourceOp,
+		includeNs:                 includeNs,
+		excludeNs:                 excludeNs,
+		extraArgsFailoverFailback: extraArgsFailoverFailback,
+		contexts:                  contexts,
+	}
+	performFailoverFailback(failoverParam)
+
+	pod, err := k8sCore.GetPodByName("fio-async-dr", migNamespaces)
+	cmd := []string{"fio", "--blocksize=32k", "--directory=/data", "--filename=test", "--ioengine=libaio", "--readwrite=read", "--size=5120M", "--name=test", "--verify=meta", "--do_verify=1", "--verify_pattern=0xDeadBeef", "--direct=1", "--randrepeat=1", "--output=fio-log_read.txt"}
+	output, err := core.Instance().RunCommandInPod(cmd, pod.Name, "compute", pod.Namespace)
+	log.FailOnError(err, "More about error %s", output)
+
+	if skipSourceOp {
+		err = hardSetConfig(kubeConfigPathSrc)
+		log.FailOnError(err, "Error setting source config: %v", err)
+		for _, ctx := range contexts {
+			waitForPodsToBeRunning(ctx, false)
+		}
+	} else {
+		err = hardSetConfig(kubeConfigPathDest)
+		log.FailOnError(err, "Error setting destination config: %v", err)
+		extraArgs["kubeconfig"] = kubeConfigPathDest
+		newMigSched := migrationSchedName + "-rev"
+		if includeNs {
+			extraArgs["namespaces"] = migrationNamespaces[0]
+		}
+		if excludeNs {
+			extraArgs["namespaces"] = strings.Join(migrationNamespaces[1:], ",")
+			extraArgsFailoverFailback["exclude-namespaces"] = migrationNamespaces[1]
+		}
+		createMigSchdAndValidateMigration(newMigSched, cpName, defaultNs, kubeConfigPathDest, extraArgs)
+		failoverback := failoverFailbackParam{
+			action:                    "failback",
+			failoverOrFailbackNs:      defaultNs,
+			migrationSchedName:        newMigSched,
+			configPath:                kubeConfigPathDest,
+			single:                    single,
+			skipSourceOp:              false,
+			includeNs:                 includeNs,
+			excludeNs:                 excludeNs,
+			extraArgsFailoverFailback: extraArgsFailoverFailback,
+			contexts:                  contexts,
+		}
+		performFailoverFailback(failoverback)
+	}
+	err = asyncdr.WaitForNamespaceDeletion(migrationNamespaces)
+	if err != nil {
+		log.Infof("Failed to delete namespaces: %v", err)
+	}
+	err = hardSetConfig(kubeConfigPathDest)
+	if err != nil {
+		log.Infof("Failed to se dest kubeconfig for NS deletion on dest: %v", err)
+	}
+	err = asyncdr.WaitForNamespaceDeletion(migrationNamespaces)
+	if err != nil {
+		log.Infof("Failed to delete namespaces: %v", err)
+	}
 }
 
 func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSourceOp, includeNs, excludeNs bool) {
