@@ -148,26 +148,21 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 
 		Step("Validate the restore object", func() {
 			log.InfoD("validating the restore object")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			restoreInspectRequest := &api.RestoreInspectRequest{
 				Name:  restoreName,
 				OrgId: BackupOrgID,
 				Uid:   restoreUID,
 			}
-			_, err = Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+			_, err := Inst().Backup.InspectRestore(testUsers[2].ctx, restoreInspectRequest)
 			log.FailOnNoError(err, "inspect restore %s", restoreName)
 		})
 
 		Step("Cleanup", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-
 			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+			backupUID, err := backupDriver.GetBackupUID(testUsers[2].ctx, backupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
 			log.InfoD("Deleting backup")
-			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, testUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
 		})
 
@@ -253,30 +248,26 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 
 		Step("Validate the restore object", func() {
 			log.InfoD("validating the restore object")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
+
 			restoreInspectRequest := &api.RestoreInspectRequest{
 				Name:  restoreName,
 				OrgId: BackupOrgID,
 				Uid:   restoreUID,
 			}
-			_, err = Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+			_, err := Inst().Backup.InspectRestore(testUsers[2].ctx, restoreInspectRequest)
 			log.FailOnError(err, "inspect restore %s", restoreName)
 		})
 
 		Step("Cleanup", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-
 			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+			backupUID, err := backupDriver.GetBackupUID(testUsers[2].ctx, backupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
 			log.InfoD("Deleting backup")
-			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, testUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
 
 			log.InfoD(fmt.Sprintf("Delete restore with name [%s]", restoreName))
-			err = DeleteRestore(restoreName, BackupOrgID, ctx)
+			err = DeleteRestore(restoreName, BackupOrgID, testUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		})
 
@@ -452,17 +443,15 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 		})
 
 		Step("Cleanup", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+			backupUID, err := backupDriver.GetBackupUID(testUsers[2].ctx, backupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
 			log.InfoD("Deleting backup")
-			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, testUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
 
-			err = DeleteRestore(restoreName, BackupOrgID, ctx)
+			err = DeleteRestore(restoreName, BackupOrgID, testUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		})
 
@@ -476,8 +465,8 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 		log.InfoD("Deleting deployed applications")
 		DestroyApps(scheduledAppContexts, opts)
 
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
+		ctx, err := backup.GetNonAdminCtx("admin", "admin")
+		log.FailOnError(err, "Fetching admin user ctx")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 
 		for i := 1; i <= 2; i++ {

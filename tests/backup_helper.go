@@ -5935,6 +5935,7 @@ func RegisterCluster(clusterName string, cloudCredName string, orgID string, ctx
 		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
 			return "", true, err
 		}
+		log.Errorf("error: %v \n", err)
 		createClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, clusterName, ctx)
 		if err != nil {
 			return "", true, err
