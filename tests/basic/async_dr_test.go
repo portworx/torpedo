@@ -1015,13 +1015,17 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 		"kubeconfig": kubeConfigPathSrc,
 	}
 
-	isCloud, cloudName := asyncdr.IsCloud()
+	stc, err := Inst().V.GetDriver()
+	log.FailOnError(err, "Failed to get driver")
+
+	isCloud, cloudName := asyncdr.IsCloud(stc)
 	var srcEp, destEp string
 	extraArgsCp := map[string]string{}
 	const defaultPort = "9001"
 
 	if isCloud {
-		if err = asyncdr.ChangePxServiceToLoadBalancer(false); err != nil {
+		storageDriverName := Inst().V.String()
+		if err = asyncdr.ChangePxServiceToLoadBalancer(false, storageDriverName, stc); err != nil {
 			log.FailOnError(err, "failed to change PX service to LoadBalancer on source cluster")
 		}
 		if cloudName == "eks" {
@@ -1031,7 +1035,7 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 		}
 		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "Failed to set destination kubeconfig")
-		if err = asyncdr.ChangePxServiceToLoadBalancer(false); err != nil {
+		if err = asyncdr.ChangePxServiceToLoadBalancer(false, storageDriverName, stc); err != nil {
 			log.FailOnError(err, "failed to change PX service to LoadBalancer on destination cluster")
 		}
 		if cloudName == "eks" {
@@ -1651,7 +1655,7 @@ func patchClusterPair(cpName, cpNs, configPath string) error {
 	log.Infof("Running command: %v", cmd)
 	_, err = exec.Command("sh", "-c", cmd).CombinedOutput()
 	if err != nil {
-		log.Infof("Error running command: %v and err is: %v", cmd, err)
+		log.Errorf("Error running command: %v and err is: %v", cmd, err)
 		return err
 	}
 	return nil

@@ -2,7 +2,6 @@ package asyncdr
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -762,7 +761,7 @@ func CheckDefaultPxStorageClass(name string) error {
 	return nil
 }
 
-func ChangePxServiceToLoadBalancer(internalLB bool) error {
+func ChangePxServiceToLoadBalancer(internalLB bool, storageDriverName string, pxStc *opcorev1.StorageCluster) error {
 	// Check if service is already of type loadbalancer
 	const (
 		pxStcServiceTypeKey  = "portworx.io/service-type"
@@ -783,22 +782,14 @@ func ChangePxServiceToLoadBalancer(internalLB bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to get portworx service before changing it to load balancer: %v", err)
 	}
-	log.Infof("Current Service Type is %v, pxService.Spec.Type")
+	log.Infof("Current Service Type is %s, pxService.Spec.Type")
 	if pxService.Spec.Type == v1.ServiceTypeLoadBalancer {
 		log.InfoD("portworx service is already of type LoadBalancer")
 		return nil
 	}
 
-	storageDriverName := flag.Lookup("storage-driver").Value.(flag.Getter).Get().(string)
-	log.Infof("Storage driver name: %v", storageDriverName)
-
 	if storageDriverName == storkdriver.PortworxDriverName {
-		stc, err := operator.Instance().ListStorageClusters(pxNamespace)
-		if err != nil {
-			return fmt.Errorf("failed to list PX storage cluster on EKS/AKS/GKE: %v", err)
-		}
-		if len(stc.Items) > 0 {
-			pxStc := (*stc).Items[0]
+		if pxStc != nil {
 			// Change portworx service to LoadBalancer, since this is an EKS/AKS/GKE with PX operator install for Portworx
 			if pxStc.ObjectMeta.Annotations == nil {
 				pxStc.ObjectMeta.Annotations = make(map[string]string)
@@ -824,7 +815,7 @@ func ChangePxServiceToLoadBalancer(internalLB bool) error {
 				pxStc.Spec.Metadata.Annotations[pxStcServiceKey][awsNLBTargetTypeKey] = awsNLBTargetTypeVal
 				pxStc.Spec.Metadata.Annotations[pxStcServiceKey][awsLBSubnetKey] = os.Getenv("LB_SUBNET_KEY")
 			}
-			_, err = operator.Instance().UpdateStorageCluster(&pxStc)
+			_, err = operator.Instance().UpdateStorageCluster(pxStc)
 
 			if err != nil {
 				return fmt.Errorf("failed to update PX service type to LoadBalancer on EKS: %v", err)
@@ -849,22 +840,16 @@ func ChangePxServiceToLoadBalancer(internalLB bool) error {
 	return nil
 }
 
-func IsCloud(portworxNs string) (bool, string) {
-	stc, err := operator.Instance().ListStorageClusters(portworxNs)
-	if len(stc.Items) > 0 && err == nil {
-		log.InfoD("Storage cluster name: %s", stc.Items[0].Name)
-		if len(stc.Items) > 0 {
-			if oputils.IsEKS(&stc.Items[0]) {
-				log.InfoD("EKS installation detected.")
-				return true, "eks"
-			} else if oputils.IsAKS(&stc.Items[0]) {
-				log.InfoD("AKS installation detected.")
-				return true, "aks"
-			} else if oputils.IsGKE(&stc.Items[0]) {
-				log.InfoD("GKE installation detected.")
-				return true, "gke"
-			}
-		}
+func IsCloud(stc *opcorev1.StorageCluster) (bool, string) {
+	if oputils.IsEKS(stc) {
+		log.InfoD("EKS installation detected.")
+		return true, "eks"
+	} else if oputils.IsAKS(stc) {
+		log.InfoD("AKS installation detected.")
+		return true, "aks"
+	} else if oputils.IsGKE(stc) {
+		log.InfoD("GKE installation detected.")
+		return true, "gke"
 	}
 	return false, ""
 }
