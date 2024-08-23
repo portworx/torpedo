@@ -1668,15 +1668,9 @@ func ShareBackup(backupName string, groupNames []string, userNames []string, acc
 }
 
 // ShareCluster provides access to the mentioned groups or/add users
-func ShareCluster(clusterName string, groupNames []string, userNames []string, ctx context1.Context) error {
+func ShareCluster(clusterName, clusterUID string, groupNames []string, userNames []string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	userIDs := make([]string, 0)
-
-	clusterUid, err := backupDriver.GetClusterUID(ctx, BackupOrgID, clusterName)
-	if err != nil {
-		return err
-	}
-	log.Infof("Cluster UID for %s - %s", clusterName, clusterUid)
 
 	for _, userName := range userNames {
 		userID, err := backup.FetchIDOfUser(userName)
@@ -1690,26 +1684,20 @@ func ShareCluster(clusterName string, groupNames []string, userNames []string, c
 		OrgId: BackupOrgID,
 		ClusterRef: &api.ObjectRef{
 			Name: clusterName,
-			Uid:  clusterUid,
+			Uid:  clusterUID,
 		},
 		Users:  userIDs,
 		Groups: groupNames,
 	}
 
-	_, err = backupDriver.ShareCluster(ctx, shareBackupRequest)
+	_, err := backupDriver.ShareCluster(ctx, shareBackupRequest)
 	return err
 }
 
-// ShareCluster provides access to the mentioned groups or/add users
-func UnShareCluster(clusterName string, groupNames []string, userNames []string, ctx context1.Context) error {
+// UnShareCluster provides access to the mentioned groups or/add users
+func UnShareCluster(clusterName, clusterUID string, groupNames []string, userNames []string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	userIDs := make([]string, 0)
-
-	clusterUid, err := backupDriver.GetClusterUID(ctx, BackupOrgID, clusterName)
-	if err != nil {
-		return err
-	}
-	log.Infof("Cluster UID for %s - %s", clusterName, clusterUid)
 
 	for _, userName := range userNames {
 		userID, err := backup.FetchIDOfUser(userName)
@@ -1723,13 +1711,13 @@ func UnShareCluster(clusterName string, groupNames []string, userNames []string,
 		OrgId: BackupOrgID,
 		ClusterRef: &api.ObjectRef{
 			Name: clusterName,
-			Uid:  clusterUid,
+			Uid:  clusterUID,
 		},
 		Users:  userIDs,
 		Groups: groupNames,
 	}
 
-	_, err = backupDriver.UnShareCluster(ctx, shareBackupRequest)
+	_, err := backupDriver.UnShareCluster(ctx, shareBackupRequest)
 	return err
 }
 
@@ -1891,6 +1879,63 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 		BackupRef: &api.ObjectRef{
 			Name: backupName,
 			Uid:  bkpUid,
+		},
+	}
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return err
+	}
+	err = RestoreSuccessCheck(restoreName, orgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Restore [%s] created successfully", restoreName)
+	return nil
+}
+
+// CreateRestoreWithClusterUID creates restore
+func CreateRestoreWithClusterUID(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string, clusterUID string,
+	orgID string, ctx context1.Context, storageClassMapping map[string]string) error {
+
+	var bkpUid string
+
+	// Check if the backup used is in successful state or not
+	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
+	}
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+	actual := resp.GetBackup().GetStatus().Status
+	reason := resp.GetBackup().GetStatus().Reason
+	if actual != api.BackupInfo_StatusInfo_Success && actual != api.BackupInfo_StatusInfo_PartialSuccess {
+		return fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, api.BackupInfo_StatusInfo_Success, actual, reason)
+	}
+	backupDriver := Inst().Backup
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkpUid,
+		},
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUID,
 		},
 	}
 	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)

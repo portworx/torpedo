@@ -67,13 +67,12 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 			err = backup.AddRoleToUser(userName, infraAdminRole, fmt.Sprintf("Adding %v role to %s", infraAdminRole, userName))
 			log.FailOnError(err, "failed to add role %s to the user %s", infraAdminRole, userName)
 		}
-
 	})
 
 	// This testcase verifies whether the restores created/owned by the user were deleted during the cluster un-share.
 	It("VerifyRestoreObjectsAreDeletedCreatedByNonSuperAdmin", func() {
 		//TODO: Need to update the testrail ID
-		StartPxBackupTorpedoTest("VerifyRestoreObjectsAreDeletedCreatedByNonSuperAdmin", "VerifyRestoreObjectsAreDeletedCreatedByNonSuperAdmin during the cluster unshare", nil, 0, Sgajawada, Q2FY25)
+		StartPxBackupTorpedoTest("VerifyRestoreObjectsAreDeletedCreatedByNonSuperAdmin", "VerifyRestoreObjectsAreDeletedCreatedByNonSuperAdmin during the cluster unshare", nil, 301039, Sgajawada, Q2FY25)
 
 		var (
 			backupName       = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
@@ -97,11 +96,12 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 		Step("Create a cluster object with User1 and Share with User2", func() {
 			err := AddSourceCluster(testUsers[1].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with %s ctx", SourceClusterName, testUsers[1].name))
+
 			clusterUid, err = Inst().Backup.GetClusterUID(testUsers[1].ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 
 			// Share the source cluster to testuser2
-			err = ShareCluster(SourceClusterName, nil, []string{testUsers[2].name}, testUsers[1].ctx)
+			err = ShareCluster(SourceClusterName, clusterUid, nil, []string{testUsers[2].name}, testUsers[1].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using %s ctx", SourceClusterName, testUsers[2].name, testUsers[1].name))
 		})
 
@@ -133,7 +133,7 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 				namespaceMapping[namespace] = restoredNameSpace
 			}
 			log.InfoD("Namespace mapping is %v:", namespaceMapping)
-			err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, testUsers[2].ctx, make(map[string]string))
+			err = CreateRestoreWithClusterUID(restoreName, backupName, namespaceMapping, SourceClusterName, clusterUid, BackupOrgID, testUsers[2].ctx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s]", restoreName))
 			restoreUID, err = Inst().Backup.GetRestoreUID(testUsers[2].ctx, restoreName, BackupOrgID)
 			log.FailOnError(err, "failed to get restore %s uid", restoreName)
@@ -142,7 +142,7 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 
 		Step("User1 UnShares the cluster from User2", func() {
 			// Un-Share the source cluster with testuser2
-			err := UnShareCluster(SourceClusterName, nil, []string{testUsers[2].name}, testUsers[1].ctx)
+			err := UnShareCluster(SourceClusterName, clusterUid, nil, []string{testUsers[2].name}, testUsers[1].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Unshare of source [%s] cluster with %s user using %s ctx", SourceClusterName, testUsers[2].name, testUsers[1].name))
 		})
 
@@ -175,7 +175,7 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 	// This testcase verifies whether the restores created/owned by the user with super-admin role were not deleted during the cluster un-share.
 	It("VerifyRestoreObjectsAreNotDeletedCreatedBySuperAdmin", func() {
 		//TODO: Need to update the testrail ID
-		StartPxBackupTorpedoTest("VerifyRestoreObjectsAreNotDeletedCreatedBySuperAdmin", "VerifyRestoreObjectsAreNotDeletedCreatedBySuperAdmin during the cluster unshare", nil, 0, Sgajawada, Q2FY25)
+		StartPxBackupTorpedoTest("VerifyRestoreObjectsAreNotDeletedCreatedBySuperAdmin", "VerifyRestoreObjectsAreNotDeletedCreatedBySuperAdmin during the cluster unshare", nil, 301041, Sgajawada, Q2FY25)
 
 		var (
 			backupName       = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
@@ -208,7 +208,7 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 
 			// Share the source cluster to testuser2
-			err = ShareCluster(SourceClusterName, nil, []string{testUsers[2].name}, testUsers[1].ctx)
+			err = ShareCluster(SourceClusterName, clusterUid, nil, []string{testUsers[2].name}, testUsers[1].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using %s ctx", SourceClusterName, testUsers[2].name, testUsers[1].name))
 		})
 
@@ -239,7 +239,7 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 				namespaceMapping[namespace] = restoredNameSpace
 			}
 			log.InfoD("Namespace mapping is %v:", namespaceMapping)
-			err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, testUsers[2].ctx, make(map[string]string))
+			err = CreateRestoreWithClusterUID(restoreName, backupName, namespaceMapping, SourceClusterName, clusterUid, BackupOrgID, testUsers[2].ctx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s]", restoreName))
 			restoreUID, err = Inst().Backup.GetRestoreUID(testUsers[2].ctx, restoreName, BackupOrgID)
 			log.FailOnError(err, "failed to get restore %s uid", restoreName)
@@ -247,7 +247,7 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 
 		Step("User1 UnShares the cluster from User2", func() {
 			// Un-Share the source cluster with testuser2
-			err := UnShareCluster(SourceClusterName, nil, []string{testUsers[2].name}, testUsers[1].ctx)
+			err := UnShareCluster(SourceClusterName, clusterUid, nil, []string{testUsers[2].name}, testUsers[1].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Unshare of source [%s] cluster with %s user using %s ctx", SourceClusterName, testUsers[2].name, testUsers[1].name))
 		})
 
@@ -284,7 +284,7 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 	// This testcase verifies the cluster un-share operation when there is a backupschedule.
 	It("VerifyClusterUnShareWhenBackupSchedulesAreDeleted", func() {
 		//TODO: Need to update the testrail ID
-		StartPxBackupTorpedoTest("VerifyClusterUnShareWhenBackupSchedulesAreDeleted", "VerifyClusterUnShareWhenBackupSchedulesAreDeleted during the cluster unshare", nil, 0, Sgajawada, Q2FY25)
+		StartPxBackupTorpedoTest("VerifyClusterUnShareWhenBackupSchedulesAreDeleted", "VerifyClusterUnShareWhenBackupSchedulesAreDeleted during the cluster unshare", nil, 301040, Sgajawada, Q2FY25)
 
 		var (
 			scheduleName               string
@@ -311,7 +311,7 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 
 			// Share the source cluster to testuser2
-			err = ShareCluster(SourceClusterName, nil, []string{testUsers[2].name}, testUsers[1].ctx)
+			err = ShareCluster(SourceClusterName, clusterUid, nil, []string{testUsers[2].name}, testUsers[1].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using %s ctx", SourceClusterName, testUsers[2].name, testUsers[1].name))
 		})
 
@@ -347,7 +347,7 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 
 		Step("User1 UnShares the cluster from User2", func() {
 			// UnShare the source cluster to testuser2
-			err := UnShareCluster(SourceClusterName, nil, []string{testUsers[2].name}, testUsers[1].ctx)
+			err := UnShareCluster(SourceClusterName, clusterUid, nil, []string{testUsers[2].name}, testUsers[1].ctx)
 			log.InfoD("UnshareCluster error response: %v", err)
 			dash.VerifyNotNilFatal(err, fmt.Sprintf("Verifying Unshare of source [%s] cluster with %s user using %s ctx", SourceClusterName, testUsers[2].name, testUsers[1].name))
 		})
@@ -362,27 +362,33 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", scheduleName))
 
 			// UnShare the source cluster to testuser2
-			err = UnShareCluster(SourceClusterName, nil, []string{testUsers[2].name}, testUsers[1].ctx)
+			err = UnShareCluster(SourceClusterName, clusterUid, nil, []string{testUsers[2].name}, testUsers[1].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Unshare of source [%s] cluster with %s user using %s ctx", SourceClusterName, testUsers[2].name, testUsers[1].name))
 		})
 
 		Step("Cleanup", func() {
 			log.InfoD("Deleting schedule policy [%s]", periodicSchedulePolicyName)
-			err := Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, []string{periodicSchedulePolicyName})
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of schedule policy [%s]", periodicSchedulePolicyName))
+			schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
+				Name:  periodicSchedulePolicyName,
+				Uid:   periodicSchedulePolicyUid,
+				OrgId: BackupOrgID,
+			}
+			_, err := Inst().Backup.DeleteSchedulePolicy(testUsers[2].ctx, schedulePolicyDeleteRequest)
+			log.FailOnError(err, "failed to delete schedule policy %s of the user %s", periodicSchedulePolicyName, testUsers[2].name)
 		})
 
 	})
 	// This testcase verifies the restore creation on the shared cluster by the shared user.
 	It("VerifyRestoreCreateBySharedClusterUser", func() {
 		//TODO: Need to update the testrail ID
-		StartPxBackupTorpedoTest("VerifyRestoreCreateBySharedClusterUser", "VerifyRestoreCreateBySharedClusterUser during the cluster unshare", nil, 0, Sgajawada, Q2FY25)
+		StartPxBackupTorpedoTest("VerifyRestoreCreateBySharedClusterUser", "VerifyRestoreCreateBySharedClusterUser during the cluster unshare", nil, 301042, Sgajawada, Q2FY25)
 
 		var (
-			backupName       = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-			restoreName      = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			namespaceMapping = make(map[string]string)
-			clusterUid       string
+			backupName            = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			restoreName           = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			namespaceMapping      = make(map[string]string)
+			clusterUid            string
+			destinationClusterUid string
 		)
 
 		Step("Get login context for the test users", func() {
@@ -399,9 +405,11 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 		Step("Create a cluster object(destination cluster) with User1 and Share with User2", func() {
 			err := AddDestinationCluster(testUsers[1].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of [%s] cluster with %s ctx", DestinationClusterName, testUsers[1].name))
+			destinationClusterUid, err = Inst().Backup.GetClusterUID(testUsers[1].ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 
 			// Share the destination cluster to testuser2
-			err = ShareCluster(DestinationClusterName, nil, []string{testUsers[2].name}, testUsers[1].ctx)
+			err = ShareCluster(DestinationClusterName, destinationClusterUid, nil, []string{testUsers[2].name}, testUsers[1].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of [%s] cluster with %s user using %s ctx", DestinationClusterName, testUsers[2].name, testUsers[1].name))
 		})
 
@@ -439,7 +447,7 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 				namespaceMapping[namespace] = restoredNameSpace
 			}
 			log.InfoD("Namespace mapping is %v:", namespaceMapping)
-			err = CreateRestore(restoreName, backupName, namespaceMapping, DestinationClusterName, BackupOrgID, testUsers[2].ctx, make(map[string]string))
+			err = CreateRestoreWithClusterUID(restoreName, backupName, namespaceMapping, DestinationClusterName, destinationClusterUid, BackupOrgID, testUsers[2].ctx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s]", restoreName))
 		})
 
