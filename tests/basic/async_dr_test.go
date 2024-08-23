@@ -1223,8 +1223,10 @@ func validateFailoverFailbackWithDataIntegrity(clusterType, taskNamePrefix strin
 	performFailoverFailback(failoverParam)
 
 	pod, err := k8sCore.GetPodByName("fio-async-dr", migNamespaces)
-	cmd := []string{"fio", "--blocksize=32k", "--directory=/data", "--filename=test", "--ioengine=libaio", "--readwrite=read", "--size=5120M", "--name=test", "--verify=meta", "--do_verify=1", "--verify_pattern=0xDeadBeef", "--direct=1", "--randrepeat=1", "--output=fio-log_read.txt"}
+	log.Infof(pod.Name)
+	cmd := []string{"fio", "--blocksize=32k", "--directory=/data", "--filename=test", "--ioengine=libaio", "--readwrite=read", "--size=5120M", "--name=test", "--verify=meta", "--do_verify=1", "--verify_pattern=0xDeadBeef", "--direct=1", "--randrepeat=1", "--output=fio-log_read.txt;", "cat", "fio-log_read.txt"}
 	output, err := core.Instance().RunCommandInPod(cmd, pod.Name, "compute", pod.Namespace)
+	log.Infof(output)
 	log.FailOnError(err, "More about error %s", output)
 
 	if skipSourceOp {
