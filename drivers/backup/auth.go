@@ -379,6 +379,7 @@ const (
 	ApplicationOwner    PxBackupRole = "px-backup-app.admin"
 	ApplicationUser                  = "px-backup-app.user"
 	InfrastructureOwner              = "px-backup-infra.admin"
+	SuperAdmin                       = "px-backup-super.admin"
 	DefaultRoles                     = "default-roles-master"
 )
 

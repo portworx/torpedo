@@ -407,6 +407,14 @@ func (p *portworx) DeleteCluster(ctx context.Context, req *api.ClusterDeleteRequ
 	return p.clusterManager.Delete(ctx, req)
 }
 
+func (p *portworx) ShareCluster(ctx context.Context, req *api.ShareClusterRequest) (*api.ShareClusterResponse, error) {
+	return p.clusterManager.ShareCluster(ctx, req)
+}
+
+func (p *portworx) UnShareCluster(ctx context.Context, req *api.UnShareClusterRequest) (*api.UnShareClusterResponse, error) {
+	return p.clusterManager.UnShareCluster(ctx, req)
+}
+
 func (p *portworx) ClusterUpdateBackupShare(ctx context.Context, req *api.ClusterBackupShareUpdateRequest) (*api.ClusterBackupShareUpdateResponse, error) {
 	reqInterface, err := p.SetMissingClusterUID(ctx, req)
 	if err != nil {
