@@ -1175,9 +1175,6 @@ func validateFailoverFailbackWithDataIntegrity(clusterType, taskNamePrefix strin
 
 	migNamespaces := strings.Join(migrationNamespaces, ",")
 
-	log.FailOnError(err, "Failed to get pod name for fio app")
-	log.Infof(pod.Name)
-
 	kubeConfigPathSrc, err := GetCustomClusterConfigPath(asyncdr.FirstCluster)
 	log.FailOnError(err, "Failed to get source configPath: %v", err)
 	kubeConfigPathDest, err := GetCustomClusterConfigPath(asyncdr.SecondCluster)
