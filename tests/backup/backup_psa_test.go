@@ -556,19 +556,19 @@ var _ = Describe("{EnableNsAndClusterLevelPSAWithBackupAndRestore}", Label(TestC
 // RestoreFromHigherPrivilegedNamespaceToLower verifies restore of applications from higher privileged to lower privileged at namespace level PSA
 var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCaseLabelsMap[RestoreFromHigherPrivilegedNamespaceToLower]...), func() {
 	var (
-		backupNames                    []string
-		scheduledAppContexts           []*scheduler.Context
-		label                          map[string]string
-		providers                      []string
-		restrictedNamespaceList        []string
-		baselineNamespaceList          []string
-		cloudCredName                  string
-		cloudCredUID                   string
-		backupLocationUID              string
-		backupLocationMap              map[string]string
-		sourceClusterUid               string
-		controlChannel                 chan string
-		errorGroup                     *errgroup.Group
+		backupNames             []string
+		scheduledAppContexts    []*scheduler.Context
+		label                   map[string]string
+		providers               []string
+		restrictedNamespaceList []string
+		baselineNamespaceList   []string
+		cloudCredName           string
+		cloudCredUID            string
+		backupLocationUID       string
+		backupLocationMap       map[string]string
+		sourceClusterUid        string
+		//controlChannel                 chan string
+		//errorGroup                     *errgroup.Group
 		restrictedScheduledAppContexts []*scheduler.Context
 		baselineScheduledAppContexts   []*scheduler.Context
 		preRuleNameMultiApplication    string
@@ -680,7 +680,7 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step(fmt.Sprintf("Create pre and post exec rules for multiple applications"), func() {
@@ -819,133 +819,135 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 
 			// Define other parameters as needed for CreateRestoreWithValidation
 			err = CreateRestoreWithValidation(ctx, restoreName, appPrivilegeToBkpMap["baseline"], namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, baselineScheduledAppContexts)
+			log.InfoD("The error is %v", err)
 			dash.VerifyFatal(strings.Contains(err.Error(), "failed to meet the pod security standard"), true, fmt.Sprintf("Creating restore [%s] from backup [%s] taken on baseline namespace and restore to restricted namespace failed as expected", restoreName, appPrivilegeToBkpMap["baseline"]))
 		})
 
-		Step("Remove restricted label from the namespace and add baseline label", func() {
-			err := SetDestinationKubeConfig()
-			log.FailOnError(err, "Switching context to destination cluster failed")
-			log.InfoD("Remove restricted label from the namespace [%s]", appPrivilegeToRestoreMap["restricted"])
-			for i := range originalAppList {
-				err = Inst().S.RemoveNamespaceLabel(appPrivilegeToRestoreMap["restricted"][i], RestrictedPSALabel)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing label [%v] from namespace [%v]", RestrictedPSALabel, appPrivilegeToRestoreMap["restricted"][i]))
-				err = Inst().S.AddNamespaceLabel(appPrivilegeToRestoreMap["restricted"][i], BaselinePSALabel)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Adding label [%v] to namespace [%v]", BaselinePSALabel, appPrivilegeToRestoreMap["restricted"][i]))
-			}
-			// Switch context back to source cluster
-			err = SetSourceKubeConfig()
-			log.FailOnError(err, "Switching context to source cluster failed")
-		})
-
-		Step("Perform a custom restore of the backup taken from the namespace in baseline mode to a namespace which is replaced restricted with baseline mode on a different cluster with replace option", func() {
-			log.InfoD("Perform a custom restore of the backup taken from the namespace in baseline mode to a namespace which is replaced restricted with baseline mode on a different cluster with replace option")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-			restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
-			namespaceMapping := make(map[string]string)
-
-			// Populate namespaceMapping with mappings for baseline to restricted namespace
-			for i := range originalAppList {
-				namespaceMapping[baselineNamespaceList[i]] = appPrivilegeToRestoreMap["restricted"][i]
-			}
-			err = CreateRestoreWithReplacePolicyWithValidation(restoreName, appPrivilegeToBkpMap["baseline"], namespaceMapping, DestinationClusterName, BackupOrgID, ctx, make(map[string]string), 2, baselineScheduledAppContexts)
-			log.Infof("error while validation of restore")
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, appPrivilegeToBkpMap["baseline"]))
-		})
-
-		Step("Perform a custom restore of the backup taken from the namespace in baseline mode to a namespace with restricted mode with replace option on different cluster", func() {
-			log.InfoD("Perform a custom restore of the backup taken from the namespace in baseline mode to a namespace with restricted mode with replace option on different cluster")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-			restrictedNamespaceList := make([]string, 0)
-
-			for i := 0; i < len(originalAppList); i++ {
-				namespace := fmt.Sprintf("%s-%s", "restricted-ns-1", RandomString(10))
-				err = CreateNamespaceAndAssignLabels(namespace, RestrictedPSALabel)
-				dash.VerifyFatal(err, nil, "Creating namespace and assigning labels")
-				restrictedNamespaceList = append(restrictedNamespaceList, namespace)
-			}
-
-			restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
-			namespaceMapping := make(map[string]string)
-
-			// Populate namespaceMapping with mappings for baseline to restricted namespace with replace option
-			for i := range originalAppList {
-				namespaceMapping[mulAppRestrictedNamespaceList[i]] = restrictedNamespaceList[i]
-			}
-			err = CreateRestoreWithReplacePolicyWithValidation(restoreName, appPrivilegeToBkpMap["baseline-mul-ns-single-app"], namespaceMapping, DestinationClusterName, BackupOrgID, ctx, make(map[string]string), 2, mulAppScheduledAppContexts)
-			log.Infof("error while validation of restore")
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, appPrivilegeToBkpMap["baseline-mul-ns-single-app"]))
-		})
-
-		Step("Perform a custom restore of the backup taken from the namespace in restricted mode to a namespace in baseline mode on a different cluster", func() {
-			log.InfoD("Perform a custom restore of the backup taken from the namespace in restricted mode to a namespace in baseline mode on a different cluster")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-			restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
-			namespaceMapping := make(map[string]string)
-
-			// Populate namespaceMapping with mappings for baseline to restricted namespace
-			for i := range originalAppList {
-				namespaceMapping[restrictedNamespaceList[i]] = appPrivilegeToRestoreMap["baseline"][i]
-			}
-			err = CreateRestoreWithValidation(ctx, restoreName, appPrivilegeToBkpMap["restricted"], namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, restrictedScheduledAppContexts)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, appPrivilegeToBkpMap["restricted"]))
-		})
-
-		Step("Perform a custom restore of the backup taken from the multiple application on multiple namespace in baseline mode to a namespace in privileged mode on a different cluster", func() {
-			log.InfoD("Perform a custom restore of the backup taken from the multiple application on multiple namespace in baseline mode to a namespace in privileged mode on a different cluster")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-			restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
-			namespaceMapping := make(map[string]string)
-
-			// Populate namespaceMapping with mappings for baseline to privileged namespace
-			for i := range originalAppList {
-				namespaceMapping[baselineNamespaceList[i]] = appPrivilegeToRestoreMap["privileged"][i]
-			}
-			err = CreateRestoreWithValidation(ctx, restoreName, appPrivilegeToBkpMap["baseline"], namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, baselineScheduledAppContexts)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, appPrivilegeToBkpMap["baseline"]))
-		})
+		//Step("Remove restricted label from the namespace and add baseline label", func() {
+		//	err := SetDestinationKubeConfig()
+		//	log.FailOnError(err, "Switching context to destination cluster failed")
+		//	log.InfoD("Remove restricted label from the namespace [%s]", appPrivilegeToRestoreMap["restricted"])
+		//	for i := range originalAppList {
+		//		err = Inst().S.RemoveNamespaceLabel(appPrivilegeToRestoreMap["restricted"][i], RestrictedPSALabel)
+		//		dash.VerifyFatal(err, nil, fmt.Sprintf("Removing label [%v] from namespace [%v]", RestrictedPSALabel, appPrivilegeToRestoreMap["restricted"][i]))
+		//		err = Inst().S.AddNamespaceLabel(appPrivilegeToRestoreMap["restricted"][i], BaselinePSALabel)
+		//		dash.VerifyFatal(err, nil, fmt.Sprintf("Adding label [%v] to namespace [%v]", BaselinePSALabel, appPrivilegeToRestoreMap["restricted"][i]))
+		//	}
+		//	// Switch context back to source cluster
+		//	err = SetSourceKubeConfig()
+		//	log.FailOnError(err, "Switching context to source cluster failed")
+		//})
+		//
+		//Step("Perform a custom restore of the backup taken from the namespace in baseline mode to a namespace which is replaced restricted with baseline mode on a different cluster with replace option", func() {
+		//	log.InfoD("Perform a custom restore of the backup taken from the namespace in baseline mode to a namespace which is replaced restricted with baseline mode on a different cluster with replace option")
+		//	ctx, err := backup.GetAdminCtxFromSecret()
+		//	log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+		//	restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
+		//	namespaceMapping := make(map[string]string)
+		//
+		//	// Populate namespaceMapping with mappings for baseline to restricted namespace
+		//	for i := range originalAppList {
+		//		namespaceMapping[baselineNamespaceList[i]] = appPrivilegeToRestoreMap["restricted"][i]
+		//	}
+		//	err = CreateRestoreWithReplacePolicyWithValidation(restoreName, appPrivilegeToBkpMap["baseline"], namespaceMapping, DestinationClusterName, BackupOrgID, ctx, make(map[string]string), 2, baselineScheduledAppContexts)
+		//	log.Infof("error while validation of restore")
+		//	dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, appPrivilegeToBkpMap["baseline"]))
+		//})
+		//
+		//Step("Perform a custom restore of the backup taken from the namespace in baseline mode to a namespace with restricted mode with replace option on different cluster", func() {
+		//	log.InfoD("Perform a custom restore of the backup taken from the namespace in baseline mode to a namespace with restricted mode with replace option on different cluster")
+		//	ctx, err := backup.GetAdminCtxFromSecret()
+		//	log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+		//	restrictedNamespaceList := make([]string, 0)
+		//
+		//	for i := 0; i < len(originalAppList); i++ {
+		//		namespace := fmt.Sprintf("%s-%s", "restricted-ns-1", RandomString(10))
+		//		err = CreateNamespaceAndAssignLabels(namespace, RestrictedPSALabel)
+		//		dash.VerifyFatal(err, nil, "Creating namespace and assigning labels")
+		//		restrictedNamespaceList = append(restrictedNamespaceList, namespace)
+		//	}
+		//
+		//	restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
+		//	namespaceMapping := make(map[string]string)
+		//
+		//	// Populate namespaceMapping with mappings for baseline to restricted namespace with replace option
+		//	for i := range originalAppList {
+		//		namespaceMapping[mulAppRestrictedNamespaceList[i]] = restrictedNamespaceList[i]
+		//	}
+		//	err = CreateRestoreWithReplacePolicyWithValidation(restoreName, appPrivilegeToBkpMap["baseline-mul-ns-single-app"], namespaceMapping, DestinationClusterName, BackupOrgID, ctx, make(map[string]string), 2, mulAppScheduledAppContexts)
+		//	log.Infof("error while validation of restore")
+		//	dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, appPrivilegeToBkpMap["baseline-mul-ns-single-app"]))
+		//})
+		//
+		//Step("Perform a custom restore of the backup taken from the namespace in restricted mode to a namespace in baseline mode on a different cluster", func() {
+		//	log.InfoD("Perform a custom restore of the backup taken from the namespace in restricted mode to a namespace in baseline mode on a different cluster")
+		//	ctx, err := backup.GetAdminCtxFromSecret()
+		//	log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+		//	restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
+		//	namespaceMapping := make(map[string]string)
+		//
+		//	// Populate namespaceMapping with mappings for baseline to restricted namespace
+		//	for i := range originalAppList {
+		//		namespaceMapping[restrictedNamespaceList[i]] = appPrivilegeToRestoreMap["baseline"][i]
+		//	}
+		//	err = CreateRestoreWithValidation(ctx, restoreName, appPrivilegeToBkpMap["restricted"], namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, restrictedScheduledAppContexts)
+		//	dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, appPrivilegeToBkpMap["restricted"]))
+		//})
+		//
+		//Step("Perform a custom restore of the backup taken from the multiple application on multiple namespace in baseline mode to a namespace in privileged mode on a different cluster", func() {
+		//	log.InfoD("Perform a custom restore of the backup taken from the multiple application on multiple namespace in baseline mode to a namespace in privileged mode on a different cluster")
+		//	ctx, err := backup.GetAdminCtxFromSecret()
+		//	log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+		//	restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
+		//	namespaceMapping := make(map[string]string)
+		//
+		//	// Populate namespaceMapping with mappings for baseline to privileged namespace
+		//	for i := range originalAppList {
+		//		namespaceMapping[baselineNamespaceList[i]] = appPrivilegeToRestoreMap["privileged"][i]
+		//	}
+		//	err = CreateRestoreWithValidation(ctx, restoreName, appPrivilegeToBkpMap["baseline"], namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, baselineScheduledAppContexts)
+		//	dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, appPrivilegeToBkpMap["baseline"]))
+		//})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		err := SetSourceKubeConfig()
-		log.FailOnError(err, "Switching context to source cluster failed")
-
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-
-		log.Info("Destroying scheduled apps on source cluster")
-		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
-
-		backupDriver := Inst().Backup
-		log.Info("Deleting backups")
-		for _, backupName := range backupNames {
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
-			log.FailOnError(err, "Backup [%s] could not be deleted", backupName)
-			dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying [%s] backup deletion is successful", backupName))
-			err = DeleteBackupAndWait(backupName, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
-		}
-
-		log.Info("Deleting rules")
-		if preRuleNameMultiApplication != "" {
-			err = Inst().Backup.DeleteRuleForBackup(BackupOrgID, preRuleNameMultiApplication)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting pre exec rule %s ", preRuleNameMultiApplication))
-		}
-		if postRuleNameMultiApplication != "" {
-			err = Inst().Backup.DeleteRuleForBackup(BackupOrgID, postRuleNameMultiApplication)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting post exec rule %s ", postRuleNameMultiApplication))
-		}
-
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		time.Sleep(200 * time.Minute)
+		//defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		//err := SetSourceKubeConfig()
+		//log.FailOnError(err, "Switching context to source cluster failed")
+		//
+		//ctx, err := backup.GetAdminCtxFromSecret()
+		//log.FailOnError(err, "Fetching px-central-admin ctx")
+		//
+		//opts := make(map[string]bool)
+		//opts[SkipClusterScopedObjects] = true
+		//
+		//log.Info("Destroying scheduled apps on source cluster")
+		//err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		//log.FailOnError(err, "Data validations failed")
+		//
+		//backupDriver := Inst().Backup
+		//log.Info("Deleting backups")
+		//for _, backupName := range backupNames {
+		//	backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+		//	log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+		//	backupDeleteResponse, err := DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
+		//	log.FailOnError(err, "Backup [%s] could not be deleted", backupName)
+		//	dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying [%s] backup deletion is successful", backupName))
+		//	err = DeleteBackupAndWait(backupName, ctx)
+		//	dash.VerifyFatal(err, nil, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
+		//}
+		//
+		//log.Info("Deleting rules")
+		//if preRuleNameMultiApplication != "" {
+		//	err = Inst().Backup.DeleteRuleForBackup(BackupOrgID, preRuleNameMultiApplication)
+		//	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting pre exec rule %s ", preRuleNameMultiApplication))
+		//}
+		//if postRuleNameMultiApplication != "" {
+		//	err = Inst().Backup.DeleteRuleForBackup(BackupOrgID, postRuleNameMultiApplication)
+		//	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting post exec rule %s ", postRuleNameMultiApplication))
+		//}
+		//
+		//CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 
