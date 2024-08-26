@@ -338,6 +338,14 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
+		log.InfoD("Recreating new admin namespace - %v", newAdminNamespace)
+		nsSpec := &v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: newAdminNamespace,
+			},
+		}
+		_, err = core.Instance().CreateNamespace(nsSpec)
+		log.FailOnError(err, fmt.Sprintf("Unable to create namespace [%s]", newAdminNamespace))
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Creating new admin namespace again for other tests - %v", newAdminNamespace)
 		nsSpec := &v1.Namespace{

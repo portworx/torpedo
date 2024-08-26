@@ -8367,11 +8367,17 @@ func validateBackupCRs(backupName string, clusterName string, orgID string, clus
 		if err != nil {
 			return nil, true, err
 		}
+		kubeSystemCrs, err := GetBackupCRs("kube-system", clusterObj)
+		if err != nil {
+			return nil, true, err
+		}
 		log.Infof("All backup CRs in [%s] are [%v]", currentAdminNamespace, allBackupCrs)
+		log.Infof("All backup CRs in [%s] are [%s] namespace", "kube-system", kubeSystemCrs)
 
 		for _, eachCR := range allBackupCrs {
 			if strings.Contains(eachCR, backupName) {
 				log.Infof("Backup CR found for [%s] under [%s] namespace", backupName, currentAdminNamespace)
+
 				return nil, false, nil
 			}
 		}
