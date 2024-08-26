@@ -28,6 +28,28 @@ spec:
                     values:
                       - postgres
               topologyKey: "kubernetes.io/hostname"
+      initContainers:
+        - name: init-postgres-data
+          image: busybox
+          command: ["/bin/sh", "-c"]
+          args:
+            {{ if .ClaimsCount }}
+              {{- range $val := Iterate .ClaimsCount }}
+              - echo "Initializing data for postgredb-{{ $val }}"; dd if=/dev/zero of=/mnt/data{{ $val }}/initfile bs=1M count=10;
+              {{- end }}
+              {{ else }}
+              - echo "Initializing data for postgredb"; dd if=/dev/zero of=/mnt/data/initfile bs=1M count=10;
+              {{- end }}
+          volumeMounts:
+            {{ if .ClaimsCount }}
+              {{- range $val := Iterate .ClaimsCount }}
+              - name: postgredb-{{ $val }}
+                mountPath: /mnt/data{{ $val }}
+              {{- end }}
+              {{ else }}
+              - name: postgredb
+                mountPath: /mnt/data
+              {{- end }}
       containers:
         - name: postgres
           image: postgres:9.5
@@ -45,14 +67,14 @@ spec:
               value: /var/lib/postgresql/data/pgdata
           volumeMounts:
             {{ if .ClaimsCount }}
-            {{- range $val := Iterate .ClaimsCount }}
-            - name: postgredb-{{ $val }}
-              mountPath: /var/lib/postgresql/data{{ $val }}
-            {{- end }}
-            {{ else }}
-            - name: postgredb
-              mountPath: /var/lib/postgresql/data
-            {{- end }}
+              {{- range $val := Iterate .ClaimsCount }}
+              - name: postgredb-{{ $val }}
+                mountPath: /var/lib/postgresql/data{{ $val }}
+              {{- end }}
+              {{ else }}
+              - name: postgredb
+                mountPath: /var/lib/postgresql/data
+              {{- end }}
           readinessProbe:
             exec:
               command: ["psql", "-U", "pgbench", "-c", "CREATE TABLE IF NOT EXISTS test_table ( test_text TEXT ); INSERT INTO test_table VALUES ( 'test_message' ); SELECT * FROM test_table; SELECT pg_sleep(1); DELETE FROM test_table;"]
@@ -64,14 +86,14 @@ spec:
             initialDelaySeconds: 45
             timeoutSeconds: 2
       volumes:
-      {{ if .ClaimsCount }}
-        {{- range $val := Iterate .ClaimsCount }}
-        - name: postgredb-{{ $val }}
-          persistentVolumeClaim:
-            claimName: postgres-data-{{ $val }}
-      {{- end }}
-      {{- else }}
-        - name: postgredb
-          persistentVolumeClaim:
-            claimName: postgres-data
-      {{- end }}
+        {{ if .ClaimsCount }}
+          {{- range $val := Iterate .ClaimsCount }}
+          - name: postgredb-{{ $val }}
+            persistentVolumeClaim:
+              claimName: postgres-data-{{ $val }}
+          {{- end }}
+          {{- else }}
+          - name: postgredb
+            persistentVolumeClaim:
+              claimName: postgres-data
+          {{- end }}
