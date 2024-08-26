@@ -120,6 +120,10 @@ var _ = Describe("{NodeRebootForOneDay}", func() {
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var err error
+		var rebootsDone = 0
+		// Time since test started
+	        startTime := time.Now()
+		
 		contexts := make([]*scheduler.Context, 0)
 		stepLog := "schedule applications"
 		Step(stepLog, func() {
@@ -168,6 +172,10 @@ var _ = Describe("{NodeRebootForOneDay}", func() {
 						dash.VerifyFatal(err, nil, "Validate volume is driver up")
 
 						ValidateApplications(contexts) // Validate applications
+						log.InfoD("Rebooted node %s %d times", nodeToReboot.Name, rebootsDone)
+						log.InfoD("Time since test started: %s", time.Since(startTime))
+						rebootsDone++
+						log.InfoD("Number of times node has been rebooted: %d", rebootsDone)
 					}
 				}
 			}
