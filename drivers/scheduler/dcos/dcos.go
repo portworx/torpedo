@@ -101,6 +101,12 @@ func (d *dcos) ValidateAutopilotRuleObjects() error {
 		Operation: "ValidateAutopilotRuleObjects()",
 	}
 }
+func (d *dcos) CalculateLatencyForAroStates(aroNamespace string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CalculateLatencyForAroStates()",
+	}
+}
 
 // WaitForRebalanceToComplete validates autopilot rule objects for Rebalance
 func (d *dcos) WaitForRebalanceAROToComplete() error {
