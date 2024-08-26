@@ -1874,7 +1874,7 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 		// Need to delete the cluster before deleting the cloud credential
 		clusterNames := []string{SourceClusterName, DestinationClusterName}
 		for _, clusterName := range clusterNames {
-			err := DeleteCluster(clusterName, BackupOrgID, ctx, false)
+			err := DeleteCluster(clusterName, BackupOrgID, ctx, true)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cluster [%s]", clusterName))
 			err = Inst().Backup.WaitForClusterDeletion(ctx, clusterName, BackupOrgID, ClusterDeleteTimeout, ClusterCreationRetryTime)
 			log.FailOnError(err, fmt.Sprintf("waiting for cluster [%s] deletion", clusterName))
