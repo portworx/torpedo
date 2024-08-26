@@ -136,6 +136,7 @@ const (
 	PSALowerPrivilegeToHigherPrivilegeWithProjectMapping                               TestCaseName = "PSALowerPrivilegeToHigherPrivilegeWithProjectMapping"
 	AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields                        TestCaseName = "AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields"
 	AzureCloudAccountForLockedBucket                                                   TestCaseName = "AzureCloudAccountForLockedBucket"
+	PXBackupUpgradeWithAzureCredChange                                                 TestCaseName = "PXBackupUpgradeWithAzureCredChange"
 )
 
 // Test case labels
@@ -271,6 +272,7 @@ const (
 	PSALowerPrivilegeToHigherPrivilegeWithProjectMappingLabel                               TestCaseLabel = "PSALowerPrivilegeToHigherPrivilegeWithProjectMapping"
 	AzureCloudAccountCreationWithMandatoryAndNonMandatoryFieldsLabel                        TestCaseLabel = "AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields"
 	AzureCloudAccountForLockedBucketLabel                                                   TestCaseLabel = "AzureCloudAccountForLockedBucket"
+	PXBackupUpgradeWithAzureCredChangeLabel                                                 TestCaseLabel = "PXBackupUpgradeWithAzureCredChange"
 )
 
 // Common Labels
@@ -536,4 +538,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	PartialBackupWithLowerStorkVersion:                               {PartialBackupWithLowerStorkVersionLabel, PartialBackupLabel},
 	PartialBackupSuccessWithAzureEndpoint:                            {PartialBackupSuccessWithAzureEndpointLabel, PartialBackupLabel, AzureBackupLocationLabel},
 	PSALowerPrivilegeToHigherPrivilegeWithProjectMapping:             {PSALowerPrivilegeToHigherPrivilegeWithProjectMappingLabel, rkePipelineNightly},
+	PXBackupUpgradeWithAzureCredChange:                               {PXBackupUpgradeWithAzureCredChangeLabel, AzureBackupLocationLabel},
 }
