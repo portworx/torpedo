@@ -1226,11 +1226,18 @@ func validateFailoverFailbackWithDataIntegrity(clusterType, taskNamePrefix strin
 	podList, _ := core.Instance().GetPods(migNamespaces, nil)
 	log.Infof(podList.Items[0].Name)
 	firstPod := podList.Items[0].Name
-	//pod, err := k8sCore.GetPodByName(podlist, migNamespaces)
-	cmd := []string{"fio", "--blocksize=32k", "--directory=/data", "--filename=test", "--ioengine=libaio", "--readwrite=read", "--size=5120M", "--name=test", "--verify=meta", "--do_verify=1", "--verify_pattern=0xDeadBeef", "--direct=1", "--randrepeat=1", "--output=fio-log_read.txt"}
-	output, err := core.Instance().RunCommandInPod(cmd, firstPod, "", migNamespaces)
-	log.Infof(output)
-	log.FailOnError(err, "More about error %s", output)
+
+	//Generate read result file
+	cmd1 := []string{"fio", "--blocksize=32k", "--directory=/data", "--filename=test", "--ioengine=libaio", "--readwrite=read", "--size=5120M", "--name=test", "--verify=meta", "--do_verify=1", "--verify_pattern=0xDeadBeef", "--direct=1", "--randrepeat=1", "--output=fio-log_read.txt"}
+	output1, err := core.Instance().RunCommandInPod(cmd1, firstPod, "", migNamespaces)
+	log.Infof(output1)
+	log.FailOnError(err, "More about error %s", output1)
+
+	//Check for err after comparison
+	cmd2 := []string{"egrep", "-i", "err", "fio-log_read.txt"}
+	output2, err := core.Instance().RunCommandInPod(cmd2, firstPod, "", migNamespaces)
+	log.Infof(output2)
+	log.FailOnError(err, "More about error %s", output2)
 
 	if skipSourceOp {
 		err = hardSetConfig(kubeConfigPathSrc)
