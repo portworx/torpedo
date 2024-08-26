@@ -191,6 +191,12 @@ type Cluster interface {
 
 	// GetClusterStatus returns status of the given cluster name in an organization
 	GetClusterStatus(orgID string, clusterName string, ctx context.Context) (api.ClusterInfo_StatusInfo_Status, error)
+
+	// ShareCluster share the cluster object
+	ShareCluster(ctx context.Context, req *api.ShareClusterRequest) (*api.ShareClusterResponse, error)
+
+	// UnShareCluster unshare the cluster object
+	UnShareCluster(ctx context.Context, req *api.UnShareClusterRequest) (*api.UnShareClusterResponse, error)
 }
 
 // BLocation obj interface

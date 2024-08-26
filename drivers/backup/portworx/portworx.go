@@ -542,6 +542,14 @@ func (p *portworx) GetClusterStatus(orgID string, clusterName string, ctx contex
 	return api.ClusterInfo_StatusInfo_Invalid, fmt.Errorf("cluster with name '%s' not found for org '%s'", clusterName, orgID)
 }
 
+func (p *portworx) ShareCluster(ctx context.Context, req *api.ShareClusterRequest) (*api.ShareClusterResponse, error) {
+	return p.clusterManager.ShareCluster(ctx, req)
+}
+
+func (p *portworx) UnShareCluster(ctx context.Context, req *api.UnShareClusterRequest) (*api.UnShareClusterResponse, error) {
+	return p.clusterManager.UnShareCluster(ctx, req)
+}
+
 // SetMissingClusterUID sets the missing cluster UID for cluster-related requests
 func (p *portworx) SetMissingClusterUID(ctx context.Context, req interface{}) (interface{}, error) {
 	switch r := req.(type) {
