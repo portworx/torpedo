@@ -4466,10 +4466,10 @@ func PxBackupUpgrade(versionToUpgrade string) error {
 	customRegistry := os.Getenv("CUSTOM_REGISTRY")
 	customRepo := os.Getenv("CUSTOM_REPO")
 	if customRegistry == "" || customRepo == "" {
-		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
+		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true --timeout=30m",
 			versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
 	} else {
-		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
+		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true --timeout=30m",
 			versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
 
 		// Additional settings to be appended using template
