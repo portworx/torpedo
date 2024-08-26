@@ -8265,30 +8265,32 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 			},
 			Action: "start",
 		}
-		if err == nil && !isCloudDrive {
-			for _, storageNode := range storageNodes {
-				log.InfoD("Get Block drives to add for node %s", storageNode.Name)
-				blockDrives, err := Inst().N.GetBlockDrives(storageNode, systemOpts)
-				UpdateOutcome(event, err)
-
-				drvPaths := make([]string, 5)
-
-				for _, drv := range blockDrives {
-					if drv.MountPoint == "" && drv.FSType == "" && drv.Type == "disk" {
-						drvPaths = append(drvPaths, drv.Path)
-						break
+		if err == nil {
+			if !isCloudDrive {
+				for _, storageNode := range storageNodes {
+					log.InfoD("Get Block drives to add for node %s", storageNode.Name)
+					blockDrives, err := Inst().N.GetBlockDrives(storageNode, systemOpts)
+					UpdateOutcome(event, err)
+					drvPaths := make([]string, 5)
+					for _, drv := range blockDrives {
+						if drv.MountPoint == "" && drv.FSType == "" && drv.Type == "disk" {
+							drvPaths = append(drvPaths, drv.Path)
+							break
+						}
 					}
+					err = Inst().V.AddBlockDrives(&storageNode, drvPaths)
+					if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
+						log.Warn(err.Error())
+						continue
+					}
+					UpdateOutcome(event, err)
 				}
-
-				err = Inst().V.AddBlockDrives(&storageNode, drvPaths)
-				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
-					log.Warn(err.Error())
-					continue
+			} else {
+				for _, storageNode := range storageNodes {
+					err = AddCloudDrive(storageNode, -1)
+					UpdateOutcome(event, err)
 				}
-
-				UpdateOutcome(event, err)
 			}
-
 			for _, ctx := range *contexts {
 				stepLog = fmt.Sprintf("validating context after add drive on storage nodes")
 				Step(stepLog, func() {
@@ -8303,7 +8305,6 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 				})
 			}
 		}
-
 	})
 	updateMetrics(*event)
 }
