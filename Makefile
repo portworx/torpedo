@@ -24,7 +24,7 @@
 
 export GO111MODULE=on
 export GOFLAGS = -mod=vendor
-HAS_GOMODULES := $(shell go help mod why 2> /dev/null)
+HAS_GOMODULES ?= $(shell go help mod why 2> /dev/null)
 
 ifndef HAS_GOMODULES
 $(error torpedo can only be built with go 1.11+ which supports go modules)
