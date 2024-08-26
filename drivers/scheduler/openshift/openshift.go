@@ -79,6 +79,8 @@ var (
 	openshiftVersion_4_12, _ = version.NewVersion("4.12.0")
 	openshiftVersion_4_13, _ = version.NewVersion("4.13.0")
 	openshiftVersion_4_14, _ = version.NewVersion("4.14.0")
+	openshiftVersion_4_15, _ = version.NewVersion("4.15.0")
+	openshiftVersion_4_16, _ = version.NewVersion("4.16.0")
 )
 
 type openshift struct {
@@ -793,8 +795,10 @@ func ackAPIRemoval(ocpVer string) error {
 		patchData = "{\"data\":{\"ack-4.11-kube-1.25-api-removals-in-4.12\":\"true\"}}"
 	} else if openshiftVersion.GreaterThanOrEqual(openshiftVersion_4_13) && openshiftVersion.LessThan(openshiftVersion_4_14) {
 		patchData = "{\"data\":{\"ack-4.12-kube-1.26-api-removals-in-4.13\":\"true\"}}"
-	} else if openshiftVersion.GreaterThanOrEqual(openshiftVersion_4_14) {
+	} else if openshiftVersion.GreaterThanOrEqual(openshiftVersion_4_14) && openshiftVersion.LessThan(openshiftVersion_4_15) {
 		patchData = "{\"data\":{\"ack-4.13-kube-1.27-api-removals-in-4.14\":\"true\"}}"
+	} else if openshiftVersion.GreaterThanOrEqual(openshiftVersion_4_16) {
+		patchData = "{\"data\":{\"ack-4.15-kube-1.29-api-removals-in-4.16\":\"true\"}}"
 	} else {
 		log.Infof("Providing acknowledgment of API removal is not needed when upgrading to OCP version [%s]", openshiftVersion.String())
 		return nil
