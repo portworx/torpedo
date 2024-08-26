@@ -704,6 +704,8 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 func validateSpec(in interface{}) (interface{}, error) {
 	if specObj, ok := in.(*appsapi.Deployment); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*appsapi.ReplicaSet); ok {
+		return specObj, nil
 	} else if specObj, ok := in.(*appsapi.StatefulSet); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*appsapi.DaemonSet); ok {
