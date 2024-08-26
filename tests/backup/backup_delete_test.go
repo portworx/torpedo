@@ -635,7 +635,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", Label(TestCaseLabelsMa
 		}
 		providers := GetBackupProviders()
 		log.Info("Check if backup location is empty or not")
-		customBucketName = fmt.Sprintf("custom-bucket-%v", time.Now().Unix())
+		customBucketName = fmt.Sprintf("custom-bucket-%v", RandomString(5))
 		for _, provider := range providers {
 			switch provider {
 			case drivers.ProviderAws:
@@ -727,13 +727,19 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", Label(TestCaseLabelsMa
 			log.InfoD("Deleting the backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Unable fetch admin context")
-			backupDriver := Inst().Backup
-			for _, backup := range backupNames {
-				backupUID, err := backupDriver.GetBackupUID(ctx, backup, BackupOrgID)
-				dash.VerifySafely(err, nil, fmt.Sprintf("trying to get backup UID for backup %s", backup))
-				_, err = DeleteBackup(backup, backupUID, BackupOrgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the backup %s", backup))
+			var wg sync.WaitGroup
+			for _, backupName := range backupNames {
+				wg.Add(1)
+				go func(backupName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the backup %s uid", backupName))
+					_, err = DeleteBackup(backupName, backupUid, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the backup %s deletion", backupName))
+				}(backupName)
 			}
+			wg.Wait()
 			for _, backup := range backupNames {
 				err := DeleteBackupAndWait(backup, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Waiting for the backup %s to be deleted", backup))
