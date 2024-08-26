@@ -111,7 +111,7 @@ const (
 	storkDeploymentName                       = "stork"
 	defaultStorkDeploymentNamespace           = "kube-system"
 	UpgradeStorkImage                         = "TARGET_STORK_VERSION"
-	LatestStorkImage                          = "23.9.0"
+	LatestStorkImage                          = "24.3.0-dev"
 	LowerStorkImage                           = "24.2.0"
 	restoreNamePrefix                         = "tp-restore"
 	DestinationClusterName                    = "destination-cluster"
