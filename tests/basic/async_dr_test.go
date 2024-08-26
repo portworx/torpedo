@@ -1227,8 +1227,8 @@ func validateFailoverFailbackWithDataIntegrity(clusterType, taskNamePrefix strin
 	log.Infof(podList.Items[0].Name)
 	firstPod := podList.Items[0].Name
 	//pod, err := k8sCore.GetPodByName(podlist, migNamespaces)
-	cmd := []string{"fio", "--blocksize=32k", "--directory=/data", "--filename=test", "--ioengine=libaio", "--readwrite=read", "--size=5120M", "--name=test", "--verify=meta", "--do_verify=1", "--verify_pattern=0xDeadBeef", "--direct=1", "--randrepeat=1", "--output=fio-log_read.txt;", "cat", "fio-log_read.txt"}
-	output, err := core.Instance().RunCommandInPod(cmd, firstPod, "compute", migNamespaces)
+	cmd := []string{"fio", "--blocksize=32k", "--directory=/data", "--filename=test", "--ioengine=libaio", "--readwrite=read", "--size=5120M", "--name=test", "--verify=meta", "--do_verify=1", "--verify_pattern=0xDeadBeef", "--direct=1", "--randrepeat=1", "--output=fio-log_read.txt;", "cat", "fio-log_read.txt;", "sleep 900"}
+	output, err := core.Instance().RunCommandInPod(cmd, firstPod, "", migNamespaces)
 	log.Infof(output)
 	log.FailOnError(err, "More about error %s", output)
 
