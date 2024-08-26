@@ -65,12 +65,12 @@ var _ = Describe("{CreateAndRunFioOnVcluster}", func() {
 	})
 	JustAfterEach(func() {
 		// VCluster, StorageClass and Namespace cleanup
-		err := vc.VClusterCleanup(scName)
-		if err != nil {
-			log.Errorf("Problem in Cleanup: %v", err)
-		} else {
-			log.Infof("Cleanup successfully done.")
-		}
+		// err := vc.VClusterCleanup(scName)
+		// if err != nil {
+		//	log.Errorf("Problem in Cleanup: %v", err)
+		//} else {
+		//	log.Infof("Cleanup successfully done.")
+		//}
 	})
 })
 
