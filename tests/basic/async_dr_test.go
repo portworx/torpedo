@@ -1228,6 +1228,7 @@ func validateFailoverFailbackWithDataIntegrity(clusterType, taskNamePrefix strin
 	firstPod := podList.Items[0].Name
 
 	//Generate read result file
+	//Data integrity code
 	cmd1 := []string{"fio", "--blocksize=32k", "--directory=/data", "--filename=test", "--ioengine=libaio", "--readwrite=read", "--size=5120M", "--name=test", "--verify=meta", "--do_verify=1", "--verify_pattern=0xDeadBeef", "--direct=1", "--randrepeat=1", "--output=fio-log_read.txt"}
 	//log.Infof(cmd1)
 	output1, err := core.Instance().RunCommandInPod(cmd1, firstPod, "", migNamespaces)
@@ -1235,7 +1236,7 @@ func validateFailoverFailbackWithDataIntegrity(clusterType, taskNamePrefix strin
 	log.FailOnError(err, "More about error %s", err)
 
 	//Check for err after comparison
-	cmd2 := []string{"egrep", "-i", "err", "/data/fio-log_read.txt"}
+	cmd2 := []string{"egrep", "err=[0-9]+", "/data/fio-log_read.txt"}
 	output2, err := core.Instance().RunCommandInPod(cmd2, firstPod, "", migNamespaces)
 	log.Infof(output2)
 	log.FailOnError(err, "More about error %s", err)
