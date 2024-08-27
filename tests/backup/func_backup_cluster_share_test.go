@@ -65,13 +65,12 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 			log.FailOnError(err, "Failed to create user - %s", userName)
 
 			err = backup.AddRoleToUser(userName, infraAdminRole, fmt.Sprintf("Adding %v role to %s", infraAdminRole, userName))
-			log.FailOnError(err, "failed to add role %s to the user %s", infraAdminRole, userName)
+			log.FailOnError(err, "Failed to add role %s to the user %s", infraAdminRole, userName)
 		}
 	})
 
 	// This testcase verifies whether the restores created/owned by the user were deleted during the cluster un-share.
 	It("VerifyRestoreObjectsAreDeletedCreatedByNonSuperAdmin", func() {
-		//TODO: Need to update the testrail ID
 		StartPxBackupTorpedoTest("VerifyRestoreObjectsAreDeletedCreatedByNonSuperAdmin", "VerifyRestoreObjectsAreDeletedCreatedByNonSuperAdmin during the cluster unshare", nil, 301039, Sgajawada, Q2FY25)
 
 		var (
@@ -120,8 +119,7 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 			}
 		})
 
-		Step("create a backup and restore it on the same cluster(Shared Cluster) with user(User2)", func() {
-
+		Step("Create a backup and restore it on the same cluster(Shared Cluster) with user(User2)", func() {
 			// Take Backup
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
 			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", testUsers[2].ctx)
@@ -169,7 +167,6 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 	})
 	// This testcase verifies whether the restores created/owned by the user with super-admin role were not deleted during the cluster un-share.
 	It("VerifyRestoreObjectsAreNotDeletedCreatedBySuperAdmin", func() {
-		//TODO: Need to update the testrail ID
 		StartPxBackupTorpedoTest("VerifyRestoreObjectsAreNotDeletedCreatedBySuperAdmin", "VerifyRestoreObjectsAreNotDeletedCreatedBySuperAdmin during the cluster unshare", nil, 301041, Sgajawada, Q2FY25)
 
 		var (
@@ -222,7 +219,7 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 			}
 		})
 
-		Step("create a backup and restore it on the same cluster(Shared Cluster) with user(User2)", func() {
+		Step("Create a backup and restore it on the same cluster(Shared Cluster) with user(User2)", func() {
 			// Take Backup
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
 			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", testUsers[2].ctx)
@@ -248,7 +245,6 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 
 		Step("Validate the restore object", func() {
 			log.InfoD("validating the restore object")
-
 			restoreInspectRequest := &api.RestoreInspectRequest{
 				Name:  restoreName,
 				OrgId: BackupOrgID,
@@ -262,6 +258,7 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 			backupDriver := Inst().Backup
 			backupUID, err := backupDriver.GetBackupUID(testUsers[2].ctx, backupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
+
 			log.InfoD("Deleting backup")
 			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, testUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
@@ -274,7 +271,6 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 	})
 	// This testcase verifies the cluster un-share operation when there is a backupschedule.
 	It("VerifyClusterUnShareWhenBackupSchedulesAreDeleted", func() {
-		//TODO: Need to update the testrail ID
 		StartPxBackupTorpedoTest("VerifyClusterUnShareWhenBackupSchedulesAreDeleted", "VerifyClusterUnShareWhenBackupSchedulesAreDeleted during the cluster unshare", nil, 301040, Sgajawada, Q2FY25)
 
 		var (
@@ -332,7 +328,7 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 			// Take Backup Schedule
 			log.InfoD("Taking schedule backup of multiple namespaces")
 			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUsers[2].ctx)
+			_, err = CreateScheduleBackupWithoutCheckWithClusterUID(scheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s]", scheduleName))
 		})
 
@@ -371,7 +367,6 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 	})
 	// This testcase verifies the restore creation on the shared cluster by the shared user.
 	It("VerifyRestoreCreateBySharedClusterUser", func() {
-		//TODO: Need to update the testrail ID
 		StartPxBackupTorpedoTest("VerifyRestoreCreateBySharedClusterUser", "VerifyRestoreCreateBySharedClusterUser during the cluster unshare", nil, 301042, Sgajawada, Q2FY25)
 
 		var (
@@ -443,10 +438,10 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 		})
 
 		Step("Cleanup", func() {
-
 			backupDriver := Inst().Backup
 			backupUID, err := backupDriver.GetBackupUID(testUsers[2].ctx, backupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
+
 			log.InfoD("Deleting backup")
 			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, testUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
@@ -454,7 +449,6 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 			err = DeleteRestore(restoreName, BackupOrgID, testUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		})
-
 	})
 
 	JustAfterEach(func() {
@@ -465,6 +459,8 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 		log.InfoD("Deleting deployed applications")
 		DestroyApps(scheduledAppContexts, opts)
 
+		// TODO: Need to change back to px-central-admin
+		// ctx, err := backup.GetAdminCtxFromSecret()
 		ctx, err := backup.GetNonAdminCtx("admin", "admin")
 		log.FailOnError(err, "Fetching admin user ctx")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
@@ -474,5 +470,4 @@ var _ = Describe("{ClusterShare}", Label(TestCaseLabelsMap[ClusterShare]...), fu
 			log.FailOnError(err, "Failed to delete user - %s", testUsers[i].name)
 		}
 	})
-
 })

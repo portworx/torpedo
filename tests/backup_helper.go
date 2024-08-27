@@ -1473,6 +1473,76 @@ func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, b
 	return resp, nil
 }
 
+// CreateScheduleBackupWithoutCheck creates a schedule backup without waiting for success
+func CreateScheduleBackupWithoutCheckWithClusterUID(scheduleName string, clusterName string, clusterUID string, bLocation string, bLocationUID string,
+	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
+	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context1.Context, resourceTypes ...string) (*api.BackupScheduleInspectResponse, error) {
+
+	if GlobalRuleFlag {
+		preRuleName = GlobalPreRuleName
+		if GlobalPreRuleName != "" {
+			preRuleUid = GlobalPreRuleUid
+		}
+
+		postRuleName = GlobalPostRuleName
+		if GlobalPostRuleName != "" {
+			postRuleUid = GlobalPostRuleUid
+		}
+	}
+
+	backupDriver := Inst().Backup
+	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  scheduleName,
+			OrgId: orgID,
+		},
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bLocation,
+			Uid:  bLocationUID,
+		},
+		SchedulePolicy: schPolicyName,
+		Cluster:        clusterName,
+		Namespaces:     namespaces,
+		LabelSelectors: labelSelectors,
+		PreExecRuleRef: &api.ObjectRef{
+			Name: preRuleName,
+			Uid:  preRuleUid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: postRuleName,
+			Uid:  postRuleUid,
+		},
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUID,
+		},
+		ResourceTypes: resourceTypes,
+	}
+
+	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	_, err = backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
+		OrgId: orgID,
+		Name:  scheduleName,
+		Uid:   "",
+	}
+	resp, err := backupDriver.InspectBackupSchedule(ctx, backupScheduleInspectRequest)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
 // CreateVMScheduleBackupByNamespacesWithoutCheck creates VM schedule backup of provided namespaces without waiting for success.
 func CreateVMScheduleBackupByNamespacesWithoutCheck(scheduleName string, vms []kubevirtv1.VirtualMachine, clusterName string, bLocation string, bLocationUID string,
 	labelSelectors map[string]string, orgID string, uid string, preRuleName string,
