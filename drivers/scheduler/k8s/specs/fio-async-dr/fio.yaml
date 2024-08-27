@@ -20,7 +20,7 @@ spec:
           args:
             - |
               fio --blocksize=32k --directory=/data --filename=test \
-                  --ioengine=libaio --readwrite=write --size=5120M --name=test \
+                  --ioengine=libaio --readwrite=write --size=512M --name=test \
                   --verify=meta --do_verify=1 --verify_pattern=0xDeadBeef --direct=1 \
                   --gtod_reduce=1 --iodepth=32 --rate_iops=4000 --randrepeat=1 \
                   --disable_lat=0
