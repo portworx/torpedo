@@ -1747,7 +1747,7 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 				}
 				log.InfoD("Restoring from the [%s] backup", preUpgradeBackupName)
 				err = CreateRestoreWithValidation(ctx, restoreName, preUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
-				dash.VerifyFatal(strings.Contains(err.Error(), "Multiple user assigned identities exist, please specify the clientId / resourceId of the identity in the token request"), true, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
+				dash.VerifyFatal(strings.Contains(err.Error(), "Failed to refresh the Token for request"), true, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 				log.Infof("Error message is [%s]", err.Error())
 			}
 		})
