@@ -1229,15 +1229,16 @@ func validateFailoverFailbackWithDataIntegrity(clusterType, taskNamePrefix strin
 
 	//Generate read result file
 	cmd1 := []string{"fio", "--blocksize=32k", "--directory=/data", "--filename=test", "--ioengine=libaio", "--readwrite=read", "--size=5120M", "--name=test", "--verify=meta", "--do_verify=1", "--verify_pattern=0xDeadBeef", "--direct=1", "--randrepeat=1", "--output=fio-log_read.txt"}
+	//log.Infof(cmd1)
 	output1, err := core.Instance().RunCommandInPod(cmd1, firstPod, "", migNamespaces)
 	log.Infof(output1)
-	log.FailOnError(err, "More about error %s", output1)
+	log.FailOnError(err, "More about error %s", err)
 
 	//Check for err after comparison
-	cmd2 := []string{"egrep", "-i", "err", "fio-log_read.txt"}
+	cmd2 := []string{"egrep", "-i", "err", "/data/fio-log_read.txt"}
 	output2, err := core.Instance().RunCommandInPod(cmd2, firstPod, "", migNamespaces)
 	log.Infof(output2)
-	log.FailOnError(err, "More about error %s", output2)
+	log.FailOnError(err, "More about error %s", err)
 
 	if skipSourceOp {
 		err = hardSetConfig(kubeConfigPathSrc)
