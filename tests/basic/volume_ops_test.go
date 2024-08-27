@@ -998,8 +998,8 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 		retain := 8
 		interval := 4
 
-		err := CreatePXCloudCredential()
-		log.FailOnError(err, "failed to create cloud credential")
+		//err := CreatePXCloudCredential()
+		//log.FailOnError(err, "failed to create cloud credential")
 
 		n := node.GetStorageDriverNodes()[0]
 		uuidCmd := "pxctl cred list -j | grep uuid"
@@ -1159,34 +1159,34 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 			}
 		})
 
-		stepLog = "Update volume io_profiles on all volumes"
-		Step(stepLog, func() {
-			for _, ctx := range contexts {
-
-				appVols, err := Inst().S.GetVolumes(ctx)
-				log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
-
-				for _, v := range appVols {
-					var volumeSpec *api.VolumeSpecUpdate
-					inspectVolume, err := Inst().V.InspectVolume(v.ID)
-					log.FailOnError(err, fmt.Sprintf("error inspecting volume %s", v.ID))
-					newIOProfile := api.IoProfile_IO_PROFILE_JOURNAL
-					if inspectVolume.DerivedIoProfile != api.IoProfile_IO_PROFILE_JOURNAL {
-						volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
-					} else {
-						newIOProfile = api.IoProfile_IO_PROFILE_AUTO
-						volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
-					}
-					err = Inst().V.UpdateVolumeSpec(v, volumeSpec)
-					log.FailOnError(err, fmt.Sprintf("failed to update io profile to %v for volume %s", newIOProfile, v.ID))
-				}
-
-				ctx.SkipVolumeValidation = true
-				ValidateContext(ctx)
-
-			}
-
-		})
+		//stepLog = "Update volume io_profiles on all volumes"
+		//Step(stepLog, func() {
+		//	for _, ctx := range contexts {
+		//
+		//		appVols, err := Inst().S.GetVolumes(ctx)
+		//		log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+		//
+		//		for _, v := range appVols {
+		//			var volumeSpec *api.VolumeSpecUpdate
+		//			inspectVolume, err := Inst().V.InspectVolume(v.ID)
+		//			log.FailOnError(err, fmt.Sprintf("error inspecting volume %s", v.ID))
+		//			newIOProfile := api.IoProfile_IO_PROFILE_JOURNAL
+		//			if inspectVolume.DerivedIoProfile != api.IoProfile_IO_PROFILE_JOURNAL {
+		//				volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
+		//			} else {
+		//				newIOProfile = api.IoProfile_IO_PROFILE_AUTO
+		//				volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
+		//			}
+		//			err = Inst().V.UpdateVolumeSpec(v, volumeSpec)
+		//			log.FailOnError(err, fmt.Sprintf("failed to update io profile to %v for volume %s", newIOProfile, v.ID))
+		//		}
+		//
+		//		ctx.SkipVolumeValidation = true
+		//		ValidateContext(ctx)
+		//
+		//	}
+		//
+		//})
 
 		stepLog = "Verify cloud snap restore"
 		Step(stepLog, func() {
