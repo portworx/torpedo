@@ -2,7 +2,7 @@
 
 pipeline {
 	agent {
-		label "porx-builder"
+		label "cbt-builder"
 	}
 
 	stages {
