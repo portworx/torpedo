@@ -153,22 +153,22 @@ var _ = Describe("{NodeRebootForOneDay}", func() {
 						err = Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
 							Force: false,
 							ConnectionOpts: node.ConnectionOpts{
-								Timeout:         defaultCommandTimeout,
-								TimeBeforeRetry: defaultCommandRetry,
+								Timeout:         60 * time.Minute,
+								TimeBeforeRetry: 30 * time.Second,
 							},
 						})
 						dash.VerifySafely(err, nil, "Validate node is rebooted")
 						// Wait for node to be back up
 						err = Inst().N.TestConnection(nodeToReboot, node.ConnectionOpts{
-							Timeout:         defaultTestConnectionTimeout,
-							TimeBeforeRetry: defaultWaitRebootRetry,
+							Timeout:         60 * time.Minute,
+							TimeBeforeRetry: 30 * time.Second,
 						})
 
 						dash.VerifyFatal(err, nil, "Validate node is back up")
 						// Wait for scheduler and volume driver to start
 						err = Inst().S.IsNodeReady(nodeToReboot)
 						dash.VerifyFatal(err, nil, "Validate node is ready")
-						err = Inst().V.WaitDriverUpOnNode(nodeToReboot, Inst().DriverStartTimeout)
+						err = Inst().V.WaitDriverUpOnNode(nodeToReboot, 60*time.Minute)
 						dash.VerifyFatal(err, nil, "Validate volume is driver up")
 
 						ValidateApplications(contexts) // Validate applications
