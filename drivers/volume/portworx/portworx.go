@@ -6512,3 +6512,66 @@ func (d *portworx) ValidateLastDefragScheduleStatus(scheduleId string, nodeIDLis
 	log.Infof("Successfully validate  defrag schedule status for id: [%s]", scheduleId)
 	return incompletedNodeList, nil
 }
+
+// GetTrashCanVolumeName returns list of volume names present in trashcan
+func (d *portworx) GetTrashCanVolumeNames(n node.Node) ([]string, error) {
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}
+
+	pxctlPath := d.getPxctlPath(n)
+
+	// Create context
+	if len(d.token) > 0 {
+		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context create admin --token=%s", pxctlPath, d.token), opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create pxctl context. cause: %v", err)
+		}
+	}
+
+	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s v l --trashcan -j", pxctlPath), opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pxctl status. cause: %v", err)
+	}
+	log.Info(out)
+
+	var data interface{}
+	err = json.Unmarshal([]byte(out), &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal pxctl status. cause: %v", err)
+	}
+
+	// Delete context
+	if len(d.token) > 0 {
+		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context delete admin", pxctlPath), opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete pxctl context. cause: %v", err)
+		}
+	}
+
+	res := data.([]interface{})
+
+	trashcanVols := make([]string, 50)
+
+	for _, v := range res {
+		var tp map[string]interface{} = v.(map[string]interface{})
+		str := fmt.Sprintf("%v", tp["id"])
+		// Access the "locator" field and then the "name" field within it
+		if locator, ok := tp["locator"].(map[string]interface{}); ok {
+			name := fmt.Sprintf("%v", locator["name"])
+			trashcanVols = append(trashcanVols, strings.Trim(str, " "))
+			log.Infof("Volume name: %s", name)
+		} else {
+
+			log.Infof("failed to get volume name from trashcan. cause: %v", err)
+			return nil, err
+		}
+	}
+
+	log.Infof("trash vols: %v", trashcanVols)
+
+	return trashcanVols, nil
+
+}
