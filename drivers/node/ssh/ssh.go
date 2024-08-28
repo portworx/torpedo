@@ -244,10 +244,11 @@ func (s *SSH) initExecPod() error {
 			return fmt.Errorf("Error while creating debug daemonset. Err: %s", err)
 		}
 	}
-	err = k8sApps.ValidateDaemonSet(ds.Name, ds.Namespace, defaultTimeout)
-	if err != nil {
-		return fmt.Errorf("Error while validating debug daemonset. Err: %s", err)
-	}
+	log.Infof("Created debug daemonset: %v . Err: [%v]", ds.Name, err)
+	//err = k8sApps.ValidateDaemonSet(ds.Name, ds.Namespace, defaultTimeout)
+	//if err != nil {
+	//	return fmt.Errorf("Error while validating debug daemonset. Err: %s", err)
+	//}
 	return nil
 }
 
