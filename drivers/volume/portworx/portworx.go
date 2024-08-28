@@ -742,6 +742,18 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 		return nil
 	}
 
+	nodeLabels, err := k8sCore.GetLabelsOnNode(n.Name)
+	if err != nil {
+		return err
+	}
+
+	// Check if the node has the "skipTorpedo" label set to "true"
+	if value, ok := nodeLabels["skipTorpedo"]; ok && value == "true" {
+		log.Infof("Found skipTorpedo label on node %s , hence not checking if Px is up", n.Name)
+		return nil
+	}
+
+
 	for _, address := range n.Addresses {
 		for _, pxNode := range pxNodes {
 			//log.Debugf("Checking PX node %+v for address %s", pxNode, address) // NOTE: Do we really need to print the whole node?
