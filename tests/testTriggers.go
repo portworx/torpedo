@@ -1365,6 +1365,10 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 	stepLog := "get volumes for all apps in test and increase replication factor"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
+		initialRepls := make(map[*volume.Volume]int64)
+		opts := volume.Options{
+			ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+		}
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
@@ -1377,9 +1381,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 				}
 			})
-			opts := volume.Options{
-				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
-			}
+
 			for _, v := range appVolumes {
 				// Check if volumes are Pure FA/FB DA volumes
 				isPureVol, err := Inst().V.IsPureVolume(v)
@@ -1434,6 +1436,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						log.InfoD("Expected Replication factor %v", expRF)
 						log.InfoD("Max Replication factor %v", MaxRF)
 						expReplMap[v] = expRF
+						initialRepls[v] = currRep
 						if !errExpected {
 							if strings.Contains(ctx.App.Key, fastpathAppName) {
 								newFastPathNode, err := AddFastPathLabel(ctx)
@@ -1501,6 +1504,25 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				}
 			})
 
+		}
+		//Reverting back the initial replication factor
+		for v, actualRep := range initialRepls {
+			currRep, err := Inst().V.GetReplicationFactor(v)
+			UpdateOutcome(event, err)
+			for {
+				if currRep > actualRep {
+					err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
+					if err != nil {
+						log.Errorf("There is an error decreasing repl [%v]", err.Error())
+						UpdateOutcome(event, err)
+						break
+					}
+					currRep, err = Inst().V.GetReplicationFactor(v)
+					UpdateOutcome(event, err)
+				} else {
+					break
+				}
+			}
 		}
 		updateMetrics(*event)
 	})
@@ -1724,6 +1746,10 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 	stepLog := "get volumes for all apps in test and decrease replication factor"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
+		initialRepls := make(map[*volume.Volume]int64)
+		opts := volume.Options{
+			ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+		}
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
@@ -1736,9 +1762,7 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 				}
 			})
-			opts := volume.Options{
-				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
-			}
+
 			for _, v := range appVolumes {
 				// Skipping repl decrease for pure volumes
 				isPureVol, err := Inst().V.IsPureVolume(v)
@@ -1765,6 +1789,7 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							expRF = currRep
 						}
 						expReplMap[v] = expRF
+						initialRepls[v] = currRep
 						log.InfoD("Expected Replication factor %v", expRF)
 						log.InfoD("Min Replication factor %v", MinRF)
 						if !errExpected {
@@ -1824,6 +1849,25 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, err)
 				}
 			})
+		}
+		//Reverting back the initial replication factor
+		for v, actualRep := range initialRepls {
+			currRep, err := Inst().V.GetReplicationFactor(v)
+			UpdateOutcome(event, err)
+			for {
+				if currRep < actualRep {
+					err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, true, opts)
+					if err != nil {
+						log.Errorf("There is an error reverting repl [%v]", err.Error())
+						UpdateOutcome(event, err)
+						break
+					}
+					currRep, err = Inst().V.GetReplicationFactor(v)
+					UpdateOutcome(event, err)
+				} else {
+					break
+				}
+			}
 		}
 		updateMetrics(*event)
 	})

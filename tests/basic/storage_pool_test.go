@@ -9665,6 +9665,9 @@ func getRandomNodeWithPoolIOs(contexts []*scheduler.Context) (node.Node, error) 
 	// pick a storage node with pool having IOs
 	poolID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
 	n, err := GetNodeWithGivenPoolID(poolID)
+	if err != nil {
+		return node.Node{}, err
+	}
 	return *n, err
 }
 

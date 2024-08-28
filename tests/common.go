@@ -8475,7 +8475,6 @@ func GetNodeWithGivenPoolID(poolID string) (*node.Node, error) {
 			}
 		}
 	}
-
 	return nil, fmt.Errorf("no storage node found with given Pool UUID : %s", poolID)
 }
 
