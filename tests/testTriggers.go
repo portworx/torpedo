@@ -1377,6 +1377,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 				}
 			})
+			initialRepls := make(map[*volume.Volume]int64)
 			opts := volume.Options{
 				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
 			}
@@ -1408,6 +1409,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						errExpected := false
 						currRep, err := Inst().V.GetReplicationFactor(v)
 						UpdateOutcome(event, err)
+						initialRepls[v] = currRep
 
 						// GetMaxReplicationFactory is hardcoded to 3
 						// if it increases repl 3 to an aggregated 2 volume, it will fail
@@ -1500,7 +1502,25 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, err)
 				}
 			})
-
+			//Reverting back the initial replication factor
+			for v, actualRep := range initialRepls {
+				currRep, err := Inst().V.GetReplicationFactor(v)
+				UpdateOutcome(event, err)
+				for {
+					if currRep > actualRep {
+						err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
+						if err != nil {
+							log.Errorf("There is an error reverting repl [%v]", err.Error())
+							UpdateOutcome(event, err)
+							break
+						}
+						currRep, err = Inst().V.GetReplicationFactor(v)
+						UpdateOutcome(event, err)
+					} else {
+						break
+					}
+				}
+			}
 		}
 		updateMetrics(*event)
 	})
@@ -1736,6 +1756,7 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 				}
 			})
+			initialRepls := make(map[*volume.Volume]int64)
 			opts := volume.Options{
 				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
 			}
@@ -1758,6 +1779,7 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						errExpected := false
 						currRep, err := Inst().V.GetReplicationFactor(v)
 						UpdateOutcome(event, err)
+						initialRepls[v] = currRep
 						expRF := currRep - 1
 
 						if expRF < MinRF {
@@ -1824,6 +1846,25 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, err)
 				}
 			})
+			//Reverting back the initial replication factor
+			for v, actualRep := range initialRepls {
+				currRep, err := Inst().V.GetReplicationFactor(v)
+				UpdateOutcome(event, err)
+				for {
+					if currRep < actualRep {
+						err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, true, opts)
+						if err != nil {
+							log.Errorf("There is an error reverting repl [%v]", err.Error())
+							UpdateOutcome(event, err)
+							break
+						}
+						currRep, err = Inst().V.GetReplicationFactor(v)
+						UpdateOutcome(event, err)
+					} else {
+						break
+					}
+				}
+			}
 		}
 		updateMetrics(*event)
 	})
