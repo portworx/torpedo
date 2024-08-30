@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -819,7 +820,13 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 
 			// Define other parameters as needed for CreateRestoreWithValidation
 			err = CreateRestoreWithValidation(ctx, restoreName, appPrivilegeToBkpMap["baseline"], namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, baselineScheduledAppContexts)
-			dash.VerifyFatal(strings.Contains(err.Error(), "failed to meet the pod security standard"), true, fmt.Sprintf("Creating restore [%s] from backup [%s] taken on baseline namespace and restore to restricted namespace failed as expected", restoreName, appPrivilegeToBkpMap["baseline"]))
+			log.InfoD("Error while restoring from higher privileged to lower privileged namespace: %v", err)
+			backupType := os.Getenv("BACKUP_TYPE")
+			if backupType == string(NativeCSIWithOffloadToS3) || backupType == string(DirectKDMP) {
+				dash.VerifyFatal(strings.Contains(strings.ToLower(err.Error()), "failed to meet the pod security standard"), true, fmt.Sprintf("Creating restore [%s] from backup [%s] taken on baseline namespace and restore to restricted namespace failed as expected", restoreName, appPrivilegeToBkpMap["baseline"]))
+			} else {
+				dash.VerifyFatal(strings.Contains(strings.ToLower(err.Error()), "failed to validate app"), true, fmt.Sprintf("Creating restore [%s] from backup [%s] taken on baseline namespace and restore to restricted namespace failed as expected during validation of application post restore", restoreName, appPrivilegeToBkpMap["baseline"]))
+			}
 		})
 
 		Step("Remove restricted label from the namespace and add baseline label", func() {
