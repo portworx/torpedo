@@ -9,6 +9,7 @@ import (
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
 	"time"
+	"strings"
 )
 
 var _ = Describe("{CrashOneNode}", func() {
