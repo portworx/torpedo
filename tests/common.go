@@ -10,7 +10,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/vmware/govmomi/object"
 	"io/ioutil"
 	"maps"
 	"math"
@@ -27,6 +26,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/vmware/govmomi/object"
 
 	"cloud.google.com/go/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
@@ -4800,6 +4801,43 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 	}
 	backupDeleteResponse, err = backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
 	return backupDeleteResponse, err
+}
+
+// DeleteBackup deletes a backup with the given backup reference without checking the cluster reference, suitable for normal backup deletion where the cluster reference is not needed.
+func DeleteBackupAndWaitForCompletion(backupName string, backupUID string, orgID string, ctx context1.Context) error {
+	var err error
+	var backupObj *api.BackupObject
+
+	backupDriver := Inst().Backup
+
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	for _, bkp := range curBackups.GetBackups() {
+		if bkp.Uid == backupUID {
+			backupObj = bkp
+			break
+		}
+	}
+	if backupObj == nil {
+		return fmt.Errorf("unable to find backup [%s] with uid [%s]", backupName, backupUID)
+	}
+
+	bkpDeleteRequest := &api.BackupDeleteRequest{
+		Name:  backupName,
+		OrgId: orgID,
+		Uid:   backupUID,
+	}
+	_, err = backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
+	if err != nil {
+		return err
+	}
+
+	err = Inst().Backup.WaitForBackupDeletion(ctx, backupName, orgID, defaultTimeout, defaultRetryInterval)
+	return err
 }
 
 // DeleteBackupWithClusterUID deletes a backup using the specified cluster name and UID, ensuring the cluster reference is checked before deletion, suitable for cases where the cluster reference is necessary (e.g., for same-name or deleted clusters).

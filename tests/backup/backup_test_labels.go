@@ -137,6 +137,7 @@ const (
 	AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields                        TestCaseName = "AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields"
 	AzureCloudAccountForLockedBucket                                                   TestCaseName = "AzureCloudAccountForLockedBucket"
 	PXBackupUpgradeWithAzureCredChange                                                 TestCaseName = "PXBackupUpgradeWithAzureCredChange"
+	ClusterShare                                                                       TestCaseName = "ClusterShare"
 )
 
 // Test case labels
@@ -273,6 +274,7 @@ const (
 	AzureCloudAccountCreationWithMandatoryAndNonMandatoryFieldsLabel                        TestCaseLabel = "AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields"
 	AzureCloudAccountForLockedBucketLabel                                                   TestCaseLabel = "AzureCloudAccountForLockedBucket"
 	PXBackupUpgradeWithAzureCredChangeLabel                                                 TestCaseLabel = "PXBackupUpgradeWithAzureCredChange"
+	ClusterShareLabel                                                                       TestCaseLabel = "ClusterShare"
 )
 
 // Common Labels
@@ -539,4 +541,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	PartialBackupSuccessWithAzureEndpoint:                            {PartialBackupSuccessWithAzureEndpointLabel, PartialBackupLabel, AzureBackupLocationLabel},
 	PSALowerPrivilegeToHigherPrivilegeWithProjectMapping:             {PSALowerPrivilegeToHigherPrivilegeWithProjectMappingLabel, rkePipelineNightly},
 	PXBackupUpgradeWithAzureCredChange:                               {PXBackupUpgradeWithAzureCredChangeLabel, AzureBackupLocationLabel},
+	ClusterShare:                                                     {ClusterShareLabel},
 }

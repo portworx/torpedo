@@ -91,6 +91,7 @@ const (
 	Sabrarhussaini TestcaseAuthor = "sabrarhussaini"
 	ATrivedi       TestcaseAuthor = "atrivedi-px"
 	Dbinnal        TestcaseAuthor = "dbinnal-px"
+	Sgajawada      TestcaseAuthor = "sgajawada-px"
 )
 
 // TestcaseQuarter List
@@ -1472,6 +1473,76 @@ func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, b
 	return resp, nil
 }
 
+// CreateScheduleBackupWithoutCheck creates a schedule backup without waiting for success
+func CreateScheduleBackupWithoutCheckWithClusterUID(scheduleName string, clusterName string, clusterUID string, bLocation string, bLocationUID string,
+	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
+	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context1.Context, resourceTypes ...string) (*api.BackupScheduleInspectResponse, error) {
+
+	if GlobalRuleFlag {
+		preRuleName = GlobalPreRuleName
+		if GlobalPreRuleName != "" {
+			preRuleUid = GlobalPreRuleUid
+		}
+
+		postRuleName = GlobalPostRuleName
+		if GlobalPostRuleName != "" {
+			postRuleUid = GlobalPostRuleUid
+		}
+	}
+
+	backupDriver := Inst().Backup
+	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  scheduleName,
+			OrgId: orgID,
+		},
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bLocation,
+			Uid:  bLocationUID,
+		},
+		SchedulePolicy: schPolicyName,
+		Cluster:        clusterName,
+		Namespaces:     namespaces,
+		LabelSelectors: labelSelectors,
+		PreExecRuleRef: &api.ObjectRef{
+			Name: preRuleName,
+			Uid:  preRuleUid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: postRuleName,
+			Uid:  postRuleUid,
+		},
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUID,
+		},
+		ResourceTypes: resourceTypes,
+	}
+
+	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	_, err = backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
+		OrgId: orgID,
+		Name:  scheduleName,
+		Uid:   "",
+	}
+	resp, err := backupDriver.InspectBackupSchedule(ctx, backupScheduleInspectRequest)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
 // CreateVMScheduleBackupByNamespacesWithoutCheck creates VM schedule backup of provided namespaces without waiting for success.
 func CreateVMScheduleBackupByNamespacesWithoutCheck(scheduleName string, vms []kubevirtv1.VirtualMachine, clusterName string, bLocation string, bLocationUID string,
 	labelSelectors map[string]string, orgID string, uid string, preRuleName string,
@@ -1824,6 +1895,63 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 		BackupRef: &api.ObjectRef{
 			Name: backupName,
 			Uid:  bkpUid,
+		},
+	}
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return err
+	}
+	err = RestoreSuccessCheck(restoreName, orgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Restore [%s] created successfully", restoreName)
+	return nil
+}
+
+// CreateRestoreWithClusterUID creates restore
+func CreateRestoreWithClusterUID(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string, clusterUID string,
+	orgID string, ctx context1.Context, storageClassMapping map[string]string) error {
+
+	var bkpUid string
+
+	// Check if the backup used is in successful state or not
+	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
+	}
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+	actual := resp.GetBackup().GetStatus().Status
+	reason := resp.GetBackup().GetStatus().Reason
+	if actual != api.BackupInfo_StatusInfo_Success && actual != api.BackupInfo_StatusInfo_PartialSuccess {
+		return fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, api.BackupInfo_StatusInfo_Success, actual, reason)
+	}
+	backupDriver := Inst().Backup
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkpUid,
+		},
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUID,
 		},
 	}
 	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
@@ -5855,6 +5983,7 @@ func RegisterCluster(clusterName string, cloudCredName string, orgID string, ctx
 		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
 			return "", true, err
 		}
+		log.Errorf("error: %v \n", err)
 		createClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, clusterName, ctx)
 		if err != nil {
 			return "", true, err
