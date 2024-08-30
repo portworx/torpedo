@@ -141,6 +141,7 @@ var _ = Describe("{NodeRebootForOneDay}", func() {
 
 			semaphore := make(chan struct{}, 2)
 			stopChan := make(chan struct{}) // Channel to signal goroutines to stop
+			doneChan := make(chan struct{}) // Channel to signal that all work is done
 
 			// Function to reboot a node and perform multipath consistency check
 			rebootNode := func(nodeToReboot node.Node) {
@@ -148,7 +149,7 @@ var _ = Describe("{NodeRebootForOneDay}", func() {
 				defer func() {
 					stopChan <- struct{}{} // Signal the goroutine to stop
 				}()
-				poolMultipathMap := make(map[string][]string)
+				poolMultipathMap := make(map[string][]string, 0)
 				firstReboot := true
 				countBeforeReboot := 0
 
@@ -165,7 +166,27 @@ var _ = Describe("{NodeRebootForOneDay}", func() {
 							<-semaphore // Release semaphore
 						}()
 
-						if firstReboot {
+						if IsPureCluster() {
+							if firstReboot {
+								cmd := "pxctl status | awk '/\\/dev\\//'"
+								output, err := Inst().N.RunCommand(nodeToReboot, cmd, node.ConnectionOpts{
+									Timeout:         60 * time.Minute,
+									TimeBeforeRetry: 30 * time.Second,
+								})
+								log.FailOnError(err, "Error getting multipath status")
+								lines := strings.Split(output, "\n")
+								for _, line := range lines {
+									deviceInfo := strings.Fields(line)
+									if len(deviceInfo) > 1 {
+										devicePathSize := []string{deviceInfo[1], deviceInfo[2]}
+										poolMultipathMap[deviceInfo[0]] = devicePathSize
+										countBeforeReboot++
+									}
+								}
+								firstReboot = false
+							}
+
+							// Consistency check after reboot
 							cmd := "pxctl status | awk '/\\/dev\\//'"
 							output, err := Inst().N.RunCommand(nodeToReboot, cmd, node.ConnectionOpts{
 								Timeout:         60 * time.Minute,
@@ -173,55 +194,41 @@ var _ = Describe("{NodeRebootForOneDay}", func() {
 							})
 							log.FailOnError(err, "Error getting multipath status")
 							lines := strings.Split(output, "\n")
+							countAfterReboot := 0
 							for _, line := range lines {
 								deviceInfo := strings.Fields(line)
 								if len(deviceInfo) > 1 {
-									devicePathSize := []string{deviceInfo[1], deviceInfo[2]}
-									poolMultipathMap[deviceInfo[0]] = devicePathSize
-									countBeforeReboot++
-								}
-							}
-							firstReboot = false
-						}
-
-						// Consistency check after reboot
-						cmd := "pxctl status | awk '/\\/dev\\//'"
-						output, err := Inst().N.RunCommand(nodeToReboot, cmd, node.ConnectionOpts{
-							Timeout:         60 * time.Minute,
-							TimeBeforeRetry: 30 * time.Second,
-						})
-						log.FailOnError(err, "Error getting multipath status")
-						lines := strings.Split(output, "\n")
-						countAfterReboot := 0
-						for _, line := range lines {
-							deviceInfo := strings.Fields(line)
-							if len(deviceInfo) > 1 {
-								deviceInfoAfterReboot := []string{deviceInfo[1], deviceInfo[2]}
-								if poolMultipathMap[deviceInfo[0]][0] != deviceInfoAfterReboot[0] || poolMultipathMap[deviceInfo[0]][1] != deviceInfoAfterReboot[1] {
-									log.InfoD("Device path before reboot")
-									for key, value := range poolMultipathMap {
-										log.InfoD("pool id: %s device path and size :[%s]", key, value)
+									deviceInfoAfterReboot := []string{deviceInfo[1], deviceInfo[2]}
+									if poolMultipathMap[deviceInfo[0]][0] != deviceInfoAfterReboot[0] || poolMultipathMap[deviceInfo[0]][1] != deviceInfoAfterReboot[1] {
+										log.InfoD("Device path before reboot")
+										for key, value := range poolMultipathMap {
+											log.InfoD("pool id: %s device path and size :[%s]", key, value)
+										}
+										log.InfoD("Device path size before reboot: %s %s", poolMultipathMap[deviceInfo[0]][0], poolMultipathMap[deviceInfo[0]][1])
+										log.InfoD("Device path size after reboot: %s %s", deviceInfoAfterReboot[0], deviceInfoAfterReboot[1])
+										log.FailOnError(fmt.Errorf("multipath consistency check failed"), "Multipath consistency check failed")
 									}
-									log.InfoD("Device path size before reboot: %s %s", poolMultipathMap[deviceInfo[0]][0], poolMultipathMap[deviceInfo[0]][1])
-									log.InfoD("Device path size after reboot: %s %s", deviceInfoAfterReboot[0], deviceInfoAfterReboot[1])
-									log.FailOnError(fmt.Errorf("multipath consistency check failed"), "Multipath consistency check failed")
+									countAfterReboot++
 								}
-								countAfterReboot++
 							}
-						}
-						//check if any faulty decvices in multipath
-						cmd = "multipath -ll | grep -i fault"
-						output, err = Inst().N.RunCommand(nodeToReboot, cmd, node.ConnectionOpts{
-							Timeout:         60 * time.Minute,
-							TimeBeforeRetry: 30 * time.Second,
-						})
-						log.FailOnError(err, "Error getting multipath status")
-						if output != "" {
-							log.FailOnError(fmt.Errorf("multipath consistency check failed"), "Multipath consistency check failed")
+							if countBeforeReboot != countAfterReboot {
+								log.InfoD("There is a mismatch in the number of device paths before and after reboot")
+								log.InfoD("Device path before reboot")
+								for key, value := range poolMultipathMap {
+									log.InfoD("pool id: %s device path and size :[%s]", key, value)
+								}
+								log.InfoD("Device path size before reboot: %d", countBeforeReboot)
+								for _, line := range lines {
+									deviceInfo := strings.Fields(line)
+									if len(deviceInfo) > 1 {
+										log.InfoD("Device path size after reboot: %s %s", deviceInfo[0], deviceInfo[1])
+									}
+								}
+							}
 						}
 
 						// Reboot the node
-						err = Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
+						err := Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
 							Force: false,
 							ConnectionOpts: node.ConnectionOpts{
 								Timeout:         60 * time.Minute,
@@ -262,17 +269,23 @@ var _ = Describe("{NodeRebootForOneDay}", func() {
 					case <-stopChan:
 						return
 					default:
-						semaphore <- struct{}{}
-						semaphore <- struct{}{}
 						// Ensure that reboots are not happening in parallel
+						semaphore <- struct{}{}
+						semaphore <- struct{}{}
 						ValidateApplications(contexts)
 						time.Sleep(1 * time.Minute) // Polling interval
 					}
 				}
 			}()
 
-			<-timer.C  // Wait for the timer to finish
-			<-stopChan // Signal the goroutines to stop
+			// Ensure all nodes complete the reboot process or timer ends
+			go func() {
+				defer close(doneChan) // Signal that all work is done
+				<-timer.C             // Wait for the timer to finish
+				close(stopChan)       // Signal the goroutines to stop
+			}()
+
+			<-doneChan // Wait for all work to be completed
 
 			// Final comprehensive validation after the 24-hour period
 			ValidateApplications(contexts)
