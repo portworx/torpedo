@@ -107,7 +107,7 @@ var _ = Describe("{CrashOneNode}", func() {
 var _ = Describe("{NodeRebootForOneDay}", func() {
 	/* https://purestorage.atlassian.net/browse/PTX-25705
 	1. Schedule applications
-	2. Reboot node(s) for one day
+	2. Reboot 2 node(s) for one day
 	3. Validate applications
 	4. Destroy applications
 	*/
@@ -119,11 +119,6 @@ var _ = Describe("{NodeRebootForOneDay}", func() {
 	itLog := "Reboot node(s) for one day"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		var err error
-		var rebootsDone = 0
-		// Time since test started
-	        startTime := time.Now()
-		
 		contexts := make([]*scheduler.Context, 0)
 		stepLog := "schedule applications"
 		Step(stepLog, func() {
@@ -134,22 +129,97 @@ var _ = Describe("{NodeRebootForOneDay}", func() {
 			ValidateApplications(contexts)
 		})
 
-		stepLog = "reboot node(s) for one day"
+		stepLog = "reboot 2 nodes in parallel for one day"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			nodeToReboot := node.GetStorageDriverNodes()[0]
+			nodesToReboot := node.GetStorageDriverNodes()[:2] // Get the first two nodes to reboot
+
 			// Start a timer for 24 hours
 			timer := time.NewTimer(24 * time.Hour)
-			go func() {
-				<-timer.C
-				nodeToReboot.IsStorageDriverInstalled = false
-			}()
-			for {
-				select {
-				case <-timer.C:
-					break
-				default:
-					{
+			defer timer.Stop()
+
+			semaphore := make(chan struct{}, 2)
+			stopChan := make(chan struct{}) // Channel to signal goroutines to stop
+
+			// Function to reboot a node and perform multipath consistency check
+			rebootNode := func(nodeToReboot node.Node) {
+				defer GinkgoRecover()
+				defer func() {
+					stopChan <- struct{}{} // Signal the goroutine to stop
+				}()
+				poolMultipathMap := make(map[string][]string)
+				firstReboot := true
+				countBeforeReboot := 0
+
+				for {
+					select {
+					case <-stopChan:
+						return
+					case <-timer.C:
+						return
+					default:
+						// Acquire semaphore to control the parallel execution
+						semaphore <- struct{}{}
+						defer func() {
+							<-semaphore // Release semaphore
+						}()
+
+						if firstReboot {
+							cmd := "pxctl status | awk '/\\/dev\\//'"
+							output, err := Inst().N.RunCommand(nodeToReboot, cmd, node.ConnectionOpts{
+								Timeout:         60 * time.Minute,
+								TimeBeforeRetry: 30 * time.Second,
+							})
+							log.FailOnError(err, "Error getting multipath status")
+							lines := strings.Split(output, "\n")
+							for _, line := range lines {
+								deviceInfo := strings.Fields(line)
+								if len(deviceInfo) > 1 {
+									devicePathSize := []string{deviceInfo[1], deviceInfo[2]}
+									poolMultipathMap[deviceInfo[0]] = devicePathSize
+									countBeforeReboot++
+								}
+							}
+							firstReboot = false
+						}
+
+						// Consistency check after reboot
+						cmd := "pxctl status | awk '/\\/dev\\//'"
+						output, err := Inst().N.RunCommand(nodeToReboot, cmd, node.ConnectionOpts{
+							Timeout:         60 * time.Minute,
+							TimeBeforeRetry: 30 * time.Second,
+						})
+						log.FailOnError(err, "Error getting multipath status")
+						lines := strings.Split(output, "\n")
+						countAfterReboot := 0
+						for _, line := range lines {
+							deviceInfo := strings.Fields(line)
+							if len(deviceInfo) > 1 {
+								deviceInfoAfterReboot := []string{deviceInfo[1], deviceInfo[2]}
+								if poolMultipathMap[deviceInfo[0]][0] != deviceInfoAfterReboot[0] || poolMultipathMap[deviceInfo[0]][1] != deviceInfoAfterReboot[1] {
+									log.InfoD("Device path before reboot")
+									for key, value := range poolMultipathMap {
+										log.InfoD("pool id: %s device path and size :[%s]", key, value)
+									}
+									log.InfoD("Device path size before reboot: %s %s", poolMultipathMap[deviceInfo[0]][0], poolMultipathMap[deviceInfo[0]][1])
+									log.InfoD("Device path size after reboot: %s %s", deviceInfoAfterReboot[0], deviceInfoAfterReboot[1])
+									log.FailOnError(fmt.Errorf("multipath consistency check failed"), "Multipath consistency check failed")
+								}
+								countAfterReboot++
+							}
+						}
+						//check if any faulty decvices in multipath
+						cmd = "multipath -ll | grep -i fault"
+						output, err = Inst().N.RunCommand(nodeToReboot, cmd, node.ConnectionOpts{
+							Timeout:         60 * time.Minute,
+							TimeBeforeRetry: 30 * time.Second,
+						})
+						log.FailOnError(err, "Error getting multipath status")
+						if output != "" {
+							log.FailOnError(fmt.Errorf("multipath consistency check failed"), "Multipath consistency check failed")
+						}
+
+						// Reboot the node
 						err = Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
 							Force: false,
 							ConnectionOpts: node.ConnectionOpts{
@@ -158,32 +228,57 @@ var _ = Describe("{NodeRebootForOneDay}", func() {
 							},
 						})
 						dash.VerifySafely(err, nil, "Validate node is rebooted")
-						// Wait for node to be back up
+
+						// Verify that the node is back online
 						err = Inst().N.TestConnection(nodeToReboot, node.ConnectionOpts{
 							Timeout:         60 * time.Minute,
 							TimeBeforeRetry: 30 * time.Second,
 						})
-
 						dash.VerifyFatal(err, nil, "Validate node is back up")
-						// Wait for scheduler and volume driver to start
+
 						err = Inst().S.IsNodeReady(nodeToReboot)
 						dash.VerifyFatal(err, nil, "Validate node is ready")
-						err = Inst().V.WaitDriverUpOnNode(nodeToReboot, 60*time.Minute)
-						dash.VerifyFatal(err, nil, "Validate volume is driver up")
 
-						ValidateApplications(contexts) // Validate applications
-						log.InfoD("Rebooted node %s %d times", nodeToReboot.Name, rebootsDone)
-						log.InfoD("Time since test started: %s", time.Since(startTime))
-						rebootsDone++
-						log.InfoD("Number of times node has been rebooted: %d", rebootsDone)
+						err = Inst().V.WaitDriverUpOnNode(nodeToReboot, 60*time.Minute)
+						dash.VerifyFatal(err, nil, "Validate volume driver is up")
+
+						log.InfoD("Rebooted node %s", nodeToReboot.Name)
 					}
 				}
 			}
+
+			// Reboot nodes in parallel
+			for _, nodeToReboot := range nodesToReboot {
+				go rebootNode(nodeToReboot)
+				time.Sleep(5 * time.Second) // Small delay between reboots to avoid contention
+			}
+
+			// Monitor the application state during reboots
+			go func() {
+				defer GinkgoRecover()
+				for {
+					select {
+					case <-stopChan:
+						return
+					default:
+						semaphore <- struct{}{}
+						semaphore <- struct{}{}
+						// Ensure that reboots are not happening in parallel
+						ValidateApplications(contexts)
+						time.Sleep(1 * time.Minute) // Polling interval
+					}
+				}
+			}()
+
+			<-timer.C  // Wait for the timer to finish
+			<-stopChan // Signal the goroutines to stop
+
+			// Final comprehensive validation after the 24-hour period
+			ValidateApplications(contexts)
 		})
 	})
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 	})
-
 })
