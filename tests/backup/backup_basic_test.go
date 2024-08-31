@@ -64,18 +64,6 @@ func TestBasic(t *testing.T) {
 	RunSpecs(t, "Torpedo : Backup")
 }
 
-// triggerCleanup returns if cleanup should happen or not based on ENVs set in torpedo
-func triggerCleanup() bool {
-	lockedBucketName := os.Getenv("LOCKED_BUCKET_NAME")
-	if lockedBucketName == "" {
-		return true
-	}
-
-	// TODO: Add code not cleanup if you wish to debug anything
-
-	return false
-}
-
 // BackupInitInstance initialises instances required for backup
 func BackupInitInstance() {
 	var err error
@@ -272,7 +260,7 @@ var _ = AfterSuite(func() {
 	defer dash.TestSetEnd()
 	defer EndTorpedoTest()
 
-	cleanup := triggerCleanup()
+	cleanup := TriggerCleanup()
 	log.InfoD(fmt.Sprintf("Cleanup state is set to %t", cleanup))
 	if cleanup {
 		ctx, err := backup.GetAdminCtxFromSecret()

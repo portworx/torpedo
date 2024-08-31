@@ -138,6 +138,8 @@ const (
 	AzureCloudAccountForLockedBucket                                                   TestCaseName = "AzureCloudAccountForLockedBucket"
 	PXBackupUpgradeWithAzureCredChange                                                 TestCaseName = "PXBackupUpgradeWithAzureCredChange"
 	ClusterShare                                                                       TestCaseName = "ClusterShare"
+	VerifyBackupDeletionWhenRetentionIsMet                                             TestCaseName = "VerifyBackupDeletionWhenRetentionIsMet"
+	DeleteVerifyBackupDeletionWhenRetentionIsMet                                       TestCaseName = "DeleteVerifyBackupDeletionWhenRetentionIsMet"
 )
 
 // Test case labels
@@ -275,6 +277,8 @@ const (
 	AzureCloudAccountForLockedBucketLabel                                                   TestCaseLabel = "AzureCloudAccountForLockedBucket"
 	PXBackupUpgradeWithAzureCredChangeLabel                                                 TestCaseLabel = "PXBackupUpgradeWithAzureCredChange"
 	ClusterShareLabel                                                                       TestCaseLabel = "ClusterShare"
+	VerifyBackupDeletionWhenRetentionIsMetLabel                                             TestCaseLabel = "VerifyBackupDeletionWhenRetentionIsMet"
+	DeleteVerifyBackupDeletionWhenRetentionIsMetLabel                                       TestCaseLabel = "DeleteVerifyBackupDeletionWhenRetentionIsMet"
 )
 
 // Common Labels
@@ -542,4 +546,6 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	PSALowerPrivilegeToHigherPrivilegeWithProjectMapping:             {PSALowerPrivilegeToHigherPrivilegeWithProjectMappingLabel, rkePipelineNightly},
 	PXBackupUpgradeWithAzureCredChange:                               {PXBackupUpgradeWithAzureCredChangeLabel, AzureBackupLocationLabel},
 	ClusterShare:                                                     {ClusterShareLabel},
+	VerifyBackupDeletionWhenRetentionIsMet:                           {VerifyBackupDeletionWhenRetentionIsMetLabel},
+	DeleteVerifyBackupDeletionWhenRetentionIsMet:                     {DeleteVerifyBackupDeletionWhenRetentionIsMetLabel},
 }

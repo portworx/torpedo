@@ -67,8 +67,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/stork"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	v1 "k8s.io/api/policy/v1"
-
 	"go.uber.org/multierr"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/iterator"
@@ -77,6 +75,7 @@ import (
 	"google.golang.org/grpc/status"
 	"gopkg.in/natefinch/lumberjack.v2"
 	yaml "gopkg.in/yaml.v2"
+	v1 "k8s.io/api/policy/v1"
 
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -774,6 +773,18 @@ func InitInstance() {
 
 func PrintPxctlStatus() {
 	PrintCommandOutput("pxctl status")
+}
+
+// TriggerCleanup returns if cleanup should happen or not based on ENVs set in torpedo
+func TriggerCleanup() bool {
+	lockedBucketName := os.Getenv("LOCKED_BUCKET_NAME")
+	if lockedBucketName == "" {
+		return true
+	}
+
+	// TODO: Add code not cleanup if you wish to debug anything
+
+	return false
 }
 
 func PrintInspectVolume(volID string) {
@@ -4897,6 +4908,21 @@ func DeleteClusterWithUID(name string, uid string, orgID string, ctx context1.Co
 	return nil
 }
 
+// IsSchedulePolicyAutoDelete checks if a schedule policy has auto delete to set to true or not
+func IsSchedulePolicyAutoDelete(name, orgId, uid string, ctx context1.Context) (bool, error) {
+	backupDriver := Inst().Backup
+	schedulePolicyInspectRequest := &api.SchedulePolicyInspectRequest{
+		Name:  name,
+		Uid:   uid,
+		OrgId: orgId,
+	}
+	resp, err := backupDriver.InspectSchedulePolicy(ctx, schedulePolicyInspectRequest)
+	if err != nil {
+		return false, err
+	}
+	return resp.SchedulePolicy.AutoDelete, nil
+}
+
 // DeleteBackupLocation deletes backup location
 func DeleteBackupLocation(name string, backupLocationUID string, orgID string, DeleteExistingBackups bool) error {
 
@@ -5681,38 +5707,54 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 	return nil
 }
 
+// AzureCredential structure to be used hold CredName and CredUid
+type AzureCredential struct {
+	CredName string
+	CredUID  string
+}
+
 // CreateAzureCredentialsForImmutableBackupLocations creates azure cloud credentials for immutable backup locations
-func CreateAzureCredentialsForImmutableBackupLocations(ctx context1.Context, softDelete bool) (map[string]string, error) {
+func CreateAzureCredentialsForImmutableBackupLocations(ctx context1.Context, softDelete bool) (map[Mode]AzureCredential, error) {
 	tenantID, clientID, clientSecret, subscriptionID, _, _ := GetAzureCredsFromEnv()
 	_, containerLevelSA, containerLevelSAKey, storageAccountLevelSA, storageAccountLevelSAKey, softDeleteAccountLevelSA, softAccountLevelSAKey := GetAzureImmutabilityCredsFromEnv()
 
-	// Creating a key Value par of StorageAccount and its keys
-	storageAccountKeys := map[string]string{
-		storageAccountLevelSA: storageAccountLevelSAKey,
-		containerLevelSA:      containerLevelSAKey,
-	}
-	if softDelete {
-		storageAccountKeys[softDeleteAccountLevelSA] = softAccountLevelSAKey
-	}
-	storageAccountWithKey := make(map[string]string)
-	for storageAccount, storageAccountKey := range storageAccountKeys {
-		credUidWithAllFields := uuid.New()
-		azureConfigFields := &api.AzureConfig{
+	// Creating a key Value pair of StorageAccount and its keys
+	credentials := make(map[Mode]AzureCredential)
+	createCredential := func(accountName, accountKey string, mode Mode) error {
+		credUID := uuid.New()
+		azureConfig := &api.AzureConfig{
 			TenantId:       tenantID,
 			ClientId:       clientID,
 			ClientSecret:   clientSecret,
-			AccountName:    storageAccount,
-			AccountKey:     storageAccountKey,
+			AccountName:    accountName,
+			AccountKey:     accountKey,
 			SubscriptionId: subscriptionID,
 		}
-		azureCredNameWithAllFields := fmt.Sprintf("azure-cloud-cred-%s-%s", storageAccount, RandomString(10))
-		err := CreateAzureCloudCredential(azureCredNameWithAllFields, credUidWithAllFields, BackupOrgID, azureConfigFields, ctx)
+		credNameWithAllFields := fmt.Sprintf("azure-cloud-cred-%s-%s", accountName, RandomString(10))
+		if err := CreateAzureCloudCredential(credNameWithAllFields, credUID, BackupOrgID, azureConfig, ctx); err != nil {
+			return err
+		}
+		credentials[mode] = AzureCredential{
+			CredName: credNameWithAllFields,
+			CredUID:  credUID,
+		}
+		return nil
+	}
+	err := createCredential(containerLevelSA, containerLevelSAKey, Container_level)
+	if err != nil {
+		return nil, err
+	}
+	err = createCredential(storageAccountLevelSA, storageAccountLevelSAKey, SA_level)
+	if err != nil {
+		return nil, err
+	}
+	if softDelete {
+		err = createCredential(softDeleteAccountLevelSA, softAccountLevelSAKey, SOFT_SA_LEVEL)
 		if err != nil {
 			return nil, err
 		}
-		storageAccountWithKey[azureCredNameWithAllFields] = credUidWithAllFields
 	}
-	return storageAccountWithKey, nil
+	return credentials, nil
 }
 
 // CreateAzureCloudCredential creates azure cloud credentials
@@ -6889,7 +6931,7 @@ func HaIncreaseErrorInjectSourceNode(event *EventRecord, ctx *scheduler.Context,
 
 			}
 
-			// if repl is 3 cannot increase repl for the volume
+			//if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
 				return
@@ -7127,7 +7169,7 @@ func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 		result, err := IsGCPBucketEmpty(bucketName)
 		return result, err
 	case drivers.ProviderAzure:
-		result, err := IsAzureBlobEmpty(bucketName)
+		result, err := IsAzureBlobEmpty(bucketName, "", false)
 		return result, err
 	default:
 		return false, fmt.Errorf("function does not support %s provider", provider)
@@ -7235,8 +7277,17 @@ func IsGCPBucketEmpty(bucketName string) (bool, error) {
 }
 
 // IsAzureBlobEmpty returns true if bucket empty else false
-func IsAzureBlobEmpty(containerName string) (bool, error) {
-	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
+func IsAzureBlobEmpty(containerName string, mode Mode, objectLock bool) (bool, error) {
+	accountName, accountKey := "", ""
+	if objectLock {
+		if mode == SA_level {
+			_, _, _, accountName, accountKey, _, _ = GetAzureImmutabilityCredsFromEnv()
+		} else if mode == Container_level {
+			_, accountName, accountKey, _, _, _, _ = GetAzureImmutabilityCredsFromEnv()
+		}
+	} else {
+		_, _, _, _, accountName, accountKey = GetAzureCredsFromEnv()
+	}
 	azureEndpoint := os.Getenv("AZURE_ENDPOINT")
 	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, containerName)
 	if azureEndpoint == AzureChinaEndpoint {
@@ -7422,6 +7473,7 @@ type Mode string
 const (
 	SA_level        Mode = "sa_level"
 	Container_level Mode = "container_level"
+	SOFT_SA_LEVEL   Mode = "soft_sa_level"
 )
 
 // CreateAzureBucket creates bucket in Azure
@@ -7485,7 +7537,7 @@ func CreateAzureBucket(bucketName string, immutability bool, mode Mode, retentio
 		}
 
 	} else {
-		_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
+		_, _, _, _, accountName, accountKey = GetAzureCredsFromEnv()
 		urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName) // Default value
 		if azureRegion == "CHINA" {
 			urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", accountName, bucketName)
@@ -8591,7 +8643,7 @@ func ValidateDriveRebalance(stNode node.Node) error {
 	}
 	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
 	if err != nil {
-		// this is a special case occurs where drive is added with same path as deleted pool
+		//this is a special case occurs where drive is added with same path as deleted pool
 		if initPoolCount >= len(stNode.Pools) {
 			for p := range stNode.Disks {
 				drivePathsToValidate = append(drivePathsToValidate, p)
@@ -8684,7 +8736,7 @@ func ValidateRebalanceJobs(stNode node.Node) error {
 				log.InfoD("Job %v is in Running state", job.GetId())
 
 				currentDone, total := getReblanceWorkSummary(jobResponse)
-				// checking for rebalance progress
+				//checking for rebalance progress
 				for currentDone < total && previousDone < currentDone {
 					time.Sleep(2 * time.Minute)
 					log.InfoD("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
@@ -9053,23 +9105,27 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 	}
 	// Cleanup all the namespaces created by the testcase
-	err := DeleteAllNamespacesCreatedByTestCase()
-	if err != nil {
-		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	cleanup := TriggerCleanup()
+	log.InfoD(fmt.Sprintf("Cleanup state is set to %t", cleanup))
+	if cleanup {
+		err := DeleteAllNamespacesCreatedByTestCase()
+		if err != nil {
+			log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+		}
+
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
+			return
+		}
+
+		err = DeleteAllNamespacesCreatedByTestCase()
+		if err != nil {
+			log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+		}
 	}
 
-	err = SetDestinationKubeConfig()
-	if err != nil {
-		log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
-		return
-	}
-
-	err = DeleteAllNamespacesCreatedByTestCase()
-	if err != nil {
-		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
-	}
-
-	err = SetSourceKubeConfig()
+	err := SetSourceKubeConfig()
 	log.FailOnError(err, "failed to switch context to source cluster")
 
 	masterNodes := node.GetMasterNodes()
@@ -9155,7 +9211,7 @@ func GetPoolsInUse() ([]string, error) {
 	for _, pv := range pvlist.Items {
 		volumeID := pv.GetName()
 		poolUuids, err := GetPoolIDsFromVolName(volumeID)
-		// Needed this logic as a workaround for PWX-35637
+		//Needed this logic as a workaround for PWX-35637
 		if err != nil && strings.Contains(err.Error(), "not found") {
 			continue
 		}
@@ -9495,7 +9551,7 @@ func GetPoolsDetailsOnNode(n *node.Node) ([]*opsapi.StoragePool, error) {
 	if err != nil {
 		return nil, err
 	}
-	// updating the node info after refresh
+	//updating the node info after refresh
 	stDriverNodes := node.GetStorageDriverNodes()
 	for _, stDriverNode := range stDriverNodes {
 		if stDriverNode.VolDriverNodeID == n.VolDriverNodeID {
@@ -9772,7 +9828,7 @@ func GetAutoFsTrimStatusForCtx(ctx *scheduler.Context) (map[string]opsapi.Filesy
 		if isPureVol {
 			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
 		}
-		// skipping fstrim check for log PVCs
+		//skipping fstrim check for log PVCs
 		if strings.Contains(v.Name, "log") {
 			continue
 		}
@@ -9826,7 +9882,7 @@ func GetAutoFstrimUsageForCtx(ctx *scheduler.Context) (map[string]*opsapi.Fstrim
 		if isPureVol {
 			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
 		}
-		// skipping fstrim check for log PVCs
+		//skipping fstrim check for log PVCs
 		if strings.Contains(v.Name, "log") {
 			continue
 		}
@@ -10280,7 +10336,7 @@ func GetVolumeReplicationStatus(vol *volume.Volume) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// sample output : "Replication Status       :  Up"
+	//sample output : "Replication Status       :  Up"
 	output = strings.Split(strings.TrimSpace(output), ":")[1]
 	return strings.TrimSpace(output), nil
 }
@@ -11022,7 +11078,7 @@ outer:
 		} else {
 			timeout = appScaleFactor * ctx.ReadinessTimeout
 		}
-		// Waiting for all the apps in ctx are running
+		//Waiting for all the apps in ctx are running
 		mError = Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
 		if mError != nil {
 			return mError
@@ -11033,7 +11089,7 @@ outer:
 			return mError
 		}
 
-		// waiting for volumes replication status should be up before calculating md5sum
+		//waiting for volumes replication status should be up before calculating md5sum
 		for _, v := range appVolumes {
 			var replicaSets []*opsapi.ReplicaSet
 			replicaSets, mError = Inst().V.GetReplicaSets(v)
@@ -11041,7 +11097,7 @@ outer:
 				return mError
 			}
 
-			// skipping the validation if volume is repl 2
+			//skipping the validation if volume is repl 2
 			if len(replicaSets) == 1 && len(replicaSets[0].PoolUuids) == 1 {
 				continue outer
 			}
@@ -11087,7 +11143,7 @@ outer:
 			mError = multierr.Append(mError, err)
 			return mError
 		}
-		// waiting for volumes to be detached after scale down
+		//waiting for volumes to be detached after scale down
 		for _, v := range appVolumes {
 			t := func() (interface{}, bool, error) {
 				apiVol, err := Inst().V.InspectVolume(v.ID)
@@ -11117,7 +11173,7 @@ outer:
 
 		}
 
-		// function to calulate md5sum of the given volume in the give pool
+		//function to calulate md5sum of the given volume in the give pool
 		calChecksum := func(wg *sync.WaitGroup, v *volume.Volume, nodeDetail *node.Node, poolUuid string, errCh chan<- error) {
 			defer ginkgo.GinkgoRecover()
 			defer wg.Done()
@@ -11143,7 +11199,7 @@ outer:
 				return
 			}
 			log.InfoD("Getting md5sum for volume %s on pool %s in node %s", inspectVolume.Id, poolUuid, nodeDetail.Name)
-			// To-Do update the command if set up is dmthin
+			//To-Do update the command if set up is dmthin
 			cmd := fmt.Sprintf("/opt/pwx/bin/runc exec -t portworx md5sum /var/.px/%d/%s/pxdev", poolID, inspectVolume.Id)
 
 			if isDmthinSetup {
@@ -11227,7 +11283,7 @@ outer:
 
 					}
 				}
-				// clearing the pool after the volume validation
+				//clearing the pool after the volume validation
 				for k := range dmthinPoolChecksumMap {
 					delete(dmthinPoolChecksumMap, k)
 				}
@@ -11249,7 +11305,7 @@ outer:
 					}
 
 				}
-				// clearing the pool after the volume validation
+				//clearing the pool after the volume validation
 				for k := range poolChecksumMap {
 					delete(poolChecksumMap, k)
 				}
@@ -11262,7 +11318,7 @@ outer:
 }
 
 func revertAppScale(ctx *scheduler.Context) error {
-	// reverting application scale
+	//reverting application scale
 	applicationScaleUpMap := make(map[string]int32, len(ctx.App.SpecList))
 
 	applicationScaleMap, err := Inst().S.GetScaleFactorMap(ctx)
@@ -11391,7 +11447,7 @@ func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*schedul
 				contextsOnNode = append(contextsOnNode, ctx)
 				break
 			}
-			// case where volume is attached to different node but one of the replicas is the give node
+			//case where volume is attached to different node but one of the replicas is the give node
 			replicaSets, err := Inst().V.GetReplicaSets(v)
 			if err != nil {
 				return nil, err
@@ -12054,7 +12110,7 @@ func UpdateDriverVariables(envVar, runTimeOpts map[string]string) error {
 
 	var newEnvVarList []corev1.EnvVar
 
-	// Update environment variables in the spec
+	//Update environment variables in the spec
 	if envVar != nil && len(envVar) > 0 {
 		for _, env := range clusterSpec.Spec.Env {
 			newEnvVarList = append(newEnvVarList, env)
@@ -12066,7 +12122,7 @@ func UpdateDriverVariables(envVar, runTimeOpts map[string]string) error {
 		clusterSpec.Spec.Env = newEnvVarList
 	}
 
-	// Update RunTimeOpts in the spec
+	//Update RunTimeOpts in the spec
 	if runTimeOpts != nil && len(runTimeOpts) > 0 {
 		if clusterSpec.Spec.RuntimeOpts == nil {
 			clusterSpec.Spec.RuntimeOpts = make(map[string]string)
@@ -13238,7 +13294,7 @@ func GetIQNOfNode(n node.Node) (string, error) {
 
 // GetIQNOfFA gets the IQN of the FA
 func GetIQNOfFA(n node.Node, FAclient flasharray.Client) (string, error) {
-	// Run iscsiadm commands to login to the controllers
+	//Run iscsiadm commands to login to the controllers
 	networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(&FAclient, "iscsi")
 	log.FailOnError(err, "Failed to get network interfaces based on service type")
 
@@ -13313,7 +13369,7 @@ func WaitForVolumeClean(vol *volume.Volume) error {
 
 // GetFADetailsUsed Returns list of FlashArrays used in the cluster
 func GetFADetailsUsed() ([]pureutils.FlashArrayEntry, error) {
-	// get the flash array details
+	//get the flash array details
 	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get details on FlashArray used in the cluster")
@@ -13446,7 +13502,7 @@ func EnableFlashArrayNetworkInterface(faMgmtIP string, iface string) error {
 
 // GetFBDetailsFromCluster Returns list of FlashBlades used in the cluster
 func GetFBDetailsFromCluster() ([]pureutils.FlashBladeEntry, error) {
-	// get the flash array details
+	//get the flash array details
 	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get details on FlashBlade used in the cluster")
@@ -13949,7 +14005,7 @@ func CheckVolumesExistinFA(flashArrays []pureutils.FlashArrayEntry, listofFadaPv
 		}
 		for _, volumeName := range listofFadaPvc {
 			if !NoVolumeExists {
-				// This is to make sure we dont iterate through volumes which are already found in one FA,which means the value for that volume name is already true
+				//This is to make sure we dont iterate through volumes which are already found in one FA,which means the value for that volume name is already true
 				if pvcFadaMap[volumeName] {
 					continue
 				}

@@ -4,6 +4,9 @@ import (
 	"bytes"
 	context1 "context"
 	"fmt"
+	"github.com/gogo/protobuf/types"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -7778,6 +7781,104 @@ func CreateBackupUntilIncrementalBackup(ctx context1.Context, scheduledAppContex
 		}
 	}
 	return incrementalBackupName, nil
+}
+
+// AreAllVolumeBackupsFull AreAllVolumesBackupFull checks if all volume backups in a given backup are full or not
+func AreAllVolumeBackupsFull(orgID string, backupName string, ctx context1.Context) (bool, error) {
+	listOfVolumes := make(map[string]bool)
+	backupDriver := Inst().Backup
+	if os.Getenv("BACKUP_TYPE") == "" {
+		bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		if err != nil {
+			return false, fmt.Errorf("unable to fetch backup - %s : error [%v]", backupName, err)
+		}
+		bkpInspectReq := &api.BackupInspectRequest{
+			Name:  backupName,
+			OrgId: orgID,
+			Uid:   bkpUid,
+		}
+		bkpInspectResponse, err := backupDriver.InspectBackup(ctx, bkpInspectReq)
+		if err != nil {
+			return false, fmt.Errorf("unable to fetch backup - %s : error [%v]", backupName, err)
+		}
+		for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
+			backupId := vol.GetBackupId()
+			log.InfoD(fmt.Sprintf("Backup Name: %s; BackupID: %s ", backupName, backupId))
+			if strings.Contains(backupId, "incr") {
+				listOfVolumes[backupId] = false
+			} else {
+				listOfVolumes[backupId] = true
+			}
+		}
+		noFailures := true
+		for id, isFull := range listOfVolumes {
+			if !isFull {
+				log.InfoD(fmt.Sprintf("Backup %s wasn't a incremental backup", id))
+				noFailures = false
+			}
+		}
+		return noFailures, nil
+	}
+	return true, nil
+}
+
+// IsBackupPresent check if backups is present or not
+func IsBackupPresent(ctx context1.Context, backupName string, orgID string) bool {
+	backupDriver := Inst().Backup
+	_, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	code := status.Code(err)
+	if code == codes.NotFound {
+		return false
+	}
+	return true
+}
+
+// GetRetentionTimeStamp gets the retention timestamp of a given backup]
+func GetRetentionTimeStamp(ctx context1.Context, backupName string, orgID string) (*types.Timestamp, error) {
+	backupDriver := Inst().Backup
+	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch backup - %s : error [%v]", backupName, err)
+	}
+	bkpInspectReq := &api.BackupInspectRequest{
+		Name:  backupName,
+		OrgId: orgID,
+		Uid:   bkpUid,
+	}
+	bkpInspectResponse, err := backupDriver.InspectBackup(ctx, bkpInspectReq)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch backup - %s : error [%v]", backupName, err)
+	}
+	backupRetentionTimestamp := bkpInspectResponse.GetBackup().GetRetentionTime()
+	return backupRetentionTimestamp, nil
+}
+
+// IsRetentionTimestampUpdated check if the retention timestamp is updated or not
+func IsRetentionTimestampUpdated(ctx context1.Context, backupName string, orgID string, oldtimeStamp *types.Timestamp) (bool, error) {
+	backupRetentionTimestamp, err := GetRetentionTimeStamp(ctx, backupName, orgID)
+	if err != nil {
+		return false, fmt.Errorf("unable to fetch retention timestamp - %s : error [%v]", backupName, err)
+	}
+	return oldtimeStamp.Seconds != backupRetentionTimestamp.Seconds, nil
+}
+
+// UpdateBackupWithLabel update backup with a given label
+func UpdateBackupWithLabel(ctx context1.Context, backupName string, orgID string, label map[string]string) error {
+	backupDriver := Inst().Backup
+	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return fmt.Errorf("unable to fetch backup - %s : error [%v]", backupName, err)
+	}
+	bkpUpdateRequest := &api.BackupUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:   backupName,
+			OrgId:  orgID,
+			Uid:    bkpUid,
+			Labels: label,
+		},
+	}
+	_, err = backupDriver.UpdateBackup(ctx, bkpUpdateRequest)
+	return err
 }
 
 // StartAllVMsInNamespace starts all the Kubevirt VMs in the given namespace
