@@ -5553,6 +5553,16 @@ func MapToKeyValueString(m map[string]string) string {
 	return strings.Join(pairs, ",")
 }
 
+// StringToMap converts a string which is like a=b to map with similar structure
+func StringToMap(m string) map[string]string {
+	resultMap := make(map[string]string)
+	for _, pair := range strings.Split(m, ",") {
+		kv := strings.Split(pair, "=")
+		resultMap[kv[0]] = kv[1]
+	}
+	return resultMap
+}
+
 // VerifyLicenseConsumedCount verifies the consumed license count for px-backup
 func VerifyLicenseConsumedCount(ctx context1.Context, OrgId string, expectedLicenseConsumedCount int64) error {
 	licenseInspectRequestObject := &api.LicenseInspectRequest{
@@ -7935,7 +7945,7 @@ func IsBackupPresent(ctx context1.Context, backupName string, orgID string) bool
 	return true
 }
 
-// GetRetentionTimeStamp gets the retention timestamp of a given backup]
+// GetRetentionTimeStamp gets the retention timestamp of a given backup
 func GetRetentionTimeStamp(ctx context1.Context, backupName string, orgID string) (*types.Timestamp, error) {
 	backupDriver := Inst().Backup
 	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
@@ -7952,6 +7962,26 @@ func GetRetentionTimeStamp(ctx context1.Context, backupName string, orgID string
 		return nil, fmt.Errorf("unable to fetch backup - %s : error [%v]", backupName, err)
 	}
 	backupRetentionTimestamp := bkpInspectResponse.GetBackup().GetRetentionTime()
+	return backupRetentionTimestamp, nil
+}
+
+// GetCreationTimestamp gets creation timestamp of a given backup
+func GetCreationTimestamp(ctx context1.Context, backupName string, orgID string) (*types.Timestamp, error) {
+	backupDriver := Inst().Backup
+	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch backup - %s : error [%v]", backupName, err)
+	}
+	bkpInspectReq := &api.BackupInspectRequest{
+		Name:  backupName,
+		OrgId: orgID,
+		Uid:   bkpUid,
+	}
+	bkpInspectResponse, err := backupDriver.InspectBackup(ctx, bkpInspectReq)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch backup - %s : error [%v]", backupName, err)
+	}
+	backupRetentionTimestamp := bkpInspectResponse.GetBackup().GetCreateTime()
 	return backupRetentionTimestamp, nil
 }
 
