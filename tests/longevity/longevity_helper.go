@@ -50,6 +50,11 @@ var (
 
 	// Pure Topology Label array
 	labels []map[string]string
+
+	// SSIE Framework variables
+	eventCombinations = make([][]string, 0)
+	combinationsLock  = sync.RWMutex{}
+	skipEvents        []string
 )
 
 var (
@@ -243,6 +248,7 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 	setUpgradeStorageDriverEndpointList(configData)
 	setVclusterFioRunOptions(configData)
 	setSchedUpgradeHops(configData)
+	setSkipEvents(configData)
 
 	err := populateTriggers(configData)
 	if err != nil {
@@ -1945,4 +1951,111 @@ func backupEventTrigger(wg *sync.WaitGroup,
 		time.Sleep(controlLoopSleepTime)
 	}
 	os.Exit(0)
+}
+
+// GenerateAndStoreEventCombinations will generate all possible combinations of events we want to execute
+func GenerateAndStoreEventCombinations() {
+	NumDisruptiveEvents := 1
+	NumNonDisruptiveEvents := 3
+	nonDisruptive, disruptive := separateEventsByType()
+	var localCombinations [][]string
+
+	contains := func(slice []string, element string) bool {
+		for _, el := range slice {
+			if el == element {
+				return true
+			}
+		}
+		return false
+	}
+
+	shouldSkipCombination := func(combination []string) bool {
+		skipCount := 0
+		for _, event := range skipEvents {
+			if contains(combination, event) {
+				skipCount++
+			}
+		}
+		return skipCount == len(skipEvents)
+	}
+
+	// Generating combinations of disruptive events
+	disruptiveCombos := combinations(disruptive, NumDisruptiveEvents)
+
+	for _, dCombo := range disruptiveCombos {
+		// Generating combinations of non-disruptive events
+		nonDisruptiveCombos := combinations(nonDisruptive, NumNonDisruptiveEvents)
+		for _, ndCombo := range nonDisruptiveCombos {
+			// Merging non-disruptive and disruptive events into a single combination
+			fullCombo := append(ndCombo, dCombo...)
+			if !shouldSkipCombination(fullCombo) {
+				localCombinations = append(localCombinations, fullCombo)
+			}
+		}
+	}
+
+	combinationsLock.Lock()
+	eventCombinations = localCombinations
+	combinationsLock.Unlock()
+}
+
+// separateEventsByType separates events into non-disruptive and disruptive based on their type
+func separateEventsByType() (nonDisruptive []string, disruptive []string) {
+	populateDisruptiveTriggers()
+	for event, isDisruptive := range disruptiveTriggers {
+		if isDisruptive {
+			disruptive = append(disruptive, event)
+		} else {
+			nonDisruptive = append(nonDisruptive, event)
+		}
+	}
+	return
+}
+
+// combinations will return all possible combinations of the events given k at a time
+func combinations(elements []string, k int) (combs [][]string) {
+	if k > len(elements) {
+		return nil
+	}
+	indices := make([]int, k)
+	var final []string
+	for i := range indices {
+		indices[i] = i
+	}
+	for {
+		final = make([]string, k)
+		for i, idx := range indices {
+			final[i] = elements[idx]
+		}
+		combs = append(combs, final)
+		if !nextCombination(indices, len(elements)) {
+			break
+		}
+	}
+	return
+}
+
+func nextCombination(indices []int, n int) bool {
+	k := len(indices)
+	for i := k - 1; i >= 0; i-- {
+		if indices[i] != i+n-k {
+			indices[i]++
+			for j := i + 1; j < k; j++ {
+				indices[j] = indices[j-1] + 1
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// Reads and sets skip events from longevity-triggers configuration map
+func setSkipEvents(configData *map[string]string) {
+	if skipString, ok := (*configData)["skipEvents"]; !ok {
+		log.Infof("No 'skipEvents' field found. All events will be considered.")
+		skipEvents = nil
+	} else {
+		skipEvents = strings.Split(skipString, ",")
+		log.Infof("Skipping events: %v\n", skipEvents)
+	}
 }
