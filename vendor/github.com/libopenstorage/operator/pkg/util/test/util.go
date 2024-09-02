@@ -5460,7 +5460,10 @@ func ValidatePodDisruptionBudget(cluster *corev1.StorageCluster, timeout, interv
 	// PodDisruptionBudget is supported for k8s version greater than or equal to 1.21 and operator version greater than or equal to 1.5.0
 	// Changing opVersion to 23.10.0 for PTX-23350 | TODO: add better logic with PTX-23407
 	// Smart and parallel upgrades is supported from px version 3.1.2 and operator version 24.2.0
+	logrus.Infof("k8sVersion: %v, opVersion: %v, pxVersion: %v", k8sVersion, opVersion, pxVersion)
+	logrus.Infof("op version comparision: %t, px version comparision: %t", opVersion.GreaterThanOrEqual(opVer24_2_0), pxVersion.GreaterThanOrEqual(pxVer3_1_2))
 	if k8sVersion.GreaterThanOrEqual(minSupportedK8sVersionForPdb) && opVersion.GreaterThanOrEqual(opVer24_2_0) && pxVersion.GreaterThanOrEqual(pxVer3_1_2) {
+		logrus.Infof("Checking for node level PDBs")
 		t := func() (interface{}, bool, error) {
 			nodes, err := operatorops.Instance().ListStorageNodes(cluster.Namespace)
 			if err != nil {
@@ -5497,6 +5500,7 @@ func ValidatePodDisruptionBudget(cluster *corev1.StorageCluster, timeout, interv
 		}
 		return nil
 	} else if k8sVersion.GreaterThanOrEqual(minSupportedK8sVersionForPdb) && opVersion.GreaterThanOrEqual(opVer23_10) {
+		logrus.Infof("Checking for cluster level PDB")
 		// This is only for non async DR setup
 		t := func() (interface{}, bool, error) {
 
