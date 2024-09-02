@@ -45,8 +45,10 @@ const (
 	defaultClusterPairDirNew  = "cluster-pair-new"
 	defaultClusterPairName    = "remoteclusterpair"
 	defaultClusterPairNameNew = "remoteclusterpairnew"
-	defaultBackupLocation     = "s3"
-	defaultSecret             = "s3secret"
+	azureSecret               = "azuresecret"
+	azureBackupLocation       = "azure"
+	googleSecret              = "googlesecret"
+	googleBackupLocation      = "google"
 	defaultMigSchedName       = "automation-migration-schedule-"
 	migrationKey              = "async-dr-"
 	migrationSchedKey         = "mig-sched-"
@@ -55,7 +57,9 @@ const (
 )
 
 var (
-	kubeConfigWritten bool
+	kubeConfigWritten     bool
+	defaultBackupLocation = "s3"
+	defaultSecret         = "s3secret"
 )
 
 type failoverFailbackParam struct {
@@ -231,7 +235,7 @@ var _ = Describe("{MigrateDeploymentMetroAsync}", func() {
 					namespace := GetAppNamespace(ctx, taskName)
 					migrationNamespaces = append(migrationNamespaces, namespace)
 					log.Infof("Creating clusterpair between first and second cluster")
-					err = ScheduleBidirectionalClusterPair(defaultClusterPairName, namespace, "", "", "", "sync-dr", asyncdr.FirstCluster, asyncdr.SecondCluster)
+					err = ScheduleBidirectionalClusterPair(defaultClusterPairName, namespace, "", "", "", "sync-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, nil)
 					log.FailOnError(err, "Failed creating bidirectional cluster pair")
 				}
 			}
@@ -264,7 +268,7 @@ var _ = Describe("{MigrateDeploymentMetroAsync}", func() {
 
 		for i, currMigNamespace := range migrationNamespaces {
 			log.Infof("Creating clusterpair between second and third cluster")
-			ScheduleBidirectionalClusterPair(defaultClusterPairNameNew, currMigNamespace, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.SecondCluster, asyncdr.ThirdCluster)
+			ScheduleBidirectionalClusterPair(defaultClusterPairNameNew, currMigNamespace, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.SecondCluster, asyncdr.ThirdCluster, nil)
 			migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
 			currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, defaultClusterPairNameNew, currMigNamespace, &includeVolumesFlagAsync, &includeResourcesFlag, &startApplicationsFlag, nil)
 			Expect(err).NotTo(HaveOccurred(),
@@ -676,7 +680,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", func() {
 			backupName         = "storkbackup-" + time.Now().Format("15h03m05s")
 			taskNamePrefix     = "appbkprest-upgradepx"
 			defaultNs          = "kube-system"
-			timeout            = 10 * time.Minute	
+			timeout            = 10 * time.Minute
 		)
 		bkpNs, contexts := initialSetupApps(taskNamePrefix, true)
 		storageNodes := node.GetStorageNodes()
@@ -806,7 +810,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", func() {
 			kubeConfigPath[cluster], err = GetCustomClusterConfigPath(cluster)
 			log.FailOnError(err, "Getting error while fetching path for %v cluster, error is %v", cluster, err)
 		}
-		
+
 		var migrationSchedName string
 		var schdPol *storkapi.SchedulePolicy
 		cpName := defaultClusterPairName + time.Now().Format("15h03m05s")
@@ -825,7 +829,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", func() {
 
 		Step("create clusterpair and start migration", func() {
 			log.InfoD("Creating clusterpair between first and second cluster")
-			err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster)
+			err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, nil)
 			log.FailOnError(err, "Failed creating bidirectional cluster pair")
 
 			log.InfoD("Start migration schedule and perform failover")
@@ -1010,14 +1014,70 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 		"namespaces": migNamespaces,
 		"kubeconfig": kubeConfigPathSrc,
 	}
+
+	stc, err := Inst().V.GetDriver()
+	log.FailOnError(err, "Failed to get driver")
+
+	isCloud, cloudName := asyncdr.IsCloud(stc)
+	var srcEp, destEp string
+	extraArgsCp := map[string]string{}
+	const defaultPort = "9001"
+
+	if isCloud {
+		storageDriverName := Inst().V.String()
+		if err = asyncdr.ChangePxServiceToLoadBalancer(false, storageDriverName, stc); err != nil {
+			log.FailOnError(err, "failed to change PX service to LoadBalancer on source cluster")
+		}
+		if cloudName == "eks" {
+			pxService, err := core.Instance().GetService("portworx-service", "kube-system")
+			log.FailOnError(err, "failed to get px service")
+			srcEp = pxService.Status.LoadBalancer.Ingress[0].Hostname
+		}
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "Failed to set destination kubeconfig")
+		if err = asyncdr.ChangePxServiceToLoadBalancer(false, storageDriverName, stc); err != nil {
+			log.FailOnError(err, "failed to change PX service to LoadBalancer on destination cluster")
+		}
+		if cloudName == "eks" {
+			pxService, err := core.Instance().GetService("portworx-service", "kube-system")
+			log.FailOnError(err, "failed to get px service")
+			destEp = pxService.Status.LoadBalancer.Ingress[0].Hostname
+		}
+		err = SetSourceKubeConfig()
+		log.FailOnError(err, "Failed to set source kubeconfig")
+	}
+
+	if cloudName == "aks" {
+		defaultSecret = azureSecret
+		defaultBackupLocation = azureBackupLocation
+	} else if cloudName == "gke" {
+		defaultSecret = googleSecret
+		defaultBackupLocation = googleBackupLocation
+	}
+
+	if cloudName == "eks" {
+		extraArgsCp["src-ep"] = srcEp + ":" + defaultPort
+		extraArgsCp["dest-ep"] = destEp + ":" + defaultPort
+	}
+
 	log.Infof("Creating clusterpair between first and second cluster")
 	cpName := defaultClusterPairName + time.Now().Format("15h03m05s")
+
 	if clusterType == "asyncdr" {
-		err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster)
+		err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, extraArgsCp)
 	} else {
-		err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", "", "", "sync-dr", asyncdr.FirstCluster, asyncdr.SecondCluster)
+		err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", "", "", "sync-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, extraArgsCp)
 	}
+
 	log.FailOnError(err, "Failed creating bidirectional cluster pair")
+
+	if isCloud {
+		err := patchClusterPair(cpName, defaultNs, kubeConfigPathSrc)
+		log.FailOnError(err, "Failed patching cluster pair")
+		err = patchClusterPair(cpName, defaultNs, kubeConfigPathDest)
+		log.FailOnError(err, "Failed patching cluster pair")
+	}
+
 	log.Infof("Start migration schedule and perform failover")
 	migrationSchedName := migrationSchedKey + time.Now().Format("15h03m05s")
 	createMigSchdAndValidateMigration(migrationSchedName, cpName, defaultNs, kubeConfigPathSrc, extraArgs)
@@ -1350,9 +1410,9 @@ func validateOperatorMigFailover(namespace, clusterType, opName, crName string, 
 	kubeConfigPathDest, err := GetCustomClusterConfigPath(asyncdr.SecondCluster)
 	log.FailOnError(err, "Failed to get destination configPath: %v", err)
 	if clusterType == "asyncdr" {
-		err = ScheduleBidirectionalClusterPair(cpName, namespace, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster)
+		err = ScheduleBidirectionalClusterPair(cpName, namespace, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, nil)
 	} else {
-		err = ScheduleBidirectionalClusterPair(cpName, namespace, "", "", "", "sync-dr", asyncdr.FirstCluster, asyncdr.SecondCluster)
+		err = ScheduleBidirectionalClusterPair(cpName, namespace, "", "", "", "sync-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, nil)
 	}
 	log.FailOnError(err, "Failed creating bidirectional cluster pair")
 	log.Infof("Start migration schedule and perform failover")
@@ -1584,6 +1644,18 @@ func patchStashStrategy(crName string) error {
 	_, err = exec.Command("sh", "-c", cmd).CombinedOutput()
 	if err != nil {
 		log.Infof("Error running command: %v and err is: %v", cmd, err)
+		return err
+	}
+	return nil
+}
+
+func patchClusterPair(cpName, cpNs, configPath string) error {
+	patch := []byte(`[{"op": "remove", "path": "/spec/options/mode"}]`)
+	cmd := fmt.Sprintf(`kubectl --kubeconfig %v patch clusterpair %v -n %v --type='json' -p='%s'`, configPath, cpName, cpNs, string(patch))
+	log.Infof("Running command: %v", cmd)
+	_, err = exec.Command("sh", "-c", cmd).CombinedOutput()
+	if err != nil {
+		log.Errorf("Error running command: %v and err is: %v", cmd, err)
 		return err
 	}
 	return nil

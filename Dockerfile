@@ -95,6 +95,9 @@ RUN apk add --no-cache openssh sshpass
 # Install dependancy for OCP 4.14 CLI
 RUN apk --update add gcompat
 
+#Install aws-cli    
+RUN apk add aws-cli && aws --version
+
 # Install yq
 RUN wget https://github.com/mikefarah/yq/releases/download/v4.25.1/yq_linux_amd64 -O /usr/bin/yq && \
     chmod +x /usr/bin/yq

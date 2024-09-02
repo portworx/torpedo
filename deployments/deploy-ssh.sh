@@ -600,6 +600,8 @@ spec:
       value: "${K8S_VENDOR}"
     - name: TORPEDO_SSH_USER
       value: "${TORPEDO_SSH_USER}"
+    - name: LB_SUBNET_KEY
+      value: "${LB_SUBNET_KEY}"
     - name: TORPEDO_SSH_PASSWORD
       value: "${TORPEDO_SSH_PASSWORD}"
     - name: TORPEDO_SSH_KEY
