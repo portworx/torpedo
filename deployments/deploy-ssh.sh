@@ -920,6 +920,25 @@ cat torpedo.yaml
 echo "Deploying torpedo pod..."
 kubectl -n default apply -f torpedo.yaml
 
+# MKE requires delta between secret creation & pod deployment, adding retries to handle this
+max_retries=3
+retry_delay=10
+retry_count=0
+
+while [ $retry_count -lt $max_retries ]; do
+    echo "Attempting to apply torpedo.yaml (Attempt #$((retry_count + 1)))..."
+
+    if kubectl -n default get pod torpedo; then
+        echo "Successfully applied torpedo.yaml"
+        break
+    else
+        echo "Failed to apply torpedo.yaml. Retrying in $retry_delay seconds..."
+        retry_count=$((retry_count + 1))
+        kubectl -n default apply -f torpedo.yaml
+        sleep $retry_delay
+    fi
+done
+
 echo "Waiting for torpedo to start running"
 
 function describe_pod_then_exit {
