@@ -4785,7 +4785,7 @@ func PxBackupUpgrade(versionToUpgrade string) error {
 				{Name: "pxBackupPrometheusOperatorImage"},
 				{Name: "pxBackupPrometheusConfigReloaderImage"},
 				{Name: "preUpgradeHookImage"},
-				{Name: "mongodbImages"},
+				{Name: "mongodbImageMap"},
 			},
 		}
 
