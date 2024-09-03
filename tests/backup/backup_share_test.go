@@ -908,20 +908,17 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", Label(Test
 	numberOfGroups, _ := strconv.Atoi(GetEnv(GroupsToBeCreated, "100"))
 	groupSize, _ := strconv.Atoi(GetEnv(MaxUsersInGroup, "2"))
 	numberOfBackups, _ := strconv.Atoi(GetEnv(MaxBackupsToBeCreated, "100"))
-	timeBetweenConsecutiveBackups := 10 * time.Second
 	users := make([]string, 0)
 	groups := make([]string, 0)
 	backupNames := make([]string, 0)
-	numberOfSimultaneousBackups := 20
+	numberOfSimultaneousBackups := 3
 	var scheduledAppContexts []*scheduler.Context
-	labelSelectors := make(map[string]string)
 	var backupLocationUID string
 	var cloudCredUID string
 	var cloudCredUidList []string
 	userContexts := make([]context.Context, 0)
 	var appContextsToBackup []*scheduler.Context
 	var bkpNamespaces []string
-	var clusterUid string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	var customBackupLocationName string
 	var credName string
@@ -1046,34 +1043,18 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", Label(Test
 			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid [%s]", SourceClusterName, clusterUid))
 		})
 
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking backup of applications")
-			var sem = make(chan struct{}, numberOfSimultaneousBackups)
-			var wg sync.WaitGroup
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
+			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			log.InfoD("Taking %d backups", numberOfBackups)
-			for i := 0; i < numberOfBackups; i++ {
-				time.Sleep(timeBetweenConsecutiveBackups)
-				backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-				backupNames = append(backupNames, backupName)
-				sem <- struct{}{}
-				wg.Add(1)
-				go func(backupName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					defer func() { <-sem }()
-					appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-					err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
-				}(backupName)
-			}
-			wg.Wait()
-			log.Infof("List of backups - %v", backupNames)
+			backupNames, err = TakeMultipleBackupsPerDeployment(ctx, BackupOrgID, SourceClusterName, numberOfBackups, numberOfSimultaneousBackups, customBackupLocationName, backupLocationUID, appContextsToBackup, BackupNamePrefix)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupNames))
 		})
 
 		Step("Share all backups with Full Access in source cluster with a group", func() {
