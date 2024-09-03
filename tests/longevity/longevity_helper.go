@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1958,25 +1959,28 @@ func GenerateAndStoreEventCombinations() {
 	NumDisruptiveEvents := 1
 	NumNonDisruptiveEvents := 3
 	nonDisruptive, disruptive := separateEventsByType()
+	configMap, err := core.Instance().GetConfigMap(testTriggersConfigMap, configMapNS)
+	if err != nil {
+		log.Infof("Error retrieving config map: %v", err)
+		return
+	}
+	alreadyRanCombosStr := configMap.Data["AlreadyRanCombos"]
+	alreadyRanCombos := strings.Split(alreadyRanCombosStr, ";")
+
 	var localCombinations [][]string
 
-	contains := func(slice []string, element string) bool {
-		for _, el := range slice {
-			if el == element {
-				return true
-			}
-		}
-		return false
-	}
-
 	shouldSkipCombination := func(combination []string) bool {
+		combinationStr := strings.Join(combination, ",")
 		skipCount := 0
 		for _, event := range skipEvents {
-			if contains(combination, event) {
+			if slices.Contains(combination, event) {
 				skipCount++
 			}
 		}
-		return skipCount == len(skipEvents)
+		if skipCount == len(skipEvents) || slices.Contains(alreadyRanCombos, combinationStr) {
+			return true
+		}
+		return false
 	}
 
 	// Generating combinations of disruptive events
@@ -2058,4 +2062,24 @@ func setSkipEvents(configData *map[string]string) {
 		skipEvents = strings.Split(skipString, ",")
 		log.Infof("Skipping events: %v\n", skipEvents)
 	}
+}
+
+// UpdateAlreadyRanCombinations takes a combination that has run, updates the ConfigMap to include this combination in "AlreadyRanCombos".
+func UpdateAlreadyRanCombinations(newCombo []string) error {
+	configMap, err := core.Instance().GetConfigMap(testTriggersConfigMap, configMapNS)
+	if err != nil {
+		return fmt.Errorf("error retrieving config map: %v", err)
+	}
+	newComboStr := strings.Join(newCombo, ",")
+	if existingCombos, ok := configMap.Data["AlreadyRanCombos"]; ok {
+		configMap.Data["AlreadyRanCombos"] = existingCombos + ";" + newComboStr
+	} else {
+		configMap.Data["AlreadyRanCombos"] = newComboStr
+	}
+	updatedConfigMap, err := core.Instance().UpdateConfigMap(configMap)
+	if err != nil {
+		return fmt.Errorf("error updating config map with new combination: %v", err)
+	}
+	log.Infof("ConfigMap updated successfully with new data: %v\n", updatedConfigMap.Data["AlreadyRanCombos"])
+	return nil
 }
