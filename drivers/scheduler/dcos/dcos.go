@@ -5,6 +5,7 @@ import (
 	"fmt"
 	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"io/ioutil"
+	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	"os"
 	"path/filepath"
 	"time"
@@ -1195,6 +1196,13 @@ func (d *dcos) GetPXCloudDriveConfigMap(cluster *v1.StorageCluster) (map[string]
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetPXCloudDriveConfigMap()",
+	}
+}
+
+func (d *dcos) GetPodMetrics(podName, namespace string) (*v1beta1.PodMetrics, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPodMetrics()",
 	}
 }
 

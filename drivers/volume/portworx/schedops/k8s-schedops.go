@@ -1,7 +1,9 @@
 package schedops
 
 import (
+	context1 "context"
 	"fmt"
+	torpedotask "github.com/portworx/torpedo/pkg/task"
 	"regexp"
 	"strconv"
 	"strings"
@@ -296,7 +298,13 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 		return nil, true, fmt.Errorf("pods pending validation current: %d. Expected: %d", lenValidatedPods, lenExpectedPods)
 	}
 
-	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, defaultRetryInterval)
+	gctx := context1.Background()
+	gctx = context1.WithValue(gctx, torpedotask.TimeBeforeRetryKey, 5*time.Second)
+	gctx = context1.WithValue(gctx, torpedotask.TimeoutKey, 2*time.Minute)
+	gctx = context1.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+
+	_, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx)
+	//_, err := task.DoRetryWithTimeout(t, 30*time.Minute, defaultRetryInterval)
 	return err
 }
 

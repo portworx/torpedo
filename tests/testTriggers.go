@@ -126,6 +126,7 @@ const (
 	// EssentialsFaFbSKU is license strings for FA/FB essential license
 	EssentialsFaFbSKU = "Portworx CSI for FA/FB"
 	fastpathAppName   = "fastpath"
+	IsSSIEKey         = "IS_SSIE"
 )
 
 const (
@@ -176,7 +177,7 @@ var IOProfileChange = [3]apios.IoProfile{apios.IoProfile_IO_PROFILE_NONE, apios.
 
 var currentIOProfileChangeCounter = 0
 
-var longevityLogger *lumberjack.Logger
+//var longevityLogger *lumberjack.Logger
 
 // EmailRecipients list of email IDs to send email to
 var EmailRecipients []string
@@ -273,6 +274,9 @@ var isDefragScheduleExist = false
 
 // defragScheduleID is needed to remember the scheduleID during next run
 var defragScheduleID string
+
+var logMap = make(map[string]*lumberjack.Logger)
+var mutex sync.Mutex
 
 // Event describes type of test trigger
 type Event struct {
@@ -516,8 +520,8 @@ const (
 	UpgradeVolumeDriverFromCatalog = "upgradeVolumeDriverFromCatalog"
 	// UpgradeCluster upgrades the cluster according to the Inst().SchedUpgradeHops
 	UpgradeCluster = "upgradeCluster"
-	// AppTasksDown scales app up and down
-	AppTasksDown = "appScaleUpAndDown"
+	// AppScaleUpAndDown scales app up and down
+	AppScaleUpAndDown = "appScaleUpAndDown"
 	// AutoFsTrim enables Auto Fstrim in PX cluster
 	AutoFsTrim = "autoFsTrim"
 	// UpdateVolume provides option to update volume with properties like iopriority.
@@ -736,15 +740,22 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 }
 
 func startLongevityTest(testName string) {
-	longevityLogger = CreateLogger(fmt.Sprintf("%s-%s.log", testName, time.Now().Format(time.RFC3339)))
+	mutex.Lock()
+	defer mutex.Unlock()
+	log.SetTestName(testName)
+	longevityLogger := CreateLogger(fmt.Sprintf("%s-%s.log", testName, time.Now().Format(time.RFC3339)))
 	log.SetTorpedoFileOutput(longevityLogger)
+
+	logMap[testName] = longevityLogger
 	dash.TestCaseBegin(testName, fmt.Sprintf("validating %s in longevity cluster", testName), "", nil)
 	PrintPxctlStatus()
 }
 func endLongevityTest() {
+	mutex.Lock()
+	defer mutex.Unlock()
 	PrintPxctlStatus()
 	dash.TestCaseEnd()
-	CloseLogger(longevityLogger)
+	CloseLogger(logMap[log.GetTestName()])
 }
 
 func updateLongevityStats(name, eventStatName string, dashStats map[string]string) {
@@ -767,6 +778,15 @@ func updateLongevityStats(name, eventStatName string, dashStats map[string]strin
 		DashStats: dashStats,
 	}
 	stats.PushStatsToAetos(dash, name, product, "Longevity", eventStat)
+}
+
+func isSSIERun() bool {
+	boolVal, err := strconv.ParseBool(os.Getenv(IsSSIEKey))
+	if err != nil {
+		log.Errorf("error parsing env variable %s. err: %+v", IsSSIEKey, err)
+		return false
+	}
+	return boolVal
 }
 
 // TriggerDeployNewApps deploys applications in separate namespaces
@@ -984,17 +1004,19 @@ func TriggerDetachDrives(contexts *[]*scheduler.Context, recordChan *chan *Event
 				} else {
 					UpdateOutcome(event, fmt.Errorf("Failed to find the node!"))
 				}
-				for _, ctx := range *contexts {
-					log.Infof("Validating context: %v", ctx.App.Key)
-					ctx.SkipVolumeValidation = false
-					errorChan := make(chan error, errorChannelSize)
-					ValidateContext(ctx, &errorChan)
-					for err := range errorChan {
-						UpdateOutcome(event, err)
+				if !isSSIERun() {
+					for _, ctx := range *contexts {
+						log.Infof("Validating context: %v", ctx.App.Key)
+						ctx.SkipVolumeValidation = false
+						errorChan := make(chan error, errorChannelSize)
+						ValidateContext(ctx, &errorChan)
+						for err := range errorChan {
+							UpdateOutcome(event, err)
+						}
 					}
+					err = ValidateDataIntegrity(contexts)
+					UpdateOutcome(event, err)
 				}
-				err = ValidateDataIntegrity(contexts)
-				UpdateOutcome(event, err)
 				updateMetrics(*event)
 			})
 	})
@@ -1346,6 +1368,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
 	startLongevityTest(HAIncrease)
+	log.SetTestName(HAIncrease)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -1481,28 +1504,30 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						}
 					})
 			}
-			stepLog = fmt.Sprintf("validating context after increasing HA for app: %s",
-				ctx.App.Key)
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				errorChan := make(chan error, errorChannelSize)
-				ctx.SkipVolumeValidation = true
-				log.InfoD("Context Validation after increasing HA started for  %s", ctx.App.Key)
-				ValidateContext(ctx, &errorChan)
-				ctx.SkipVolumeValidation = false
-				log.InfoD("Context Validation after increasing HA is completed for  %s", ctx.App.Key)
-				for err := range errorChan {
-					if err != nil {
-						log.Errorf("There is a error in context validation [%v]", err.Error())
+			if !isSSIERun() {
+				stepLog = fmt.Sprintf("validating context after increasing HA for app: %s",
+					ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					errorChan := make(chan error, errorChannelSize)
+					ctx.SkipVolumeValidation = true
+					log.InfoD("Context Validation after increasing HA started for  %s", ctx.App.Key)
+					ValidateContext(ctx, &errorChan)
+					ctx.SkipVolumeValidation = false
+					log.InfoD("Context Validation after increasing HA is completed for  %s", ctx.App.Key)
+					for err := range errorChan {
+						if err != nil {
+							log.Errorf("There is a error in context validation [%v]", err.Error())
+						}
+						UpdateOutcome(event, err)
+						log.Infof("Context outcome after increasing HA is updated for  %s", ctx.App.Key)
 					}
-					UpdateOutcome(event, err)
-					log.Infof("Context outcome after increasing HA is updated for  %s", ctx.App.Key)
-				}
-				if strings.Contains(ctx.App.Key, fastpathAppName) {
-					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
-					UpdateOutcome(event, err)
-				}
-			})
+					if strings.Contains(ctx.App.Key, fastpathAppName) {
+						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+						UpdateOutcome(event, err)
+					}
+				})
+			}
 
 		}
 		//Reverting back the initial replication factor
@@ -1697,26 +1722,29 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 
 					})
 			}
-			stepLog = fmt.Sprintf("validating context after increasing HA for app: %s",
-				ctx.App.Key)
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				errorChan := make(chan error, errorChannelSize)
-				log.InfoD("Context Validation after increasing HA started for  %s", ctx.App.Key)
-				ValidateContext(ctx, &errorChan)
-				log.InfoD("Context Validation after increasing HA is completed for  %s", ctx.App.Key)
-				for err := range errorChan {
-					if err != nil {
-						log.Errorf("There is a error in context validation [%v]", err.Error())
+			if !isSSIERun() {
+				stepLog = fmt.Sprintf("validating context after increasing HA for app: %s",
+					ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					errorChan := make(chan error, errorChannelSize)
+					log.InfoD("Context Validation after increasing HA started for  %s", ctx.App.Key)
+					ValidateContext(ctx, &errorChan)
+					log.InfoD("Context Validation after increasing HA is completed for  %s", ctx.App.Key)
+					for err := range errorChan {
+						if err != nil {
+							log.Errorf("There is a error in context validation [%v]", err.Error())
+						}
+						UpdateOutcome(event, err)
+						log.Infof("Context outcome after increasing HA is updated for  %s", ctx.App.Key)
 					}
-					UpdateOutcome(event, err)
-					log.Infof("Context outcome after increasing HA is updated for  %s", ctx.App.Key)
-				}
-				if strings.Contains(ctx.App.Key, fastpathAppName) {
-					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
-					UpdateOutcome(event, err)
-				}
-			})
+					if strings.Contains(ctx.App.Key, fastpathAppName) {
+						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+						UpdateOutcome(event, err)
+					}
+				})
+			}
+
 		}
 		updateMetrics(*event)
 	})
@@ -1830,25 +1858,28 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 
 					})
 			}
-			stepLog = fmt.Sprintf("validating context after reducing HA for app: %s",
-				ctx.App.Key)
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				errorChan := make(chan error, errorChannelSize)
-				ctx.SkipVolumeValidation = true
-				log.InfoD("Context Validation after reducing HA started for  %s", ctx.App.Key)
-				ValidateContext(ctx, &errorChan)
-				log.InfoD("Context Validation after reducing HA is completed for  %s", ctx.App.Key)
-				ctx.SkipVolumeValidation = false
-				for err := range errorChan {
-					UpdateOutcome(event, err)
-					log.Infof("Context outcome after reducing HA is updated for  %s", ctx.App.Key)
-				}
-				if strings.Contains(ctx.App.Key, fastpathAppName) {
-					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-					UpdateOutcome(event, err)
-				}
-			})
+			if !isSSIERun() {
+				stepLog = fmt.Sprintf("validating context after reducing HA for app: %s",
+					ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					errorChan := make(chan error, errorChannelSize)
+					ctx.SkipVolumeValidation = true
+					log.InfoD("Context Validation after reducing HA started for  %s", ctx.App.Key)
+					ValidateContext(ctx, &errorChan)
+					log.InfoD("Context Validation after reducing HA is completed for  %s", ctx.App.Key)
+					ctx.SkipVolumeValidation = false
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+						log.Infof("Context outcome after reducing HA is updated for  %s", ctx.App.Key)
+					}
+					if strings.Contains(ctx.App.Key, fastpathAppName) {
+						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+						UpdateOutcome(event, err)
+					}
+				})
+			}
+
 		}
 		//Reverting back the initial replication factor
 		for v, actualRep := range initialRepls {
@@ -1906,18 +1937,21 @@ func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			}
 			UpdateOutcome(event, err)
 		})
-		stepLog = fmt.Sprintf("validating context after delete tasks for app: [%s]",
-			ctx.App.Key)
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			errorChan := make(chan error, errorChannelSize)
-			ctx.SkipVolumeValidation = true
-			ValidateContext(ctx, &errorChan)
-			ctx.SkipVolumeValidation = false
-			for err := range errorChan {
-				UpdateOutcome(event, err)
-			}
-		})
+		if !isSSIERun() {
+			stepLog = fmt.Sprintf("validating context after delete tasks for app: [%s]",
+				ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				errorChan := make(chan error, errorChannelSize)
+				ctx.SkipVolumeValidation = true
+				ValidateContext(ctx, &errorChan)
+				ctx.SkipVolumeValidation = false
+				for err := range errorChan {
+					UpdateOutcome(event, err)
+				}
+			})
+		}
+
 	}
 	updateMetrics(*event)
 }
@@ -1970,9 +2004,11 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 						UpdateOutcome(event, err)
 					}
 				})
+
 			err = ValidateDataIntegrity(&nodeContexts)
 			UpdateOutcome(event, err)
 			validateContexts(event, contexts)
+
 		}
 		updateMetrics(*event)
 	})
@@ -2026,9 +2062,11 @@ func TriggerCrashPXDaemon(contexts *[]*scheduler.Context, recordChan *chan *Even
 						UpdateOutcome(event, err)
 					}
 				})
+
 			err = ValidateDataIntegrity(&nodeContexts)
 			UpdateOutcome(event, err)
 			validateContexts(event, contexts)
+
 		}
 		updateMetrics(*event)
 	})
@@ -2082,9 +2120,11 @@ func TriggerKubeletRestart(contexts *[]*scheduler.Context, recordChan *chan *Eve
 						UpdateOutcome(event, err)
 					}
 				})
+
 			err = ValidateDataIntegrity(&nodeContexts)
 			UpdateOutcome(event, err)
 			validateContexts(event, contexts)
+
 		}
 		updateMetrics(*event)
 	})
@@ -2164,9 +2204,9 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 			Step("Giving few seconds for volume driver to stabilize", func() {
 				time.Sleep(20 * time.Second)
 			})
+
 			err = ValidateDataIntegrity(&nodeContexts)
 			UpdateOutcome(event, err)
-
 			validateContexts(event, contexts)
 		}
 		updateMetrics(*event)
@@ -2243,10 +2283,11 @@ func TriggerNodeMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 			Step("Giving few seconds for volume driver to stabilize", func() {
 				time.Sleep(20 * time.Second)
 			})
+
 			err = ValidateDataIntegrity(&nodeContexts)
 			UpdateOutcome(event, err)
-
 			validateContexts(event, contexts)
+
 		}
 		updateMetrics(*event)
 	})
@@ -2326,10 +2367,11 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 			Step("Giving few seconds for volume driver to stabilize", func() {
 				time.Sleep(20 * time.Second)
 			})
+
 			err = ValidateDataIntegrity(&nodeContexts)
 			UpdateOutcome(event, err)
-
 			validateContexts(event, contexts)
+
 		}
 		updateMetrics(*event)
 	})
@@ -2490,8 +2532,8 @@ func TriggerStorageFullPoolExpansion(contexts *[]*scheduler.Context, recordChan 
 
 			err = ValidateDataIntegrity(contexts)
 			UpdateOutcome(event, err)
-
 			validateContexts(event, contexts)
+
 			err = Inst().V.RefreshDriverEndpoints()
 			UpdateOutcome(event, err)
 		}
@@ -2500,6 +2542,9 @@ func TriggerStorageFullPoolExpansion(contexts *[]*scheduler.Context, recordChan 
 }
 
 func validateContexts(event *EventRecord, contexts *[]*scheduler.Context) {
+	if isSSIERun() {
+		return
+	}
 	actualEvent := strings.Split(event.Event.Type, "<br>")[0]
 	for _, ctx := range *contexts {
 		stepLog := fmt.Sprintf("%s: validating app [%s]", actualEvent, ctx.App.Key)
@@ -3618,10 +3663,24 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 	n := node.GetStorageDriverNodes()[0]
 	uuidCmd := "cred list -j | grep uuid"
 
-	output, err := Inst().V.GetPxctlCmdOutput(n, uuidCmd)
+	output, err := Inst().V.GetPxctlCmdOutputConnectionOpts(n, uuidCmd, node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}, true)
 	if err != nil {
+		err = CreatePXCloudCredential()
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+		}
+		output, err = Inst().V.GetPxctlCmdOutputConnectionOpts(n, uuidCmd, node.ConnectionOpts{
+			IgnoreError:     false,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		}, true)
 		UpdateOutcome(event, err)
-		return
+
 	}
 
 	if output == "" {
@@ -3649,11 +3708,6 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 					policyName := "intervalpolicy"
 					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 					if err != nil {
-						err = CreatePXCloudCredential()
-						if err != nil {
-							UpdateOutcome(event, err)
-							return
-						}
 						retain := 10
 						interval := getCloudSnapInterval(CloudSnapShot)
 						log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
@@ -3679,7 +3733,6 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 					} else {
 						log.Infof("schedPolicy is %v already exists", schedPolicy.Name)
 					}
-
 					UpdateOutcome(event, err)
 				})
 				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
@@ -4207,6 +4260,102 @@ func CollectEventRecords(recordChan *chan *EventRecord) {
 		TestExecutionCounter.Increment(actualEvent)
 		log.Infof("TestExecutionCountMap: %v", TestExecutionCounter.String())
 		eventRing = eventRing.Next()
+	}
+}
+
+func ValidateSSIEStatus(contexts *[]*scheduler.Context) {
+	pxLabel := map[string]string{"name": "portworx"}
+	storkLabel := map[string]string{"name": "stork"}
+	autopilotLabel := map[string]string{"name": "autopilot"}
+	operatorLabel := map[string]string{"name": "portworx-operator"}
+	namespace, err := Inst().V.GetVolumeDriverNamespace()
+	log.FailOnError(err, "Failed to get volume driver namespace")
+
+	podList, err := core.Instance().GetPods(namespace, pxLabel)
+	log.FailOnError(err, "Failed to get portworx pods")
+
+	for _, pod := range podList.Items {
+		log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
+		pm, err := Inst().S.GetPodMetrics(pod.Name, pod.Namespace)
+		log.FailOnError(err, fmt.Sprintf("error getting metrics for pod %s in namespace %s", pod.Name, pod.Namespace))
+		log.Infof("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
+	}
+
+	podList, err = core.Instance().GetPods(namespace, storkLabel)
+	log.FailOnError(err, "Failed to get stork pods pods")
+
+	for _, pod := range podList.Items {
+		log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
+		pm, err := Inst().S.GetPodMetrics(pod.Name, pod.Namespace)
+		log.FailOnError(err, fmt.Sprintf("error getting metrics for pod %s in namespace %s", pod.Name, pod.Namespace))
+		log.Infof("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
+
+	}
+	podList, err = core.Instance().GetPods(namespace, autopilotLabel)
+	log.FailOnError(err, "Failed to get autopilot pods")
+
+	for _, pod := range podList.Items {
+		log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
+		pm, err := Inst().S.GetPodMetrics(pod.Name, pod.Namespace)
+		log.FailOnError(err, fmt.Sprintf("error getting metrics for pod %s in namespace %s", pod.Name, pod.Namespace))
+		log.Infof("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
+
+	}
+
+	podList, err = core.Instance().GetPods(namespace, operatorLabel)
+	log.FailOnError(err, "Failed to get operator pods")
+
+	for _, pod := range podList.Items {
+		log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
+		pm, err := Inst().S.GetPodMetrics(pod.Name, pod.Namespace)
+		log.FailOnError(err, fmt.Sprintf("error getting metrics for pod %s in namespace %s", pod.Name, pod.Namespace))
+		log.Infof("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
+
+	}
+
+	stnodes := node.GetStorageDriverNodes()
+	for _, n := range stnodes {
+
+		k8sNode, err := core.Instance().GetNodeByName(n.Name)
+		log.FailOnError(err, fmt.Sprintf("Failed to get K8s node %s", n.Name))
+
+		for _, condition := range k8sNode.Status.Conditions {
+			if condition.Type == v1.NodeReady {
+				if condition.Status != v1.ConditionTrue || k8sNode.Spec.Unschedulable {
+					log.FailOnError(fmt.Errorf("node %v has Node Status %v and Schedulabe status %v", n.Name, condition.Status, k8sNode.Spec.Unschedulable), "Node Status False")
+				}
+			}
+			status, err := Inst().V.GetNodeStatus(n)
+			log.FailOnError(err, "Failed to get node status")
+			log.Infof("Node [%s] has status [%s]", n, status)
+		}
+
+		for _, n := range stnodes {
+			log.Infof("looking for core files on node %s", n.Name)
+			file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
+				Timeout:         2 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			})
+			log.FailOnError(err, fmt.Sprintf("Failed to do system check on node [%s]", n.Name))
+
+			if len(file) != 0 {
+				log.FailOnError(fmt.Errorf("core file [%s] found on node %s", file, n.Name), "Core files found")
+			}
+		}
+
+		for i := 0; i < eventRing.Len(); i++ {
+			record := eventRing.Value
+			if record != nil {
+				log.Infof("Event Record : %v", *record.(*EventRecord))
+				eventRing.Value = nil
+			}
+			eventRing = eventRing.Next()
+		}
+
+		for _, ctx := range *contexts {
+			ValidateContext(ctx)
+		}
+
 	}
 }
 
@@ -7556,23 +7705,25 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 		updateMetrics(*event)
 	})
 
-	for _, ctx := range *contexts {
-
-		Step(fmt.Sprintf("validating context after node: [%s] decommission",
-			nodeToDecomm.Name), func() {
-			errorChan := make(chan error, errorChannelSize)
-			ctx.SkipVolumeValidation = true
-			ValidateContext(ctx, &errorChan)
-			ctx.SkipVolumeValidation = false
-			for err := range errorChan {
-				UpdateOutcome(event, err)
-				if strings.Contains(ctx.App.Key, fastpathAppName) {
-					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+	if !isSSIERun() {
+		for _, ctx := range *contexts {
+			Step(fmt.Sprintf("validating context after node: [%s] decommission",
+				nodeToDecomm.Name), func() {
+				errorChan := make(chan error, errorChannelSize)
+				ctx.SkipVolumeValidation = true
+				ValidateContext(ctx, &errorChan)
+				ctx.SkipVolumeValidation = false
+				for err := range errorChan {
 					UpdateOutcome(event, err)
+					if strings.Contains(ctx.App.Key, fastpathAppName) {
+						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+						UpdateOutcome(event, err)
+					}
 				}
-			}
-		})
+			})
+		}
 	}
+
 }
 
 // TriggerNodeRejoin rejoins the decommissioned node
@@ -7681,19 +7832,21 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				}
 			})
 			decommissionedNode = node.Node{}
-			for _, ctx := range *contexts {
-
-				Step(fmt.Sprintf("validating context after node: [%s] rejoin",
-					decommissionedNodeName), func() {
-					errorChan := make(chan error, errorChannelSize)
-					ctx.SkipVolumeValidation = true
-					ValidateContext(ctx, &errorChan)
-					ctx.SkipVolumeValidation = false
-					for err := range errorChan {
-						UpdateOutcome(event, err)
-					}
-				})
+			if !isSSIERun() {
+				for _, ctx := range *contexts {
+					Step(fmt.Sprintf("validating context after node: [%s] rejoin",
+						decommissionedNodeName), func() {
+						errorChan := make(chan error, errorChannelSize)
+						ctx.SkipVolumeValidation = true
+						ValidateContext(ctx, &errorChan)
+						ctx.SkipVolumeValidation = false
+						for err := range errorChan {
+							UpdateOutcome(event, err)
+						}
+					})
+				}
 			}
+
 		} else {
 			log.Infof("No node available to rejoin")
 		}
@@ -8163,15 +8316,15 @@ func validateKVDBMembers(event *EventRecord, kvdbMembers map[string]*volume.Meta
 
 }
 
-// TriggerAppTasksDown performs app scale up and down according to chaos level
-func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+// TriggerAppScaleUpAndDown performs app scale up and down according to chaos level
+func TriggerAppScaleUpAndDown(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
-	startLongevityTest(AppTasksDown)
+	startLongevityTest(AppScaleUpAndDown)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: AppTasksDown,
+			Type: AppScaleUpAndDown,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -8183,7 +8336,7 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 	setMetrics(*event)
 
-	chaosLevel := ChaosMap[AppTasksDown]
+	chaosLevel := ChaosMap[AppScaleUpAndDown]
 	stepLog := "deletes all pods from a given app and validate if they recover"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
@@ -8194,21 +8347,23 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 					log.InfoD(stepLog)
 					dashStats := make(map[string]string)
 					dashStats["task-name"] = ctx.App.Key
-					updateLongevityStats(AppTasksDown, stats.DeletePodsEventName, dashStats)
+					updateLongevityStats(AppScaleUpAndDown, stats.DeletePodsEventName, dashStats)
 					err := Inst().S.DeleteTasks(ctx, nil)
 					if err != nil {
 						PrintDescribeContext(ctx)
 					}
 					UpdateOutcome(event, err)
 				})
-				stepLog = "validate all apps after deletion"
-				Step(stepLog, func() {
-					log.InfoD(stepLog)
-					errorChan := make(chan error, errorChannelSize)
-					ctx.SkipVolumeValidation = true
-					ValidateContext(ctx, &errorChan)
-					ctx.SkipClusterScopedObject = false
-				})
+				if !isSSIERun() {
+					stepLog = "validate all apps after deletion"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						errorChan := make(chan error, errorChannelSize)
+						ctx.SkipVolumeValidation = true
+						ValidateContext(ctx, &errorChan)
+						ctx.SkipClusterScopedObject = false
+					})
+				}
 			}
 		}
 	})
@@ -8333,21 +8488,22 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 				UpdateOutcome(event, err)
 			}
 
-			for _, ctx := range *contexts {
-				stepLog = fmt.Sprintf("validating context after add drive on storage nodes")
-				Step(stepLog, func() {
-					log.InfoD(stepLog)
-					errorChan := make(chan error, errorChannelSize)
-					ctx.SkipVolumeValidation = true
-					ValidateContext(ctx, &errorChan)
-					ctx.SkipVolumeValidation = false
-					for err := range errorChan {
-						UpdateOutcome(event, err)
-					}
-				})
+			if !isSSIERun() {
+				for _, ctx := range *contexts {
+					stepLog = fmt.Sprintf("validating context after add drive on storage nodes")
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						errorChan := make(chan error, errorChannelSize)
+						ctx.SkipVolumeValidation = true
+						ValidateContext(ctx, &errorChan)
+						ctx.SkipVolumeValidation = false
+						for err := range errorChan {
+							UpdateOutcome(event, err)
+						}
+					})
+				}
 			}
 		}
-
 	})
 	updateMetrics(*event)
 }
@@ -12268,6 +12424,47 @@ func TriggerSvMotionMultipleNodes(contexts *[]*scheduler.Context, recordChan *ch
 	})
 
 	updateMetrics(*event)
+}
+
+func TriggerLogging(contexts []*scheduler.Context) {
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		log.SetTestName("FirstLoggingTest")
+		startLongevityTest("FirstLoggingTest")
+		defer endLongevityTest()
+
+		ValidateApplications(contexts)
+		log.Infof("Validated Applications")
+		log.Infof("printing cluster")
+		PrintK8sClusterInfo()
+		PrintPxctlStatus()
+
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		log.SetTestName("SecondLoggingTest")
+		startLongevityTest("SecondLoggingTest")
+		defer endLongevityTest()
+
+		ValidateApplications(contexts)
+		log.Infof("Validated Applications")
+		log.Infof("printing kvdb nodes")
+		getKVDBNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "failed to get list of all kvdb nodes")
+		dash.VerifyFatal(len(getKVDBNodes) == 3, true, "missing required kvdb member nodes")
+		for _, eachKvdb := range getKVDBNodes {
+			log.Infof("KVDB Node [%s] is Leader [%v]", eachKvdb.ID, eachKvdb.Leader)
+		}
+
+	}()
+	wg.Wait()
+
 }
 
 // getDefragStartTime return non-overlapping start time with another defrag schedule in a cluster

@@ -29,99 +29,6 @@ var _ = Describe("{Longevity}", func() {
 	var emailTriggerLock sync.Mutex
 	var populateDone bool
 	triggerEventsChan := make(chan *EventRecord, 100)
-	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-		DeployApps:                        TriggerDeployNewApps,
-		RebootNode:                        TriggerRebootNodes,
-		ValidatePdsApps:                   TriggerValidatePdsApps,
-		CrashNode:                         TriggerCrashNodes,
-		CrashPXDaemon:                     TriggerCrashPXDaemon,
-		RestartVolDriver:                  TriggerRestartVolDriver,
-		CrashVolDriver:                    TriggerCrashVolDriver,
-		HAIncrease:                        TriggerHAIncrease,
-		HADecrease:                        TriggerHADecrease,
-		VolumeClone:                       TriggerVolumeClone,
-		VolumeResize:                      TriggerVolumeResize,
-		AppTaskDown:                       TriggerAppTaskDown,
-		AppTasksDown:                      TriggerAppTasksDown,
-		AddDrive:                          TriggerAddDrive,
-		CoreChecker:                       TriggerCoreChecker,
-		CloudSnapShot:                     TriggerCloudSnapShot,
-		LocalSnapShot:                     TriggerLocalSnapShot,
-		DeleteLocalSnapShot:               TriggerDeleteLocalSnapShot,
-		MetadataPoolResizeDisk:            TriggerMetadataPoolResizeDisk,
-		PoolAddDisk:                       TriggerPoolAddDisk,
-		UpgradeStork:                      TriggerUpgradeStork,
-		VolumesDelete:                     TriggerVolumeDelete,
-		UpgradeVolumeDriver:               TriggerUpgradeVolumeDriver,
-		AutoFsTrim:                        TriggerAutoFsTrim,
-		UpdateVolume:                      TriggerVolumeUpdate,
-		UpdateIOProfile:                   TriggerVolumeIOProfileUpdate,
-		RestartManyVolDriver:              TriggerRestartManyVolDriver,
-		RebootManyNodes:                   TriggerRebootManyNodes,
-		NodeDecommission:                  TriggerNodeDecommission,
-		NodeRejoin:                        TriggerNodeRejoin,
-		CsiSnapShot:                       TriggerCsiSnapShot,
-		CsiSnapRestore:                    TriggerCsiSnapRestore,
-		RelaxedReclaim:                    TriggerRelaxedReclaim,
-		Trashcan:                          TriggerTrashcan,
-		KVDBFailover:                      TriggerKVDBFailover,
-		ValidateDeviceMapper:              TriggerValidateDeviceMapperCleanup,
-		MetroDR:                           TriggerMetroDR,
-		AsyncDR:                           TriggerAsyncDR,
-		AsyncDRMigrationSchedule:          TriggerAsyncDRMigrationSchedule,
-		ConfluentAsyncDR:                  TriggerConfluentAsyncDR,
-		KafkaAsyncDR:                      TriggerKafkaAsyncDR,
-		MongoAsyncDR:                      TriggerMongoAsyncDR,
-		AsyncDRVolumeOnly:                 TriggerAsyncDRVolumeOnly,
-		AutoFsTrimAsyncDR:                 TriggerAutoFsTrimAsyncDR,
-		DetachDrives:                      TriggerDetachDrives,
-		IopsBwAsyncDR:                     TriggerIopsBwAsyncDR,
-		StorkApplicationBackup:            TriggerStorkApplicationBackup,
-		StorkAppBkpVolResize:              TriggerStorkAppBkpVolResize,
-		StorkAppBkpHaUpdate:               TriggerStorkAppBkpHaUpdate,
-		StorkAppBkpPxRestart:              TriggerStorkAppBkpPxRestart,
-		StorkAppBkpPoolResize:             TriggerStorkAppBkpPoolResize,
-		StorkVolumeSnapshotSchedule:       TriggerStorkVolumeSnapshotSchedule,
-		StorkVolumeSnapshotScheduleLocal:  TriggerStorkVolumeSnapshotScheduleLocal,
-		RestartKvdbVolDriver:              TriggerRestartKvdbVolDriver,
-		HAIncreaseAndReboot:               TriggerHAIncreaseAndReboot,
-		AddDiskAndReboot:                  TriggerPoolAddDiskAndReboot,
-		ResizeDiskAndReboot:               TriggerPoolResizeDiskAndReboot,
-		AutopilotRebalance:                TriggerAutopilotPoolRebalance,
-		DeleteOldNamespaces:               TriggerDeleteOldNamespaces,
-		DeleteCloudsnaps:                  TriggerDeleteCloudsnaps,
-		MetroDRMigrationSchedule:          TriggerMetroDRMigrationSchedule,
-		CloudSnapShotRestore:              TriggerCloudSnapshotRestore,
-		LocalSnapShotRestore:              TriggerLocalSnapshotRestore,
-		AggrVolDepReplResizeOps:           TriggerAggrVolDepReplResizeOps,
-		AddStorageNode:                    TriggerAddOCPStorageNode,
-		AddStoragelessNode:                TriggerAddOCPStoragelessNode,
-		OCPStorageNodeRecycle:             TriggerOCPStorageNodeRecycle,
-		HAIncreaseAndCrashPX:              TriggerHAIncreaseAndCrashPX,
-		HAIncreaseAndRestartPX:            TriggerHAIncreaseAndPXRestart,
-		NodeMaintenanceCycle:              TriggerNodeMaintenanceCycle,
-		PoolMaintenanceCycle:              TriggerPoolMaintenanceCycle,
-		StorageFullPoolExpansion:          TriggerStorageFullPoolExpansion,
-		HAIncreaseWithPVCResize:           TriggerHAIncreasWithPVCResize,
-		ReallocateSharedMount:             TriggerReallocSharedMount,
-		CreateAndRunFioOnVcluster:         TriggerCreateAndRunFioOnVcluster,
-		CreateAndRunMultipleFioOnVcluster: TriggerCreateAndRunMultipleFioOnVcluster,
-		VolumeDriverDownVCluster:          TriggerVolumeDriverDownVCluster,
-		SetDiscardMounts:                  TriggerSetDiscardMounts,
-		PowerOffAllVMs:                    TriggerPowerOffAllVMs,
-		ResetDiscardMounts:                TriggerResetDiscardMounts,
-		ScaleFADAVolumeAttach:             TriggerScaleFADAVolumeAttach,
-		RestartKubeletService:             TriggerKubeletRestart,
-		PoolDelete:                        TriggerPoolDelete,
-		DefragScheduleCRUDOperations:      TriggerDefragScheduleCRUDOps,
-		DefragSchedules:                   TriggerDefragSchedules,
-		SVMotionSingleNode:                TriggerSvMotionSingleNode,
-		SVMotionMultipleNodes:             TriggerSvMotionMultipleNodes,
-	}
-	//Creating a distinct trigger to make sure email triggers at regular intervals
-	emailTriggerFunction = map[string]func(){
-		EmailReporter: TriggerEmailReporter,
-	}
 
 	BeforeEach(func() {
 		if !populateDone {
@@ -130,6 +37,7 @@ var _ = Describe("{Longevity}", func() {
 			}
 			StartTorpedoTest("PX-Longevity", "Validate PX longevity workflow", tags, 0)
 
+			populateTriggerFuncs()
 			populateIntervals()
 			populateDisruptiveTriggers()
 			populateDone = true
@@ -268,7 +176,6 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			HAIncreaseAndReboot:   TriggerHAIncreaseAndReboot,
 			RestartKvdbVolDriver:  TriggerRestartKvdbVolDriver,
 			NodeDecommission:      TriggerNodeDecommission,
-			AppTasksDown:          TriggerAppTasksDown,
 			NodeRejoin:            TriggerNodeRejoin,
 			KVDBFailover:          TriggerKVDBFailover,
 			RestartManyVolDriver:  TriggerRestartManyVolDriver,
@@ -495,6 +402,7 @@ func testTrigger(wg *sync.WaitGroup,
 	triggerLoc *sync.Mutex,
 	triggerEventsChan *chan *EventRecord) {
 	defer wg.Done()
+	defer GinkgoRecover()
 
 	minRunTime := Inst().MinRunTimeMins
 	timeout := (minRunTime) * 60

@@ -63,11 +63,12 @@ var _ = AfterSuite(func() {
 		TestLogger = CreateLogger("SystemCheck.log")
 		defer dash.TestSetEnd()
 		defer CloseLogger(TestLogger)
-		defer dash.TestCaseEnd()
+
 		// making sure validate clean up executed even if systemcheck failed
 		defer func() {
 			if wantAllAfterSuiteActions || wantAfterSuiteValidateCleanup {
 				dash.TestCaseBegin("Validate Cleanup", "Validating clean up", "", nil)
+				defer dash.TestCaseEnd()
 				ValidateCleanup()
 			}
 		}()
@@ -76,6 +77,7 @@ var _ = AfterSuite(func() {
 		if !Inst().SkipSystemChecks {
 			if wantAllAfterSuiteActions || wantAfterSuiteSystemCheck {
 				dash.TestCaseBegin("System Checks", "Perform system checks", "", nil)
+				defer dash.TestCaseEnd()
 				PerformSystemCheck()
 			}
 		}

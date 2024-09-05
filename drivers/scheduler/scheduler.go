@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"fmt"
+	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -478,6 +479,9 @@ type Driver interface {
 
 	// GetPXCloudDriveConfigMap gets the PX-Cloud drive config map
 	GetPXCloudDriveConfigMap(cluster *operatorcorev1.StorageCluster) (map[string]node.DriveSet, error)
+
+	// GetPodMetrics gets the metrics for a pod
+	GetPodMetrics(podName, namespace string) (*v1beta1.PodMetrics, error)
 }
 
 var (

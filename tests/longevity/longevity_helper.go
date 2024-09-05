@@ -3,6 +3,7 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/onsi/ginkgo/v2"
 	"os"
 	"slices"
 	"strconv"
@@ -37,7 +38,7 @@ var (
 	triggerInterval map[string]map[int]time.Duration
 	// Stores which are disruptive triggers. When disruptive triggers are happening in test,
 	// other triggers are allowed to happen only after existing triggers are complete.
-	disruptiveTriggers map[string]bool
+	disruptiveTriggers []string
 
 	triggerFunctions       map[string]func(*[]*scheduler.Context, *chan *EventRecord)
 	triggerBackupFunctions map[string]func(*[]*scheduler.Context, *chan *EventRecord)
@@ -98,10 +99,6 @@ func watchConfigMap() error {
 		return fmt.Errorf("Failed to watch on config map: %s due to: %v", testTriggersConfigMap, err)
 	}
 	return nil
-}
-
-func populateBackupDisruptiveTriggers() {
-	disruptiveTriggers = map[string]bool{}
 }
 
 func populateBackupIntervals() {
@@ -185,55 +182,139 @@ func populateBackupIntervals() {
 
 }
 
-func populateDisruptiveTriggers() {
-	disruptiveTriggers = map[string]bool{
-		HAIncrease:                      false,
-		HADecrease:                      false,
-		RestartVolDriver:                false,
-		CrashVolDriver:                  false,
-		RebootNode:                      true,
-		CrashNode:                       true,
-		EmailReporter:                   false,
-		AppTaskDown:                     false,
-		DeployApps:                      false,
-		BackupAllApps:                   false,
-		BackupScheduleAll:               false,
-		BackupScheduleScale:             true,
-		BackupSpecificResource:          false,
-		BackupSpecificResourceOnCluster: false,
-		TestInspectBackup:               false,
-		TestInspectRestore:              false,
-		TestDeleteBackup:                false,
-		RestoreNamespace:                false,
-		BackupUsingLabelOnCluster:       false,
-		BackupRestartPortworx:           false,
-		BackupRestartNode:               false,
-		BackupDeleteBackupPod:           false,
-		BackupScaleMongo:                false,
-		AppTasksDown:                    false,
-		RestartManyVolDriver:            true,
-		RebootManyNodes:                 true,
-		RestartKvdbVolDriver:            true,
-		NodeDecommission:                true,
-		DetachDrives:                    true,
-		CsiSnapShot:                     false,
-		CsiSnapRestore:                  false,
-		DeleteCloudsnaps:                false,
-		KVDBFailover:                    true,
-		HAIncreaseAndReboot:             true,
-		AddDiskAndReboot:                true,
-		ResizeDiskAndReboot:             true,
-		VolumeCreatePxRestart:           true,
-		OCPStorageNodeRecycle:           true,
-		CrashPXDaemon:                   true,
-		PowerOffAllVMs:                  true,
-		RestartKubeletService:           true,
-		PoolDelete:                      true,
+func populateTriggerFuncs() {
+
+	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
+		DeployApps:                        TriggerDeployNewApps,
+		RebootNode:                        TriggerRebootNodes,
+		ValidatePdsApps:                   TriggerValidatePdsApps,
+		CrashNode:                         TriggerCrashNodes,
+		CrashPXDaemon:                     TriggerCrashPXDaemon,
+		RestartVolDriver:                  TriggerRestartVolDriver,
+		CrashVolDriver:                    TriggerCrashVolDriver,
+		HAIncrease:                        TriggerHAIncrease,
+		HADecrease:                        TriggerHADecrease,
+		VolumeClone:                       TriggerVolumeClone,
+		VolumeResize:                      TriggerVolumeResize,
+		AppTaskDown:                       TriggerAppTaskDown,
+		AppScaleUpAndDown:                 TriggerAppScaleUpAndDown,
+		AddDrive:                          TriggerAddDrive,
+		CoreChecker:                       TriggerCoreChecker,
+		CloudSnapShot:                     TriggerCloudSnapShot,
+		LocalSnapShot:                     TriggerLocalSnapShot,
+		DeleteLocalSnapShot:               TriggerDeleteLocalSnapShot,
+		MetadataPoolResizeDisk:            TriggerMetadataPoolResizeDisk,
+		PoolAddDisk:                       TriggerPoolAddDisk,
+		UpgradeStork:                      TriggerUpgradeStork,
+		VolumesDelete:                     TriggerVolumeDelete,
+		UpgradeVolumeDriver:               TriggerUpgradeVolumeDriver,
+		AutoFsTrim:                        TriggerAutoFsTrim,
+		UpdateVolume:                      TriggerVolumeUpdate,
+		UpdateIOProfile:                   TriggerVolumeIOProfileUpdate,
+		RestartManyVolDriver:              TriggerRestartManyVolDriver,
+		RebootManyNodes:                   TriggerRebootManyNodes,
+		NodeDecommission:                  TriggerNodeDecommission,
+		NodeRejoin:                        TriggerNodeRejoin,
+		CsiSnapShot:                       TriggerCsiSnapShot,
+		CsiSnapRestore:                    TriggerCsiSnapRestore,
+		RelaxedReclaim:                    TriggerRelaxedReclaim,
+		Trashcan:                          TriggerTrashcan,
+		KVDBFailover:                      TriggerKVDBFailover,
+		ValidateDeviceMapper:              TriggerValidateDeviceMapperCleanup,
+		MetroDR:                           TriggerMetroDR,
+		AsyncDR:                           TriggerAsyncDR,
+		AsyncDRMigrationSchedule:          TriggerAsyncDRMigrationSchedule,
+		ConfluentAsyncDR:                  TriggerConfluentAsyncDR,
+		KafkaAsyncDR:                      TriggerKafkaAsyncDR,
+		MongoAsyncDR:                      TriggerMongoAsyncDR,
+		AsyncDRVolumeOnly:                 TriggerAsyncDRVolumeOnly,
+		AutoFsTrimAsyncDR:                 TriggerAutoFsTrimAsyncDR,
+		DetachDrives:                      TriggerDetachDrives,
+		IopsBwAsyncDR:                     TriggerIopsBwAsyncDR,
+		StorkApplicationBackup:            TriggerStorkApplicationBackup,
+		StorkAppBkpVolResize:              TriggerStorkAppBkpVolResize,
+		StorkAppBkpHaUpdate:               TriggerStorkAppBkpHaUpdate,
+		StorkAppBkpPxRestart:              TriggerStorkAppBkpPxRestart,
+		StorkAppBkpPoolResize:             TriggerStorkAppBkpPoolResize,
+		StorkVolumeSnapshotSchedule:       TriggerStorkVolumeSnapshotSchedule,
+		StorkVolumeSnapshotScheduleLocal:  TriggerStorkVolumeSnapshotScheduleLocal,
+		RestartKvdbVolDriver:              TriggerRestartKvdbVolDriver,
+		HAIncreaseAndReboot:               TriggerHAIncreaseAndReboot,
+		AddDiskAndReboot:                  TriggerPoolAddDiskAndReboot,
+		ResizeDiskAndReboot:               TriggerPoolResizeDiskAndReboot,
+		AutopilotRebalance:                TriggerAutopilotPoolRebalance,
+		DeleteOldNamespaces:               TriggerDeleteOldNamespaces,
+		DeleteCloudsnaps:                  TriggerDeleteCloudsnaps,
+		MetroDRMigrationSchedule:          TriggerMetroDRMigrationSchedule,
+		CloudSnapShotRestore:              TriggerCloudSnapshotRestore,
+		LocalSnapShotRestore:              TriggerLocalSnapshotRestore,
+		AggrVolDepReplResizeOps:           TriggerAggrVolDepReplResizeOps,
+		AddStorageNode:                    TriggerAddOCPStorageNode,
+		AddStoragelessNode:                TriggerAddOCPStoragelessNode,
+		OCPStorageNodeRecycle:             TriggerOCPStorageNodeRecycle,
+		HAIncreaseAndCrashPX:              TriggerHAIncreaseAndCrashPX,
+		HAIncreaseAndRestartPX:            TriggerHAIncreaseAndPXRestart,
+		NodeMaintenanceCycle:              TriggerNodeMaintenanceCycle,
+		PoolMaintenanceCycle:              TriggerPoolMaintenanceCycle,
+		StorageFullPoolExpansion:          TriggerStorageFullPoolExpansion,
+		HAIncreaseWithPVCResize:           TriggerHAIncreasWithPVCResize,
+		ReallocateSharedMount:             TriggerReallocSharedMount,
+		CreateAndRunFioOnVcluster:         TriggerCreateAndRunFioOnVcluster,
+		CreateAndRunMultipleFioOnVcluster: TriggerCreateAndRunMultipleFioOnVcluster,
+		VolumeDriverDownVCluster:          TriggerVolumeDriverDownVCluster,
+		SetDiscardMounts:                  TriggerSetDiscardMounts,
+		PowerOffAllVMs:                    TriggerPowerOffAllVMs,
+		ResetDiscardMounts:                TriggerResetDiscardMounts,
+		ScaleFADAVolumeAttach:             TriggerScaleFADAVolumeAttach,
+		RestartKubeletService:             TriggerKubeletRestart,
+		PoolDelete:                        TriggerPoolDelete,
+		DefragScheduleCRUDOperations:      TriggerDefragScheduleCRUDOps,
+		DefragSchedules:                   TriggerDefragSchedules,
+		SVMotionSingleNode:                TriggerSvMotionSingleNode,
+		SVMotionMultipleNodes:             TriggerSvMotionMultipleNodes,
 	}
+
+	//Creating a distinct trigger to make sure email triggers at regular intervals
+	emailTriggerFunction = map[string]func(){
+		EmailReporter: TriggerEmailReporter,
+	}
+
 }
 
-func isDisruptiveTrigger(triggerType string) bool {
-	return disruptiveTriggers[triggerType]
+func populateDisruptiveTriggers() {
+	disruptiveTriggers = []string{
+		RestartVolDriver,
+		CrashVolDriver,
+		RebootNode,
+		CrashNode,
+		RestartManyVolDriver,
+		RebootManyNodes,
+		RestartKvdbVolDriver,
+		NodeDecommission,
+		DetachDrives,
+		KVDBFailover,
+		HAIncreaseAndReboot,
+		AddDiskAndReboot,
+		ResizeDiskAndReboot,
+		VolumeCreatePxRestart,
+		OCPStorageNodeRecycle,
+		CrashPXDaemon,
+		PowerOffAllVMs,
+		RestartKubeletService,
+		PoolDelete,
+		NodeMaintenanceCycle,
+		RestartKubeletService,
+		PoolMaintenanceCycle,
+		VolumesDelete,
+		ResizeDiskAndReboot,
+		AddDiskAndReboot,
+		PowerOffAllVMs,
+		OCPStorageNodeRecycle,
+		ReallocateSharedMount,
+		VolumeDriverDownVCluster,
+		SVMotionSingleNode,
+		SVMotionMultipleNodes,
+	}
 }
 
 func populateDataFromConfigMap(configData *map[string]string) error {
@@ -409,6 +490,9 @@ func setSchedUpgradeHops(configData *map[string]string) {
 
 func populateTriggers(triggers *map[string]string) error {
 	for triggerType, chaosLevel := range *triggers {
+		if triggerType == "alreadyRanCombos" {
+			continue
+		}
 		chaosLevelInt, err := strconv.Atoi(chaosLevel)
 		if err != nil {
 			return fmt.Errorf("failed to get chaos levels for [%s] from configMap [%s] in [%s] namespace. Error: [%v]",
@@ -563,7 +647,7 @@ func populateIntervals() {
 	triggerInterval[UpgradeVolumeDriverFromCatalog] = make(map[int]time.Duration)
 	triggerInterval[UpgradeCluster] = make(map[int]time.Duration)
 	triggerInterval[PowerOffAllVMs] = make(map[int]time.Duration)
-	triggerInterval[AppTasksDown] = make(map[int]time.Duration)
+	triggerInterval[AppScaleUpAndDown] = make(map[int]time.Duration)
 	triggerInterval[AutoFsTrim] = make(map[int]time.Duration)
 	triggerInterval[UpdateVolume] = make(map[int]time.Duration)
 	triggerInterval[UpdateIOProfile] = make(map[int]time.Duration)
@@ -986,16 +1070,16 @@ func populateIntervals() {
 	triggerInterval[SVMotionSingleNode][2] = 9 * baseInterval
 	triggerInterval[SVMotionSingleNode][1] = 10 * baseInterval
 
-	triggerInterval[AppTasksDown][10] = 1 * baseInterval
-	triggerInterval[AppTasksDown][9] = 2 * baseInterval
-	triggerInterval[AppTasksDown][8] = 3 * baseInterval
-	triggerInterval[AppTasksDown][7] = 4 * baseInterval
-	triggerInterval[AppTasksDown][6] = 5 * baseInterval
-	triggerInterval[AppTasksDown][5] = 6 * baseInterval
-	triggerInterval[AppTasksDown][4] = 7 * baseInterval
-	triggerInterval[AppTasksDown][3] = 8 * baseInterval
-	triggerInterval[AppTasksDown][2] = 9 * baseInterval
-	triggerInterval[AppTasksDown][1] = 10 * baseInterval
+	triggerInterval[AppScaleUpAndDown][10] = 1 * baseInterval
+	triggerInterval[AppScaleUpAndDown][9] = 2 * baseInterval
+	triggerInterval[AppScaleUpAndDown][8] = 3 * baseInterval
+	triggerInterval[AppScaleUpAndDown][7] = 4 * baseInterval
+	triggerInterval[AppScaleUpAndDown][6] = 5 * baseInterval
+	triggerInterval[AppScaleUpAndDown][5] = 6 * baseInterval
+	triggerInterval[AppScaleUpAndDown][4] = 7 * baseInterval
+	triggerInterval[AppScaleUpAndDown][3] = 8 * baseInterval
+	triggerInterval[AppScaleUpAndDown][2] = 9 * baseInterval
+	triggerInterval[AppScaleUpAndDown][1] = 10 * baseInterval
 
 	triggerInterval[RebootNode][10] = 1 * baseInterval
 	triggerInterval[RebootNode][9] = 3 * baseInterval
@@ -1786,7 +1870,7 @@ func populateIntervals() {
 	triggerInterval[VolumesDelete][0] = 0
 	triggerInterval[LocalSnapShot][0] = 0
 	triggerInterval[DeleteLocalSnapShot][0] = 0
-	triggerInterval[AppTasksDown][0] = 0
+	triggerInterval[AppScaleUpAndDown][0] = 0
 	triggerInterval[AutoFsTrim][0] = 0
 	triggerInterval[UpdateVolume][0] = 0
 	triggerInterval[RestartManyVolDriver][0] = 0
@@ -1872,6 +1956,7 @@ func emailEventTrigger(wg *sync.WaitGroup,
 	triggerFunc func(),
 	emailTriggerLock *sync.Mutex) {
 	defer wg.Done()
+	defer ginkgo.GinkgoRecover()
 
 	start := time.Now().Local()
 	lastInvocationTime := start
@@ -1879,7 +1964,7 @@ func emailEventTrigger(wg *sync.WaitGroup,
 	for {
 		select {
 		case <-StopLongevityChan:
-			log.InfoD("Received stop signal. Exiting longevity test trigger [%s] loop", triggerType)
+			log.InfoD("Received stop signal. Exiting email test trigger [%s] loop", triggerType)
 			return
 		default:
 			// Continuing the loop as no stop signal is received
@@ -1950,6 +2035,7 @@ func backupEventTrigger(wg *sync.WaitGroup,
 		time.Sleep(controlLoopSleepTime)
 	}
 	os.Exit(0)
+
 }
 
 // GenerateAndStoreEventCombinations will generate all possible combinations of events we want to execute
@@ -1962,7 +2048,7 @@ func GenerateAndStoreEventCombinations() {
 		log.Infof("Error retrieving config map: %v", err)
 		return
 	}
-	alreadyRanCombosStr := configMap.Data["AlreadyRanCombos"]
+	alreadyRanCombosStr := configMap.Data["alreadyRanCombos"]
 	alreadyRanCombos := strings.Split(alreadyRanCombosStr, ";")
 
 	var localCombinations [][]string
@@ -1970,17 +2056,21 @@ func GenerateAndStoreEventCombinations() {
 	shouldSkipCombination := func(combination []string) bool {
 		combinationStr := strings.Join(combination, ",")
 		skipCount := 0
-		for _, event := range skipEvents {
-			if slices.Contains(combination, event) {
-				skipCount++
+		if len(skipEvents) > 0 {
+			for _, event := range skipEvents {
+				if slices.Contains(combination, event) {
+					skipCount++
+				}
+			}
+			if skipCount == len(skipEvents) {
+				return true
 			}
 		}
-		if skipCount == len(skipEvents) || slices.Contains(alreadyRanCombos, combinationStr) {
+		if slices.Contains(alreadyRanCombos, combinationStr) {
 			return true
 		}
 		return false
 	}
-
 	// Generating combinations of disruptive events
 	disruptiveCombos := combinations(disruptive, NumDisruptiveEvents)
 
@@ -1991,6 +2081,7 @@ func GenerateAndStoreEventCombinations() {
 			// Merging non-disruptive and disruptive events into a single combination
 			fullCombo := append(ndCombo, dCombo...)
 			if !shouldSkipCombination(fullCombo) {
+				log.Infof("Created combination: %v", fullCombo)
 				localCombinations = append(localCombinations, fullCombo)
 			}
 		}
@@ -2004,11 +2095,15 @@ func GenerateAndStoreEventCombinations() {
 // separateEventsByType separates events into non-disruptive and disruptive based on their type
 func separateEventsByType() (nonDisruptive []string, disruptive []string) {
 	populateDisruptiveTriggers()
-	for event, isDisruptive := range disruptiveTriggers {
-		if isDisruptive {
-			disruptive = append(disruptive, event)
-		} else {
-			nonDisruptive = append(nonDisruptive, event)
+
+	for event, _ := range triggerFunctions {
+		_, enableEvent := isTriggerEnabled(event)
+		if enableEvent {
+			if slices.Contains(disruptiveTriggers, event) {
+				disruptive = append(disruptive, event)
+			} else {
+				nonDisruptive = append(nonDisruptive, event)
+			}
 		}
 	}
 	return
@@ -2059,6 +2154,7 @@ func setSkipEvents(configData *map[string]string) {
 	} else {
 		skipEvents = strings.Split(skipString, ",")
 		log.Infof("Skipping events: %v\n", skipEvents)
+		delete(*configData, "skipEvents")
 	}
 }
 
@@ -2069,10 +2165,10 @@ func UpdateAlreadyRanCombinations(newCombo []string) error {
 		return fmt.Errorf("error retrieving config map: %v", err)
 	}
 	newComboStr := strings.Join(newCombo, ",")
-	if existingCombos, ok := configMap.Data["AlreadyRanCombos"]; ok {
-		configMap.Data["AlreadyRanCombos"] = existingCombos + ";" + newComboStr
+	if existingCombos, ok := configMap.Data["alreadyRanCombos"]; ok {
+		configMap.Data["alreadyRanCombos"] = existingCombos + ";" + newComboStr
 	} else {
-		configMap.Data["AlreadyRanCombos"] = newComboStr
+		configMap.Data["alreadyRanCombos"] = newComboStr
 	}
 	updatedConfigMap, err := core.Instance().UpdateConfigMap(configMap)
 	if err != nil {

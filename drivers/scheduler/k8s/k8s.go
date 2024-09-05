@@ -95,6 +95,8 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	v1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
+	"k8s.io/metrics/pkg/client/clientset/versioned"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
@@ -251,6 +253,8 @@ var (
 	// SnapshotAPIGroup is the group for the resource being referenced.
 	SnapshotAPIGroup = "snapshot.storage.k8s.io"
 )
+
+var mutex sync.Mutex
 
 // CustomResourceObjectYAML	Used as spec object for all CRs
 type CustomResourceObjectYAML struct {
@@ -445,6 +449,8 @@ func (k *K8s) RescanSpecs(specDir, storageDriver string) error {
 
 // RefreshNodeRegistry update the k8 node list registry
 func (k *K8s) RefreshNodeRegistry() error {
+	mutex.Lock()
+	defer mutex.Unlock()
 
 	nodes, err := k8sCore.GetNodes()
 	if err != nil {
@@ -8824,4 +8830,21 @@ func createClonedStorageClassIfRequired(originalStorageClass *storageapi.Storage
 		}
 	}
 	return clonedSCName, nil
+}
+
+func (k *K8s) GetPodMetrics(podName, namespace string) (*v1beta1.PodMetrics, error) {
+
+	cfg, err := rest.InClusterConfig()
+
+	metricsClient, err := versioned.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("error creating metrics client, Err: %s", err.Error())
+	}
+
+	podMetrics, err := metricsClient.MetricsV1beta1().PodMetricses(namespace).Get(context.TODO(), podName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("error getting pod metrics, Err: %s", err.Error())
+
+	}
+	return podMetrics, nil
 }

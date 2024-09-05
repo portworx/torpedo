@@ -8067,8 +8067,8 @@ var _ = Describe("{MulPoolsUpMetaPoolFullAndResize}", func() {
 		poolWithMetadataDisk, err := GetPoolUUIDWithMetadataDisk(selectedNode)
 		log.FailOnError(err, "error identifying pool with metadata disk from the node [%v]", selectedNode.Name)
 		repl1Pool, err := GetStoragePoolByUUID(poolWithMetadataDisk)
-		fmt.Printf("repl1 UUID is [%s]\n", repl1Pool.Uuid)
 		log.FailOnError(err, "error getting storage pool with UUID [%s]", poolWithMetadataDisk)
+		log.Infof("repl1 UUID is [%s]\n", repl1Pool.Uuid)
 		for _, n := range stNodes {
 			if n.Name != selectedNode.Name {
 				secondReplNode = n
@@ -9496,7 +9496,8 @@ var _ = Describe("{CreateNewPoolsOnClusterInParallel}", func() {
 			if node.IsMasterNode(each) == false {
 				sPools, err := GetPoolsDetailsOnNode(&each)
 				if err != nil {
-					fmt.Printf("[%v]", err)
+					log.Errorf("Failed to get pool details on node [%v]", each.Name)
+					continue
 				}
 				if len(sPools) < 8 {
 					nodesToUse = append(nodesToUse, each)

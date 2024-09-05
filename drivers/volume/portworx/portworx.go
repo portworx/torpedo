@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	torpedotask "github.com/portworx/torpedo/pkg/task"
 	"io/ioutil"
 	"math"
 	"net"
@@ -17,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
@@ -201,6 +203,7 @@ var deleteVolumeLabelList = []string{
 var k8sCore = core.Instance()
 var pxOperator = operator.Instance()
 var apiExtentions = apiextensions.Instance()
+var mutex sync.Mutex
 
 type portworx struct {
 	legacyClusterManager  cluster.Cluster
@@ -491,7 +494,8 @@ func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 }
 
 func (d *portworx) RefreshDriverEndpoints() error {
-
+	mutex.Lock()
+	defer mutex.Unlock()
 	secretConfigMap := flag.Lookup("config-map").Value.(flag.Getter).Get().(string)
 	if secretConfigMap != "" {
 		log.Infof("Fetching token from configmap: %s", secretConfigMap)
@@ -1069,7 +1073,12 @@ func (d *portworx) getPxVersionOnNode(n node.Node, nodeManager ...api.OpenStorag
 		pxVersion := pxNode.NodeLabels[pxVersionLabel]
 		return pxVersion, false, nil
 	}
-	pxVersion, err := task.DoRetryWithTimeout(t, getNodeTimeout, getNodeRetryInterval)
+
+	gctx := context.Background()
+	gctx = context.WithValue(gctx, torpedotask.TimeBeforeRetryKey, getNodeRetryInterval)
+	gctx = context.WithValue(gctx, torpedotask.TimeoutKey, getNodeTimeout)
+	gctx = context.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+	pxVersion, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx)
 	if err != nil {
 		return "", fmt.Errorf("Timeout after %v waiting to get PX Version", getNodeTimeout)
 	}
@@ -2812,7 +2821,11 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 
 		return "", false, nil
 	}
-	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
+	gctx := context.Background()
+	gctx = context.WithValue(gctx, torpedotask.TimeBeforeRetryKey, defaultRetryInterval)
+	gctx = context.WithValue(gctx, torpedotask.TimeoutKey, timeout)
+	gctx = context.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+	if _, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx); err != nil {
 		log.InfoD(fmt.Sprintf("------Printing the px logs on the node:%s ----------", n.Name))
 		d.PrintCommandOutput("journalctl -lu portworx* -n 100 --no-pager ", n)
 		log.InfoD(fmt.Sprintf("------Finished Printing the px logs on the node:%s ----------", n.Name))
@@ -2830,8 +2843,12 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		}
 		return "", false, nil
 	}
+	gctx = context.Background()
+	gctx = context.WithValue(gctx, torpedotask.TimeBeforeRetryKey, defaultRetryInterval)
+	gctx = context.WithValue(gctx, torpedotask.TimeoutKey, timeout)
+	gctx = context.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
 
-	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
+	if _, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx); err != nil {
 		return fmt.Errorf("PX pod failed to come up on node [%s/%s], Err: %v", n.Name, n.VolDriverNodeID, err)
 	}
 
@@ -2856,8 +2873,12 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 		log.Infof("PX on node [%s] is now down.", n.Name)
 		return "", false, nil
 	}
+	gctx := context.Background()
+	gctx = context.WithValue(gctx, torpedotask.TimeBeforeRetryKey, waitDriverDownOnNodeRetryInterval)
+	gctx = context.WithValue(gctx, torpedotask.TimeoutKey, validateNodeStopTimeout)
+	gctx = context.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
 
-	if _, err := task.DoRetryWithTimeout(t, validateNodeStopTimeout, waitDriverDownOnNodeRetryInterval); err != nil {
+	if _, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx); err != nil {
 		return fmt.Errorf("failed to stop PX on node [%s], Err: %v", n.Name, err)
 	}
 
@@ -5477,6 +5498,7 @@ func (d *portworx) GetPxctlCmdOutputConnectionOpts(n node.Node, command string, 
 	)
 
 	cmd := fmt.Sprintf("%s %s", pxctlPath, command)
+	log.Infof("Running pxctl command: %s", cmd)
 	if retry {
 		out, err = d.nodeDriver.RunCommand(n, cmd, opts)
 	} else {

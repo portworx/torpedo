@@ -6722,6 +6722,7 @@ k8s.io/kubelet v0.25.1/go.mod h1:mXo8HjxCrwVduGBk4tzuhegJYPvNwPyycRf39H4KKqE=
 k8s.io/kubernetes v1.25.1 h1:s+sqdGuKl7j9Mehh7ZvFI1ay3UZVsQwkR/ZmdEDy2Sc=
 k8s.io/kubernetes v1.25.1/go.mod h1:OlhMy4mww2SLr1KtdV1vC014/MwfYlts/C66gtnDkKE=
 k8s.io/legacy-cloud-providers v0.25.1/go.mod h1:bFgLZAHYlJEwRzJXd36mfoZYdLwhY/lJOtpyxy1WRI4=
+k8s.io/metrics v0.25.1 h1:cp9WcR3PAN8xx5kBlbWCQQfkFwacjhKhITZafBJfIGs=
 k8s.io/metrics v0.25.1/go.mod h1:/t3eughLPd1sQNc47py2vTOY8e1E8bIxecA8rq/qQjM=
 k8s.io/mount-utils v0.25.1/go.mod h1:WTYq8Ev/JrnkqK2h1jFUnC8qWGuqzMb9XDC+Lu3WNU0=
 k8s.io/pod-security-admission v0.25.1/go.mod h1:Wq5qUdvu9jVuoGK7qQu+rqO9kIKIT/tgFMHSu3aa5Ro=

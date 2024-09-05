@@ -1,10 +1,10 @@
 package aetosutil
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/sirupsen/logrus"
-
 	"net/http"
 	"os"
 	"reflect"
@@ -20,14 +20,15 @@ import (
 )
 
 var (
-	testCasesStack    = make([]int, 0)
+	testCasesStack    = make(map[int]TestCase)
 	testCaseStartTime time.Time
-	testCase          TestCase
 
 	dash         *Dashboard
 	lock         = &sync.Mutex{}
 	expect       = gomega.Expect
 	haveOccurred = gomega.HaveOccurred
+	testInfoMap  sync.Map
+	mutex        sync.Mutex
 )
 
 const (
@@ -68,7 +69,8 @@ type Dashboard struct {
 	TestSetID int
 	//TestSet object created during initialization
 	TestSet           *TestSet
-	testcaseID        int
+	TestcaseID        int
+	testCase          TestCase
 	testSetStartTime  time.Time
 	testCaseStartTime time.Time
 }
@@ -181,8 +183,11 @@ func (d *Dashboard) TestSetEnd() {
 			return
 		}
 		if len(testCasesStack) > 0 {
-			for _, v := range testCasesStack {
-				d.testcaseID = v
+			logrus.Infof("Ending TestSet, but some testcases are still in progress %v", testCasesStack)
+			for v, t := range testCasesStack {
+				d.TestcaseID = v
+				d.testCase = t
+				d.setDashTestCaseId()
 				d.TestCaseEnd()
 			}
 			testCasesStack = nil
@@ -200,15 +205,33 @@ func (d *Dashboard) TestSetEnd() {
 	}
 }
 
+func contains[T comparable](slice []T, item T) bool {
+	for _, v := range slice {
+		if v == item {
+			return true
+		}
+	}
+	return false
+}
+
 // TestCaseEnd update testcase  to dashboard DB
 func (d *Dashboard) TestCaseEnd() {
 	if d.IsEnabled {
 
-		if d.testcaseID == 0 {
+		if d.TestcaseID == 0 {
+			return
+		}
+		mutex.Lock()         // Lock the mutex before updating
+		defer mutex.Unlock() // Ensure the mutex is unlocked when the function exits
+
+		testcaseID := d.getDashTestCaseId()
+		if _, ok := testCasesStack[testcaseID]; !ok {
+			logrus.Infof("current stack : %v", testCasesStack)
+			logrus.Infof("TestcaseID: %d not present in stack", testcaseID)
 			return
 		}
 
-		url := fmt.Sprintf("%s/testcase/%d/end", DashBoardBaseURL, d.testcaseID)
+		url := fmt.Sprintf("%s/testcase/%d/end", DashBoardBaseURL, testcaseID)
 		resp, respStatusCode, err := rest.PUT(url, nil, nil, nil)
 
 		if err != nil {
@@ -217,7 +240,7 @@ func (d *Dashboard) TestCaseEnd() {
 			logrus.Errorf("Failed to end TestCase, Resp : %s", string(resp))
 		}
 
-		removeTestCaseFromStack(d.testcaseID)
+		delete(testCasesStack, testcaseID)
 
 		var updateResponse testCaseUpdateResponse
 		err = json.Unmarshal(resp, &updateResponse)
@@ -227,27 +250,11 @@ func (d *Dashboard) TestCaseEnd() {
 		testCaseResult := updateResponse.TestCaseStatus
 		d.VerifySafely(testCaseResult, "PASS", "Test completed successfully ?")
 	}
-
+	dTestCase := d.getDashTestCase()
 	logrus.Info("--------Test End------")
-	logrus.Infof("#Test: %s ", testCase.Name)
-	logrus.Infof("#Description: %s ", testCase.Description)
+	logrus.Infof("#Test: %s ", dTestCase.Name)
+	logrus.Infof("#Description: %s ", dTestCase.Description)
 	logrus.Info("------------------------")
-}
-
-func removeTestCaseFromStack(testcaseID int) {
-
-	removeIndex := -1
-	for i, v := range testCasesStack {
-		if v == testcaseID {
-			removeIndex = i
-			break
-		}
-	}
-
-	if removeIndex != -1 {
-		testCasesStack = append(testCasesStack[:removeIndex], testCasesStack[removeIndex+1:]...)
-	}
-
 }
 
 // TestSetUpdate update test set  to dashboard DB
@@ -281,8 +288,10 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags
 		if d.TestSetID == 0 {
 			return
 		}
+		mutex.Lock()
+		defer mutex.Unlock()
 
-		testCase = TestCase{}
+		testCase := TestCase{}
 		testCase.Tags = make(map[string]string)
 		testCase.Name = testName
 
@@ -336,15 +345,54 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags
 		} else if respStatusCode != http.StatusOK {
 			logrus.Errorf("Error creating test case, resp :%s", string(resp))
 		} else {
-			d.testcaseID, err = strconv.Atoi(string(resp))
+			d.TestcaseID, err = strconv.Atoi(string(resp))
 			if err != nil {
 				logrus.Errorf("TestCase creation failed. Cause : %v", err)
 			}
 		}
+		d.testCase = testCase
+		d.setDashTestCaseId()
 		d.Infof("Torpedo Command: %s", os.Args)
-		testCasesStack = append(testCasesStack, d.testcaseID)
+		logrus.Infof("Adding testcaseID: %d to stack", d.TestcaseID)
+		testCasesStack[d.TestcaseID] = testCase
 
 	}
+}
+
+// SetDashTestCaseId sets the aetos dashboard testcase id for the current goroutine
+func (d *Dashboard) setDashTestCaseId() {
+	gid := getGoroutineID()
+	dgid := fmt.Sprintf("d-%d", gid)
+	testInfoMap.Store(dgid, d.TestcaseID)
+	testInfoMap.Store(fmt.Sprintf("dt-%d", gid), d.testCase)
+}
+func getGoroutineID() uint64 {
+	b := make([]byte, 64)
+	b = b[:runtime.Stack(b, false)]
+	// Example output: "goroutine 1 [running]:\n"
+	idField := bytes.Fields(b)[1]
+	id, _ := strconv.ParseUint(string(idField), 10, 64)
+	return id
+}
+
+// getDashTestCaseId retrieves the aetos dashboard testcase id for the current goroutine
+func (d *Dashboard) getDashTestCaseId() int {
+	gid := getGoroutineID()
+	dgid := fmt.Sprintf("d-%d", gid)
+	if testCaseID, ok := testInfoMap.Load(dgid); ok {
+		return testCaseID.(int)
+	}
+	return d.TestcaseID
+}
+
+// getDashTestCaseId retrieves the aetos dashboard testcase id for the current goroutine
+func (d *Dashboard) getDashTestCase() TestCase {
+	gid := getGoroutineID()
+	dgid := fmt.Sprintf("dt-%d", gid)
+	if dTestCase, ok := testInfoMap.Load(dgid); ok {
+		return dTestCase.(TestCase)
+	}
+	return d.testCase
 }
 
 func (d *Dashboard) verify(r result) {
@@ -379,7 +427,7 @@ func (d *Dashboard) VerifySafely(actual, expected interface{}, description strin
 	res.Actual = actualVal
 	res.Expected = expectedVal
 	res.Description = description
-	res.TestCaseID = d.testcaseID
+	res.TestCaseID = d.getDashTestCaseId()
 
 	logrus.Infof("Verifying : Description : %s", description)
 	if actualVal == expectedVal {
@@ -408,7 +456,7 @@ func (d *Dashboard) Fatal(description string, args ...interface{}) {
 	res.Actual = "false"
 	res.Expected = "true"
 	res.Description = fmt.Sprintf(description, args...)
-	res.TestCaseID = d.testcaseID
+	res.TestCaseID = d.getDashTestCaseId()
 	res.ResultStatus = false
 	res.ResultType = "error"
 	if d.IsEnabled {
@@ -436,7 +484,7 @@ func (d *Dashboard) VerifyNotNilFatal(err error, description string) {
 func (d *Dashboard) Info(message string) {
 	if d.IsEnabled {
 		res := comment{}
-		res.TestCaseID = d.testcaseID
+		res.TestCaseID = d.getDashTestCaseId()
 		res.Description = message
 		res.ResultType = "info"
 		d.addComment(res)
@@ -448,8 +496,8 @@ func (d *Dashboard) Infof(message string, args ...interface{}) {
 	if d.IsEnabled {
 		fmtMsg := fmt.Sprintf(message, args...)
 		res := comment{}
-		res.TestCaseID = d.testcaseID
-		res.Description = fmtMsg
+		res.TestCaseID = d.getDashTestCaseId()
+		res.Description = fmt.Sprintf("[TestcaseID: %d] %s", res.TestCaseID, fmtMsg)
 		res.ResultType = "info"
 		d.addComment(res)
 	}
@@ -460,7 +508,7 @@ func (d *Dashboard) Warnf(message string, args ...interface{}) {
 	if d.IsEnabled {
 		fmtMsg := fmt.Sprintf(message, args...)
 		res := comment{}
-		res.TestCaseID = d.testcaseID
+		res.TestCaseID = d.getDashTestCaseId()
 		res.Description = fmtMsg
 		res.ResultType = "warning"
 		d.addComment(res)
@@ -471,7 +519,7 @@ func (d *Dashboard) Warnf(message string, args ...interface{}) {
 func (d *Dashboard) Warn(message string) {
 	if d.IsEnabled {
 		res := comment{}
-		res.TestCaseID = d.testcaseID
+		res.TestCaseID = d.getDashTestCaseId()
 		res.Description = message
 		res.ResultType = "warning"
 		d.addComment(res)
@@ -482,7 +530,7 @@ func (d *Dashboard) Warn(message string) {
 func (d *Dashboard) Error(message string) {
 	if d.IsEnabled {
 		res := comment{}
-		res.TestCaseID = d.testcaseID
+		res.TestCaseID = d.getDashTestCaseId()
 		res.Description = message
 		res.ResultType = "error"
 		d.addComment(res)
@@ -494,7 +542,7 @@ func (d *Dashboard) Errorf(message string, args ...interface{}) {
 	if d.IsEnabled {
 		fmtMsg := fmt.Sprintf(message, args...)
 		res := comment{}
-		res.TestCaseID = d.testcaseID
+		res.TestCaseID = d.getDashTestCaseId()
 		res.Description = fmtMsg
 		res.ResultType = "error"
 		d.addComment(res)
@@ -512,7 +560,7 @@ func (d *Dashboard) addComment(c comment) {
 
 		resp, respStatusCode, err := rest.POST(commentURL, c, nil, nil)
 		if err != nil {
-			logrus.Errorf("Error in adding log message to dashboard, Cause: %v", err)
+			logrus.Errorf("Error in adding log message [%s] to dashboard, Cause: %v", c.Description, err)
 		} else if respStatusCode != http.StatusOK {
 			logrus.Errorf("Error updating the vrify comment, resp : %s", string(resp))
 		}
@@ -553,8 +601,7 @@ func (d *Dashboard) UpdateStats(name, product, statType, version string, dashSta
 		} else if respStatusCode != http.StatusOK {
 			logrus.Errorf("Error updating the stats, resp : %s", string(resp))
 		} else {
-			logrus.Infof("stats response: %v", resp)
-			logrus.Infof("stats status code: %d", respStatusCode)
+			logrus.Infof("stats response: %v , respose code [%d]", string(resp), respStatusCode)
 		}
 
 	}

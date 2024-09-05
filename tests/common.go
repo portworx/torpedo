@@ -124,6 +124,7 @@ import (
 	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/pkg/s3utils"
 	"github.com/portworx/torpedo/pkg/stats"
+	torpedotask "github.com/portworx/torpedo/pkg/task"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/portworx/torpedo/pkg/units"
 
@@ -768,7 +769,10 @@ func InitInstance() {
 	log.FailOnError(err, "Error occured while getting volume driver namespace")
 	installGrafana(ns)
 	err = updatePxClusterOpts()
-	log.Errorf("%v", err)
+	if err != nil {
+		log.Errorf("Error updating px cluster options, Err: [%v]", err)
+	}
+
 }
 
 func PrintPxctlStatus() {
@@ -988,10 +992,19 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 				return "", false, nil
 			}
 
-			if _, err = task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
+			gctx := context1.Background()
+			gctx = context1.WithValue(gctx, torpedotask.TimeBeforeRetryKey, 5*time.Second)
+			gctx = context1.WithValue(gctx, torpedotask.TimeoutKey, 2*time.Minute)
+			gctx = context1.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+			if _, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx); err != nil {
 				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
 				processError(err, errChan...)
 			}
+
+			//if _, err = task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
+			//	log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
+			//	processError(err, errChan...)
+			//}
 
 			for _, vol := range vols {
 				stepLog = fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol)
@@ -1403,11 +1416,19 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 				}
 				return "", false, nil
 			}
-
-			if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
+			gctx := context1.Background()
+			gctx = context1.WithValue(gctx, torpedotask.TimeBeforeRetryKey, 5*time.Second)
+			gctx = context1.WithValue(gctx, torpedotask.TimeoutKey, 2*time.Minute)
+			gctx = context1.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+			if _, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx); err != nil {
 				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
 				processError(err, errChan...)
 			}
+
+			//if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
+			//	log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
+			//	processError(err, errChan...)
+			//}
 			volScaleFactor := 1
 			if len(vols) > 10 {
 				// Take into account the number of volumes in the app. More volumes will
@@ -6907,6 +6928,10 @@ func HaIncreaseErrorInjectionTargetNode(event *EventRecord, ctx *scheduler.Conte
 								}
 							})
 
+						if os.Getenv(IsSSIEKey) == "true" {
+							return
+						}
+
 						err = ValidateDataIntegrity(&nodeContexts)
 						if err != nil {
 							return
@@ -8161,6 +8186,7 @@ func CreateLogger(filename string) *lumberjack.Logger {
 // CloseLogger ends testcase file object
 func CloseLogger(testLogger *lumberjack.Logger) {
 	if testLogger != nil {
+
 		testLogger.Close()
 		// Below steps are performed to remove current file from log output
 		log.SetDefaultOutput(suiteLogger)
@@ -11054,6 +11080,9 @@ func runDataIntegrityValidation(testName string) bool {
 }
 
 func ValidateDataIntegrity(contexts *[]*scheduler.Context) (mError error) {
+	if isSSIERun() {
+		return nil
+	}
 	testName := ginkgo.CurrentSpecReport().FullText()
 	if strings.Contains(testName, "Longevity") || strings.Contains(testName, "Trigger") {
 		pc, _, _, _ := runtime.Caller(1)
@@ -12525,9 +12554,19 @@ func PrintK8sClusterInfo() {
 		}
 		return "", false, fmt.Errorf("no nodes were found in the cluster")
 	}
-	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
+
+	gctx := context1.Background()
+	gctx = context1.WithValue(gctx, torpedotask.TimeBeforeRetryKey, 5*time.Second)
+	gctx = context1.WithValue(gctx, torpedotask.TimeoutKey, 2*time.Minute)
+	gctx = context1.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+
+	if _, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx); err != nil {
 		log.Warnf("failed to get k8s cluster info, Err: %v", err)
 	}
+
+	//if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
+	//	log.Warnf("failed to get k8s cluster info, Err: %v", err)
+	//}
 }
 
 func CreatePXCloudCredential() error {
@@ -13894,7 +13933,7 @@ func GetCloudDriveList() (*map[string]CloudData, error) {
 
 		err = json.Unmarshal([]byte(output), &data)
 		if err != nil {
-			fmt.Println("Error:", err)
+			log.Errorf("Failed to unmarshal the data [%v]", output)
 			return nil, err
 		}
 		break

@@ -154,6 +154,7 @@ require (
 	go.mongodb.org/mongo-driver v1.14.0
 	go.uber.org/multierr v1.11.0
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
+	k8s.io/metrics v0.25.1
 )
 
 require (
@@ -229,7 +230,7 @@ require (
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/gogo/googleapis v1.4.1 // indirect
-	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/gogo/protobuf v1.3.2
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/golang/glog v1.1.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect

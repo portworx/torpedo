@@ -3,6 +3,7 @@ package vsphere
 import (
 	"context"
 	"fmt"
+	torpedotask "github.com/portworx/torpedo/pkg/task"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -11,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/pkg/log"
@@ -141,7 +141,13 @@ func (v *vsphere) TestConnection(n node.Node, options node.ConnectionOpts) error
 
 		return nil, false, nil
 	}
-	if _, err := task.DoRetryWithTimeout(t, VMReadyTimeout, VMReadyRetryInterval); err != nil {
+
+	gctx := context.Background()
+	gctx = context.WithValue(gctx, torpedotask.TimeBeforeRetryKey, VMReadyRetryInterval)
+	gctx = context.WithValue(gctx, torpedotask.TimeoutKey, VMReadyTimeout)
+	gctx = context.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+
+	if _, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx); err != nil {
 		return err
 	}
 	// Check if VM is not just powered on but also usable

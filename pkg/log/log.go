@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -34,9 +35,12 @@ var (
 )
 
 var (
-	dash  *aetosutil.Dashboard
-	lock  = &sync.Mutex{}
-	tpLog *logrus.Logger
+	dash        *aetosutil.Dashboard
+	lock        = &sync.Mutex{}
+	tpLog       *logrus.Logger
+	testInfoMap sync.Map
+	loggersMap  sync.Map
+	mutex       sync.Mutex
 )
 
 // We are logging to file, strip colors to make the output more readable
@@ -181,8 +185,14 @@ func SetLoglevel(logLevel string) {
 // SetTorpedoFileOutput adds output destination for logging
 func SetTorpedoFileOutput(logger *lumberjack.Logger) {
 	if logger != nil {
-		tpLog.Out = io.MultiWriter(tpLog.Out, logger)
+		testLogger := GetTestLogger()
+		if testLogger != nil {
+			testLogger.Out = io.MultiWriter(logger)
+		} else {
+			tpLog.Out = io.MultiWriter(tpLog.Out, logger)
+		}
 		tpLog.Infof("Log Dir: %s", logger.Filename)
+
 	}
 }
 
@@ -231,94 +241,162 @@ func (mf *MyFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
+func getFormatedLog(testName, callerFunc, format string) string {
+	if testName == "Unknown" {
+		return fmt.Sprintf("[%s] - %s", callerFunc, format)
+	}
+	return fmt.Sprintf("[%s][%s] - %s", testName, callerFunc, format)
+}
+
 func Fatalf(format string, args ...interface{}) {
 	pc, _, line, _ := runtime.Caller(1)
 	callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
 	callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
-	extendedFormat := fmt.Sprintf("[%s] - %s", callerFunc, format)
+	testName := GetTestName()
+	extendedFormat := getFormatedLog(testName, callerFunc, format)
 	dash.Fatal(extendedFormat, args...)
 	tpLog.Errorf(extendedFormat, args...)
+	testLogger := GetTestLogger()
+	if testLogger != nil {
+		testLogger.Fatalf(extendedFormat, args...)
+	}
+
 }
 
 func Errorf(format string, args ...interface{}) {
 	pc, _, line, _ := runtime.Caller(1)
 	callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
 	callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
-	extendedFormat := fmt.Sprintf("[%s] - %s", callerFunc, format)
+	testName := GetTestName()
+	extendedFormat := getFormatedLog(testName, callerFunc, format)
 	dash.Errorf(extendedFormat, args...)
 	tpLog.Errorf(extendedFormat, args...)
+	testLogger := GetTestLogger()
+	if testLogger != nil {
+		testLogger.Errorf(extendedFormat, args...)
+	}
+
 }
 
 func Warnf(format string, args ...interface{}) {
 	pc, _, line, _ := runtime.Caller(1)
 	callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
 	callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
-	extendedFormat := fmt.Sprintf("[%s] - %s", callerFunc, format)
+	testName := GetTestName()
+	extendedFormat := getFormatedLog(testName, callerFunc, format)
 	dash.Warnf(extendedFormat, args...)
 	tpLog.Warningf(extendedFormat, args...)
+	testLogger := GetTestLogger()
+	if testLogger != nil {
+		testLogger.Warnf(extendedFormat, args...)
+	}
 }
 
 func Infof(format string, args ...interface{}) {
 	pc, _, line, _ := runtime.Caller(1)
 	callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
 	callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
-	extendedFormat := fmt.Sprintf("[%s] - %s", callerFunc, format)
+	testName := GetTestName()
+	extendedFormat := getFormatedLog(testName, callerFunc, format)
 	tpLog.Infof(extendedFormat, args...)
+	testLogger := GetTestLogger()
+	if testLogger != nil {
+		testLogger.Infof(extendedFormat, args...)
+	}
 }
 
 func InfoD(format string, args ...interface{}) {
+	pc, _, line, _ := runtime.Caller(1)
+	callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
+	callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
+	testName := GetTestName()
+	extendedFormat := getFormatedLog(testName, callerFunc, format)
 	dash.Infof(format, args...)
-	tpLog.Infof(format, args...)
+	tpLog.Infof(extendedFormat, args...)
+	testLogger := GetTestLogger()
+	if testLogger != nil {
+		testLogger.Infof(extendedFormat, args...)
+	}
 }
 
 func Debugf(format string, args ...interface{}) {
 	pc, _, line, _ := runtime.Caller(1)
 	callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
 	callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
-	extendedFormat := fmt.Sprintf("[%s] - %s", callerFunc, format)
+	testName := GetTestName()
+	extendedFormat := getFormatedLog(testName, callerFunc, format)
 	tpLog.Debugf(extendedFormat, args...)
+	testLogger := GetTestLogger()
+	if testLogger != nil {
+		testLogger.Debugf(extendedFormat, args...)
+	}
 }
 
 func Error(args ...interface{}) {
 	pc, _, line, _ := runtime.Caller(1)
 	callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
 	callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
-	extendedFormat := fmt.Sprintf("[%s] - %s", callerFunc, strings.Join(compiler.ConvertInterfaceArrayToStringArray(args), " "))
+	testName := GetTestName()
+	extendedFormat := getFormatedLog(testName, callerFunc, strings.Join(compiler.ConvertInterfaceArrayToStringArray(args), " "))
 	dash.Error(fmt.Sprint(args...))
 	tpLog.Error(extendedFormat)
+	testLogger := GetTestLogger()
+	if testLogger != nil {
+		testLogger.Error(extendedFormat)
+	}
 }
 
 func Warn(args ...interface{}) {
 	pc, _, line, _ := runtime.Caller(1)
 	callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
 	callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
-	extendedFormat := fmt.Sprintf("[%s] - %s", callerFunc, strings.Join(compiler.ConvertInterfaceArrayToStringArray(args), " "))
+	testName := GetTestName()
+	extendedFormat := getFormatedLog(testName, callerFunc, strings.Join(compiler.ConvertInterfaceArrayToStringArray(args), " "))
 	dash.Warn(fmt.Sprint(args...))
 	tpLog.Warn(extendedFormat)
+	testLogger := GetTestLogger()
+	if testLogger != nil {
+		testLogger.Warn(extendedFormat)
+	}
 }
 
 func Info(args ...interface{}) {
 	pc, _, line, _ := runtime.Caller(1)
 	callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
 	callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
-	extendedFormat := fmt.Sprintf("[%s] - %s", callerFunc, strings.Join(compiler.ConvertInterfaceArrayToStringArray(args), " "))
+	testName := GetTestName()
+	extendedFormat := getFormatedLog(testName, callerFunc, strings.Join(compiler.ConvertInterfaceArrayToStringArray(args), " "))
 	tpLog.Info(extendedFormat)
+	testLogger := GetTestLogger()
+	if testLogger != nil {
+		testLogger.Info(extendedFormat)
+	}
 }
 
 func Debug(args ...interface{}) {
 	pc, _, line, _ := runtime.Caller(1)
 	callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
 	callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
-	extendedFormat := fmt.Sprintf("[%s] - %s", callerFunc, strings.Join(compiler.ConvertInterfaceArrayToStringArray(args), " "))
+	testName := GetTestName()
+	extendedFormat := getFormatedLog(testName, callerFunc, strings.Join(compiler.ConvertInterfaceArrayToStringArray(args), " "))
 	tpLog.Debugf(extendedFormat, args...)
+	testLogger := GetTestLogger()
+	if testLogger != nil {
+		testLogger.Debugf(extendedFormat, args...)
+	}
 }
 
 func Panicf(format string, args ...interface{}) {
 	pc, _, line, _ := runtime.Caller(1)
 	callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
 	callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
-	extendedFormat := fmt.Sprintf("[%s] - %s", callerFunc, format)
+	testName := GetTestName()
+	extendedFormat := getFormatedLog(testName, callerFunc, format)
 	tpLog.Panicf(extendedFormat, args...)
+	testLogger := GetTestLogger()
+	if testLogger != nil {
+		testLogger.Panicf(extendedFormat, args...)
+	}
 }
 
 func FailOnError(err error, description string, args ...interface{}) {
@@ -327,9 +405,14 @@ func FailOnError(err error, description string, args ...interface{}) {
 		pc, _, line, _ := runtime.Caller(1)
 		callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
 		callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
-		extendedFormat := fmt.Sprintf("[%s] - %s", callerFunc, errorString)
+		testName := GetTestName()
+		extendedFormat := getFormatedLog(testName, callerFunc, errorString)
 		dash.Fatal(extendedFormat)
 		tpLog.Errorf(extendedFormat)
+		testLogger := GetTestLogger()
+		if testLogger != nil {
+			testLogger.Errorf(extendedFormat, args...)
+		}
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	}
 }
@@ -340,13 +423,54 @@ func FailOnNoError(err error, description string, args ...interface{}) {
 		pc, _, line, _ := runtime.Caller(1)
 		callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
 		callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
-		extendedFormat := fmt.Sprintf("[%s] - %s", callerFunc, errorString)
-		dash.VerifyNotNilFatal(err, extendedFormat)
+		extendedFormat := getFormatedLog(GetTestName(), callerFunc, errorString)
 		tpLog.Debugf(extendedFormat)
+		dash.VerifyNotNilFatal(err, extendedFormat)
+
 	} else {
-		dash.Fatal(description, args...)
 		tpLog.Errorf(description, args...)
+		dash.Fatal(description, args...)
 	}
+}
+
+// SetTestName sets the test name for the current goroutine
+func SetTestName(testName string) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	gid := getGoroutineID()
+	testInfoMap.Store(gid, testName)
+	if _, ok := loggersMap.Load(testName); testName != "Unknown" && !ok {
+		testLog := New()
+		loggersMap.Store(testName, testLog)
+	}
+
+}
+
+// GetTestName retrieves the test name for the current goroutine
+func GetTestName() string {
+	gid := getGoroutineID()
+	if testName, ok := testInfoMap.Load(gid); ok {
+		return testName.(string)
+	}
+	return "Unknown"
+}
+
+// GetTestLogger retrieves the logger for the current goroutine
+func GetTestLogger() *logrus.Logger {
+	testName := GetTestName()
+	if testLogger, ok := loggersMap.Load(testName); ok {
+		return testLogger.(*logrus.Logger)
+	}
+	return nil
+}
+
+func getGoroutineID() uint64 {
+	b := make([]byte, 64)
+	b = b[:runtime.Stack(b, false)]
+	// Example output: "goroutine 1 [running]:\n"
+	idField := bytes.Fields(b)[1]
+	id, _ := strconv.ParseUint(string(idField), 10, 64)
+	return id
 }
 
 func init() {

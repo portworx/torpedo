@@ -2439,7 +2439,7 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 	var (
 		hostName               = fmt.Sprintf("torpedo-host-%v", time.Now().UnixNano())
 		volumeName             = fmt.Sprintf("torpedo-vol-%v", time.Now().UnixNano())
-		faSecret               = Inst().FaSecret
+		faSecret               = "Inst().FaSecret"
 		FAclient               *flasharray.Client
 		MultipathBeforeRestart string
 		faMgmtEndPoint         string

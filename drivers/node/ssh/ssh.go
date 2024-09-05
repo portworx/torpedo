@@ -1,9 +1,11 @@
 package ssh
 
 import (
+	context1 "context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	torpedotask "github.com/portworx/torpedo/pkg/task"
 	"io/ioutil"
 	"net"
 	"os"
@@ -595,10 +597,19 @@ func (s *SSH) RunCommand(n node.Node, command string, options node.ConnectionOpt
 		return output, false, nil
 	}
 
-	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
+	gctx := context1.Background()
+	gctx = context1.WithValue(gctx, torpedotask.TimeBeforeRetryKey, options.TimeBeforeRetry)
+	gctx = context1.WithValue(gctx, torpedotask.TimeoutKey, options.Timeout)
+	gctx = context1.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+
+	output, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx)
 	if err != nil {
 		return "", err
 	}
+	//output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
+	//if err != nil {
+	//	return "", err
+	//}
 	return output.(string), nil
 }
 
@@ -806,10 +817,20 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 		return output, false, nil
 	}
 
-	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
+	gctx := context1.Background()
+	gctx = context1.WithValue(gctx, torpedotask.TimeBeforeRetryKey, options.TimeBeforeRetry)
+	gctx = context1.WithValue(gctx, torpedotask.TimeoutKey, options.Timeout)
+	gctx = context1.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+
+	output, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx)
 	if err != nil {
 		return "", err
 	}
+
+	//output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
+	//if err != nil {
+	//	return "", err
+	//}
 	return output.(string), nil
 }
 

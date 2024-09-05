@@ -439,12 +439,12 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 })
 
 // This test deletes all tasks of an application and checks if app converges back to desired state
-var _ = Describe("{AppTasksDown}", func() {
+var _ = Describe("{AppScaleUpAndDown}", func() {
 	var testrailID = 35263
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35264
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("AppTasksDown", "Validate app after tasks are deleted", nil, testrailID)
+		StartTorpedoTest("AppScaleUpAndDown", "Validate app after tasks are deleted", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -1932,5 +1932,32 @@ var _ = Describe("{PerformStorageVMotions}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+})
+
+// Volume Driver Plugin has crashed - and the client container should not be impacted.
+var _ = Describe("{LoggingTest}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("LoggingTest", "Validate PX after volume driver crash", nil, 0)
+
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "has to schedule apps and crash volume driver on app nodes"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("voldrivercrash-%d", i))...)
+		}
+
+		TriggerLogging(contexts)
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
