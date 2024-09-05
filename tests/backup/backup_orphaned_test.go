@@ -1837,6 +1837,7 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", Label(TestCaseLabelsMap[De
 		wg                             sync.WaitGroup
 		controlChannel                 chan string
 		errorGroup                     *errgroup.Group
+		backupDriver                   backup.Driver
 	)
 	bkpNamespaces = make([]string, 0)
 	userNames = make([]string, 0)
@@ -1868,11 +1869,11 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", Label(TestCaseLabelsMap[De
 	userBackupNamesMapFromAdmin := make(map[string][]string)
 	userBackupSchedulesMap := make(map[string][]string)
 	userRestoresMap := make(map[string][]string)
-	backupDriver := Inst().Backup
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("DeleteBackupOfUserNonSharedRBAC",
 			"Delete backups,restores,schedules,clusters created by non-admin user with non-shared RBAC resources from px-admin ", nil, 87561, Ak, Q3FY24)
+		backupDriver = Inst().Backup
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < numOfNS; i++ {
@@ -2513,7 +2514,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", Label(TestCaseLabelsMap[Delet
 		userBackupNamesMapFromAdmin      = make(map[string][]string)
 		userBackupSchedulesMap           = make(map[string][]string)
 		userRestoresMap                  = make(map[string][]string)
-		backupDriver                     = Inst().Backup
+		backupDriver                     backup.Driver
 		controlChannel                   chan string
 		errorGroup                       *errgroup.Group
 	)
@@ -2521,6 +2522,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", Label(TestCaseLabelsMap[Delet
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("DeleteBackupOfUserSharedRBAC",
 			"Delete backups,restores,schedules,clusters created by non-admin user with shared RBAC resources from px-admin", nil, 87560, Ak, Q3FY24)
+		backupDriver = Inst().Backup
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < numOfNS; i++ {
@@ -3333,14 +3335,15 @@ var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin}", Label(TestCaseL
 		userBackupSchedulesMap         = make(map[string][]string)
 		userBackupsMapFromAdmin        = make(map[string][]string)
 		userBackupsMap                 = make(map[string][]string)
-		backupDriver                   = Inst().Backup
 		controlChannel                 chan string
 		errorGroup                     *errgroup.Group
+		backupDriver                   backup.Driver
 	)
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("DeleteBackupSharedByMultipleUsersFromAdmin",
 			"Delete backups of non admin user from px-admin when backup is shared by multiple users", nil, 87565, Ak, Q3FY24)
+		backupDriver = Inst().Backup
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {

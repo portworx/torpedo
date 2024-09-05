@@ -309,7 +309,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", Label(TestCaseLabelsMap[ReplicaC
 // This testcase verifies resize after the volume is restored from a backup
 var _ = Describe("{ResizeOnRestoredVolume}", Label(TestCaseLabelsMap[ResizeOnRestoredVolume]...), func() {
 	var (
-		appList              = Inst().AppList
+		appList              []string
 		scheduledAppContexts []*scheduler.Context
 		preRuleNameList      []string
 		postRuleNameList     []string
@@ -332,6 +332,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", Label(TestCaseLabelsMap[ResizeOnRes
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("ResizeOnRestoredVolume", "Resize after the volume is restored from a backup", nil, 58064, Kshithijiyer, Q4FY23)
+		appList = Inst().AppList
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(PostRuleApp, appList[i]) {
@@ -674,7 +675,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", Label(TestCaseLabel
 // This testcase verifies schedule backups are successful while volume resize is in progress
 var _ = Describe("{ResizeVolumeOnScheduleBackup}", Label(TestCaseLabelsMap[ResizeVolumeOnScheduleBackup]...), func() {
 	var (
-		appList                     = Inst().AppList
+		appList                     []string
 		scheduledAppContexts        []*scheduler.Context
 		appContextsToBackup         []*scheduler.Context
 		preRuleNameList             []string
@@ -711,6 +712,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", Label(TestCaseLabelsMap[Resiz
 	appNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("ResizeVolumeOnScheduleBackup", "Verify schedule backups are successful while volume resize is in progress", nil, 58050, Sn, Q1FY24)
+		appList = Inst().AppList
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(PostRuleApp, appList[i]) {

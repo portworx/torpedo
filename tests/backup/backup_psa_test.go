@@ -1,6 +1,7 @@
 package tests
 
 import (
+	context1 "context"
 	"fmt"
 	"os"
 	"strings"
@@ -33,7 +34,7 @@ var _ = Describe("{EnableNsAndClusterLevelPSAWithBackupAndRestore}", Label(TestC
 		backupNames          []string
 		backupNames2         []string
 		restoreNames         []string
-		appList              = Inst().AppList
+		appList              []string
 		scheduledAppContexts []*scheduler.Context
 		bkpNamespaces        []string
 		label                map[string]string
@@ -53,6 +54,7 @@ var _ = Describe("{EnableNsAndClusterLevelPSAWithBackupAndRestore}", Label(TestC
 		errorGroup           *errgroup.Group
 		backupNamesAllNs     []string
 		restoredNamespaces   []string
+		originalList         []string
 	)
 	storageClassMapping := make(map[string]string)
 	AppContextsMapping := make(map[string]*scheduler.Context)
@@ -61,7 +63,6 @@ var _ = Describe("{EnableNsAndClusterLevelPSAWithBackupAndRestore}", Label(TestC
 	bkpNamespaces = make([]string, 0)
 	preRuleNameList = make([]string, 0)
 	postRuleNameList = make([]string, 0)
-	originalList := Inst().AppList
 	label = make(map[string]string)
 	backupLocationMap = make(map[string]string)
 	psaFlag := false
@@ -69,7 +70,8 @@ var _ = Describe("{EnableNsAndClusterLevelPSAWithBackupAndRestore}", Label(TestC
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("EnableNsAndClusterLevelPSAWithBackupAndRestore", "Enable Namespace and cluster level PSA with Backup and Restore", nil, 299243, Kshithijiyer, Q2FY25)
-
+		originalList = Inst().AppList
+		appList = Inst().AppList
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		psaApp := make([]string, 0)
@@ -957,7 +959,7 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 })
 
 // PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege verifies taking backup in lower privilege and restore to higher privilege with namespace level PSA
-var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Label(TestCaseLabelsMap[PsaTakeBackupInLowerPrevilegeRestoreInHigherPrivilege]...), func() {
+var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Label(TestCaseLabelsMap[PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege]...), func() {
 	var (
 		err                                                                   error
 		backupLocationUID                                                     string
@@ -998,17 +1000,20 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 		namespaces                     []string
 		psaApp                         []string
 		backupNamespaceMap             = make(map[string]string)
+		backupLocationMap              = make(map[string]string)
+		numberOfBackups                int
+		params                         map[string]string
+		storageClassMapping            map[string]string
+		ctx                            context1.Context
 	)
-
-	backupLocationMap := make(map[string]string)
-	numberOfBackups, _ := strconv.Atoi(GetEnv(MaxBackupsToBeCreated, "3"))
-	params := make(map[string]string)
-	storageClassMapping := make(map[string]string)
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Getting admin context from secret")
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege", "Take backup from lower Privileged namespace and restore to higher Privileged namespace", nil, 299237, Dbinnal, Q2FY25)
+		backupLocationMap = make(map[string]string)
+		numberOfBackups, _ = strconv.Atoi(GetEnv(MaxBackupsToBeCreated, "3"))
+		params = make(map[string]string)
+		storageClassMapping = make(map[string]string)
+		log.FailOnError(err, "Getting admin context from secret")
 		defaultAppList = Inst().AppList
 		log.InfoD("App list at the start of the testcase is %v", defaultAppList)
 		for _, app := range defaultAppList {
@@ -1016,6 +1021,7 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 		}
 		Inst().AppList = psaApp
 		log.InfoD("App list for PSA %v", psaApp)
+		ctx, err = backup.GetAdminCtxFromSecret()
 	})
 
 	It("Take backup in restricted PSA set at a NS and restore in privilege PSA set to new NS", func() {
@@ -1604,13 +1610,13 @@ var _ = Describe("{PSALowerPrivilegeToHigherPrivilegeWithProjectMapping}", Label
 		privilegeScheduledAppContexts     []*scheduler.Context
 		baselineScheduledAppContexts      []*scheduler.Context
 		restrictedScheduledAppContexts    []*scheduler.Context
+		ctx                               context1.Context
 	)
-
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Getting admin context from secret")
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("PSALowerPrivilegeToHigherPrivilegeWithProjectMapping", "Verify PSA backup in lower privilege mode and restore in higher privilege mode with project mapping", nil, 299238, Vpinisetti, Q2FY25)
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Getting admin context from secret")
 		AppContextsMapping := make(map[string]*scheduler.Context)
 		nsLabel := make(map[string]string)
 		numOfDeployments := Inst().GlobalScaleFactor

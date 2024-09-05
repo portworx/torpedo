@@ -313,7 +313,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", Label(TestCaseLabelsMap[Cus
 // DeleteAllBackupObjects deletes all backed up objects
 var _ = Describe("{DeleteAllBackupObjects}", Label(TestCaseLabelsMap[DeleteAllBackupObjects]...), func() {
 	var (
-		appList              = Inst().AppList
+		appList              []string
 		backupName           string
 		scheduledAppContexts []*scheduler.Context
 		preRuleNameList      []string
@@ -342,6 +342,7 @@ var _ = Describe("{DeleteAllBackupObjects}", Label(TestCaseLabelsMap[DeleteAllBa
 	intervalName := fmt.Sprintf("%s-%v", "interval", time.Now().Unix())
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("DeleteAllBackupObjects", "Create the backup Objects and Delete", nil, 58088, Skonda, Q4FY23)
+		appList = Inst().AppList
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the AppParameters or not ")
 		for i := 0; i < len(appList); i++ {
 			if Contains(PostRuleApp, appList[i]) {
@@ -2669,10 +2670,10 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", Label(Test
 		cloudCredUID         string
 		backupLocationUID    string
 		backupLocationName   string
+		originalAppList      []string
 	)
 
 	var (
-		originalAppList   = Inst().AppList
 		namespaceMapping  = make(map[string]string)
 		backupLocationMap = make(map[string]string)
 		labelSelectors    = make(map[string]string)
@@ -2681,7 +2682,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", Label(Test
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("BackupCRsThenMultipleRestoresOnHigherK8sVersion", "Deploy CRs (CRD + webhook); then backup; create two simultaneous restores on cluster with higher K8s version; one restore is Success and other PartialSuccess", nil, 83716, Tthurlapati, Q2FY24)
-
+		originalAppList = Inst().AppList
 		log.InfoD("specs (apps) allowed in execution of test: %v", AppsWithCRDsAndWebhooks)
 		Inst().AppList = AppsWithCRDsAndWebhooks
 	})

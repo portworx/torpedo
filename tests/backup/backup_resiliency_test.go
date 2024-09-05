@@ -26,7 +26,7 @@ import (
 // This test restarts volume driver (PX) while backup is in progress
 var _ = Describe("{BackupRestartPX}", Label(TestCaseLabelsMap[BackupRestartPX]...), func() {
 	var (
-		appList        = Inst().AppList
+		appList        []string
 		controlChannel chan string
 		errorGroup     *errgroup.Group
 	)
@@ -49,6 +49,7 @@ var _ = Describe("{BackupRestartPX}", Label(TestCaseLabelsMap[BackupRestartPX]..
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("BackupRestartPX", "Restart PX when backup in progress", nil, 55818, Kshithijiyer, Q4FY23)
+		appList = Inst().AppList
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(PostRuleApp, appList[i]) {
@@ -195,7 +196,7 @@ var _ = Describe("{BackupRestartPX}", Label(TestCaseLabelsMap[BackupRestartPX]..
 // performing backup and restores.
 var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", Label(TestCaseLabelsMap[KillStorkWithBackupsAndRestoresInProgress]...), func() {
 	var (
-		appList        = Inst().AppList
+		appList        []string
 		controlChannel chan string
 		errorGroup     *errgroup.Group
 	)
@@ -217,6 +218,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", Label(TestCaseLa
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("KillStorkWithBackupsAndRestoresInProgress", "Kill Stork when backups and restores in progress", nil, 55819, Kshithijiyer, Q4FY23)
+		appList = Inst().AppList
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(PostRuleApp, appList[i]) {

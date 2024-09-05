@@ -84,7 +84,7 @@ const (
 	DeleteS3ScheduleAndCreateNfsSchedule                                               TestCaseName = "DeleteS3ScheduleAndCreateNfsSchedule"
 	KubeAndPxNamespacesSkipOnAllNSBackup                                               TestCaseName = "KubeAndPxNamespacesSkipOnAllNSBackup"
 	MultipleBackupLocationWithSameEndpoint                                             TestCaseName = "MultipleBackupLocationWithSameEndpoint"
-	UpgradePxBackup                                                                    TestCaseName = "UpgradePxBackupWithHelm"
+	UpgradePxBackup                                                                    TestCaseName = "UpgradePxBackup"
 	StorkUpgradeWithBackup                                                             TestCaseName = "StorkUpgradeWithBackup"
 	PXBackupEndToEndBackupAndRestoreWithUpgrade                                        TestCaseName = "PXBackupEndToEndBackupAndRestoreWithUpgrade"
 	IssueDeleteOfIncrementalBackupsAndRestore                                          TestCaseName = "IssueDeleteOfIncrementalBackupsAndRestore"
@@ -142,6 +142,7 @@ const (
 	DeleteVerifyBackupDeletionWhenRetentionIsMet                                       TestCaseName = "DeleteVerifyBackupDeletionWhenRetentionIsMet"
 	VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules                        TestCaseName = "VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules"
 	DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules                  TestCaseName = "DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules"
+	PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege                              TestCaseName = "PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege"
 )
 
 // Test case labels
@@ -273,7 +274,6 @@ const (
 	PartialBackupSuccessWithPxAndKDMPVolumesLabel                                           TestCaseLabel = "PartialBackupSuccessWithPxAndKDMPVolumes"
 	PartialBackupWithLowerStorkVersionLabel                                                 TestCaseLabel = "PartialBackupWithLowerStorkVersion"
 	PartialBackupSuccessWithAzureEndpointLabel                                              TestCaseLabel = "PartialBackupSuccessWithAzureEndpoint"
-	PsaTakeBackupInLowerPrevilegeRestoreInHigherPrivilege                                   TestCaseLabel = "PsaTakeBackupInLowerPrevilegeRestoreInHigherPrivilege"
 	PSALowerPrivilegeToHigherPrivilegeWithProjectMappingLabel                               TestCaseLabel = "PSALowerPrivilegeToHigherPrivilegeWithProjectMapping"
 	AzureCloudAccountCreationWithMandatoryAndNonMandatoryFieldsLabel                        TestCaseLabel = "AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields"
 	AzureCloudAccountForLockedBucketLabel                                                   TestCaseLabel = "AzureCloudAccountForLockedBucket"
@@ -283,275 +283,257 @@ const (
 	DeleteVerifyBackupDeletionWhenRetentionIsMetLabel                                       TestCaseLabel = "DeleteVerifyBackupDeletionWhenRetentionIsMet"
 	VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel                        TestCaseLabel = "VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules"
 	DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel                  TestCaseLabel = "DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules"
+	PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilegeLabel                              TestCaseLabel = "PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege"
 )
 
 // Common Labels
 const (
-	PxBackupLabel = "px-backup"
+	PxBackupLabel TestCaseLabel = "px-backup"
 )
 
 // Priority labels
 const (
-	P0 = "p0"
-	P1 = "p1"
-	P2 = "p2"
+	P0 TestCaseLabel = "p0"
+	P1 TestCaseLabel = "p1"
+	P2 TestCaseLabel = "p2"
 )
 
 // Test type labels
 const (
-	SystemTest      = "system-test"
-	ScaleTest       = "scale-test"
-	LongevityTest   = "longevity-test"
-	PerformanceTest = "performance-test"
-)
-
-// Platform labels
-const (
-	Vanilla     = "vanilla"
-	Openshift   = "openshift"
-	Rancher     = "rancher"
-	AKS         = "aks"
-	EKS         = "eks"
-	GKE         = "gke"
-	IKS         = "iks"
-	ROKS        = "roks"
-	AnyPlatform = "any-platform"
+	SystemTest      TestCaseLabel = "system-test"
+	ScaleTest       TestCaseLabel = "scale-test"
+	LongevityTest   TestCaseLabel = "longevity-test"
+	PerformanceTest TestCaseLabel = "performance-test"
+	FunctionalTest  TestCaseLabel = "functional-test"
 )
 
 // PipelineLabels
 const (
-	vanillaPipelineS3Nightly                   = "vanilla-pipeline-s3"
-	vanillaPipelineNfsNightly                  = "vanilla-pipeline-nfs"
-	vanillaPipelineWithDifferentK8sVersionsS3  = "vanilla-pipeline-with-different-k8s-versions-s3"
-	vanillaPipelineWithDifferentK8sVersionsNfs = "vanilla-pipeline-with-different-k8s-versions-nfs"
-	vanillaPipelineWithS3LockedBucket          = "vanilla-pipeline-with-s3-locked-bucket"
-	vanillaPipelineS3Upgrade                   = "vanilla-pipeline-s3-upgrade"
-	vanillaFacdPipelineS3                      = "vanilla-facd-pipeline-s3"
-	vanillaFacdPipelineNfs                     = "vanilla-facd-pipeline-nfs"
-	vanillaFadaPipelineS3                      = "vanilla-fada-pipeline-s3"
-	vanillaFadaPipelineNfs                     = "vanilla-fada-pipeline-nfs"
-	vanillaFBDAPipelineS3                      = "vanilla-fbda-pipeline-s3"
-	vanillaFBDAPipelineNfs                     = "vanilla-fbda-pipeline-nfs"
-	ibmNonPXIKSPipelineS3                      = "ibm-nonpx-iks-pipeline-s3"
-	ibmPxIKSPipelineS3                         = "ibm-px-iks-pipeline-s3"
-	ibmNonPxRoksPipelineS3                     = "ibm-nonpx-roks-pipeline-s3"
-	ibmPxRoksPipelineS3                        = "ibm-px-roks-pipeline-s3"
-	ibmNonPxIksPipelineS3Upgrade               = "ibm-nonpx-iks-pipeline-s3-upgrade"
-	ibmPxIksPipelineS3Upgrade                  = "ibm-px-iks-pipeline-s3-upgrade"
-	ocpPxPipelineS3Upgrade                     = "ocp-px-pipeline-s3-upgrade"
-	ibmNonPxRoksPipelineS3Upgrade              = "ibm-nonpx-roks-pipeline-s3-upgrade"
-	VanillaPipelineS3StorkUpgrade              = "vanilla-pipeline-s3-stork-upgrade"
-	rkePipelineNightly                         = "rke-pipeline-nightly"
-)
-
-// Aetos lN labels
-const (
-	aetosl1aws                     = "aetos-l1-aws"
-	aetosl1nfs                     = "aetos-l1-nfs"
-	aetosl3awsVanilla              = "aetos-l3-aws-vanilla"
-	aetosl3nfsVanilla              = "aetos-l3-nfs-vanilla"
-	aetosl3awsrke                  = "aetos-l3-aws-rke"
-	aetosl3nfsrke                  = "aetos-l3-nfs-rke"
-	aetosl3awsstorkupgrade         = "aetos-l3-aws-stork-upgrade"
-	aetosl3awsPXBackupupgrade      = "aetos-l3-aws-px-backup-upgrade"
-	aetosl3awsPXBackupStorkupgrade = "aetos-l3-aws-px-backup-stork-upgrade"
+	ocpPipeline     TestCaseLabel = "ocp-pipeline"
+	vanillaPipeline TestCaseLabel = "vanilla-pipeline"
+	rkePipeline     TestCaseLabel = "rke-pipeline"
+	aksPipeline     TestCaseLabel = "aks-pipeline"
+	eksPipeline     TestCaseLabel = "eks-pipeline"
+	gkePipeline     TestCaseLabel = "gke-pipeline"
+	iksPipeline     TestCaseLabel = "iks-pipeline"
+	allPipeline     TestCaseLabel = "all-pipeline"
 )
 
 // Parallel/Non-Parallel labels
 const (
-	ParallelLabel    = "parallel"
-	NonParallelLabel = "non-parallel"
+	ParallelLabel                 TestCaseLabel = "parallel"
+	NonParallelLabelTestCaseLabel TestCaseLabel = "non-parallel"
 )
 
 // Test duration labels
 const (
-	Slow = "slow"
-	Fast = "fast"
+	Slow TestCaseLabel = "slow"
+	Fast TestCaseLabel = "fast"
 )
 
 // Backup labels
 const (
-	PxLabel   = "px"
-	KDMPLabel = "kdmp"
-	CsiLabel  = "csi"
-	AnyBackup = "any-backup"
+	PxLabel   TestCaseLabel = "px"
+	KDMPLabel TestCaseLabel = "kdmp"
+	CsiLabel  TestCaseLabel = "csi"
+	AnyBackup TestCaseLabel = "any-backup"
 )
 
 // StorkQualificationLabel Stork qualification labels
 const (
-	StorkQualificationLabel = "stork-qualification"
+	StorkQualificationLabel TestCaseLabel = "stork-qualification"
 )
 
 // Sanity labels
 const (
-	SanityLabel = "sanity"
+	SanityLabel TestCaseLabel = "sanity"
 )
 
 // Disruptive labels
 const (
-	DisruptiveLabel = "disruptive"
+	DisruptiveLabel TestCaseLabel = "disruptive"
 )
 
 // Skip test labels
 const (
-	SkipTestLabel = "skip-test"
+	SkipTestLabel TestCaseLabel = "skip-test"
 )
 
 // Volume labels
 const (
-	PortworxVolumeLabel = "portworx-volume"
-	EBSVolumeLabel      = "ebs-volume"
-	AnyVolumeLabel      = "any-volume"
+	PortworxVolumeLabel TestCaseLabel = "portworx-volume"
+	EBSVolumeLabel      TestCaseLabel = "ebs-volume"
+	AnyVolumeLabel      TestCaseLabel = "any-volume"
 )
 
 // Backup location labels
 const (
-	NfsBackupLocationLabel   = "nfs"
-	S3BackupLocationLabel    = "s3"
-	AzureBackupLocationLabel = "Azure"
+	NfsBackupLocationLabel   TestCaseLabel = "nfs"
+	S3BackupLocationLabel    TestCaseLabel = "s3"
+	AzureBackupLocationLabel TestCaseLabel = "Azure"
+	S3LockedBucket           TestCaseLabel = "s3-locked-bucket"
+	AzureImmutableBucket     TestCaseLabel = "azure-immutable-bucket"
+)
+
+// Labels for locked bucket delete tests
+const (
+	Day0LockedBucketLabel TestCaseLabel = "day0-locked-bucket"
+	Day3LockedBucketLabel TestCaseLabel = "day3-locked-bucket"
+)
+
+// Volume provisioner labels
+const (
+	FACDLabel TestCaseLabel = "facd"
+	FADALabel TestCaseLabel = "fada"
+	FBDALabel TestCaseLabel = "fbda"
 )
 
 // App labels
 const (
-	KubevirtAppLabel = "kubevirt-app"
+	KubevirtAppLabel TestCaseLabel = "kubevirt-app"
 )
 
 // Feature labels
 const (
-	PartialBackupLabel = "PartialBackup"
+	PartialBackupLabel  TestCaseLabel = "PartialBackup"
+	DiffK8sVersionLabel TestCaseLabel = "DiffK8sVersion"
 )
 
 var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
-	CreateMultipleUsersAndGroups:                                      {CreateMultipleUsersAndGroupsLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DuplicateSharedBackup:                                             {DuplicateSharedBackupLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DifferentAccessSameUser:                                           {DifferentAccessSameUserLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ShareBackupWithUsersAndGroups:                                     {ShareBackupWithUsersAndGroupsLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly},
-	ShareLargeNumberOfBackupsWithLargeNumberOfUsers:                   {ShareLargeNumberOfBackupsWithLargeNumberOfUsersLabel},
-	CancelClusterBackupShare:                                          {CancelClusterBackupShareLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ShareBackupAndEdit:                                                {ShareBackupAndEditLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly},
-	SharedBackupDelete:                                                {SharedBackupDeleteLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ClusterBackupShareToggle:                                          {ClusterBackupShareToggleLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ShareBackupsAndClusterWithUser:                                    {ShareBackupsAndClusterWithUserLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ShareBackupWithDifferentRoleUsers:                                 {ShareBackupWithDifferentRoleUsersLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteSharedBackup:                                                {DeleteSharedBackupLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ShareAndRemoveBackupLocation:                                      {ShareAndRemoveBackupLocationLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ViewOnlyFullBackupRestoreIncrementalBackup:                        {ViewOnlyFullBackupRestoreIncrementalBackupLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	IssueMultipleRestoresWithNamespaceAndStorageClassMapping:          {IssueMultipleRestoresWithNamespaceAndStorageClassMappingLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteUsersRole:                                                   {DeleteUsersRoleLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	IssueMultipleDeletesForSharedBackup:                               {IssueMultipleDeletesForSharedBackupLabel, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	SwapShareBackup:                                                   {SwapShareBackupLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	NamespaceLabelledBackupSharedWithDifferentAccessMode:              {NamespaceLabelledBackupSharedWithDifferentAccessModeLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	BackupScheduleForOldAndNewNS:                                      {BackupScheduleForOldAndNewNSLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ManualAndScheduledBackupUsingNamespaceAndResourceLabel:            {ManualAndScheduledBackupUsingNamespaceAndResourceLabelLabel, aetosl1aws, aetosl1nfs, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ScheduleBackupWithAdditionAndRemovalOfNS:                          {ScheduleBackupWithAdditionAndRemovalOfNSLabel, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit:               {ManualAndScheduleBackupUsingNSLabelWithMaxCharLimitLabel, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	NamespaceLabelledBackupOfEmptyNamespace:                           {NamespaceLabelledBackupOfEmptyNamespaceLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmNonPxRoksPipelineS3, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteNfsExecutorPodWhileBackupAndRestoreInProgress:               {DeleteNfsExecutorPodWhileBackupAndRestoreInProgressLabel},
-	SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProject:  {SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProjectLabel, aetosl3awsrke, aetosl3nfsrke},
-	NamespaceMoveFromProjectToProjectToNoProjectWhileRestore:          {NamespaceMoveFromProjectToProjectToNoProjectWhileRestoreLabel, aetosl3awsrke, aetosl3nfsrke},
-	MultipleProjectsAndNamespacesBackupAndRestore:                     {MultipleProjectsAndNamespacesBackupAndRestoreLabel, aetosl3awsrke, aetosl3nfsrke},
-	BackupRestartPX:                                                   {BackupRestartPXLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3nfsrke, aetosl3nfsVanilla, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	KillStorkWithBackupsAndRestoresInProgress:                         {KillStorkWithBackupsAndRestoresInProgressLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	RestartBackupPodDuringBackupSharing:                               {RestartBackupPodDuringBackupSharingLabel, aetosl3awsVanilla, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	CancelAllRunningBackupJobs:                                        {CancelAllRunningBackupJobsLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ScaleMongoDBWhileBackupAndRestore:                                 {ScaleMongoDBWhileBackupAndRestoreLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	RebootNodesWhenBackupsAreInProgress:                               {RebootNodesWhenBackupsAreInProgressLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3nfsrke, aetosl3nfsVanilla, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress:             {ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgressLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	CancelAllRunningRestoreJobs:                                       {CancelAllRunningRestoreJobsLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteSameNameObjectsByMultipleUsersFromAdmin:                     {DeleteSameNameObjectsByMultipleUsersFromAdminLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdmin:  {DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdminLabel, aetosl3awsVanilla, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsVanilla, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteObjectsByMultipleUsersFromNewAdmin:                          {DeleteObjectsByMultipleUsersFromNewAdminLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin:             {DeleteFailedInProgressBackupAndRestoreOfUserFromAdminLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteSharedBackupOfUserFromAdmin:                                 {DeleteSharedBackupOfUserFromAdminLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteBackupOfUserNonSharedRBAC:                                   {DeleteBackupOfUserNonSharedRBACLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteBackupOfUserSharedRBAC:                                      {DeleteBackupOfUserSharedRBACLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	UpdatesBackupOfUserFromAdmin:                                      {UpdatesBackupOfUserFromAdminLabel, aetosl3awsVanilla, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteBackupSharedByMultipleUsersFromAdmin:                        {DeleteBackupSharedByMultipleUsersFromAdminLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	NodeCountForLicensing:                                             {NodeCountForLicensingLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	LicensingCountWithNodeLabelledBeforeClusterAddition:               {LicensingCountWithNodeLabelledBeforeClusterAdditionLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	LicensingCountBeforeAndAfterBackupPodRestart:                      {LicensingCountBeforeAndAfterBackupPodRestartLabel, aetosl3awsVanilla, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly},
-	BackupLocationWithEncryptionKey:                                   {BackupLocationWithEncryptionKeyLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ReplicaChangeWhileRestore:                                         {ReplicaChangeWhileRestoreLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ResizeOnRestoredVolume:                                            {ResizeOnRestoredVolumeLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	RestoreEncryptedAndNonEncryptedBackups:                            {RestoreEncryptedAndNonEncryptedBackupsLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ResizeVolumeOnScheduleBackup:                                      {ResizeVolumeOnScheduleBackupLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly},
-	BackupClusterVerification:                                         {BackupClusterVerificationLabel},
-	UserGroupManagement:                                               {UserGroupManagementLabel, aetosl1aws, aetosl1nfs},
-	BasicBackupCreation:                                               {BasicBackupCreationLabel, aetosl1aws, aetosl1nfs, aetosl3awsrke, aetosl3nfsrke, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy:      {CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicyLabel},
-	BasicSelectiveRestore:                                             {BasicSelectiveRestoreLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	CustomResourceBackupAndRestore:                                    {CustomResourceBackupAndRestoreLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly},
-	DeleteAllBackupObjects:                                            {DeleteAllBackupObjectsLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	ScheduleBackupCreationAllNS:                                       {ScheduleBackupCreationAllNSLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	CustomResourceRestore:                                             {CustomResourceRestoreLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	AllNSBackupWithIncludeNewNSOption:                                 {AllNSBackupWithIncludeNewNSOptionLabel, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	BackupSyncBasicTest:                                               {BackupSyncBasicTestLabel, aetosl3awsVanilla, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, vanillaPipelineS3Nightly},
-	BackupMultipleNsWithSameLabel:                                     {BackupMultipleNsWithSameLabelLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	MultipleCustomRestoreSameTimeDiffStorageClassMapping:              {MultipleCustomRestoreSameTimeDiffStorageClassMappingLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	AddMultipleNamespaceLabels:                                        {AddMultipleNamespaceLabelsLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	MultipleInPlaceRestoreSameTime:                                    {MultipleInPlaceRestoreSameTimeLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	CloudSnapsSafeWhenBackupLocationDeleteTest:                        {CloudSnapsSafeWhenBackupLocationDeleteTestLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	SetUnsetNSLabelDuringScheduleBackup:                               {SetUnsetNSLabelDuringScheduleBackupLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	BackupRestoreOnDifferentK8sVersions:                               {BackupRestoreOnDifferentK8sVersionsLabel, vanillaPipelineWithDifferentK8sVersionsS3, vanillaPipelineWithDifferentK8sVersionsNfs},
-	BackupCRsThenMultipleRestoresOnHigherK8sVersion:                   {BackupCRsThenMultipleRestoresOnHigherK8sVersionLabel, vanillaPipelineWithDifferentK8sVersionsS3, vanillaPipelineWithDifferentK8sVersionsNfs},
-	ScheduleBackupDeleteAndRecreateNS:                                 {ScheduleBackupDeleteAndRecreateNSLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteNSDeleteClusterRestore:                                      {DeleteNSDeleteClusterRestoreLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, ibmNonPXIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmNonPxIksPipelineS3Upgrade, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, ibmNonPxRoksPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	AlternateBackupBetweenNfsAndS3:                                    {AlternateBackupBetweenNfsAndS3Label, aetosl3awsVanilla, aetosl3awsrke, aetosl3nfsrke, aetosl3nfsVanilla, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	BackupNamespaceInNfsRestoredFromS3:                                {BackupNamespaceInNfsRestoredFromS3Label, aetosl3awsVanilla, aetosl3awsrke, aetosl3nfsrke, aetosl3nfsVanilla, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteS3ScheduleAndCreateNfsSchedule:                              {DeleteS3ScheduleAndCreateNfsScheduleLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3nfsrke, aetosl3nfsVanilla, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	KubeAndPxNamespacesSkipOnAllNSBackup:                              {KubeAndPxNamespacesSkipOnAllNSBackupLabel, aetosl3awsVanilla, aetosl3nfsVanilla, vanillaFacdPipelineS3, vanillaFacdPipelineNfs, vanillaFadaPipelineS3, vanillaFadaPipelineNfs, vanillaFBDAPipelineS3, vanillaFBDAPipelineNfs, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	MultipleBackupLocationWithSameEndpoint:                            {MultipleBackupLocationWithSameEndpointLabel},
-	UpgradePxBackup:                                                   {UpgradePxBackupLabel},
-	StorkUpgradeWithBackup:                                            {StorkUpgradeWithBackupLabel},
-	PXBackupEndToEndBackupAndRestoreWithUpgrade:                       {PXBackupEndToEndBackupAndRestoreWithUpgradeLabel},
-	IssueDeleteOfIncrementalBackupsAndRestore:                         {IssueDeleteOfIncrementalBackupsAndRestoreLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteIncrementalBackupsAndRecreateNew:                            {DeleteIncrementalBackupsAndRecreateNewLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteBucketVerifyCloudBackupMissing:                              {DeleteBucketVerifyCloudBackupMissingLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmNonPXIKSPipelineS3, ibmPxIKSPipelineS3, ibmNonPxRoksPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	DeleteBackupAndCheckIfBucketIsEmpty:                               {DeleteBackupAndCheckIfBucketIsEmptyLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3awsPXBackupupgrade, aetosl3awsstorkupgrade, aetosl3awsPXBackupStorkupgrade, aetosl3nfsrke, aetosl3nfsVanilla, ibmPxIKSPipelineS3, ibmPxRoksPipelineS3, ibmPxIksPipelineS3Upgrade, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	KubevirtVMBackupRestoreWithDifferentStates:                        {KubevirtVMBackupRestoreWithDifferentStatesLabel, KubevirtAppLabel},
-	BackupAlternatingBetweenLockedAndUnlockedBuckets:                  {BackupAlternatingBetweenLockedAndUnlockedBucketsLabel, vanillaPipelineWithS3LockedBucket},
-	LockedBucketResizeOnRestoredVolume:                                {LockedBucketResizeOnRestoredVolumeLabel, vanillaPipelineWithS3LockedBucket},
-	LockedBucketResizeVolumeOnScheduleBackup:                          {LockedBucketResizeVolumeOnScheduleBackupLabel, vanillaPipelineWithS3LockedBucket},
-	DeleteLockedBucketUserObjectsFromAdmin:                            {DeleteLockedBucketUserObjectsFromAdminLabel},
-	VerifyRBACForInfraAdmin:                                           {VerifyRBACForInfraAdminLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3nfsrke, aetosl3nfsVanilla, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	VerifyRBACForPxAdmin:                                              {VerifyRBACForPxAdminLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3nfsrke, aetosl3nfsVanilla, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	VerifyRBACForAppAdmin:                                             {VerifyRBACForAppAdminLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3nfsrke, aetosl3nfsVanilla, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	VerifyRBACForAppUser:                                              {VerifyRBACForAppUserLabel, aetosl3awsVanilla, aetosl3awsrke, aetosl3nfsrke, aetosl3nfsVanilla, ocpPxPipelineS3Upgrade, vanillaPipelineS3Upgrade, VanillaPipelineS3StorkUpgrade, vanillaPipelineS3Nightly, vanillaPipelineNfsNightly},
-	KubevirtUpgradeTest:                                               {KubevirtUpgradeTestLabel, KubevirtAppLabel},
-	KubevirtVMBackupOrDeletionInProgress:                              {KubevirtVMBackupOrDeletionInProgressLabel, KubevirtAppLabel},
-	KubevirtVMBackupRestoreWithNodeSelector:                           {KubevirtVMBackupRestoreWithNodeSelectorLabel, KubevirtAppLabel},
-	KubevirtVMWithFreezeUnfreeze:                                      {KubevirtVMWithFreezeUnfreezeLabel, KubevirtAppLabel},
-	KubevirtInPlaceRestoreWithReplaceAndRetain:                        {KubevirtInPlaceRestoreWithReplaceAndRetainLabel, KubevirtAppLabel},
-	KubevirtVMRestoreWithAfterChangingVMConfig:                        {KubevirtVMRestoreWithAfterChangingVMConfigLabel, KubevirtAppLabel},
-	DefaultBackupRestoreWithKubevirtAndNonKubevirtNS:                  {DefaultBackupRestoreWithKubevirtAndNonKubevirtNSLabel, KubevirtAppLabel},
-	KubevirtScheduledVMDelete:                                         {KubevirtScheduledVMDeleteLabel, KubevirtAppLabel},
-	CustomBackupRestoreWithKubevirtAndNonKubevirtNS:                   {CustomBackupRestoreWithKubevirtAndNonKubevirtNSLabel, KubevirtAppLabel},
-	ExcludeInvalidDirectoryFileBackup:                                 {ExcludeInvalidDirectoryFileBackupLabel},
-	ExcludeDirectoryFileBackup:                                        {ExcludeDirectoryFileBackupLabel},
-	MultipleMemberProjectBackupAndRestoreForSingleNamespace:           {MultipleMemberProjectBackupAndRestoreForSingleNamespaceLabel},
-	MultipleProvisionerCsiSnapshotDeleteBackupAndRestore:              {MultipleProvisionerCsiSnapshotDeleteBackupAndRestoreLabel},
-	BackupNetworkErrorTest:                                            {BackupNetworkErrorTestLabel},
-	IssueMultipleBackupsAndRestoreInterleavedCopies:                   {IssueMultipleBackupsAndRestoreInterleavedCopiesLabel},
-	ValidateFiftyVolumeBackups:                                        {ValidateFiftyVolumeBackupsLabel},
-	PXBackupClusterUpgradeTest:                                        {PXBackupClusterUpgradeTestLabel},
-	BackupToLockedBucketWithSharedObjects:                             {BackupToLockedBucketWithSharedObjectsLabel, vanillaPipelineWithS3LockedBucket},
-	RemoveJSONFilesFromNFSBackupLocation:                              {RemoveJSONFilesFromNFSBackupLocationLabel},
-	CloudSnapshotMissingValidationForNFSLocation:                      {CloudSnapshotMissingValidationForNFSLocationLabel},
-	MultipleProvisionerCsiKdmpBackupAndRestore:                        {MultipleProvisionerCsiKdmpBackupAndRestoreLabel},
-	KubevirtVMMigrationTest:                                           {KubevirtVMMigrationTestLabel, KubevirtAppLabel},
-	BackupCSIVolumesWithPartialSuccess:                                {BackupCSIVolumesWithPartialSuccessLabel, PartialBackupLabel},
-	BackupStateTransitionForScheduledBackups:                          {BackupStateTransitionForScheduledBackupsLabel, PartialBackupLabel},
-	EnableNsAndClusterLevelPSAWithBackupAndRestore:                    {EnableNsAndClusterLevelPSAWithBackupAndRestoreLabel},
-	RestoreFromHigherPrivilegedNamespaceToLower:                       {RestoreFromHigherPrivilegedNamespaceToLowerLabel, rkePipelineNightly},
-	PartialBackupSuccessWithPxVolumes:                                 {PartialBackupSuccessWithPxVolumesLabel, PartialBackupLabel},
-	PartialBackupSuccessWithPxAndKDMPVolumes:                          {PartialBackupSuccessWithPxAndKDMPVolumesLabel, PartialBackupLabel},
-	PartialBackupWithLowerStorkVersion:                                {PartialBackupWithLowerStorkVersionLabel, PartialBackupLabel},
-	PartialBackupSuccessWithAzureEndpoint:                             {PartialBackupSuccessWithAzureEndpointLabel, PartialBackupLabel, AzureBackupLocationLabel},
-	PSALowerPrivilegeToHigherPrivilegeWithProjectMapping:              {PSALowerPrivilegeToHigherPrivilegeWithProjectMappingLabel, rkePipelineNightly},
-	PXBackupUpgradeWithAzureCredChange:                                {PXBackupUpgradeWithAzureCredChangeLabel, AzureBackupLocationLabel},
-	ClusterShare:                                                      {ClusterShareLabel},
-	VerifyBackupDeletionWhenRetentionIsMet:                            {VerifyBackupDeletionWhenRetentionIsMetLabel},
-	DeleteVerifyBackupDeletionWhenRetentionIsMet:                      {DeleteVerifyBackupDeletionWhenRetentionIsMetLabel},
-	VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules:       {VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel},
-	DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules: {DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel},
+	AddMultipleNamespaceLabels:                                                         {AddMultipleNamespaceLabelsLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel},
+	AllNSBackupWithIncludeNewNSOption:                                                  {AllNSBackupWithIncludeNewNSOptionLabel, ocpPipeline, SystemTest, PxBackupLabel, P0, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel, FBDALabel, FADALabel},
+	AlternateBackupBetweenNfsAndS3:                                                     {AlternateBackupBetweenNfsAndS3Label, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields:                        {AzureCloudAccountCreationWithMandatoryAndNonMandatoryFieldsLabel, aksPipeline, SystemTest, PxBackupLabel, P0},
+	AzureCloudAccountForLockedBucket:                                                   {AzureCloudAccountForLockedBucketLabel, aksPipeline, SystemTest, PxBackupLabel, P2},
+	BackupAlternatingBetweenLockedAndUnlockedBuckets:                                   {BackupAlternatingBetweenLockedAndUnlockedBucketsLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3LockedBucket, AzureImmutableBucket},
+	BackupAndRestoreSyncDR:                                                             {BackupAndRestoreSyncDRLabel, ocpPipeline, SystemTest, PxBackupLabel, P2},
+	BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResumeSuspendBackupPolicies: {allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel},
+	BackupCRsThenMultipleRestoresOnHigherK8sVersion:                                    {BackupCRsThenMultipleRestoresOnHigherK8sVersionLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, DiffK8sVersionLabel},
+	BackupCSIVolumesWithPartialSuccess:                                                 {BackupCSIVolumesWithPartialSuccessLabel, PartialBackupLabel, ocpPipeline, iksPipeline, SystemTest, PxBackupLabel, P1},
+	BackupClusterVerification:                                                          {BackupClusterVerificationLabel, SystemTest, PxBackupLabel, S3BackupLocationLabel, FACDLabel},
+	BackupLocationWithEncryptionKey:                                                    {BackupLocationWithEncryptionKeyLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel, FADALabel},
+	BackupMultipleNsWithSameLabel:                                                      {BackupMultipleNsWithSameLabelLabel, ocpPipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel, FBDALabel},
+	BackupNamespaceInNfsRestoredFromS3:                                                 {BackupNamespaceInNfsRestoredFromS3Label, rkePipeline, SystemTest, PxBackupLabel, P2},
+	BackupNetworkErrorTest:                                                             {BackupNetworkErrorTestLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	BackupRestartPX:                                                                    {BackupRestartPXLabel, ocpPipeline, SystemTest, PxBackupLabel, P0, FADALabel},
+	BackupRestoreOnDifferentK8sVersions:                                                {BackupRestoreOnDifferentK8sVersionsLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, DiffK8sVersionLabel},
+	BackupScheduleForOldAndNewNS:                                                       {BackupScheduleForOldAndNewNSLabel, ocpPipeline, rkePipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel, FBDALabel},
+	BackupStateTransitionForScheduledBackups:                                           {BackupStateTransitionForScheduledBackupsLabel, PartialBackupLabel, ocpPipeline, iksPipeline, SystemTest, PxBackupLabel, P0, FADALabel},
+	BackupSyncBasicTest:                                                                {BackupSyncBasicTestLabel, allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel},
+	BackupToLockedBucketWithSharedObjects:                                              {BackupToLockedBucketWithSharedObjectsLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3LockedBucket, AzureImmutableBucket},
+	BasicBackupCreation:                                                                {BasicBackupCreationLabel, allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel, FADALabel},
+	BasicSelectiveRestore:                                                              {BasicSelectiveRestoreLabel, rkePipeline, SystemTest, PxBackupLabel, P0, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel, FBDALabel, FADALabel},
+	CancelAllRunningBackupJobs:                                                         {CancelAllRunningBackupJobsLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel, FBDALabel},
+	CancelAllRunningRestoreJobs:                                                        {CancelAllRunningRestoreJobsLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel, FBDALabel},
+	CancelClusterBackupShare:                                                           {CancelClusterBackupShareLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel},
+	CloudSnapsSafeWhenBackupLocationDeleteTest:                                         {CloudSnapsSafeWhenBackupLocationDeleteTestLabel, ocpPipeline, vanillaPipeline, rkePipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel},
+	CloudSnapshotMissingValidationForNFSLocation:                                       {CloudSnapshotMissingValidationForNFSLocationLabel, ocpPipeline, SystemTest, PxBackupLabel, P1},
+	ClusterBackupShareToggle:                                                           {ClusterBackupShareToggleLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel},
+	CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy:                       {CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicyLabel, ocpPipeline, SystemTest, PxBackupLabel, P0, FADALabel},
+	CreateMultipleUsersAndGroups:                                                       {CreateMultipleUsersAndGroupsLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel},
+	CustomBackupRestoreWithKubevirtAndNonKubevirtNS:                                    {CustomBackupRestoreWithKubevirtAndNonKubevirtNSLabel, KubevirtAppLabel, ocpPipeline, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	CustomResourceBackupAndRestore:                                                     {CustomResourceBackupAndRestoreLabel, rkePipeline, SystemTest, PxBackupLabel, P0, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel, FBDALabel, FADALabel},
+	CustomResourceRestore:                                                              {CustomResourceRestoreLabel, allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel, FADALabel},
+	DefaultBackupRestoreWithKubevirtAndNonKubevirtNS:                                   {DefaultBackupRestoreWithKubevirtAndNonKubevirtNSLabel, KubevirtAppLabel, ocpPipeline, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FADALabel},
+	DeleteAllBackupObjects:                                                             {DeleteAllBackupObjectsLabel, rkePipeline, SystemTest, PxBackupLabel, P0, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel, FBDALabel, FADALabel},
+	DeleteBackupAndCheckIfBucketIsEmpty:                                                {DeleteBackupAndCheckIfBucketIsEmptyLabel, allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel},
+	DeleteBackupOfUserNonSharedRBAC:                                                    {DeleteBackupOfUserNonSharedRBACLabel, ocpPipeline, aksPipeline, SystemTest, PxBackupLabel, P0, S3BackupLocationLabel, FACDLabel, FADALabel},
+	DeleteBackupOfUserSharedRBAC:                                                       {DeleteBackupOfUserSharedRBACLabel, ocpPipeline, aksPipeline, SystemTest, PxBackupLabel, P0, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel, FADALabel},
+	DeleteBackupSharedByMultipleUsersFromAdmin:                                         {DeleteBackupSharedByMultipleUsersFromAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel},
+	DeleteBucketVerifyCloudBackupMissing:                                               {DeleteBucketVerifyCloudBackupMissingLabel, allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel},
+	DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin:                              {DeleteFailedInProgressBackupAndRestoreOfUserFromAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel},
+	DeleteIncrementalBackupsAndRecreateNew:                                             {DeleteIncrementalBackupsAndRecreateNewLabel, ocpPipeline, rkePipeline, SystemTest, PxBackupLabel, P0, S3BackupLocationLabel, FACDLabel, FADALabel},
+	DeleteLockedBucketUserObjectsFromAdmin:                                             {DeleteLockedBucketUserObjectsFromAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, SkipTestLabel},
+	DeleteNSDeleteClusterRestore:                                                       {DeleteNSDeleteClusterRestoreLabel, ocpPipeline, SystemTest, PxBackupLabel, P0, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel, FBDALabel, FADALabel},
+	DeleteNfsExecutorPodWhileBackupAndRestoreInProgress:                                {DeleteNfsExecutorPodWhileBackupAndRestoreInProgressLabel, ocpPipeline, SystemTest, PxBackupLabel, P2},
+	DeleteObjectsByMultipleUsersFromNewAdmin:                                           {DeleteObjectsByMultipleUsersFromNewAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel},
+	DeleteS3ScheduleAndCreateNfsSchedule:                                               {DeleteS3ScheduleAndCreateNfsScheduleLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	DeleteSameNameObjectsByMultipleUsersFromAdmin:                                      {DeleteSameNameObjectsByMultipleUsersFromAdminLabel, ocpPipeline, aksPipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel, FBDALabel},
+	DeleteSharedBackup:                                                                 {DeleteSharedBackupLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel},
+	DeleteSharedBackupOfUserFromAdmin:                                                  {DeleteSharedBackupOfUserFromAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel},
+	DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdmin:                   {DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel},
+	DeleteUsersRole:                                                                    {DeleteUsersRoleLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel},
+	DifferentAccessSameUser:                                                            {DifferentAccessSameUserLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel},
+	DuplicateSharedBackup:                                                              {DuplicateSharedBackupLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel},
+	EnableNsAndClusterLevelPSAWithBackupAndRestore:                                     {EnableNsAndClusterLevelPSAWithBackupAndRestoreLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FADALabel},
+	ExcludeDirectoryFileBackup:                                                         {ExcludeDirectoryFileBackupLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel, KDMPLabel},
+	ExcludeInvalidDirectoryFileBackup:                                                  {ExcludeInvalidDirectoryFileBackupLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel, KDMPLabel},
+	IssueDeleteOfIncrementalBackupsAndRestore:                                          {IssueDeleteOfIncrementalBackupsAndRestoreLabel, ocpPipeline, rkePipeline, SystemTest, PxBackupLabel, P0, S3BackupLocationLabel, FACDLabel, FADALabel},
+	IssueMultipleBackupsAndRestoreInterleavedCopies:                                    {IssueMultipleBackupsAndRestoreInterleavedCopiesLabel, ocpPipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, FACDLabel},
+	IssueMultipleDeletesForSharedBackup:                                                {IssueMultipleDeletesForSharedBackupLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, S3BackupLocationLabel, FACDLabel},
+	IssueMultipleRestoresWithNamespaceAndStorageClassMapping:                           {IssueMultipleRestoresWithNamespaceAndStorageClassMappingLabel, ocpPipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, FACDLabel},
+	KillStorkWithBackupsAndRestoresInProgress:                                          {KillStorkWithBackupsAndRestoresInProgressLabel, ocpPipeline, SystemTest, PxBackupLabel, P0, S3BackupLocationLabel, FACDLabel, FADALabel},
+	KubeAndPxNamespacesSkipOnAllNSBackup:                                               {KubeAndPxNamespacesSkipOnAllNSBackupLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel, FADALabel},
+	KubevirtInPlaceRestoreWithReplaceAndRetain:                                         {KubevirtInPlaceRestoreWithReplaceAndRetainLabel, KubevirtAppLabel, ocpPipeline, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FADALabel},
+	KubevirtScheduledVMDelete:                                                          {KubevirtScheduledVMDeleteLabel, KubevirtAppLabel, ocpPipeline, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	KubevirtUpgradeTest:                                                                {KubevirtUpgradeTestLabel, KubevirtAppLabel, ocpPipeline, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	KubevirtVMBackupOrDeletionInProgress:                                               {KubevirtVMBackupOrDeletionInProgressLabel, KubevirtAppLabel, ocpPipeline, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	KubevirtVMBackupRestoreWithDifferentStates:                                         {KubevirtVMBackupRestoreWithDifferentStatesLabel, KubevirtAppLabel, ocpPipeline, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FADALabel},
+	KubevirtVMBackupRestoreWithNodeSelector:                                            {KubevirtVMBackupRestoreWithNodeSelectorLabel, KubevirtAppLabel, ocpPipeline, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	KubevirtVMMigrationTest:                                                            {KubevirtVMMigrationTestLabel, KubevirtAppLabel, ocpPipeline, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FADALabel},
+	KubevirtVMRestoreWithAfterChangingVMConfig:                                         {KubevirtVMRestoreWithAfterChangingVMConfigLabel, KubevirtAppLabel, ocpPipeline, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	KubevirtVMWithFreezeUnfreeze:                                                       {KubevirtVMWithFreezeUnfreezeLabel, KubevirtAppLabel, ocpPipeline, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	LicensingCountBeforeAndAfterBackupPodRestart:                                       {LicensingCountBeforeAndAfterBackupPodRestartLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel},
+	LicensingCountWithNodeLabelledBeforeClusterAddition:                                {LicensingCountWithNodeLabelledBeforeClusterAdditionLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel, FBDALabel},
+	LockedBucketResizeOnRestoredVolume:                                                 {LockedBucketResizeOnRestoredVolumeLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3LockedBucket, AzureImmutableBucket},
+	LockedBucketResizeVolumeOnScheduleBackup:                                           {LockedBucketResizeVolumeOnScheduleBackupLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3LockedBucket, AzureImmutableBucket},
+	ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit:                                {ManualAndScheduleBackupUsingNSLabelWithMaxCharLimitLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel},
+	ManualAndScheduledBackupUsingNamespaceAndResourceLabel:                             {ManualAndScheduledBackupUsingNamespaceAndResourceLabelLabel, ocpPipeline, rkePipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel, FBDALabel},
+	MultipleBackupLocationWithSameEndpoint:                                             {MultipleBackupLocationWithSameEndpointLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	MultipleCustomRestoreSameTimeDiffStorageClassMapping:                               {MultipleCustomRestoreSameTimeDiffStorageClassMappingLabel, ocpPipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, FACDLabel},
+	MultipleInPlaceRestoreSameTime:                                                     {MultipleInPlaceRestoreSameTimeLabel, allPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel},
+	MultipleMemberProjectBackupAndRestoreForSingleNamespace:                            {MultipleMemberProjectBackupAndRestoreForSingleNamespaceLabel, rkePipeline, SystemTest, PxBackupLabel, P1},
+	MultipleProjectsAndNamespacesBackupAndRestore:                                      {MultipleProjectsAndNamespacesBackupAndRestoreLabel, rkePipeline, SystemTest, PxBackupLabel, P0, FADALabel},
+	MultipleProvisionerCsiKdmpBackupAndRestore:                                         {MultipleProvisionerCsiKdmpBackupAndRestoreLabel, allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FADALabel},
+	MultipleProvisionerCsiSnapshotDeleteBackupAndRestore:                               {MultipleProvisionerCsiSnapshotDeleteBackupAndRestoreLabel, allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel},
+	NamespaceLabelledBackupOfEmptyNamespace:                                            {NamespaceLabelledBackupOfEmptyNamespaceLabel, ocpPipeline, rkePipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel, FBDALabel},
+	NamespaceLabelledBackupSharedWithDifferentAccessMode:                               {NamespaceLabelledBackupSharedWithDifferentAccessModeLabel, allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel, FADALabel},
+	NamespaceMoveFromProjectToProjectToNoProjectWhileRestore:                           {NamespaceMoveFromProjectToProjectToNoProjectWhileRestoreLabel, rkePipeline, SystemTest, PxBackupLabel, P0, FADALabel},
+	NodeCountForLicensing:                                                              {NodeCountForLicensingLabel, allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel, FADALabel},
+	PSALowerPrivilegeToHigherPrivilegeWithProjectMapping:                               {PSALowerPrivilegeToHigherPrivilegeWithProjectMappingLabel, rkePipeline, SystemTest, PxBackupLabel, P1},
+	PXBackupClusterUpgradeTest:                                                         {PXBackupClusterUpgradeTestLabel, ocpPipeline, SystemTest, PxBackupLabel, P0, FADALabel},
+	PXBackupEndToEndBackupAndRestoreWithUpgrade:                                        {PXBackupEndToEndBackupAndRestoreWithUpgradeLabel, allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FADALabel},
+	PXBackupUpgradeWithAzureCredChange:                                                 {PXBackupUpgradeWithAzureCredChangeLabel, AzureBackupLocationLabel, aksPipeline, SystemTest, PxBackupLabel, P1},
+	PartialBackupSuccessWithAzureEndpoint:                                              {PartialBackupSuccessWithAzureEndpointLabel, PartialBackupLabel, AzureBackupLocationLabel, ocpPipeline, SystemTest, PxBackupLabel, P2},
+	PartialBackupSuccessWithPxAndKDMPVolumes:                                           {PartialBackupSuccessWithPxAndKDMPVolumesLabel, PartialBackupLabel, ocpPipeline, iksPipeline, SystemTest, PxBackupLabel, P0, FADALabel},
+	PartialBackupSuccessWithPxVolumes:                                                  {PartialBackupSuccessWithPxVolumesLabel, PartialBackupLabel, ocpPipeline, iksPipeline, SystemTest, PxBackupLabel, P1},
+	PartialBackupWithLowerStorkVersion:                                                 {PartialBackupWithLowerStorkVersionLabel, PartialBackupLabel, ocpPipeline, iksPipeline, SystemTest, PxBackupLabel, P1},
+	PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege:                              {PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilegeLabel, vanillaPipeline, rkePipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	RebootNodesWhenBackupsAreInProgress:                                                {RebootNodesWhenBackupsAreInProgressLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel},
+	RemoveJSONFilesFromNFSBackupLocation:                                               {RemoveJSONFilesFromNFSBackupLocationLabel, ocpPipeline, SystemTest, PxBackupLabel, P2},
+	ReplicaChangeWhileRestore:                                                          {ReplicaChangeWhileRestoreLabel, ocpPipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, FACDLabel},
+	ResizeOnRestoredVolume:                                                             {ResizeOnRestoredVolumeLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, S3BackupLocationLabel, FACDLabel},
+	ResizeVolumeOnScheduleBackup:                                                       {ResizeVolumeOnScheduleBackupLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, S3BackupLocationLabel, FACDLabel},
+	RestartBackupPodDuringBackupSharing:                                                {RestartBackupPodDuringBackupSharingLabel, ocpPipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel},
+	RestoreEncryptedAndNonEncryptedBackups:                                             {RestoreEncryptedAndNonEncryptedBackupsLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel},
+	RestoreFromHigherPrivilegedNamespaceToLower:                                        {RestoreFromHigherPrivilegedNamespaceToLowerLabel, vanillaPipeline, rkePipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress:                              {ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgressLabel, ocpPipeline, SystemTest, PxBackupLabel, P0, S3BackupLocationLabel, FACDLabel, FADALabel},
+	ScaleMongoDBWhileBackupAndRestore:                                                  {ScaleMongoDBWhileBackupAndRestoreLabel, ocpPipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, FACDLabel},
+	ScheduleBackupCreationAllNS:                                                        {ScheduleBackupCreationAllNSLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel, FADALabel},
+	ScheduleBackupDeleteAndRecreateNS:                                                  {ScheduleBackupDeleteAndRecreateNSLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel, FBDALabel},
+	ScheduleBackupWithAdditionAndRemovalOfNS:                                           {ScheduleBackupWithAdditionAndRemovalOfNSLabel, allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel},
+	SetUnsetNSLabelDuringScheduleBackup:                                                {SetUnsetNSLabelDuringScheduleBackupLabel, ocpPipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, FACDLabel, NfsBackupLocationLabel},
+	ShareAndRemoveBackupLocation:                                                       {ShareAndRemoveBackupLocationLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel, FADALabel},
+	ShareBackupAndEdit:                                                                 {ShareBackupAndEditLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel},
+	ShareBackupWithDifferentRoleUsers:                                                  {ShareBackupWithDifferentRoleUsersLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel},
+	ShareBackupWithUsersAndGroups:                                                      {ShareBackupWithUsersAndGroupsLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel, FADALabel},
+	ShareBackupsAndClusterWithUser:                                                     {ShareBackupsAndClusterWithUserLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel, FADALabel},
+	ShareLargeNumberOfBackupsWithLargeNumberOfUsers:                                    {ShareLargeNumberOfBackupsWithLargeNumberOfUsersLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	SharedBackupDelete:                                                                 {SharedBackupDeleteLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel},
+	SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProject:                   {SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProjectLabel, rkePipeline, SystemTest, PxBackupLabel, P0, FADALabel},
+	StorkUpgradeWithBackup:                                                             {StorkUpgradeWithBackupLabel, SystemTest, PxBackupLabel},
+	SwapShareBackup:                                                                    {SwapShareBackupLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel},
+	UpdatesBackupOfUserFromAdmin:                                                       {UpdatesBackupOfUserFromAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FBDALabel},
+	UpgradePxBackup:                                                                    {UpgradePxBackupLabel, SystemTest, PxBackupLabel},
+	UserGroupManagement:                                                                {UserGroupManagementLabel, SystemTest, PxBackupLabel, S3BackupLocationLabel, FACDLabel},
+	ValidateFiftyVolumeBackups:                                                         {ValidateFiftyVolumeBackupsLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	VerifyRBACForAppAdmin:                                                              {VerifyRBACForAppAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel},
+	VerifyRBACForAppUser:                                                               {VerifyRBACForAppUserLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel},
+	VerifyRBACForInfraAdmin:                                                            {VerifyRBACForInfraAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel},
+	VerifyRBACForPxAdmin:                                                               {VerifyRBACForPxAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel},
+	ViewOnlyFullBackupRestoreIncrementalBackup:                                         {ViewOnlyFullBackupRestoreIncrementalBackupLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel},
+	VerifyBackupDeletionWhenRetentionIsMet:                                             {VerifyBackupDeletionWhenRetentionIsMetLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day0LockedBucketLabel, S3LockedBucket, AzureImmutableBucket},
+	DeleteVerifyBackupDeletionWhenRetentionIsMet:                                       {DeleteVerifyBackupDeletionWhenRetentionIsMetLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, S3LockedBucket, AzureImmutableBucket},
+	VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules:                        {VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day0LockedBucketLabel, S3LockedBucket, AzureImmutableBucket},
+	DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules:                  {DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, S3LockedBucket, AzureImmutableBucket},
 }

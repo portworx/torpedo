@@ -31,7 +31,7 @@ const (
 // This testcase verifies alternating backups between locked and unlocked bucket
 var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", Label(TestCaseLabelsMap[BackupAlternatingBetweenLockedAndUnlockedBuckets]...), func() {
 	var (
-		appList              = Inst().AppList
+		appList              []string
 		credName             string
 		restoreNames         []string
 		controlChannel       chan string
@@ -52,6 +52,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", Label(Tes
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("BackupAlternatingBetweenLockedAndUnlockedBuckets", "Alternate backup between locked and unlocked buckets", nil, 60018, Kshithijiyer, Q4FY23)
+		appList = Inst().AppList
 		bkpNamespaces = make([]string, 0)
 		labelSelectors = make(map[string]string)
 		CloudCredUIDMap = make(map[string]string)
@@ -252,7 +253,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", Label(Tes
 // This testcase verifies resize after same original volume is restored from a backup stored in a locked bucket
 var _ = Describe("{LockedBucketResizeOnRestoredVolume}", Label(TestCaseLabelsMap[LockedBucketResizeOnRestoredVolume]...), func() {
 	var (
-		appList              = Inst().AppList
+		appList              []string
 		backupName           string
 		scheduledAppContexts []*scheduler.Context
 		preRuleNameList      []string
@@ -280,6 +281,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", Label(TestCaseLabelsMap
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("LockedBucketResizeOnRestoredVolume", "Resize after the volume is restored from a backup from locked bucket", nil, 59904, Kshithijiyer, Q4FY23)
+		appList = Inst().AppList
 		labelSelectors = make(map[string]string)
 		CloudCredUIDMap = make(map[string]string)
 		BackupLocationMap = make(map[string]string)
@@ -537,7 +539,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", Label(TestCaseLab
 		periodicSchedulePolicyUid  string
 		scheduleName               string
 		backupLocation             string
-		appList                    = Inst().AppList
+		appList                    []string
 		scheduledAppContexts       []*scheduler.Context
 		scheduleNames              []string
 		preRuleNameList            []string
@@ -569,6 +571,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", Label(TestCaseLab
 		volListBeforeSizeMap = make(map[string]int)
 		volListAfterSizeMap = make(map[string]int)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
+		appList = Inst().AppList
 		for i := 0; i < len(appList); i++ {
 			if Contains(PostRuleApp, appList[i]) {
 				if _, ok := portworx.AppParameters[appList[i]]["post_action_list"]; ok {
