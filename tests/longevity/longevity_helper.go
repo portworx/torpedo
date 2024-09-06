@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/onsi/ginkgo/v2"
+	"math/rand"
 	"os"
 	"slices"
 	"strconv"
@@ -2040,8 +2041,25 @@ func backupEventTrigger(wg *sync.WaitGroup,
 
 // GenerateAndStoreEventCombinations will generate all possible combinations of events we want to execute
 func GenerateAndStoreEventCombinations() {
-	NumDisruptiveEvents := 1
-	NumNonDisruptiveEvents := 3
+	rand.Seed(time.Now().UnixNano())
+	getRandomValue := func() int {
+		prob := rand.Float64()
+		switch {
+		case prob < 0.6:
+			return 1
+		case prob < 0.8:
+			return 2
+		case prob < 0.85:
+			return 3
+		case prob < 0.95:
+			return 4
+		default:
+			return 5
+		}
+	}
+	NumNonDisruptiveEvents := getRandomValue()
+	log.Infof("NumNonDisruptiveEvents:", NumNonDisruptiveEvents)
+	NumDisruptiveEvents := 0
 	nonDisruptive, disruptive := separateEventsByType()
 	configMap, err := core.Instance().GetConfigMap(testTriggersConfigMap, configMapNS)
 	if err != nil {
