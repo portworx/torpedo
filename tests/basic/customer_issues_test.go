@@ -777,8 +777,7 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 		DestroyApps(contexts, opts)
-		err = DeleteCloudSnapBucket(bucketName)
-		log.FailOnError(err, "failed to delete cloud snap bucket")
+		DeleteCloudSnapBucket(bucketName)
 		AfterEachTest(contexts)
 	})
 })

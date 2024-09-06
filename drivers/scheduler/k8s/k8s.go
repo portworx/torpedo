@@ -8768,9 +8768,14 @@ func rotateTopologyArray(options *scheduler.ScheduleOptions) {
 // GetPXCloudDriveConfigMap retruns px cloud derive config map data
 func (k *K8s) GetPXCloudDriveConfigMap(cluster *operatorcorev1.StorageCluster) (map[string]node.DriveSet, error) {
 	cloudDriveConfigmapName := pxutil.GetCloudDriveConfigMapName(cluster)
-	cloudDriveConfifmap, _ := k8sCore.GetConfigMap(cloudDriveConfigmapName, cluster.Namespace)
+	cloudDriveConfigmap, err := k8sCore.GetConfigMap(cloudDriveConfigmapName, cluster.Namespace)
+	if err != nil {
+		log.Errorf("GetPXCloudDriveConfigMap: failed to get cloud drive configmap from [%v/%v]: %v", cloudDriveConfigmapName, cluster.Namespace, err)
+		return nil, err
+	}
 	var configData map[string]node.DriveSet
-	err := json.Unmarshal([]byte(cloudDriveConfifmap.Data["cloud-drive"]), &configData)
+	log.Infof("GetPXCloudDriveConfigMap: cloud drive configmap: %v", cloudDriveConfigmap)
+	err = json.Unmarshal([]byte(cloudDriveConfigmap.Data["cloud-drive"]), &configData)
 	if err != nil {
 		return nil, err
 	}

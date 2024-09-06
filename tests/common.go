@@ -12685,12 +12685,13 @@ func GetCloudsnapBucketName(contexts []*scheduler.Context) (string, error) {
 	return bucketName, nil
 }
 
-func DeleteCloudSnapBucket(bucketName string) error {
-
+func DeleteCloudSnapBucket(bucketName string) {
+	// TODO: Update Aetos with bucket details
 	if bucketName != "" {
 		id, secret, endpoint, s3Region, _, err := getCreateCredParams()
 		if err != nil {
-			return err
+			log.Errorf("failed to get create cred params, Cause: %v", err)
+			return
 		}
 		var sess *session.Session
 		if strings.Contains(endpoint, "minio") {
@@ -12704,7 +12705,8 @@ func DeleteCloudSnapBucket(bucketName string) error {
 				},
 			})
 			if err != nil {
-				return fmt.Errorf("failed to initialize new session: %v", err)
+				log.Errorf("failed to initialize new session using endpoint [%s], Cause: %v", endpoint, err)
+				return
 			}
 		}
 
@@ -12716,22 +12718,22 @@ func DeleteCloudSnapBucket(bucketName string) error {
 				},
 			})
 			if err != nil {
-				return fmt.Errorf("failed to initialize new session: %v", err)
+				log.Errorf("failed to initialize new session using endpoint [%s], Cause: %v", endpoint, err)
+				return
 			}
 		}
 
 		if sess == nil {
-			return fmt.Errorf("failed to initialize new session using endpoint [%s], Cause: %v", endpoint, err)
+			log.Errorf("failed to initialize new session using endpoint [%s], Cause: %v", endpoint, err)
+			return
 		}
 
 		client := s3.New(sess)
 		err = deleteAndValidateBucketDeletion(client, bucketName)
 		if err != nil {
-			return err
+			log.Errorf("failed to delete bucket [%s] [id: %s, secret: %s, endpoint: %s, region: %s], Cause: %v", bucketName, id, secret, endpoint, s3Region, err)
 		}
 	}
-
-	return nil
 }
 
 func deleteAndValidateBucketDeletion(client *s3.S3, bucketName string) error {

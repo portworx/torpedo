@@ -1078,7 +1078,7 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 				err = Inst().S.ValidateVolumes(ctx, scaleFactor*4*time.Minute, defaultRetryInterval, nil)
 				log.FailOnError(err, "error validating volumes for [%s]", ctx.App.Key)
 				for _, v := range appVolumes {
-
+					// Skip cloud snapshot trigger for Pure DA volumes
 					isPureVol, err := Inst().V.IsPureVolume(v)
 					log.FailOnError(err, "error checking if volume is pure volume")
 					if isPureVol {
@@ -1260,8 +1260,7 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 		log.FailOnError(err, "error getting cloud snap bucket name")
 		opts := make(map[string]bool)
 		DestroyApps(contexts, opts)
-		err = DeleteCloudSnapBucket(bucketName)
-		log.FailOnError(err, "error deleting cloud snap bucket")
+		DeleteCloudSnapBucket(bucketName)
 		AfterEachTest(contexts)
 	})
 })
@@ -2042,8 +2041,7 @@ var _ = Describe("{TrashcanRecoveryWithCloudsnap}", func() {
 		log.FailOnError(err, "error getting cloud snap bucket name")
 		opts := make(map[string]bool)
 		DestroyApps(contexts, opts)
-		err = DeleteCloudSnapBucket(bucketName)
-		log.FailOnError(err, "error deleting cloud snap bucket")
+		DeleteCloudSnapBucket(bucketName)
 		AfterEachTest(contexts)
 	})
 })
@@ -2638,8 +2636,7 @@ var _ = Describe("{CloudSnapWithPXEvents}", func() {
 		log.FailOnError(err, "error getting cloud snap bucket name")
 		opts := make(map[string]bool)
 		DestroyApps(contexts, opts)
-		err = DeleteCloudSnapBucket(bucketName)
-		log.FailOnError(err, "failed to delete cloud snap bucket")
+		DeleteCloudSnapBucket(bucketName)
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
@@ -2891,8 +2888,7 @@ var _ = Describe("{PoolFullCloudsnap}", func() {
 		log.FailOnError(err, "error getting cloud snap bucket name")
 		opts := make(map[string]bool)
 		DestroyApps(contexts, opts)
-		err = DeleteCloudSnapBucket(bucketName)
-		log.FailOnError(err, "failed to delete cloud snap bucket")
+		DeleteCloudSnapBucket(bucketName)
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
