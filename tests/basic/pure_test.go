@@ -2664,6 +2664,8 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 		volumeName             = fmt.Sprintf("torpedo-vol-%v", time.Now().UnixNano())
 		FAclient               *flasharray.Client
 		MultipathBeforeRestart string
+		faMgmtEndPoint         string
+		faAPIToken             string
 		host                   *flasharray.Host
 		volSize                int
 		wg                     sync.WaitGroup
@@ -2690,6 +2692,8 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 				log.FailOnError(fmt.Errorf("no FlashArrays details found"), fmt.Sprintf("error getting FlashArrays creds from %s [%s]", PureSecretName, pxPureSecret))
 			}
 
+			faMgmtEndPoint = flashArrays[0].MgmtEndPoint
+			faAPIToken = flashArrays[0].APIToken
 		})
 
 		stepLog = "Create a volume, create a host, attach the volume to the host, update iqn of the host and attach the volume to the host"
@@ -2699,6 +2703,10 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 			iqn, err := GetIQNOfNode(n)
 			log.FailOnError(err, "Failed to get iqn of the node %v", n.Name)
 			log.InfoD("Iqn of the node: %v", iqn)
+
+			//create a connections to the FA whose credentials not present in the pure secret
+			FAclient, err = pureutils.PureCreateClientAndConnect(faMgmtEndPoint, faAPIToken)
+			log.FailOnError(err, "Failed to create client and connect to FA")
 
 			// Check if the IQN of the node is present in the FA if present take the existing host else create one
 			IQNExists, err := pureutils.IsIQNExistsOnFA(FAclient, iqn)
@@ -2736,15 +2744,6 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 		})
 		stepLog = "Run iscsiadm commands to login to the controllers"
 		Step(stepLog, func() {
-
-			//Run iscsiadm commands to login to the controllers
-			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
-
-			for _, networkInterface := range networkInterfaces {
-				err = LoginIntoController(n, networkInterface, *FAclient)
-				log.FailOnError(err, "Failed to login into controller")
-				log.InfoD("Successfully logged into controller: %v", networkInterface.Address)
-			}
 
 			//run multipath before refresh
 			cmd := "multipath -ll"
@@ -2861,15 +2860,6 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 			log.FailOnError(err, "Failed to refresh iscsi session")
 			log.InfoD("Successfully refreshed iscsi session")
 
-			//log out of all the controllers
-			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
-
-			for _, networkInterface := range networkInterfaces {
-				err = LogoutFromController(n, networkInterface, *FAclient)
-				log.FailOnError(err, "Failed to login into controller")
-				log.InfoD("Successfully logged out of controller: %v", networkInterface.Address)
-			}
-
 		})
 
 	})
@@ -2878,6 +2868,7 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
 
 /*
 This test deploys app with FBDA volume having storageClass with pure_nfs_endpoint parameter.
