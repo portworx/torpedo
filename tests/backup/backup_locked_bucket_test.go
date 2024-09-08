@@ -1854,7 +1854,7 @@ var _ = Describe("{VerifyBackupDeletionWhenRetentionIsMet}", Label(TestCaseLabel
 			for backupName, namespace := range backupNSMap {
 				restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				customNamespace := fmt.Sprintf("%s-%d", namespace, time.Now().Unix())
+				customNamespace := fmt.Sprintf("%s-%s", namespace, RandomString(4))
 				namespaceMapping := map[string]string{namespace: customNamespace}
 				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), SourceClusterName, BackupOrgID, appContextsToBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
@@ -1870,7 +1870,7 @@ var _ = Describe("{VerifyBackupDeletionWhenRetentionIsMet}", Label(TestCaseLabel
 				restoreName := fmt.Sprintf("%s-restore-%v", firstScheduleBackupName, time.Now().Unix())
 				namespaceMapping := make(map[string]string)
 				for _, namespace := range bkpNamespaces[start : start+partSize] {
-					customNamespace := fmt.Sprintf("%s-%d", namespace, time.Now().Unix())
+					customNamespace := fmt.Sprintf("%s-%s", namespace, RandomString(4))
 					namespaceMapping[namespace] = customNamespace
 				}
 				err = CreateRestoreWithValidation(ctx, restoreName, firstScheduleBackupName, namespaceMapping, make(map[string]string), SourceClusterName, BackupOrgID, appContextsToBackup)
@@ -1887,7 +1887,7 @@ var _ = Describe("{VerifyBackupDeletionWhenRetentionIsMet}", Label(TestCaseLabel
 			for backupName, namespace := range backupNSMap {
 				restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				customNamespace := fmt.Sprintf("%s-%d", namespace, time.Now().Unix())
+				customNamespace := fmt.Sprintf("%s-%s", namespace, RandomString(4))
 				namespaceMapping := map[string]string{namespace: customNamespace}
 				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, appContextsToBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
@@ -1903,7 +1903,7 @@ var _ = Describe("{VerifyBackupDeletionWhenRetentionIsMet}", Label(TestCaseLabel
 				restoreName := fmt.Sprintf("%s-restore-%v", firstScheduleBackupName, time.Now().Unix())
 				namespaceMapping := make(map[string]string)
 				for _, namespace := range bkpNamespaces[start : start+partSize] {
-					customNamespace := fmt.Sprintf("%s-%d", namespace, time.Now().Unix())
+					customNamespace := fmt.Sprintf("%s-%s", namespace, RandomString(5))
 					namespaceMapping[namespace] = customNamespace
 				}
 				err = CreateRestoreWithValidation(ctx, restoreName, firstScheduleBackupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, appContextsToBackup)
@@ -1933,7 +1933,7 @@ var _ = Describe("{VerifyBackupDeletionWhenRetentionIsMet}", Label(TestCaseLabel
 			for backupName, namespace := range backupNSMap {
 				restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				customNamespace := fmt.Sprintf("%s-%d-rest", namespace, time.Now().Unix())
+				customNamespace := fmt.Sprintf("%s-%s-rest", namespace, RandomString(5))
 				err = CreateRestoreWithReplacePolicyWithValidation(customNamespace, backupName, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete, appContextsToBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
 				restoreNames = append(restoreNames, restoreName)
@@ -2085,7 +2085,7 @@ var _ = Describe("{DeleteVerifyBackupDeletionWhenRetentionIsMet}", Label(TestCas
 			log.FailOnError(err, "failed to fetch px-admin ctx")
 			for backupName, namespace := range backupNSMap {
 				restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
-				customNamespace := fmt.Sprintf("%s-%d-rest", namespace, time.Now().Unix())
+				customNamespace := fmt.Sprintf("%s-%s-rest", namespace, RandomString(4))
 				err = CreateRestoreWithReplacePolicy(customNamespace, backupName, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
 			}
