@@ -6,7 +6,9 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"math/rand"
 	"os"
+	"slices"
 	"sync"
 	"time"
 )
@@ -56,14 +58,19 @@ var _ = Describe("{RunSSIE}", func() {
 		}
 
 		Inst().IsHyperConverged = hyperConvergedTypeEnabled
+		var ssieErr error
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			defer GinkgoRecover()
 			TriggerDeployNewApps(&contexts, &triggerEventsChan)
+			ssieErr = ValidateSSIEStatus(&contexts)
 		}()
 		wg.Wait()
+		if ssieErr != nil {
+			dash.VerifyFatal(ssieErr, nil, "validate SSIE status after deploying apps")
+		}
 
 		stepLog := "Register SSIE test triggers"
 		Step(stepLog, func() {
@@ -93,11 +100,7 @@ var _ = Describe("{RunSSIE}", func() {
 
 		CollectEventRecords(&triggerEventsChan)
 		wg.Wait()
-		Step("teardown all apps", func() {
-			for _, ctx := range contexts {
-				TearDownContext(ctx, nil)
-			}
-		})
+
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -114,18 +117,17 @@ func triggerSSIECombo(contexts *[]*scheduler.Context, triggerEventsChan *chan *E
 		}
 
 		nextCombinationToRun := getNextCombination()
+
 		if nextCombinationToRun == nil {
 			log.Infof("No more SSIE combinations to trigger")
 			break
 		}
 
-		log.Infof("Waiting for %v before triggering SSIE combination %v", waitTime, nextCombinationToRun)
+		log.InfoD("Waiting for %v before triggering SSIE combination %v", waitTime, nextCombinationToRun)
 		time.Sleep(waitTime)
 		var wg sync.WaitGroup
 		for _, triggerType := range nextCombinationToRun {
-
 			triggerFunc := triggerFunctions[triggerType]
-
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -133,14 +135,39 @@ func triggerSSIECombo(contexts *[]*scheduler.Context, triggerEventsChan *chan *E
 				triggerFunc(contexts, triggerEventsChan)
 			}()
 		}
-		wg.Wait()
-		err := UpdateAlreadyRanCombinations(nextCombinationToRun)
-		if err != nil {
-			log.Errorf("Failed to update already ran combinations: %v", err)
-		}
 
-		log.InfoD(fmt.Sprintf("Validating SSIE status after running [%s]", nextCombinationToRun))
-		ValidateSSIEStatus(contexts)
+		var ssieErr error
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+
+			for {
+				select {
+				case <-StopSSIEChan:
+					log.InfoD("Received stop signal. Exiting destructive test triggers")
+					return
+				default:
+					// Continuing the loop as no stop signal is received
+				}
+				destructiveEvent := getDestructiveEvent()
+				log.InfoD("Running destructive event [%s]", destructiveEvent)
+
+				triggerFunc := triggerFunctions[destructiveEvent]
+				triggerFunc(contexts, triggerEventsChan)
+				log.InfoD(fmt.Sprintf("Validating SSIE status after running [%s]", nextCombinationToRun))
+				ssieErr = ValidateSSIEStatus(contexts)
+				if ssieErr != nil {
+					dash.VerifySafely(ssieErr, nil, fmt.Sprintf("verify SSIE status after running [%s]", destructiveEvent))
+					close(StopSSIEChan)
+				}
+			}
+		}()
+
+		wg.Wait()
+		if ssieErr != nil {
+			return
+		}
 	}
 
 }
@@ -148,7 +175,41 @@ func triggerSSIECombo(contexts *[]*scheduler.Context, triggerEventsChan *chan *E
 func getNextCombination() []string {
 	GenerateAndStoreEventCombinations()
 	if len(eventCombinations) > 0 {
-		return eventCombinations[0]
+		rand.Seed(time.Now().UnixNano())
+
+		// Generate a random index within the range of the list
+		randomIndex := rand.Intn(len(eventCombinations))
+		return eventCombinations[randomIndex]
 	}
 	return nil
+}
+
+func getDestructiveEvent() string {
+	var enabledDestructiveEvents []string
+	for event := range triggerFunctions {
+		_, enableEvent := isTriggerEnabled(event)
+		if enableEvent {
+			if slices.Contains(disruptiveTriggers, event) {
+				enabledDestructiveEvents = append(enabledDestructiveEvents, event)
+			}
+		}
+	}
+
+	rand.Seed(time.Now().UnixNano())
+	var selectedValue string
+
+	// Keep picking a random value until it's not in the recentPicks slice
+	for {
+		selectedValue = enabledDestructiveEvents[rand.Intn(len(enabledDestructiveEvents))]
+		if !slices.Contains(recentDestructivePicks, selectedValue) {
+			break
+		}
+	}
+
+	// Add the selected value to recentPicks
+	recentDestructivePicks = append(recentDestructivePicks, selectedValue)
+	if len(recentDestructivePicks) > len(enabledDestructiveEvents)/2 {
+		recentDestructivePicks = recentDestructivePicks[1:] // Remove the oldest entry to maintain only the last half picks
+	}
+	return selectedValue
 }

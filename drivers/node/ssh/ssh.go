@@ -606,10 +606,6 @@ func (s *SSH) RunCommand(n node.Node, command string, options node.ConnectionOpt
 	if err != nil {
 		return "", err
 	}
-	//output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
-	//if err != nil {
-	//	return "", err
-	//}
 	return output.(string), nil
 }
 
@@ -804,6 +800,7 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 				Cause: fmt.Sprintf("debug pod not found in node %v", n),
 			}
 		}
+
 		cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
 		log.Debugf("Running command on pod %s [%s]", debugPod.Name, cmds)
 		output, err := k8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)

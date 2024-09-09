@@ -12304,9 +12304,9 @@ func GetProcessPID(memberNode node.Node, processName string) (string, error) {
 		return "", err
 	}
 
-	lines := strings.Split(string(out), "\n")
+	lines := strings.Split(out, "\n")
 	for _, line := range lines {
-		if strings.Contains(line, fmt.Sprintf("/usr/local/bin/%s", processName)) && !strings.Contains(line, "grep") {
+		if strings.Contains(line, fmt.Sprintf("\"/usr/local/bin/%s\"", processName)) && !strings.Contains(line, "grep") {
 			fields := strings.Fields(line)
 			processPid = fields[1]
 			break
@@ -14800,4 +14800,49 @@ func CheckIfVolumeExistsInFBorFA(flashBlades []pureutils.FlashBladeEntry, flashA
 		}
 	}
 	return false, nil
+}
+
+func GetCPUAndMemOfPxProcess(n node.Node, processName string) (float64, float64, error) {
+	getPxPidCmd := "pidof px-storage"
+
+	output, err := Inst().N.RunCommand(n, getPxPidCmd, node.ConnectionOpts{Timeout: 30 * time.Second, TimeBeforeRetry: 20 * time.Second, Sudo: true})
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get PX PID on node [%s]. Err: [%v]", n.Name, err)
+	}
+	pid := strings.TrimSpace(output)
+
+	command := fmt.Sprintf("top -b -n 1 -p %s", pid)
+	out, err := Inst().N.RunCommand(n, command, node.ConnectionOpts{
+		Timeout:         20 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+
+	lines := strings.Split(out, "\n")
+	for _, line := range lines {
+		// Look for the line that contains the PID
+		if strings.Contains(line, pid) {
+			fields := strings.Fields(line)
+			if len(fields) < 9 {
+				return 0, 0, fmt.Errorf("unexpected format in top command output :[%s]", line)
+			}
+			// The 9th field usually represents the CPU usage percentage in the top command output
+			cpuUsageStr := fields[8]
+			cpuUsage, err := strconv.ParseFloat(cpuUsageStr, 64)
+			if err != nil {
+				return 0, 0, err
+			}
+			memUsageStr := fields[9]
+			memUsage, err := strconv.ParseFloat(memUsageStr, 64)
+			if err != nil {
+				return 0, 0, err
+			}
+			return cpuUsage, memUsage, nil
+		}
+	}
+
+	return 0, 0, fmt.Errorf("PID [%s] not found in top command output", pid)
 }

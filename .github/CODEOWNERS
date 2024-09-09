@@ -1,4 +1,4 @@
 # Need approval from these core developers before merging any change 
 *.go @pure-px/torpedo-codeowners
-.Makefile @mborodin_pure @aghodke_pure @cgopal_pure @aarunachalam_pure @dbhatnagar_pure
-.Dockerfile @mborodin_pure @aghodke_pure @cgopal_pure @aarunachalam_pure @dbhatnagar_pure
+.Makefile @mborodin_pure @aghodke_pure @cgopal_pure @lsrinivas_pure @dbhatnagar_pure
+.Dockerfile @mborodin_pure @aghodke_pure @cgopal_pure @lsrinivas_pure @dbhatnagar_pure

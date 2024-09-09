@@ -5,6 +5,8 @@ import (
 	"container/ring"
 	ctxt "context"
 	"fmt"
+	torpedotask "github.com/portworx/torpedo/pkg/task"
+	"gopkg.in/inf.v0"
 	"math"
 	"math/rand"
 	"net/url"
@@ -30,7 +32,6 @@ import (
 
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	apios "github.com/libopenstorage/openstorage/api"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -173,7 +174,7 @@ const (
 // TODO Need to add for AutoJournal
 //var IOProfileChange = [4]apios.IoProfile{apios.IoProfile_IO_PROFILE_NONE, apios.IoProfile_IO_PROFILE_AUTO_JOURNAL, apios.IoProfile_IO_PROFILE_AUTO, apios.IoProfile_IO_PROFILE_DB_REMOTE}
 
-var IOProfileChange = [3]apios.IoProfile{apios.IoProfile_IO_PROFILE_NONE, apios.IoProfile_IO_PROFILE_AUTO, apios.IoProfile_IO_PROFILE_DB_REMOTE}
+var IOProfileChange = [3]opsapi.IoProfile{opsapi.IoProfile_IO_PROFILE_NONE, opsapi.IoProfile_IO_PROFILE_AUTO, opsapi.IoProfile_IO_PROFILE_DB_REMOTE}
 
 var currentIOProfileChangeCounter = 0
 
@@ -391,7 +392,7 @@ type PureSecret struct {
 
 type VolumeIOProfile struct {
 	SpecInfo *volume.Volume
-	Profile  apios.IoProfile
+	Profile  opsapi.IoProfile
 }
 
 type storageClassOption func(*storageapi.StorageClass)
@@ -888,6 +889,8 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 				for _, appVol := range appVolumes {
 					log.Infof(fmt.Sprintf("updating volume %s [app:%s] with volume spec: %+v", appVol.Name, ctx.App.Key, volumeSpecUpdate))
 					err = Inst().V.UpdateVolumeSpec(appVol, volumeSpecUpdate)
+					log.Errorf("error updating volume spec for volume %s [app:%s] err: %v", appVol.Name, ctx.App.Key, err)
+					UpdateOutcome(event, err)
 				}
 			}
 		}
@@ -952,7 +955,7 @@ func TriggerDetachDrives(contexts *[]*scheduler.Context, recordChan *chan *Event
 				time.Sleep(1 * time.Minute)
 				statusErr := Inst().V.WaitDriverUpOnNode(storageNodes[0], 10*time.Minute)
 				if statusErr != nil {
-					if strings.Contains(statusErr.Error(), apios.Status_STATUS_STORAGE_DOWN.String()) {
+					if strings.Contains(statusErr.Error(), opsapi.Status_STATUS_STORAGE_DOWN.String()) {
 						log.Infof("Node has gone to Storage Down state after detach %v: Node %s", statusErr, storageNodes[0].Name)
 					} else {
 						UpdateOutcome(event, statusErr)
@@ -960,26 +963,26 @@ func TriggerDetachDrives(contexts *[]*scheduler.Context, recordChan *chan *Event
 				}
 				storageNode, err := Inst().V.GetDriverNode(&storageNodes[0])
 				UpdateOutcome(event, err)
-				if storageNode.Status.String() != apios.Status_STATUS_STORAGE_DOWN.String() {
+				if storageNode.Status.String() != opsapi.Status_STATUS_STORAGE_DOWN.String() {
 					UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", storageNode.SchedulerNodeName,
-						apios.Status_STATUS_STORAGE_DOWN, storageNode.Status))
+						opsapi.Status_STATUS_STORAGE_DOWN, storageNode.Status))
 				}
 				log.Infof("Status of the storage node %s ,%v ", storageNode.SchedulerNodeName, storageNode.Status)
 				statusErr = Inst().V.EnterMaintenance(storageNodes[0])
 				UpdateOutcome(event, statusErr)
 				status, _ := Inst().V.GetNodeStatus(storageNodes[0])
 				log.Infof("Status when the storage node entered maintenance mode %s , ", status.String())
-				if status.String() != apios.Status_STATUS_MAINTENANCE.String() {
+				if status.String() != opsapi.Status_STATUS_MAINTENANCE.String() {
 					UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", storageNodes[0].Name,
-						apios.Status_STATUS_MAINTENANCE, status))
+						opsapi.Status_STATUS_MAINTENANCE, status))
 				}
 				statusErr = Inst().V.ExitMaintenance(storageNodes[0])
 				UpdateOutcome(event, statusErr)
 				status, _ = Inst().V.GetNodeStatus(storageNodes[0])
 				log.Infof("Node Status after exit maintenance mode %v , %s", status, storageNodes[0].Name)
-				if status.String() != apios.Status_STATUS_OK.String() {
+				if status.String() != opsapi.Status_STATUS_OK.String() {
 					UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", storageNodes[0].Name,
-						apios.Status_STATUS_MAINTENANCE, status))
+						opsapi.Status_STATUS_MAINTENANCE, status))
 				}
 				err = Inst().V.RefreshDriverEndpoints()
 				UpdateOutcome(event, err)
@@ -1000,9 +1003,9 @@ func TriggerDetachDrives(contexts *[]*scheduler.Context, recordChan *chan *Event
 						UpdateOutcome(event, err)
 					} else {
 						log.Infof("Node Status  %v node: %s", status, (*selectedStorageNode).SchedulerNodeName)
-						if status.String() != apios.Status_STATUS_OK.String() {
+						if status.String() != opsapi.Status_STATUS_OK.String() {
 							UpdateOutcome(event, fmt.Errorf("Node %s: Expected: %v Actual: %v", (*selectedStorageNode).SchedulerNodeName,
-								apios.Status_STATUS_OK, status))
+								opsapi.Status_STATUS_OK, status))
 						}
 					}
 				} else {
@@ -1104,7 +1107,7 @@ func TriggerVolumeCreatePXRestart(contexts *[]*scheduler.Context, recordChan *ch
 				}
 				// It is noted that the DevicePath is intermittently empty.
 				// This check ensures the device path is not empty for attached volumes
-				if cVol.State == apios.VolumeState_VOLUME_STATE_ATTACHED && cVol.AttachedState == apios.AttachState_ATTACH_STATE_EXTERNAL && cVol.DevicePath == "" {
+				if cVol.State == opsapi.VolumeState_VOLUME_STATE_ATTACHED && cVol.AttachedState == opsapi.AttachState_ATTACH_STATE_EXTERNAL && cVol.DevicePath == "" {
 					return cVol, false, fmt.Errorf("device path is not present for volume: %s", vol)
 				}
 				return cVol, true, err
@@ -4296,100 +4299,275 @@ func CollectEventRecords(recordChan *chan *EventRecord) {
 	}
 }
 
-func ValidateSSIEStatus(contexts *[]*scheduler.Context) {
+func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 	pxLabel := map[string]string{"name": "portworx"}
 	storkLabel := map[string]string{"name": "stork"}
 	autopilotLabel := map[string]string{"name": "autopilot"}
 	operatorLabel := map[string]string{"name": "portworx-operator"}
 	namespace, err := Inst().V.GetVolumeDriverNamespace()
-	log.FailOnError(err, "Failed to get volume driver namespace")
+	if err != nil {
+		return err
+	}
 
 	podList, err := core.Instance().GetPods(namespace, pxLabel)
-	log.FailOnError(err, "Failed to get portworx pods")
+
+	if err != nil {
+		return err
+	}
 
 	for _, pod := range podList.Items {
 		log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
-		pm, err := Inst().S.GetPodMetrics(pod.Name, pod.Namespace)
-		log.FailOnError(err, fmt.Sprintf("error getting metrics for pod %s in namespace %s", pod.Name, pod.Namespace))
-		log.Infof("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
+		if pod.Status.Phase != v1.PodRunning {
+			return fmt.Errorf("pod [%s] in namespace [%s] has status [%s]", pod.Name, pod.Namespace, pod.Status.Phase)
+		}
+		if pod.Status.ContainerStatuses[0].State.Running == nil {
+			return fmt.Errorf("pod [%s] in namespace [%s] has container state [%v]", pod.Name, pod.Namespace, pod.Status.ContainerStatuses[0].State)
+		}
+
+		n, err := node.GetNodeByName(pod.Spec.NodeName)
+		if err != nil {
+			return err
+		}
+
+		t := func() (interface{}, bool, error) {
+			cpu, mem, err := GetCPUAndMemOfPxProcess(n, "px-storage")
+			if err != nil {
+				return "", true, fmt.Errorf("error getting CPU and Memory of px-storage on node [%s]. Err: %v", pod.Name, err)
+			}
+			if cpu > 90 || mem > 90 {
+				return "", true, fmt.Errorf("px-storage on node [%s] has CPU [%v%%] and memory [%v%%]", pod.Name, cpu, mem)
+			}
+
+			log.Infof("px-storage on node [%s] has CPU [%v%%] and Memory [%v%%]", pod.Name, cpu, mem)
+			return "", false, nil
+		}
+
+		gctx := ctxt.Background()
+		gctx = ctxt.WithValue(gctx, torpedotask.TimeBeforeRetryKey, 5*time.Second)
+		gctx = ctxt.WithValue(gctx, torpedotask.TimeoutKey, 2*time.Minute)
+		gctx = ctxt.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+
+		_, err = torpedotask.DoRetryWithTimeoutWithCtx(t, gctx)
+		if err != nil {
+			return err
+		}
+
 	}
 
 	podList, err = core.Instance().GetPods(namespace, storkLabel)
-	log.FailOnError(err, "Failed to get stork pods pods")
+	if err != nil {
+		return err
+	}
 
 	for _, pod := range podList.Items {
 		log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
+		if pod.Status.Phase != v1.PodRunning {
+			return fmt.Errorf("pod [%s] in namespace [%s] has status [%s]", pod.Name, pod.Namespace, pod.Status.Phase)
+		}
+		if pod.Status.ContainerStatuses[0].State.Running == nil {
+			return fmt.Errorf("pod [%s] in namespace [%s] has container state [%v]", pod.Name, pod.Namespace, pod.Status.ContainerStatuses[0].State)
+		}
 		pm, err := Inst().S.GetPodMetrics(pod.Name, pod.Namespace)
+		if err != nil {
+			return err
+		}
 		log.FailOnError(err, fmt.Sprintf("error getting metrics for pod %s in namespace %s", pod.Name, pod.Namespace))
 		log.Infof("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
 
+		memoryInGib := pm.Containers[0].Usage.Memory().Value() / (1024 * 1024)
+		fmt.Println("memory in GiB: ", memoryInGib)
+		multiplier := inf.NewDec(1, 0)
+
+		res, ok := new(inf.Dec).Mul(pm.Containers[0].Usage.Cpu().AsDec(), multiplier).Unscaled()
+		if ok {
+			cpuInMilliCores := res / (1000 * 1000)
+			fmt.Println("CPU in millicores: ", cpuInMilliCores)
+		}
+
 	}
 	podList, err = core.Instance().GetPods(namespace, autopilotLabel)
-	log.FailOnError(err, "Failed to get autopilot pods")
+	if err != nil {
+		return err
+	}
 
 	for _, pod := range podList.Items {
 		log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
+		if pod.Status.Phase != v1.PodRunning {
+			return fmt.Errorf("pod [%s] in namespace [%s] has status [%s]", pod.Name, pod.Namespace, pod.Status.Phase)
+		}
+		if pod.Status.ContainerStatuses[0].State.Running == nil {
+			return fmt.Errorf("pod [%s] in namespace [%s] has container state [%v]", pod.Name, pod.Namespace, pod.Status.ContainerStatuses[0].State)
+		}
 		pm, err := Inst().S.GetPodMetrics(pod.Name, pod.Namespace)
-		log.FailOnError(err, fmt.Sprintf("error getting metrics for pod %s in namespace %s", pod.Name, pod.Namespace))
+		if err != nil {
+			return err
+		}
 		log.Infof("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
 
 	}
 
 	podList, err = core.Instance().GetPods(namespace, operatorLabel)
-	log.FailOnError(err, "Failed to get operator pods")
+	if err != nil {
+		return err
+	}
 
 	for _, pod := range podList.Items {
 		log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
+		if pod.Status.Phase != v1.PodRunning {
+			return fmt.Errorf("pod [%s] in namespace [%s] has status [%s]", pod.Name, pod.Namespace, pod.Status.Phase)
+		}
+		if pod.Status.ContainerStatuses[0].State.Running == nil {
+			return fmt.Errorf("pod [%s] in namespace [%s] has container state [%v]", pod.Name, pod.Namespace, pod.Status.ContainerStatuses[0].State)
+		}
 		pm, err := Inst().S.GetPodMetrics(pod.Name, pod.Namespace)
-		log.FailOnError(err, fmt.Sprintf("error getting metrics for pod %s in namespace %s", pod.Name, pod.Namespace))
+		if err != nil {
+			return err
+		}
 		log.Infof("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
-
 	}
 
 	stnodes := node.GetStorageDriverNodes()
 	for _, n := range stnodes {
-
 		k8sNode, err := core.Instance().GetNodeByName(n.Name)
-		log.FailOnError(err, fmt.Sprintf("Failed to get K8s node %s", n.Name))
+		if err != nil {
+			return err
+		}
 
 		for _, condition := range k8sNode.Status.Conditions {
 			if condition.Type == v1.NodeReady {
 				if condition.Status != v1.ConditionTrue || k8sNode.Spec.Unschedulable {
-					log.FailOnError(fmt.Errorf("node %v has Node Status %v and Schedulabe status %v", n.Name, condition.Status, k8sNode.Spec.Unschedulable), "Node Status False")
+					return fmt.Errorf("node %v has Node Status %v and Schedulabe status %v", n.Name, condition.Status, k8sNode.Spec.Unschedulable)
 				}
 			}
 			status, err := Inst().V.GetNodeStatus(n)
-			log.FailOnError(err, "Failed to get node status")
-			log.Infof("Node [%s] has status [%s]", n, status)
-		}
-
-		for _, n := range stnodes {
-			log.Infof("looking for core files on node %s", n.Name)
-			file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
-				Timeout:         2 * time.Minute,
-				TimeBeforeRetry: 10 * time.Second,
-			})
-			log.FailOnError(err, fmt.Sprintf("Failed to do system check on node [%s]", n.Name))
-
-			if len(file) != 0 {
-				log.FailOnError(fmt.Errorf("core file [%s] found on node %s", file, n.Name), "Core files found")
+			if err != nil {
+				return err
 			}
-		}
+			if *status != opsapi.Status_STATUS_OK {
+				return fmt.Errorf("node [%s] has status [%s]", n.Name, status)
 
-		for i := 0; i < eventRing.Len(); i++ {
-			record := eventRing.Value
-			if record != nil {
-				log.Infof("Event Record : %v", *record.(*EventRecord))
-				eventRing.Value = nil
 			}
-			eventRing = eventRing.Next()
+			log.Infof("Node [%s] has status [%s]", n.Name, status)
 		}
 
-		for _, ctx := range *contexts {
-			ValidateContext(ctx)
+		coresFound := false
+
+		log.Infof("looking for core files on node %s", n.Name)
+		file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+
+		if err != nil {
+			return fmt.Errorf("failed to do system check on node [%s], err: [%v]", n.Name, err)
 		}
 
+		if len(file) != 0 {
+			coresFound = true
+			log.Errorf(fmt.Sprintf("core file [%s] found on node %s", file, n.Name), "Core files found")
+		}
+
+		if coresFound {
+			return fmt.Errorf("one or more core files found on the nodes")
+		}
 	}
+
+	ctxErr := false
+
+	for _, ctx := range *contexts {
+		errorChan := make(chan error, errorChannelSize)
+		appVolumes, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get volumes for app %s, err: %v", ctx.App.Key, err)
+		}
+		for _, v := range appVolumes {
+			// waiting for all the volume in up state
+			checkVolumeStateIsResync := func(v *volume.Volume) (interface{}, bool, error) {
+				runTimeState, err := GetVolumeReplicationStatus(v)
+				if err != nil {
+					return "", false, fmt.Errorf("error getting run time state for volume:%s. App : %s", v.Name, ctx.App.Key)
+				}
+				if strings.ToLower(runTimeState) == "up" {
+					return "", false, nil
+				}
+				if strings.ToLower(runTimeState) == "resync" {
+					return "", true, fmt.Errorf("waiting for volume %s run time state to change to up, current state: %s", v.Name, runTimeState)
+				}
+				return nil, false, fmt.Errorf("volume %s run time state: %s", v.Name, runTimeState)
+			}
+
+			f := func() (interface{}, bool, error) { return checkVolumeStateIsResync(v) }
+			gctx := ctxt.Background()
+			gctx = ctxt.WithValue(gctx, torpedotask.TimeBeforeRetryKey, 1*time.Minute)
+			gctx = ctxt.WithValue(gctx, torpedotask.TimeoutKey, 180*time.Minute)
+			gctx = ctxt.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+
+			_, err = torpedotask.DoRetryWithTimeoutWithCtx(f, gctx)
+			if err != nil {
+				return err
+			}
+
+			checkVolumeStateIsResync = func(v *volume.Volume) (interface{}, bool, error) {
+				appVol, err := Inst().V.InspectVolume(v.ID)
+				if err != nil {
+					return "", false, fmt.Errorf("error inspecting volume:%s. App : %s", v.Name, ctx.App.Key)
+				}
+				if appVol.Status == opsapi.VolumeStatus_VOLUME_STATUS_UP {
+					return "", false, nil
+				}
+				if appVol.Status == opsapi.VolumeStatus_VOLUME_STATUS_DEGRADED {
+					return "", true, fmt.Errorf("waiting for volume %s status to change to UP, current state: %s", v.Name, appVol.Status)
+				}
+				return nil, false, fmt.Errorf("volume %s current state: %s", v.Name, appVol.Status)
+			}
+
+			f = func() (interface{}, bool, error) { return checkVolumeStateIsResync(v) }
+			gctx = ctxt.Background()
+			gctx = ctxt.WithValue(gctx, torpedotask.TimeBeforeRetryKey, 1*time.Minute)
+			gctx = ctxt.WithValue(gctx, torpedotask.TimeoutKey, 15*time.Minute)
+			gctx = ctxt.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+
+			_, err = torpedotask.DoRetryWithTimeoutWithCtx(f, gctx)
+			if err != nil {
+				return err
+			}
+
+		}
+
+		ValidateContext(ctx, &errorChan)
+		// Collect and combine errors
+		log.Infof("Validating Context errors")
+
+		for e := range errorChan {
+			if e != nil {
+				ctxErr = true
+				log.Errorf("Error: %v", e)
+			}
+		}
+	}
+
+	if ctxErr {
+		return fmt.Errorf("one or more errors found while validating contexts")
+	}
+
+	log.Infof("Validating Event errors ")
+	evErr := false
+	for i := 0; i < eventRing.Len(); i++ {
+		record := eventRing.Value
+		if record != nil {
+			ev := *record.(*EventRecord)
+			if ev.Outcome != nil && len(ev.Outcome) > 0 {
+				evErr = true
+				log.Errorf("Event [%s] failed with error [%v]", ev.Event.Type, ev.Outcome)
+			}
+			eventRing.Value = nil
+		}
+		eventRing = eventRing.Next()
+	}
+	if evErr {
+		return fmt.Errorf("one or more errors found while validating events")
+	}
+	return nil
 }
 
 // TriggerEmailReporter sends email with all reported errors
@@ -7237,7 +7415,7 @@ func getIOProfileOnVolumes(contexts *[]*scheduler.Context) (map[string]VolumeIOP
 	return pvcProfileMap, nil
 }
 func revertIOProfile(event *EventRecord, pvcProfileMap map[string]VolumeIOProfile) {
-	var volumeSpec *apios.VolumeSpecUpdate
+	var volumeSpec *opsapi.VolumeSpecUpdate
 	for pvcName, v := range pvcProfileMap {
 		log.InfoD("Getting info from volume: %s", pvcName)
 		appVol, err := Inst().V.InspectVolume(pvcName)
@@ -7248,7 +7426,7 @@ func revertIOProfile(event *EventRecord, pvcProfileMap map[string]VolumeIOProfil
 		log.InfoD("Volume: %s Current IO profile : %s, current derived IO profile %s", pvcName, appVol.Spec.IoProfile, appVol.DerivedIoProfile)
 		if appVol.Spec.IoProfile != v.Profile {
 			log.InfoD("Expected IO Profile change to  %v", v.Profile)
-			volumeSpec = &apios.VolumeSpecUpdate{IoProfileOpt: &apios.VolumeSpecUpdate_IoProfile{IoProfile: v.Profile}}
+			volumeSpec = &opsapi.VolumeSpecUpdate{IoProfileOpt: &opsapi.VolumeSpecUpdate_IoProfile{IoProfile: v.Profile}}
 			err = Inst().V.UpdateVolumeSpec(v.SpecInfo, volumeSpec)
 			if err != nil {
 				UpdateOutcome(event, err)
@@ -7268,9 +7446,9 @@ func revertIOProfile(event *EventRecord, pvcProfileMap map[string]VolumeIOProfil
 		}
 	}
 }
-func updateIOProfile(event *EventRecord, pvcProfileMap map[string]VolumeIOProfile, ioProfileTo apios.IoProfile) {
+func updateIOProfile(event *EventRecord, pvcProfileMap map[string]VolumeIOProfile, ioProfileTo opsapi.IoProfile) {
 	//Get all volumes and change IO profile on those volumes.
-	var volumeSpec *apios.VolumeSpecUpdate
+	var volumeSpec *opsapi.VolumeSpecUpdate
 	for pvcName, v := range pvcProfileMap {
 		log.InfoD("Getting info from volume: %s", pvcName)
 		appVol, err := Inst().V.InspectVolume(pvcName)
@@ -7281,7 +7459,7 @@ func updateIOProfile(event *EventRecord, pvcProfileMap map[string]VolumeIOProfil
 		derivedIOProfile := appVol.DerivedIoProfile
 		log.InfoD("Volume: %s Current IO profile : %s, current derived IO profile %s", pvcName, currentIOProfile, derivedIOProfile)
 		if currentIOProfile != ioProfileTo {
-			if appVol.Spec.HaLevel == 1 && ioProfileTo == apios.IoProfile_IO_PROFILE_DB_REMOTE {
+			if appVol.Spec.HaLevel == 1 && ioProfileTo == opsapi.IoProfile_IO_PROFILE_DB_REMOTE {
 				log.InfoD(" HA of PVC  %v cannot be set to DB-REMOTE", pvcName)
 			} else {
 				log.InfoD("Expected IO Profile change to  %v", ioProfileTo)
@@ -7290,7 +7468,7 @@ func updateIOProfile(event *EventRecord, pvcProfileMap map[string]VolumeIOProfil
 				dashStats["derived-io-profile"] = derivedIOProfile.String()
 				dashStats["new-io-profile"] = ioProfileTo.String()
 				updateLongevityStats(event.Event.Type, stats.VolumeUpdateEventName, dashStats)
-				volumeSpec = &apios.VolumeSpecUpdate{IoProfileOpt: &apios.VolumeSpecUpdate_IoProfile{IoProfile: ioProfileTo}}
+				volumeSpec = &opsapi.VolumeSpecUpdate{IoProfileOpt: &opsapi.VolumeSpecUpdate_IoProfile{IoProfile: ioProfileTo}}
 				err = Inst().V.UpdateVolumeSpec(v.SpecInfo, volumeSpec)
 				if err != nil {
 					UpdateOutcome(event, err)
@@ -10263,7 +10441,7 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 		includeResourcesFlag  = true
 		startApplicationsFlag = false
 		appVolumes            []*volume.Volume
-		expected_iot          *apios.IoThrottle
+		expected_iot          *opsapi.IoThrottle
 	)
 	chaosLevel := ChaosMap[IopsBwAsyncDR]
 	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {

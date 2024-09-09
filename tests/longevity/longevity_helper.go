@@ -55,14 +55,17 @@ var (
 	labels []map[string]string
 
 	// SSIE Framework variables
-	eventCombinations = make([][]string, 0)
-	combinationsLock  = sync.RWMutex{}
-	skipEvents        []string
+	eventCombinations                 = make([][]string, 0)
+	combinationsLock                  = sync.RWMutex{}
+	skipEvents                        []string
+	recentDestructivePicks            []string
+	longevityConfigMapResourceVersion string
 )
 
 var (
 	// StopLongevityChan is a channel to stop longevity tests
 	StopLongevityChan = make(chan struct{})
+	StopSSIEChan      = make(chan struct{})
 )
 
 // TriggerFunction represents function signature of a testTrigger
@@ -295,6 +298,8 @@ func populateDisruptiveTriggers() {
 		DetachDrives,
 		KVDBFailover,
 		HAIncreaseAndReboot,
+		HAIncreaseAndRestartPX,
+		HAIncreaseAndCrashPX,
 		AddDiskAndReboot,
 		ResizeDiskAndReboot,
 		VolumeCreatePxRestart,
@@ -2041,6 +2046,7 @@ func backupEventTrigger(wg *sync.WaitGroup,
 
 // GenerateAndStoreEventCombinations will generate all possible combinations of events we want to execute
 func GenerateAndStoreEventCombinations() {
+
 	rand.Seed(time.Now().UnixNano())
 	getRandomValue := func() int {
 		prob := rand.Float64()
@@ -2058,37 +2064,14 @@ func GenerateAndStoreEventCombinations() {
 		}
 	}
 	NumNonDisruptiveEvents := getRandomValue()
-	log.Infof("NumNonDisruptiveEvents:", NumNonDisruptiveEvents)
+	log.Infof("NumNonDisruptiveEvents: %d", NumNonDisruptiveEvents)
+
 	NumDisruptiveEvents := 0
+
 	nonDisruptive, disruptive := separateEventsByType()
-	configMap, err := core.Instance().GetConfigMap(testTriggersConfigMap, configMapNS)
-	if err != nil {
-		log.Infof("Error retrieving config map: %v", err)
-		return
-	}
-	alreadyRanCombosStr := configMap.Data["alreadyRanCombos"]
-	alreadyRanCombos := strings.Split(alreadyRanCombosStr, ";")
 
 	var localCombinations [][]string
 
-	shouldSkipCombination := func(combination []string) bool {
-		combinationStr := strings.Join(combination, ",")
-		skipCount := 0
-		if len(skipEvents) > 0 {
-			for _, event := range skipEvents {
-				if slices.Contains(combination, event) {
-					skipCount++
-				}
-			}
-			if skipCount == len(skipEvents) {
-				return true
-			}
-		}
-		if slices.Contains(alreadyRanCombos, combinationStr) {
-			return true
-		}
-		return false
-	}
 	// Generating combinations of disruptive events
 	disruptiveCombos := combinations(disruptive, NumDisruptiveEvents)
 
@@ -2098,10 +2081,7 @@ func GenerateAndStoreEventCombinations() {
 		for _, ndCombo := range nonDisruptiveCombos {
 			// Merging non-disruptive and disruptive events into a single combination
 			fullCombo := append(ndCombo, dCombo...)
-			if !shouldSkipCombination(fullCombo) {
-				log.Infof("Created combination: %v", fullCombo)
-				localCombinations = append(localCombinations, fullCombo)
-			}
+			localCombinations = append(localCombinations, fullCombo)
 		}
 	}
 
@@ -2112,7 +2092,6 @@ func GenerateAndStoreEventCombinations() {
 
 // separateEventsByType separates events into non-disruptive and disruptive based on their type
 func separateEventsByType() (nonDisruptive []string, disruptive []string) {
-	populateDisruptiveTriggers()
 
 	for event, _ := range triggerFunctions {
 		_, enableEvent := isTriggerEnabled(event)

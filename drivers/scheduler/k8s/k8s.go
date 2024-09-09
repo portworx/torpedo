@@ -8768,7 +8768,8 @@ func rotateTopologyArray(options *scheduler.ScheduleOptions) {
 // GetPXCloudDriveConfigMap retruns px cloud derive config map data
 func (k *K8s) GetPXCloudDriveConfigMap(cluster *operatorcorev1.StorageCluster) (map[string]node.DriveSet, error) {
 	cloudDriveConfigmapName := pxutil.GetCloudDriveConfigMapName(cluster)
-	cloudDriveConfigmap, err := k8sCore.GetConfigMap(cloudDriveConfigmapName, cluster.Namespace)
+	//px-clouddrive config map will always be created in kube-system namespace
+	cloudDriveConfigmap, err := k8sCore.GetConfigMap(cloudDriveConfigmapName, "kube-system")
 	if err != nil {
 		log.Errorf("GetPXCloudDriveConfigMap: failed to get cloud drive configmap from [%v/%v]: %v", cloudDriveConfigmapName, cluster.Namespace, err)
 		return nil, err
