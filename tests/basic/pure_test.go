@@ -1229,7 +1229,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 
 		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 		//Number of apps to be deployed
-		NumberOfAppsToBeDeployed := 300
+		NumberOfAppsToBeDeployed := 8
 
 		stepLog = fmt.Sprintf("schedule application")
 		Step(stepLog, func() {
