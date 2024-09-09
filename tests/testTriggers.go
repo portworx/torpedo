@@ -3797,9 +3797,20 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 								log.Infof("Snapshot [%s] has status [%v]", status.Name, status.Status)
 								if status.Status == snapv1.VolumeSnapshotConditionError {
 									resp, _ := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
-									log.Infof("SnapshotSchedule resp: %v", resp)
+									log.Infof("SnapshotSchedule resp: %+v", resp)
 									snapData, _ := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
-									log.Infof("snapData : %v", snapData)
+									if snapData != nil {
+										log.Infof("snapData : %v", snapData)
+									}
+
+									volumeSnapshot, err := Inst().S.GetSnapShot(ctx, status.Name, appNamespace)
+									if err != nil {
+										log.Errorf("Error getting volume snapshot [%s] in namespace [%s]. Error: [%v]", status.Name, appNamespace, err)
+									}
+									if volumeSnapshot != nil {
+										log.Errorf("volumeSnapshot : %+v", volumeSnapshot)
+									}
+
 									UpdateOutcome(event, fmt.Errorf("snapshot [%s] failed with status [%v]. Error: cloud snapshot for [%s] failed", status.Name, status.Status, snapshotScheduleName))
 									return
 								}
@@ -4464,7 +4475,7 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 
 		if len(file) != 0 {
 			coresFound = true
-			log.Errorf(fmt.Sprintf("core file [%s] found on node %s", file, n.Name), "Core files found")
+			log.Errorf(fmt.Sprintf("core file [%s] found on node %s", file, n.Name))
 		}
 
 		if coresFound {

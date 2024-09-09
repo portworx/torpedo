@@ -11956,7 +11956,12 @@ func WaitForSnapShotToReady(snapshotScheduleName, snapshotName, appNamespace str
 
 		return nil, false, nil
 	}
-	_, err := task.DoRetryWithTimeout(delVol, time.Duration(3)*appReadinessTimeout, 30*time.Second)
+
+	gctx := context1.Background()
+	gctx = context1.WithValue(gctx, torpedotask.TimeBeforeRetryKey, 30*time.Second)
+	gctx = context1.WithValue(gctx, torpedotask.TimeoutKey, time.Duration(3)*appReadinessTimeout)
+	gctx = context1.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+	_, err := torpedotask.DoRetryWithTimeoutWithCtx(delVol, gctx)
 
 	return schedVolumeSnapstatus, err
 }

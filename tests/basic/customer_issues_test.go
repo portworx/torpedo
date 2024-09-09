@@ -699,9 +699,18 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 
 									if status.Status == snapv1.VolumeSnapshotConditionError {
 										resp, _ := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
-										log.Infof("SnapshotSchedule resp: %v", resp)
+										log.Infof("SnapshotSchedule resp: %+v", resp)
 										snapData, _ := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
-										log.Infof("snapData : %v", snapData)
+										if snapData != nil {
+											log.Infof("snapData : %v", snapData)
+										}
+										volumeSnapshot, err := Inst().S.GetSnapShot(ctx, status.Name, appNamespace)
+										if err != nil {
+											log.Errorf("Error getting volume snapshot [%s] in namespace [%s]. Error: [%v]", status.Name, appNamespace, err)
+										}
+										if volumeSnapshot != nil {
+											log.Errorf("volumeSnapshot : %+v", volumeSnapshot)
+										}
 										log.FailOnError(fmt.Errorf("snapshot: %s failed. status: %v", status.Name, status.Status), fmt.Sprintf("cloud snapshot for %s failed", snapshotScheduleName))
 									}
 									if status.Status == snapv1.VolumeSnapshotConditionPending {

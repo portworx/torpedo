@@ -4059,6 +4059,20 @@ func (k *K8s) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotName
 	return snapData, nil
 }
 
+// GetSnapShot returns the volume snapshot
+func (k *K8s) GetSnapShot(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshot, error) {
+
+	snap, err := k8sExternalStorage.GetSnapshot(snapshotName, snapshotNameSpace)
+	if err != nil {
+		return nil, &scheduler.ErrFailedToGetSnapShot{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("failed to get Volume Snapshot: %v. Err: %v", snapshotName, err),
+		}
+	}
+
+	return snap, nil
+}
+
 // GetWorkloadSizeFromAppSpec gets workload size from an application spec
 func (k *K8s) GetWorkloadSizeFromAppSpec(context *scheduler.Context) (uint64, error) {
 	var err error

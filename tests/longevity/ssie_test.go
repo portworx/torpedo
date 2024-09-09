@@ -155,7 +155,7 @@ func triggerSSIECombo(contexts *[]*scheduler.Context, triggerEventsChan *chan *E
 
 				triggerFunc := triggerFunctions[destructiveEvent]
 				triggerFunc(contexts, triggerEventsChan)
-				log.InfoD(fmt.Sprintf("Validating SSIE status after running [%s]", nextCombinationToRun))
+				log.InfoD(fmt.Sprintf("Validating SSIE status after running [%s]", destructiveEvent))
 				ssieErr = ValidateSSIEStatus(contexts)
 				if ssieErr != nil {
 					dash.VerifySafely(ssieErr, nil, fmt.Sprintf("verify SSIE status after running [%s]", destructiveEvent))

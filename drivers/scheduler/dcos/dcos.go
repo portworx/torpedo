@@ -119,15 +119,23 @@ func (d *dcos) VerifyPoolResizeARO(apapi.AutopilotRule) (bool, error) {
 	}
 }
 
-// GetSnapShotData retruns given snapshots
+// GetSnapShotData returns given snapshotdata
 func (d *dcos) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshotData, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "ValidateSnapShot()",
+		Operation: "GetSnapShotData()",
 	}
 }
 
-// DeleteSnapshots  delete the snapshots
+// GetSnapShot returns given volumesnapshot
+func (d *dcos) GetSnapShot(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshot, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetSnapShot()",
+	}
+}
+
+// DeleteSnapShot  delete the snapshots
 func (d *dcos) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",

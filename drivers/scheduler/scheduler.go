@@ -229,10 +229,13 @@ type Driver interface {
 	// ValidateTopologyLabel validate topology Labels for App
 	ValidateTopologyLabel(cc *Context) error
 
-	// GetSnapShotData retruns volumesnapshotdata
+	// GetSnapShotData returns volumesnapshotdata
 	GetSnapShotData(ctx *Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshotData, error)
 
-	// DeleteSnapshots  delete the snapshots
+	// GetSnapShot returns volumesnapshot
+	GetSnapShot(ctx *Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshot, error)
+
+	// DeleteSnapShot  delete the snapshots
 	DeleteSnapShot(ctx *Context, snapshotName, snapshotNameSpace string) error
 
 	// GetSnapshotsInNameSpace get the snapshots list for the namespace
