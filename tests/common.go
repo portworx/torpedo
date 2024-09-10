@@ -1096,7 +1096,7 @@ func GetPDBValue() (int, int) {
 }
 
 // Return a list of PodDisruptionBudegts of type PodDisruptionBudget
-func ListNodePDBs() ([]*v1.PodDisruptionBudget, error) {
+func ListNodePDBs() ([]v1.PodDisruptionBudget, error) {
 	stc, err := Inst().V.GetDriver()
 	if err != nil {
 		return nil, err
@@ -1105,10 +1105,10 @@ func ListNodePDBs() ([]*v1.PodDisruptionBudget, error) {
 	if err != nil {
 		return nil, err
 	}
-	pdbList := make([]*v1.PodDisruptionBudget, 0)
+	pdbList := make([]v1.PodDisruptionBudget, 0)
 	for _, pdb := range pdbs.Items {
 		if strings.HasPrefix(pdb.Name, "px") && pdb.Name != "px-kvdb" {
-			pdbList = append(pdbList, &pdb)
+			pdbList = append(pdbList, pdb)
 		}
 	}
 	return pdbList, nil
@@ -14516,76 +14516,73 @@ func DoParallelUpgradePDBValidation(stopSignal <-chan struct{}, mError *error) {
 }
 
 func ValidateVolumeQuorum(errChan ...*chan error) {
-	volIDs, err := Inst().V.ListAllVolumes()
-	if err != nil {
-		// add to errChan
-		err := fmt.Errorf("error listing volumes, Err: %v", err)
-		processError(err, errChan...)
-		return
-	}
-
-	for _, volID := range volIDs {
-		apiVol, err := Inst().V.InspectVolume(volID)
-
+	t := func() (interface{}, bool, error) {
+		volIDs, err := Inst().V.ListAllVolumes()
 		if err != nil {
-			err = fmt.Errorf("error inspecting volume [%s], Err: %v", volID, err)
-			processError(err, errChan...)
-			return
+			return nil, true, fmt.Errorf("error listing volumes, Err: %v", err)
 		}
 
-		// check if volume replicas are on different nodes
-		// get all the nodes where replicas are present
-		if len(apiVol.ReplicaSets) == 0 {
-			err := fmt.Errorf("volume [%s] does not have any replicas", volID)
-			processError(err, errChan...)
-			return
-		}
-
-		replicaNodes := apiVol.ReplicaSets[0].Nodes
-
-		if apiVol.Status != opsapi.VolumeStatus_VOLUME_STATUS_UP {
-			// skip validation for repl-1 volume
-			if len(replicaNodes) == 1 {
-				log.Warnf("volume [%s] replicas are on same nodes [%v]", volID, replicaNodes)
-				continue
-			} else {
-				err = fmt.Errorf("volume [%s] is not up", volID)
-				processError(err, errChan...)
-				return
+		for _, volID := range volIDs {
+			apiVol, err := Inst().V.InspectVolume(volID)
+			if err != nil {
+				return nil, true, fmt.Errorf("error inspecting volume [%s], Err: %v", volID, err)
 			}
-		}
 
-		if len(apiVol.RuntimeState) == 0 {
-			err := fmt.Errorf("volume [%s] does not have runtime state", volID)
-			processError(err, errChan...)
-			return
-		}
+			// check if volume replicas are on different nodes
+			// get all the nodes where replicas are present
+			if len(apiVol.ReplicaSets) == 0 {
+				return nil, true, fmt.Errorf("volume [%s] does not have any replicas", volID)
+			}
 
-		runTimeState := apiVol.RuntimeState[0].RuntimeState[VolumeRuntimeStateKey]
-		// check if volume is up and runtime status is clean
-		log.Infof("Volume [%s] status : %v, runtime state: %v", volID, apiVol.Status, runTimeState)
+			replicaNodes := apiVol.ReplicaSets[0].Nodes
 
-		// if volume is not in clean state, check if all the nodes of it's repilcas are in storage up state
-		if runTimeState != VolumeRuntimeStatusClean {
-			log.InfoD("volume [%s] runtime state is %v which is not clean, validating the node state...", volID, runTimeState)
-			for i := range replicaNodes {
-				nodeInfo, err := node.GetNodeDetailsByNodeID(replicaNodes[i])
-				log.FailOnError(err, fmt.Sprintf("error getting node details for node [%s]", replicaNodes[i]))
+			if apiVol.Status != opsapi.VolumeStatus_VOLUME_STATUS_UP {
+				// skip validation for repl-1 volume
+				if len(replicaNodes) == 1 {
+					log.Warnf("volume [%s] replicas are on same nodes [%v]", volID, replicaNodes)
+					continue
+				} else {
+					return nil, true, fmt.Errorf("volume [%s] is not up", volID)
+				}
+			}
 
-				// check if node is in storage up state
-				nodeStatus, err := Inst().V.GetNodeStatus(nodeInfo)
-				log.FailOnError(err, fmt.Sprintf("error getting node status for node [%s]", replicaNodes[i]))
+			if len(apiVol.RuntimeState) == 0 {
+				return nil, true, fmt.Errorf("volume [%s] does not have runtime state", volID)
+			}
 
-				// if node is in storage down state and runtime state is not clean, fail the test
-				log.Infof("Node [%s] status: %v", replicaNodes[i], nodeStatus)
-				if reflect.DeepEqual(nodeStatus, opsapi.Status_STATUS_STORAGE_DOWN) {
-					err = fmt.Errorf("node [%s] is in %v Runtime state ", replicaNodes[i], runTimeState)
-					processError(err, errChan...)
-					return
+			runTimeState := apiVol.RuntimeState[0].RuntimeState[VolumeRuntimeStateKey]
+			// check if volume is up and runtime status is clean
+			log.Infof("Volume [%s] status : %v, runtime state: %v", volID, apiVol.Status, runTimeState)
+
+			// if volume is not in clean state, check if all the nodes of it's repilcas are in storage up state
+			if runTimeState != VolumeRuntimeStatusClean {
+				log.InfoD("volume [%s] runtime state is %v which is not clean, validating the node state...", volID, runTimeState)
+				for i := range replicaNodes {
+					nodeInfo, err := node.GetNodeDetailsByNodeID(replicaNodes[i])
+					if err != nil {
+						return nil, true, fmt.Errorf("error getting node details for node [%s]", replicaNodes[i])
+					}
+					// check if node is in storage up state
+					nodeStatus, err := Inst().V.GetNodeStatus(nodeInfo)
+					if err != nil {
+						return nil, true, fmt.Errorf("error getting node status for node [%s]", replicaNodes[i])
+					}
+
+					// if node is in storage down state and runtime state is not clean, fail the test
+					log.Infof("Node [%s] status: %v", replicaNodes[i], nodeStatus)
+					if reflect.DeepEqual(nodeStatus, opsapi.Status_STATUS_STORAGE_DOWN) {
+						return nil, false, fmt.Errorf("node [%s] is in %v Runtime state ", replicaNodes[i], runTimeState)
+					}
 				}
 			}
 		}
+		return nil, false, nil
 	}
+	_,err := task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second)
+	if err != nil {
+		processError(err, errChan...)
+	}
+
 }
 
 // DeleteTorpedoApps deletes all the namespaces which are created by torpedo which has the label creator=torpedo
