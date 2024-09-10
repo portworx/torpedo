@@ -2840,11 +2840,6 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 			log.FailOnError(err, "Failed to delete volume on FA")
 			log.InfoD("Volume deleted on FA: %v", volumeName)
 
-			//Refresh the iscsi session
-			err = RefreshIscsiSession(n)
-			log.FailOnError(err, "Failed to refresh iscsi session")
-			log.InfoD("Successfully refreshed iscsi session")
-
 		})
 
 	})
