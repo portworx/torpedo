@@ -2540,6 +2540,15 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 		})
 		stepLog = "Run iscsiadm commands to login to the controllers"
 		Step(stepLog, func() {
+			//Run iscsiadm commands to login to the controllers
+			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
+
+			for _, networkInterface := range networkInterfaces {
+				err = LoginIntoController(n, networkInterface, *FAclient)
+				log.FailOnError(err, "Failed to login into controller")
+				log.InfoD("Successfully logged into controller: %v", networkInterface.Address)
+			}
+			
 			// run multipath after login
 			cmd := "multipath -ll"
 			MultipathBeforeRestart, err = runCmd(cmd, n)
@@ -2592,6 +2601,14 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 				_, err = pureutils.DeleteHostOnFA(FAclient, hostName)
 				log.FailOnError(err, "Failed to delete host on FA")
 				log.InfoD("Host deleted on FA: %v", hostName)
+			}
+			//log out of all the controllers
+			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
+
+			for _, networkInterface := range networkInterfaces {
+				err = LogoutFromController(n, networkInterface, *FAclient)
+				log.FailOnError(err, "Failed to login into controller")
+				log.InfoD("Successfully logged out of controller: %v", networkInterface.Address)
 			}
 		})
 
@@ -2730,14 +2747,33 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 		stepLog = "Run iscsiadm commands to login to the controllers"
 		Step(stepLog, func() {
 
+			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
+			
+			for _, networkInterface := range networkInterfaces {
+				err = LoginIntoController(n, networkInterface, *FAclient)
+				log.FailOnError(err, "Failed to login into controller")
+				log.InfoD("Successfully logged into controller: %v", networkInterface.Address)
+			}
+			
 			//run multipath before refresh
 			cmd := "multipath -ll"
 			output, err := runCmd(cmd, n)
 			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
 			log.InfoD("Output of multipath -ll command before PX restart : %v", output)
 
+
+			// Refresh the iscsi session
+			err = RefreshIscsiSession(n)
+			log.FailOnError(err, "Failed to refresh iscsi session")
+			log.InfoD("Successfully refreshed iscsi session")
+			
+
 			//sleep for 10s for the entries to update
 			time.Sleep(10 * time.Second)
+
+			
+				
+			
 
 			// run multipath after login
 			cmd = "multipath -ll"
@@ -2834,6 +2870,21 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 			_, err = pureutils.DeleteVolumeOnFABackend(FAclient, volumeName)
 			log.FailOnError(err, "Failed to delete volume on FA")
 			log.InfoD("Volume deleted on FA: %v", volumeName)
+
+			//Refresh the iscsi session
+			err = RefreshIscsiSession(n)
+			log.FailOnError(err, "Failed to refresh iscsi session")
+			log.InfoD("Successfully refreshed iscsi session")
+
+			//log out of all the controllers
+			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
+
+			for _, networkInterface := range networkInterfaces {
+				err = LogoutFromController(n, networkInterface, *FAclient)
+				log.FailOnError(err, "Failed to login into controller")
+				log.InfoD("Successfully logged out of controller: %v", networkInterface.Address)
+			}
+			
 
 		})
 
