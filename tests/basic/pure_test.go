@@ -2736,11 +2736,6 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
 			log.InfoD("Output of multipath -ll command before PX restart : %v", output)
 
-			// Refresh the iscsi session
-			err = RefreshIscsiSession(n)
-			log.FailOnError(err, "Failed to refresh iscsi session")
-			log.InfoD("Successfully refreshed iscsi session")
-
 			//sleep for 10s for the entries to update
 			time.Sleep(10 * time.Second)
 
