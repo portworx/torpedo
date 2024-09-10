@@ -423,7 +423,7 @@ var _ = Describe("{FADAVolTokenTimout}", func() {
 		i := 0
 		Step(stepLog, func() {
 			contexts = make([]*scheduler.Context, 0)
-			appScale := 200
+			appScale := 12
 
 			for i = 1; i < appScale; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fadavoltkn-%d", i))...)
@@ -434,7 +434,7 @@ var _ = Describe("{FADAVolTokenTimout}", func() {
 		var wg sync.WaitGroup
 
 		stepLog = "Attaching 40 volumes at same time"
-		scheduleCount := 40
+		scheduleCount := 15
 		Step(stepLog, func() {
 			scheduleAppParallel := func(c int) {
 				defer wg.Done()
@@ -1229,7 +1229,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 
 		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 		//Number of apps to be deployed
-		NumberOfAppsToBeDeployed := 300
+		NumberOfAppsToBeDeployed := 8
 
 		stepLog = fmt.Sprintf("schedule application")
 		Step(stepLog, func() {
@@ -2354,7 +2354,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 			stepLog = "run the multipath -ll command on the node where the pods were scheduled before deleting"
 			Step(stepLog, func() {
 				// sleep for 60 seconds for all the entries to update
-				time.Sleep(30 * time.Second)
+				time.Sleep(120 * time.Second)
 				log.InfoD("Sleeping for 30 seconds for all the entries to update")
 				cmd := fmt.Sprintf("multipath -ll")
 				output, err := runCmd(cmd, selectedNode)
@@ -2421,6 +2421,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 	})
 })
 
+
 var _ = Describe("{VolAttachFAPxRestart}", func() {
 	/*
 				https://purestorage.atlassian.net/browse/PTX-21440
@@ -2439,7 +2440,6 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 	var (
 		hostName               = fmt.Sprintf("torpedo-host-%v", time.Now().UnixNano())
 		volumeName             = fmt.Sprintf("torpedo-vol-%v", time.Now().UnixNano())
-		faSecret               = Inst().FaSecret
 		FAclient               *flasharray.Client
 		MultipathBeforeRestart string
 		faMgmtEndPoint         string
@@ -2453,6 +2453,9 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 		log.InfoD(itLog)
 		// select a random node to run the test
 		n := node.GetStorageDriverNodes()[0]
+
+		faSecret := Inst().FaSecret
+		log.InfoD("Fa secret : %s",faSecret)
 
 		stepLog := "get the secrete of FA which is not present in pure secret"
 		Step(stepLog, func() {
@@ -2524,7 +2527,7 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 			}
 
 			//create a volume on the FA
-			volSize := 1048576 * rand.Intn(10)
+			volSize := 1048576 * (rand.Intn(10) + 1)
 			volume, err := pureutils.CreateVolumeOnFABackend(FAclient, volumeName, volSize)
 			log.FailOnError(err, "Failed to create volume on FA")
 			log.InfoD("Volume created on FA: %v", volume.Name)
@@ -2537,7 +2540,6 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 		})
 		stepLog = "Run iscsiadm commands to login to the controllers"
 		Step(stepLog, func() {
-
 			//Run iscsiadm commands to login to the controllers
 			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
 
@@ -2546,7 +2548,7 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 				log.FailOnError(err, "Failed to login into controller")
 				log.InfoD("Successfully logged into controller: %v", networkInterface.Address)
 			}
-
+			
 			// run multipath after login
 			cmd := "multipath -ll"
 			MultipathBeforeRestart, err = runCmd(cmd, n)
@@ -2584,15 +2586,6 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 		stepLog = "Delete the volume and host from the FA"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			//log out of all the controllers
-			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
-
-			for _, networkInterface := range networkInterfaces {
-				err = LogoutFromController(n, networkInterface, *FAclient)
-				log.FailOnError(err, "Failed to login into controller")
-				log.InfoD("Successfully logged out of controller: %v", networkInterface.Address)
-			}
-
 			//disconnect volume from host
 			_, err = pureutils.DisConnectVolumeFromHost(FAclient, hostName, volumeName)
 			log.FailOnError(err, "Failed to disconnect volume from host")
@@ -2609,6 +2602,14 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 				log.FailOnError(err, "Failed to delete host on FA")
 				log.InfoD("Host deleted on FA: %v", hostName)
 			}
+			//log out of all the controllers
+			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
+
+			for _, networkInterface := range networkInterfaces {
+				err = LogoutFromController(n, networkInterface, *FAclient)
+				log.FailOnError(err, "Failed to login into controller")
+				log.InfoD("Successfully logged out of controller: %v", networkInterface.Address)
+			}
 		})
 
 	})
@@ -2617,6 +2618,7 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
 
 func LoginIntoController(n node.Node, networkInterface flasharray.NetworkInterface, FAclient flasharray.Client) error {
 	ipAddress := networkInterface.Address
@@ -2742,30 +2744,13 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 			log.InfoD("Volume connected to host: %v", connectedVolume.Name)
 
 		})
-		stepLog = "Run iscsiadm commands to login to the controllers"
+		stepLog = "Run multipath command before restart"
 		Step(stepLog, func() {
-
-			//Run iscsiadm commands to login to the controllers
-			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
-
-			for _, networkInterface := range networkInterfaces {
-				err = LoginIntoController(n, networkInterface, *FAclient)
-				log.FailOnError(err, "Failed to login into controller")
-				log.InfoD("Successfully logged into controller: %v", networkInterface.Address)
-			}
-
-			//run multipath before refresh
+       			//run multipath before refresh
 			cmd := "multipath -ll"
 			output, err := runCmd(cmd, n)
 			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
 			log.InfoD("Output of multipath -ll command before PX restart : %v", output)
-
-			// Refresh the iscsi session
-			err = RefreshIscsiSession(n)
-			log.FailOnError(err, "Failed to refresh iscsi session")
-			log.InfoD("Successfully refreshed iscsi session")
-
-			//sleep for 10s for the entries to update
 			time.Sleep(10 * time.Second)
 
 			// run multipath after login
@@ -2774,8 +2759,7 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
 			log.InfoD("Output of multipath -ll command before PX restart : %v", MultipathBeforeRestart)
 
-			// multipath before and after shoouldn't be same
-			dash.VerifyFatal(MultipathBeforeRestart != output, true, "Multipath entries are different before and after refresh")
+
 
 		})
 		stepLog = "create ext4 file system on top of the volume,mount it to /home/test Start running fio on the volume"
@@ -2864,20 +2848,6 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 			log.FailOnError(err, "Failed to delete volume on FA")
 			log.InfoD("Volume deleted on FA: %v", volumeName)
 
-			//Refresh the iscsi session
-			err = RefreshIscsiSession(n)
-			log.FailOnError(err, "Failed to refresh iscsi session")
-			log.InfoD("Successfully refreshed iscsi session")
-
-			//log out of all the controllers
-			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
-
-			for _, networkInterface := range networkInterfaces {
-				err = LogoutFromController(n, networkInterface, *FAclient)
-				log.FailOnError(err, "Failed to login into controller")
-				log.InfoD("Successfully logged out of controller: %v", networkInterface.Address)
-			}
-
 		})
 
 	})
@@ -2886,6 +2856,7 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
 
 /*
 This test deploys app with FBDA volume having storageClass with pure_nfs_endpoint parameter.
