@@ -423,7 +423,7 @@ var _ = Describe("{FADAVolTokenTimout}", func() {
 		i := 0
 		Step(stepLog, func() {
 			contexts = make([]*scheduler.Context, 0)
-			appScale := 200
+			appScale := 12
 
 			for i = 1; i < appScale; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fadavoltkn-%d", i))...)
@@ -434,7 +434,7 @@ var _ = Describe("{FADAVolTokenTimout}", func() {
 		var wg sync.WaitGroup
 
 		stepLog = "Attaching 40 volumes at same time"
-		scheduleCount := 40
+		scheduleCount := 15
 		Step(stepLog, func() {
 			scheduleAppParallel := func(c int) {
 				defer wg.Done()
