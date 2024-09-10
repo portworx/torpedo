@@ -2439,7 +2439,6 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 	var (
 		hostName               = fmt.Sprintf("torpedo-host-%v", time.Now().UnixNano())
 		volumeName             = fmt.Sprintf("torpedo-vol-%v", time.Now().UnixNano())
-		faSecret               = Inst().FaSecret
 		FAclient               *flasharray.Client
 		MultipathBeforeRestart string
 		faMgmtEndPoint         string
@@ -2453,6 +2452,9 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 		log.InfoD(itLog)
 		// select a random node to run the test
 		n := node.GetStorageDriverNodes()[0]
+
+		faSecret := Inst().FaSecret
+		log.InfoD("Fa secret : %s",fasecret)
 
 		stepLog := "get the secrete of FA which is not present in pure secret"
 		Step(stepLog, func() {
