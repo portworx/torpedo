@@ -1530,6 +1530,10 @@ func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, b
 	}
 
 	backupDriver := Inst().Backup
+	clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+	if err != nil {
+		return nil, err
+	}
 	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  scheduleName,
@@ -1556,9 +1560,13 @@ func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, b
 			Uid:  postRuleUid,
 		},
 		ResourceTypes: resourceTypes,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
 	}
 
-	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
+	err = AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -1729,6 +1737,10 @@ func CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName string, cluster
 	}
 
 	backupDriver := Inst().Backup
+	clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+	if err != nil {
+		return nil, err
+	}
 	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  scheduleName,
@@ -1756,9 +1768,13 @@ func CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName string, cluster
 		},
 		VolumeSnapshotClassMapping: provisionerVolumeSnapshotClassMap,
 		DirectKdmp:                 forceKdmp,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
 	}
 
-	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
+	err = AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -1988,6 +2004,10 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 		return fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, api.BackupInfo_StatusInfo_Success, actual, reason)
 	}
 	backupDriver := Inst().Backup
+	clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+	if err != nil {
+		return err
+	}
 	createRestoreReq := &api.RestoreCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  restoreName,
@@ -2000,6 +2020,10 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 		BackupRef: &api.ObjectRef{
 			Name: backupName,
 			Uid:  bkpUid,
+		},
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
 		},
 	}
 	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
@@ -2097,6 +2121,10 @@ func CreateRestoreWithCRValidation(restoreName string, backupName string, namesp
 		return fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, api.BackupInfo_StatusInfo_Success, actual, reason)
 	}
 	backupDriver := Inst().Backup
+	clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+	if err != nil {
+		return err
+	}
 	createRestoreReq := &api.RestoreCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  restoreName,
@@ -2109,6 +2137,10 @@ func CreateRestoreWithCRValidation(restoreName string, backupName string, namesp
 		BackupRef: &api.ObjectRef{
 			Name: backupName,
 			Uid:  bkpUid,
+		},
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
 		},
 	}
 	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
@@ -2153,6 +2185,10 @@ func CreateRestoreWithReplacePolicy(restoreName string, backupName string, names
 			break
 		}
 	}
+	clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+	if err != nil {
+		return err
+	}
 	createRestoreReq := &api.RestoreCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  restoreName,
@@ -2167,6 +2203,10 @@ func CreateRestoreWithReplacePolicy(restoreName string, backupName string, names
 			Uid:  bkpUid,
 		},
 		ReplacePolicy: api.ReplacePolicy_Type(replacePolicy),
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
 	}
 	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
 	if err != nil {
@@ -2230,7 +2270,10 @@ func CreateRestoreWithUID(restoreName string, backupName string, namespaceMappin
 	orgID string, ctx context1.Context, storageClassMapping map[string]string, backupUID string) error {
 
 	backupDriver := Inst().Backup
-	log.Infof("Getting the UID of the backup needed to be restored")
+	clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+	if err != nil {
+		return err
+	}
 
 	createRestoreReq := &api.RestoreCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -2245,8 +2288,12 @@ func CreateRestoreWithUID(restoreName string, backupName string, namespaceMappin
 			Name: backupName,
 			Uid:  backupUID,
 		},
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
 	}
-	_, err := backupDriver.CreateRestore(ctx, createRestoreReq)
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
 	if err != nil {
 		return err
 	}
@@ -2276,6 +2323,10 @@ func CreateRestoreWithoutCheck(restoreName string, backupName string,
 			break
 		}
 	}
+	clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+	if err != nil {
+		return nil, err
+	}
 	createRestoreReq := &api.RestoreCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  restoreName,
@@ -2288,8 +2339,12 @@ func CreateRestoreWithoutCheck(restoreName string, backupName string,
 			Name: backupName,
 			Uid:  bkpUid,
 		},
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
 	}
-	_, err := backupDriver.CreateRestore(ctx, createRestoreReq)
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
 	if err != nil {
 		return nil, err
 	}
@@ -4405,6 +4460,10 @@ func CreateCustomRestoreWithPVCs(restoreName string, backupName string, namespac
 		pvcsStructs[i] = pvcStruct
 	}
 	newResources = append([]*api.ResourceInfo{deploymentStruct}, pvcsStructs...)
+	clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+	if err != nil {
+		return "", err
+	}
 	createRestoreReq := &api.RestoreCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  restoreName,
@@ -4419,6 +4478,10 @@ func CreateCustomRestoreWithPVCs(restoreName string, backupName string, namespac
 			Uid:  bkpUid,
 		},
 		IncludeResources: newResources,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
 	}
 	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
 	if err != nil {
@@ -5247,6 +5310,10 @@ func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clu
 	}
 
 	backupDriver := Inst().Backup
+	clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+	if err != nil {
+		return nil, err
+	}
 	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  scheduleName,
@@ -5272,9 +5339,13 @@ func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clu
 			Uid:  postRuleUid,
 		},
 		NsLabelSelectors: namespaceLabel,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
 	}
 
-	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
+	err = AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -5299,6 +5370,10 @@ func CreateVMScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, v
 	backupDriver := Inst().Backup
 
 	includeResource := GenerateResourceInfo(vms)
+	clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+	if err != nil {
+		return nil, err
+	}
 	bkpScheduleCreateRequest := &api.BackupScheduleCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  scheduleName,
@@ -5329,9 +5404,13 @@ func CreateVMScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, v
 		},
 		SkipVmAutoExecRules: skipVmAutoExecRules,
 		NsLabelSelectors:    namespaceLabel,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
 	}
 
-	err := AdditionalScheduledBackupRequestParams(bkpScheduleCreateRequest)
+	err = AdditionalScheduledBackupRequestParams(bkpScheduleCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -6330,6 +6409,10 @@ func CreateRestoreWithProjectMapping(restoreName string, backupName string, name
 			break
 		}
 	}
+	clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+	if err != nil {
+		return err
+	}
 	createRestoreReq := &api.RestoreCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  restoreName,
@@ -6345,6 +6428,10 @@ func CreateRestoreWithProjectMapping(restoreName string, backupName string, name
 		},
 		RancherProjectMapping:     rancherProjectMapping,
 		RancherProjectNameMapping: rancherProjectNameMapping,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
 	}
 	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
 	if err != nil {
@@ -6379,6 +6466,10 @@ func CreateRestoreOnRancherWithoutCheck(restoreName string, backupName string, n
 			break
 		}
 	}
+	clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+	if err != nil {
+		return err
+	}
 	createRestoreReq := &api.RestoreCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  restoreName,
@@ -6395,6 +6486,10 @@ func CreateRestoreOnRancherWithoutCheck(restoreName string, backupName string, n
 		ReplacePolicy:             api.ReplacePolicy_Type(replacePolicy),
 		RancherProjectMapping:     rancherProjectMapping,
 		RancherProjectNameMapping: rancherProjectNameMapping,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
 	}
 	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
 	if err != nil {
