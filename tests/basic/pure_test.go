@@ -2454,7 +2454,7 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 		n := node.GetStorageDriverNodes()[0]
 
 		faSecret := Inst().FaSecret
-		log.InfoD("Fa secret : %s",fasecret)
+		log.InfoD("Fa secret : %s",faSecret)
 
 		stepLog := "get the secrete of FA which is not present in pure secret"
 		Step(stepLog, func() {
