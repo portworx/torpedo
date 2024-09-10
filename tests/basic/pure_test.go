@@ -2526,7 +2526,7 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 			}
 
 			//create a volume on the FA
-			volSize := 1048576 * rand.Intn(10)
+			volSize := 1048576 * (rand.Intn(10) + 1)
 			volume, err := pureutils.CreateVolumeOnFABackend(FAclient, volumeName, volSize)
 			log.FailOnError(err, "Failed to create volume on FA")
 			log.InfoD("Volume created on FA: %v", volume.Name)
