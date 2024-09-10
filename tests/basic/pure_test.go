@@ -2421,6 +2421,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 	})
 })
 
+
 var _ = Describe("{VolAttachFAPxRestart}", func() {
 	/*
 				https://purestorage.atlassian.net/browse/PTX-21440
@@ -2539,16 +2540,6 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 		})
 		stepLog = "Run iscsiadm commands to login to the controllers"
 		Step(stepLog, func() {
-
-			//Run iscsiadm commands to login to the controllers
-			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
-
-			for _, networkInterface := range networkInterfaces {
-				err = LoginIntoController(n, networkInterface, *FAclient)
-				log.FailOnError(err, "Failed to login into controller")
-				log.InfoD("Successfully logged into controller: %v", networkInterface.Address)
-			}
-
 			// run multipath after login
 			cmd := "multipath -ll"
 			MultipathBeforeRestart, err = runCmd(cmd, n)
@@ -2586,15 +2577,6 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 		stepLog = "Delete the volume and host from the FA"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			//log out of all the controllers
-			networkInterfaces, err := pureutils.GetSpecificInterfaceBasedOnServiceType(FAclient, "iscsi")
-
-			for _, networkInterface := range networkInterfaces {
-				err = LogoutFromController(n, networkInterface, *FAclient)
-				log.FailOnError(err, "Failed to login into controller")
-				log.InfoD("Successfully logged out of controller: %v", networkInterface.Address)
-			}
-
 			//disconnect volume from host
 			_, err = pureutils.DisConnectVolumeFromHost(FAclient, hostName, volumeName)
 			log.FailOnError(err, "Failed to disconnect volume from host")
@@ -2619,6 +2601,7 @@ var _ = Describe("{VolAttachFAPxRestart}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
 
 func LoginIntoController(n node.Node, networkInterface flasharray.NetworkInterface, FAclient flasharray.Client) error {
 	ipAddress := networkInterface.Address
