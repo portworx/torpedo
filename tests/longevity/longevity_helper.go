@@ -44,6 +44,7 @@ var (
 	triggerFunctions       map[string]func(*[]*scheduler.Context, *chan *EventRecord)
 	triggerBackupFunctions map[string]func(*[]*scheduler.Context, *chan *EventRecord)
 	emailTriggerFunction   map[string]func()
+	eventTimeMap           = make(map[string]time.Time)
 
 	// Pure Topology is disabled by default
 	pureTopologyEnabled = false
@@ -2094,8 +2095,16 @@ func GenerateAndStoreEventCombinations() {
 func separateEventsByType() (nonDisruptive []string, disruptive []string) {
 
 	for event, _ := range triggerFunctions {
-		_, enableEvent := isTriggerEnabled(event)
-		if enableEvent {
+		addEvent := true
+		waitTIme, enableEvent := isTriggerEnabled(event)
+		if startTime, ok := eventTimeMap[event]; ok {
+			if time.Since(startTime) < waitTIme {
+				addEvent = false
+			}
+		}
+
+		if enableEvent && addEvent {
+			eventTimeMap[event] = time.Now().Local()
 			if slices.Contains(disruptiveTriggers, event) {
 				disruptive = append(disruptive, event)
 			} else {

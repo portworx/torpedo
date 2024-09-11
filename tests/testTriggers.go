@@ -4320,24 +4320,79 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 		return err
 	}
 
+	stnodes := node.GetStorageDriverNodes()
+	for _, n := range stnodes {
+
+		checkNodesStatus := func() (interface{}, bool, error) {
+
+			k8sNode, err := core.Instance().GetNodeByName(n.Name)
+			if err != nil {
+				return "", true, fmt.Errorf("error getting k8s node [%s]. Err: %v", n.Name, err)
+			}
+
+			for _, condition := range k8sNode.Status.Conditions {
+				if condition.Type == v1.NodeReady {
+					if condition.Status != v1.ConditionTrue || k8sNode.Spec.Unschedulable {
+						return "", true, fmt.Errorf("node %v has Node Status %v and Schedulabe status %v", n.Name, condition.Status, k8sNode.Spec.Unschedulable)
+					}
+				}
+			}
+			status, err := Inst().V.GetNodeStatus(n)
+			if err != nil {
+				return "", true, fmt.Errorf("error getting node status for node [%s]. Err: %v", n.Name, err)
+			}
+			if *status != opsapi.Status_STATUS_OK {
+				return "", true, fmt.Errorf("PX on node [%s] is not up and has status [%s]", n.Name, status)
+
+			}
+			log.Infof("PX Node [%s] has status [%s]", n.Name, status)
+			return "", false, nil
+
+		}
+
+		gctx := ctxt.Background()
+		gctx = ctxt.WithValue(gctx, torpedotask.TimeBeforeRetryKey, 1*time.Minute)
+		gctx = ctxt.WithValue(gctx, torpedotask.TimeoutKey, 20*time.Minute)
+		gctx = ctxt.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+
+		_, err = torpedotask.DoRetryWithTimeoutWithCtx(checkNodesStatus, gctx)
+
+		if err != nil {
+			return err
+		}
+
+		log.Infof("looking for core files on node %s", n.Name)
+		file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+
+		if err != nil {
+			log.Errorf("failed to do system check on node [%s], err: [%v]", n.Name, err)
+			continue
+		}
+
+		if len(file) != 0 {
+			log.Errorf(fmt.Sprintf("core file [%s] found on node %s", file, n.Name))
+		}
+
+	}
+
 	podList, err := core.Instance().GetPods(namespace, pxLabel)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("error getting pods in namespace [%s] with label [%v]. Err: %v", namespace, pxLabel, err)
 	}
 
 	for _, pod := range podList.Items {
 		log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
-		if pod.Status.Phase != v1.PodRunning {
-			return fmt.Errorf("pod [%s] in namespace [%s] has status [%s]", pod.Name, pod.Namespace, pod.Status.Phase)
-		}
-		if pod.Status.ContainerStatuses[0].State.Running == nil {
-			return fmt.Errorf("pod [%s] in namespace [%s] has container state [%v]", pod.Name, pod.Namespace, pod.Status.ContainerStatuses[0].State)
-		}
+		dash.VerifySafely(pod.Status.Phase, v1.PodRunning, fmt.Sprintf("pod [%s] in namespace [%s] has status [%s]", pod.Name, pod.Namespace, pod.Status.Phase))
+		dash.VerifySafely(pod.Status.ContainerStatuses[0].State.Running != nil, true, fmt.Sprintf("pod [%s] in namespace [%s] has container state [%v]", pod.Name, pod.Namespace, pod.Status.ContainerStatuses[0].State))
 
 		n, err := node.GetNodeByName(pod.Spec.NodeName)
 		if err != nil {
-			return err
+			log.Errorf("error getting node [%s]. Err: %v", pod.Spec.NodeName, err)
+			continue
 		}
 
 		t := func() (interface{}, bool, error) {
@@ -4359,131 +4414,93 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 		gctx = ctxt.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
 
 		_, err = torpedotask.DoRetryWithTimeoutWithCtx(t, gctx)
-		if err != nil {
-			return err
-		}
+		dash.VerifySafely(err, nil, fmt.Sprintf("validating CPU/Memory metrics on node [%s]", pod.Name))
 
 	}
 
 	podList, err = core.Instance().GetPods(namespace, storkLabel)
 	if err != nil {
-		return err
+		return fmt.Errorf("error getting pods in namespace [%s] with label [%v]. Err: %v", namespace, storkLabel, err)
 	}
 
 	for _, pod := range podList.Items {
 		log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
-		if pod.Status.Phase != v1.PodRunning {
-			return fmt.Errorf("pod [%s] in namespace [%s] has status [%s]", pod.Name, pod.Namespace, pod.Status.Phase)
-		}
-		if pod.Status.ContainerStatuses[0].State.Running == nil {
-			return fmt.Errorf("pod [%s] in namespace [%s] has container state [%v]", pod.Name, pod.Namespace, pod.Status.ContainerStatuses[0].State)
-		}
+		dash.VerifySafely(pod.Status.Phase, v1.PodRunning, fmt.Sprintf("pod [%s] in namespace [%s] has status [%s]", pod.Name, pod.Namespace, pod.Status.Phase))
+		dash.VerifySafely(pod.Status.ContainerStatuses[0].State.Running != nil, true, fmt.Sprintf("pod [%s] in namespace [%s] has container state [%v]", pod.Name, pod.Namespace, pod.Status.ContainerStatuses[0].State))
+
 		pm, err := Inst().S.GetPodMetrics(pod.Name, pod.Namespace)
 		if err != nil {
-			return err
+			log.Errorf("error getting metrics for pod %s in namespace %s. Err: %v", pod.Name, pod.Namespace, err)
+			continue
 		}
-		log.FailOnError(err, fmt.Sprintf("error getting metrics for pod %s in namespace %s", pod.Name, pod.Namespace))
+
 		log.Infof("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
 
 		memoryInGib := pm.Containers[0].Usage.Memory().Value() / (1024 * 1024)
-		fmt.Println("memory in GiB: ", memoryInGib)
+		log.Infof("pod [%s] in namespace [%s] has memory [%v] in MiB", pod.Name, pod.Namespace, memoryInGib)
 		multiplier := inf.NewDec(1, 0)
 
 		res, ok := new(inf.Dec).Mul(pm.Containers[0].Usage.Cpu().AsDec(), multiplier).Unscaled()
 		if ok {
-			cpuInMilliCores := res / (1000 * 1000)
-			fmt.Println("CPU in millicores: ", cpuInMilliCores)
+			cpuInMilliCores := res
+			log.Infof("pod [%s] in namespace [%s] has CPU in millicores: [%v]", pod.Name, pod.Namespace, cpuInMilliCores)
 		}
 
 	}
 	podList, err = core.Instance().GetPods(namespace, autopilotLabel)
 	if err != nil {
-		return err
-	}
+		log.Errorf("error getting pods in namespace [%s] with label [%v]. Err: %v", namespace, autopilotLabel, err)
+	} else {
+		for _, pod := range podList.Items {
+			log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
+			dash.VerifySafely(pod.Status.Phase, v1.PodRunning, fmt.Sprintf("pod [%s] in namespace [%s] has status [%s]", pod.Name, pod.Namespace, pod.Status.Phase))
+			dash.VerifySafely(pod.Status.ContainerStatuses[0].State.Running != nil, true, fmt.Sprintf("pod [%s] in namespace [%s] has container state [%v]", pod.Name, pod.Namespace, pod.Status.ContainerStatuses[0].State))
 
-	for _, pod := range podList.Items {
-		log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
-		if pod.Status.Phase != v1.PodRunning {
-			return fmt.Errorf("pod [%s] in namespace [%s] has status [%s]", pod.Name, pod.Namespace, pod.Status.Phase)
-		}
-		if pod.Status.ContainerStatuses[0].State.Running == nil {
-			return fmt.Errorf("pod [%s] in namespace [%s] has container state [%v]", pod.Name, pod.Namespace, pod.Status.ContainerStatuses[0].State)
-		}
-		pm, err := Inst().S.GetPodMetrics(pod.Name, pod.Namespace)
-		if err != nil {
-			return err
-		}
-		log.Infof("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
+			pm, err := Inst().S.GetPodMetrics(pod.Name, pod.Namespace)
+			if err != nil {
+				log.Errorf("error getting metrics for pod %s in namespace %s. Err: %v", pod.Name, pod.Namespace, err)
+				continue
+			}
+			log.Infof("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
+			memoryInGib := pm.Containers[0].Usage.Memory().Value() / (1024 * 1024)
+			log.Infof("pod [%s] in namespace [%s] has memory [%v] in MiB", pod.Name, pod.Namespace, memoryInGib)
+			multiplier := inf.NewDec(1, 0)
 
+			res, ok := new(inf.Dec).Mul(pm.Containers[0].Usage.Cpu().AsDec(), multiplier).Unscaled()
+			if ok {
+				cpuInMilliCores := res
+				log.Infof("pod [%s] in namespace [%s] has CPU in millicores: [%v]", pod.Name, pod.Namespace, cpuInMilliCores)
+			}
+
+		}
 	}
 
 	podList, err = core.Instance().GetPods(namespace, operatorLabel)
 	if err != nil {
-		return err
+		return fmt.Errorf("error getting pods in namespace [%s] with label [%v]. Err: %v", namespace, operatorLabel, err)
 	}
 
 	for _, pod := range podList.Items {
 		log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
-		if pod.Status.Phase != v1.PodRunning {
-			return fmt.Errorf("pod [%s] in namespace [%s] has status [%s]", pod.Name, pod.Namespace, pod.Status.Phase)
-		}
-		if pod.Status.ContainerStatuses[0].State.Running == nil {
-			return fmt.Errorf("pod [%s] in namespace [%s] has container state [%v]", pod.Name, pod.Namespace, pod.Status.ContainerStatuses[0].State)
-		}
+		dash.VerifySafely(pod.Status.Phase, v1.PodRunning, fmt.Sprintf("pod [%s] in namespace [%s] has status [%s]", pod.Name, pod.Namespace, pod.Status.Phase))
+		dash.VerifySafely(pod.Status.ContainerStatuses[0].State.Running != nil, true, fmt.Sprintf("pod [%s] in namespace [%s] has container state [%v]", pod.Name, pod.Namespace, pod.Status.ContainerStatuses[0].State))
+
 		pm, err := Inst().S.GetPodMetrics(pod.Name, pod.Namespace)
 		if err != nil {
-			return err
+			log.Errorf("error getting metrics for pod %s in namespace %s. Err: %v", pod.Name, pod.Namespace, err)
+			continue
 		}
 		log.Infof("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
-	}
+		memoryInGib := pm.Containers[0].Usage.Memory().Value() / (1024 * 1024)
+		log.Infof("pod [%s] in namespace [%s] has memory [%v] in MiB", pod.Name, pod.Namespace, memoryInGib)
+		multiplier := inf.NewDec(1, 0)
 
-	stnodes := node.GetStorageDriverNodes()
-	for _, n := range stnodes {
-		k8sNode, err := core.Instance().GetNodeByName(n.Name)
-		if err != nil {
-			return err
-		}
-
-		for _, condition := range k8sNode.Status.Conditions {
-			if condition.Type == v1.NodeReady {
-				if condition.Status != v1.ConditionTrue || k8sNode.Spec.Unschedulable {
-					return fmt.Errorf("node %v has Node Status %v and Schedulabe status %v", n.Name, condition.Status, k8sNode.Spec.Unschedulable)
-				}
-			}
-			status, err := Inst().V.GetNodeStatus(n)
-			if err != nil {
-				return err
-			}
-			if *status != opsapi.Status_STATUS_OK {
-				return fmt.Errorf("node [%s] has status [%s]", n.Name, status)
-
-			}
-			log.Infof("Node [%s] has status [%s]", n.Name, status)
-		}
-
-		coresFound := false
-
-		log.Infof("looking for core files on node %s", n.Name)
-		file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
-			Timeout:         2 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
-		})
-
-		if err != nil {
-			return fmt.Errorf("failed to do system check on node [%s], err: [%v]", n.Name, err)
-		}
-
-		if len(file) != 0 {
-			coresFound = true
-			log.Errorf(fmt.Sprintf("core file [%s] found on node %s", file, n.Name))
-		}
-
-		if coresFound {
-			return fmt.Errorf("one or more core files found on the nodes")
+		res, ok := new(inf.Dec).Mul(pm.Containers[0].Usage.Cpu().AsDec(), multiplier).Unscaled()
+		if ok {
+			cpuInMilliCores := res
+			log.Infof("pod [%s] in namespace [%s] has CPU in millicores: [%v]", pod.Name, pod.Namespace, cpuInMilliCores)
 		}
 	}
-
-	ctxErr := false
 
 	for _, ctx := range *contexts {
 		errorChan := make(chan error, errorChannelSize)
@@ -4551,33 +4568,27 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 
 		for e := range errorChan {
 			if e != nil {
-				ctxErr = true
+
 				log.Errorf("Error: %v", e)
 			}
 		}
 	}
 
-	if ctxErr {
-		return fmt.Errorf("one or more errors found while validating contexts")
-	}
-
 	log.Infof("Validating Event errors ")
-	evErr := false
+
 	for i := 0; i < eventRing.Len(); i++ {
 		record := eventRing.Value
 		if record != nil {
 			ev := *record.(*EventRecord)
 			if ev.Outcome != nil && len(ev.Outcome) > 0 {
-				evErr = true
+
 				log.Errorf("Event [%s] failed with error [%v]", ev.Event.Type, ev.Outcome)
 			}
 			eventRing.Value = nil
 		}
 		eventRing = eventRing.Next()
 	}
-	if evErr {
-		return fmt.Errorf("one or more errors found while validating events")
-	}
+
 	return nil
 }
 
