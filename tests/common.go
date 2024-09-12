@@ -4901,13 +4901,18 @@ func DeleteBackupWithClusterUID(backupName string, backupUID string, clusterName
 func DeleteCluster(name string, orgID string, ctx context1.Context, cleanupBackupsRestores bool) error {
 	backupDriver := Inst().Backup
 	clusterUid, err := backupDriver.GetClusterUID(ctx, orgID, name)
+	if cleanupBackupsRestores {
+		err = DeleteAllBackupsWithClusterUid(ctx, BackupOrgID, clusterUid)
+		if err != nil {
+			return err
+		}
+	}
 	if err != nil {
 		return err
 	}
 	clusterDeleteReq := &api.ClusterDeleteRequest{
 		OrgId:          orgID,
 		Name:           name,
-		DeleteBackups:  cleanupBackupsRestores,
 		DeleteRestores: cleanupBackupsRestores,
 		Uid:            clusterUid,
 	}
@@ -4918,11 +4923,16 @@ func DeleteCluster(name string, orgID string, ctx context1.Context, cleanupBacku
 // DeleteClusterWithUID deletes cluster with the given cluster name and uid
 func DeleteClusterWithUID(name string, uid string, orgID string, ctx context1.Context, cleanupBackupsRestores bool) error {
 	backupDriver := Inst().Backup
+	if cleanupBackupsRestores {
+		err := DeleteAllBackupsWithClusterUid(ctx, BackupOrgID, uid)
+		if err != nil {
+			return err
+		}
+	}
 	clusterDeleteReq := &api.ClusterDeleteRequest{
 		OrgId:          orgID,
 		Name:           name,
 		Uid:            uid,
-		DeleteBackups:  cleanupBackupsRestores,
 		DeleteRestores: cleanupBackupsRestores,
 	}
 	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
@@ -4955,15 +4965,21 @@ func IsSchedulePolicyAutoDelete(name, orgId, uid string, ctx context1.Context) (
 func DeleteBackupLocation(name string, backupLocationUID string, orgID string, DeleteExistingBackups bool) error {
 
 	backupDriver := Inst().Backup
-	bLocationDeleteReq := &api.BackupLocationDeleteRequest{
-		Name:          name,
-		OrgId:         orgID,
-		DeleteBackups: DeleteExistingBackups,
-		Uid:           backupLocationUID,
-	}
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
 		return err
+	}
+
+	if DeleteExistingBackups {
+		err = DeleteAllBackupsForBackupLocation(ctx, BackupOrgID, name, backupLocationUID)
+		if err != nil {
+			return err
+		}
+	}
+	bLocationDeleteReq := &api.BackupLocationDeleteRequest{
+		Name:  name,
+		OrgId: orgID,
+		Uid:   backupLocationUID,
 	}
 	_, err = backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
 	if err != nil {
@@ -4977,11 +4993,16 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string, D
 // DeleteBackupLocationWithContext deletes backup location with the given context
 func DeleteBackupLocationWithContext(name string, backupLocationUID string, orgID string, DeleteExistingBackups bool, ctx context1.Context) error {
 	backupDriver := Inst().Backup
+	if DeleteExistingBackups {
+		err := DeleteAllBackupsForBackupLocation(ctx, BackupOrgID, name, backupLocationUID)
+		if err != nil {
+			return err
+		}
+	}
 	bLocationDeleteReq := &api.BackupLocationDeleteRequest{
-		Name:          name,
-		Uid:           backupLocationUID,
-		OrgId:         orgID,
-		DeleteBackups: DeleteExistingBackups,
+		Name:  name,
+		Uid:   backupLocationUID,
+		OrgId: orgID,
 	}
 	_, err := backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
 	if err != nil {
@@ -4993,6 +5014,16 @@ func DeleteBackupLocationWithContext(name string, backupLocationUID string, orgI
 // DeleteSchedule deletes backup schedule
 func DeleteSchedule(backupScheduleName string, clusterName string, orgID string, ctx context1.Context, deleteBackups bool) error {
 	backupDriver := Inst().Backup
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	if deleteBackups {
+		err = DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
+		if err != nil {
+			return err
+		}
+	}
 	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
 		Name:  backupScheduleName,
 		Uid:   "",
@@ -5006,10 +5037,7 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
 		OrgId: orgID,
 		Name:  backupScheduleName,
-		// DeleteBackups indicates whether the cloud backup files need to
-		// be deleted or retained.
-		DeleteBackups: deleteBackups,
-		Uid:           backupScheduleUID,
+		Uid:   backupScheduleUID,
 	}
 	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
 	if err != nil {
@@ -5039,15 +5067,22 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 // DeleteScheduleWithUID deletes backup schedule with the given backup schedule name and uid
 func DeleteScheduleWithUID(backupScheduleName string, backupScheduleUid string, orgID string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	err = DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
+	if err != nil {
+		return err
+	}
 	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
 		OrgId: orgID,
 		Name:  backupScheduleName,
 		// DeleteBackups indicates whether the cloud backup files need to
 		// be deleted or retained.
-		DeleteBackups: true,
-		Uid:           backupScheduleUid,
+		Uid: backupScheduleUid,
 	}
-	_, err := backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
 	if err != nil {
 		return err
 	}
@@ -5057,15 +5092,20 @@ func DeleteScheduleWithUID(backupScheduleName string, backupScheduleUid string, 
 // DeleteScheduleWithUIDAndWait deletes backup schedule with the given backup schedule name and uid and waits for its deletion
 func DeleteScheduleWithUIDAndWait(backupScheduleName string, backupScheduleUid string, clusterName string, clusterUid string, orgID string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	err = DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
+	if err != nil {
+		return err
+	}
 	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
 		OrgId: orgID,
 		Name:  backupScheduleName,
-		// DeleteBackups indicates whether the cloud backup files need to
-		// be deleted or retained.
-		DeleteBackups: true,
-		Uid:           backupScheduleUid,
+		Uid:   backupScheduleUid,
 	}
-	_, err := backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
 	clusterReq := &api.ClusterInspectRequest{
 		OrgId:          orgID,
 		Name:           clusterName,
@@ -6332,14 +6372,20 @@ func DeleteScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 	Step(fmt.Sprintf("Delete scheduled backup %s of all namespaces on cluster %s in organization %s",
 		backupScheduleName, SourceClusterName, OrgID), func() {
 		backupDriver := Inst().Backup
-
+		ctx, err = backup.GetAdminCtxFromSecret()
+		if err != nil {
+			return
+		}
+		err = DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
+		if err != nil {
+			return
+		}
 		bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
 			OrgId: OrgID,
 			Name:  backupScheduleName,
 			// delete_backups indicates whether the cloud backup files need to
 			// be deleted or retained.
-			DeleteBackups: true,
-			Uid:           backupScheduleUID,
+			Uid: backupScheduleUID,
 		}
 		ctx, err = backup.GetPxCentralAdminCtx()
 		if err != nil {

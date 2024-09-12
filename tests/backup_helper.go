@@ -5,9 +5,8 @@ import (
 	context1 "context"
 	"fmt"
 	"github.com/gogo/protobuf/types"
+
 	"github.com/portworx/torpedo/drivers/applications/databases"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -6983,14 +6982,11 @@ func DeleteAllBackups(ctx context1.Context, orgId string) error {
 		return err
 	}
 	errChan := make(chan error, len(curBackups.GetBackups()))
-	semaphore := make(chan int, 4)
 	var wg sync.WaitGroup
 	for _, bkp := range curBackups.GetBackups() {
 		wg.Add(1)
 		go func(bkp *api.BackupObject) {
-			semaphore <- 0
 			defer wg.Done()
-			defer func() { <-semaphore }()
 			bkpDeleteRequest := &api.BackupDeleteRequest{
 				Name:  bkp.GetName(),
 				OrgId: bkp.GetOrgId(),
@@ -7001,7 +6997,50 @@ func DeleteAllBackups(ctx context1.Context, orgId string) error {
 				errChan <- err
 				return
 			}
-			err = Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), bkp.GetOrgId(), BackupDeleteTimeout, BackupDeleteRetryTime)
+		}(bkp)
+	}
+	wg.Wait()
+	close(errChan)
+	var errList []string
+	for err := range errChan {
+		errList = append(errList, err.Error())
+	}
+	if len(errList) > 0 {
+		return fmt.Errorf(strings.Join(errList, "; "))
+	}
+	for _, bkp := range curBackups.GetBackups() {
+		err = Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), bkp.GetOrgId(), BackupDeleteTimeout, BackupDeleteRetryTime)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeleteAllBackupsWithClusterUid deletes all backup from the given context and org for a specific cluster Uid
+func DeleteAllBackupsWithClusterUid(ctx context1.Context, orgId, clusterUid string) error {
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgId,
+		EnumerateOptions: &api.EnumerateOptions{
+			ClusterUidFilter: clusterUid,
+		},
+	}
+	curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	errChan := make(chan error, len(curBackups.GetBackups()))
+	var wg sync.WaitGroup
+	for _, bkp := range curBackups.GetBackups() {
+		wg.Add(1)
+		go func(bkp *api.BackupObject) {
+			defer wg.Done()
+			bkpDeleteRequest := &api.BackupDeleteRequest{
+				Name:  bkp.GetName(),
+				OrgId: bkp.GetOrgId(),
+				Uid:   bkp.GetUid(),
+			}
+			_, err := Inst().Backup.DeleteBackup(ctx, bkpDeleteRequest)
 			if err != nil {
 				errChan <- err
 				return
@@ -7010,13 +7049,113 @@ func DeleteAllBackups(ctx context1.Context, orgId string) error {
 	}
 	wg.Wait()
 	close(errChan)
-	close(semaphore)
 	var errList []string
 	for err := range errChan {
 		errList = append(errList, err.Error())
 	}
 	if len(errList) > 0 {
 		return fmt.Errorf(strings.Join(errList, "; "))
+	}
+	for _, bkp := range curBackups.GetBackups() {
+		err = Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), bkp.GetOrgId(), BackupDeleteTimeout, BackupDeleteRetryTime)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeleteAllBackupsForBackupLocation deletes all backup for a given backup location
+func DeleteAllBackupsForBackupLocation(ctx context1.Context, orgId, BackupLocationName, BackupLocationUid string) error {
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgId,
+	}
+	curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	errChan := make(chan error, len(curBackups.GetBackups()))
+	var wg sync.WaitGroup
+	for _, bkp := range curBackups.GetBackups() {
+		if bkp.GetBackupLocationRef().GetName() == BackupLocationName && bkp.GetBackupLocationRef().GetUid() == BackupLocationUid {
+			wg.Add(1)
+			go func(bkp *api.BackupObject) {
+				defer wg.Done()
+				bkpDeleteRequest := &api.BackupDeleteRequest{
+					Name:  bkp.GetName(),
+					OrgId: bkp.GetOrgId(),
+					Uid:   bkp.GetUid(),
+				}
+				_, err := Inst().Backup.DeleteBackup(ctx, bkpDeleteRequest)
+				if err != nil {
+					errChan <- err
+					return
+				}
+			}(bkp)
+		}
+	}
+	wg.Wait()
+	close(errChan)
+	var errList []string
+	for err := range errChan {
+		errList = append(errList, err.Error())
+	}
+	if len(errList) > 0 {
+		return fmt.Errorf(strings.Join(errList, "; "))
+	}
+	for _, bkp := range curBackups.GetBackups() {
+		err = Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), bkp.GetOrgId(), BackupDeleteTimeout, BackupDeleteRetryTime)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeleteAllScheduleBackups deletes all backup from the given context and org for a specific schedule
+func DeleteAllScheduleBackups(ctx context1.Context, orgId, scheduleName string) error {
+	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgId)
+	if err != nil {
+		return err
+	}
+	errChan := make(chan error, len(allScheduleBackupNames))
+	var wg sync.WaitGroup
+	for _, bkp := range allScheduleBackupNames {
+		if IsBackupPresent(ctx, bkp, orgId) {
+			wg.Add(1)
+			go func(bkp string) {
+				defer wg.Done()
+				uid, err := Inst().Backup.GetBackupUID(ctx, bkp, orgId)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				bkpDeleteRequest := &api.BackupDeleteRequest{
+					Name:  bkp,
+					OrgId: orgId,
+					Uid:   uid,
+				}
+				_, err = Inst().Backup.DeleteBackup(ctx, bkpDeleteRequest)
+				if err != nil {
+
+				}
+			}(bkp)
+		}
+	}
+	wg.Wait()
+	close(errChan)
+	var errList []string
+	for err := range errChan {
+		errList = append(errList, err.Error())
+	}
+	if len(errList) > 0 {
+		return fmt.Errorf(strings.Join(errList, "; "))
+	}
+	for _, bkp := range allScheduleBackupNames {
+		err = Inst().Backup.WaitForBackupDeletion(ctx, bkp, orgId, BackupDeleteTimeout, BackupDeleteRetryTime)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -8035,8 +8174,7 @@ func AreAllVolumeBackupsFull(orgID string, backupName string, ctx context1.Conte
 func IsBackupPresent(ctx context1.Context, backupName string, orgID string) bool {
 	backupDriver := Inst().Backup
 	_, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-	code := status.Code(err)
-	if code == codes.NotFound {
+	if err != nil && strings.Contains(err.Error(), fmt.Sprintf("backup with name '%s' not found for org '%s'", backupName, orgID)) {
 		return false
 	}
 	return true
@@ -9452,6 +9590,12 @@ func SuspendAndDeleteSchedule(backupScheduleName string, schedulePolicyName stri
 		return err
 	}
 	log.Infof("Verifying if the schedule is suspended by getting the suspended state of the schedule by inspecting")
+	if deleteBackupFlag {
+		err = DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
+		if err != nil {
+			return err
+		}
+	}
 	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
 		OrgId: orgID,
 		Name:  backupScheduleName,
@@ -9475,10 +9619,7 @@ func SuspendAndDeleteSchedule(backupScheduleName string, schedulePolicyName stri
 	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
 		OrgId: orgID,
 		Name:  backupScheduleName,
-		// DeleteBackups indicates whether the cloud backup files need to
-		// be deleted or retained.
-		DeleteBackups: deleteBackupFlag,
-		Uid:           backupScheduleUID,
+		Uid:   backupScheduleUID,
 	}
 	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
 	if err != nil {

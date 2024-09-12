@@ -452,6 +452,15 @@ message NFSConfig {
     string mount_option = 3;
 }
 
+message completionTimeInfo {
+    // This will store timestamp for the completion of volumes
+    google.protobuf.Timestamp volumes_completion_time = 1;
+    // This will store timestamp for the completion of resources
+    google.protobuf.Timestamp resources_completion_time = 2;
+    // This will store the total completion time of the entire backup/restore
+    google.protobuf.Timestamp total_completion_time = 3;
+}
+
 message BackupLocationInfo {
     Type type = 1;
     string path = 2;
@@ -571,6 +580,8 @@ message BackupInfo {
     bool direct_kdmp = 38;
     // this will store the timestamp, when the retention period of locked backup will be expired
     google.protobuf.Timestamp retention_time = 39;
+    // this will store the completion time of the volumes, resources and total backup
+    completionTimeInfo completion_time_info = 40;
 
     message BackupType {
         Type type = 1;
@@ -1148,8 +1159,7 @@ message BackupScheduleInspectResponse {
 message BackupScheduleDeleteRequest {
     string org_id = 1;
     string name = 2;
-    // delete_backups indicates whether the cloud backup files need to
-    // be deleted or retained.
+    // delete_backups is deprecated, not to be used.
     bool delete_backups = 3;
     string uid = 4;
 }
@@ -1323,8 +1333,7 @@ message ClusterInspectResponse { ClusterObject cluster = 1; }
 message ClusterDeleteRequest {
     string org_id = 1;
     string name = 2;
-    // delete_backups indicates whether the backup related to cluster need to
-    // be deleted or retained.
+    // delete_backups is deprecated, not to be used.
     bool delete_backups = 3;
     // delete_restores indicates whether the restore related to cluster  need to
     // be deleted or retained.
@@ -1871,8 +1880,7 @@ message BackupLocationInspectResponse {
 message BackupLocationDeleteRequest {
     string org_id = 1;
     string name = 2;
-    // delete_backups indicates whether the cloud backup files need to
-    // be deleted or retained.
+    // delete_backups is deprecated, not to be used.
     bool delete_backups = 3;
     string uid = 4;
 }
@@ -1909,7 +1917,43 @@ service Metrics {
             get : "/v1/metrics/{org_id}"
         };
     }
+
+    // Pass metrics from other pods to px-backup, which will push as px-backup metrics to Prometheus
+    rpc Create(MetricsCreateRequest) returns (MetricsCreateResponse) {
+        option (google.api.http) = {
+            post : "/v1/metrics/{org_id}"
+            body : "*"
+        };
+    }
 }
+
+message MetricsCreateRequest {
+   string org_id = 1;
+   MetricsInfo metrics_info = 2;
+
+}
+
+message MetricsInfo {
+    Type type = 1;
+    
+    // Check with charts/px-central/templates/px-backup/pxcentral-prometheus.yaml before 
+    // adding Type here, few metrics are ignored.
+    enum Type {
+        Invalid = 0;
+        BackupStatus = 1;
+        BackupResourceCount = 2;
+        BackupLocationStatus = 3;
+        ClusterStatus = 4;
+        RestoreStatus = 5;
+    }
+    
+    oneof MetricData {
+        BackupObject  backup = 100;
+    }
+    
+}
+
+message MetricsCreateResponse {}
 
 message MetricsInspectRequest { string org_id = 1; }
 
