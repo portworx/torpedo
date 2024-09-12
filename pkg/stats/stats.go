@@ -21,6 +21,7 @@ const (
 	HADecreaseEventName                     = "HA Decrease"
 	AddDiskEventName                        = "Add Disk"
 	ResizeDiskEventName                     = "Resize Disk"
+	ResizeAutoEventName                     = "Resize Auto"
 	AddPoolEventName                        = "New Pool Creation"
 	DeletePoolEventName                     = "Pool Deletion"
 	CloudsnapEventName                      = "Cloud Snapshot"

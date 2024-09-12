@@ -5,8 +5,6 @@ import (
 	"container/ring"
 	ctxt "context"
 	"fmt"
-	torpedotask "github.com/portworx/torpedo/pkg/task"
-	"gopkg.in/inf.v0"
 	"math"
 	"math/rand"
 	"net/url"
@@ -20,6 +18,9 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	torpedotask "github.com/portworx/torpedo/pkg/task"
+	"gopkg.in/inf.v0"
 
 	"github.com/devans10/pugo/flasharray"
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
@@ -485,6 +486,10 @@ const (
 	MetadataPoolResizeDisk = "metadatapoolResizeDisk"
 	// PoolAddDisk resize storage pool using add-disk
 	PoolAddDisk = "poolAddDisk"
+	// PoolExpansionAuto resize storage pool using auto
+	PoolExpansionAuto = "poolExpansionAuto"
+	// PoolExpansionResizeDisk resize storage pool using resize-disk
+	PoolExpansionResizeDisk = "poolExpansionResizeDisk"
 	// BackupAllApps Perform backups of all deployed apps
 	BackupAllApps = "backupAllApps"
 	// BackupScheduleAll Creates and deletes namespaces and checks a scheduled backup for inclusion
@@ -6284,11 +6289,16 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 		return
 	}
 
-	expansionType := "resize-disk"
-
-	if resizeOperationType == 1 {
-		expansionType = "add-disk"
-	}
+	expansionType, statType := func() (string, string) {
+		switch resizeOperationType {
+		case 0:
+			return "auto", stats.ResizeAutoEventName
+		case 1:
+			return "add-disk", stats.AddDiskEventName
+		default:
+			return "resize-disk", stats.ResizeDiskEventName
+		}
+	}()
 
 	if poolValidity {
 		initialPoolSize := pool.TotalSize / units.GiB
@@ -6298,10 +6308,6 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 		dashStats["pool-uuid"] = pool.Uuid
 		dashStats["resize-operation"] = resizeOperationType.String()
 		dashStats["resize-percentage"] = fmt.Sprintf("%d", chaosLevel)
-		statType := stats.AddDiskEventName
-		if resizeOperationType == opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK {
-			statType = stats.ResizeDiskEventName
-		}
 		isDmthin, _ := IsDMthin()
 		pNode, err = GetNodeFromPoolUUID(pool.Uuid)
 		if err != nil {
@@ -13238,3 +13244,88 @@ $('#pxtable tr td').each(function(){
 </table>
 </body>
 </html>`
+
+// TriggerPoolExpansionAuto performs auto on the storage pools for the given contexts
+func TriggerPoolExpansionAuto(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(PoolExpansionAuto)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PoolExpansionAuto,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	chaosLevel := getPoolExpandPercentage(PoolExpansionAuto)
+	stepLog := fmt.Sprintf("get storage pools and perform auto by %v percentage on it ", chaosLevel)
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		poolsToBeResized, err := getStoragePoolsToExpand(opsapi.SdkStoragePool_RESIZE_TYPE_AUTO, chaosLevel)
+		if err != nil {
+			log.Error(err.Error())
+			UpdateOutcome(event, err)
+		}
+		log.InfoD("Pools to auto [%v]", poolsToBeResized)
+		var wg sync.WaitGroup
+		for _, pool := range poolsToBeResized {
+			//Initiating multiple pool expansions by auto
+			wg.Add(1)
+			go initiatePoolExpansion(event, &wg, pool, chaosLevel, opsapi.SdkStoragePool_RESIZE_TYPE_AUTO, false)
+		}
+		wg.Wait()
+	})
+	if !isSSIERun() {
+		validateContexts(event, contexts)
+	}
+	updateMetrics(*event)
+}
+
+// TriggerPoolExpansionResizeDisk performs resize-disk on the storage pools for the given contexts
+func TriggerPoolExpansionResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(PoolExpansionResizeDisk)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PoolExpansionResizeDisk,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	chaosLevel := getPoolExpandPercentage(PoolExpansionResizeDisk)
+	stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		poolsToBeResized, err := getStoragePoolsToExpand(opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, chaosLevel)
+		if err != nil {
+			log.Error(err.Error())
+			UpdateOutcome(event, err)
+		}
+		log.InfoD("Pools to resize-disk [%v]", poolsToBeResized)
+		var wg sync.WaitGroup
+		for _, pool := range poolsToBeResized {
+			//Initiating multiple pool expansions by resize-disk
+			wg.Add(1)
+			go initiatePoolExpansion(event, &wg, pool, chaosLevel, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, false)
+
+		}
+		wg.Wait()
+	})
+	if !isSSIERun() {
+		validateContexts(event, contexts)
+	}
+	updateMetrics(*event)
+}
