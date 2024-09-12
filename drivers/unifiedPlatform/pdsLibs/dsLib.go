@@ -1,0 +1,270 @@
+package pdslibs
+
+import (
+	"encoding/base64"
+	"fmt"
+	"github.com/portworx/torpedo/drivers/applications/databases"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/portworx/torpedo/drivers/utilities"
+	"github.com/portworx/torpedo/pkg/log"
+	"golang.org/x/sync/errgroup"
+	"strings"
+)
+
+const (
+	DEPLOYMENT_TOPOLOGY = "pds-qa-test-topology"
+)
+
+type DataServiceDetails struct {
+	Deployment                    automationModels.V1Deployment
+	Namespace                     string
+	NamespaceId                   string
+	SourceMd5Checksum             string
+	DSParams                      PDSDataService
+	DNSEndpoint                   string
+	DatabaseDriver                databases.DatabaseDriver
+	DatabaseName                  string
+	DatabaseUser                  string
+	DatabaseControlChannel        *chan string
+	DatabaseErrorGroup            *errgroup.Group
+	IsContinousDataSupportEnabled bool
+}
+
+// WorkloadGenerationParams has data service creds
+type WorkloadGenerationParams struct {
+	Host                         string
+	User                         string
+	Password                     string
+	DataServiceName              string
+	DeploymentName               string
+	DeploymentID                 string
+	ScaleFactor                  string
+	Iterations                   string
+	Namespace                    string
+	UseSSL, VerifyCerts, TimeOut string
+	Replicas                     int
+}
+
+// InitUnifiedApiComponents
+func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
+	v2Components, err = unifiedPlatform.NewUnifiedPlatformComponents(controlPlaneURL, accountID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func GetDeploymentConfig(deploymentConfigId string) (*automationModels.PDSDeploymentResponse, error) {
+	depInputs := &automationModels.PDSDeploymentRequest{
+		Update: automationModels.PDSDeploymentUpdate{
+			DeploymentConfigId: deploymentConfigId,
+		},
+	}
+	deployment, err := v2Components.PDS.GetDeploymentConfig(depInputs)
+	if err != nil {
+		return nil, err
+	}
+	return deployment, err
+}
+
+func UpdateDataService(ds PDSDataService, deploymentId, namespaceId, projectId, imageId, appConfigId, resConfigId, stConfigId string) (*automationModels.PDSDeploymentResponse, error) {
+	log.Info("Update Data service will be performed")
+	depInputs := &automationModels.PDSDeploymentRequest{
+		Update: automationModels.PDSDeploymentUpdate{
+			NamespaceID:  namespaceId,
+			ProjectID:    projectId,
+			DeploymentID: deploymentId,
+			V1Deployment: automationModels.V1DeploymentUpdate{
+				Meta: automationModels.Meta{
+					Name: &ds.DeploymentName,
+				},
+				Config: automationModels.DataServiceDeploymentUpdateConfig{
+					DataServiceDeploymentMeta: automationModels.Meta{
+						Description: StringPtr("pds-qa-tests"),
+					},
+					DataServiceDeploymentConfig: automationModels.V1Config1{
+						References: automationModels.Reference{
+							ImageId: &imageId,
+						},
+						TlsConfig: automationModels.V1TLSConfig{
+							Enabled:    ds.EnableTLS,
+							IssuerName: ds.IssuerName,
+						},
+						DataServiceDeploymentTopologies: []automationModels.V1DataServiceDeploymentTopology{
+							{
+								Name:      StringPtr(DEPLOYMENT_TOPOLOGY),
+								Instances: intToPointerString(ds.ScaleReplicas),
+								ResourceSettings: &automationModels.PdsTemplates{
+									Id: &resConfigId,
+								},
+								ServiceConfigurations: &automationModels.PdsTemplates{
+									Id: &appConfigId,
+								},
+								StorageOptions: &automationModels.PdsTemplates{
+									Id: &stConfigId,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	deployment, err := v2Components.PDS.UpdateDeployment(depInputs)
+	if err != nil {
+		return nil, err
+	}
+	return deployment, err
+}
+
+// DeleteDeployment Deletes the given deployment
+func DeleteDeployment(deploymentId string) error {
+	return v2Components.PDS.DeleteDeployment(deploymentId)
+}
+
+func GetDeployment(deploymentId string) (*automationModels.PDSDeploymentResponse, error) {
+	deployment, err := v2Components.PDS.GetDeployment(deploymentId)
+	if err != nil {
+		return nil, err
+	}
+	return deployment, nil
+}
+
+func GetDeploymentCredentials(deploymentId string) (string, error) {
+
+	creds, err := v2Components.PDS.GetDeploymentCredentials(deploymentId)
+	if err != nil {
+		return "", err
+	}
+	password, err := base64.StdEncoding.DecodeString(creds)
+	if err != nil {
+		return "", fmt.Errorf("Failed to decode the password: %v\n", err)
+	}
+	return string(password), nil
+}
+
+func GetDeploymentAndPodDetails(deploymentId string) (*automationModels.PDSDeploymentResponse, string, error) {
+	deployment, err := v2Components.PDS.GetDeployment(deploymentId)
+	if err != nil {
+		return nil, "", err
+	}
+	log.Debugf("deployment [%+v]", deployment)
+	pod := deployment.Get.Status.DataServiceDeploymentTopologyStatus[0].ConnectionInfo.ReadyInstances[0].Name
+	log.Debugf("pods [%+v]", *pod)
+	podName := utilities.GetBasePodName(*pod)
+	return deployment, podName, err
+}
+
+// DeployDataService Deploys the dataservices based on the given params
+func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterId, imageId, appConfigId, resConfigId, stConfigId string) (*automationModels.PDSDeploymentResponse, error) {
+	log.Info("Data service will be deployed as per the config map passed..")
+	depInputs := &automationModels.PDSDeploymentRequest{
+		Create: automationModels.PDSDeployment{
+			NamespaceID: namespaceId,
+			ProjectID:   projectId,
+			V1Deployment: automationModels.V1Deployment{
+				Meta: automationModels.Meta{
+					Name: &ds.DeploymentName,
+				},
+				Config: automationModels.V1Config1{
+					References: automationModels.Reference{
+						ImageId: &imageId,
+					},
+					TlsConfig: automationModels.V1TLSConfig{
+						Enabled:    ds.EnableTLS,
+						IssuerName: ds.IssuerName,
+					},
+					DataServiceDeploymentTopologies: []automationModels.V1DataServiceDeploymentTopology{
+						{
+							Name:        StringPtr(DEPLOYMENT_TOPOLOGY),
+							Instances:   intToPointerString(ds.Replicas),
+							ServiceType: StringPtr(ds.ServiceType),
+							ResourceSettings: &automationModels.PdsTemplates{
+								Id: &resConfigId,
+							},
+							ServiceConfigurations: &automationModels.PdsTemplates{
+								Id: &appConfigId,
+							},
+							StorageOptions: &automationModels.PdsTemplates{
+								Id: &stConfigId,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	log.Infof("app template ids [%s]", *depInputs.Create.V1Deployment.Config.DataServiceDeploymentTopologies[0].ServiceConfigurations.Id)
+	log.Infof("resource template ids [%s]", *depInputs.Create.V1Deployment.Config.DataServiceDeploymentTopologies[0].ResourceSettings.Id)
+	log.Infof("storage template ids [%s]", *depInputs.Create.V1Deployment.Config.DataServiceDeploymentTopologies[0].StorageOptions.Id)
+
+	log.Infof("Is TLS Enabled [%v]", ds.EnableTLS)
+	log.Infof("IssuerName [%v]", ds.IssuerName)
+
+	log.Infof("depInputs [+%v]", depInputs.Create)
+	deployment, err := v2Components.PDS.CreateDeployment(depInputs)
+	if err != nil {
+		return nil, err
+	}
+	return deployment, err
+}
+
+// GetDataServiceId gets the DataService's ID
+func GetDataServiceId(dsName string) (string, error) {
+	ds, err := v2Components.PDS.ListDataServices()
+	if err != nil {
+		return "", fmt.Errorf("Failed to list DataServices: %v", err)
+	}
+	for _, dataService := range ds.DataServiceList {
+		log.Debugf("Dataservice name: [%s]", *dataService.Meta.Name)
+		if strings.Contains(strings.ToLower(strings.ReplaceAll(*dataService.Meta.Name, " ", "")), strings.ToLower(dsName)) {
+			return *dataService.Meta.Uid, nil
+		}
+	}
+	return "", fmt.Errorf("Failed to find DataService with name %s", dsName)
+}
+
+func ListDataServiceVersions(dsId string) (*automationModels.CatalogResponse, error) {
+	input := automationModels.WorkFlowRequest{
+		DataServiceId: dsId,
+	}
+	ds, err := v2Components.PDS.ListDataServiceVersions(&input)
+	return ds, err
+}
+
+func ListDataServiceImages(dsId, dsVersionId string) (*automationModels.CatalogResponse, error) {
+	input := automationModels.WorkFlowRequest{
+		DataServiceId:        dsId,
+		DataServiceVersionId: dsVersionId,
+	}
+	ds, err := v2Components.PDS.ListDataServiceImages(&input)
+	return ds, err
+}
+
+func DeleteAllDeployments(projectId string) error {
+	var numberOfDeploymentsDeleted int
+	deployments, err := v2Components.PDS.ListDeployment(projectId)
+	if err != nil {
+		return err
+	}
+
+	if len(deployments.List) <= 0 {
+		return fmt.Errorf("Deployments List is empty, No deployments to delete.\n")
+	}
+
+	for _, dep := range deployments.List {
+		log.Infof("Deleting Deployment [%d]", *dep.Meta.Uid)
+		err := v2Components.PDS.DeleteDeployment(*dep.Meta.Uid)
+		if err != nil {
+			//TODO: Check for associated backup's and delete it
+			log.Infof("Error occured while deleting deployments, skipping for now: [%s]", err)
+			numberOfDeploymentsDeleted -= 1
+		}
+		numberOfDeploymentsDeleted += 1
+	}
+
+	log.Infof("Total number of deployments Deleted [%d]", numberOfDeploymentsDeleted)
+	return nil
+}

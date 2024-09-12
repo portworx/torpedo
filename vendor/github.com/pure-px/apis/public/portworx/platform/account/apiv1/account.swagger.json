@@ -1,0 +1,348 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/platform/account/apiv1/account.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "AccountService"
+        }
+    ],
+    "paths": {
+        "/core/v1/accounts/{accountId}": {
+            "get": {
+                "summary": "GetAccount API returns the info about account for given account id.",
+                "operationId": "AccountService_GetAccount",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1Account"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "accountId",
+                        "description": "account id for which account details need to be fetched.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "AccountService"
+                ]
+            },
+            "delete": {
+                "summary": "DeleteAccount API deletes account for given id.",
+                "operationId": "AccountService_DeleteAccount",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {}
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "accountId",
+                        "description": "account id which is going to be deleted.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "AccountService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "accountv1Status": {
+                "type": "object",
+                "properties": {
+                    "pxe": {
+                        "$ref": "#/components/schemas/v1StatusType"
+                    },
+                    "pds": {
+                        "$ref": "#/components/schemas/v1StatusType"
+                    },
+                    "baas": {
+                        "$ref": "#/components/schemas/v1StatusType"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Textual information for the current state of the account."
+                    },
+                    "phase": {
+                        "$ref": "#/components/schemas/v1PhaseType"
+                    }
+                },
+                "title": "Subscription Status for Portworx Services"
+            },
+            "googlerpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "v1Account": {
+                "type": "object",
+                "properties": {
+                    "meta": {
+                        "$ref": "#/components/schemas/v1Meta"
+                    },
+                    "config": {
+                        "$ref": "#/components/schemas/v1Config"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/accountv1Status"
+                    }
+                },
+                "description": "Account is a high level entity that represents one large company(e.g. a Pure). An account has multiple tenants."
+            },
+            "v1AccountType": {
+                "type": "string",
+                "enum": [
+                    "ACCOUNT_TYPE_UNSPECIFIED",
+                    "FREEMIUM",
+                    "ENTERPRISE"
+                ],
+                "default": "ACCOUNT_TYPE_UNSPECIFIED",
+                "description": "Accepted account types.\n\n - ACCOUNT_TYPE_UNSPECIFIED: Unspecified, do not use.\n - FREEMIUM: Account is of freemium type for all three Portworx Service.\n - ENTERPRISE: Account has a active subscription for at least one of the Portworx Services."
+            },
+            "v1AwsSubscriptionInfo": {
+                "type": "object",
+                "properties": {
+                    "clientId": {
+                        "type": "string",
+                        "description": "Aws client id associated with the installed product."
+                    },
+                    "productId": {
+                        "type": "string",
+                        "description": "Aws product id of the installed product."
+                    },
+                    "accountId": {
+                        "type": "string",
+                        "description": "Aws account id associated with the installed product."
+                    }
+                },
+                "description": "AWS subscription info for one product."
+            },
+            "v1Config": {
+                "type": "object",
+                "properties": {
+                    "userEmail": {
+                        "type": "string",
+                        "description": "email of the first account user.",
+                        "readOnly": true
+                    },
+                    "dnsName": {
+                        "type": "string",
+                        "description": "Account DNS name."
+                    },
+                    "displayName": {
+                        "type": "string",
+                        "description": "Display name of Account."
+                    },
+                    "accountType": {
+                        "$ref": "#/components/schemas/v1AccountType"
+                    },
+                    "pdsZuoraSubscription": {
+                        "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
+                    },
+                    "pxeAwsSubscription": {
+                        "$ref": "#/components/schemas/v1AwsSubscriptionInfo"
+                    },
+                    "pxeZuoraSubscription": {
+                        "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
+                    },
+                    "baasAwsSubscription": {
+                        "$ref": "#/components/schemas/v1AwsSubscriptionInfo"
+                    },
+                    "baasZuoraSubscription": {
+                        "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
+                    }
+                },
+                "description": "Desired configuration of the account."
+            },
+            "v1Meta": {
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the resource."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the resource."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                    },
+                    "createTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Creation time of the object.",
+                        "readOnly": true
+                    },
+                    "updateTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Update time of the object.",
+                        "readOnly": true
+                    },
+                    "labels": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Labels to apply to the object."
+                    },
+                    "annotations": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Annotations for the object."
+                    },
+                    "parentReference": {
+                        "$ref": "#/components/schemas/v1Reference"
+                    },
+                    "resourceNames": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                        "readOnly": true
+                    }
+                },
+                "description": "Meta holds general resource metadata."
+            },
+            "v1PhaseType": {
+                "type": "string",
+                "enum": [
+                    "TYPE_UNSPECIFIED",
+                    "ACTIVE",
+                    "DELETE_PENDING",
+                    "DELETE_IN_PROGRESS",
+                    "DELETE_FAILED"
+                ],
+                "default": "TYPE_UNSPECIFIED",
+                "description": "Type of phase the account is in currently should be one of the below.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACTIVE: The account is in use and active.\n - DELETE_PENDING: Deletion of account has not started.\n - DELETE_IN_PROGRESS: Deletion of the account is scheduled and in progress.\n - DELETE_FAILED: Deletion of account is failed"
+            },
+            "v1Reference": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": "API group of the resource."
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Version of the API."
+                    },
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource."
+                    }
+                },
+                "description": "Reference identifies the resource type, version of the uid and the resource."
+            },
+            "v1StatusType": {
+                "type": "string",
+                "enum": [
+                    "STATUS_TYPE_UNSPECIFIED",
+                    "FREEMIUM_SUCCESS",
+                    "AWS_SUBSCRIBE_SUCCESS",
+                    "AWS_SUBSCRIBE_FAIL",
+                    "AWS_UNSUBSCRIBE_PENDING",
+                    "AWS_UNSUBSCRIBE_SUCCESS",
+                    "ZUORA_SUBSCRIBE",
+                    "ZUORA_UNSUBSCRIBE"
+                ],
+                "default": "STATUS_TYPE_UNSPECIFIED",
+                "description": "Accepted status types for various cloud providers.\n\n - STATUS_TYPE_UNSPECIFIED: Unspecified, do not use.\n - FREEMIUM_SUCCESS: A successfully freemium account setup.\n - AWS_SUBSCRIBE_SUCCESS: Customer has subscribed product on aws marketplace.\n - AWS_SUBSCRIBE_FAIL: Customer has subscribed product on aws marketplace but aws encountered failure during account setup.\n - AWS_UNSUBSCRIBE_PENDING: Customer has unsubscribed from marketplace and now we have 1 hour to report final billing.\nand perform other de-boarding processes.\n - AWS_UNSUBSCRIBE_SUCCESS: Customer successfully unsubscribed and we can't report billing to aws for this account anymore.\n - ZUORA_SUBSCRIBE: Customer successfully subscribed to Zuora.\n - ZUORA_UNSUBSCRIBE: Customer has unsubscribed from Zuora."
+            },
+            "v1ZuoraSubscriptionInfo": {
+                "type": "object",
+                "properties": {
+                    "subscriptionId": {
+                        "type": "string",
+                        "description": "id associated installed product."
+                    },
+                    "accountId": {
+                        "type": "string",
+                        "description": "id associated with the customer account."
+                    }
+                },
+                "description": "Zuora Subscription info for a particular installed product."
+            }
+        }
+    }
+}

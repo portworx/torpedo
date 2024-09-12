@@ -1,0 +1,153 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+syntax = "proto3";
+
+package public.portworx.pds.dataservicedeploymentconfigupdate.v1;
+
+import "public/portworx/common/apiv1/meta.proto";
+import "public/portworx/common/apiv1/pagination.proto";
+import "google/api/annotations.proto";
+import "public/portworx/common/apiv1/sort.proto";
+import "google/api/field_behavior.proto";
+import "public/portworx/pds/dataservicedeployment/apiv1/dataservicedeployment.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/pds/dataservicedeploymentconfigupdate/apiv1;dataservicedeploymentconfigupdate";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.pds.dataservicedeploymentconfigupdate.v1";
+option java_outer_classname = "DataServiceDeploymentConfigUpdateProto";
+
+// DataServiceDeploymentConfigUpdateService provides APIs to interact with the data service deployment config update.
+service DataServiceDeploymentConfigUpdateService {
+  // CreateDataServiceDeploymentConfigUpdate API creates config update for deployment.
+  // (-- api-linter: core::0133::http-method=disabled
+  //     aip.dev/not-precedent: We need to do this because here we are actually updating deployment config. --)
+  rpc CreateDataServiceDeploymentConfigUpdate(CreateDataServiceDeploymentConfigUpdateRequest)
+    returns (DataServiceDeploymentConfigUpdate) {
+    option (google.api.http) = {
+      put: "/pds/v1/dataServiceDeployments/{data_service_deployment_config_update.config.data_service_deployment_meta.uid}/dataServiceDeploymentConfigUpdates"
+      body: "data_service_deployment_config_update"
+    };
+  }
+
+  // GetDataServiceDeploymentConfigUpdate API returns a DataService deployment config update by id.
+  rpc GetDataServiceDeploymentConfigUpdate(GetDataServiceDeploymentConfigUpdateRequest)
+    returns (DataServiceDeploymentConfigUpdate) {
+    option (google.api.http) = {
+      get: "/pds/v1/dataServiceDeploymentConfigUpdates/{id}"
+    };
+  }
+
+  // ListDataServiceDeploymentConfigUpdates API returns a list of data service deployment config updates.
+  rpc ListDataServiceDeploymentConfigUpdates(ListDataServiceDeploymentConfigUpdatesRequest)
+    returns (ListDataServiceDeploymentConfigUpdatesResponse) {
+    option (google.api.http) = {
+      get: "/pds/v1/dataServiceDeploymentConfigUpdates"
+    };
+  }
+
+  // RetryDataServiceDeploymentConfigUpdate API retries a data service deployment config update.
+  rpc RetryDataServiceDeploymentConfigUpdate(RetryDataServiceDeploymentConfigUpdateRequest)
+    returns (DataServiceDeploymentConfigUpdate) {
+    option (google.api.http) = {
+      post: "/pds/v1/dataServiceDeploymentConfigUpdates/{id}:retry"
+      body: "*"
+    };
+  }
+}
+
+// CreateDataServiceDeploymentConfigUpdateRequest is the request to create a data service deployment config update record containing desired state of dataservice deployment.
+message CreateDataServiceDeploymentConfigUpdateRequest {
+  // DataServiceDeploymentConfigUpdate of the DataService config deployment update request.
+  DataServiceDeploymentConfigUpdate data_service_deployment_config_update = 1;
+}
+
+// GetDataServiceDeploymentConfigUpdateRequest is the request for GetDataServiceDeploymentConfigUpdate.
+message GetDataServiceDeploymentConfigUpdateRequest {
+  // UID of the DataService deployment config update.
+  string id = 1;
+}
+
+// ListDataServiceDeploymentConfigUpdatesRequest is the request for ListDataServiceDeploymentConfigUpdates.
+message ListDataServiceDeploymentConfigUpdatesRequest {
+  // UID of the DataService Deployment.
+  string data_service_deployment_id = 1 [(google.api.field_behavior) = OPTIONAL];
+  // Sorting details using which requested list to be sorted.
+  public.portworx.common.v1.Sort sort = 2;
+  // Pagination parameters for listing data service deployment config updates.
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListDataServiceDeploymentConfigUpdatesResponse is the response for ListDataServiceDeploymentConfigUpdates.
+message ListDataServiceDeploymentConfigUpdatesResponse {
+  // List of DataService deployment config updates.
+  repeated DataServiceDeploymentConfigUpdate data_service_deployment_config_updates = 1;
+  // Pagination metadata for this response.
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
+
+// RetryDataServiceDeploymentConfigUpdateRequest is the request for RetryDataServiceDeploymentConfigUpdate.
+message RetryDataServiceDeploymentConfigUpdateRequest {
+  // UID of the DataService deployment config update.
+  string id = 1;
+}
+
+// DataServiceDeploymentConfigUpdate represents a DataService deployment config update resource.
+message DataServiceDeploymentConfigUpdate {
+  // Metadata of the DataService deployment config update request.
+  portworx.common.v1.Meta meta = 1;
+  // Config of the DataService deployment for which config update is requested.
+  Config config = 2;
+  // Status of the DataService deployment config update.
+  Status status = 3;
+}
+
+// Config of the desired DataService deployment configuration.
+message Config {
+  // Metadata of the DataService deployment resource.
+  portworx.common.v1.Meta data_service_deployment_meta = 1;
+  // DataService config represents desired DataService Deployment Configuration.
+  public.portworx.pds.dataservicedeployment.v1.Config data_service_deployment_config = 2;
+}
+
+// Status of the DataService  deployment config update.
+message Status {
+  // Error Code is a short string that represents the error.
+  string error_code = 1;
+  // Error Message is a description of the error.
+  string error_message = 2;
+  // Number of times the DataService config update has been retried.
+  int32 retry_count = 3;
+
+  // Enum for Phase of the DataService  deployment config update.
+  enum Phase {
+    // Phase is unspecified.
+    PHASE_UNSPECIFIED = 0;
+    // DataService deployment config update failed.
+    FAILED = 1;
+    // DataService deployment config update is queued.
+    QUEUED = 2;
+    // DataService deployment config update is in progress.
+    IN_PROGRESS = 3;
+    // DataService deployment config update is completed.
+    COMPLETED = 4;
+    // DataService config update is requeued.
+    REQUEUED  = 5;
+  }
+
+  // Phase of the DataService deployment config update.
+  Phase phase = 4;
+}

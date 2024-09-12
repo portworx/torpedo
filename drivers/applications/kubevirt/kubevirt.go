@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
-	. "github.com/portworx/torpedo/drivers/applications/apptypes"
 	"github.com/portworx/torpedo/drivers/node"
 	. "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"

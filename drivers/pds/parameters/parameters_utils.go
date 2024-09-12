@@ -20,6 +20,7 @@ type Parameter struct {
 		OldImage              string `json:"OldImage"`
 		DataServiceEnabledTLS bool   `json:"DataServiceEnabledTLS"`
 	} `json:"DataServiceToTest"`
+
 	ForceImageID bool
 
 	SSIE struct {
@@ -90,6 +91,136 @@ type Parameter struct {
 		StorageRequest string
 		Iterations     int
 	} `json:"StorageConfigurations"`
+}
+
+type NewPDSParams struct {
+	DataServiceToTest []struct {
+		DeploymentName    string `json:"DeploymentName"`
+		Name              string `json:"Name"`
+		Version           string `json:"Version"`
+		Image             string `json:"Image"`
+		Replicas          int    `json:"Replicas"`
+		ScaleReplicas     int    `json:"ScaleReplicas"`
+		OldVersion        string `json:"OldVersion"`
+		OldImage          string `json:"OldImage"`
+		EnableTLS         bool   `json:"EnableTLS"`
+		IssuerName        string `json:"IssuerName"`
+		ServiceType       string `json:"ServiceType"`
+		RunContinuousData bool   `json:"RunContinuousData"`
+	} `json:"DataServiceToTest"`
+
+	DataserviceConfigurationsToTest []struct {
+		Name           string                 `json:"Name"`
+		Configurations map[string]interface{} `json:"Configurations"`
+	} `json:"DataserviceConfigurationsToTest"`
+
+	ForceImageID bool
+
+	SSIE struct {
+		NumIterations       int `json:"NumIterations"`
+		Deployments         int `json:"Deployments"`
+		HammerDBScaleFactor int `json:"HammerDBScaleFactor"`
+	} `json:"SSIE"`
+
+	TLS struct {
+		EnableTLS              bool
+		RepoName               string
+		RepoURL                string
+		ClusterIssuerName      string
+		ClusterIssuerNamespace string
+	}
+	BackUpAndRestore struct {
+		RunBkpAndRestrTest bool
+		TargetLocation     string
+	}
+	InfraToTest struct {
+		ControlPlaneURL      string `json:"ControlPlaneURL"`
+		AccountName          string `json:"AccountName"`
+		TenantName           string `json:"TenantName"`
+		ProjectName          string `json:"ProjectName"`
+		ClusterType          string `json:"ClusterType"`
+		Namespace            string `json:"Namespace"`
+		PxNamespace          string `json:"PxNamespace"`
+		PDSNamespace         string `json:"PDSNamespace"`
+		ServiceIdentityToken bool   `json:"ServiceIdentityToken"`
+	} `json:"InfraToTest"`
+	PDSHelmVersions struct {
+		LatestHelmVersion   string `json:"LatestHelmVersion"`
+		PreviousHelmVersion string `json:"PreviousHelmVersion"`
+	} `json:"PDSHelmVersions"`
+	LoadGen struct {
+		LoadGenDepName  string `json:"LoadGenDepName"`
+		FailOnError     string `json:"FailOnError"`
+		Mode            string `json:"Mode"` //example: read,write
+		TableName       string `json:"TableName"`
+		NumOfRows       string `json:"NumOfRows"`
+		Iterations      string `json:"Iterations"`
+		Timeout         string `json:"Timeout"` //example: 60s
+		ReplacePassword string `json:"ReplacePassword"`
+		ClusterMode     string `json:"ClusterMode"`
+		Replicas        int32  `json:"Replicas"`
+	}
+	CleanUpParams struct {
+		DeletePlatformResources bool     `json:"DeletePlatformResources"`
+		TargetClusterPrefix     []string `json:"TargetClusterPrefix"`
+		BackupLocationPrefix    []string `json:"BackupLocationPrefix"`
+		CloudCredentialPrefix   []string `json:"CloudCredentialPrefix"`
+		AppTemplatePrefix       []string `json:"AppTemplatePrefix"`
+		ResourceTemplatePrefix  []string `json:"ResourceTemplatePrefix"`
+		StorageTemplatePrefix   []string `json:"StorageTemplatePrefix"`
+		SkipTargetClusterCheck  bool     `json:"SkipTargetClusterCheck"`
+	}
+	Users struct {
+		AdminUsername        string `json:"AdminUsername"`
+		AdminPassword        string `json:"AdminPassword"`
+		AdminEmailAddress    string `json:"AdminEmailAddress"`
+		NonAdminUsername     string `json:"NonAdminUsername"`
+		NonAdminPassword     string `json:"NonAdminPassword"`
+		NonAdminEmailAddress string `json:"NonAdminEmailAddress"`
+	} `json:"Users"`
+	ResiliencyTest struct {
+		CheckTillReplica int32 `json:"CheckTillReplica"`
+	} `json:"ResiliencyTest"`
+	StorageConfigurationsSSIE struct {
+		FSType                    []string
+		ReplFactor                []string
+		NewStorageSize            string
+		CpuLimit                  string
+		CpuRequest                string
+		MemoryLimit               string
+		MemoryRequest             string
+		StorageRequest            string
+		Iterations                int
+		BaseStorageInGBForUpgrade int `json:"BaseStorageInGBForUpgrade"`
+		StorageIncreaseStepInGB   int `json:"StorageIncreaseStepInGB"`
+	} `json:"StorageConfigurationsSSIE"`
+	StorageConfiguration struct {
+		FS          string `json:"FS"`
+		Repl        string `json:"Repl"`
+		Provisioner string `json:"Provisioner"`
+		FG          string `json:"FG"`
+		Secure      string `json:"Secure"`
+	} `json:"StorageConfiguration"`
+	ResourceConfiguration struct {
+		Cpu_Limit           string `json:"Cpu_Limit"`
+		Cpu_Request         string `json:"Cpu_Request"`
+		Memory_Limit        string `json:"Memory_Limit"`
+		Memory_Request      string `json:"Memory_Request"`
+		Storage_Request     string `json:"Storage_Request"`
+		New_Cpu_Limit       string `json:"New_Cpu_Limit"`
+		New_Cpu_Request     string `json:"New_Cpu_Request"`
+		New_Memory_Limit    string `json:"New_Memory_Limit"`
+		New_Memory_Request  string `json:"New_Memory_Request"`
+		New_Storage_Request string `json:"New_Storage_Request"`
+	} `json:"ResourceConfiguration"`
+	ServiceConfiguration struct {
+		MAX_CONNECTIONS string `json:"MAX_CONNECTIONS"`
+	} `json:"ServiceConfiguration"`
+	RbacParams struct {
+		RunWithRbac bool   //true
+		RoleName    string //Project-admin or project-user
+		ResourceId  string // projectId
+	} `json:"RbacParams"`
 }
 
 const (

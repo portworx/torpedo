@@ -1,0 +1,882 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/platform/iam/apiv1/iam.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "IAMService"
+        }
+    ],
+    "paths": {
+        "/core/v1/iam": {
+            "get": {
+                "summary": "ListIAM API lists the role bindings.",
+                "operationId": "IAMService_ListIAM",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListIAMResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "actorId",
+                        "description": "Actor ID for which the IAM should be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "accountId",
+                        "description": "Account UID for which the IAM should be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "tenantId",
+                        "description": "Tenant UID for which the IAM should be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "projectId",
+                        "description": "Project UID for which the IAM should be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "sort.sortBy",
+                        "description": "Name of the attribute to sort results by.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - EMAIL: Sorting based on the email of the iam.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "FIELD_UNSPECIFIED",
+                                "EMAIL"
+                            ],
+                            "default": "FIELD_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "sort.sortOrder",
+                        "description": "Order of sorting to be applied on requested list.\nIf sort_by having some value and sort_order is not provided, by default ascending order will be used to sort the list.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "VALUE_UNSPECIFIED",
+                                "ASC",
+                                "DESC"
+                            ],
+                            "default": "VALUE_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageNumber",
+                        "description": "Page number is the page number to return based on the size.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageSize",
+                        "description": "Page size is the maximum number of records to include per page.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    }
+                ],
+                "tags": [
+                    "IAMService"
+                ]
+            },
+            "post": {
+                "summary": "CreateIAM API creates a new IAM role-binding.",
+                "operationId": "IAMService_CreateIAM",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1IAM"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/v1IAM"
+                            }
+                        }
+                    },
+                    "description": "IAM to be created",
+                    "required": true
+                },
+                "tags": [
+                    "IAMService"
+                ]
+            }
+        },
+        "/core/v1/iam/permissions": {
+            "get": {
+                "summary": "ListIAMPermissions API list permissions for Roles in IAM.",
+                "operationId": "IAMService_ListIAMPermissions",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListIAMPermissionsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "IAMService"
+                ]
+            }
+        },
+        "/core/v1/iam/{actorId}": {
+            "get": {
+                "summary": "GetIAM API returns the info about IAM for given IAM id.",
+                "operationId": "IAMService_GetIAM",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1IAM"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "actorId",
+                        "description": "Actor ID for which the details need to be fetched.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "IAMService"
+                ]
+            },
+            "delete": {
+                "summary": "DeleteIAM API delete IAM, currently required only for name.",
+                "operationId": "IAMService_DeleteIAM",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {}
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "actorId",
+                        "description": "Actor ID for which the IAM should be deleted.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "IAMService"
+                ]
+            }
+        },
+        "/core/v1/iam/{actorId}:grant": {
+            "post": {
+                "summary": "GrantIAM API creates new IAM role-binding at tenant, project and account level.",
+                "operationId": "IAMService_GrantIAM",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1GrantIAMResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "actorId",
+                        "description": "actorId is UID of user/serviceAccount for we want to add new role in the IAM",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IAMServiceGrantIAMBody"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "tags": [
+                    "IAMService"
+                ]
+            }
+        },
+        "/core/v1/iam/{actorId}:revoke": {
+            "post": {
+                "summary": "RevokeIAM API delete IAM role-binding at tenant, project and account level.",
+                "operationId": "IAMService_RevokeIAM",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1RevokeIAMResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "actorId",
+                        "description": "actorId is UID of user/serviceAccount for we want to revoke role in the IAM",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IAMServiceRevokeIAMBody"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "tags": [
+                    "IAMService"
+                ]
+            }
+        },
+        "/core/v1/iam/{iam.meta.uid}": {
+            "put": {
+                "summary": "UpdateIAM API updates IAM with the new set of role bindings. The request replaces the existing set of bindings.",
+                "operationId": "IAMService_UpdateIAM",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1IAM"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "iam.meta.uid",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "meta": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "description": "Name of the resource."
+                                            },
+                                            "description": {
+                                                "type": "string",
+                                                "description": "Description of the resource."
+                                            },
+                                            "resourceVersion": {
+                                                "type": "string",
+                                                "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                                            },
+                                            "createTime": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "description": "Creation time of the object.",
+                                                "readOnly": true
+                                            },
+                                            "updateTime": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "description": "Update time of the object.",
+                                                "readOnly": true
+                                            },
+                                            "labels": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Labels to apply to the object."
+                                            },
+                                            "annotations": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Annotations for the object."
+                                            },
+                                            "parentReference": {
+                                                "$ref": "#/components/schemas/v1Reference"
+                                            },
+                                            "resourceNames": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                                                "readOnly": true
+                                            }
+                                        },
+                                        "description": "Metadata for IAM.",
+                                        "title": "Metadata for IAM."
+                                    },
+                                    "config": {
+                                        "$ref": "#/components/schemas/v1Config"
+                                    }
+                                },
+                                "title": "IAM to be updated."
+                            }
+                        }
+                    },
+                    "description": "IAM to be updated.",
+                    "required": true
+                },
+                "tags": [
+                    "IAMService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "IAMServiceGrantIAMBody": {
+                "type": "object",
+                "properties": {
+                    "accountId": {
+                        "type": "string",
+                        "description": "Account UID under which user wants to add role binding."
+                    },
+                    "tenantId": {
+                        "type": "string",
+                        "description": "Tenant UID  under which user wants to add role binding."
+                    },
+                    "projectId": {
+                        "type": "string",
+                        "description": "Project UID under which user wants to add role binding."
+                    },
+                    "accessPolicy": {
+                        "$ref": "#/components/schemas/v1AccessPolicy"
+                    }
+                },
+                "description": "GrantIAMRequest to grant add a new role in the IAM for tenant, project or account."
+            },
+            "IAMServiceRevokeIAMBody": {
+                "type": "object",
+                "properties": {
+                    "accountId": {
+                        "type": "string",
+                        "description": "Account UID under which user wants to delete role ."
+                    },
+                    "tenantId": {
+                        "type": "string",
+                        "description": "Tenant UID  under which user wants to delete role ."
+                    },
+                    "projectId": {
+                        "type": "string",
+                        "description": "Project UID under which user wants to delete role ."
+                    },
+                    "accessPolicy": {
+                        "$ref": "#/components/schemas/v1AccessPolicy"
+                    }
+                },
+                "description": "RevokeIAMRequest to revoke/delete a role binding at tenant, project or account."
+            },
+            "SortOrderValue": {
+                "type": "string",
+                "enum": [
+                    "VALUE_UNSPECIFIED",
+                    "ASC",
+                    "DESC"
+                ],
+                "default": "VALUE_UNSPECIFIED",
+                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
+            },
+            "platformiamv1Sort": {
+                "type": "object",
+                "properties": {
+                    "sortBy": {
+                        "$ref": "#/components/schemas/platformiamv1SortByField"
+                    },
+                    "sortOrder": {
+                        "$ref": "#/components/schemas/SortOrderValue"
+                    }
+                },
+                "description": "The details of the attribute for which the requested list of IAM to be sorted."
+            },
+            "platformiamv1SortByField": {
+                "type": "string",
+                "enum": [
+                    "FIELD_UNSPECIFIED",
+                    "EMAIL"
+                ],
+                "default": "FIELD_UNSPECIFIED",
+                "description": "Field names for sorting the list of IAMs.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - EMAIL: Sorting based on the email of the iam."
+            },
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "rpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "v1AccessPolicy": {
+                "type": "object",
+                "properties": {
+                    "globalScope": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Global scope represents the global role names."
+                    },
+                    "account": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Account represents the account role names."
+                    },
+                    "tenant": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1RoleBinding"
+                        },
+                        "description": "Tenant represents the tenant level role bindings and resource IDs."
+                    },
+                    "project": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1RoleBinding"
+                        },
+                        "description": "Project represents the project level role bindings and resource IDS."
+                    },
+                    "namespace": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1RoleBinding"
+                        },
+                        "description": "Namespace represents the namespace level role bindings and resource IDS."
+                    }
+                },
+                "description": "Access Policy controls access to control plane resources. With IAM, one can centrally manage permissions that control which resources users can access."
+            },
+            "v1Config": {
+                "type": "object",
+                "properties": {
+                    "actorId": {
+                        "type": "string",
+                        "description": "Actor ID for the associated actor."
+                    },
+                    "actorType": {
+                        "type": "string",
+                        "description": "Actor Type gives the actor type for the concerned actor_id.",
+                        "readOnly": true
+                    },
+                    "actorEmail": {
+                        "type": "string",
+                        "description": "Actor email for actorType USER.",
+                        "readOnly": true
+                    },
+                    "accessPolicy": {
+                        "$ref": "#/components/schemas/v1AccessPolicy"
+                    }
+                },
+                "description": "Config represents the details of the data for IAM across different levels."
+            },
+            "v1GrantIAMResponse": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "Any error or success message to show for GrantIAM response.",
+                        "readOnly": true
+                    }
+                },
+                "description": "GrantIAMResponse is response for GrantIAM API."
+            },
+            "v1IAM": {
+                "type": "object",
+                "properties": {
+                    "meta": {
+                        "$ref": "#/components/schemas/v1Meta"
+                    },
+                    "config": {
+                        "$ref": "#/components/schemas/v1Config"
+                    }
+                },
+                "description": "IAM returns the created IAM for given data."
+            },
+            "v1ListIAMPermissionsResponse": {
+                "type": "object",
+                "properties": {
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "permissions is list of permissions."
+                    }
+                },
+                "description": "ListIAMPermissionsResponse is response which contains permission for actor."
+            },
+            "v1ListIAMResponse": {
+                "type": "object",
+                "properties": {
+                    "iam": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1IAM"
+                        },
+                        "description": "the list of IAMs."
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
+                    }
+                },
+                "description": "ListIAMResponse is the response to the ListIAM API and contains the list of IAMs visible to the caller."
+            },
+            "v1Meta": {
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the resource."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the resource."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                    },
+                    "createTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Creation time of the object.",
+                        "readOnly": true
+                    },
+                    "updateTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Update time of the object.",
+                        "readOnly": true
+                    },
+                    "labels": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Labels to apply to the object."
+                    },
+                    "annotations": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Annotations for the object."
+                    },
+                    "parentReference": {
+                        "$ref": "#/components/schemas/v1Reference"
+                    },
+                    "resourceNames": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                        "readOnly": true
+                    }
+                },
+                "description": "Meta holds general resource metadata."
+            },
+            "v1PageBasedPaginationRequest": {
+                "type": "object",
+                "properties": {
+                    "pageNumber": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page number is the page number to return based on the size."
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page size is the maximum number of records to include per page."
+                    }
+                },
+                "description": "Request parameters for page-based pagination."
+            },
+            "v1PageBasedPaginationResponse": {
+                "type": "object",
+                "properties": {
+                    "totalRecords": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Total records without pagination available in the dataset."
+                    },
+                    "currentPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Current page number for this paginated response."
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page size used for pagination."
+                    },
+                    "totalPages": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Total pages based on the page_size provided in the request."
+                    },
+                    "nextPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Next page if available in the dataset, -1 if unavailable."
+                    },
+                    "prevPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Previous page if available in the dataset, -1 if unavailable."
+                    }
+                },
+                "description": "Metadata related to page based pagination for paginated API responses."
+            },
+            "v1Reference": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": "API group of the resource."
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Version of the API."
+                    },
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource."
+                    }
+                },
+                "description": "Reference identifies the resource type, version of the uid and the resource."
+            },
+            "v1RevokeIAMResponse": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "Any error or success message to show for GrantIAM response.",
+                        "readOnly": true
+                    }
+                },
+                "description": "GrantIAMResponse is response for GrantIAM API."
+            },
+            "v1RoleBinding": {
+                "type": "object",
+                "properties": {
+                    "roleName": {
+                        "type": "string",
+                        "description": "Role name represents the role for a tenant/project/namespace."
+                    },
+                    "resourceIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Resource IDs represent the IDs bounded for the given role."
+                    }
+                },
+                "description": "RoleBinding represents the tenant/project/namespace level role bindings and resource IDS."
+            }
+        }
+    }
+}

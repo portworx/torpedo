@@ -1,0 +1,53 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+
+syntax = "proto3";
+
+package public.portworx.pds.common.v1;
+
+import "public/portworx/common/apiv1/selector.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/pds/common/apiv1;common";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.pds.common.v1";
+option java_outer_classname = "PDSApplicationResourceProto";
+
+// The resource type of Data Service
+message PDSApplicationResource {
+  // Type of the resource can be associated to the project.
+  enum Type {
+    // Unspecified, do not use.
+    TYPE_UNSPECIFIED = 0;
+    // List of supported PDS application resources.
+    // data service resource.
+    DATA_SERVICE = 1;
+  }
+}
+
+// PDSApplicationSelector is used to query deployments using the associated application reesources.
+message PDSApplicationSelector{
+  // PDSApplicationFilter is filter for a given resource type.
+  message PDSApplicationFilter{
+    // Key of key,value pair against which filtering needs to be performs based on associated data service.
+    PDSApplicationResource.Type resource_type = 101;
+    // Op provides the relationship between the key,value pair in the resp element(s).
+    public.portworx.common.v1.Selector.Operator op = 102;
+    // Value of key,value pair against which filtering needs to be performs.
+    repeated string values = 103;
+  }
+  // Application_filters is the list of all filters that should be applied to fetch data related to deployment.
+  // Each filter will have AND relationship.
+  repeated PDSApplicationFilter application_filters = 1;
+}

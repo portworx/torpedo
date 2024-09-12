@@ -1,0 +1,73 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+
+syntax = "proto3";
+
+package public.portworx.common.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/api/field_behavior.proto";
+import "google/api/field_info.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/common/apiv1;common";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.common.v1";
+option java_outer_classname = "MetaProto";
+
+// Meta holds general resource metadata.
+message Meta {
+  // UID of the resource of the format <resource prefix>-<uuid>.
+  string uid = 1 [(google.api.field_info).format = UUID4];
+
+  // Name of the resource.
+  string name = 2;
+
+  // Description of the resource.
+  string description = 3;
+
+  // A string that identifies the version of this object that can be used by clients to determine when objects have changed.
+  // This value must be passed unmodified back to the server by the client.
+  string resource_version = 4;
+
+  // Creation time of the object.
+  google.protobuf.Timestamp create_time = 5 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Update time of the object.
+  google.protobuf.Timestamp update_time = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Labels to apply to the object.
+  map<string, string> labels = 7;
+
+  // Annotations for the object.
+  map<string, string> annotations = 8;
+
+  // Reference to parent object of this resource.
+  Reference parent_reference = 9 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.
+  map<string, string> resource_names = 10 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+// Reference identifies the resource type, version of the uid and the resource.
+message Reference {
+  // API group of the resource.
+  string type = 1;
+
+  // Version of the API.
+  string version = 2;
+
+  // UID of the resource.
+  string uid = 3 [(google.api.field_info).format = UUID4];
+}

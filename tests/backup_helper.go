@@ -5,6 +5,7 @@ import (
 	context1 "context"
 	"fmt"
 	"github.com/gogo/protobuf/types"
+	"github.com/portworx/torpedo/drivers/applications/databases"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io/ioutil"
@@ -30,8 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 
-	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
-
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/k8s/storage"
 
@@ -42,7 +41,6 @@ import (
 	appsapi "k8s.io/api/apps/v1"
 
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
 	appUtils "github.com/portworx/torpedo/drivers/utilities"
 
 	"github.com/pborman/uuid"
@@ -738,15 +736,15 @@ func FilterAppContextsByNamespace(appContexts []*scheduler.Context, namespaces [
 	return
 }
 
-func InsertDataForBackupValidation(namespaces []string, ctx context1.Context, existingAppHandler []appDriver.ApplicationDriver, backupName string,
-	commandBeforeBackup map[appDriver.ApplicationDriver]map[string][]string) ([]appDriver.ApplicationDriver, map[appDriver.ApplicationDriver]map[string][]string, error) {
+func InsertDataForBackupValidation(namespaces []string, ctx context1.Context, existingAppHandler []databases.DatabaseDriver, backupName string,
+	commandBeforeBackup map[databases.DatabaseDriver]map[string][]string) ([]databases.DatabaseDriver, map[databases.DatabaseDriver]map[string][]string, error) {
 
 	// afterBackup - Check if the data is being inserted before or after backup
 
 	// Getting app handlers for deployed apps in the namespace and inserting data to same
 	var err error
-	var allHandlers []appDriver.ApplicationDriver
-	var dataCommands = make(map[appDriver.ApplicationDriver]map[string][]string)
+	var allHandlers []databases.DatabaseDriver
+	var dataCommands = make(map[databases.DatabaseDriver]map[string][]string)
 
 	if len(existingAppHandler) == 0 {
 		for _, eachNamespace := range namespaces {
@@ -795,7 +793,7 @@ func CreateBackupWithValidation(ctx context1.Context, backupName string, cluster
 
 	log.InfoD("Backup [%s] started at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
 	// Insert data before backup which is expected to be present after restore
-	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
+	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []databases.DatabaseDriver{}, backupName, nil)
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
 	}
@@ -826,7 +824,7 @@ func CreateBackupWithPartialSuccessValidation(ctx context1.Context, backupName s
 
 	log.InfoD("Backup [%s] started at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
 	// Insert data before backup which is expected to be present after restore
-	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
+	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []databases.DatabaseDriver{}, backupName, nil)
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
 	}
@@ -856,7 +854,7 @@ func CreateBackupWithValidationWithVscMapping(ctx context1.Context, backupName s
 	}
 
 	// Insert data before backup which is expected to be present after restore
-	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
+	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []databases.DatabaseDriver{}, backupName, nil)
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
 	}
@@ -900,7 +898,7 @@ func CreateVMBackupWithValidation(ctx context1.Context, backupName string, vms [
 	}
 
 	// Insert data before backup which is expected to be present after restore
-	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
+	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []databases.DatabaseDriver{}, backupName, nil)
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
 	}
@@ -3823,7 +3821,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 	var dataBeforeBackup = make(map[string]map[string][][]string)
 	var dataAfterBackup = make(map[string]map[string][][]string)
 
-	var allRestoreHandlers []appDriver.ApplicationDriver
+	var allRestoreHandlers []databases.DatabaseDriver
 	var allErrors []string
 
 	backupDriver := Inst().Backup
@@ -3907,7 +3905,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 			allErrors = append(allErrors, err.Error())
 		}
 		if appInfo.StartDataSupport {
-			appHandler, _ := appDriver.GetApplicationDriver(
+			appHandler, _ := databases.GetDatabaseDriver(
 				appInfo.AppType,
 				appInfo.Hostname,
 				appInfo.User,
@@ -3917,13 +3915,15 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 				appInfo.NodePort,
 				appInfo.Namespace,
 				appInfo.IPAddress,
-				Inst().N)
-			if appInfo.AppType == appType.Kubevirt && appInfo.StartDataSupport {
-				err = appHandler.WaitForVMToBoot()
-				if err != nil {
-					return fmt.Errorf("Unable to boot VM on destination. Error - [%s]", err.Error())
-				}
-			}
+				Inst().N,
+				"")
+			// TODO: This needs to be enabled once kubevirt data validation support is added
+			//if appInfo.AppType == databases.Kubevirt && appInfo.StartDataSupport {
+			//	err = appHandler.WaitForVMToBoot()
+			//	if err != nil {
+			//		return fmt.Errorf("Unable to boot VM on destination. Error - [%s]", err.Error())
+			//	}
+			//}
 			pods, err := k8sCore.GetPods(appInfo.Namespace, make(map[string]string))
 			if err != nil {
 				return err
@@ -3973,7 +3973,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 	return nil
 }
 
-func verifyDataPresentInApp(appHandler appDriver.ApplicationDriver, dataExpected [][]string, appContext context1.Context) error {
+func verifyDataPresentInApp(appHandler databases.DatabaseDriver, dataExpected [][]string, appContext context1.Context) error {
 	var isDataPresent = false
 	var allErrorMessage []string
 	for _, eachExpectedData := range dataExpected {
@@ -10383,7 +10383,7 @@ func CreatePartialBackupWithValidationWithVscMapping(ctx context1.Context, backu
 		}
 	}
 	// Insert data before backup which is expected to be present after restore
-	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
+	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []databases.DatabaseDriver{}, backupName, nil)
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
 	}

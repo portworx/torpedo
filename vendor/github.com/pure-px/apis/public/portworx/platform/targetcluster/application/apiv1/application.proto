@@ -1,0 +1,225 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+
+syntax = "proto3";
+
+package public.portworx.platform.targetcluster.application.v1;
+
+import "google/protobuf/empty.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "public/portworx/common/apiv1/meta.proto";
+import "public/portworx/common/apiv1/pagination.proto";
+import "public/portworx/common/apiv1/selector.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/platform/targetcluster/application/apiv1;application";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.platform.targetcluster.application.v1";
+option java_outer_classname = "ApplicationProto";
+
+
+// Application service provides APIs to interact with the Application entity
+service ApplicationService {
+  // ListApplications API lists the applications installed on the target cluster.
+  rpc ListApplications(ListApplicationsRequest)
+      returns (ListApplicationsResponse) {
+    option(google.api.http) = {
+      get: "/core/v1/clusters/{cluster_id}/applications"
+    };
+  }
+
+  // GetApplication API returns the info about application with given id.
+  rpc GetApplication(GetApplicationRequest)
+      returns (Application) {
+    option(google.api.http) = {
+      get: "/core/v1/applications/{id}"
+      additional_bindings {
+        get: "/core/v1/clusters/{cluster_id}/applications/{id}"
+      }
+    };
+  }
+
+  // InstallApplication API installs specified application on the target cluster.
+  rpc InstallApplication(InstallApplicationRequest)
+      returns (Application) {
+    option(google.api.http) = {
+      post: "/core/v1/clusters/{cluster_id}/applications"
+      body: "application"
+    };
+  }
+
+  // UpdateApplication API updates specified application on the target cluster.
+  rpc UpdateApplication(UpdateApplicationRequest)
+      returns (Application) {
+    option(google.api.http) = {
+      put: "/core/v1/applications/{application.meta.uid}"
+      body: "application"
+    };
+  }
+
+  // (-- api-linter: core::0136::http-method=disabled
+  //     aip.dev/not-precedent: We need to do this because
+  //     delete method is required for deleting resource. --)
+  //  UninstallApplication API uninstalls the specified application on the target cluster.
+  rpc UninstallApplication(UninstallApplicationRequest)
+      returns(google.protobuf.Empty) {
+    option(google.api.http) = {
+      delete: "/core/v1/applications/{id}"
+      additional_bindings {
+        delete: "/core/v1/clusters/{cluster_id}/applications/{id}"
+      }
+    };
+  }
+}
+
+// ListApplicationsRequest is the request to the ListApplications API.
+message ListApplicationsRequest {
+  // Unique identifier of the cluster whose details needs to be fetched.
+  string cluster_id = 1;
+  // Pagination parameters for listing applications.
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 2;
+  // Field selector is used to filter applications based on the fields in application proto message.
+  public.portworx.common.v1.Selector field_selector = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListApplicationsResponse is the response to the ListApplications API.
+message ListApplicationsResponse {
+  // list of applications visible to the caller.
+  repeated Application applications = 1;
+  // Pagination metadata for this response.
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
+
+// GetApplicationRequest is the request to the GetApplication API.
+message GetApplicationRequest {
+  // Unique identifier of the cluster whose details needs to be fetched.
+  string cluster_id = 1;
+  // Unique identifier of the application whose details needs to be fetched.
+  string id = 2;
+}
+
+// InstallApplicationRequest is the request to the InstallApplication API.
+message InstallApplicationRequest {
+  // unique identifier of the cluster where application needs to be installed
+  // (-- api-linter: core::0133::request-unknown-fields=disabled
+  //     aip.dev/not-precedent: We really need this field because
+  //     application needs to be associated with cluster id. --)
+  string cluster_id = 1;
+  // application to be installed.
+  Application application = 2;
+}
+
+// UpdateApplicationRequest is the request to the update application.
+message UpdateApplicationRequest {
+  // application to be updated.
+  Application application = 1;
+}
+
+// UninstallApplicationRequest is the request to the UninstallApplication API.
+message UninstallApplicationRequest {
+  // Unique identifier of the cluster whose details needs to be fetched.
+  string cluster_id = 1;
+  // unique identifier of the application.
+  string id = 2;
+}
+
+// Application is a high level entity for the application resource.
+// for e.g. PXE, BaaS, etc.
+message Application {
+  // Metadata of the application(Resource Meta).
+  public.portworx.common.v1.Meta meta = 1;
+
+  // Desired configuration of the Application.
+  Config config = 2;
+
+  // Current status of the Application.
+  Status status = 3;
+}
+
+// Desired configuration of the Application.
+message Config {
+  // namespace in target cluster where application will be installed.
+  string namespace = 1[(google.api.field_behavior) = OUTPUT_ONLY];
+  // desired application chart version.
+  string version = 2[(google.api.field_behavior) = OUTPUT_ONLY];
+  // properties of the application.
+  oneof properties {
+    // pds app properties.
+    PDSProperties pds = 3;
+  }
+}
+
+// PDSProperties are the properties available for PDS.
+message PDSProperties {
+  // Global is the global property block for PDS.
+  message Global {
+    // data_service_tls_enabled enables TLS for dataservices.
+    // This requires cert-manager to be pre-installed.
+    bool data_service_tls_enabled = 1;
+  }
+
+  // global properties for PDS.
+  //  (-- api-linter: core::0140::reserved-words=disabled
+  //  aip.dev/not-precedent: We need to do this to be similar to helm config values. --).
+  Global global = 1;
+}
+
+// Status of the Application.
+message Status {
+  // current application chart version.
+  string version = 1;
+  // current phase of the application.
+  ApplicationPhase.Phase phase = 2;
+  // current health of the application.
+  ApplicationHealth.Health health = 3;
+  // conditions of the application.
+  map<string, string> conditions = 4;
+}
+
+// ApplicationPhase represents the phase of an application in target cluster.
+message ApplicationPhase {
+  // AppStatus determines status of an application.
+  enum Phase {
+    // Must be set in the proto file; ignore.
+    PHASE_UNSPECIFIED = 0;
+    // Application yet to be installed.
+    PENDING = 1;
+    // Application deployment on the target cluster in progress.
+    DEPLOYING = 2;
+    // Installed successfully.
+    SUCCEEDED = 3;
+    // Application failed to install.
+    FAILED = 4;
+    // Application is being deleted.
+    DELETING = 5;
+  }
+}
+
+// ApplicationHealth represents the health of an application in target cluster.
+message ApplicationHealth {
+  // Health determines health of an application.
+  enum Health {
+    // Must be set in the proto file; ignore.
+    HEALTH_UNSPECIFIED = 0;
+    // Application health is unknown.
+    UNKNOWN = 1;
+    // Application is healthy.
+    HEALTHY = 2;
+    // Application is unhealthy.
+    UNHEALTHY = 3;
+  }
+}

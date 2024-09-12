@@ -7,6 +7,9 @@
 # make {build-pds|container-pds}:
 #	 create pds.test binary/container (<repo>/torpedo-pds:<tag>)
 #
+# make {build-unifiedPlatform|container-unifiedPlatform}
+#    create pds2.test binary/container (container-unifiedPlatform)
+#
 # make {build-backup|container-backup}:
 #	 create backup.test binary/container (<repo>/torpedo-backup:<tag>)
 #
@@ -67,7 +70,7 @@ PGBENCH_IMG=$(DOCKER_HUB_REPO)/torpedo-pgbench:latest
 ESLOAD_IMG=$(DOCKER_HUB_REPO)/torpedo-esload:latest
 
 
-all: vet build build-pds build-backup build-taas build-longevity fmt
+all: vet build build-pds build-unifiedPlatform build-backup build-taas build-longevity fmt
 
 deps:
 	go get -d -v $(PKGS)
@@ -102,6 +105,16 @@ build: $(GOPATH)/bin/ginkgo
 # this target builds the pds.test binary only.
 build-pds: GINKGO_BUILD_DIR=./tests/pds
 build-pds: $(GOPATH)/bin/ginkgo
+	mkdir -p $(BIN)
+	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)
+
+	ginkgo build -r $(GINKGO_BUILD_DIR)
+	find $(GINKGO_BUILD_DIR) -name '*.test' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
+	chmod -R 755 bin/*
+
+# this target builds the unifiedPlatform.test binary only.
+build-unifiedPlatform: GINKGO_BUILD_DIR=./tests/unifiedPlatform/platform ./tests/unifiedPlatform/pds2
+build-unifiedPlatform: $(GOPATH)/bin/ginkgo
 	mkdir -p $(BIN)
 	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)
 
@@ -184,6 +197,12 @@ container-pds: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo-pds:$(DOCKER_HUB_TAG)
 container-pds:
 	@echo "Building pds.test container "$(TORPEDO_IMG)
 	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg MAKE_TARGET=build-pds -f Dockerfile .
+
+# this target builds a container with platform.test binary only. Repo is hardcoded to ".../torpedo-unifiedPlatform".
+container-unifiedPlatform: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo-pds:$(DOCKER_HUB_TAG)
+container-unifiedPlatform:
+	@echo "Building unifiedPlatform.test container "$(TORPEDO_IMG)
+	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg MAKE_TARGET=build-unifiedPlatform -f Dockerfile .
 
 # this target builds a container with backup.test binary only. Repo is hardcoded to ".../torpedo-backup".
 container-backup: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo-backup:$(DOCKER_HUB_TAG)

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/applications/databases"
 	"io/ioutil"
 	"maps"
 	"math"
@@ -103,8 +104,6 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/portworx/torpedo/drivers"
-	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
-	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/monitor"
 	"github.com/portworx/torpedo/drivers/node"
@@ -228,7 +227,7 @@ var (
 )
 
 var (
-	NamespaceAppWithDataMap    = make(map[string][]appDriver.ApplicationDriver)
+	NamespaceAppWithDataMap    = make(map[string][]databases.DatabaseDriver)
 	IsReplacePolicySetToDelete = false // To check if the policy in the test is set to delete - Skip data continuity validation in this case
 )
 
@@ -2411,14 +2410,13 @@ func ValidateApplications(contexts []*scheduler.Context) {
 }
 
 // ValidateApplicationsStartData validates applications and start continous data injection to the same
-
 func ValidateApplicationsStartData(contexts []*scheduler.Context, context context1.Context) (chan string, *errgroup.Group) {
 
 	log.Infof("Is backup longevity run [%v]", IsBackupLongevityRun)
 	// Skipping map reset in case of longevity run
 	if !IsBackupLongevityRun {
 		// Resetting the global map before starting the new App Validations
-		NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
+		NamespaceAppWithDataMap = make(map[string][]databases.DatabaseDriver)
 	}
 
 	log.InfoD("Validate applications")
@@ -2434,7 +2432,7 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, context contex
 			continue
 		}
 		if appInfo.StartDataSupport {
-			appHandler, err := appDriver.GetApplicationDriver(
+			appHandler, err := databases.GetDatabaseDriver(
 				appInfo.AppType,
 				appInfo.Hostname,
 				appInfo.User,
@@ -2444,14 +2442,16 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, context contex
 				appInfo.NodePort,
 				appInfo.Namespace,
 				appInfo.IPAddress,
-				Inst().N)
+				Inst().N,
+				"")
 			if err != nil {
 				log.Infof("Error - %s", err.Error())
 			}
-			if appInfo.AppType == appType.Kubevirt && appInfo.StartDataSupport {
-				err = appHandler.WaitForVMToBoot()
-				log.FailOnError(err, "Some error occured while starting the VM")
-			}
+			// TODO: This needs to be added once kubevirt data validation support is enabled
+			//if appInfo.AppType == databases.Kubevirt && appInfo.StartDataSupport {
+			//	err = appHandler.WaitForVMToBoot()
+			//	log.FailOnError(err, "Some error occured while starting the VM")
+			//}
 			log.InfoD("App handler created for [%s]", appInfo.Hostname)
 			NamespaceAppWithDataMap[appInfo.Namespace] = append(NamespaceAppWithDataMap[appInfo.Namespace], appHandler)
 		}

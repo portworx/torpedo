@@ -3,6 +3,7 @@ package dataservice
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -14,6 +15,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+)
+
+var (
+	mutex sync.Mutex
+)
+
+const (
+	clusterRoleName = "pds-loadgen-cluster"
 )
 
 func createServiceAccount(namespace string) (*corev1.ServiceAccount, error) {
@@ -138,6 +147,77 @@ func createRoleBinding(namespace string, account *corev1.ServiceAccount) error {
 	return err
 }
 
+// CreateClusterRole for pds2.0 deployments
+func CreateClusterRole(resourceName string) (*rbacv1.ClusterRole, error) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	clusterRole := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterRoleName,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"deployments.pds.portworx.com"},
+				Resources: []string{resourceName},
+				Verbs:     []string{"get", "list"},
+			},
+		},
+	}
+	clusterrole, err := k8sRbac.CreateClusterRole(clusterRole)
+	if errors.IsAlreadyExists(err) {
+		log.Infof("Cluster Role already exists")
+		clusterrole, err = k8sRbac.GetClusterRole(clusterRoleName)
+		if err != nil {
+			return nil, fmt.Errorf("Error while getting cluster role %v", err)
+		}
+	} else {
+		return nil, err
+	}
+	return clusterrole, err
+}
+
+// CreateClusterRoleBinding for pds2.0 deployments
+func CreateClusterRoleBinding(namespace string, account *corev1.ServiceAccount) error {
+	clusterRoleBindingName := "pds-loadgen:pds-loadgen-cluster"
+
+	clusterRoleBinding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterRoleBindingName,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      account.Name,
+				Namespace: namespace,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			Kind:     "ClusterRole",
+			Name:     clusterRoleName,
+			APIGroup: "rbac.authorization.k8s.io",
+		},
+	}
+
+	_, err := k8sRbac.GetClusterRoleBinding(clusterRoleBindingName)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("Creating ClusterRole Bindings..")
+			_, err = k8sRbac.CreateClusterRoleBinding(clusterRoleBinding)
+			if err != nil {
+				return fmt.Errorf("Error while creating cluster role bindings %v", err)
+			}
+			log.InfoD("ClusterRole Binding Created..")
+		} else {
+			return fmt.Errorf("Error while creating cluster role bindings %v", err)
+		}
+	} else {
+		log.Info("ClusterRoleBindings already exists")
+	}
+	return err
+}
+
+// createClusterRole for pds1.0
 func createClusterRole() (*rbacv1.ClusterRole, error) {
 	clusterRoleName := "pds-loadgen-cluster"
 	clusterRole := &rbacv1.ClusterRole{
@@ -207,6 +287,34 @@ func createClusterRoleBinding(namespace string, account *corev1.ServiceAccount, 
 		log.Info("ClusterRoleBindings already exists")
 	}
 	return err
+}
+
+func CreatePolicies(namespace, dsName string) (*corev1.ServiceAccount, error) {
+	serviceAccount, err := createServiceAccount(namespace)
+	if err != nil {
+		return nil, fmt.Errorf("error while creating service Account %v", err)
+	}
+
+	err = createRole(namespace, serviceAccount)
+	if err != nil {
+		return nil, fmt.Errorf("error while creating role %v", err)
+	}
+
+	err = createRoleBinding(namespace, serviceAccount)
+	if err != nil {
+		return nil, fmt.Errorf("error while creating rolebinding %v", err)
+	}
+
+	_, err = CreateClusterRole(dsName)
+	if err != nil {
+		return nil, fmt.Errorf("error while creating cluster role %v", err)
+	}
+
+	err = CreateClusterRoleBinding(namespace, serviceAccount)
+	if err != nil {
+		return nil, fmt.Errorf("error while creating cluster rolebinding %v", err)
+	}
+	return serviceAccount, nil
 }
 
 func createPolicies(namespace string) (*corev1.ServiceAccount, error) {
