@@ -110,65 +110,80 @@ var _ = Describe("{RunSSIE}", func() {
 
 func triggerSSIECombo(contexts *[]*scheduler.Context, triggerEventsChan *chan *EventRecord) {
 	waitTime := 2 * time.Minute
-	for {
 
-		if baseInterval, ok := ChaosMap[BaseInterval]; ok {
-			waitTime = time.Duration(baseInterval) * time.Minute
-		}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer GinkgoRecover()
+		for {
 
-		nextCombinationToRun := getNextCombination()
-
-		if nextCombinationToRun == nil {
-			log.Infof("No more SSIE combinations to trigger")
-			break
-		}
-
-		log.InfoD("Waiting for %v before triggering SSIE combination %v", waitTime, nextCombinationToRun)
-		time.Sleep(waitTime)
-		var wg sync.WaitGroup
-		for _, triggerType := range nextCombinationToRun {
-			triggerFunc := triggerFunctions[triggerType]
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				defer GinkgoRecover()
-				triggerFunc(contexts, triggerEventsChan)
-			}()
-		}
-
-		var ssieErr error
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			defer GinkgoRecover()
-
-			for {
-				select {
-				case <-StopSSIEChan:
-					log.InfoD("Received stop signal. Exiting destructive test triggers")
-					return
-				default:
-					// Continuing the loop as no stop signal is received
-				}
-				destructiveEvent := getDestructiveEvent()
-				log.InfoD("Running destructive event [%s]", destructiveEvent)
-
-				triggerFunc := triggerFunctions[destructiveEvent]
-				triggerFunc(contexts, triggerEventsChan)
-				log.InfoD(fmt.Sprintf("Validating SSIE status after running [%s]", destructiveEvent))
-				ssieErr = ValidateSSIEStatus(contexts)
-				if ssieErr != nil {
-					dash.VerifySafely(ssieErr, nil, fmt.Sprintf("verify SSIE status after running [%s]", destructiveEvent))
-					close(StopSSIEChan)
-				}
+			select {
+			case <-StopSSIEChan:
+				log.InfoD("Received stop signal. Exiting non-destructive test triggers")
+				return
+			default:
+				// Continuing the loop as no stop signal is received
 			}
-		}()
 
-		wg.Wait()
-		if ssieErr != nil {
-			return
+			if baseInterval, ok := ChaosMap[BaseInterval]; ok {
+				waitTime = time.Duration(baseInterval) * time.Minute
+			}
+
+			nextCombinationToRun := getNextCombination()
+
+			if nextCombinationToRun == nil {
+				log.Infof("No more SSIE combinations to trigger")
+				return
+			}
+
+			log.InfoD("Waiting for %v before triggering SSIE combination %v", waitTime, nextCombinationToRun)
+			time.Sleep(waitTime)
+
+			var ndwg sync.WaitGroup
+
+			for _, triggerType := range nextCombinationToRun {
+				triggerFunc := triggerFunctions[triggerType]
+				ndwg.Add(1)
+				go func() {
+					defer ndwg.Done()
+					defer GinkgoRecover()
+					triggerFunc(contexts, triggerEventsChan)
+				}()
+			}
+			ndwg.Wait()
 		}
-	}
+	}()
+
+	var ssieErr error
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer GinkgoRecover()
+
+		for {
+			select {
+			case <-StopSSIEChan:
+				log.InfoD("Received stop signal. Exiting destructive test triggers")
+				return
+			default:
+				// Continuing the loop as no stop signal is received
+			}
+			destructiveEvent := getDestructiveEvent()
+			log.InfoD("Running destructive event [%s]", destructiveEvent)
+
+			triggerFunc := triggerFunctions[destructiveEvent]
+			triggerFunc(contexts, triggerEventsChan)
+			log.InfoD(fmt.Sprintf("Validating SSIE status after running [%s]", destructiveEvent))
+			ssieErr = ValidateSSIEStatus(contexts)
+			if ssieErr != nil {
+				dash.VerifySafely(ssieErr, nil, fmt.Sprintf("verify SSIE status after running [%s]", destructiveEvent))
+				close(StopSSIEChan)
+			}
+		}
+	}()
+
+	wg.Wait()
 
 }
 

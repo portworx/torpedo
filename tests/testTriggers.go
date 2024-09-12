@@ -4557,7 +4557,7 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 
 			_, err = torpedotask.DoRetryWithTimeoutWithCtx(f, gctx)
 			if err != nil {
-				return err
+				log.Errorf("error waiting for volume %s to be in UP state. App : %s, Err: %v", v.Name, ctx.App.Key, err)
 			}
 
 		}

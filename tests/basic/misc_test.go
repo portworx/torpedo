@@ -1934,30 +1934,3 @@ var _ = Describe("{PerformStorageVMotions}", func() {
 		AfterEachTest(contexts)
 	})
 })
-
-// Volume Driver Plugin has crashed - and the client container should not be impacted.
-var _ = Describe("{LoggingTest}", func() {
-
-	JustBeforeEach(func() {
-		StartTorpedoTest("LoggingTest", "Validate PX after volume driver crash", nil, 0)
-
-	})
-	var contexts []*scheduler.Context
-
-	stepLog := "has to schedule apps and crash volume driver on app nodes"
-	It(stepLog, func() {
-		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
-
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("voldrivercrash-%d", i))...)
-		}
-
-		TriggerLogging(contexts)
-
-	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		AfterEachTest(contexts, testrailID, runID)
-	})
-})

@@ -2067,24 +2067,27 @@ func GenerateAndStoreEventCombinations() {
 	NumNonDisruptiveEvents := getRandomValue()
 	log.Infof("NumNonDisruptiveEvents: %d", NumNonDisruptiveEvents)
 
-	NumDisruptiveEvents := 0
-
-	nonDisruptive, disruptive := separateEventsByType()
+	nonDisruptive, _ := separateEventsByType()
 
 	var localCombinations [][]string
 
 	// Generating combinations of disruptive events
-	disruptiveCombos := combinations(disruptive, NumDisruptiveEvents)
+	//disruptiveCombos := combinations(disruptive, NumDisruptiveEvents)
 
-	for _, dCombo := range disruptiveCombos {
-		// Generating combinations of non-disruptive events
-		nonDisruptiveCombos := combinations(nonDisruptive, NumNonDisruptiveEvents)
-		for _, ndCombo := range nonDisruptiveCombos {
-			// Merging non-disruptive and disruptive events into a single combination
-			fullCombo := append(ndCombo, dCombo...)
-			localCombinations = append(localCombinations, fullCombo)
-		}
+	nonDisruptiveCombos := combinations(nonDisruptive, NumNonDisruptiveEvents)
+	for _, ndCombo := range nonDisruptiveCombos {
+		localCombinations = append(localCombinations, ndCombo)
 	}
+
+	//for _, dCombo := range disruptiveCombos {
+	//	// Generating combinations of non-disruptive events
+	//	nonDisruptiveCombos := combinations(nonDisruptive, NumNonDisruptiveEvents)
+	//	for _, ndCombo := range nonDisruptiveCombos {
+	//		// Merging non-disruptive and disruptive events into a single combination
+	//		fullCombo := append(ndCombo, dCombo...)
+	//		localCombinations = append(localCombinations, fullCombo)
+	//	}
+	//}
 
 	combinationsLock.Lock()
 	eventCombinations = localCombinations
@@ -2098,7 +2101,7 @@ func separateEventsByType() (nonDisruptive []string, disruptive []string) {
 		addEvent := true
 		waitTIme, enableEvent := isTriggerEnabled(event)
 		if startTime, ok := eventTimeMap[event]; ok {
-			if time.Since(startTime) < waitTIme {
+			if ChaosMap[event] != maximumChaosLevel && time.Since(startTime) < waitTIme {
 				addEvent = false
 			}
 		}
