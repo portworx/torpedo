@@ -13,6 +13,8 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type user struct {
@@ -32,8 +34,7 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 		backupLocationUID    string
 		bkpLocationName      string
 		backupLocationMap    map[string]string
-		testUsers            map[int]user
-		adminContext         context.Context
+		pxbUsers             map[int]user
 	)
 	JustBeforeEach(func() {
 		backupLocationMap = make(map[string]string)
@@ -54,31 +55,27 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 		ValidateApplications(scheduledAppContexts)
 
 		// Create two test users with infra admin role
-		testUsers = map[int]user{1: {name: "testuser1"}, 2: {name: "testuser2"}}
-		log.InfoD("Creating %d users", 2)
-		for i := 1; i <= 2; i++ {
-			userName := testUsers[i].name
-			firstName := fmt.Sprintf("FirstName%v", i)
-			lastName := fmt.Sprintf("LastName%v", i)
-			email := fmt.Sprintf("testuser%v@cnbu.com", i)
+		var err error
+		numberOfUsers := 2
+		log.InfoD("Creating %d users", numberOfUsers)
+		testusers := CreateUsers(numberOfUsers)
+		pxbUsers = make(map[int]user)
 
-			err := backup.AddUser(userName, firstName, lastName, email, CommonPassword)
-			log.FailOnError(err, "Failed to create user - %s", userName)
+		adminCtx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching admin user ctx")
 
-			err = backup.AddRoleToUser(userName, infraAdminRole, fmt.Sprintf("Adding %v role to %s", infraAdminRole, userName))
-			log.FailOnError(err, "Failed to add role %s to the user %s", infraAdminRole, userName)
+		pxbUsers[0] = user{name: "ADMIN USER", ctx: adminCtx}
+		//pxbUsers = map[int]user{1: {name: "testuser1"}, 2: {name: "testuser2"}}
+		for index, testuser := range testusers {
+			err = backup.AddRoleToUser(testuser, infraAdminRole, fmt.Sprintf("Adding %v role to %s", infraAdminRole, testuser))
+			log.FailOnError(err, "Failed to add role %s to the user %s", infraAdminRole, testuser)
 
-			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, CommonPassword)
+			ctxNonAdmin, err := backup.GetNonAdminCtx(testuser, CommonPassword)
 			log.FailOnError(err, "Fetching non admin ctx")
-			user := testUsers[i]
-			user.ctx = ctxNonAdmin
-			testUsers[i] = user
+			pxbUsers[index+1] = user{testuser, ctxNonAdmin}
 		}
 
 		// Create backup location and cloud setting with admin user
-		var err error
-		adminContext, err = backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching admin user ctx")
 		log.InfoD("Creating backup location and cloud setting with admin user")
 		for _, provider := range providers {
 			cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
@@ -86,15 +83,15 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 			cloudCredUID = uuid.New()
 			backupLocationUID = uuid.New()
 			backupLocationMap[backupLocationUID] = bkpLocationName
-			err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, adminContext)
+			err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, pxbUsers[0].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
-			err = CreateBackupLocationWithContext(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", adminContext, true)
+			err = CreateBackupLocationWithContext(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", pxbUsers[0].ctx, true)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
 		}
 
 		// Share the Backup Location with testUser2
 		log.InfoD("Sharing backup location with user2")
-		err = AddBackupLocationOwnership(bkpLocationName, backupLocationUID, []string{testUsers[2].name}, nil, Read, Invalid, adminContext)
+		err = AddBackupLocationOwnership(bkpLocationName, backupLocationUID, []string{pxbUsers[2].name}, nil, Read, Invalid, pxbUsers[0].ctx)
 		log.FailOnError(err, "failed to update backup location [%v] ownership", bkpLocationName)
 	})
 	// This testcase verifies whether the restores created/owned by the user were deleted during the cluster un-share.
@@ -110,21 +107,21 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 		)
 
 		Step("Create a cluster object with User1 and Share with User2", func() {
-			err := AddSourceCluster(testUsers[1].ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with %s ctx", SourceClusterName, testUsers[1].name))
+			err := AddSourceCluster(pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with %s ctx", SourceClusterName, pxbUsers[1].name))
 
-			clusterUid, err = Inst().Backup.GetClusterUID(testUsers[1].ctx, BackupOrgID, SourceClusterName)
+			clusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[1].ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 
 			// Share the source cluster to testuser2
-			_, err = ShareCluster(testUsers[1].ctx, SourceClusterName, clusterUid, []string{testUsers[2].name}, nil, false)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using %s ctx", SourceClusterName, testUsers[2].name, testUsers[1].name))
+			_, err = ShareCluster(pxbUsers[1].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using %s ctx", SourceClusterName, pxbUsers[2].name, pxbUsers[1].name))
 		})
 
 		Step("Create a backup and restore it on the same cluster(Shared Cluster) with user(User2)", func() {
 			// Take Backup
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
-			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", testUsers[2].ctx)
+			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
 
 			// Create Restore
@@ -133,17 +130,17 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 				namespaceMapping[namespace] = restoredNameSpace
 			}
 			log.InfoD("Namespace mapping is %v:", namespaceMapping)
-			err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, testUsers[2].ctx, make(map[string]string))
+			err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, pxbUsers[2].ctx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s]", restoreName))
-			restoreUID, err = Inst().Backup.GetRestoreUID(testUsers[2].ctx, restoreName, BackupOrgID)
+			restoreUID, err = Inst().Backup.GetRestoreUID(pxbUsers[2].ctx, restoreName, BackupOrgID)
 			log.FailOnError(err, "failed to get restore %s uid", restoreName)
 
 		})
 
 		Step("User1 UnShares the cluster from User2", func() {
 			// Un-Share the source cluster with testuser2
-			_, err := UnShareCluster(testUsers[1].ctx, SourceClusterName, clusterUid, []string{testUsers[2].name}, nil)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Unshare of source [%s] cluster with %s user using %s ctx", SourceClusterName, testUsers[2].name, testUsers[1].name))
+			_, err := UnShareCluster(pxbUsers[1].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Unshare of source [%s] cluster with %s user using %s ctx", SourceClusterName, pxbUsers[2].name, pxbUsers[1].name))
 		})
 
 		Step("Validate the restore object", func() {
@@ -153,20 +150,20 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 				OrgId: BackupOrgID,
 				Uid:   restoreUID,
 			}
-			_, err := Inst().Backup.InspectRestore(testUsers[2].ctx, restoreInspectRequest)
+			_, err := Inst().Backup.InspectRestore(pxbUsers[2].ctx, restoreInspectRequest)
 			log.FailOnNoError(err, "inspect restore %s", restoreName)
 		})
 
 		Step("Cleanup", func() {
 			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(testUsers[2].ctx, backupName, BackupOrgID)
+			backupUID, err := backupDriver.GetBackupUID(pxbUsers[2].ctx, backupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
 
 			log.InfoD("Deleting backup")
-			err = DeleteBackupAndWaitForCompletion(backupName, backupUID, BackupOrgID, testUsers[2].ctx)
+			err = DeleteBackupAndWaitForCompletion(backupName, backupUID, BackupOrgID, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
 
-			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, testUsers[1].ctx, false)
+			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[1].ctx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", SourceClusterName))
 		})
 	})
@@ -183,31 +180,31 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 		)
 
 		Step("Update testuser2 with super admin role", func() {
-			err := backup.AddRoleToUser(testUsers[2].name, superAdminRole, fmt.Sprintf("Adding %v role to %s", infraAdminRole, testUsers[2].name))
-			log.FailOnError(err, "failed to add role %s to the user %s", superAdminRole, testUsers[2].name)
+			err := backup.AddRoleToUser(pxbUsers[2].name, superAdminRole, fmt.Sprintf("Adding %v role to %s", infraAdminRole, pxbUsers[2].name))
+			log.FailOnError(err, "failed to add role %s to the user %s", superAdminRole, pxbUsers[2].name)
 
-			ctxNonAdmin, err := backup.GetNonAdminCtx(testUsers[2].name, CommonPassword)
+			ctxNonAdmin, err := backup.GetNonAdminCtx(pxbUsers[2].name, CommonPassword)
 			log.FailOnError(err, "Fetching non admin ctx")
-			user := testUsers[2]
+			user := pxbUsers[2]
 			user.ctx = ctxNonAdmin
-			testUsers[2] = user
+			pxbUsers[2] = user
 		})
 
 		Step("Create a cluster object with User1 and Share with User2", func() {
-			err := AddSourceCluster(testUsers[1].ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with %s ctx", SourceClusterName, testUsers[1].name))
-			clusterUid, err = Inst().Backup.GetClusterUID(testUsers[1].ctx, BackupOrgID, SourceClusterName)
+			err := AddSourceCluster(pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with %s ctx", SourceClusterName, pxbUsers[1].name))
+			clusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[1].ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 
 			// Share the source cluster to testuser2
-			_, err = ShareCluster(testUsers[1].ctx, SourceClusterName, clusterUid, []string{testUsers[2].name}, nil, false)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using %s ctx", SourceClusterName, testUsers[2].name, testUsers[1].name))
+			_, err = ShareCluster(pxbUsers[1].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using %s ctx", SourceClusterName, pxbUsers[2].name, pxbUsers[1].name))
 		})
 
 		Step("Create a backup and restore it on the same cluster(Shared Cluster) with user(User2)", func() {
 			// Take Backup
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
-			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", testUsers[2].ctx)
+			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
 
 			// Create Restore
@@ -216,16 +213,16 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 				namespaceMapping[namespace] = restoredNameSpace
 			}
 			log.InfoD("Namespace mapping is %v:", namespaceMapping)
-			err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, testUsers[2].ctx, make(map[string]string))
+			err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, pxbUsers[2].ctx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s]", restoreName))
-			restoreUID, err = Inst().Backup.GetRestoreUID(testUsers[2].ctx, restoreName, BackupOrgID)
+			restoreUID, err = Inst().Backup.GetRestoreUID(pxbUsers[2].ctx, restoreName, BackupOrgID)
 			log.FailOnError(err, "failed to get restore %s uid", restoreName)
 		})
 
 		Step("User1 UnShares the cluster from User2", func() {
 			// Un-Share the source cluster with testuser2
-			_, err := UnShareCluster(testUsers[1].ctx, SourceClusterName, clusterUid, []string{testUsers[2].name}, nil)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Unshare of source [%s] cluster with %s user using %s ctx", SourceClusterName, testUsers[2].name, testUsers[1].name))
+			_, err := UnShareCluster(pxbUsers[1].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Unshare of source [%s] cluster with %s user using %s ctx", SourceClusterName, pxbUsers[2].name, pxbUsers[1].name))
 		})
 
 		Step("Validate the restore object", func() {
@@ -235,24 +232,24 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 				OrgId: BackupOrgID,
 				Uid:   restoreUID,
 			}
-			_, err := Inst().Backup.InspectRestore(testUsers[2].ctx, restoreInspectRequest)
+			_, err := Inst().Backup.InspectRestore(pxbUsers[2].ctx, restoreInspectRequest)
 			log.FailOnError(err, "inspect restore %s", restoreName)
 		})
 
 		Step("Cleanup", func() {
 			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(testUsers[2].ctx, backupName, BackupOrgID)
+			backupUID, err := backupDriver.GetBackupUID(pxbUsers[2].ctx, backupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
 
 			log.InfoD("Deleting backup")
-			err = DeleteBackupAndWaitForCompletion(backupName, backupUID, BackupOrgID, testUsers[2].ctx)
+			err = DeleteBackupAndWaitForCompletion(backupName, backupUID, BackupOrgID, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
 
 			log.InfoD(fmt.Sprintf("Delete restore with name [%s]", restoreName))
-			err = DeleteRestore(restoreName, BackupOrgID, testUsers[2].ctx)
+			err = DeleteRestore(restoreName, BackupOrgID, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 
-			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, testUsers[1].ctx, false)
+			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[1].ctx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", SourceClusterName))
 		})
 
@@ -270,14 +267,14 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 		)
 
 		Step("Create a cluster object with User1 and Share with User2", func() {
-			err := AddSourceCluster(testUsers[1].ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with %s ctx", SourceClusterName, testUsers[1].name))
-			clusterUid, err = Inst().Backup.GetClusterUID(testUsers[1].ctx, BackupOrgID, SourceClusterName)
+			err := AddSourceCluster(pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with %s ctx", SourceClusterName, pxbUsers[1].name))
+			clusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[1].ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 
 			// Share the source cluster to testuser2
-			_, err = ShareCluster(testUsers[1].ctx, SourceClusterName, clusterUid, []string{testUsers[2].name}, nil, false)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using %s ctx", SourceClusterName, testUsers[2].name, testUsers[1].name))
+			_, err = ShareCluster(pxbUsers[1].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using %s ctx", SourceClusterName, pxbUsers[2].name, pxbUsers[1].name))
 		})
 
 		Step("Create a backup schedule with User2", func() {
@@ -285,51 +282,51 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(5))
 			periodicSchedulePolicyUid = uuid.New()
 			periodicSchedulePolicyInterval := int64(15)
-			err := CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, testUsers[2].ctx, false, false)
+			err := CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, pxbUsers[2].ctx, false, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s] ", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
 
 			// Take Backup Schedule
 			log.InfoD("Taking schedule backup of multiple namespaces")
 			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUsers[2].ctx)
+			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s]", scheduleName))
 		})
 
 		Step("User1 UnShares the cluster from User2", func() {
 			// UnShare the source cluster to testuser2
-			_, err := UnShareCluster(testUsers[1].ctx, SourceClusterName, clusterUid, []string{testUsers[2].name}, nil)
+			_, err := UnShareCluster(pxbUsers[1].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil)
 			log.InfoD("UnshareCluster error response: %v", err)
-			dash.VerifyNotNilFatal(err, fmt.Sprintf("Verifying Unshare of source [%s] cluster with %s user using %s ctx", SourceClusterName, testUsers[2].name, testUsers[1].name))
+			dash.VerifyNotNilFatal(err, fmt.Sprintf("Verifying Unshare of source [%s] cluster with %s user using %s ctx", SourceClusterName, pxbUsers[2].name, pxbUsers[1].name))
 		})
 
 		Step("Delete the backup schedule and unshare the cluster", func() {
 			// TODO: Here need to delete the backup schedule with super-admin role user
 			log.InfoD("Deleting backup schedule [%s]", scheduleName)
-			scheduleUID, err := GetScheduleUID(scheduleName, BackupOrgID, testUsers[2].ctx)
+			scheduleUID, err := GetScheduleUID(scheduleName, BackupOrgID, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backupschedule uid", scheduleName))
 
-			allScheduleBackupNames, err = Inst().Backup.GetAllScheduleBackupNames(testUsers[2].ctx, scheduleName, BackupOrgID)
-			log.FailOnError(err, "failed to get all schedule backup names with schedule name %s of the user %s", scheduleName, testUsers[2].name)
+			allScheduleBackupNames, err = Inst().Backup.GetAllScheduleBackupNames(pxbUsers[2].ctx, scheduleName, BackupOrgID)
+			log.FailOnError(err, "failed to get all schedule backup names with schedule name %s of the user %s", scheduleName, pxbUsers[2].name)
 
-			err = DeleteScheduleWithUIDAndWait(scheduleName, scheduleUID, SourceClusterName, clusterUid, BackupOrgID, testUsers[2].ctx)
+			err = DeleteScheduleWithUIDAndWait(scheduleName, scheduleUID, SourceClusterName, clusterUid, BackupOrgID, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", scheduleName))
 
 			// UnShare the source cluster to testuser2
-			_, err = UnShareCluster(testUsers[1].ctx, SourceClusterName, clusterUid, []string{testUsers[2].name}, nil)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Unshare of source [%s] cluster with %s user using %s ctx", SourceClusterName, testUsers[2].name, testUsers[1].name))
+			_, err = UnShareCluster(pxbUsers[1].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Unshare of source [%s] cluster with %s user using %s ctx", SourceClusterName, pxbUsers[2].name, pxbUsers[1].name))
 		})
 
 		Step("Cleanup", func() {
 			log.InfoD("allScheduleBackupNames: %v", allScheduleBackupNames)
 			for i := len(allScheduleBackupNames) - 1; i >= 0; i-- {
 				backupName := allScheduleBackupNames[i]
-				backupUid, err := Inst().Backup.GetBackupUID(testUsers[2].ctx, backupName, BackupOrgID)
+				backupUid, err := Inst().Backup.GetBackupUID(pxbUsers[2].ctx, backupName, BackupOrgID)
 				if err != nil && !strings.Contains(err.Error(), "not found") {
-					log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, testUsers[2].name)
+					log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, pxbUsers[2].name)
 				}
 				if backupUid != "" {
-					err = DeleteBackupAndWaitForCompletion(backupName, backupUid, BackupOrgID, testUsers[2].ctx)
-					log.FailOnError(err, "failed to delete schedule backup %s of the user %s", backupName, testUsers[2].name)
+					err = DeleteBackupAndWaitForCompletion(backupName, backupUid, BackupOrgID, pxbUsers[2].ctx)
+					log.FailOnError(err, "failed to delete schedule backup %s of the user %s", backupName, pxbUsers[2].name)
 				}
 			}
 
@@ -339,10 +336,10 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 				Uid:   periodicSchedulePolicyUid,
 				OrgId: BackupOrgID,
 			}
-			_, err := Inst().Backup.DeleteSchedulePolicy(testUsers[2].ctx, schedulePolicyDeleteRequest)
-			log.FailOnError(err, "failed to delete schedule policy %s of the user %s", periodicSchedulePolicyName, testUsers[2].name)
+			_, err := Inst().Backup.DeleteSchedulePolicy(pxbUsers[2].ctx, schedulePolicyDeleteRequest)
+			log.FailOnError(err, "failed to delete schedule policy %s of the user %s", periodicSchedulePolicyName, pxbUsers[2].name)
 
-			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, testUsers[1].ctx, false)
+			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[1].ctx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", SourceClusterName))
 		})
 
@@ -360,27 +357,27 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 		)
 
 		Step("Create a cluster object(destination cluster) with User1 and Share with User2", func() {
-			err := AddDestinationCluster(testUsers[1].ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of [%s] cluster with %s ctx", DestinationClusterName, testUsers[1].name))
-			destinationClusterUid, err = Inst().Backup.GetClusterUID(testUsers[1].ctx, BackupOrgID, DestinationClusterName)
+			err := AddDestinationCluster(pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of [%s] cluster with %s ctx", DestinationClusterName, pxbUsers[1].name))
+			destinationClusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[1].ctx, BackupOrgID, DestinationClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 
 			// Share the destination cluster to testuser2
-			_, err = ShareCluster(testUsers[1].ctx, DestinationClusterName, destinationClusterUid, []string{testUsers[2].name}, nil, false)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of [%s] cluster with %s user using %s ctx", DestinationClusterName, testUsers[2].name, testUsers[1].name))
+			_, err = ShareCluster(pxbUsers[1].ctx, DestinationClusterName, destinationClusterUid, []string{pxbUsers[2].name}, nil, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of [%s] cluster with %s user using %s ctx", DestinationClusterName, pxbUsers[2].name, pxbUsers[1].name))
 		})
 
 		Step("Create another cluster object(Source Cluster) with User2", func() {
-			err := AddSourceCluster(testUsers[2].ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of [%s] cluster with %s ctx", SourceClusterName, testUsers[2].name))
-			clusterUid, err = Inst().Backup.GetClusterUID(testUsers[2].ctx, BackupOrgID, SourceClusterName)
+			err := AddSourceCluster(pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of [%s] cluster with %s ctx", SourceClusterName, pxbUsers[2].name))
+			clusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[2].ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 
 		Step("create a backup from soure and restore it on destination(Shared Cluster) with user2", func() {
 			// Take Backup
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
-			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", testUsers[2].ctx)
+			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
 
 			// Create Restore
@@ -389,26 +386,26 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 				namespaceMapping[namespace] = restoredNameSpace
 			}
 			log.InfoD("Namespace mapping is %v:", namespaceMapping)
-			err = CreateRestore(restoreName, backupName, namespaceMapping, DestinationClusterName, BackupOrgID, testUsers[2].ctx, make(map[string]string))
+			err = CreateRestore(restoreName, backupName, namespaceMapping, DestinationClusterName, BackupOrgID, pxbUsers[2].ctx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s]", restoreName))
 		})
 
 		Step("Cleanup", func() {
 			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(testUsers[2].ctx, backupName, BackupOrgID)
+			backupUID, err := backupDriver.GetBackupUID(pxbUsers[2].ctx, backupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
 
 			log.InfoD("Deleting backup")
-			err = DeleteBackupAndWaitForCompletion(backupName, backupUID, BackupOrgID, testUsers[2].ctx)
+			err = DeleteBackupAndWaitForCompletion(backupName, backupUID, BackupOrgID, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
 
-			err = DeleteRestore(restoreName, BackupOrgID, testUsers[2].ctx)
+			err = DeleteRestore(restoreName, BackupOrgID, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 
-			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, testUsers[2].ctx, false)
+			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[2].ctx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", SourceClusterName))
 
-			err = DeleteClusterWithUID(DestinationClusterName, destinationClusterUid, BackupOrgID, testUsers[1].ctx, false)
+			err = DeleteClusterWithUID(DestinationClusterName, destinationClusterUid, BackupOrgID, pxbUsers[1].ctx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", DestinationClusterName))
 		})
 	})
@@ -421,10 +418,10 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 		log.InfoD("Deleting deployed applications")
 		DestroyApps(scheduledAppContexts, opts)
 
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminContext)
-		for i := 1; i <= 2; i++ {
-			err := backup.DeleteUser(testUsers[i].name)
-			log.FailOnError(err, "Failed to delete user - %s", testUsers[i].name)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, pxbUsers[0].ctx)
+		for i := 1; i < len(pxbUsers); i++ {
+			err := backup.DeleteUser(pxbUsers[i].name)
+			log.FailOnError(err, "Failed to delete user - %s", pxbUsers[i].name)
 		}
 	})
 })
@@ -439,8 +436,7 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 		backupLocationUID    string
 		bkpLocationName      string
 		backupLocationMap    map[string]string
-		testUsers            map[int]user
-		adminContext         context.Context
+		pxbUsers             map[int]user
 	)
 	JustBeforeEach(func() {
 		backupLocationMap = make(map[string]string)
@@ -460,29 +456,25 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 		// Validate the application
 		ValidateApplications(scheduledAppContexts)
 
-		// Create two test users with infra admin role
-		testUsers = map[int]user{1: {name: "testuser1"}, 2: {name: "testuser2"}}
-		log.InfoD("Creating %d users", 2)
-		for i := 1; i <= 2; i++ {
-			userName := testUsers[i].name
-			firstName := fmt.Sprintf("FirstName%v", i)
-			lastName := fmt.Sprintf("LastName%v", i)
-			email := fmt.Sprintf("testuser%v@cnbu.com", i)
+		// Create two test users
+		var err error
+		numberOfUsers := 2
+		log.InfoD("Creating %d users", numberOfUsers)
+		testusers := CreateUsers(numberOfUsers)
+		pxbUsers = make(map[int]user)
 
-			err := backup.AddUser(userName, firstName, lastName, email, CommonPassword)
-			log.FailOnError(err, "Failed to create user - %s", userName)
+		adminCtx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching admin user ctx")
 
-			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, CommonPassword)
+		pxbUsers[0] = user{name: "ADMIN USER", ctx: adminCtx}
+		//pxbUsers = map[int]user{1: {name: "testuser1"}, 2: {name: "testuser2"}}
+		for index, testuser := range testusers {
+			ctxNonAdmin, err := backup.GetNonAdminCtx(testuser, CommonPassword)
 			log.FailOnError(err, "Fetching non admin ctx")
-			user := testUsers[i]
-			user.ctx = ctxNonAdmin
-			testUsers[i] = user
+			pxbUsers[index+1] = user{testuser, ctxNonAdmin}
 		}
 
 		// Create backup location and cloud setting with admin user
-		var err error
-		adminContext, err = backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching admin user ctx")
 		log.InfoD("Creating backup location and cloud setting with admin user")
 		for _, provider := range providers {
 			cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
@@ -490,15 +482,15 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 			cloudCredUID = uuid.New()
 			backupLocationUID = uuid.New()
 			backupLocationMap[backupLocationUID] = bkpLocationName
-			err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, adminContext)
+			err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, pxbUsers[0].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
-			err = CreateBackupLocationWithContext(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", adminContext, true)
+			err = CreateBackupLocationWithContext(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", pxbUsers[0].ctx, true)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
 		}
 
 		// Share the Backup Location with testUser2
 		log.InfoD("Sharing backup location with user2")
-		err = AddBackupLocationOwnership(bkpLocationName, backupLocationUID, []string{testUsers[2].name}, nil, Read, Invalid, adminContext)
+		err = AddBackupLocationOwnership(bkpLocationName, backupLocationUID, []string{pxbUsers[2].name}, nil, Read, Invalid, pxbUsers[0].ctx)
 		log.FailOnError(err, "failed to update backup location [%v] ownership", bkpLocationName)
 	})
 
@@ -512,53 +504,53 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 		)
 
 		Step("Create a cluster object with Admin User ", func() {
-			err := AddSourceCluster(adminContext)
+			err := AddSourceCluster(pxbUsers[0].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with admin ctx", SourceClusterName))
 
-			clusterUid, err = Inst().Backup.GetClusterUID(adminContext, BackupOrgID, SourceClusterName)
+			clusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 
 		Step("Create a Backup with Admin User", func() {
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
-			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", adminContext)
+			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[0].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
 		})
 
 		Step("Share the admin created cluster with User2", func() {
-			_, err := ShareCluster(adminContext, SourceClusterName, clusterUid, []string{testUsers[2].name}, nil, false)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using admin ctx", SourceClusterName, testUsers[2].name))
+			_, err := ShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using admin ctx", SourceClusterName, pxbUsers[2].name))
 		})
 
 		Step("Verify the cluster access with User2", func() {
-			err := VerifySourceClusterAccessWithHavingNoBackupsRestoresANDBackupScheduleObjects(testUsers[2].ctx, testUsers[2].name, CommonPassword, clusterUid)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify pxb objects for %v user", testUsers[2].name))
+			err := VerifySourceClusterAccessWithHavingNoBackupsRestoresANDBackupScheduleObjects(pxbUsers[2].ctx, pxbUsers[2].name, CommonPassword, clusterUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify pxb objects for %v user", pxbUsers[2].name))
 		})
 
 		Step("Create a backup on the shared cluster with testuser2", func() {
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
-			err := CreateBackup(testUser2backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", testUsers[2].ctx)
+			err := CreateBackup(testUser2backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", testUser2backupName))
 		})
 
 		Step("Cleanup", func() {
 			backupDriver := Inst().Backup
-			testUser2backupUID, err := backupDriver.GetBackupUID(testUsers[2].ctx, testUser2backupName, BackupOrgID)
+			testUser2backupUID, err := backupDriver.GetBackupUID(pxbUsers[2].ctx, testUser2backupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", testUser2backupName)
 
 			log.InfoD("Deleting backup created by user2")
-			err = DeleteBackupAndWaitForCompletion(testUser2backupName, testUser2backupUID, BackupOrgID, testUsers[2].ctx)
+			err = DeleteBackupAndWaitForCompletion(testUser2backupName, testUser2backupUID, BackupOrgID, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", testUser2backupName))
 
-			backupUID, err := backupDriver.GetBackupUID(adminContext, backupName, BackupOrgID)
+			backupUID, err := backupDriver.GetBackupUID(pxbUsers[0].ctx, backupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
 
 			log.InfoD("Deleting backup created by admin")
-			err = DeleteBackupAndWaitForCompletion(backupName, backupUID, BackupOrgID, adminContext)
+			err = DeleteBackupAndWaitForCompletion(backupName, backupUID, BackupOrgID, pxbUsers[0].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
 
 			log.InfoD("Deleting cluster created by admin")
-			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, adminContext, false)
+			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[0].ctx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", SourceClusterName))
 		})
 	})
@@ -576,27 +568,27 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 		)
 
 		Step("Create a cluster object with Admin User ", func() {
-			err := AddSourceCluster(adminContext)
+			err := AddSourceCluster(pxbUsers[0].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with admin ctx", SourceClusterName))
 
-			clusterUid, err = Inst().Backup.GetClusterUID(adminContext, BackupOrgID, SourceClusterName)
+			clusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 
 		Step("Create a Backup with Admin User", func() {
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
-			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", adminContext)
+			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[0].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
 		})
 
 		Step("Share the admin created cluster with User2", func() {
-			_, err := ShareCluster(adminContext, SourceClusterName, clusterUid, []string{testUsers[2].name}, nil, false)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using admin ctx", SourceClusterName, testUsers[2].name))
+			_, err := ShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using admin ctx", SourceClusterName, pxbUsers[2].name))
 		})
 
 		Step("Verify the cluster access with User2", func() {
-			err := VerifySourceClusterAccessWithHavingNoBackupsRestoresANDBackupScheduleObjects(testUsers[2].ctx, testUsers[2].name, CommonPassword, clusterUid)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify pxb objects for %v user", testUsers[2].name))
+			err := VerifySourceClusterAccessWithHavingNoBackupsRestoresANDBackupScheduleObjects(pxbUsers[2].ctx, pxbUsers[2].name, CommonPassword, clusterUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify pxb objects for %v user", pxbUsers[2].name))
 		})
 
 		Step("Create BackupSchedule on the shared cluster with testuser2", func() {
@@ -604,44 +596,44 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(5))
 			periodicSchedulePolicyUid = uuid.New()
 			periodicSchedulePolicyInterval := int64(15)
-			err := CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, adminContext, false, false)
+			err := CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, pxbUsers[0].ctx, false, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s] ", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
 
-			err = AddSchedulePolicyOwnership(periodicSchedulePolicyName, periodicSchedulePolicyUid, []string{testUsers[2].name}, nil, Read, Invalid, adminContext)
+			err = AddSchedulePolicyOwnership(periodicSchedulePolicyName, periodicSchedulePolicyUid, []string{pxbUsers[2].name}, nil, Read, Invalid, pxbUsers[0].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for schedulepolicy - %s", periodicSchedulePolicyName))
 
 			// Take Backup Schedule
 			log.InfoD("Taking schedule backup of multiple namespaces")
 			testUser2backupScheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			err = CreateScheduleBackup(testUser2backupScheduleName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUsers[2].ctx)
+			err = CreateScheduleBackup(testUser2backupScheduleName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s]", testUser2backupScheduleName))
 
 			// Get the first schedule backup name
-			firstScheduleBackupName, err = GetFirstScheduleBackupName(testUsers[2].ctx, testUser2backupScheduleName, BackupOrgID)
+			firstScheduleBackupName, err = GetFirstScheduleBackupName(pxbUsers[2].ctx, testUser2backupScheduleName, BackupOrgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of first scheduled backup [%s] with schedule name [%s]", firstScheduleBackupName, testUser2backupScheduleName))
 		})
 
 		Step("Cleanup", func() {
 			backupDriver := Inst().Backup
-			firstScheduleBackupUID, err := backupDriver.GetBackupUID(testUsers[2].ctx, firstScheduleBackupName, BackupOrgID)
+			firstScheduleBackupUID, err := backupDriver.GetBackupUID(pxbUsers[2].ctx, firstScheduleBackupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", firstScheduleBackupName)
 
 			log.InfoD("Deleting first schedule backup created by user2")
-			err = DeleteBackupAndWaitForCompletion(firstScheduleBackupName, firstScheduleBackupUID, BackupOrgID, testUsers[2].ctx)
+			err = DeleteBackupAndWaitForCompletion(firstScheduleBackupName, firstScheduleBackupUID, BackupOrgID, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", firstScheduleBackupName))
 
-			backupUID, err := backupDriver.GetBackupUID(adminContext, backupName, BackupOrgID)
+			backupUID, err := backupDriver.GetBackupUID(pxbUsers[0].ctx, backupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
 
 			log.InfoD("Deleting backup created by admin")
-			err = DeleteBackupAndWaitForCompletion(backupName, backupUID, BackupOrgID, adminContext)
+			err = DeleteBackupAndWaitForCompletion(backupName, backupUID, BackupOrgID, pxbUsers[0].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
 
 			log.InfoD("Deleting backup schedule [%s]", testUser2backupScheduleName)
-			scheduleUID, err := GetScheduleUID(testUser2backupScheduleName, BackupOrgID, testUsers[2].ctx)
+			scheduleUID, err := GetScheduleUID(testUser2backupScheduleName, BackupOrgID, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backupschedule uid", testUser2backupScheduleName))
 
-			err = DeleteScheduleWithUIDAndWait(testUser2backupScheduleName, scheduleUID, SourceClusterName, clusterUid, BackupOrgID, testUsers[2].ctx)
+			err = DeleteScheduleWithUIDAndWait(testUser2backupScheduleName, scheduleUID, SourceClusterName, clusterUid, BackupOrgID, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", testUser2backupScheduleName))
 
 			log.InfoD("Deleting schedule policy [%s]", periodicSchedulePolicyName)
@@ -650,11 +642,11 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 				Uid:   periodicSchedulePolicyUid,
 				OrgId: BackupOrgID,
 			}
-			_, err = Inst().Backup.DeleteSchedulePolicy(adminContext, schedulePolicyDeleteRequest)
-			log.FailOnError(err, "failed to delete schedule policy %s of the user %s", periodicSchedulePolicyName, testUsers[2].name)
+			_, err = Inst().Backup.DeleteSchedulePolicy(pxbUsers[0].ctx, schedulePolicyDeleteRequest)
+			log.FailOnError(err, "failed to delete schedule policy %s of the user %s", periodicSchedulePolicyName, pxbUsers[2].name)
 
 			log.InfoD("Deleting cluster created by admin")
-			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, adminContext, false)
+			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[0].ctx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", SourceClusterName))
 		})
 	})
@@ -676,27 +668,27 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 		)
 
 		Step("Create a cluster object with Admin User ", func() {
-			err := AddSourceCluster(adminContext)
+			err := AddSourceCluster(pxbUsers[0].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with admin ctx", SourceClusterName))
 
-			clusterUid, err = Inst().Backup.GetClusterUID(adminContext, BackupOrgID, SourceClusterName)
+			clusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 
 		Step("Create a Backup with Admin User", func() {
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
-			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", adminContext)
+			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[0].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
 		})
 
 		Step("Share the admin created cluster with User2 and User1", func() {
-			_, err := ShareCluster(adminContext, SourceClusterName, clusterUid, []string{testUsers[2].name, testUsers[1].name}, nil, false)
+			_, err := ShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name, pxbUsers[1].name}, nil, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with test users using admin ctx", SourceClusterName))
 		})
 
 		Step("Verify the cluster access with User2", func() {
-			err := VerifySourceClusterAccessWithHavingNoBackupsRestoresANDBackupScheduleObjects(testUsers[2].ctx, testUsers[2].name, CommonPassword, clusterUid)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify pxb objects for %v user", testUsers[2].name))
+			err := VerifySourceClusterAccessWithHavingNoBackupsRestoresANDBackupScheduleObjects(pxbUsers[2].ctx, pxbUsers[2].name, CommonPassword, clusterUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify pxb objects for %v user", pxbUsers[2].name))
 		})
 
 		Step("Create Schedule Policy with testuser2 and Share it with testuser1", func() {
@@ -704,10 +696,10 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(5))
 			periodicSchedulePolicyUid = uuid.New()
 			periodicSchedulePolicyInterval := int64(15)
-			err := CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, adminContext, false, false)
+			err := CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, pxbUsers[0].ctx, false, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s] ", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
 
-			err = AddSchedulePolicyOwnership(periodicSchedulePolicyName, periodicSchedulePolicyUid, []string{testUsers[1].name, testUsers[2].name}, nil, Read, Invalid, adminContext)
+			err = AddSchedulePolicyOwnership(periodicSchedulePolicyName, periodicSchedulePolicyUid, []string{pxbUsers[1].name, pxbUsers[2].name}, nil, Read, Invalid, pxbUsers[0].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for schedulepolicy - %s", periodicSchedulePolicyName))
 
 		})
@@ -717,11 +709,11 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 			var err error
 			log.InfoD("Taking schedule backup of multiple namespaces")
 			testUser2backupScheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			err = CreateScheduleBackup(testUser2backupScheduleName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUsers[2].ctx)
+			err = CreateScheduleBackup(testUser2backupScheduleName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s]", testUser2backupScheduleName))
 
 			// Get the first schedule backup name
-			testUser2FirstScheduleBackupName, err = GetFirstScheduleBackupName(testUsers[2].ctx, testUser2backupScheduleName, BackupOrgID)
+			testUser2FirstScheduleBackupName, err = GetFirstScheduleBackupName(pxbUsers[2].ctx, testUser2backupScheduleName, BackupOrgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of first scheduled backup [%s] with schedule name [%s]", testUser2FirstScheduleBackupName, testUser2backupScheduleName))
 		})
 
@@ -732,18 +724,18 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 				namespaceMapping[namespace] = restoredNameSpace
 			}
 			log.InfoD("Namespace mapping is %v:", namespaceMapping)
-			err := CreateRestore(restoreName, testUser2FirstScheduleBackupName, namespaceMapping, SourceClusterName, BackupOrgID, testUsers[2].ctx, make(map[string]string))
+			err := CreateRestore(restoreName, testUser2FirstScheduleBackupName, namespaceMapping, SourceClusterName, BackupOrgID, pxbUsers[2].ctx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s]", restoreName))
 		})
 
 		Step("Verify the cluster access with User1", func() {
-			err := VerifySourceClusterAccessWithHavingNoBackupsRestoresANDBackupScheduleObjects(testUsers[1].ctx, testUsers[1].name, CommonPassword, clusterUid)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify pxb objects for %v user", testUsers[1].name))
+			err := VerifySourceClusterAccessWithHavingNoBackupsRestoresANDBackupScheduleObjects(pxbUsers[1].ctx, pxbUsers[1].name, CommonPassword, clusterUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify pxb objects for %v user", pxbUsers[1].name))
 		})
 
 		Step("Sharing backup location with user1", func() {
 			log.InfoD("Sharing backup location with user1")
-			err := AddBackupLocationOwnership(bkpLocationName, backupLocationUID, []string{testUsers[1].name}, nil, Read, Invalid, adminContext)
+			err := AddBackupLocationOwnership(bkpLocationName, backupLocationUID, []string{pxbUsers[1].name}, nil, Read, Invalid, pxbUsers[0].ctx)
 			log.FailOnError(err, "failed to update backup location [%v] ownership", bkpLocationName)
 		})
 
@@ -752,47 +744,47 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 			var err error
 			log.InfoD("Taking schedule backup of multiple namespaces")
 			testUser1backupScheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			err = CreateScheduleBackup(testUser1backupScheduleName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUsers[1].ctx)
+			err = CreateScheduleBackup(testUser1backupScheduleName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, pxbUsers[1].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s]", testUser1backupScheduleName))
 
 			// Get the first schedule backup name
-			testUser1FirstScheduleBackupName, err = GetFirstScheduleBackupName(testUsers[1].ctx, testUser1backupScheduleName, BackupOrgID)
+			testUser1FirstScheduleBackupName, err = GetFirstScheduleBackupName(pxbUsers[1].ctx, testUser1backupScheduleName, BackupOrgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of first scheduled backup [%s] with schedule name [%s]", testUser1FirstScheduleBackupName, testUser1backupScheduleName))
 		})
 
-		Step("TestUsers Should enumerate their own backupobjects", func() {
-			testUser1BackupObjects, err := GetAllBackupsForUser(testUsers[1].name, CommonPassword)
-			log.FailOnError(err, "failed to GetAllOwnedBackupsFromCluster %s for user %s", SourceClusterName, testUsers[1].name)
+		Step("pxbUsers Should enumerate their own backupobjects", func() {
+			testUser1BackupObjects, err := GetAllBackupsForUser(pxbUsers[1].name, CommonPassword)
+			log.FailOnError(err, "failed to GetAllOwnedBackupsFromCluster %s for user %s", SourceClusterName, pxbUsers[1].name)
 			for _, backupname := range testUser1BackupObjects {
 				bkpInspectRequest := &api.BackupInspectRequest{
 					OrgId: BackupOrgID,
 					Name:  backupname,
 				}
-				resp, err := Inst().Backup.InspectBackup(testUsers[1].ctx, bkpInspectRequest)
+				resp, err := Inst().Backup.InspectBackup(pxbUsers[1].ctx, bkpInspectRequest)
 				log.FailOnError(err, "failed to inspect backup [%v]", backupname)
 
 				// First fetch the client ID of the user1
-				clientID, err := backup.FetchIDOfUser(testUsers[1].name)
+				clientID, err := backup.FetchIDOfUser(pxbUsers[1].name)
 				if err != nil {
-					log.FailOnError(err, "Failed to fetch the userID for %v", testUsers[1].name)
+					log.FailOnError(err, "Failed to fetch the userID for %v", pxbUsers[1].name)
 				}
 				dash.VerifyFatal(resp.Backup.GetOwnership().GetOwner(), clientID, fmt.Sprintf("Verfy owner for the backup %v", backupname))
 			}
 
-			testUser2BackupObjects, err := GetAllBackupsForUser(testUsers[2].name, CommonPassword)
-			log.FailOnError(err, "failed to GetAllOwnedBackupsFromCluster %s for user %s", SourceClusterName, testUsers[2].name)
+			testUser2BackupObjects, err := GetAllBackupsForUser(pxbUsers[2].name, CommonPassword)
+			log.FailOnError(err, "failed to GetAllOwnedBackupsFromCluster %s for user %s", SourceClusterName, pxbUsers[2].name)
 			for _, backupname := range testUser2BackupObjects {
 				bkpInspectRequest := &api.BackupInspectRequest{
 					OrgId: BackupOrgID,
 					Name:  backupname,
 				}
-				resp, err := Inst().Backup.InspectBackup(testUsers[2].ctx, bkpInspectRequest)
+				resp, err := Inst().Backup.InspectBackup(pxbUsers[2].ctx, bkpInspectRequest)
 				log.FailOnError(err, "failed to inspect backup [%v]", backupname)
 
 				// First fetch the client ID of the user2
-				clientID, err := backup.FetchIDOfUser(testUsers[2].name)
+				clientID, err := backup.FetchIDOfUser(pxbUsers[2].name)
 				if err != nil {
-					log.FailOnError(err, "Failed to fetch the userID for %v", testUsers[2].name)
+					log.FailOnError(err, "Failed to fetch the userID for %v", pxbUsers[2].name)
 				}
 				dash.VerifyFatal(resp.Backup.GetOwnership().GetOwner(), clientID, fmt.Sprintf("Verfy owner for the backup %v", backupname))
 			}
@@ -801,43 +793,43 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 		Step("Cleanup 1", func() {
 			backupDriver := Inst().Backup
 			// Delete user1 schedule backup
-			testUser1FirstScheduleBackupUID, err := backupDriver.GetBackupUID(testUsers[1].ctx, testUser1FirstScheduleBackupName, BackupOrgID)
+			testUser1FirstScheduleBackupUID, err := backupDriver.GetBackupUID(pxbUsers[1].ctx, testUser1FirstScheduleBackupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", testUser1FirstScheduleBackupName)
 
 			log.InfoD("Deleting first schedule backup created by user1")
-			err = DeleteBackupAndWaitForCompletion(testUser1FirstScheduleBackupName, testUser1FirstScheduleBackupUID, BackupOrgID, testUsers[1].ctx)
+			err = DeleteBackupAndWaitForCompletion(testUser1FirstScheduleBackupName, testUser1FirstScheduleBackupUID, BackupOrgID, pxbUsers[1].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", testUser1FirstScheduleBackupName))
 
-			backupUID, err := backupDriver.GetBackupUID(adminContext, backupName, BackupOrgID)
+			backupUID, err := backupDriver.GetBackupUID(pxbUsers[0].ctx, backupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
 
 			// Delete user2 schedule backup
-			testUser2FirstScheduleBackupUID, err := backupDriver.GetBackupUID(testUsers[2].ctx, testUser2FirstScheduleBackupName, BackupOrgID)
+			testUser2FirstScheduleBackupUID, err := backupDriver.GetBackupUID(pxbUsers[2].ctx, testUser2FirstScheduleBackupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", testUser2FirstScheduleBackupName)
 
 			log.InfoD("Deleting first schedule backup created by user2")
-			err = DeleteBackupAndWaitForCompletion(testUser2FirstScheduleBackupName, testUser2FirstScheduleBackupUID, BackupOrgID, testUsers[2].ctx)
+			err = DeleteBackupAndWaitForCompletion(testUser2FirstScheduleBackupName, testUser2FirstScheduleBackupUID, BackupOrgID, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", testUser2FirstScheduleBackupName))
 
 			// Delete admin created backup
 			log.InfoD("Deleting backup created by admin")
-			err = DeleteBackupAndWaitForCompletion(backupName, backupUID, BackupOrgID, adminContext)
+			err = DeleteBackupAndWaitForCompletion(backupName, backupUID, BackupOrgID, pxbUsers[0].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
 
 			// Delete user2 backup schedule
 			log.InfoD("Deleting backup schedule [%s]", testUser2backupScheduleName)
-			scheduleUID, err := GetScheduleUID(testUser2backupScheduleName, BackupOrgID, testUsers[2].ctx)
+			scheduleUID, err := GetScheduleUID(testUser2backupScheduleName, BackupOrgID, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backupschedule uid", testUser2backupScheduleName))
 
-			err = DeleteScheduleWithUIDAndWait(testUser2backupScheduleName, scheduleUID, SourceClusterName, clusterUid, BackupOrgID, testUsers[2].ctx)
+			err = DeleteScheduleWithUIDAndWait(testUser2backupScheduleName, scheduleUID, SourceClusterName, clusterUid, BackupOrgID, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", testUser2backupScheduleName))
 
 			// Delete user1 backup schedule
 			log.InfoD("Deleting backup schedule [%s]", testUser1backupScheduleName)
-			scheduleUID, err = GetScheduleUID(testUser1backupScheduleName, BackupOrgID, testUsers[1].ctx)
+			scheduleUID, err = GetScheduleUID(testUser1backupScheduleName, BackupOrgID, pxbUsers[1].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backupschedule uid", testUser1backupScheduleName))
 
-			err = DeleteScheduleWithUIDAndWait(testUser1backupScheduleName, scheduleUID, SourceClusterName, clusterUid, BackupOrgID, testUsers[1].ctx)
+			err = DeleteScheduleWithUIDAndWait(testUser1backupScheduleName, scheduleUID, SourceClusterName, clusterUid, BackupOrgID, pxbUsers[1].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", testUser1backupScheduleName))
 
 			// Delete Schedule Policy Object
@@ -847,12 +839,12 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 				Uid:   periodicSchedulePolicyUid,
 				OrgId: BackupOrgID,
 			}
-			_, err = Inst().Backup.DeleteSchedulePolicy(adminContext, schedulePolicyDeleteRequest)
-			log.FailOnError(err, "failed to delete schedule policy %s of the user %s", periodicSchedulePolicyName, testUsers[2].name)
+			_, err = Inst().Backup.DeleteSchedulePolicy(pxbUsers[0].ctx, schedulePolicyDeleteRequest)
+			log.FailOnError(err, "failed to delete schedule policy %s of the user %s", periodicSchedulePolicyName, pxbUsers[2].name)
 		})
 
 		Step("UnShare the admin created cluster with User2 and User1", func() {
-			_, err := UnShareCluster(adminContext, SourceClusterName, clusterUid, []string{testUsers[2].name, testUsers[1].name}, nil)
+			_, err := UnShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name, pxbUsers[1].name}, nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying unshare of source [%s] cluster with test users using admin ctx", SourceClusterName))
 		})
 
@@ -860,8 +852,282 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 
 			// Delete Cluster Object
 			log.InfoD("Deleting cluster created by admin")
-			err := DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, adminContext, false)
+			err := DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[0].ctx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", SourceClusterName))
+		})
+	})
+
+	It("VerifyCascadingClusterShareOperationIsDenied.", func() {
+		StartPxBackupTorpedoTest("VerifyCascadingClusterShareOperationIsDenied", "As Cluster Shared user verify Cluster share operation is denied.", nil, 301032, Sgajawada, Q2FY25)
+		var (
+			clusterUid string
+			userKey    = len(pxbUsers)
+		)
+
+		Step("Create App Admin User", func() {
+			users := CreateUsers(1)
+
+			// Add app admin role(ApplicationOwner) to the user
+			err := backup.AddRoleToUser(users[0], backup.ApplicationOwner, fmt.Sprintf("Adding %v role to %s", backup.ApplicationOwner, users[0]))
+			log.FailOnError(err, "Failed to add role %s to the user %s", backup.ApplicationOwner, users[0])
+
+			nonAdminCtx, err := backup.GetNonAdminCtx(users[0], CommonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
+
+			pxbUsers[userKey] = user{name: users[0], ctx: nonAdminCtx}
+		})
+
+		Step("Create a cluster object with app admin user", func() {
+			err := AddSourceCluster(pxbUsers[userKey].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with app admin ctx", SourceClusterName))
+
+			clusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[userKey].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+
+		Step("Share the Cluster with User1", func() {
+			_, err := ShareCluster(pxbUsers[userKey].ctx, SourceClusterName, clusterUid, []string{pxbUsers[1].name}, nil, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with test user1 using app admin ctx", SourceClusterName))
+		})
+
+		Step("Again Share the Cluster with User2 with User1(Shared Cluster User) context", func() {
+			_, err := ShareCluster(pxbUsers[1].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil, false)
+			dash.VerifyNotNilFatal(err, fmt.Sprintf("Verifying [%s] cluster share by shared user[%s] is not allowed", SourceClusterName, pxbUsers[1].name))
+		})
+
+		Step("Cleanup", func() {
+			// Delete Cluster Object
+			log.InfoD("Deleting cluster created by app admin")
+			err := DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[userKey].ctx, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", SourceClusterName))
+		})
+
+	})
+
+	It("VerifyClusterDeletionFailedBySharedClusterUser", func() {
+		StartPxBackupTorpedoTest("VerifyClusterDeletionFailedBySharedClusterUser", "As Cluster shared user verify Delete Cluster Fails.", nil, 301033, Sgajawada, Q2FY25)
+		var (
+			backupName          = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			testUser2backupName = fmt.Sprintf("%s-user2-%v", BackupNamePrefix, time.Now().Unix())
+			clusterUid          string
+		)
+
+		Step("Create a cluster object with Admin User ", func() {
+			err := AddSourceCluster(pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with admin ctx", SourceClusterName))
+
+			clusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+
+		Step("Create a Backup with Admin User", func() {
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
+		})
+
+		Step("Share the admin created cluster with User2", func() {
+			_, err := ShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using admin ctx", SourceClusterName, pxbUsers[2].name))
+		})
+
+		Step("Verify the cluster access with User2", func() {
+			clusterInspectReq := &api.ClusterInspectRequest{
+				OrgId:          BackupOrgID,
+				Name:           SourceClusterName,
+				Uid:            clusterUid,
+				IncludeSecrets: true,
+			}
+			_, err := Inst().Backup.InspectCluster(pxbUsers[2].ctx, clusterInspectReq)
+			log.FailOnError(err, "failed to inspect cluster %s", SourceClusterName)
+
+			backupObjects, err := GetAllBackupsForUser(pxbUsers[2].name, CommonPassword)
+			log.FailOnError(err, "failed to GetAllBackupsForUser %s for user %s", SourceClusterName, pxbUsers[2].name)
+			dash.VerifyFatal(len(backupObjects), 0, fmt.Sprintf("Verifying all backups in source [%s] cluster with %s user ", SourceClusterName, pxbUsers[2].name))
+
+			restoreObjects, err := GetAllRestoresForUser(pxbUsers[2].name, CommonPassword)
+			log.FailOnError(err, "failed to GetAllRestoresForUser %s for user %s", SourceClusterName, pxbUsers[2].name)
+			dash.VerifyFatal(len(restoreObjects), 0, fmt.Sprintf("Verifying all restores in source [%s] cluster with %s user ", SourceClusterName, pxbUsers[2].name))
+
+			backupScheduleObjects, err := GetAllBackupSchedulesForUser(pxbUsers[2].name, CommonPassword)
+			log.FailOnError(err, "failed to GetAllBackupSchedulesForUser %s for user %s", SourceClusterName, pxbUsers[2].name)
+			dash.VerifyFatal(len(backupScheduleObjects), 0, fmt.Sprintf("Verifying all backup schedules in source [%s] cluster with %s user ", SourceClusterName, pxbUsers[2].name))
+		})
+
+		Step("Create a backup on the shared cluster with testuser2", func() {
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err := CreateBackup(testUser2backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", testUser2backupName))
+
+			bkpInspectRequest := &api.BackupInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  testUser2backupName,
+			}
+			resp, err := Inst().Backup.InspectBackup(pxbUsers[2].ctx, bkpInspectRequest)
+			log.FailOnError(err, "failed to inspect backup [%v]", testUser2backupName)
+
+			// First fetch the client ID of the user2
+			clientID, err := backup.FetchIDOfUser(pxbUsers[2].name)
+			if err != nil {
+				log.FailOnError(err, "Failed to fetch the userID for %v", pxbUsers[2].name)
+			}
+			dash.VerifyFatal(resp.Backup.GetOwnership().GetOwner(), clientID, fmt.Sprintf("Verfy owner for the backup %v", testUser2backupName))
+		})
+
+		Step("Perform delete of this cluster from testUser2", func() {
+			log.InfoD("Deleting cluster created by admin using testUser2 ctx")
+			err := DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[2].ctx, false)
+			dash.VerifyNotNilFatal(err, fmt.Sprintf("Deleting Cluster [%s] with testUser2", SourceClusterName))
+			dash.VerifyFatal(status.Code(err), codes.PermissionDenied, fmt.Sprintf("Verify %v error code when deleting the cluster %s with user %s", codes.PermissionDenied, SourceClusterName, pxbUsers[2].name))
+		})
+
+		Step("Cleanup", func() {
+			backupDriver := Inst().Backup
+			testUser2backupUID, err := backupDriver.GetBackupUID(pxbUsers[2].ctx, testUser2backupName, BackupOrgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", testUser2backupName)
+
+			log.InfoD("Deleting backup created by user2")
+			err = DeleteBackupAndWaitForCompletion(testUser2backupName, testUser2backupUID, BackupOrgID, pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", testUser2backupName))
+
+			backupUID, err := backupDriver.GetBackupUID(pxbUsers[0].ctx, backupName, BackupOrgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
+
+			log.InfoD("Deleting backup created by admin")
+			err = DeleteBackupAndWaitForCompletion(backupName, backupUID, BackupOrgID, pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
+
+			log.InfoD("Deleting cluster created by admin")
+			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[0].ctx, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", SourceClusterName))
+
+		})
+	})
+
+	It("VerifyObjectsAccessPostUnShareTheCluster", func() {
+		StartPxBackupTorpedoTest("VerifyObjectsAccessPostUnShareTheCluster", "Revoke Cluster share to a user verify access to objects by user.", nil, 301034, Sgajawada, Q2FY25)
+		var (
+			backupName          = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			testUser2backupName = fmt.Sprintf("%s-user2-%v", BackupNamePrefix, time.Now().Unix())
+			clusterUid          string
+		)
+
+		Step("Create a cluster object with Admin User ", func() {
+			err := AddSourceCluster(pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with admin ctx", SourceClusterName))
+
+			clusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+
+		Step("Create a Backup with Admin User", func() {
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
+		})
+
+		Step("Share the admin created cluster with User2", func() {
+			_, err := ShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using admin ctx", SourceClusterName, pxbUsers[2].name))
+		})
+
+		Step("Verify the cluster access with User2", func() {
+			clusterInspectReq := &api.ClusterInspectRequest{
+				OrgId:          BackupOrgID,
+				Name:           SourceClusterName,
+				Uid:            clusterUid,
+				IncludeSecrets: true,
+			}
+			_, err := Inst().Backup.InspectCluster(pxbUsers[2].ctx, clusterInspectReq)
+			log.FailOnError(err, "failed to inspect cluster %s", SourceClusterName)
+
+			backupObjects, err := GetAllBackupsForUser(pxbUsers[2].name, CommonPassword)
+			log.FailOnError(err, "failed to GetAllBackupsForUser %s for user %s", SourceClusterName, pxbUsers[2].name)
+			dash.VerifyFatal(len(backupObjects), 0, fmt.Sprintf("Verifying all backups in source [%s] cluster with %s user ", SourceClusterName, pxbUsers[2].name))
+
+			restoreObjects, err := GetAllRestoresForUser(pxbUsers[2].name, CommonPassword)
+			log.FailOnError(err, "failed to GetAllRestoresForUser %s for user %s", SourceClusterName, pxbUsers[2].name)
+			dash.VerifyFatal(len(restoreObjects), 0, fmt.Sprintf("Verifying all restores in source [%s] cluster with %s user ", SourceClusterName, pxbUsers[2].name))
+
+			backupScheduleObjects, err := GetAllBackupSchedulesForUser(pxbUsers[2].name, CommonPassword)
+			log.FailOnError(err, "failed to GetAllBackupSchedulesForUser %s for user %s", SourceClusterName, pxbUsers[2].name)
+			dash.VerifyFatal(len(backupScheduleObjects), 0, fmt.Sprintf("Verifying all backup schedules in source [%s] cluster with %s user ", SourceClusterName, pxbUsers[2].name))
+		})
+
+		Step("Create a backup on the shared cluster with testuser2", func() {
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err := CreateBackup(testUser2backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", testUser2backupName))
+
+			bkpInspectRequest := &api.BackupInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  testUser2backupName,
+			}
+			resp, err := Inst().Backup.InspectBackup(pxbUsers[2].ctx, bkpInspectRequest)
+			log.FailOnError(err, "failed to inspect backup [%v]", testUser2backupName)
+
+			// First fetch the client ID of the user2
+			clientID, err := backup.FetchIDOfUser(pxbUsers[2].name)
+			if err != nil {
+				log.FailOnError(err, "Failed to fetch the userID for %v", pxbUsers[2].name)
+			}
+			dash.VerifyFatal(resp.Backup.GetOwnership().GetOwner(), clientID, fmt.Sprintf("Verfy owner for the backup %v", testUser2backupName))
+		})
+
+		Step("UnShare the admin created cluster with User2", func() {
+			_, err := UnShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying unshare of source [%s] cluster with testuser2 using admin ctx", SourceClusterName))
+		})
+
+		Step("Verify from admin user that backup created by testUser2 is still accessible", func() {
+			bkpInspectRequest := &api.BackupInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  testUser2backupName,
+			}
+			_, err := Inst().Backup.InspectBackup(pxbUsers[0].ctx, bkpInspectRequest)
+			log.FailOnError(err, "failed to inspect backup [%v] with admin ctx", testUser2backupName)
+		})
+
+		Step("Verify that cluster is no longer accessible with testUser2", func() {
+			clusterInspectReq := &api.ClusterInspectRequest{
+				OrgId:          BackupOrgID,
+				Name:           SourceClusterName,
+				Uid:            clusterUid,
+				IncludeSecrets: true,
+			}
+			_, err := Inst().Backup.InspectCluster(pxbUsers[2].ctx, clusterInspectReq)
+			log.FailOnNoError(err, "failed to inspect cluster %s", SourceClusterName)
+		})
+
+		Step("Verify that backups are accessible from shared cluster that was revoked", func() {
+			bkpInspectRequest := &api.BackupInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  testUser2backupName,
+			}
+			_, err := Inst().Backup.InspectBackup(pxbUsers[2].ctx, bkpInspectRequest)
+			log.FailOnError(err, "failed to inspect backup [%v] with testuser2 ctx", testUser2backupName)
+		})
+
+		Step("Cleanup", func() {
+			backupDriver := Inst().Backup
+			testUser2backupUID, err := backupDriver.GetBackupUID(pxbUsers[2].ctx, testUser2backupName, BackupOrgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", testUser2backupName)
+
+			log.InfoD("Deleting backup created by user2")
+			err = DeleteBackupAndWaitForCompletion(testUser2backupName, testUser2backupUID, BackupOrgID, pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", testUser2backupName))
+
+			backupUID, err := backupDriver.GetBackupUID(pxbUsers[0].ctx, backupName, BackupOrgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
+
+			log.InfoD("Deleting backup created by admin")
+			err = DeleteBackupAndWaitForCompletion(backupName, backupUID, BackupOrgID, pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
+
+			log.InfoD("Deleting cluster created by admin")
+			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[0].ctx, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", SourceClusterName))
+
 		})
 	})
 
@@ -873,10 +1139,11 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 		log.InfoD("Deleting deployed applications")
 		DestroyApps(scheduledAppContexts, opts)
 
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminContext)
-		for i := 1; i <= 2; i++ {
-			err := backup.DeleteUser(testUsers[i].name)
-			log.FailOnError(err, "Failed to delete user - %s", testUsers[i].name)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, pxbUsers[0].ctx)
+		for i := 1; i < len(pxbUsers); i++ {
+			err := backup.DeleteUser(pxbUsers[i].name)
+			log.FailOnError(err, "Failed to delete user - %s", pxbUsers[i].name)
 		}
 	})
+
 })
