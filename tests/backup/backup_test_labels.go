@@ -143,6 +143,7 @@ const (
 	VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules                        TestCaseName = "VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules"
 	DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules                  TestCaseName = "DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules"
 	PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege                              TestCaseName = "PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege"
+	SuperAdmin                                                                         TestCaseName = "SuperAdmin"
 )
 
 // Test case labels
@@ -284,6 +285,7 @@ const (
 	VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel                        TestCaseLabel = "VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules"
 	DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel                  TestCaseLabel = "DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules"
 	PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilegeLabel                              TestCaseLabel = "PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege"
+	SuperAdminLabel                                                                         TestCaseLabel = "SuperAdmin"
 )
 
 // Common Labels
@@ -536,4 +538,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	DeleteVerifyBackupDeletionWhenRetentionIsMet:                                       {DeleteVerifyBackupDeletionWhenRetentionIsMetLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, S3LockedBucket, AzureImmutableBucket},
 	VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules:                        {VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day0LockedBucketLabel, S3LockedBucket, AzureImmutableBucket},
 	DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules:                  {DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, S3LockedBucket, AzureImmutableBucket},
+	SuperAdmin: {SuperAdminLabel},
 }

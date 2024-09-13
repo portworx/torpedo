@@ -10,7 +10,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/applications/databases"
 	"io/ioutil"
 	"maps"
 	"math"
@@ -27,6 +26,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/applications/databases"
 
 	"github.com/vmware/govmomi/object"
 
@@ -5106,6 +5107,9 @@ func DeleteScheduleWithUIDAndWait(backupScheduleName string, backupScheduleUid s
 		Uid:   backupScheduleUid,
 	}
 	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	if err != nil {
+		return err
+	}
 	clusterReq := &api.ClusterInspectRequest{
 		OrgId:          orgID,
 		Name:           clusterName,
@@ -14624,7 +14628,7 @@ func ValidateVolumeQuorum(errChan ...*chan error) {
 		}
 		return nil, false, nil
 	}
-	_,err := task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second)
+	_, err := task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second)
 	if err != nil {
 		processError(err, errChan...)
 	}

@@ -377,10 +377,12 @@ type PxBackupRole string
 
 const (
 	ApplicationOwner    PxBackupRole = "px-backup-app.admin"
-	ApplicationUser                  = "px-backup-app.user"
-	InfrastructureOwner              = "px-backup-infra.admin"
-	SuperAdmin                       = "px-backup-super.admin"
-	DefaultRoles                     = "default-roles-master"
+	ApplicationUser     PxBackupRole = "px-backup-app.user"
+	InfrastructureOwner PxBackupRole = "px-backup-infra.admin"
+	SuperAdmin          PxBackupRole = "px-backup-super.admin"
+	DefaultRoles        PxBackupRole = "default-roles-master"
+	Admin               PxBackupRole = "admin"
+	SystemAdmin         PxBackupRole = "system.admin"
 )
 
 // GetRoleID gets role ID for a given role
@@ -500,6 +502,11 @@ func FetchIDOfUser(userName string) (string, error) {
 
 // AddRoleToUser assigning a given role to an existing user
 func AddRoleToUser(userName string, role PxBackupRole, description string) error {
+	return AddRoleToUserWithCredentials(userName, role, description, PxCentralAdminUser, PxCentralAdminPwd)
+}
+
+// AddRoleToUser assigning a given role to an existing user
+func AddRoleToUserWithCredentials(userName string, role PxBackupRole, description string, authUserName string, authPassword string) error {
 	fn := "AddRoleToUser"
 	// First fetch the client ID of the user
 	clientID, err := FetchIDOfUser(userName)
@@ -536,7 +543,7 @@ func AddRoleToUser(userName string, role PxBackupRole, description string) error
 	}
 	reqURL := fmt.Sprintf("%s/users/%s/role-mappings/realm", keycloakEndPoint, clientID)
 	method := "POST"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := GetCommonHTTPHeaders(authUserName, authPassword)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err

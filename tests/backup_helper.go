@@ -4,9 +4,7 @@ import (
 	"bytes"
 	context1 "context"
 	"fmt"
-	"github.com/gogo/protobuf/types"
 
-	"github.com/portworx/torpedo/drivers/applications/databases"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -21,6 +19,10 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/applications/databases"
+
+	"github.com/gogo/protobuf/types"
 
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"k8s.io/apimachinery/pkg/watch"
@@ -7221,6 +7223,66 @@ func CreateRole(roleName backup.PxBackupRole, svcs []RoleServices, apis []RoleAp
 	return nil
 }
 
+// UpdateRole updates role with given services and apis in px-backup datastore.
+func UpdateRole(roleName backup.PxBackupRole, svcs []RoleServices, apis []RoleApis, ctx context1.Context) error {
+	roleObject, err := InspectRole(roleName, BackupOrgID, ctx)
+	if err != nil {
+		return err
+	}
+
+	roleId, err := backup.GetRoleID(roleName)
+	if err != nil {
+		return err
+	}
+
+	serviceList := make([]string, len(svcs))
+	for i, svc := range svcs {
+		serviceList[i] = string(svc)
+	}
+	apiList := make([]string, len(apis))
+	for i, api := range apis {
+		apiList[i] = string(api)
+	}
+	rule := &api.RoleConfig{
+		Services: serviceList,
+		Apis:     apiList,
+	}
+	roleUpdateRequest := &api.RoleUpdateRequest{
+		Rules:  []*api.RoleConfig{rule},
+		RoleId: roleId,
+		CreateMetadata: &api.CreateMetadata{
+			Name:      roleObject.Role.GetName(),
+			OrgId:     roleObject.Role.GetOrgId(),
+			Uid:       roleObject.Role.GetUid(),
+			Owner:     roleObject.Role.GetOwner(),
+			Ownership: roleObject.Role.GetOwnership(),
+			Labels:    roleObject.Role.GetLabels(),
+		},
+	}
+
+	backupDriver := Inst().Backup
+	_, err = backupDriver.UpdateRole(ctx, roleUpdateRequest)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// InspectRole inspects the role.
+func InspectRole(roleName backup.PxBackupRole, orgId string, ctx context1.Context) (*api.RoleInspectResponse, error) {
+	backupDriver := Inst().Backup
+	roleId, err := backup.GetRoleID(roleName)
+	if err != nil {
+		return nil, err
+	}
+	roleInspectRequest := &api.RoleInspectRequest{
+		OrgId: orgId,
+		Name:  string(roleName),
+		Uid:   roleId,
+	}
+	return backupDriver.InspectRole(ctx, roleInspectRequest)
+}
+
 // DeleteRole delete role with given services and apis from datastore and also from keycloak.
 func DeleteRole(roleName backup.PxBackupRole, orgId string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
@@ -8246,6 +8308,39 @@ func UpdateBackupWithLabel(ctx context1.Context, backupName string, orgID string
 	}
 	_, err = backupDriver.UpdateBackup(ctx, bkpUpdateRequest)
 	return err
+}
+
+func InspectAndUpdateRuleWithLabels(ctx context1.Context, ruleName, ruleUID string, label map[string]string) error {
+	// Inspect the rule with user1
+	log.InfoD("Inspect rule [%s]", ruleName)
+	ruleInspectRequest := &api.RuleInspectRequest{
+		Name:  ruleName,
+		Uid:   ruleUID,
+		OrgId: BackupOrgID,
+	}
+	ruleObject, err := Inst().Backup.InspectRule(ctx, ruleInspectRequest)
+	if err != nil {
+		return err
+	}
+
+	// Update the rule with user1
+	log.InfoD("Update rule [%s]", ruleName)
+	ruleUpdateRequest := &api.RuleUpdateRequest{
+		RulesInfo: ruleObject.GetRule().RulesInfo,
+		CreateMetadata: &api.CreateMetadata{
+			Name:      ruleObject.GetRule().GetName(),
+			Uid:       ruleObject.GetRule().GetUid(),
+			OrgId:     ruleObject.GetRule().GetOrgId(),
+			Labels:    label, // new updated values
+			Ownership: ruleObject.GetRule().GetOwnership(),
+			Owner:     ruleObject.GetRule().GetOwner(),
+		},
+	}
+	_, err = Inst().Backup.UpdateRule(ctx, ruleUpdateRequest)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // StartAllVMsInNamespace starts all the Kubevirt VMs in the given namespace
