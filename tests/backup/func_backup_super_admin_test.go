@@ -80,7 +80,7 @@ var _ = Describe("{SuperAdmin}", Label(TestCaseLabelsMap[SuperAdmin]...), func()
 
 	})
 
-	FIt("AsSuperAdminVerifyCRUDOperationsOnBackupLocation", func() {
+	It("AsSuperAdminVerifyCRUDOperationsOnBackupLocation", func() {
 		// TODO: Add the testrail ID
 		StartPxBackupTorpedoTest("AsSuperAdminVerifyCRUDOperationsOnBackupLocation", "As Super Admin Verify CRUD of BackupLocation", nil, 301218, Sgajawada, Q2FY25)
 
@@ -172,7 +172,7 @@ var _ = Describe("{SuperAdmin}", Label(TestCaseLabelsMap[SuperAdmin]...), func()
 		})
 	})
 
-	FIt("AsSuperAdminVerifyCRUDOperationsOnSchedulePolicy", func() {
+	It("AsSuperAdminVerifyCRUDOperationsOnSchedulePolicy", func() {
 		// TODO: Add the testrail ID
 		StartPxBackupTorpedoTest("AsSuperAdminVerifyCRUDOperationsOnSchedulePolicy", "As Super Admin Verify CRUD Schedule Policy", nil, 301217, Sgajawada, Q2FY25)
 
@@ -275,7 +275,7 @@ var _ = Describe("{SuperAdmin}", Label(TestCaseLabelsMap[SuperAdmin]...), func()
 
 	})
 
-	FIt("AsSuperAdminVerifyCRUDOperationsOnRules", func() {
+	It("AsSuperAdminVerifyCRUDOperationsOnRules", func() {
 		// TODO: Add the testrail ID
 		StartPxBackupTorpedoTest("AsSuperAdminVerifyCRUDOperationsOnRules", "As Super Admin Verify CRUD of Rules", nil, 301219, Sgajawada, Q2FY25)
 
@@ -354,7 +354,7 @@ var _ = Describe("{SuperAdmin}", Label(TestCaseLabelsMap[SuperAdmin]...), func()
 		})
 	})
 
-	FIt("AsSuperAdminVerifyCRUDOperationsOnRoles ", func() {
+	It("AsSuperAdminVerifyCRUDOperationsOnRoles ", func() {
 		// TODO: Add the testrail ID
 		StartPxBackupTorpedoTest("AsSuperAdminVerifyCRUDOperationsOnRoles", "As Super Admin verify CRUD operation of Roles ", nil, 301220, Sgajawada, Q2FY25)
 
