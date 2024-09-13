@@ -14898,3 +14898,40 @@ func GetCPUAndMemOfPxProcess(n node.Node, processName string) (float64, float64,
 
 	return 0, 0, fmt.Errorf("PID [%s] not found in top command output", pid)
 }
+
+func VerifySourceClusterAccessWithHavingNoBackupsRestoresANDBackupScheduleObjects(ctx context1.Context, username string, password string, clusterUid string) error {
+	clusterInspectReq := &api.ClusterInspectRequest{
+		OrgId:          BackupOrgID,
+		Name:           SourceClusterName,
+		Uid:            clusterUid,
+		IncludeSecrets: true,
+	}
+	_, err := Inst().Backup.InspectCluster(ctx, clusterInspectReq)
+	if err != nil {
+		log.Errorf("failed to inspect cluster %s, err: %v", SourceClusterName, err)
+		return err
+	}
+
+	backupObjects, err := GetAllBackupsForUser(username, password)
+	if err != nil {
+		log.Errorf("failed to GetAllBackupsForUser %s for user %s, err: %v", SourceClusterName, username, err)
+		return err
+	}
+
+	restoreObjects, err := GetAllRestoresForUser(username, password)
+	if err != nil {
+		log.Errorf("failed to GetAllRestoresForUser %s for user %s, err: %v", SourceClusterName, username, err)
+		return err
+	}
+
+	backupScheduleObjects, err := GetAllBackupSchedulesForUser(username, password)
+	if err != nil {
+		log.Errorf("failed to GetAllBackupSchedulesForUser %s for user %s, err: %v", SourceClusterName, username, err)
+		return err
+	}
+
+	if len(backupObjects) != 0 || len(restoreObjects) != 0 || len(backupScheduleObjects) != 0 {
+		return errors.New(fmt.Sprintf("non-zero backup/restore/backupschedule objects exists: \n backupObjects:%v, \n backupScheduleObjects:%v,\n restoreObjects:%v", backupObjects, backupScheduleObjects, restoreObjects))
+	}
+	return nil
+}

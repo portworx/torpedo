@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -114,7 +115,7 @@ var _ = Describe("{SuperAdmin}", Label(TestCaseLabelsMap[SuperAdmin]...), func()
 				namespaceMapping[namespace] = restoredNameSpace
 			}
 			log.InfoD("Namespace mapping is %v:", namespaceMapping)
-			err = CreateRestoreWithClusterUID(restoreName, backupName, namespaceMapping, SourceClusterName, sourceClusterUID, BackupOrgID, testUser1Ctx, make(map[string]string))
+			err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, testUser1Ctx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s]", restoreName))
 		})
 
@@ -205,7 +206,7 @@ var _ = Describe("{SuperAdmin}", Label(TestCaseLabelsMap[SuperAdmin]...), func()
 			// Take Backup Schedule
 			log.InfoD("Taking schedule backup of multiple namespaces")
 			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			_, err := CreateScheduleBackupWithoutCheckWithClusterUID(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUser1Ctx)
+			_, err := CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUser1Ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s]", scheduleName))
 		})
 
@@ -252,9 +253,13 @@ var _ = Describe("{SuperAdmin}", Label(TestCaseLabelsMap[SuperAdmin]...), func()
 			for i := len(allScheduleBackupNames) - 1; i >= 0; i-- {
 				backupName := allScheduleBackupNames[i]
 				backupUid, err := Inst().Backup.GetBackupUID(testUser1Ctx, backupName, BackupOrgID)
-				log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, testUser1Name)
-				err = DeleteBackupAndWaitForCompletion(backupName, backupUid, BackupOrgID, testUser1Ctx)
-				log.FailOnError(err, "failed to delete schedule backup %s of the user %s", backupName, testUser1Name)
+				if err != nil && !strings.Contains(err.Error(), "not found") {
+					log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, testUser1Name)
+				}
+				if backupUid != "" {
+					err = DeleteBackupAndWaitForCompletion(backupName, backupUid, BackupOrgID, testUser1Ctx)
+					log.FailOnError(err, "failed to delete schedule backup %s of the user %s", backupName, testUser1Name)
+				}
 			}
 
 			// Delete the Schedule Policy with user1
