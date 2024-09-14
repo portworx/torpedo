@@ -10395,7 +10395,7 @@ func GetCloudsnapStatus() (map[string]CloudsnapStatus, error) {
 }
 
 // WatchAndStopCloudsnapBackup watches the cloudsnap creation and stops it if a new entry is added
-func WatchAndStopCloudsnapBackup(pvcName, namespace string, timeoutDuration time.Duration, ctx context1.Context) error {
+func WatchAndStopCloudsnapBackup(pvcName, namespace string, timeoutDuration time.Duration, ctx context1.Context, pauseAndResumeChannel chan string) error {
 	workerNode := node.GetStorageNodes()[0]
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -10414,12 +10414,17 @@ func WatchAndStopCloudsnapBackup(pvcName, namespace string, timeoutDuration time
 		}
 		return statusMap, nil
 	}
+	paused := false
 	for {
 		select {
 		case <-ctx.Done():
 			log.Infof("Context status is [%v]", ctx.Err())
 			return nil
 		case <-ticker.C:
+			if paused {
+				// If paused, do nothing until resumed
+				continue
+			}
 			statusMap, err := getCloudsnapStatus()
 			if err != nil {
 				return fmt.Errorf("failed to get cloudsnap status from cluster: %w", err)
@@ -10458,8 +10463,20 @@ func WatchAndStopCloudsnapBackup(pvcName, namespace string, timeoutDuration time
 			if !found {
 				log.Infof("No cloudsnap found for PVC [%s] in namespace [%s]", pvcName, namespace)
 			}
+		case msg := <-pauseAndResumeChannel:
+			switch msg {
+			case "pause":
+				log.Infof("Pausing cloudsnap backup process for PVC [%s] in namespace [%s]", pvcName, namespace)
+				paused = true
+			case "resume":
+				log.Infof("Resuming cloudsnap backup process for PVC [%s] in namespace [%s]", pvcName, namespace)
+				paused = false
+			default:
+				log.Infof("Received unknown message: [%s] for PVC [%s] in namespace [%s]", msg, pvcName, namespace)
+				paused = false
+			}
 		case <-timeout:
-			log.Infof("WatchAndStopCloudsnapBackupWithFixedNode timed out after %v", timeoutDuration)
+			log.Infof("WatchAndStopCloudsnapBackup timed out after %v", timeoutDuration)
 			return nil
 		}
 	}

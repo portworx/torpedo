@@ -259,6 +259,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		restoreNames                       []string
 		mutex                              sync.Mutex
 		controlChannel                     chan string
+		pauseAndResumeChannel              chan string
 		errorGroup                         *errgroup.Group
 		vmBackupNames                      []string
 		partialAppNamespaces               []string
@@ -598,7 +599,6 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				k8sCore := k8score.Instance()
 				pvcList, err := k8sCore.GetPersistentVolumeClaims(partialAppNamespaces[0], make(map[string]string))
 				log.FailOnError(err, fmt.Sprintf("error getting PVC list for namespace %s", partialAppNamespaces[0]))
-				log.Infof("pvc list is %v", pvcList)
 				for _, pvc := range pvcList.Items {
 					log.Infof("pvc %v", pvc)
 					failedVolumes = append(failedVolumes, &pvc)
@@ -609,13 +609,15 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				var wg sync.WaitGroup
 				var ctx context1.Context
 				ctx, cancelFunc = context1.WithCancel(context1.Background())
+				pauseAndResumeChannel = make(chan string, 2)
+
 				wg.Add(len(failedVolumes))
 				for _, pvc := range failedVolumes {
 					go func(pvc *corev1.PersistentVolumeClaim) {
 						defer GinkgoRecover()
 						defer wg.Done()
 						log.Infof("Starting go routine to stop the CR backups for namespace [%s] and pvc [%s]", pvc.Name, pvc.Namespace)
-						err := WatchAndStopCloudsnapBackup(pvc.Name, pvc.Namespace, 2*time.Hour, ctx)
+						err := WatchAndStopCloudsnapBackup(pvc.Name, pvc.Namespace, 2*time.Hour, ctx, pauseAndResumeChannel)
 						if err != nil {
 							dash.VerifySafely(err, nil, fmt.Sprintf("watching and stopping cloudsnap backup for PVC [%s] in namespace [%s]: %v", pvc.Name, pvc.Namespace, err))
 						} else {
@@ -679,6 +681,9 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				log.Infof("Upgrading stork version on source cluster to %s ", targetStorkVersion)
 				err := UpgradeStorkVersion(targetStorkVersion)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of stork version upgrade to - %s on source cluster", targetStorkVersion))
+				if IsPxInstalled() {
+					pauseAndResumeChannel <- "pause"
+				}
 				err = SetDestinationKubeConfig()
 				log.FailOnError(err, "Switching context to destination cluster failed")
 				log.Infof("Upgrading stork version on destination cluster to %s ", targetStorkVersion)
@@ -686,6 +691,9 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of stork version upgrade to - %s on destination cluster", targetStorkVersion))
 				err = SetSourceKubeConfig()
 				log.FailOnError(err, "Switching context to source cluster failed")
+				if IsPxInstalled() {
+					pauseAndResumeChannel <- "resume"
+				}
 			}
 		})
 
@@ -724,6 +732,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				} else {
 					log.Warnf("No running goroutines to stop")
 				}
+				err = SuspendBackupSchedule(partialScheduledBackupName, partialScheduleName, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s]", partialScheduledBackupName))
 				log.InfoD("Restoring the scheduled backup with partial success")
 				namespaceMapping := make(map[string]string)
 				for _, namespace := range partialAppNamespaces {
