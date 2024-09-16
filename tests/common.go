@@ -571,6 +571,7 @@ var (
 )
 
 var (
+	RunIds                    []int
 	RunIdForSuite             int
 	TestRailSetupSuccessful   bool
 	CurrentTestRailTestCaseId int
@@ -3886,20 +3887,24 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 		DescribeNamespace(contexts)
 		testStatus = "Fail"
 	}
-	if len(ids) >= 1 {
+	if len(ids) >= 2 {
 		driverVersion, err := Inst().V.GetDriverVersion()
 		if err != nil {
 			log.Errorf("Error in getting driver version")
 		}
-		testrailObject := testrailuttils.Testrail{
-			Status:          testStatus,
-			TestID:          ids[0],
-			RunID:           ids[1],
-			DriverVersion:   driverVersion,
-			PxBackupVersion: PxBackupVersion,
+		testID := ids[0]
+		for i := 1; i < len(ids); i++ {
+			runID := ids[i]
+			testrailObject := testrailuttils.Testrail{
+				Status:          testStatus,
+				TestID:          testID,
+				RunID:           runID,
+				DriverVersion:   driverVersion,
+				PxBackupVersion: PxBackupVersion,
+			}
+			testrailuttils.AddTestEntry(testrailObject)
+			log.Infof("Testrail testrun url: %s/index.php?/runs/view/%d&group_by=cases:custom_automated&group_order=asc&group_id=%d", testRailHostname, runID, testrailuttils.PwxProjectID)
 		}
-		testrailuttils.AddTestEntry(testrailObject)
-		log.Infof("Testrail testrun url: %s/index.php?/runs/view/%d&group_by=cases:custom_automated&group_order=asc&group_id=%d", testRailHostname, ids[1], testrailuttils.PwxProjectID)
 	}
 }
 
@@ -7863,8 +7868,8 @@ func ParseFlags() {
 	flag.StringVar(&migrationHops, "migration-hops", "", "Comma separated list of versions for migration pool")
 	flag.StringVar(&autopilotUpgradeImage, autopilotUpgradeImageCliFlag, "", "Autopilot version which will be used for checking version after upgrade autopilot")
 	flag.StringVar(&csiGenericDriverConfigMapName, csiGenericDriverConfigMapFlag, "", "Name of config map that stores provisioner details when CSI generic driver is being used")
-	flag.StringVar(&testrailuttils.MilestoneName, milestoneFlag, "", "Testrail milestone name")
-	flag.StringVar(&testrailuttils.RunName, testrailRunNameFlag, "", "Testrail run name, this run will be updated in testrail")
+	flag.StringVar(&testrailuttils.MilestoneName, milestoneFlag, "", "Testrail milestone names with comma separated values")
+	flag.StringVar(&testrailuttils.RunName, testrailRunNameFlag, "", "Testrail run names with comma separated values, this run will be updated in testrail")
 	flag.StringVar(&testrailuttils.JobRunID, testrailRunIDFlag, "", "Run ID for the testrail run")
 	flag.StringVar(&testrailuttils.JenkinsBuildURL, testrailJenkinsBuildURLFlag, "", "Jenins job url for testrail update")
 	flag.StringVar(&testRailHostname, testRailHostFlag, "", "Testrail server hostname")
@@ -9041,8 +9046,19 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	tags["pureFADAPod"] = Inst().PureFADAPod
 	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
 	if TestRailSetupSuccessful && testRepoID != 0 {
-		RunIdForSuite = testrailuttils.AddRunsToMilestone(testRepoID)
 		CurrentTestRailTestCaseId = testRepoID
+		RunIds = make([]int, 0)
+		RunIds = append(RunIds, CurrentTestRailTestCaseId)
+		milestones := strings.Split(testrailuttils.MilestoneName, ",")
+		testruns := strings.Split(testrailuttils.RunName, ",")
+		if len(milestones) > 1 || len(testruns) > 1 {
+			log.Infof("Multiple Milestones found: %v", milestones)
+			r := testrailuttils.AddRunsToMilestones(testRepoID)
+			RunIds = append(RunIds, r...)
+		} else {
+			RunIdForSuite = testrailuttils.AddRunsToMilestone(testRepoID)
+			RunIds = append(RunIds, RunIdForSuite)
+		}
 	}
 	log.Infof("TOGGLE_PURE_MGMT_IP: %v", os.Getenv("TOGGLE_PURE_MGMT_IP"))
 	if os.Getenv("TOGGLE_PURE_MGMT_IP") != "" {
@@ -9167,8 +9183,8 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	}()
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
-	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
-		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
+	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && len(RunIds) > 1 && RunIds[1] != 0 {
+		AfterEachTest(contexts, RunIds...)
 	}
 
 	currentSpecReport := ginkgo.CurrentSpecReport()
