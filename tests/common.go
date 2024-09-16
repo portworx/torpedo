@@ -5015,12 +5015,8 @@ func DeleteBackupLocationWithContext(name string, backupLocationUID string, orgI
 // DeleteSchedule deletes backup schedule
 func DeleteSchedule(backupScheduleName string, clusterName string, orgID string, ctx context1.Context, deleteBackups bool) error {
 	backupDriver := Inst().Backup
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
-	}
 	if deleteBackups {
-		err = DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
+		err := DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
 		if err != nil {
 			return err
 		}
@@ -5068,11 +5064,7 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 // DeleteScheduleWithUID deletes backup schedule with the given backup schedule name and uid
 func DeleteScheduleWithUID(backupScheduleName string, backupScheduleUid string, orgID string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
-	}
-	err = DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
+	err := DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
 	if err != nil {
 		return err
 	}
@@ -5093,11 +5085,7 @@ func DeleteScheduleWithUID(backupScheduleName string, backupScheduleUid string, 
 // DeleteScheduleWithUIDAndWait deletes backup schedule with the given backup schedule name and uid and waits for its deletion
 func DeleteScheduleWithUIDAndWait(backupScheduleName string, backupScheduleUid string, clusterName string, clusterUid string, orgID string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
-	}
-	err = DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
+	err := DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
 	if err != nil {
 		return err
 	}

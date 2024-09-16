@@ -1059,7 +1059,7 @@ func (p *portworx) WaitForBackupDeletion(
 ) error {
 	backupUID, err := p.GetBackupUID(ctx, backupName, orgID)
 	if err != nil && strings.Contains(err.Error(), fmt.Sprintf("backup with name '%s' not found for org '%s'", backupName, orgID)) {
-		log.Infof("Backup [%s] is already deleted or not present", backupName)
+		log.Infof("Backup [%s] is already deleted or not present while fetching backup uid", backupName)
 		return nil
 	} else {
 		req := &api.BackupInspectRequest{
@@ -1070,6 +1070,10 @@ func (p *portworx) WaitForBackupDeletion(
 		var backupError error
 		f := func() (interface{}, bool, error) {
 			inspectBackupResp, err := p.backupManager.Inspect(ctx, req)
+			if err != nil && strings.Contains(err.Error(), "object not found") {
+				log.Infof("Backup [%s] is already deleted or not present while inspecting backup", backupName)
+				return nil, false, nil
+			}
 			if err == nil {
 				// Object still exists, just retry
 				currentStatus := inspectBackupResp.GetBackup().GetStatus().GetStatus()

@@ -3354,6 +3354,8 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", Label(TestCaseLabelsMap[Delet
 			log.FailOnError(err, "Fetching backup uid for [%s]", backupName)
 			_, err = DeleteBackupWithClusterUID(backupName, backupUID, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
+			err = Inst().Backup.WaitForBackupDeletion(ctx, backupName, BackupOrgID, BackupDeleteTimeout, BackupDeleteRetryTime)
+			dash.VerifySafely(err, nil, fmt.Sprintf("failed waiting for backup %s deletion", backupName))
 		}
 
 		for _, restoreName := range restoreNames {

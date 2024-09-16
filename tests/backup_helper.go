@@ -6942,6 +6942,7 @@ func DeleteAllBackupsWithClusterUid(ctx context1.Context, orgId, clusterUid stri
 
 // DeleteAllBackupsForBackupLocation deletes all backup for a given backup location
 func DeleteAllBackupsForBackupLocation(ctx context1.Context, orgId, BackupLocationName, BackupLocationUid string) error {
+	var backupsSelectedForDeletion []string
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: orgId,
 	}
@@ -6953,6 +6954,7 @@ func DeleteAllBackupsForBackupLocation(ctx context1.Context, orgId, BackupLocati
 	var wg sync.WaitGroup
 	for _, bkp := range curBackups.GetBackups() {
 		if bkp.GetBackupLocationRef().GetName() == BackupLocationName && bkp.GetBackupLocationRef().GetUid() == BackupLocationUid {
+			backupsSelectedForDeletion = append(backupsSelectedForDeletion, bkp.GetName())
 			wg.Add(1)
 			go func(bkp *api.BackupObject) {
 				defer wg.Done()
@@ -6978,8 +6980,8 @@ func DeleteAllBackupsForBackupLocation(ctx context1.Context, orgId, BackupLocati
 	if len(errList) > 0 {
 		return fmt.Errorf(strings.Join(errList, "; "))
 	}
-	for _, bkp := range curBackups.GetBackups() {
-		err = Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), bkp.GetOrgId(), BackupDeleteTimeout, BackupDeleteRetryTime)
+	for _, bkp := range backupsSelectedForDeletion {
+		err = Inst().Backup.WaitForBackupDeletion(ctx, bkp, BackupOrgID, BackupDeleteTimeout, BackupDeleteRetryTime)
 		if err != nil {
 			return err
 		}
