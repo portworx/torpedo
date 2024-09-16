@@ -613,7 +613,12 @@ func (d *portworx) WaitForPxPodsToBeUp(n node.Node) error {
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, validatePxPodsUpTimeout, podUpRetryInterval); err != nil {
+	gctx := context.Background()
+	gctx = context.WithValue(gctx, torpedotask.TimeBeforeRetryKey, podUpRetryInterval)
+	gctx = context.WithValue(gctx, torpedotask.TimeoutKey, validatePxPodsUpTimeout)
+	gctx = context.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+
+	if _, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx); err != nil {
 		return fmt.Errorf("PX pod failed to come up on node : [%s]. Error: [%v]", n.Name, err)
 	}
 	return nil
@@ -4160,7 +4165,6 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 	_, err = task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 
 	cmd := fmt.Sprintf("echo Y | %s cluster delete -f %s", d.getPxctlPath(*n), nodeResp.Node.Id)
-	log.Infof("Running command [%s] on node [%s]", cmd, n.Name)
 
 	var cmdNode node.Node
 	for _, cn := range node.GetStorageDriverNodes() {
@@ -4169,6 +4173,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 			break
 		}
 	}
+	log.Infof("Running command [%s] on node [%s]", cmd, cmdNode.Name)
 
 	t = func() (interface{}, bool, error) {
 		out, err := d.nodeDriver.RunCommandWithNoRetry(cmdNode, cmd, node.ConnectionOpts{

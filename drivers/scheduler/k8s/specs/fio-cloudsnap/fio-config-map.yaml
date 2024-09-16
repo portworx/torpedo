@@ -11,8 +11,9 @@ data:
       blocksize=32k
       direct=1
       fsync=1
-      do_verify=0
+      do_verify=1
       verify=crc32c
+      verify_fatal=1
       verify_pattern=0xdeadbeef
       disable_lat=0
       time_based=1
@@ -30,7 +31,8 @@ data:
       blocksize=32k
       direct=1
       end_fsync=1
-      do_verify=0
+      do_verify=1
+      verify_fatal=1
       verify=crc32c
       verify_pattern=0xdeadbeef
       disable_lat=0

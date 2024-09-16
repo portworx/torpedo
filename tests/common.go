@@ -6949,7 +6949,7 @@ func HaIncreaseErrorInjectionTargetNode(event *EventRecord, ctx *scheduler.Conte
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
-									err = fmt.Errorf("error in ha-increse after %s target node . Error: %v", action, err)
+									err = fmt.Errorf("error in ha-increase after %s target node . Error: %v", action, err)
 									return
 								}
 								dash.VerifySafely(err, nil, fmt.Sprintf("repl successfully increased to %d", currRep+1))
@@ -7107,7 +7107,7 @@ func HaIncreaseErrorInjectSourceNode(event *EventRecord, ctx *scheduler.Context,
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
-									err = fmt.Errorf("error in ha-increse after  source node reboot. Error: %v", err)
+									err = fmt.Errorf("error in ha-increase after  source node reboot. Error: %v", err)
 									return
 								}
 								dash.VerifySafely(err, nil, fmt.Sprintf("repl successfully increased to %d", currRep+1))

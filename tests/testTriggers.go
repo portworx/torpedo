@@ -5,6 +5,7 @@ import (
 	"container/ring"
 	ctxt "context"
 	"fmt"
+	"github.com/libopenstorage/openstorage/pkg/dbg"
 	"math"
 	"math/rand"
 	"net/url"
@@ -1617,11 +1618,21 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 				log.Infof("Initiating volume size increase on volume [%v] by size [%v] to [%v]",
 					vol.ID, curSize/units.GiB, newSize/units.GiB)
 
-				err = Inst().V.ResizeVolume(vol.ID, newSize)
+				pvcs, err := GetContextPVCs(ctx)
 				if err != nil {
-					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failure of resizing the volume", vol.Name, vol.ID, vol.Namespace)
-					PrintInspectVolume(vol.ID)
+					log.Errorf("Error getting PVCs for context %s", ctx.App.Key)
 					return err
+				}
+				for _, pvc := range pvcs {
+					if pvc.Spec.VolumeName == vol.Name {
+						_, err = Inst().S.ResizePVC(ctx, pvc, newSize)
+						if err != nil {
+							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failure of resizing the volume", vol.Name, vol.ID, vol.Namespace)
+							PrintInspectVolume(vol.ID)
+							return err
+						}
+					}
+
 				}
 
 				// Wait for 2 seconds for Volume to update stats
@@ -1725,7 +1736,7 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 						log.InfoD(stepLog)
 						err = ValidateReplFactorUpdate(v, expReplMap[v])
 						if err != nil {
-							err = fmt.Errorf("error in ha-increse after  source node reboot. Error: %v", err)
+							err = fmt.Errorf("error in ha-increase after  source node reboot. Error: %v", err)
 							log.Error(err)
 							UpdateOutcome(event, err)
 						} else {
@@ -3999,7 +4010,11 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 						return
 					}
 					snapshotStatusMap := make(map[storkv1.SchedulePolicyType][]*storkv1.ScheduledVolumeSnapshotStatus)
-					log.Infof("TriggerCloudSnapshotRestore: The snapshot [%s] response [%+v] has [%v] items", snapshotScheduleName, resp.Status.Items, len(resp.Status.Items))
+					log.Infof("TriggerCloudSnapshotRestore: The snapshot [%s] response :", snapshotScheduleName)
+					for policyType, snapshotStatuses := range resp.Status.Items {
+						log.Infof("TriggerCloudSnapshotRestore: PolicyType [%s] has [%v] snapshotStatuses", policyType, len(snapshotStatuses))
+
+					}
 					for policyType, snapshotStatuses := range resp.Status.Items {
 						sort.Slice(snapshotStatuses, func(i, j int) bool {
 							return snapshotStatuses[i].FinishTimestamp.After(snapshotStatuses[j].FinishTimestamp.Time)
@@ -4048,13 +4063,25 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 								UpdateOutcome(event, err)
 								return
 							}
+						} else {
+							UpdateOutcome(event, err)
+							snapshotRestore, err := storkops.Instance().GetVolumeSnapshotRestore(restore.Name, restore.Namespace)
+							if err != nil {
+								UpdateOutcome(event, err)
+								return
+							}
+							log.Infof("SnapshotRestore Resposne: %+v", snapshotRestore)
+							fields := fmt.Sprintf("involvedObject.kind=%s,involvedObject.name=%s", "VolumeSnapshotRestore", restore.Name)
+							events, err := k8sCore.ListEvents(restore.Namespace, metav1.ListOptions{FieldSelector: fields})
+							if err != nil {
+								log.Errorf("error getting events for VolumeSnapshotRestore [%s/%s]. Error: [%v]", restore.Namespace, restore.Name, err)
+							}
+							log.Infof("Events of SnapshotRestore Failure: %+v", events)
 						}
 					} else {
 						UpdateOutcome(event, fmt.Errorf("no snapshot with Ready status found for vol[%s] in namespace[%s]", vol.Name, vol.Namespace))
 					}
-
 				}
-
 			}
 		}
 
@@ -4115,6 +4142,7 @@ func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *Event
 			UpdateOutcome(event, err)
 			checkLunsAfterVolumeDeletion(event, vols)
 		}
+		endLongevityTest()
 		*contexts = nil
 		TriggerDeployNewApps(contexts, recordChan)
 		updateMetrics(*event)
@@ -4363,6 +4391,18 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 		_, err = torpedotask.DoRetryWithTimeoutWithCtx(checkNodesStatus, gctx)
 
 		if err != nil {
+			config := &volume.DiagRequestConfig{
+				DockerHost:    "unix:///var/run/docker.sock",
+				OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", n.Name, dbg.GetTimeStamp()),
+				ContainerName: "",
+				OnHost:        true,
+				Live:          true,
+			}
+
+			diagsErr := Inst().V.CollectDiags(n, config, volume.DiagOps{Validate: true, PxDir: "/etc/pwx/"})
+			if diagsErr != nil {
+				log.Errorf("error collecting diags for node [%s]. Err: %v", n.Name, diagsErr)
+			}
 			return err
 		}
 
@@ -4507,6 +4547,7 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 		}
 	}
 
+	appErr := false
 	for _, ctx := range *contexts {
 		errorChan := make(chan error, errorChannelSize)
 		appVolumes, err := Inst().S.GetVolumes(ctx)
@@ -4537,7 +4578,7 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 
 			_, err = torpedotask.DoRetryWithTimeoutWithCtx(f, gctx)
 			if err != nil {
-				return err
+				log.Errorf("error waiting for volume %s replication to be in up state. App : %s, Err: %v", v.Name, ctx.App.Key, err)
 			}
 
 			checkVolumeStateIsResync = func(v *volume.Volume) (interface{}, bool, error) {
@@ -4573,8 +4614,30 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 
 		for e := range errorChan {
 			if e != nil {
-
+				appErr = true
 				log.Errorf("Error: %v", e)
+				for _, v := range appVolumes {
+					snapshotResponse, snapErr := Inst().V.CreateSnapshot(v.ID, fmt.Sprintf("%s-fail-vol-%s", v.ID, time.Now().Format("01-02-15h04m05s")))
+					if snapErr != nil {
+						log.Errorf("Error creating snapshot for volume [%s]. Err: %v", v.ID, snapErr)
+					}
+					log.Infof("Snapshot created for volume [%s] with ID [%s]", v.ID, snapshotResponse.GetSnapshotId())
+				}
+			}
+		}
+	}
+	if appErr {
+		for _, n := range stnodes {
+			config := &volume.DiagRequestConfig{
+				DockerHost:    "unix:///var/run/docker.sock",
+				OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", n.Name, dbg.GetTimeStamp()),
+				ContainerName: "",
+				OnHost:        true,
+				Live:          true,
+			}
+			diagsErr := Inst().V.CollectDiags(n, config, volume.DiagOps{Validate: true})
+			if diagsErr != nil {
+				log.Errorf("error collecting diags for node [%s]. Err: %v", n.Name, diagsErr)
 			}
 		}
 	}
@@ -6354,6 +6417,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 					dashStats["node"] = storageNode.Name
 
 					updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
+					log.InfoD("Rebooting the node [%s]", storageNode.Name)
 					if isDmthin && resizeOperationType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
 						//this is required as for Dmthin add-disk . pool will be in maintenance mode after node reboot
 						err = RebootNodeAndWaitForPxDown(*storageNode)
