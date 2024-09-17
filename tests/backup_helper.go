@@ -23,7 +23,6 @@ import (
 	"github.com/portworx/torpedo/drivers/applications/databases"
 
 	"github.com/gogo/protobuf/types"
-
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"k8s.io/apimachinery/pkg/watch"
 
@@ -94,6 +93,7 @@ const (
 	ATrivedi       TestcaseAuthor = "atrivedi-px"
 	Dbinnal        TestcaseAuthor = "dbinnal-px"
 	Sgajawada      TestcaseAuthor = "sgajawada-px"
+	Pamathur       TestcaseAuthor = "pallav-px"
 )
 
 // TestcaseQuarter List
@@ -2410,6 +2410,8 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 	enumerateClusterResponse, err := Inst().Backup.EnumerateAllCluster(ctx, enumerateClusterRequest)
 	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying enumerate cluster in organization %s", BackupOrgID))
 	for _, clusterObj := range enumerateClusterResponse.GetClusters() {
+		err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), BackupOrgID, ctx, true)
+		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterObj.GetName()))
 		clusterProvider := GetClusterProviders()
 		for _, provider := range clusterProvider {
 			var clusterCredName, clusterCredUID string
@@ -2429,8 +2431,6 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 					log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterObj.GetName())
 				}
 			}
-			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), BackupOrgID, ctx, true)
-			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterObj.GetName()))
 			if clusterCredName != "" {
 				err = DeleteCloudCredential(clusterCredName, BackupOrgID, clusterCredUID)
 				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))

@@ -1003,7 +1003,7 @@ func AddGroup(group string) error {
 	return nil
 }
 
-// DeleteGroup adds a new group
+// DeleteGroup delete a particular group
 func DeleteGroup(group string) error {
 	keycloakEndPoint, err := getKeycloakEndPoint(true)
 	if err != nil {

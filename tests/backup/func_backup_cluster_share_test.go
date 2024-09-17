@@ -22,7 +22,7 @@ type user struct {
 	ctx  context.Context
 }
 
-var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[ClusterShare]...), func() {
+var _ = Describe("{ClusterShareWithRestoreGroupAndMultipleUserTestcases}", Label(TestCaseLabelsMap[ClusterShare]...), func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		bkpNamespaces        []string
@@ -88,6 +88,10 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 			err = CreateBackupLocationWithContext(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", pxbUsers[0].ctx, true)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
 		}
+
+		log.InfoD("Sharing backup location with user1")
+		err = AddBackupLocationOwnership(bkpLocationName, backupLocationUID, []string{pxbUsers[1].name}, nil, Read, Invalid, pxbUsers[0].ctx)
+		log.FailOnError(err, "failed to update backup location [%v] ownership", bkpLocationName)
 
 		// Share the Backup Location with testUser2
 		log.InfoD("Sharing backup location with user2")
@@ -409,6 +413,542 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", DestinationClusterName))
 		})
 	})
+	// This test case verifies that after sharing a cluster with a new user, the user can access the cluster, create a backup, and after the cluster is revoked by the admin, confirm that the cluster is no longer visible to the user, while ensuring the backup remains accessible and can be deleted.
+	It("VerifyClusterShareAccessAndBackupCreationWithRevocation", func() {
+		StartPxBackupTorpedoTest("VerifyClusterShareAccessAndBackupCreationWithRevocation", "VerifyClusterShareAccessAndBackupCreationWithRevocation", nil, 301035, Pamathur, Q2FY25)
+
+		var (
+			backupName2  = fmt.Sprintf("%s-%v-2", BackupNamePrefix, time.Now().Unix())
+			backupName   = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			backupDriver = Inst().Backup
+			clusterUid   string
+		)
+		Step("Create a cluster & backup object from admin and Share with User1", func() {
+			err := AddSourceCluster(pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			clusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] from user [%s]", backupName, pxbUsers[0].name))
+
+			// Share the source cluster to testuser1
+			_, err = ShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, []string{pxbUsers[1].name}, nil, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with [%s] user using [%s] ctx", SourceClusterName, pxbUsers[1].name, pxbUsers[0].name))
+		})
+		Step("Create a backup object using shared cluster from user1", func() {
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[1].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[1].name))
+
+			backupResp, err := Inst().Backup.EnumerateBackup(pxbUsers[1].ctx, &api.BackupEnumerateRequest{
+				OrgId: BackupOrgID,
+			})
+			dash.VerifyFatal(len(backupResp.GetBackups()), 0, fmt.Sprintf("Enumerating backups for org [%s] using [%s]", BackupOrgID, pxbUsers[1].ctx))
+
+			// Take Backup
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err = CreateBackup(backupName2, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] using [%s] ctx", backupName2, pxbUsers[1].name))
+		})
+		Step("Delete Cluster using admin and verify backups", func() {
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[0].ctx, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s] using [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			_, err = backupDriver.InspectBackup(pxbUsers[0].ctx, &api.BackupInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  backupName2,
+			})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Inspection of backup [%s] using [%s] ctx", backupName2, pxbUsers[0].name))
+		})
+		Step("Verify Backup from User1 that was created from unshared cluster", func() {
+			_, err := backupDriver.InspectCluster(pxbUsers[1].ctx, &api.ClusterInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  SourceClusterName,
+			})
+			dash.VerifyNotNilFatal(err, fmt.Sprintf("Inspection of cluster [%s] using [%s] ctx", SourceClusterName, pxbUsers[1].name))
+
+			_, err = backupDriver.InspectBackup(pxbUsers[1].ctx, &api.BackupInspectRequest{
+				Name:  backupName2,
+				OrgId: BackupOrgID,
+			})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Inspection of backup [%s] using [%s] ctx", backupName2, pxbUsers[1].name))
+
+			// Delete Backup
+			backupUID, err := backupDriver.GetBackupUID(pxbUsers[1].ctx, backupName2, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backup uid using [%s] ctx", backupName2, pxbUsers[1].name))
+
+			log.InfoD("Deleting backup")
+			_, err = DeleteBackup(backupName2, backupUID, BackupOrgID, pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using [%s] ctx", backupName, pxbUsers[1].ctx))
+
+			backupUID, err = backupDriver.GetBackupUID(pxbUsers[0].ctx, backupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backup uid using [%s] ctx", backupName2, pxbUsers[0].name))
+
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using [%s] ctx", backupName, pxbUsers[0].ctx))
+		})
+	})
+	// This test case verifies the behavior of cluster sharing and backup creation between two users. It ensures that after a super admin revokes the shared cluster from testUser2, testUser1 can still create backups, testUser2 is prevented from creating new backups, and testUser2 can delete the backup created prior to the revocation.
+	It("VerifyClusterShareRevocationBackupAccessAndDeletionBehavior", func() {
+		StartPxBackupTorpedoTest("VerifyClusterShareRevocationBackupAccessAndDeletionBehavior", "VerifyClusterShareRevocationBackupAccessAndDeletionBehavior", nil, 301036, Pamathur, Q2FY25)
+		var (
+			backupName2 = fmt.Sprintf("%s-%v-2", BackupNamePrefix, time.Now().Unix())
+			backupName  = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			clusterUid  string
+		)
+		Step("Create a cluster & backup object with User1 and Share with User2", func() {
+			err := AddSourceCluster(pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with [%s] ctx", SourceClusterName, pxbUsers[1].name))
+
+			clusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[1].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] using [%s] ctx", backupName, pxbUsers[1].name))
+
+			// Share the source cluster to testuser2
+			_, err = ShareCluster(pxbUsers[1].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with [%s] user using [%s] ctx", SourceClusterName, pxbUsers[2].name, pxbUsers[1].name))
+		})
+		// 6. Login as TestUser2 and create Backup on shared cluster.
+		Step("Create a backup on the same cluster(Shared Cluster) with user(User2)", func() {
+			// Take Backup
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err := CreateBackup(backupName2, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] using [%s] ctx", backupName, pxbUsers[2].name))
+		})
+		Step("Revoke the cluster share from User2", func() {
+			_, err := UnShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Unshare of source [%s] cluster with [%s] user using [%s] ctx", SourceClusterName, pxbUsers[2].name, pxbUsers[0].name))
+		})
+		Step("Create Backup From Both Users and Validate", func() {
+			// Create Backup 2 from user1
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err := CreateBackup(backupName2, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] using [%s] ctx", backupName2, pxbUsers[1].name))
+
+			// Create Backup 2 from user 2
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[2].ctx)
+			dash.VerifyNotNilFatal(err, fmt.Sprintf("Creation of backup [%s] using [%s] ctx", backupName, pxbUsers[2].name))
+
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[0].ctx, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s] using [%s] ctx", SourceClusterName, pxbUsers[0]))
+
+			// Delete Backup
+			log.InfoD("Deleting backup")
+
+			backupUID, err := Inst().Backup.GetBackupUID(pxbUsers[1].ctx, backupName2, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Inspection of backup [%s] using [%s] ctx", backupName2, pxbUsers[1].name))
+			_, err = DeleteBackup(backupName2, backupUID, BackupOrgID, pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using [%s]", backupName2, pxbUsers[1].name))
+
+			backupUID, err = Inst().Backup.GetBackupUID(pxbUsers[2].ctx, backupName2, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Inspection of backup [%s] using [%s] ctx", backupName2, pxbUsers[2].name))
+			_, err = DeleteBackup(backupName2, backupUID, BackupOrgID, pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using [%s]", backupName2, pxbUsers[2].name))
+
+			backupUID, err = Inst().Backup.GetBackupUID(pxbUsers[1].ctx, backupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Inspection of backup [%s] using [%s] ctx", backupName, pxbUsers[1].name))
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using [%s]", backupName, pxbUsers[1].name))
+		})
+	})
+	// This test case verifies that after sharing a cluster and a backup with full access to testUser1, the user can successfully restore from the shared backup, and subsequently delete both the backup created by the admin and their own backup. Each action is validated to ensure the correct permissions and access control are enforced.
+	It("VerifyClusterShareBackupRestoreAndDeletionBySharedUserWithFullAccess", func() {
+		StartPxBackupTorpedoTest("VerifyClusterShareBackupRestoreAndDeletionBySharedUserWithFullAccess", "VerifyClusterShareBackupRestoreAndDeletionBySharedUserWithFullAccess", nil, 301037, Pamathur, Q2FY25)
+		var (
+			backupName       = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			backupName2      = fmt.Sprintf("%s-%v-2", BackupNamePrefix, time.Now().Unix())
+			restoreName      = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			namespaceMapping = make(map[string]string)
+			clusterUid       string
+		)
+		Step("Create a cluster & backup object with super amin and Share with User1", func() {
+
+			err := AddSourceCluster(pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with admin ctx", SourceClusterName))
+
+			clusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] using [%s] ctx", BackupNamePrefix, pxbUsers[0].name))
+
+			// Share the source cluster to testuser1
+			_, err = ShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, []string{pxbUsers[1].name}, nil, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with [%s] user using [%s] ctx", SourceClusterName, pxbUsers[1].name, pxbUsers[0].name))
+		})
+		Step("Create a backup object using shared cluster from user1", func() {
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[1].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[1].name))
+
+			resp, err := Inst().Backup.EnumerateBackup(pxbUsers[1].ctx, &api.BackupEnumerateRequest{
+				OrgId: BackupOrgID,
+			})
+			dash.VerifyFatal(err, nil, "Enumerating backups")
+			dash.VerifyFatal(len(resp.GetBackups()), 0, fmt.Sprintf("Enumerating backups using [%s] ctx", pxbUsers[1].name))
+
+			// Take Backup
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err = CreateBackup(backupName2, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] using [%s] ctx", backupName2, pxbUsers[1].name))
+		})
+		Step("Share the backup with User1", func() {
+			err := ShareBackup(backupName, nil, []string{pxbUsers[1].name}, FullAccess, pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of backup [%s] with %s user using [%s] ctx", backupName, pxbUsers[1].name, pxbUsers[0].name))
+		})
+		Step("Restore the backup and delete the backups", func() {
+			// Create Restore
+			for _, namespace := range bkpNamespaces {
+				restoredNameSpace := fmt.Sprintf("%s-%s", RandomString(10), "restored")
+				namespaceMapping[namespace] = restoredNameSpace
+			}
+			log.InfoD("Namespace mapping is %v:", namespaceMapping)
+			err := CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, pxbUsers[1].ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s] using [%s] ctx", restoreName, pxbUsers[1].name))
+
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[0].ctx, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s] using [%s] ctx", SourceClusterName, pxbUsers[0]))
+
+			// Delete Backup
+			backupUID, err := Inst().Backup.GetBackupUID(pxbUsers[1].ctx, backupName2, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backup uid using [%s] ctx", backupName2, pxbUsers[1].name))
+
+			_, err = DeleteBackup(backupName2, backupUID, BackupOrgID, pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using [%s] ctx", backupName2, pxbUsers[1].name))
+
+			backupUID, err = Inst().Backup.GetBackupUID(pxbUsers[0].ctx, backupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backup uid using [%s] ctx", backupName, pxbUsers[0].name))
+
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using [%s] ctx", backupName, pxbUsers[0].name))
+
+		})
+	})
+	// This test case verifies that after testUser1 shares a cluster with testUser2, testUser2 can create a backup schedule on the shared cluster. It also confirms that when testUser1 attempts to revoke the cluster share from testUser2, the operation should fail, ensuring proper handling of permissions during active backup schedules.
+	It("VerifyBackupScheduleCreationAndFailedClusterShareRevocation", func() {
+		StartPxBackupTorpedoTest("VerifyBackupScheduleCreationAndFailedClusterShareRevocation", "VerifyBackupScheduleCreationAndFailedClusterShareRevocation", nil, 301038, Pamathur, Q2FY25)
+		var (
+			periodicSchedulePolicyName     = fmt.Sprintf("%s-%s", "periodic", RandomString(5))
+			periodicSchedulePolicyUid      = uuid.New()
+			periodicSchedulePolicyInterval = int64(15)
+			scheduleName                   = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
+		)
+		Step("Create a cluster object with User1 and share it to user2", func() {
+			err := AddSourceCluster(pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with [%s] ctx", SourceClusterName, pxbUsers[1].name))
+
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[1].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[1].name))
+
+			// Share the source cluster to testuser2
+			_, err = ShareCluster(pxbUsers[1].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with [%s] user using [%s] ctx", SourceClusterName, pxbUsers[2].name, pxbUsers[1].name))
+		})
+		Step("Create a backup schedule on the shared cluster with User2", func() {
+			// Create Schedule Policy
+			err := CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, pxbUsers[2].ctx, false, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s] using [%s] ctx", periodicSchedulePolicyInterval, periodicSchedulePolicyName, pxbUsers[2].name))
+
+			// Take Backup Schedule
+			log.InfoD("Taking schedule backup of multiple namespaces")
+			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] using [%s] ctx", scheduleName, pxbUsers[2].name))
+		})
+		Step("Revoke the cluster share from User2", func() {
+
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[1].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[1].name))
+
+			_, err = UnShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil)
+			dash.VerifyNotNilFatal(err, fmt.Sprintf("Verifying Unshare of source [%s] cluster with [%s] user using [%s] ctx", SourceClusterName, pxbUsers[2].name, pxbUsers[1].name))
+
+			err = SuspendAndDeleteSchedule(scheduleName, periodicSchedulePolicyName, SourceClusterName, BackupOrgID, pxbUsers[2].ctx, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of schedule [%s] using [%s] ctx", scheduleName, pxbUsers[2].name))
+
+		})
+	})
+	// This test case verifies that after sharing a cluster with a group containing multiple users, both users (user1 and user2) can successfully create backups on the shared cluster. It ensures that group-level access permissions are properly applied for backup creation.
+	It("VerifyClusterShareWithGroupAndSuccessfulBackupCreationByAllGroupMembers", func() {
+		StartPxBackupTorpedoTest("VerifyClusterShareWithGroupAndSuccessfulBackupCreationByAllGroupMembers", "VerifyClusterShareWithGroupAndSuccessfulBackupCreationByAllGroupMembers", nil, 301043, Pamathur, Q2FY25)
+		var (
+			groupName  = fmt.Sprintf("%s-%s", "group", RandomString(5))
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+		)
+		Step("Create a Group from admin and assign this to user1 and user2", func() {
+			// Create Group
+			err := backup.AddGroup(groupName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of group [%s] using [%s] ctx", groupName, pxbUsers[0].name))
+
+			err = backup.AddRoleToGroup(groupName, backup.ApplicationOwner, "testing from torpedo")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addition of role [%s] to group [%s] using [%s] ctx", backup.ApplicationOwner, groupName, pxbUsers[0].name))
+
+			// Add User to Group
+			err = backup.AddGroupToUser(pxbUsers[1].name, groupName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addition of user [%s] to group [%s] using [%s] ctx", pxbUsers[1].name, groupName, pxbUsers[0].name))
+
+			err = backup.AddGroupToUser(pxbUsers[2].name, groupName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addition of user [%s] to group [%s] using [%s] ctx", pxbUsers[2].name, groupName, pxbUsers[0].name))
+
+			err = AddSourceCluster(pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			// Share the source cluster to group
+			_, err = ShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, nil, []string{groupName}, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with [%s] group using [%s] ctx", SourceClusterName, groupName, pxbUsers[0].name))
+
+		})
+		Step("Create a backup on the shared cluster with User1 & User2", func() {
+
+			ctxNonAdmin, err := backup.GetNonAdminCtx(pxbUsers[1].name, CommonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
+			pxbUsers[1] = user{name: pxbUsers[1].name, ctx: ctxNonAdmin}
+
+			ctxNonAdmin, err = backup.GetNonAdminCtx(pxbUsers[2].name, CommonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
+			pxbUsers[2] = user{name: pxbUsers[2].name, ctx: ctxNonAdmin}
+			// Create Backup
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[1].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[1].name))
+
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] using [%s] ctx", backupName, pxbUsers[1].name))
+
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] using [%s] ctx", backupName, pxbUsers[2].name))
+		})
+
+		Step("Cleanup", func() {
+			err := backup.DeleteGroup(groupName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of group [%s] using [%s] ctx", groupName, pxbUsers[0].name))
+
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[0].ctx, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s] using [%s] ctx", SourceClusterName, pxbUsers[0]))
+
+			// Delete Backup
+			backupUID, err := Inst().Backup.GetBackupUID(pxbUsers[2].ctx, backupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backup uid using [%s] ctx", backupName, pxbUsers[2].name))
+
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using [%s] ctx", backupName, pxbUsers[2].name))
+
+			backupUID, err = Inst().Backup.GetBackupUID(pxbUsers[1].ctx, backupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backup uid using [%s] ctx", backupName, pxbUsers[1].name))
+
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using [%s] ctx", backupName, pxbUsers[1].name))
+		})
+
+	})
+	// This test case verifies that after sharing a cluster with a group, both user1 and user2 can successfully create backups and restores from the shared cluster. After the cluster is unshared from the group by the admin, it confirms that no restore objects are listed for the cluster, ensuring proper revocation of access.
+	It("VerifyBackupRestoreByGroupAndNoRestoreAccessAfterClusterUnshare", func() {
+		StartPxBackupTorpedoTest("VerifyBackupRestoreByGroupAndNoRestoreAccessAfterClusterUnshare", "VerifyBackupRestoreByGroupAndNoRestoreAccessAfterClusterUnshare", nil, 301044, Pamathur, Q2FY25)
+		var (
+			restoreName      = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			namespaceMapping = make(map[string]string)
+		)
+		var (
+			groupName  = fmt.Sprintf("%s-%s", "group", RandomString(5))
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+		)
+		Step("Create a Group from admin and assign this to user1 and user2", func() {
+			// Create Group
+			err := backup.AddGroup(groupName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of group [%s] using [%s] ctx", groupName, pxbUsers[0].name))
+
+			err = backup.AddRoleToGroup(groupName, backup.ApplicationOwner, "testing from torpedo")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addition of role [%s] to group [%s] using [%s] ctx", backup.ApplicationOwner, groupName, pxbUsers[0].name))
+
+			// Add User to Group
+			err = backup.AddGroupToUser(pxbUsers[1].name, groupName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addition of user [%s] to group [%s] using [%s] ctx", pxbUsers[1].name, groupName, pxbUsers[0].name))
+
+			err = backup.AddGroupToUser(pxbUsers[2].name, groupName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addition of user [%s] to group [%s] using [%s] ctx", pxbUsers[2].name, groupName, pxbUsers[0].name))
+
+			err = AddSourceCluster(pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			// Share the source cluster to group
+			_, err = ShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, nil, []string{groupName}, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with [%s] group using [%s] ctx", SourceClusterName, groupName, pxbUsers[0].name))
+
+		})
+		Step("Create a backup on the shared cluster with User1", func() {
+			ctxNonAdmin, err := backup.GetNonAdminCtx(pxbUsers[1].name, CommonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
+			pxbUsers[1] = user{name: pxbUsers[1].name, ctx: ctxNonAdmin}
+
+			ctxNonAdmin, err = backup.GetNonAdminCtx(pxbUsers[2].name, CommonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
+			pxbUsers[2] = user{name: pxbUsers[2].name, ctx: ctxNonAdmin}
+			// Create Backup
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[1].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[1].name))
+
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] using [%s] ctx", backupName, pxbUsers[1].name))
+
+			// Create Restore
+			for _, namespace := range bkpNamespaces {
+				restoredNameSpace := fmt.Sprintf("%s-%s", RandomString(10), "restored")
+				namespaceMapping[namespace] = restoredNameSpace
+			}
+			log.InfoD("Namespace mapping is %v:", namespaceMapping)
+			err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, pxbUsers[1].ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s] using [%s] ctx", restoreName, pxbUsers[1].name))
+
+		})
+
+		Step("Create a backup on the shared cluster with User2", func() {
+			// Create Backup
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[2].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[2].name))
+
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] using [%s] ctx", backupName, pxbUsers[2].name))
+
+			// Create Restore
+			for _, namespace := range bkpNamespaces {
+				restoredNameSpace := fmt.Sprintf("%s-%s", RandomString(10), "restored")
+				namespaceMapping[namespace] = restoredNameSpace
+			}
+			log.InfoD("Namespace mapping is %v:", namespaceMapping)
+			err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, pxbUsers[2].ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s] using [%s] ctx", restoreName, pxbUsers[2].name))
+
+		})
+
+		Step("Unshare the cluster from the group", func() {
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			_, err = UnShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, nil, []string{groupName})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Unshare of source [%s] cluster with [%s] group using [%s] ctx", SourceClusterName, groupName, pxbUsers[0].name))
+
+			// check after un sharing of cluster from groups , restore should get deleted automatically
+			resp, err := Inst().Backup.EnumerateRestore(pxbUsers[0].ctx, &api.RestoreEnumerateRequest{
+				OrgId: BackupOrgID,
+			})
+			dash.VerifyFatal(len(resp.Restores), 0, fmt.Sprintf("Verifying restore list is empty after unshare of source [%s] cluster with [%s] group using [%s] ctx", SourceClusterName, groupName, pxbUsers[0].name))
+
+		})
+
+		Step("Cleanup", func() {
+
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[0].ctx, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s] using [%s] ctx", SourceClusterName, pxbUsers[0]))
+
+			backupUID, err := Inst().Backup.GetBackupUID(pxbUsers[2].ctx, backupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backup uid using [%s] ctx", backupName, pxbUsers[2].name))
+
+			log.InfoD("Deleting backup")
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using [%s] ctx", backupName, pxbUsers[2].name))
+
+			backupUID, err = Inst().Backup.GetBackupUID(pxbUsers[1].ctx, backupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backup uid using [%s] ctx", backupName, pxbUsers[1].name))
+
+			log.InfoD("Deleting backup")
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, pxbUsers[1].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using [%s] ctx", backupName, pxbUsers[1].name))
+
+		})
+	})
+
+	// This test case verifies that after sharing a cluster and its backups from User1 to User2, User2 can successfully create a backup on the shared cluster and perform a restore from the backup originally created by User1. This ensures proper functionality of cluster and backup sharing with restoration capabilities.
+	It("VerifyClusterAndBackupShareWithBackupCreationAndRestoreBySharedUser", func() {
+		StartPxBackupTorpedoTest("VerifyClusterAndBackupShareWithBackupCreationAndRestoreBySharedUser", "VerifyClusterAndBackupShareWithBackupCreationAndRestoreBySharedUser", nil, 301045, Pamathur, Q2FY25)
+		var (
+			backupName2 = fmt.Sprintf("%s-%v-2", BackupNamePrefix, time.Now().Unix())
+			backupName  = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			clusterUid  string
+		)
+		Step("Create a cluster & backup object with admin and Share with User2", func() {
+			err := AddSourceCluster(pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			clusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] using [%s] ctx", backupName, pxbUsers[0].name))
+
+			// Share the source cluster to testuser2
+			_, err = ShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil, true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with [%s] user using [%s] ctx", SourceClusterName, pxbUsers[2].name, pxbUsers[0].name))
+		})
+		Step("Create a backup object with User2 and restore with admin Backup", func() {
+			// Create Backup
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err := CreateBackup(backupName2, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] using [%s] ctx", backupName2, pxbUsers[2].name))
+
+			// Create Restore
+			restoredNameSpace := fmt.Sprintf("%s-%s", RandomString(10), "restored")
+			namespaceMapping := make(map[string]string)
+			for _, namespace := range bkpNamespaces {
+				namespaceMapping[namespace] = restoredNameSpace
+			}
+			log.InfoD("Namespace mapping is %v:", namespaceMapping)
+			err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, pxbUsers[2].ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s] using [%s] ctx", backupName, pxbUsers[2].name))
+		})
+
+		Step("Cleanup", func() {
+
+			clusterUid, err := Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using [%s] ctx", SourceClusterName, pxbUsers[0].name))
+
+			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[0].ctx, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s] using [%s] ctx", SourceClusterName, pxbUsers[0]))
+
+			log.InfoD("Deleting backup")
+			backupUID, err := Inst().Backup.GetBackupUID(pxbUsers[2].ctx, backupName2, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backup uid using [%s] ctx", backupName2, pxbUsers[2].name))
+
+			_, err = DeleteBackup(backupName2, backupUID, BackupOrgID, pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using [%s] ctx", backupName2, pxbUsers[2].name))
+
+			backupUID, err = Inst().Backup.GetBackupUID(pxbUsers[0].ctx, backupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backup uid using [%s] ctx", backupName, pxbUsers[0].name))
+
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using [%s] ctx", backupName, pxbUsers[0].name))
+		})
+	})
 
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
@@ -418,12 +958,43 @@ var _ = Describe("{ClusterShareWithRestoreTestcases}", Label(TestCaseLabelsMap[C
 		log.InfoD("Deleting deployed applications")
 		DestroyApps(scheduledAppContexts, opts)
 
+		restoreResp, err := Inst().Backup.EnumerateRestore(pxbUsers[0].ctx, &api.RestoreEnumerateRequest{
+			OrgId: BackupOrgID,
+		})
+		dash.VerifyFatal(err, nil, "Enumerating restores")
+		for _, restore := range restoreResp.GetRestores() {
+			log.InfoD("Deleting restore")
+			err = DeleteRestore(restore.GetName(), BackupOrgID, pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restore.GetName()))
+		}
+
+		backupResp, err := Inst().Backup.EnumerateBackup(pxbUsers[0].ctx, &api.BackupEnumerateRequest{
+			OrgId: BackupOrgID,
+		})
+		dash.VerifyFatal(err, nil, "Enumerating backups")
+		for _, backup := range backupResp.GetBackups() {
+			log.InfoD("Deleting backup")
+			err = DeleteBackupAndWaitForCompletion(backup.GetName(), backup.GetUid(), BackupOrgID, pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backup.GetName()))
+		}
+
+		scheduleResp, err := Inst().Backup.EnumerateBackupSchedule(pxbUsers[0].ctx, &api.BackupScheduleEnumerateRequest{
+			OrgId: BackupOrgID,
+		})
+		dash.VerifyFatal(err, nil, "Enumerating backupschedules")
+		for _, schedule := range scheduleResp.GetBackupSchedules() {
+			log.InfoD("Deleting schedule")
+			err = DeleteScheduleWithUIDAndWait(schedule.GetName(), schedule.GetUid(), schedule.GetClusterRef().GetName(), schedule.GetClusterRef().GetUid(), BackupOrgID, pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting schedule [%s]", schedule.GetName()))
+		}
+
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, pxbUsers[0].ctx)
-		for i := 1; i < len(pxbUsers); i++ {
+		for i := 1; i <= 2; i++ {
 			err := backup.DeleteUser(pxbUsers[i].name)
 			log.FailOnError(err, "Failed to delete user - %s", pxbUsers[i].name)
 		}
 	})
+
 })
 
 var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[ClusterShare]...), func() {
