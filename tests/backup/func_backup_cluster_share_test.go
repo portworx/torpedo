@@ -651,6 +651,64 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 		})
 	})
 
+	It("VerifyClusterShareByAdminToAnyUserAndVerifyBackupAndRestoreOperation", func() {
+		StartPxBackupTorpedoTest("VerifyClusterShareByAdminToAnyUserAndVerifyBackupRestoreOperation", "VerifyClusterShareByAdminToAnyUserAndVerifyBackupRestoreOperation", nil, 301026, Dbinnal, Q2FY25)
+
+		var (
+			testUser2backupName = fmt.Sprintf("%s-user2-%v", BackupNamePrefix, time.Now().Unix())
+			clusterUid          string
+			restoreName         = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+		)
+
+		Step("Create a cluster object with Admin User ", func() {
+			err := AddSourceCluster(pxbUsers[0].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with admin ctx", SourceClusterName))
+
+			clusterUid, err = Inst().Backup.GetClusterUID(pxbUsers[0].ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+
+		Step("Share the admin created cluster with User2", func() {
+			_, err := ShareCluster(pxbUsers[0].ctx, SourceClusterName, clusterUid, []string{pxbUsers[2].name}, nil, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of source [%s] cluster with %s user using admin ctx", SourceClusterName, pxbUsers[2].name))
+		})
+
+		Step("Verify the cluster access with User2", func() {
+			err := VerifySourceClusterAccessWithHavingNoBackupsRestoresANDBackupScheduleObjects(pxbUsers[2].ctx, pxbUsers[2].name, CommonPassword, clusterUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify pxb objects for %v user", pxbUsers[2].name))
+		})
+
+		Step("Create a backup on the shared cluster with testuser2", func() {
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err := CreateBackup(testUser2backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", testUser2backupName))
+		})
+
+		Step("Create a restore on the shared cluster with testuser2", func() {
+			log.InfoD(fmt.Sprintf("Taking restore of the backup [%v]", testUser2backupName))
+			err := CreateRestore(restoreName, testUser2backupName, make(map[string]string), SourceClusterName, BackupOrgID, pxbUsers[2].ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s]", testUser2backupName))
+		})
+
+		Step("Cleanup", func() {
+			backupDriver := Inst().Backup
+			testUser2backupUID, err := backupDriver.GetBackupUID(pxbUsers[2].ctx, testUser2backupName, BackupOrgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", testUser2backupName)
+
+			log.InfoD("Deleting backup created by user2")
+			err = DeleteBackupAndWaitForCompletion(testUser2backupName, testUser2backupUID, BackupOrgID, pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", testUser2backupName))
+
+			log.InfoD("Deleting restore [%s] created by user2", restoreName)
+			err = DeleteRestore(restoreName, BackupOrgID, pxbUsers[2].ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+
+			log.InfoD("Deleting cluster created by admin")
+			err = DeleteClusterWithUID(SourceClusterName, clusterUid, BackupOrgID, pxbUsers[0].ctx, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", SourceClusterName))
+		})
+	})
+
 	It("VerifyClusterShareByAdminToMultipleUsersAndVerifyBackupScheduleOperation", func() {
 		StartPxBackupTorpedoTest("VerifyClusterShareByAdminToMultipleUsersAndVerifyBackupScheduleOperation", "Cluster share by admin to more than one user, create backup and verify backups are only visible to owners only", nil, 301027, Sgajawada, Q2FY25)
 
