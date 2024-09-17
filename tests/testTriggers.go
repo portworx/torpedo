@@ -633,30 +633,6 @@ const (
 	// ReallocateSharedMount reallocated shared mount volumes
 	ReallocateSharedMount = "reallocateSharedMount"
 
-	// AddBackupCluster adds source and destination cluster
-	AddBackupCluster = "pxbAddBackupCluster"
-
-	//SetupBackupBucketAndCreds add creds and adds bucket for backup
-	SetupBackupBucketAndCreds = "pxbSetupBackupBucketAndCreds"
-
-	//SetupBackupLockedBucketAndCreds add creds and adds locked bucket for backup
-	SetupBackupLockedBucketAndCreds = "pxbSetupBackupLockedBucketAndCreds"
-
-	//DeployBackupApps deploys backup application
-	DeployBackupApps = "pxbDeployBackupApps"
-
-	//CreatePxBackup creates backup for longevity
-	CreatePxBackup = "pxbCreatePxBackup"
-
-	//CreatePxLockedBackup creates locked backup for longevity
-	CreatePxLockedBackup = "pxbCreatePxLockedBackup"
-
-	//CreatePxBackupAndRestore creates backup and Restores the backup
-	CreatePxBackupAndRestore = "pxbCreateBackupAndRestore"
-
-	//CreateRandomRestore creates backup and Restores the backup
-	CreateRandomRestore = "pxbCreateRandomRestore"
-
 	// CreateAndRunFioOnVcluster creates and runs fio on vcluster
 	CreateAndRunFioOnVcluster = "createAndRunFioOnVcluster"
 

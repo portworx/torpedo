@@ -29,7 +29,7 @@ var _ = Describe("{BackupLongevity}", func() {
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
-		EmailReporter: TriggerEmailReporter,
+		EmailReporter: TriggerBackupEmailReporter,
 	}
 
 	BeforeEach(func() {

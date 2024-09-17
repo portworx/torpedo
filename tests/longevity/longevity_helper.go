@@ -173,7 +173,7 @@ func populateBackupIntervals() {
 	triggerInterval[DeployBackupApps][2] = 12 * 60 * baseInterval
 	triggerInterval[DeployBackupApps][1] = 24 * 60 * baseInterval
 
-	baseInterval = 1 * time.Hour
+	baseInterval = 7 * time.Minute
 
 	triggerInterval[EmailReporter][10] = 1 * baseInterval
 	triggerInterval[EmailReporter][9] = 2 * baseInterval
@@ -515,15 +515,28 @@ func populateTriggers(triggers *map[string]string) error {
 	}
 
 	RunningTriggers = map[string]time.Duration{}
-	for triggerType := range triggerFunctions {
-		chaosLevel, ok := ChaosMap[triggerType]
-		if !ok {
-			chaosLevel = Inst().ChaosLevel
-		}
-		if chaosLevel != 0 {
-			RunningTriggers[triggerType] = triggerInterval[triggerType][chaosLevel]
-		}
+	if IsBackupLongevityRun {
+		for triggerType := range triggerBackupFunctions {
+			chaosLevel, ok := ChaosMap[triggerType]
+			if !ok {
+				chaosLevel = Inst().ChaosLevel
+			}
+			if chaosLevel != 0 {
+				RunningTriggers[triggerType] = triggerInterval[triggerType][chaosLevel]
+			}
 
+		}
+	} else {
+		for triggerType := range triggerFunctions {
+			chaosLevel, ok := ChaosMap[triggerType]
+			if !ok {
+				chaosLevel = Inst().ChaosLevel
+			}
+			if chaosLevel != 0 {
+				RunningTriggers[triggerType] = triggerInterval[triggerType][chaosLevel]
+			}
+
+		}
 	}
 	return nil
 }
