@@ -63,6 +63,7 @@ func CreateMilestone() {
 			MilestoneNameToID[milestone] = msCreated.ID
 			log.Debugf("Milestone %s created successfully ID - %d", milestone, msCreated.ID)
 		} else {
+			MilestoneNameToID[milestone] = milestoneID
 			log.Debugf("Milestone %s already exists ID - %d \n", milestone, milestoneID)
 		}
 	}
