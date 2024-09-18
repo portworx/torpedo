@@ -173,7 +173,7 @@ func populateBackupIntervals() {
 	triggerInterval[DeployBackupApps][2] = 12 * 60 * baseInterval
 	triggerInterval[DeployBackupApps][1] = 24 * 60 * baseInterval
 
-	baseInterval = 7 * time.Minute
+	baseInterval = 1 * time.Hour
 
 	triggerInterval[EmailReporter][10] = 1 * baseInterval
 	triggerInterval[EmailReporter][9] = 2 * baseInterval
