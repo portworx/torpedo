@@ -350,6 +350,12 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 
 // AddNewNode method parse and add node to node registry
 func (k *K8s) AddNewNode(newNode corev1.Node) error {
+	// Logic to skip adding Node to registry if it has skipTorpedo label present
+	if value, ok := newNode.Labels["skipTorpedo"]; ok && value == "true" {
+		log.Infof("Skipping adding node %s to Registry as it has skipTorpedo label set", newNode.Name)
+		return nil
+	}
+
 	n := k.parseK8SNode(newNode)
 	if err := k.IsNodeReady(n); err != nil {
 		return err
