@@ -733,6 +733,15 @@ EOF
   sed -i '/spec:/a\  imagePullSecrets:\n    - name: torpedo' torpedo.yaml
 fi
 
+if [[ "$AZURE_PROXY_ENABLED_CLUSTER" == "true" ]]; then
+  echo "Adding azure proxy annotation to torpedo.yaml"
+  ANNOTATION_KEY="kubernetes.azure.com/no-http-proxy-vars"
+  ANNOTATION_VALUE="true"
+  yq eval "
+      (select(.kind == \"Pod\") | .metadata.annotations.\"$ANNOTATION_KEY\" = \"$ANNOTATION_VALUE\") // .
+    " -i torpedo.yaml
+fi
+
 cat torpedo.yaml
 
 echo "Deploying torpedo pod..."
