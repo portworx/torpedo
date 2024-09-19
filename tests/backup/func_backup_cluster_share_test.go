@@ -885,7 +885,6 @@ var _ = Describe("{ClusterShareWithRestoreGroupAndMultipleUserTestcases}", Label
 
 		})
 	})
-
 	// This test case verifies that after sharing a cluster and its backups from User1 to User2, User2 can successfully create a backup on the shared cluster and perform a restore from the backup originally created by User1. This ensures proper functionality of cluster and backup sharing with restoration capabilities.
 	It("VerifyClusterAndBackupShareWithBackupCreationAndRestoreBySharedUser", func() {
 		StartPxBackupTorpedoTest("VerifyClusterAndBackupShareWithBackupCreationAndRestoreBySharedUser", "VerifyClusterAndBackupShareWithBackupCreationAndRestoreBySharedUser", nil, 301045, Pamathur, Q2FY25)

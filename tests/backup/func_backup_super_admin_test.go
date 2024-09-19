@@ -472,6 +472,10 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 		superAdmin                 string
 		periodicSchedulePolicyName string
 		periodicSchedulePolicyUid  string
+		testUser1Name              = "testuser1"
+		testUser1FirstName         = "testUser1FirstName"
+		testUser1LastName          = "testUser1LastName"
+		testUser1Email             = "testuser1email@cnbu.com"
 	)
 
 	BeforeEach(func() {
@@ -1105,6 +1109,146 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 			err = CreateRestore(restoreName, userBackupName, namespaceMapping, SourceClusterName, BackupOrgID, ctx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s]", restoreName))
 		})
+	})
+
+	// This test verifies sharing of backup with restore access to other users from other users having super admin role ( non owner/ non default admin )
+	It("VerifyClusterBackupShareWithBackupCreationAndRestoreBySharedUser", func() {
+		StartPxBackupTorpedoTest("VerifyClusterBackupShareWithBackupCreationAndRestoreBySharedUser", "Verify Cluster Backup Share with Backup Creation and Restore by Shared User", nil, 301216, Pamathur, Q2FY25)
+		var (
+			backupName         = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			restoreName        = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			restoreName2       = fmt.Sprintf("%s-%v-2", RestoreNamePrefix, time.Now().Unix())
+			namespaceMapping   = make(map[string]string)
+			scheduleName       string
+			testUser2Name      = "testuser2"
+			testUser2FirstName = "testUser2FirstName"
+			testUser2LastName  = "testUser2LastName"
+			testUser2Email     = "testuser2email@cnbu.com"
+		)
+		Step("Create Cluster with Admin Context and create backup/backupSchedule/restore objects on it", func() {
+
+			adminCtx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching admin user ctx")
+
+			err = AddSourceCluster(adminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding source cluster [%s] using admin ctx", SourceClusterName))
+
+			clusterUid, err = Inst().Backup.GetClusterUID(adminCtx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using admin ctx", SourceClusterName))
+
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, clusterUid, "", "", "", "", adminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] using admin ctx", backupName))
+
+			log.InfoD("Creating SchedulePolicy with Admin Context")
+			periodicSchedulePolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(5))
+			periodicSchedulePolicyUid = uuid.New()
+			periodicSchedulePolicyInterval := int64(15)
+			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, adminCtx, false, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s] using admin ctx", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
+			periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, adminCtx, periodicSchedulePolicyName)
+			log.FailOnError(err, "Fetching uid of schedule policy [%s] using admin ctx", periodicSchedulePolicyName)
+
+			log.InfoD("Creating BackupSchedule with Admin Context")
+			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, RandomString(6))
+			labelSelectors := make(map[string]string)
+			err = CreateScheduleBackup(scheduleName, SourceClusterName, backupLocationName, backupLocationUID, bkpNamespaces, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, adminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s] using admix ctx", scheduleName))
+
+			for _, namespace := range bkpNamespaces {
+				namespaceMapping[namespace] = namespace
+			}
+			err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, adminCtx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s] using admin ctx", restoreName))
+		})
+		Step("Share Backup as restore access using user with super admin role", func() {
+			superAdminCtx, err := backup.GetNonAdminCtx(superAdmin, CommonPassword)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching super.admin user [%s] ctx", superAdmin))
+
+			// Create testuser1
+			err = backup.AddUser(testUser1Name, testUser1FirstName, testUser1LastName, testUser1Email, CommonPassword)
+			log.FailOnError(err, "Failed to create user - %s", testUser1Name)
+
+			err = backup.AddRoleToUser(testUser1Name, backup.ApplicationOwner, fmt.Sprintf("Adding %v role to %s", backup.SuperAdmin, testUser1Name))
+			log.FailOnError(err, "Failed to add role %s to the user %s", backup.SuperAdmin, testUser1Name)
+
+			err = ShareBackup(backupName, nil, []string{testUser1Name}, RestoreAccess, superAdminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Sharing backup [%s] to user [%s] with restore access with [%s] ctx", backupName, testUser1Name, superAdmin))
+		})
+		Step("Verify Backup Shared to User 2 and create restore to verify restore access", func() {
+			testUser1Ctx, err := backup.GetNonAdminCtx(testUser1Name, CommonPassword)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching testUser1 [%s] ctx", testUser1Name))
+
+			// Verify backup is accessible to testUser1
+			_, err = Inst().Backup.InspectBackup(testUser1Ctx, &api.BackupInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  backupName,
+			})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] is accessible to user [%s]", backupName, testUser1Name))
+
+			// user1 needs atleast one cluster where he can restore
+			err = AddSourceCluster(testUser1Ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding source cluster [%s] using [%s] ctx", SourceClusterName, testUser1Name))
+
+			// Create restore from backup
+			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			namespaceMapping := make(map[string]string)
+			for _, namespace := range bkpNamespaces {
+				restoreNamespace := fmt.Sprintf("%s-%s", namespace, "restored")
+				namespaceMapping[namespace] = restoreNamespace
+			}
+
+			err = CreateRestore(restoreName2, backupName, namespaceMapping, SourceClusterName, BackupOrgID, testUser1Ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s]", restoreName))
+		})
+		Step("Verify Backup access and share to user 3", func() {
+			superAdminCtx, err := backup.GetNonAdminCtx(superAdmin, CommonPassword)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching super.admin user [%s] ctx", superAdmin))
+
+			// Verify backup is accessible to testUser1
+			_, err = Inst().Backup.InspectBackup(superAdminCtx, &api.BackupInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  backupName,
+			})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] is accessible to user [%s]", backupName, superAdmin))
+
+			// Create testuser2
+			err = backup.AddUser(testUser2Name, testUser2FirstName, testUser2LastName, testUser2Email, CommonPassword)
+			log.FailOnError(err, "Failed to create user - %s", testUser2Name)
+
+			err = ShareBackup(backupName, nil, []string{testUser2Name}, RestoreAccess, superAdminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Sharing backup [%s] to user [%s] with restore access with [%s] ctx", backupName, testUser2Name, superAdmin))
+		})
+		Step("Cleanup", func() {
+			adminCtx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching admin user ctx")
+
+			log.InfoD("Deleting backup")
+			backupUID, err := Inst().Backup.GetBackupUID(adminCtx, backupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backup uid using admin ctx", backupName))
+
+			// Delete the backup
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, adminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using admin ctx", backupName))
+
+			err = SuspendAndDeleteSchedule(scheduleName, periodicSchedulePolicyName, SourceClusterName, BackupOrgID, adminCtx, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of schedule [%s] using admin ctx", scheduleName))
+
+			// Delete the restore
+			err = DeleteRestore(restoreName, BackupOrgID, adminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s] using admin ctx", restoreName))
+
+			// Delete the restore
+			err = DeleteRestore(restoreName2, BackupOrgID, adminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s] using admin ctx", restoreName2))
+
+			// Delete the users
+			for _, user := range []string{testUser1Name, testUser2Name} {
+				err = backup.DeleteUser(user)
+				log.FailOnError(err, "Failed to delete user - %s", user)
+			}
+		})
+
 	})
 
 	AfterEach(func() {
