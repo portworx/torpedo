@@ -400,9 +400,11 @@ var _ = Describe("{DifferentAccessSameUser}", Label(TestCaseLabelsMap[DifferentA
 			log.InfoD("Registering Source and Destination clusters from user context")
 			err = CreateApplicationClusters(BackupOrgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			userDestClusterUid, err := Inst().Backup.GetClusterUID(ctxNonAdmin, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			// Try restore with user having RestoreAccess and it should pass
-			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
 			log.Infof("About to delete restore - %s to validate user can delete restore  ", restoreName)
@@ -663,10 +665,13 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", Label(TestCaseLabelsMap[Shar
 			err = CreateApplicationClusters(BackupOrgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
+			userDestClusterUid, err := Inst().Backup.GetClusterUID(ctxNonAdmin, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
@@ -714,7 +719,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", Label(TestCaseLabelsMap[Shar
 
 			// Get Backup UID
 			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+			backupUID, err := backupDriver.GetBackupUID(ctxNonAdmin, backupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 
 			// Delete backup to confirm that the user cannot delete the backup
@@ -749,10 +754,13 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", Label(TestCaseLabelsMap[Shar
 			err = CreateApplicationClusters(BackupOrgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
+			userDestClusterUid, err := Inst().Backup.GetClusterUID(ctxNonAdmin, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with can restore
@@ -792,11 +800,14 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", Label(TestCaseLabelsMap[Shar
 			err = CreateApplicationClusters(BackupOrgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
+			userDestClusterUid, err := Inst().Backup.GetClusterUID(ctxNonAdmin, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 			// Start Restore
 			backupName := backupNames[3]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with can restore
@@ -831,10 +842,13 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", Label(TestCaseLabelsMap[Shar
 			err = CreateApplicationClusters(BackupOrgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
+			userDestClusterUid, err := Inst().Backup.GetClusterUID(ctxNonAdmin, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 			// Start Restore
 			backupName := backupNames[2]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctxNonAdmin, make(map[string]string))
+			err = CreateRestore(restoreName, backupName, make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, ctxNonAdmin, make(map[string]string))
 			log.Infof("Error while trying to restore - %s", err.Error())
 			// Restore validation to make sure that the user with View Access cannot restore
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
@@ -923,6 +937,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", Label(Test
 	var customBackupLocationName string
 	var credName string
 	var chosenUser string
+	var destClusterUid string
 	backupLocationMapNew := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 
@@ -1045,6 +1060,8 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", Label(Test
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
 			clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid [%s]", SourceClusterName, clusterUid))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Taking backup of applications", func() {
@@ -1087,11 +1104,14 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", Label(Test
 			err = CreateApplicationClusters(BackupOrgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
+			userDestClusterUid, err := Inst().Backup.GetClusterUID(ctxNonAdmin, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 			// Start Restore
 			backupName := backupNames[rand.Intn(numberOfBackups-1)]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
@@ -1136,7 +1156,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", Label(Test
 			backupName := backupNames[rand.Intn(numberOfBackups-1)]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 			// Restore validation to make sure that the user with Restore Access can restore
 			log.InfoD("Restoring of backup [%s] was successful with name - [%s]", backupName, restoreName)
@@ -1177,7 +1197,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", Label(Test
 			// Start Restore
 			backupName := backupNames[rand.Intn(numberOfBackups-1)]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctxNonAdmin, make(map[string]string))
+			err = CreateRestore(restoreName, backupName, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, ctxNonAdmin, make(map[string]string))
 
 			// Restore validation to make sure that the user with View Access cannot restore
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
@@ -1258,6 +1278,7 @@ var _ = Describe("{CancelClusterBackupShare}", Label(TestCaseLabelsMap[CancelClu
 	var customBackupLocationName string
 	var credName string
 	var chosenUser string
+	var userDestClusterUid string
 	individualUser := "autogenerated-user"
 	bkpNamespaces = make([]string, 0)
 	backupLocationMap := make(map[string]string)
@@ -1451,11 +1472,14 @@ var _ = Describe("{CancelClusterBackupShare}", Label(TestCaseLabelsMap[CancelClu
 			err = CreateApplicationClusters(BackupOrgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
+			userDestClusterUid, err := Inst().Backup.GetClusterUID(ctxNonAdmin, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 			// Start Restore
 			backupName := backupNames[5]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
@@ -1487,11 +1511,14 @@ var _ = Describe("{CancelClusterBackupShare}", Label(TestCaseLabelsMap[CancelClu
 			err = CreateApplicationClusters(BackupOrgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
+			userDestClusterUid, err = Inst().Backup.GetClusterUID(ctxNonAdmin, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 			// Start Restore
 			backupName = backupNames[4]
 			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
@@ -1535,7 +1562,7 @@ var _ = Describe("{CancelClusterBackupShare}", Label(TestCaseLabelsMap[CancelClu
 			backupName := backupNames[3]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Restore Access can restore
@@ -1563,7 +1590,7 @@ var _ = Describe("{CancelClusterBackupShare}", Label(TestCaseLabelsMap[CancelClu
 			backupName = backupNames[2]
 			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 
 			// Restore validation to make sure that the user with Restore Access can restore
@@ -1604,7 +1631,7 @@ var _ = Describe("{CancelClusterBackupShare}", Label(TestCaseLabelsMap[CancelClu
 			// Start Restore
 			backupName := backupNames[1]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctxNonAdmin, make(map[string]string))
+			err = CreateRestore(restoreName, backupName, make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, ctxNonAdmin, make(map[string]string))
 
 			// Restore validation to make sure that the user with View Access cannot restore
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
@@ -1626,7 +1653,7 @@ var _ = Describe("{CancelClusterBackupShare}", Label(TestCaseLabelsMap[CancelClu
 
 			// Start Restore
 			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctxNonAdmin, make(map[string]string))
+			err = CreateRestore(restoreName, backupName, make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, ctxNonAdmin, make(map[string]string))
 
 			// Restore validation to make sure that the user with View Access cannot restore
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
@@ -1930,10 +1957,13 @@ var _ = Describe("{ShareBackupAndEdit}", Label(TestCaseLabelsMap[ShareBackupAndE
 			err = CreateApplicationClusters(BackupOrgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
+			userDestClusterUid, err := Inst().Backup.GetClusterUID(ctxNonAdmin, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupNames[0], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupNames[0], make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[0], restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
@@ -1965,6 +1995,9 @@ var _ = Describe("{ShareBackupAndEdit}", Label(TestCaseLabelsMap[ShareBackupAndE
 			err = CreateApplicationClusters(BackupOrgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
+			userDestClusterUid, err := Inst().Backup.GetClusterUID(ctxNonAdmin, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 			// Get Backup UID
 			backupDriver := Inst().Backup
 			backupUID, err := backupDriver.GetBackupUID(ctx, backupNames[0], BackupOrgID)
@@ -1979,7 +2012,7 @@ var _ = Describe("{ShareBackupAndEdit}", Label(TestCaseLabelsMap[ShareBackupAndE
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupNames[0], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupNames[0], make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[0], restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
@@ -2152,6 +2185,9 @@ var _ = Describe("{SharedBackupDelete}", Label(TestCaseLabelsMap[SharedBackupDel
 				err = CreateApplicationClusters(BackupOrgID, "", "", ctxNonAdmin)
 				dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
+				userDestClusterUid, err := Inst().Backup.GetClusterUID(ctxNonAdmin, BackupOrgID, DestinationClusterName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 				for _, backup := range backupNames {
 					// Get Backup UID
 					backupDriver := Inst().Backup
@@ -2161,7 +2197,7 @@ var _ = Describe("{SharedBackupDelete}", Label(TestCaseLabelsMap[SharedBackupDel
 
 					// Start Restore
 					restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-					err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backup, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+					err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backup, make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 					// Restore validation to make sure that the user with cannot restore
 					dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true,
 						fmt.Sprintf("Verifying backup restore [%s] is not possible for backup [%s] with user [%s]", restoreName, backup, user))
@@ -2251,6 +2287,7 @@ var _ = Describe("{ClusterBackupShareToggle}", Label(TestCaseLabelsMap[ClusterBa
 		backupClusterName          string
 		scheduleNames              []string
 		firstScheduleBackupName    string
+		clusterUid                 string
 	)
 
 	JustBeforeEach(func() {
@@ -2311,7 +2348,7 @@ var _ = Describe("{ClusterBackupShareToggle}", Label(TestCaseLabelsMap[ClusterBa
 			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, backupClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", backupClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", backupClusterName))
-			clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, backupClusterName)
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, backupClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", backupClusterName))
 			log.InfoD("Uid of [%s] cluster is %s", backupClusterName, clusterUid)
 			ctxNonAdmin, err := backup.GetNonAdminCtx(username, CommonPassword)
@@ -2337,7 +2374,7 @@ var _ = Describe("{ClusterBackupShareToggle}", Label(TestCaseLabelsMap[ClusterBa
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			labelSelectors := make(map[string]string)
-			_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, backupClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, backupClusterName, clusterUid, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 			scheduleNames = append(scheduleNames, scheduleName)
 			log.InfoD("Getting the first schedule backup from admin")
@@ -3183,6 +3220,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", Label(TestCaseL
 	var cloudCredUID string
 	var cloudCredUidList []string
 	var clusterUid string
+	var userDestClusterUid string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	var customBackupLocationName string
 	var credName string
@@ -3305,9 +3343,12 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", Label(TestCaseL
 			err = CreateApplicationClusters(BackupOrgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
+			userDestClusterUid, err = Inst().Backup.GetClusterUID(ctxNonAdmin, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 			// Start Restore and confirm that user cannot restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestore(restoreName, fullBackupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctxNonAdmin, make(map[string]string))
+			err = CreateRestore(restoreName, fullBackupName, make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, ctxNonAdmin, make(map[string]string))
 			log.Infof("Error returned - %s", err.Error())
 			// Restore validation to make sure that the user with View Access cannot restore
 			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
@@ -3336,7 +3377,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", Label(TestCaseL
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, incrementalBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, incrementalBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", incrementalBackupName, restoreName)
 
 			// Restore validation to make sure that the user with Full Access can restore
@@ -3405,6 +3446,8 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", L
 		scName               string
 		restoreList          []string
 		sourceScName         *storageApi.StorageClass
+		userSrcClusterUid    string
+		userDestClusterUid   string
 	)
 	numberOfUsers := 1
 	namespaceMap := make(map[string]string)
@@ -3527,13 +3570,17 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", L
 			log.Infof(" the backup are", userBackups1)
 			err = CreateApplicationClusters(BackupOrgID, "", "", userCtx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster for user")
+			userSrcClusterUid, err = Inst().Backup.GetClusterUID(userCtx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			userDestClusterUid, err = Inst().Backup.GetClusterUID(userCtx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Restoring backup in the same namespace with user having FullAccess in different cluster", func() {
 			log.InfoD("Restoring backup in the same namespace with user having FullAccess in different cluster")
 			restoreName := fmt.Sprintf("same-namespace-full-access-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, "Restoring backup in the same namespace with user having FullAccess Access in different cluster")
 		})
 
@@ -3541,7 +3588,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", L
 			log.InfoD("Restoring backup in new namespace with user having FullAccess in same cluster")
 			restoreName := fmt.Sprintf("new-namespace-full-access-same-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, namespaceMap, make(map[string]string), SourceClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, namespaceMap, make(map[string]string), SourceClusterName, userSrcClusterUid, BackupOrgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, "Restoring backup in new namespace with user having FullAccess Access in same cluster")
 		})
 
@@ -3549,7 +3596,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", L
 			log.InfoD("Restoring backup in new namespace with user having FullAccess in different cluster")
 			restoreName := fmt.Sprintf("new-namespace-full-access-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, namespaceMap, make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, namespaceMap, make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, "Restoring backup in new namespace with user having FullAccess Access in different cluster")
 		})
 
@@ -3558,7 +3605,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", L
 			storageClassMapping[sourceScName.Name] = scName
 			restoreName := fmt.Sprintf("new-storage-class-full-access-same-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, namespaceMap, storageClassMapping, SourceClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, namespaceMap, storageClassMapping, SourceClusterName, userSrcClusterUid, BackupOrgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, "Restoring backup in different storage class with user having FullAccess in same cluster")
 		})
 
@@ -3567,7 +3614,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", L
 			storageClassMapping[sourceScName.Name] = scName
 			restoreName := fmt.Sprintf("new-storage-class-full-access-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, namespaceMap, storageClassMapping, DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, namespaceMap, storageClassMapping, DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, "Restoring backup in different storage class with user having FullAccess in different cluster")
 		})
 
@@ -3579,21 +3626,21 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", L
 		Step("Restoring backup in the same namespace with user having RestoreAccess in different cluster", func() {
 			restoreName := fmt.Sprintf("same-ns-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, "Restoring backup in the same namespace with user having RestoreAccess Access in different cluster")
 		})
 
 		Step("Restoring backup in new namespace with user having RestoreAccess in same cluster", func() {
 			restoreName := fmt.Sprintf("new-namespace-same-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, namespaceMap, make(map[string]string), SourceClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, namespaceMap, make(map[string]string), SourceClusterName, userSrcClusterUid, BackupOrgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, "Restoring backup in new namespace with user having RestoreAccess Access in same cluster")
 		})
 
 		Step("Restoring backup in new namespace with user having RestoreAccess in different cluster", func() {
 			restoreName := fmt.Sprintf("new-namespace-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, namespaceMap, make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, namespaceMap, make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, "Restoring backup in new namespace with user having RestoreAccess Access in different cluster")
 		})
 
@@ -3602,7 +3649,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", L
 			storageClassMapping[sourceScName.Name] = scName
 			restoreName := fmt.Sprintf("new-storage-class-restore-access-same-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, make(map[string]string), storageClassMapping, SourceClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, make(map[string]string), storageClassMapping, SourceClusterName, userSrcClusterUid, BackupOrgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, "Restoring backup in different storage class with user having RestoreAccess in same cluster")
 		})
 
@@ -3611,7 +3658,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", L
 			storageClassMapping[sourceScName.Name] = scName
 			restoreName := fmt.Sprintf("new-storage-class-full-access-diff-cluster-%s-%v", RestoreNamePrefix, time.Now().Unix())
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, make(map[string]string), storageClassMapping, DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(userCtx, restoreName, backupName, make(map[string]string), storageClassMapping, DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, "Restoring backup in different storage class with user having RestoreAccess in different cluster")
 		})
 	})
@@ -3845,6 +3892,8 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", Label(TestCaseLabelsMa
 				log.InfoD("Registering Source and Destination clusters from user context for user -%s", user)
 				err = CreateApplicationClusters(BackupOrgID, "", "", ctxNonAdmin)
 				log.FailOnError(err, "Failed to create source and destination cluster for user %s", user)
+				userDestClusterUid, err := Inst().Backup.GetClusterUID(ctxNonAdmin, BackupOrgID, DestinationClusterName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 
 				// Get Backup UID
 				backupDriver := Inst().Backup
@@ -3857,7 +3906,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", Label(TestCaseLabelsMa
 				restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, user)
 				restoreNames = append(restoreNames, restoreName)
 				log.Infof("Creating restore %s for user %s", restoreName, user)
-				_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, DestinationClusterName, BackupOrgID, ctxNonAdmin)
+				_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, DestinationClusterName, userDestClusterUid, BackupOrgID, ctxNonAdmin)
 				log.FailOnError(err, "Failed to create restore %s for user %s", restoreName, user)
 			}
 		})

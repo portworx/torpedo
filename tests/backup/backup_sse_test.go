@@ -59,6 +59,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		customBuckets                        []string
 		randomStringLength                   = 10
 		backupsAfterSettingSseTrue           []string
+		destClusterUid                       string
 	)
 	params := make(map[string]string)
 	k8sStorage := storage.Instance()
@@ -104,6 +105,8 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
 				clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+				destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 			})
 			Step("Create bucket without deny policy", func() {
 				log.InfoD(fmt.Sprintf("Create bucket without deny policy"))
@@ -292,7 +295,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 					go func(scName string) {
 						defer GinkgoRecover()
 						defer wg.Done()
-						err = CreateRestore(restoreName, backupsWithSse[0], namespaceMap, SourceClusterName, BackupOrgID, ctx, storageClassMapping)
+						err = CreateRestore(restoreName, backupsWithSse[0], namespaceMap, SourceClusterName, clusterUid, BackupOrgID, ctx, storageClassMapping)
 						if err != nil {
 							mutex.Lock()
 							errors = append(errors, fmt.Sprintf("Failed while restoring %s backup %s with sc mapping %s . Error - [%s]", backupsWithSse[0], restoreName, scName, err.Error()))
@@ -390,7 +393,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				restoreName := fmt.Sprintf("%s-%s-%v", "restore-after-bl-sse-true", RandomString(randomStringLength), time.Now().Unix())
-				err = CreateRestoreWithValidation(ctx, restoreName, backupsAfterSettingSseTrue[0], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, namespaceBackupMap[backupsAfterSettingSseTrue[0]])
+				err = CreateRestoreWithValidation(ctx, restoreName, backupsAfterSettingSseTrue[0], make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, namespaceBackupMap[backupsAfterSettingSseTrue[0]])
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreList = append(restoreList, restoreName)
 			})
@@ -432,7 +435,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 				labelSelectors := make(map[string]string)
-				latestScheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, customBackupLocationWithSse, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid)
+				latestScheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, clusterUid, customBackupLocationWithSse, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 			})
 			Step("Restoring the backed up applications from latest scheduled backup which is created after stork and px-backup pod restart", func() {
@@ -440,7 +443,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				restoreName := fmt.Sprintf("%s-%s", "restore-from-schedule", RandomString(10))
-				err = CreateRestoreWithValidation(ctx, restoreName, latestScheduleBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+				err = CreateRestoreWithValidation(ctx, restoreName, latestScheduleBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreList = append(restoreList, restoreName)
 			})

@@ -98,6 +98,7 @@ var _ = Describe("{BasicBackupCreation}", Label(TestCaseLabelsMap[BasicBackupCre
 		preRuleNameList      []string
 		postRuleNameList     []string
 		sourceClusterUid     string
+		destClusterUid       string
 		cloudCredName        string
 		cloudCredUID         string
 		backupLocationUID    string
@@ -252,6 +253,9 @@ var _ = Describe("{BasicBackupCreation}", Label(TestCaseLabelsMap[BasicBackupCre
 			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Taking backup of application from source cluster", func() {
@@ -288,7 +292,7 @@ var _ = Describe("{BasicBackupCreation}", Label(TestCaseLabelsMap[BasicBackupCre
 					restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
 				}
 				log.InfoD("Restoring [%s] namespace from the [%s] backup", scheduledNamespace, backupNames[i])
-				err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts[i:i+1])
+				err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts[i:i+1])
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}

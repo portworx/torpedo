@@ -498,7 +498,7 @@ func (p *portworx) GetClusterUID(ctx context.Context, orgID string, clusterName 
 	clusterEnumerateReq := &api.ClusterEnumerateRequest{
 		OrgId: orgID,
 	}
-	enumerateRsp, err := p.clusterManager.Enumerate(ctx, clusterEnumerateReq)
+	enumerateRsp, err := p.EnumerateCluster(ctx, clusterEnumerateReq)
 	if err != nil {
 		return "", err
 	}
@@ -514,7 +514,7 @@ func (p *portworx) GetClusterName(ctx context.Context, orgID string, clusterUid 
 	clusterEnumerateReq := &api.ClusterEnumerateRequest{
 		OrgId: orgID,
 	}
-	enumerateRsp, err := p.clusterManager.Enumerate(ctx, clusterEnumerateReq)
+	enumerateRsp, err := p.EnumerateCluster(ctx, clusterEnumerateReq)
 	if err != nil {
 		return "", err
 	}
@@ -530,7 +530,7 @@ func (p *portworx) GetClusterStatus(orgID string, clusterName string, ctx contex
 	clusterEnumerateReq := &api.ClusterEnumerateRequest{
 		OrgId: orgID,
 	}
-	enumerateRsp, err := p.clusterManager.Enumerate(ctx, clusterEnumerateReq)
+	enumerateRsp, err := p.EnumerateCluster(ctx, clusterEnumerateReq)
 	if err != nil {
 		return api.ClusterInfo_StatusInfo_Invalid, err
 	}

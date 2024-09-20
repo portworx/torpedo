@@ -567,6 +567,7 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 		baselineNamespaceList          []string
 		cloudCredName                  string
 		cloudCredUID                   string
+		destClusterUid                 string
 		backupLocationUID              string
 		backupLocationMap              map[string]string
 		sourceClusterUid               string
@@ -739,6 +740,9 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Taking backup of multiple namespaces which is associated with baseline level PSA", func() {
@@ -821,7 +825,7 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 			}
 
 			// Define other parameters as needed for CreateRestoreWithValidation
-			err = CreateRestoreWithValidation(ctx, restoreName, appPrivilegeToBkpMap["baseline"], namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, baselineScheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, restoreName, appPrivilegeToBkpMap["baseline"], namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, baselineScheduledAppContexts)
 			log.InfoD("Error while restoring from higher privileged to lower privileged namespace: %v", err)
 			backupType := os.Getenv("BACKUP_TYPE")
 			if backupType == string(NativeCSIWithOffloadToS3) || backupType == string(DirectKDMP) {
@@ -898,7 +902,7 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 			for i := range originalAppList {
 				namespaceMapping[restrictedNamespaceList[i]] = appPrivilegeToRestoreMap["baseline"][i]
 			}
-			err = CreateRestoreWithValidation(ctx, restoreName, appPrivilegeToBkpMap["restricted"], namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, restrictedScheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, restoreName, appPrivilegeToBkpMap["restricted"], namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, restrictedScheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, appPrivilegeToBkpMap["restricted"]))
 		})
 
@@ -913,7 +917,7 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 			for i := range originalAppList {
 				namespaceMapping[baselineNamespaceList[i]] = appPrivilegeToRestoreMap["privileged"][i]
 			}
-			err = CreateRestoreWithValidation(ctx, restoreName, appPrivilegeToBkpMap["baseline"], namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, baselineScheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, restoreName, appPrivilegeToBkpMap["baseline"], namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, baselineScheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, appPrivilegeToBkpMap["baseline"]))
 		})
 	})
@@ -967,6 +971,7 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 		credName                                                              string
 		credUid                                                               string
 		srcClusterUid                                                         string
+		destClusterUid                                                        string
 		clusterStatus                                                         api.ClusterInfo_StatusInfo_Status
 		preRuleName                                                           string
 		postRuleName                                                          string
@@ -1052,6 +1057,8 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
 			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Creation of pre and post exec rules for applications", func() {
@@ -1197,7 +1204,7 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 			log.Infof("Namespace mapping is %v", namespaceMapping)
 
 			customRestoreWithNamespaceAndStorageClassMappingToBaselineNamespace = fmt.Sprintf("%s-%v-ns-mapping-%v", RestoreNamePrefix, RandomString(3), multiNSBackupNameWithVolumeAndResourceWithRestrictedLabel)
-			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMappingToBaselineNamespace, multiNSBackupNameWithVolumeAndResourceWithRestrictedLabel, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, append(restrictedScheduledAppContexts, currentScheduledAppContexts...))
+			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMappingToBaselineNamespace, multiNSBackupNameWithVolumeAndResourceWithRestrictedLabel, namespaceMapping, storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, append(restrictedScheduledAppContexts, currentScheduledAppContexts...))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation on namespace with baseline PSA with namespace mapping %v and storage class mapping %v", multiNSBackupNameWithVolumeAndResourceWithRestrictedLabel, customRestoreWithNamespaceAndStorageClassMappingToBaselineNamespace, namespaceMapping, storageClassMapping))
 			restoreList = append(restoreList, customRestoreWithNamespaceAndStorageClassMappingToBaselineNamespace)
 		})
@@ -1252,7 +1259,7 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 			log.Infof("Namespace mapping is %v", namespaceMapping)
 
 			customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace = fmt.Sprintf("%s-%v-ns-mapping-%v", RestoreNamePrefix, RandomString(3), singleNSbackupNameWithVolumeAndResourceWithBaselineLabel)
-			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace, singleNSbackupNameWithVolumeAndResourceWithBaselineLabel, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, baselineScheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace, singleNSbackupNameWithVolumeAndResourceWithBaselineLabel, namespaceMapping, storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, baselineScheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation on namespace with privilege PSA with namespace mapping %v and storage class mapping %v", singleNSbackupNameWithVolumeAndResourceWithBaselineLabel, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace, namespaceMapping, storageClassMapping))
 			restoreList = append(restoreList, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace)
 		})
@@ -1328,7 +1335,7 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 			log.Infof("Namespace mapping is %v", namespaceMapping)
 
 			customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace = fmt.Sprintf("%s-%v-ns-mapping-%v", RestoreNamePrefix, RandomString(3), multiNSBackupNameWithVolumeAndResourceWithBaselineLabel)
-			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace, multiNSBackupNameWithVolumeAndResourceWithBaselineLabel, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, append(baselineScheduledAppContexts, currentScheduledAppContexts...))
+			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace, multiNSBackupNameWithVolumeAndResourceWithBaselineLabel, namespaceMapping, storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, append(baselineScheduledAppContexts, currentScheduledAppContexts...))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation on namespace with privilege with namespace mapping %v and storage class mapping %v", multiNSBackupNameWithVolumeAndResourceWithBaselineLabel, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace, namespaceMapping, storageClassMapping))
 			restoreList = append(restoreList, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace)
 		})
@@ -1370,7 +1377,7 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 
 			log.InfoD("Restoring backup of namespaces with restricted PSA label to namespaces with namespace & storage class mapping to namespace with baseline PSA set")
 			customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace = fmt.Sprintf("%s-%v-ns-mapping-%v", RestoreNamePrefix, RandomString(3), singleNSBackupNameWithVolumeAndResourceWithRestrictedLabel)
-			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace, singleNSBackupNameWithVolumeAndResourceWithRestrictedLabel, namespaceMapping, nil, DestinationClusterName, BackupOrgID, restrictedScheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace, singleNSBackupNameWithVolumeAndResourceWithRestrictedLabel, namespaceMapping, nil, DestinationClusterName, destClusterUid, BackupOrgID, restrictedScheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation on namespace with baseline PSA with namespace mapping %v and storage class mapping %v", singleNSBackupNameWithVolumeAndResourceWithRestrictedLabel, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace, namespaceMapping, storageClassMapping))
 			restoreList = append(restoreList, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace)
 		})
@@ -1402,7 +1409,7 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 			log.InfoD("Taking schedule backup of applications with both volume and resources on namespace with baseline label set")
 
 			scheduleName := fmt.Sprintf("%s-schedule-with-rules-%s", BackupNamePrefix, RandomString(4))
-			scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, restrictedScheduledAppContexts, nil, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, restrictedScheduledAppContexts, nil, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup of namespaces with volume and resources [%s]", scheduleBackupName))
 			err = SuspendBackupSchedule(scheduleName, periodicSchedulePolicyName, BackupOrgID, ctx)
@@ -1432,7 +1439,7 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 			//  Taking restore of the backup taken
 			log.InfoD("Restoring backup from backup schedule of restricted namespace with namespacemapping")
 			customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace = fmt.Sprintf("%s-%v-ns-mapping-%v", RestoreNamePrefix, RandomString(3), scheduleBackupName)
-			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace, scheduleBackupName, namespaceMapping, nil, DestinationClusterName, BackupOrgID, restrictedScheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace, scheduleBackupName, namespaceMapping, nil, DestinationClusterName, destClusterUid, BackupOrgID, restrictedScheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation with namespace mapping %v and storage class mapping %v", scheduleBackupName, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace, nil, nil))
 			restoreList = append(restoreList, customRestoreWithNamespaceAndStorageClassMappingToPrivilegedNamespace)
 		})
@@ -1444,7 +1451,7 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 
 			log.InfoD("Taking schedule backup of applications with both volume and resources on namespace with baseline label set")
 			scheduleName := fmt.Sprintf("%s-schedule-with-rules-%s", BackupNamePrefix, RandomString(4))
-			scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, baselineScheduledAppContexts, nil, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, baselineScheduledAppContexts, nil, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup of namespaces with volume and resources [%s]", scheduleBackupName))
 			err = SuspendBackupSchedule(scheduleName, periodicSchedulePolicyName, BackupOrgID, ctx)
@@ -1456,7 +1463,7 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 			//  Taking restore of the backup taken
 			log.InfoD("Restoring backup of baseline namespace with namespacemapping")
 			defaultRestoreName = fmt.Sprintf("%s-%v-ns-mapping-%v", RestoreNamePrefix, RandomString(3), scheduleBackupName)
-			err = CreateRestoreWithValidation(ctx, defaultRestoreName, scheduleBackupName, nil, nil, DestinationClusterName, BackupOrgID, baselineScheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, defaultRestoreName, scheduleBackupName, nil, nil, DestinationClusterName, destClusterUid, BackupOrgID, baselineScheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation with namespace mapping %v and storage class mapping %v", scheduleBackupName, defaultRestoreName, nil, nil))
 			restoreList = append(restoreList, defaultRestoreName)
 		})
@@ -1502,7 +1509,7 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 			//  Taking restore of the backup taken
 			log.InfoD("Restoring backup of multiple namespace with different PSA set with namespace mapping")
 			customRestoreWithNamespaceAndStorageClassMapping = fmt.Sprintf("%s-%v-ns-mapping-%v", RestoreNamePrefix, RandomString(3), backupNameWithMultipleNsHavingDiffPSALabel)
-			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMapping, backupNameWithMultipleNsHavingDiffPSALabel, namespaceMapping, nil, DestinationClusterName, BackupOrgID, allScheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMapping, backupNameWithMultipleNsHavingDiffPSALabel, namespaceMapping, nil, DestinationClusterName, destClusterUid, BackupOrgID, allScheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation on multiple NS with different PSA label of higher privilege with namespace mapping %v and storage class mapping %v", backupNameWithMultipleNsHavingDiffPSALabel, customRestoreWithNamespaceAndStorageClassMapping, nil, nil))
 			restoreList = append(restoreList, customRestoreWithNamespaceAndStorageClassMapping)
 		})
@@ -1511,7 +1518,7 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 			//  Taking restore of the backup taken
 			log.InfoD("Restoring backup of multiple namespaces with different PSA set in default")
 			customRestoreWithNamespaceAndStorageClassMapping = fmt.Sprintf("%s-%v-ns-mapping-%v", RestoreNamePrefix, RandomString(3), backupNameWithMultipleNsHavingDiffPSALabel)
-			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMapping, backupNameWithMultipleNsHavingDiffPSALabel, nil, nil, SourceClusterName, BackupOrgID, allScheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMapping, backupNameWithMultipleNsHavingDiffPSALabel, nil, nil, SourceClusterName, destClusterUid, BackupOrgID, allScheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation on multiple NS with defferent PAS label with namespace mapping %v and storage class mapping %v", backupNameWithMultipleNsHavingDiffPSALabel, customRestoreWithNamespaceAndStorageClassMapping, nil, nil))
 			restoreList = append(restoreList, customRestoreWithNamespaceAndStorageClassMapping)
 		})
@@ -1576,6 +1583,7 @@ var _ = Describe("{PSALowerPrivilegeToHigherPrivilegeWithProjectMapping}", Label
 		credName                          string
 		credUid                           string
 		srcClusterUid                     string
+		destClusterUid                    string
 		clusterStatus                     api.ClusterInfo_StatusInfo_Status
 		preRuleName                       string
 		postRuleName                      string
@@ -1744,6 +1752,8 @@ var _ = Describe("{PSALowerPrivilegeToHigherPrivilegeWithProjectMapping}", Label
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
 			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid %s", SourceClusterName, srcClusterUid))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Create schedule policies", func() {
@@ -1874,7 +1884,7 @@ var _ = Describe("{PSALowerPrivilegeToHigherPrivilegeWithProjectMapping}", Label
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.Infof("The restricted backup which is going to restore is %v", restrictedManualBackupName)
 			restoreName := fmt.Sprintf("restore-rtob-%v", RandomString(5))
-			err = CreateRestoreWithProjectMapping(restoreName, restrictedManualBackupName, namespaceMapRestrictedToBaseline, DestinationClusterName, BackupOrgID, ctx, nil, restoreProjectUIDMapping, restoreProjectNameMapping)
+			err = CreateRestoreWithProjectMapping(restoreName, restrictedManualBackupName, namespaceMapRestrictedToBaseline, DestinationClusterName, destClusterUid, BackupOrgID, ctx, nil, restoreProjectUIDMapping, restoreProjectNameMapping)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore with %s from backup %s", restoreName, restrictedManualBackupName))
 		})
 
@@ -1882,7 +1892,7 @@ var _ = Describe("{PSALowerPrivilegeToHigherPrivilegeWithProjectMapping}", Label
 			log.InfoD("Restore baseline to privilege namespaces with namespace & project mappings")
 			log.Infof("The baseline backup which is going to restore is %v", baselineManualBackupName)
 			restoreName := fmt.Sprintf("restore-btop-%v", RandomString(5))
-			err = CreateRestoreWithProjectMapping(restoreName, baselineManualBackupName, namespaceMapBaselineToPrivilege, DestinationClusterName, BackupOrgID, ctx, nil, restoreProjectUIDMapping, restoreProjectNameMapping)
+			err = CreateRestoreWithProjectMapping(restoreName, baselineManualBackupName, namespaceMapBaselineToPrivilege, DestinationClusterName, destClusterUid, BackupOrgID, ctx, nil, restoreProjectUIDMapping, restoreProjectNameMapping)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore with %s from backup %s", restoreName, baselineManualBackupName))
 		})
 
@@ -1893,7 +1903,7 @@ var _ = Describe("{PSALowerPrivilegeToHigherPrivilegeWithProjectMapping}", Label
 			scheduleNames = append(scheduleNames, schBackupName)
 			labelSelectors := make(map[string]string)
 			log.InfoD("Creating a schedule backup [%s] with namespaces [%s]", backupName, bkpNamespaces)
-			allNSScheduleBackup, err = CreateScheduleBackupWithValidation(ctx, schBackupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid)
+			allNSScheduleBackup, err = CreateScheduleBackupWithValidation(ctx, schBackupName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of schedule backup [%s] with all namespaces contains both restricted and baseline apps.", allNSScheduleBackup))
 			schBackupList = append(schBackupList, allNSScheduleBackup)
 			log.Infof("Schedule backup list after all namespaces backup %v", schBackupList)
@@ -1908,7 +1918,7 @@ var _ = Describe("{PSALowerPrivilegeToHigherPrivilegeWithProjectMapping}", Label
 				schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, periodicPolicyName)
 				schBackupName := fmt.Sprintf("schbkp-restricted-%v", RandomString(5))
 				labelSelectors := make(map[string]string)
-				restrictedScheduleBackup, err = CreateScheduleBackupWithValidation(ctx, schBackupName, SourceClusterName, backupLocationName, backupLocationUID, restrictedScheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid)
+				restrictedScheduleBackup, err = CreateScheduleBackupWithValidation(ctx, schBackupName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, restrictedScheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of schedule backup %v with restricted namespaces", restrictedScheduleBackup))
 				mutex.Lock()
 				scheduleNames = append(scheduleNames, schBackupName)
@@ -1923,7 +1933,7 @@ var _ = Describe("{PSALowerPrivilegeToHigherPrivilegeWithProjectMapping}", Label
 				schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, periodicPolicyName)
 				schBackupName := fmt.Sprintf("schbkp-baseline-%v", RandomString(5))
 				labelSelectors := make(map[string]string)
-				baselineScheduleBackup, err = CreateScheduleBackupWithValidation(ctx, schBackupName, SourceClusterName, backupLocationName, backupLocationUID, baselineScheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid)
+				baselineScheduleBackup, err = CreateScheduleBackupWithValidation(ctx, schBackupName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, baselineScheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of schedule backup %v with baseline namespaces", baselineScheduleBackup))
 				mutex.Lock()
 				scheduleNames = append(scheduleNames, schBackupName)
@@ -1937,14 +1947,14 @@ var _ = Describe("{PSALowerPrivilegeToHigherPrivilegeWithProjectMapping}", Label
 		Step("Custom restore of restricted namespaces to destination cluster", func() {
 			log.InfoD("Custom restore of restricted namespaces to destination cluster")
 			restoreName := fmt.Sprintf("restore-restricted-%v", RandomString(5))
-			err = CreateRestoreWithProjectMapping(restoreName, restrictedScheduleBackup, namespaceMapRestrictedToPrivilege, DestinationClusterName, BackupOrgID, ctx, nil, restoreProjectUIDMapping, restoreProjectNameMapping)
+			err = CreateRestoreWithProjectMapping(restoreName, restrictedScheduleBackup, namespaceMapRestrictedToPrivilege, DestinationClusterName, destClusterUid, BackupOrgID, ctx, nil, restoreProjectUIDMapping, restoreProjectNameMapping)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Custom restore %s from restricted namespace backup %s", restoreName, restrictedScheduleBackup))
 		})
 
 		Step("Default restore of baseline namespaces to destination cluster", func() {
 			log.InfoD("Default restore of baseline namespaces to destination cluster")
 			restoreName := fmt.Sprintf("restore-baseline-%v", RandomString(5))
-			err = CreateRestoreWithValidation(ctx, restoreName, baselineScheduleBackup, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, baselineScheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, restoreName, baselineScheduleBackup, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, baselineScheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Default restore %s from baseline namespace backup %s", restoreName, baselineScheduleBackup))
 		})
 
@@ -1952,7 +1962,7 @@ var _ = Describe("{PSALowerPrivilegeToHigherPrivilegeWithProjectMapping}", Label
 			log.InfoD("Restore all namespace backup to destination cluster with namespace & project mappings")
 			log.Infof("All namespace backup which is going to restore is %v", allNSScheduleBackup)
 			restoreName := fmt.Sprintf("restore-all-%v", RandomString(5))
-			err = CreateRestoreOnRancherWithoutCheck(restoreName, allNSScheduleBackup, allNamespaceMap, DestinationClusterName, BackupOrgID, ctx, nil, restoreProjectUIDMapping, restoreProjectNameMapping, 2)
+			err = CreateRestoreOnRancherWithoutCheck(restoreName, allNSScheduleBackup, allNamespaceMap, DestinationClusterName, destClusterUid, BackupOrgID, ctx, nil, restoreProjectUIDMapping, restoreProjectNameMapping, 2)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore with replace option %s from backup %s", restoreName, allNSScheduleBackup))
 			err = RestoreSuccessCheck(restoreName, BackupOrgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, RestoreJobProgressRetryTime*time.Minute, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore %s with all namespace backup with project mappings", restoreName))

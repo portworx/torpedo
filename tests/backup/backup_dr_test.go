@@ -235,7 +235,7 @@ var _ = Describe("{BackupAndRestoreSyncDR}", Label(TestCaseLabelsMap[BackupAndRe
 				scheduleName := fmt.Sprintf("%s-dc-schedule-with-rules-%s", BackupNamePrefix, RandomString(4))
 				log.InfoD("Creating a schedule backup of namespace [%s] without pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup,
+				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, srcClusterUid, bkpLocationName, backupLocationUID, appContextsToBackup,
 					labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
 				err = SuspendBackupSchedule(scheduleName, periodicSchedulePolicyName, BackupOrgID, ctx)
@@ -255,7 +255,7 @@ var _ = Describe("{BackupAndRestoreSyncDR}", Label(TestCaseLabelsMap[BackupAndRe
 				scheduleName := fmt.Sprintf("%s-dr-schedule-with-rules-%s", BackupNamePrefix, RandomString(4))
 				log.InfoD("Creating a schedule backup of namespace [%s] without pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, DestinationClusterName, bkpLocationName, backupLocationUID, appContextsToBackup,
+				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, DestinationClusterName, destClusterUid, bkpLocationName, backupLocationUID, appContextsToBackup,
 					labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
 				err = SuspendBackupSchedule(scheduleName, periodicSchedulePolicyName, BackupOrgID, ctx)
@@ -279,7 +279,7 @@ var _ = Describe("{BackupAndRestoreSyncDR}", Label(TestCaseLabelsMap[BackupAndRe
 				namespaceMapping := map[string]string{backupNamespaceMap[backupName]: restoreNamespace}
 				restoredNamespaces = append(restoredNamespaces, restoreNamespace)
 				startTime := time.Now()
-				err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, ctx, make(map[string]string))
+				err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, srcClusterUid, BackupOrgID, ctx, make(map[string]string))
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 				// while restoring from DR to DC site, the application wont be in runnig state. Scale the replicas to activate the app.
@@ -307,7 +307,7 @@ var _ = Describe("{BackupAndRestoreSyncDR}", Label(TestCaseLabelsMap[BackupAndRe
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 				restoreNamespace := "custom-" + backupNamespaceMap[backupName]
 				namespaceMapping := map[string]string{backupNamespaceMap[backupName]: restoreNamespace}
-				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), SourceClusterName, BackupOrgID, appContextsToBackup)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), SourceClusterName, srcClusterUid, BackupOrgID, appContextsToBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 			}
 		})

@@ -30,6 +30,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 		restoreNames               []string
 		scheduledAppContexts       []*scheduler.Context
 		sourceClusterUid           string
+		destClusterUid             string
 		cloudCredName              string
 		cloudCredUID               string
 		backupLocationUID          string
@@ -133,6 +134,9 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Stopping VMs in a few namespaces", func() {
@@ -215,7 +219,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 					defer GinkgoRecover()
 					defer wg.Done()
 					log.InfoD("Restoring [%s] namespace from the [%s] backup", appCtx.ScheduleOptions.Namespace, backupNames[i])
-					err = CreateRestore(restoreName, backupNames[i], make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string))
+					err = CreateRestore(restoreName, backupNames[i], make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, ctx, make(map[string]string))
 					if err != nil {
 						mutex.Lock()
 						errors = append(errors, fmt.Sprintf("Failed while creating restore [%s]. Error - [%s]", restoreName, err.Error()))
@@ -291,7 +295,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 			restoreWithVMMixed = fmt.Sprintf("%s-%s", "auto-restore-mixed", RandomString(6))
 			restoreNames = append(restoreNames, restoreWithVMMixed)
 			log.InfoD("Restoring the [%s] backup", backupWithVMMixed)
-			err = CreateRestoreWithValidation(ctx, restoreWithVMMixed, backupWithVMMixed, namespaceMappingMixed, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, restoreWithVMMixed, backupWithVMMixed, namespaceMappingMixed, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreWithVMMixed, backupWithVMMixed))
 		})
 
@@ -347,7 +351,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 			restoreWithVMRestart = fmt.Sprintf("%s-%s", "auto-restore-restart", RandomString(6))
 			restoreNames = append(restoreNames, restoreWithVMRestart)
 			log.InfoD("Restoring the [%s] backup", backupWithVMRestart)
-			err = CreateRestoreWithValidation(ctx, restoreWithVMRestart, backupWithVMRestart, namespaceMappingRestart, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, restoreWithVMRestart, backupWithVMRestart, namespaceMappingRestart, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreWithVMRestart, backupWithVMRestart))
 		})
 
@@ -383,7 +387,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", Label(TestCaseL
 			restoreWithVMStopped = fmt.Sprintf("%s-%s", "auto-restore-stopped", RandomString(6))
 			restoreNames = append(restoreNames, restoreWithVMStopped)
 			log.InfoD("Restoring the [%s] backup", backupWithVMStopped)
-			err = CreateRestoreWithValidation(ctx, restoreWithVMStopped, backupWithVMStopped, namespaceMappingStopped, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, restoreWithVMStopped, backupWithVMStopped, namespaceMappingStopped, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreWithVMStopped, backupWithVMStopped))
 		})
 	})
@@ -468,6 +472,7 @@ var _ = Describe("{KubevirtUpgradeTest}", Label(TestCaseLabelsMap[KubevirtUpgrad
 		backupPostUpgrade    string
 		scheduledAppContexts []*scheduler.Context
 		sourceClusterUid     string
+		destClusterUid       string
 		cloudCredName        string
 		cloudCredUID         string
 		backupLocationUID    string
@@ -551,6 +556,9 @@ var _ = Describe("{KubevirtUpgradeTest}", Label(TestCaseLabelsMap[KubevirtUpgrad
 			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Taking backup of kubevirt application pre-upgrade", func() {
@@ -570,7 +578,7 @@ var _ = Describe("{KubevirtUpgradeTest}", Label(TestCaseLabelsMap[KubevirtUpgrad
 			restorePreUpgrade := fmt.Sprintf("%s-%s", "auto-restore", RandomString(6))
 			restoreNames = append(restoreNames, restorePreUpgrade)
 			log.InfoD("Restoring the [%s] backup", backupPreUpgrade)
-			err = CreateRestoreWithValidation(ctx, restorePreUpgrade, backupPreUpgrade, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, restorePreUpgrade, backupPreUpgrade, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restorePreUpgrade, backupPreUpgrade))
 		})
 
@@ -598,7 +606,7 @@ var _ = Describe("{KubevirtUpgradeTest}", Label(TestCaseLabelsMap[KubevirtUpgrad
 			restorePostUpgrade := fmt.Sprintf("%s-%s", "auto-restore-post-upgrade", RandomString(6))
 			restoreNames = append(restoreNames, restorePostUpgrade)
 			log.InfoD("Restoring the [%s] backup", backupPreUpgrade)
-			err = CreateRestoreWithValidation(ctx, restorePostUpgrade, backupPreUpgrade, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, restorePostUpgrade, backupPreUpgrade, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore with namespace mapping %s from backup %s", restorePostUpgrade, backupPreUpgrade))
 		})
 
@@ -619,7 +627,7 @@ var _ = Describe("{KubevirtUpgradeTest}", Label(TestCaseLabelsMap[KubevirtUpgrad
 			restoreNewPostUpgrade := fmt.Sprintf("%s-%s", "auto-restore-new-post-upgrade", RandomString(6))
 			restoreNames = append(restoreNames, restoreNewPostUpgrade)
 			log.InfoD("Restoring the [%s] backup", backupPostUpgrade)
-			err = CreateRestoreWithValidation(ctx, restoreNewPostUpgrade, backupPostUpgrade, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, restoreNewPostUpgrade, backupPostUpgrade, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreNewPostUpgrade, backupPostUpgrade))
 		})
 
@@ -681,6 +689,7 @@ var _ = Describe("{KubevirtVMBackupOrDeletionInProgress}", Label(TestCaseLabelsM
 		allVirtualMachines   []kubevirtv1.VirtualMachine
 		scheduledAppContexts []*scheduler.Context
 		sourceClusterUid     string
+		destClusterUid       string
 		cloudCredName        string
 		cloudCredUID         string
 		backupLocationUID    string
@@ -766,6 +775,10 @@ var _ = Describe("{KubevirtVMBackupOrDeletionInProgress}", Label(TestCaseLabelsM
 			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 		})
 
 		Step("Triggering two backups simultaneously on the Same virtual machines", func() {
@@ -830,7 +843,7 @@ var _ = Describe("{KubevirtVMBackupOrDeletionInProgress}", Label(TestCaseLabelsM
 				defer wg.Done()
 				restoreNames = append(restoreNames, restoreName)
 				log.InfoD("Restoring the [%s] backup", backupNames[0])
-				err = CreateRestore(restoreName, backupNames[0], make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string))
+				err = CreateRestore(restoreName, backupNames[0], make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, ctx, make(map[string]string))
 				if err != nil {
 					mutex.Lock()
 					errorRestore = append(errorRestore, fmt.Sprintf("Failed to restore from [%s]. Error - [%s]", backupNames[0], err.Error()))
@@ -901,7 +914,7 @@ var _ = Describe("{KubevirtVMBackupOrDeletionInProgress}", Label(TestCaseLabelsM
 				defer wg.Done()
 				restoreNames = append(restoreNames, restoreName)
 				log.InfoD("Restoring the [%s] backup", backupNames[1])
-				err = CreateRestore(restoreName, backupNames[1], make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string))
+				err = CreateRestore(restoreName, backupNames[1], make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, ctx, make(map[string]string))
 				if err != nil {
 					mutex.Lock()
 					errorRestore = append(errorRestore, fmt.Sprintf("Failed to restore from [%s]. Error - [%s]", backupNames[1], err.Error()))
@@ -1008,6 +1021,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 		restoreNames                 []string
 		scheduledAppContexts         []*scheduler.Context
 		sourceClusterUid             string
+		destClusterUid               string
 		cloudCredName                string
 		cloudCredUID                 string
 		backupLocationUID            string
@@ -1102,6 +1116,9 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 		})
 
 		Step("Getting the number of worker nodes in destination cluster and applying label to one of the worker nodes", func() {
@@ -1176,7 +1193,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", Label(TestCaseLabe
 			restoreNames = append(restoreNames, restoreAll)
 			log.InfoD("Restoring the [%s] backup", backupNames[0])
 			// Not restoring with validation as it will fail for all the VMs which are gone in scheduling state
-			err = CreateRestore(restoreAll, backupNames[0], make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string))
+			err = CreateRestore(restoreAll, backupNames[0], make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, ctx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreAll, backupNames[0]))
 		})
 
@@ -1705,6 +1722,7 @@ var _ = Describe("{KubevirtVMRestoreWithAfterChangingVMConfig}", Label(TestCaseL
 		scheduledAppContexts    []*scheduler.Context
 		restoredAppContexts     []*scheduler.Context
 		sourceClusterUid        string
+		destClusterUid          string
 		cloudCredName           string
 		cloudCredUID            string
 		backupLocationUID       string
@@ -1802,6 +1820,10 @@ var _ = Describe("{KubevirtVMRestoreWithAfterChangingVMConfig}", Label(TestCaseL
 
 			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 		})
 
 		Step("Taking backup of kubevirt VM", func() {
@@ -1829,7 +1851,7 @@ var _ = Describe("{KubevirtVMRestoreWithAfterChangingVMConfig}", Label(TestCaseL
 			restoreName = fmt.Sprintf("%s-%s", "vm-restore", RandomString(6))
 			restoreNames = append(restoreNames, restoreName)
 			log.InfoD("Restoring the [%s] backup", backupName)
-			err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreName, backupName))
 			log.Infof("Waiting for the VMs to boot for [%s]", bootTime)
 			time.Sleep(bootTime)
@@ -2100,6 +2122,7 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 		singleScheduledAppContexts []*scheduler.Context
 		multiScheduledAppContexts  []*scheduler.Context
 		sourceClusterUID           string
+		destClusterUid             string
 		cloudCredName              string
 		cloudCredUID               string
 		backupLocationUID          string
@@ -2210,6 +2233,9 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Create schedule policies", func() {
@@ -2352,7 +2378,7 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 			backupName = fmt.Sprintf("schdule-rule-single-ns-multi-apps-%v", RandomString(6))
 			scheduleNames = append(scheduleNames, backupName)
 			log.InfoD("Creating a backup [%s] in [%s] with namespace [%s] in backup location [%s]", backupName, SourceClusterName, appNamespaces[0], backupLocationName)
-			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, singleScheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid)
+			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, sourceClusterUID, backupLocationName, backupLocationUID, singleScheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid)
 			backupNames = append(backupNames, scheduleBackupName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single schedule backup [%s] with single namespace contains multiple apps using exec rules.", scheduleBackupName))
 		})
@@ -2365,7 +2391,7 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 			backupName = fmt.Sprintf("schedule-rule-all-ns-%v", RandomString(6))
 			scheduleNames = append(scheduleNames, backupName)
 			log.InfoD("Creating a backup [%s] in [%s] with namespaces %s in backup location [%s]", backupName, SourceClusterName, appNamespaces, backupLocationName)
-			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid)
+			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, sourceClusterUID, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid)
 			backupNames = append(backupNames, scheduleBackupName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single schedule backup [%s] with all namespaces %s using exec rules", scheduleBackupName, appNamespaces))
 		})
@@ -2416,7 +2442,7 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 			backupName = fmt.Sprintf("schdule-single-ns-multi-apps-%v", RandomString(6))
 			scheduleNames = append(scheduleNames, backupName)
 			log.InfoD("Creating a backup [%s] in [%s] with namespace [%s] in backup location [%s]", backupName, SourceClusterName, appNamespaces[0], backupLocationName)
-			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, singleScheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid)
+			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, sourceClusterUID, backupLocationName, backupLocationUID, singleScheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid)
 			backupNames = append(backupNames, scheduleBackupName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single schedule backup [%s] with single namespace contains multiple apps.", scheduleBackupName))
 		})
@@ -2429,7 +2455,7 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 			backupName = fmt.Sprintf("schedule-all-ns-%v", RandomString(6))
 			scheduleNames = append(scheduleNames, backupName)
 			log.InfoD("Creating a backup [%s] in [%s] with namespaces %s in backup location [%s]", backupName, SourceClusterName, appNamespaces, backupLocationName)
-			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid)
+			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, sourceClusterUID, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid)
 			backupNames = append(backupNames, scheduleBackupName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single schedule backup [%s] with all namespaces %s", scheduleBackupName, appNamespaces))
 		})
@@ -2443,7 +2469,7 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 				backupName = fmt.Sprintf("schedule-%s-%v", scheduledNamespace, RandomString(6))
 				scheduleNames = append(scheduleNames, backupName)
 				log.InfoD("Creating backup [%s] in [%s] with namespace [%s] in backup location [%s]", backupName, SourceClusterName, scheduledNamespace, backupLocationName)
-				scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, multiScheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid)
+				scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, sourceClusterUID, backupLocationName, backupLocationUID, multiScheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid)
 				backupNames = append(backupNames, scheduleBackupName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of multiple schedule backup [%s] with each namespace [%s]", scheduleBackupName, scheduledNamespace))
 			}
@@ -2460,7 +2486,7 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Tes
 				namespaceList, err := FetchNamespacesFromBackup(ctx, bkpName, BackupOrgID)
 				log.FailOnError(err, "Fetching namespaces from backup")
 				appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, namespaceList)
-				err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsExpectedInBackup)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsExpectedInBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s] from backup [%s]", restoreName, backupNames[i]))
 			}
 		})
@@ -3091,7 +3117,7 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 			backupName = fmt.Sprintf("schdule-rule-single-ns-multi-apps-%v", RandomString(6))
 			scheduleNames = append(scheduleNames, backupName)
 			log.InfoD("Creating a backup [%s] in [%s] with namespace [%s] in backup location [%s]", backupName, SourceClusterName, appNamespaces[0], backupLocationName)
-			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, singleScheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid, []string{"PersistentVolumeClaim"}...)
+			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, sourceClusterUID, backupLocationName, backupLocationUID, singleScheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid, []string{"PersistentVolumeClaim"}...)
 			backupNames = append(backupNames, scheduleBackupName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single schedule backup [%s] with single namespace contains multiple apps using exec rules.", scheduleBackupName))
 		})
@@ -3104,7 +3130,7 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 			backupName = fmt.Sprintf("schedule-rule-all-ns-%v", RandomString(6))
 			scheduleNames = append(scheduleNames, backupName)
 			log.InfoD("Creating a backup [%s] in [%s] with namespaces %s in backup location [%s]", backupName, SourceClusterName, appNamespaces, backupLocationName)
-			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid, []string{"PersistentVolumeClaim"}...)
+			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, sourceClusterUID, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicPolicyName, schPolicyUid, []string{"PersistentVolumeClaim"}...)
 			backupNames = append(backupNames, scheduleBackupName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single schedule backup [%s] with all namespaces %s using exec rules", scheduleBackupName, appNamespaces))
 		})
@@ -3155,7 +3181,7 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 			backupName = fmt.Sprintf("schdule-single-ns-multi-apps-%v", RandomString(6))
 			scheduleNames = append(scheduleNames, backupName)
 			log.InfoD("Creating a backup [%s] in [%s] with namespace [%s] in backup location [%s]", backupName, SourceClusterName, appNamespaces[0], backupLocationName)
-			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, singleScheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid, []string{"PersistentVolumeClaim"}...)
+			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, sourceClusterUID, backupLocationName, backupLocationUID, singleScheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid, []string{"PersistentVolumeClaim"}...)
 			backupNames = append(backupNames, scheduleBackupName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single schedule backup [%s] with single namespace contains multiple apps.", scheduleBackupName))
 		})
@@ -3168,7 +3194,7 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 			backupName = fmt.Sprintf("schedule-all-ns-%v", RandomString(6))
 			scheduleNames = append(scheduleNames, backupName)
 			log.InfoD("Creating a backup [%s] in [%s] with namespaces %s in backup location [%s]", backupName, SourceClusterName, appNamespaces, backupLocationName)
-			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid, []string{"PersistentVolumeClaim"}...)
+			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, sourceClusterUID, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid, []string{"PersistentVolumeClaim"}...)
 			backupNames = append(backupNames, scheduleBackupName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of single schedule backup [%s] with all namespaces %s", scheduleBackupName, appNamespaces))
 		})
@@ -3182,7 +3208,7 @@ var _ = Describe("{CustomBackupRestoreWithKubevirtAndNonKubevirtNS}", Label(Test
 				backupName = fmt.Sprintf("schedule-%s-%v", scheduledNamespace, RandomString(6))
 				scheduleNames = append(scheduleNames, backupName)
 				log.InfoD("Creating backup [%s] in [%s] with namespace [%s] in backup location [%s]", backupName, SourceClusterName, scheduledNamespace, backupLocationName)
-				scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, multiScheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid, []string{"PersistentVolumeClaim"}...)
+				scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, backupName, SourceClusterName, sourceClusterUID, backupLocationName, backupLocationUID, multiScheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid, []string{"PersistentVolumeClaim"}...)
 				backupNames = append(backupNames, scheduleBackupName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of multiple schedule backup [%s] with each namespace [%s]", scheduleBackupName, scheduledNamespace))
 			}
@@ -3307,6 +3333,7 @@ var _ = Describe("{KubevirtVMMigrationTest}", Label(TestCaseLabelsMap[KubevirtVM
 		cloudCredName        string
 		cloudCredUID         string
 		backupLocationUID    string
+		destClusterUid       string
 		backupLocationName   string
 		providers            []string
 		restoreNames         []string
@@ -3377,6 +3404,8 @@ var _ = Describe("{KubevirtVMMigrationTest}", Label(TestCaseLabelsMap[KubevirtVM
 			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		// func for createVMBackup
@@ -3512,7 +3541,7 @@ var _ = Describe("{KubevirtVMMigrationTest}", Label(TestCaseLabelsMap[KubevirtVM
 				log.InfoD("Restoring from the backup - [%s]", bkpName)
 				bkpNamespace := backupNamespaceMap[bkpName]
 				appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespace})
-				err = CreateRestoreWithValidation(ctx, restoreName, bkpName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsExpectedInBackup)
+				err = CreateRestoreWithValidation(ctx, restoreName, bkpName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsExpectedInBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s] from backup [%s]", restoreName, bkpName))
 				restoreNames = append(restoreNames, restoreName)
 			}

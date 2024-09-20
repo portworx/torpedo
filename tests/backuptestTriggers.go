@@ -62,7 +62,8 @@ var (
 	LongevityBackupLocationUID       string
 	LongevityLockedBackupLocationMap = make(map[string]string)
 	LongevityAllNamespaces           []string
-	LongevityClusterUID              string
+	LongevitySourceClusterUID        string
+	LongevityDestinationClusterUID   string
 	LongevityScheduledAppContexts    []*scheduler.Context
 	LongevityAllBackupNames          []string
 	LongevityAllLockedBackupNames    []string
@@ -107,7 +108,8 @@ type EventData struct {
 	BackupLocationName      string
 	BackupLocationUID       string
 	LockedBackupLocationMap map[string]string
-	ClusterUid              string
+	SourceClusterUid        string
+	DestinationClusterUid   string
 	BackupNames             []string
 	LockedBackupNames       []string
 	RestoreName             string
@@ -420,7 +422,12 @@ func eventAddSourceAndDestinationCluster(inputsForEventBuilder *PxBackupLongevit
 	if err != nil {
 		return err, "", *eventData
 	}
-	eventData.ClusterUid = clusterUid
+	eventData.SourceClusterUid = clusterUid
+	clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+	if err != nil {
+		return err, "", *eventData
+	}
+	eventData.DestinationClusterUid = clusterUid
 
 	return nil, "", *eventData
 }
@@ -523,7 +530,7 @@ func eventRestore(inputsForEventBuilder *PxBackupLongevity) (err error, restoreN
 
 	restoreName = fmt.Sprintf("%s-%s-%s", RestoreNamePrefix, inputsForEventBuilder.BackupData.BackupName, RandomString(5))
 	appContextsExpectedInBackup := inputsForEventBuilder.RestoreData.RestoreAppContexts
-	err = CreateRestoreWithValidation(ctx, restoreName, inputsForEventBuilder.BackupData.BackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsExpectedInBackup)
+	err = CreateRestoreWithValidation(ctx, restoreName, inputsForEventBuilder.BackupData.BackupName, make(map[string]string), make(map[string]string), DestinationClusterName, LongevityDestinationClusterUID, BackupOrgID, appContextsExpectedInBackup)
 	if err != nil {
 		return err, fmt.Sprintf("Restore failed for %s", restoreName), eventData
 	}
@@ -695,7 +702,8 @@ func TriggerAddBackupCluster(contexts *[]*scheduler.Context, recordChan *chan *E
 	eventData := RunBuilder(EventAddSourceAndDestinationCluster, &inputForBuilder, &result)
 
 	// Setting global variables for backup
-	LongevityClusterUID = eventData.ClusterUid
+	LongevitySourceClusterUID = eventData.SourceClusterUid
+	LongevityDestinationClusterUID = eventData.DestinationClusterUid
 
 	UpdateEventResponse(&result)
 
@@ -771,7 +779,7 @@ func TriggerCreateBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 	log.Infof("Creating Backup")
 	inputForBuilder.BackupData.BackupLocationName = LongevityBackupLocationName
 	inputForBuilder.BackupData.BackupLocationUID = LongevityBackupLocationUID
-	inputForBuilder.BackupData.ClusterUid = LongevityClusterUID
+	inputForBuilder.BackupData.ClusterUid = LongevitySourceClusterUID
 	inputForBuilder.BackupData.Namespaces = GetRandomNamespacesForBackup()
 	inputForBuilder.ApplicationData.SchedulerContext = LongevityScheduledAppContexts
 
@@ -811,7 +819,7 @@ func TriggerCreateLockedBackup(contexts *[]*scheduler.Context, recordChan *chan 
 
 	log.Infof("Creating Backup")
 	inputForBuilder.BackupData.LockedBackupLocationMap = LongevityLockedBackupLocationMap
-	inputForBuilder.BackupData.ClusterUid = LongevityClusterUID
+	inputForBuilder.BackupData.ClusterUid = LongevitySourceClusterUID
 	inputForBuilder.BackupData.Namespaces = GetRandomNamespacesForBackup()
 	inputForBuilder.ApplicationData.SchedulerContext = LongevityScheduledAppContexts
 
@@ -851,7 +859,7 @@ func TriggerCreateBackupAndRestore(contexts *[]*scheduler.Context, recordChan *c
 
 	inputForBuilder.BackupData.BackupLocationName = LongevityBackupLocationName
 	inputForBuilder.BackupData.BackupLocationUID = LongevityBackupLocationUID
-	inputForBuilder.BackupData.ClusterUid = LongevityClusterUID
+	inputForBuilder.BackupData.ClusterUid = LongevitySourceClusterUID
 	inputForBuilder.BackupData.Namespaces = GetRandomNamespacesForBackup()
 	inputForBuilder.ApplicationData.SchedulerContext = LongevityScheduledAppContexts
 

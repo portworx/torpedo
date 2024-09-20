@@ -20,6 +20,7 @@ var _ = Describe("{AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields}"
 	var (
 		credUidWithAllFields                                   string
 		sourceClusterUid                                       string
+		destClusterUid                                         string
 		backupNameWithBkpLocationHavingMandatoryParameters     string
 		restoreNameWithBkpLocationHavingMandatoryParameters    string
 		backupNameWithBkpLocationHavingAllParameters           string
@@ -134,6 +135,8 @@ var _ = Describe("{AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields}"
 			dash.VerifyFatal(err, nil, "Adding source and destination cluster using cloud credential having all fields")
 			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Taking backup of applications using backup location with cloud credential having only mandatory parameters", func() {
@@ -148,7 +151,7 @@ var _ = Describe("{AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields}"
 			log.InfoD("Restoring the backed up application from backup location with cloud credential having only mandatory parameters")
 			restoreNameWithBkpLocationHavingMandatoryParameters = fmt.Sprintf("restore-%s-%v", backupNameWithBkpLocationHavingMandatoryParameters, RandomString(5))
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
-			err = CreateRestoreWithValidation(ctx, restoreNameWithBkpLocationHavingMandatoryParameters, backupNameWithBkpLocationHavingMandatoryParameters, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctx, restoreNameWithBkpLocationHavingMandatoryParameters, backupNameWithBkpLocationHavingMandatoryParameters, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Validating restore-%s", restoreNameWithBkpLocationHavingMandatoryParameters))
 		})
 
@@ -183,7 +186,7 @@ var _ = Describe("{AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields}"
 			log.InfoD("Restoring the backed up application from backup location with cloud credential having all fields")
 			restoreNameWithBkpLocationHavingAllParameters = fmt.Sprintf("restore-%s-%v", backupNameWithBkpLocationHavingAllParameters, RandomString(5))
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
-			err = CreateRestoreWithValidation(ctx, restoreNameWithBkpLocationHavingAllParameters, backupNameWithBkpLocationHavingAllParameters, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctx, restoreNameWithBkpLocationHavingAllParameters, backupNameWithBkpLocationHavingAllParameters, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Validating restore-%s", restoreNameWithBkpLocationHavingAllParameters))
 		})
 
@@ -199,7 +202,7 @@ var _ = Describe("{AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields}"
 			log.InfoD("Restoring the backed up application from backup location with cloud credential having only mandatory parameters")
 			restoreNameWithBkpLocationHavingOnlyMandatoryFields = fmt.Sprintf("restore-%s-%v", backupNameWithBkpLocationHavingOnlyMandatoryParameters, RandomString(5))
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
-			err = CreateRestoreWithValidation(ctx, restoreNameWithBkpLocationHavingOnlyMandatoryFields, backupNameWithBkpLocationHavingOnlyMandatoryParameters, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctx, restoreNameWithBkpLocationHavingOnlyMandatoryFields, backupNameWithBkpLocationHavingOnlyMandatoryParameters, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Validating restore-%s", restoreNameWithBkpLocationHavingOnlyMandatoryFields))
 		})
 	})

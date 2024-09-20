@@ -25,6 +25,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", Label(TestCaseLa
 	var (
 		credName                 string
 		clusterUid               string
+		destClusterUid           string
 		cloudCredUID             string
 		fullBackupName           string
 		restoreName              string
@@ -115,6 +116,8 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", Label(TestCaseLa
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
 			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Taking backup of applications", func() {
@@ -175,7 +178,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", Label(TestCaseLa
 				}
 				log.InfoD("Restoring %s backup", backupName)
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[i]})
-				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}
@@ -471,7 +474,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", Label(TestCaseLabelsM
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				appContextsToBackupMap[scheduleName] = appContextsToBackup
 
-				firstScheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+				firstScheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 				backupNames = append(backupNames, firstScheduleBackupName)
 			}

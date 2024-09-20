@@ -28,6 +28,7 @@ var _ = Describe("{BackupCSIVolumesWithPartialSuccess}", Label(TestCaseLabelsMap
 		restoreNames                    []string
 		scheduledAppContexts            []*scheduler.Context
 		sourceClusterUid                string
+		destClusterUid                  string
 		cloudCredName                   string
 		cloudCredUID                    string
 		backupLocationUID               string
@@ -126,6 +127,10 @@ var _ = Describe("{BackupCSIVolumesWithPartialSuccess}", Label(TestCaseLabelsMap
 			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 		})
 
 		Step("Create invalid volume snapshot class for CSI volumes", func() {
@@ -170,7 +175,7 @@ var _ = Describe("{BackupCSIVolumesWithPartialSuccess}", Label(TestCaseLabelsMap
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			scheduleName := fmt.Sprintf("%s-%s", "partial-csi-backup-schedule", RandomString(5))
-			scheduleBackupName, err := CreatePartialScheduleBackupWithValidationWithVscMapping(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerInvalidVscMap, false, failedVolumes)
+			scheduleBackupName, err := CreatePartialScheduleBackupWithValidationWithVscMapping(ctx, scheduleName, SourceClusterName, sourceClusterUid, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerInvalidVscMap, false, failedVolumes)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of partial schedule backup [%s]", scheduleBackupName))
 			scheduleBackupNames = append(scheduleBackupNames, scheduleBackupName)
 			backupNames = append(backupNames, scheduleBackupName)
@@ -189,7 +194,7 @@ var _ = Describe("{BackupCSIVolumesWithPartialSuccess}", Label(TestCaseLabelsMap
 			for _, backupName := range backupNames {
 				restoreName := fmt.Sprintf("%s-%s-%s", "default", backupName, RandomString(4))
 				log.InfoD("Restoring from the [%s] backup with namespaceMapping [%v]", backupName, namespaceMapping)
-				err = CreatePartialRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts, failedVolumes)
+				err = CreatePartialRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts, failedVolumes)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}
@@ -288,6 +293,7 @@ var _ = Describe("{PartialBackupSuccessWithPxVolumes}", Label(TestCaseLabelsMap[
 		failedPvcs           []*corev1.PersistentVolumeClaim
 		backupName           string
 		namespaceMapping     map[string]string
+		destClusterUid       string
 	)
 
 	JustBeforeEach(func() {
@@ -363,6 +369,9 @@ var _ = Describe("{PartialBackupSuccessWithPxVolumes}", Label(TestCaseLabelsMap[
 			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Taking backup of application from source cluster", func() {
@@ -427,7 +436,7 @@ var _ = Describe("{PartialBackupSuccessWithPxVolumes}", Label(TestCaseLabelsMap[
 			}
 			restoreName := fmt.Sprintf("%s-%s", "restore-partial-backup", RandomString(4))
 			log.InfoD("Restoring from the [%s] backup with namespaceMapping [%v]", restoreName, namespaceMapping)
-			err = CreatePartialRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts, failedPvcs)
+			err = CreatePartialRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts, failedPvcs)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore with partial backup [%s]", restoreName))
 		})
 
@@ -472,6 +481,7 @@ var _ = Describe("{PartialBackupSuccessWithPxAndKDMPVolumes}", Label(TestCaseLab
 		restoreNames           []string
 		scheduledAppContexts   []*scheduler.Context
 		sourceClusterUid       string
+		destClusterUid         string
 		cloudCredName          string
 		cloudCredUID           string
 		backupLocationUID      string
@@ -574,6 +584,9 @@ var _ = Describe("{PartialBackupSuccessWithPxAndKDMPVolumes}", Label(TestCaseLab
 			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Making a list of all CSI volumes to fail", func() {
@@ -650,7 +663,7 @@ var _ = Describe("{PartialBackupSuccessWithPxAndKDMPVolumes}", Label(TestCaseLab
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			scheduleName := fmt.Sprintf("%s-%s", "schedule-partial", RandomString(4))
-			scheduleBackupName, err := CreatePartialScheduleBackupWithValidationWithVscMapping(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, make(map[string]string), false, failedVolumes)
+			scheduleBackupName, err := CreatePartialScheduleBackupWithValidationWithVscMapping(ctx, scheduleName, SourceClusterName, sourceClusterUid, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, make(map[string]string), false, failedVolumes)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of partial schedule backup [%s]", scheduleBackupName))
 			scheduleBackupNames = append(scheduleBackupNames, scheduleBackupName)
 			backupNames = append(backupNames, scheduleBackupName)
@@ -669,7 +682,7 @@ var _ = Describe("{PartialBackupSuccessWithPxAndKDMPVolumes}", Label(TestCaseLab
 			for _, backupName := range backupNames {
 				restoreName := fmt.Sprintf("%s-%s-%s", "default", backupName, RandomString(4))
 				log.InfoD("Restoring from the [%s] backup with namespaceMapping [%v]", backupName, namespaceMapping)
-				err = CreatePartialRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts, failedVolumes)
+				err = CreatePartialRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts, failedVolumes)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}
@@ -847,7 +860,7 @@ var _ = Describe("{BackupStateTransitionForScheduledBackups}", Label(TestCaseLab
 				go func(i int) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					_, err = CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName, SourceClusterName, backupLocationName, backupLocationUid, appNamespaces, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, ctx, map[string]string{}, true)
+					_, err = CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUid, appNamespaces, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, ctx, map[string]string{}, true)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", schedulePolicyName))
 					scheduledNames = append(scheduledNames, scheduleName)
 				}(i)
@@ -988,6 +1001,7 @@ var _ = Describe("{PartialBackupWithLowerStorkVersion}", Label(TestCaseLabelsMap
 		backupNames          []string
 		scheduledAppContexts []*scheduler.Context
 		sourceClusterUid     string
+		destClusterUid       string
 		cloudCredName        string
 		cloudCredUID         string
 		backupLocationUID    string
@@ -1078,6 +1092,9 @@ var _ = Describe("{PartialBackupWithLowerStorkVersion}", Label(TestCaseLabelsMap
 			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Making a list of all CSI volumes to fail", func() {
@@ -1165,7 +1182,7 @@ var _ = Describe("{PartialBackupWithLowerStorkVersion}", Label(TestCaseLabelsMap
 			for _, backupName := range backupNames {
 				restoreName := fmt.Sprintf("%s-%s-%s", "default", backupName, RandomString(4))
 				log.InfoD("Restoring from the [%s] backup with namespaceMapping [%v]", backupName, namespaceMapping)
-				err = CreatePartialRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts, failedVolumes)
+				err = CreatePartialRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts, failedVolumes)
 				if err != nil {
 					dash.VerifyFatal(strings.Contains(err.Error(), "Partial Backups requires Stork version 24.3.0-0 or above. Please upgrade your stork version"), true, fmt.Sprintf("Failure of restore [%s] with error message - %s", restoreName, err.Error()))
 				} else {
@@ -1224,6 +1241,7 @@ var _ = Describe("{PartialBackupSuccessWithAzureEndpoint}", Label(TestCaseLabels
 		restoreNames               []string
 		scheduledAppContexts       []*scheduler.Context
 		sourceClusterUid           string
+		destClusterUid             string
 		cloudCredName              string
 		cloudCredUID               string
 		backupLocationUID          string
@@ -1316,6 +1334,9 @@ var _ = Describe("{PartialBackupSuccessWithAzureEndpoint}", Label(TestCaseLabels
 			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Update the PX STC with Azure Environment Variable", func() {
@@ -1373,7 +1394,7 @@ var _ = Describe("{PartialBackupSuccessWithAzureEndpoint}", Label(TestCaseLabels
 			for _, backupName := range backupNames {
 				restoreName := fmt.Sprintf("%s-%s-%s", "default", backupName, RandomString(4))
 				log.InfoD("Restoring from the [%s] backup with namespaceMapping [%v]", backupName, namespaceMapping)
-				err = CreatePartialRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts, failedVolumes)
+				err = CreatePartialRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts, failedVolumes)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}

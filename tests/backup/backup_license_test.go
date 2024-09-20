@@ -140,6 +140,7 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", Label(
 		backupLocationUID             string
 		backupName                    string
 		clusterUid                    string
+		destClusterUid                string
 		restoreName                   string
 		bkpNamespaces                 []string
 		sourceClusterWorkerNodes      []node.Node
@@ -242,6 +243,8 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", Label(
 			log.FailOnError(err, fmt.Sprintf("Adding source cluster %s and destination cluster %s", SourceClusterName, DestinationClusterName))
 			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 		Step("Verifying the license count after adding source and destination clusters with all worker nodes labelled portworx.io/nobackup=true", func() {
 			log.InfoD("Verifying the license count after adding source and destination clusters with all worker nodes labelled portworx.io/nobackup=true")
@@ -259,7 +262,7 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", Label(
 			log.InfoD("Restoring the backed up application")
 			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore: %s of backup: %s", backupName, backupName))
 		})
 		Step("Removing label portworx.io/nobackup=true from worker nodes and verifying the license count", func() {

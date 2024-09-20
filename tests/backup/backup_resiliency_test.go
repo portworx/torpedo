@@ -346,7 +346,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", Label(TestCaseLa
 			for _, backupName := range backupNames {
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
-				_, err = CreateRestoreWithoutCheck(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, BackupOrgID, ctx)
+				_, err = CreateRestoreWithoutCheck(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, clusterUid, BackupOrgID, ctx)
 				log.FailOnError(err, "Failed while trying to restore [%s] the backup [%s]", fmt.Sprintf("%s-restore", backupName), backupName)
 			}
 		})
@@ -414,6 +414,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", Label(TestCaseLabelsMa
 	var users []string
 	var backupName string
 	var clusterUid string
+	var destClusterUid string
 	var cloudCredName string
 	var backupUID string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
@@ -466,6 +467,8 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", Label(TestCaseLabelsMa
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
 			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Creating backup location", func() {
@@ -539,7 +542,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", Label(TestCaseLabelsMa
 
 				// Start Restore. Here the restore is expected to fail as the backup is shared with ViewOnlyAccess
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-				err = CreateRestore(restoreName, backupName, nil, DestinationClusterName, BackupOrgID, ctxNonAdmin, nil)
+				err = CreateRestore(restoreName, backupName, nil, DestinationClusterName, destClusterUid, BackupOrgID, ctxNonAdmin, nil)
 				// Restore validation to make sure that the user with cannot restore
 				dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true,
 					fmt.Sprintf("Verifying backup restore [%s] is not possible for backup [%s] with user [%s]", restoreName, backupName, user))
@@ -575,7 +578,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", Label(TestCaseLabelsMa
 					// Start Restore
 					restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-					err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+					err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore the backup %s for user %s", backup, user))
 					// Delete restore
 					err = DeleteRestore(restoreName, BackupOrgID, ctxNonAdmin)
@@ -831,6 +834,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", Label(TestCaseLabelsMap[
 		backupNames          []string
 		restoreNames         []string
 		pxBackupNS           string
+		destClusterUid       string
 		err                  error
 		ctx                  context.Context
 		statefulSet          *appsV1.StatefulSet
@@ -897,6 +901,8 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", Label(TestCaseLabelsMap[
 			destClusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 		Step("Getting the replica factor of mongodb statefulset in backup namespace before taking backup", func() {
 			pxBackupNS, err = backup.GetPxBackupNamespace()
@@ -1002,7 +1008,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", Label(TestCaseLabelsMap[
 						namespaceMap[appCtx[0].ScheduleOptions.Namespace] = fmt.Sprintf("%s-%s", appCtx[0].ScheduleOptions.Namespace, RandomString(4))
 					}
 					mutex.Unlock()
-					_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMap, DestinationClusterName, BackupOrgID, ctx)
+					_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMap, DestinationClusterName, destClusterUid, BackupOrgID, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring the backup %s with name %s", backupName, restoreName))
 				}(backupName, restoreName)
 			}
@@ -1393,6 +1399,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", Labe
 		originalReplicaCount int32
 		controlChannel       chan string
 		errorGroup           *errgroup.Group
+		destClusterUid       string
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -1456,6 +1463,8 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", Labe
 			destClusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 		Step("Getting the replica factor of px-backup deployment in backup namespace before taking backup", func() {
 			pxBackupNS, err = backup.GetPxBackupNamespace()
@@ -1540,7 +1549,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", Labe
 			for _, backupName := range backupNames {
 				restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
 				restoreNames = append(restoreNames, restoreName)
-				_, err = CreateRestoreWithoutCheck(restoreName, backupName, nil, DestinationClusterName, BackupOrgID, ctx)
+				_, err = CreateRestoreWithoutCheck(restoreName, backupName, nil, DestinationClusterName, destClusterUid, BackupOrgID, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring the backup %s with name %s", backupName, restoreName))
 			}
 			log.InfoD("The list of restores are: %v", restoreNames)
@@ -1652,6 +1661,7 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", Label(TestCaseLabelsMap[Cancel
 		restoreNames         []string
 		controlChannel       chan string
 		errorGroup           *errgroup.Group
+		destClusterUid       string
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -1713,6 +1723,8 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", Label(TestCaseLabelsMap[Cancel
 			destClusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Taking backup of applications", func() {
@@ -1755,7 +1767,7 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", Label(TestCaseLabelsMap[Cancel
 					go func(restoreName string, backupName string, namespaceMapping map[string]string) {
 						defer GinkgoRecover()
 						defer wg.Done()
-						_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, DestinationClusterName, BackupOrgID, ctx)
+						_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, DestinationClusterName, destClusterUid, BackupOrgID, ctx)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring the backup %s with name %s", backupName, restoreName))
 					}(restoreName, backupName, namespaceMapping)
 				}
@@ -1861,6 +1873,7 @@ var _ = Describe("{BackupNetworkErrorTest}", Label(TestCaseLabelsMap[BackupNetwo
 		bkpLocationName      string
 		backupLocationUID    string
 		srcClusterUid        string
+		destClusterUid       string
 		appNodesMap          = make(map[string][]node.Node)
 		backupLocationMap    = make(map[string]string)
 		labelSelectors       = make(map[string]string)
@@ -1918,6 +1931,8 @@ var _ = Describe("{BackupNetworkErrorTest}", Label(TestCaseLabelsMap[BackupNetwo
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, DestinationClusterName))
 			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Taking backup of applications without any injected network delay", func() {
@@ -1998,7 +2013,7 @@ var _ = Describe("{BackupNetworkErrorTest}", Label(TestCaseLabelsMap[BackupNetwo
 			for _, namespace := range appNamespaces {
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNamespaceMap[namespace]})
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, backupNamespaceMap[namespace])
-				err = CreateRestoreWithValidation(ctx, restoreName, backupNamespaceMap[namespace], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupNamespaceMap[namespace], make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 			}
 		})

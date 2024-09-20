@@ -32,6 +32,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 		restoreNames                  = make([]string, 0)
 		scheduleNames                 = make([]string, 0)
 		clusterUid                    string
+		destClusterUid                string
 		clusterStatus                 api.ClusterInfo_StatusInfo_Status
 		restoreName                   string
 		cloudCredName                 string
@@ -275,6 +276,8 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
 			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Create new storage class on destination cluster with similiar spec as source cluster", func() {
@@ -365,7 +368,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 				scheduleName := fmt.Sprintf("%s-schedule-with-rules-%s", BackupNamePrefix, RandomString(4))
 				log.InfoD("Creating a schedule backup of namespace [%s] without pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup,
+				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, appContextsToBackup,
 					labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
 				err = SuspendBackupSchedule(scheduleName, periodicSchedulePolicyName, BackupOrgID, ctx)
@@ -407,7 +410,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 					if config.replacePolicy == ReplacePolicyRetain {
 						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNamespaceMap[backupName]})
 						restoredNamespaces = append(restoredNamespaces, config.namespaceMapping[backupNamespaceMap[backupName]])
-						err = CreateRestoreWithValidation(ctx, restoreName, backupName, config.namespaceMapping, config.storageClassMapping, DestinationClusterName, BackupOrgID, appContextsToBackup)
+						err = CreateRestoreWithValidation(ctx, restoreName, backupName, config.namespaceMapping, config.storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 					} else if config.replacePolicy == ReplacePolicyDelete {
 						restoredNamespaces = append(restoredNamespaces, config.namespaceMapping[backupNamespaceMap[backupName]])
 						err = CreateRestoreWithReplacePolicy(restoreName, backupName, config.namespaceMapping, DestinationClusterName, BackupOrgID, ctx, config.storageClassMapping, config.replacePolicy)
@@ -554,7 +557,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 				restoreNamespace := "custom2-" + backupNamespaceMap[backupName]
 				namespaceMapping := map[string]string{backupNamespaceMap[backupName]: restoreNamespace}
 				restoredNamespaces = append(restoredNamespaces, restoreNamespace)
-				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}
@@ -661,7 +664,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 				restoreNamespace := "custom3-" + backupNamespaceMap[backupName]
 				namespaceMapping := map[string]string{backupNamespaceMap[backupName]: restoreNamespace}
 				restoredNamespaces = append(restoredNamespaces, restoreNamespace)
-				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}
@@ -760,6 +763,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 		restoreNames                  = make([]string, 0)
 		scheduleNames                 = make([]string, 0)
 		clusterUid                    string
+		destClusterUid                string
 		clusterStatus                 api.ClusterInfo_StatusInfo_Status
 		restoreName                   string
 		cloudCredName                 string
@@ -947,6 +951,8 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
 			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Create new storage class on destination cluster with similiar spec as source cluster", func() {
@@ -1037,7 +1043,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 				scheduleName := fmt.Sprintf("%s-schedule-with-rules-%s", BackupNamePrefix, RandomString(4))
 				log.InfoD("Creating a schedule backup of namespace [%s] without pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup,
+				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, appContextsToBackup,
 					labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
 				err = SuspendBackupSchedule(scheduleName, periodicSchedulePolicyName, BackupOrgID, ctx)
@@ -1079,7 +1085,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 					if config.replacePolicy == ReplacePolicyRetain {
 						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNamespaceMap[backupName]})
 						restoredNamespaces = append(restoredNamespaces, config.namespaceMapping[backupNamespaceMap[backupName]])
-						err = CreateRestoreWithValidation(ctx, restoreName, backupName, config.namespaceMapping, config.storageClassMapping, DestinationClusterName, BackupOrgID, appContextsToBackup)
+						err = CreateRestoreWithValidation(ctx, restoreName, backupName, config.namespaceMapping, config.storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 					} else if config.replacePolicy == ReplacePolicyDelete {
 						restoredNamespaces = append(restoredNamespaces, config.namespaceMapping[backupNamespaceMap[backupName]])
 						err = CreateRestoreWithReplacePolicy(restoreName, backupName, config.namespaceMapping, DestinationClusterName, BackupOrgID, ctx, config.storageClassMapping, config.replacePolicy)
@@ -1206,7 +1212,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 				restoreNamespace := "custom2-" + backupNamespaceMap[backupName]
 				namespaceMapping := map[string]string{backupNamespaceMap[backupName]: restoreNamespace}
 				restoredNamespaces = append(restoredNamespaces, restoreNamespace)
-				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}
@@ -1313,7 +1319,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 				restoreNamespace := "custom3-" + backupNamespaceMap[backupName]
 				namespaceMapping := map[string]string{backupNamespaceMap[backupName]: restoreNamespace}
 				restoredNamespaces = append(restoredNamespaces, restoreNamespace)
-				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}

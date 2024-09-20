@@ -151,7 +151,7 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", Label(TestCaseLabel
 						namespaceMapping := map[string]string{namespace: customNamespace}
 						restoreNsMapping[restoreName] = namespaceMapping
 						mu.Unlock()
-						err := CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, ctx, make(map[string]string))
+						err := CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, clusterUid, BackupOrgID, ctx, make(map[string]string))
 						if err != nil {
 							mu.Lock()
 							errors = append(errors, fmt.Sprintf("Failed while taking restore [%s]. Error - [%s]", restoreName, err.Error()))
@@ -278,6 +278,7 @@ var _ = Describe("{ValidateFiftyVolumeBackups}", Label(TestCaseLabelsMap[Validat
 	var (
 		scheduledAppContexts []*scheduler.Context
 		sourceClusterUid     string
+		destClusterUid       string
 		backupLocationMap    map[string]string
 		cloudAccountName     string
 		bkpLocationName      string
@@ -371,6 +372,8 @@ var _ = Describe("{ValidateFiftyVolumeBackups}", Label(TestCaseLabelsMap[Validat
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
 			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Taking backup of application with 50 volumes on source cluster", func() {
@@ -391,7 +394,7 @@ var _ = Describe("{ValidateFiftyVolumeBackups}", Label(TestCaseLabelsMap[Validat
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			log.Infof("Backup to be restored - %v", currentBackupName)
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, RandomString(10))
-			err = CreateRestoreWithValidation(ctx, restoreName, currentBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, restoreName, currentBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, currentBackupName))
 			restoreNames = append(restoreNames, restoreName)
 		})

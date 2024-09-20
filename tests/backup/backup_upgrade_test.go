@@ -148,7 +148,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", Label(TestCaseLabelsMap[StorkUpgrad
 				scheduleName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				appContextsToBackupMap[scheduleName] = appContextsToBackup
-				_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid)
+				_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 				scheduleNames = append(scheduleNames, scheduleName)
 			}
@@ -565,7 +565,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				labelSelectors := make(map[string]string)
 				singleNSScheduleName := fmt.Sprintf("%s-single-namespace-schedule-%v", namespace, time.Now().Unix())
 				log.InfoD("Creating schedule backup with schedule [%s] of source cluster namespace [%s]", singleNSScheduleName, namespace)
-				err = CreateScheduleBackup(singleNSScheduleName, SourceClusterName, backupLocationName, backupLocationUid, []string{namespace},
+				err = CreateScheduleBackup(singleNSScheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUid, []string{namespace},
 					labelSelectors, BackupOrgID, preRuleNames[appName], preRuleUids[appName], postRuleNames[appName], postRuleUids[appName], schedulePolicyName, schedulePolicyUid, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", singleNSScheduleName))
 				firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, singleNSScheduleName, BackupOrgID)
@@ -585,7 +585,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			allNSScheduleName = fmt.Sprintf("%s-all-namespaces-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			labelSelectors := make(map[string]string)
 			log.InfoD("Creating schedule backup with schedule [%s] of all namespaces of destination cluster [%s]", allNSScheduleName, allNamespaces)
-			err = CreateScheduleBackup(allNSScheduleName, DestinationClusterName, backupLocationName, backupLocationUid, allNamespaces,
+			err = CreateScheduleBackup(allNSScheduleName, DestinationClusterName, destClusterUid, backupLocationName, backupLocationUid, allNamespaces,
 				labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", allNSScheduleName))
 			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, allNSScheduleName, BackupOrgID)
@@ -643,7 +643,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				log.FailOnError(err, "Fetching uid of schedule policy [%s]", partialScheduleName)
 				log.InfoD("Taking scheduled backup of namespaces [%s] before upgrade", partialAppNamespaces)
 				partialScheduledBackupName = fmt.Sprintf("partial-scheduled-backup-%v", RandomString(6))
-				_, err = CreateScheduleBackupWithoutCheck(partialScheduledBackupName, SourceClusterName, partialBackupLocationName, partialBackupLocationUid, partialAppNamespaces, nil, BackupOrgID, "", "", "", "", partialScheduleName, partialSchedulePolicyUid, ctx)
+				_, err = CreateScheduleBackupWithoutCheck(partialScheduledBackupName, SourceClusterName, srcClusterUid, partialBackupLocationName, partialBackupLocationUid, partialAppNamespaces, nil, BackupOrgID, "", "", "", "", partialScheduleName, partialSchedulePolicyUid, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", partialScheduleName))
 			} else {
 				log.InfoD("Skipping this step as it is a Non-PX cluster")
@@ -742,7 +742,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				log.Infof("Failed volumes are %v", failedVolumes)
 				restoreName := fmt.Sprintf("%s-%s", "restore-partial-bkp", RandomString(4))
 				log.InfoD("Restoring the schedule backup with partial success [%s] in cluster [%s] with restore [%s]", latestScheduleBackupName, DestinationClusterName, restoreName)
-				err = CreatePartialRestoreWithValidation(ctx, restoreName, latestScheduleBackupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, partialAppContexts, failedVolumes)
+				err = CreatePartialRestoreWithValidation(ctx, restoreName, latestScheduleBackupName, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, partialAppContexts, failedVolumes)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			} else {
@@ -801,7 +801,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				storageClassMapping := make(map[string]string)
 				restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 				log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
-				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, backupToContextMapping[backupName])
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of backup [%s] in cluster [%s]", restoreName, backupName, DestinationClusterName))
 				restoreNames = append(restoreNames, restoreName)
 			}
@@ -811,7 +811,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				storageClassMapping := make(map[string]string)
 				restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 				log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
-				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, backupToContextMapping[backupName])
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of backup [%s] in cluster [%s]", restoreName, backupName, restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}
@@ -825,7 +825,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				storageClassMapping := make(map[string]string)
 				restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 				log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
-				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, backupToContextMapping[backupName])
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of backup [%s] in cluster [%s]", restoreName, backupName, DestinationClusterName))
 				restoreNames = append(restoreNames, restoreName)
 			}
@@ -835,7 +835,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				storageClassMapping := make(map[string]string)
 				restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 				log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
-				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, backupToContextMapping[backupName])
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of backup [%s] in cluster [%s]", restoreName, backupName, restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}
@@ -877,7 +877,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 					log.InfoD("Restoring first single namespace schedule backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v", firstSingleNSScheduleBackupName, DestinationClusterName, restoreName, config.namespaceMapping)
 					if config.replacePolicy == ReplacePolicyRetain {
 						appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
-						err = CreateRestoreWithValidation(ctx, restoreName, firstSingleNSScheduleBackupName, config.namespaceMapping, config.storageClassMapping, DestinationClusterName, BackupOrgID, appContextsToBackup)
+						err = CreateRestoreWithValidation(ctx, restoreName, firstSingleNSScheduleBackupName, config.namespaceMapping, config.storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 					} else if config.replacePolicy == ReplacePolicyDelete {
 						err = CreateRestoreWithReplacePolicy(restoreName, firstSingleNSScheduleBackupName, config.namespaceMapping, DestinationClusterName, BackupOrgID, ctx, config.storageClassMapping, config.replacePolicy)
 					}
@@ -928,7 +928,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 					log.InfoD("Restoring next single namespace schedule backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v", nextScheduleBackupName, DestinationClusterName, restoreName, config.namespaceMapping)
 					if config.replacePolicy == ReplacePolicyRetain {
 						appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
-						err = CreateRestoreWithValidation(ctx, restoreName, nextScheduleBackupName, config.namespaceMapping, config.storageClassMapping, DestinationClusterName, BackupOrgID, appContextsToBackup)
+						err = CreateRestoreWithValidation(ctx, restoreName, nextScheduleBackupName, config.namespaceMapping, config.storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 					} else if config.replacePolicy == ReplacePolicyDelete {
 						err = CreateRestoreWithReplacePolicy(restoreName, nextScheduleBackupName, config.namespaceMapping, DestinationClusterName, BackupOrgID, ctx, config.storageClassMapping, config.replacePolicy)
 					}
@@ -947,7 +947,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			restoreName := fmt.Sprintf("%s-%s", "test-restore-all-ns", RandomString(4))
 			log.InfoD("Restoring first all namespaces schedule backup [%s] in cluster [%s] with restore [%s]", firstAllNSScheduleBackupName, SourceClusterName, restoreName)
 			namespaceMapping := make(map[string]string)
-			err = CreateRestoreWithValidation(ctx, restoreName, firstAllNSScheduleBackupName, namespaceMapping, make(map[string]string), SourceClusterName, BackupOrgID, destClusterContexts)
+			err = CreateRestoreWithValidation(ctx, restoreName, firstAllNSScheduleBackupName, namespaceMapping, make(map[string]string), SourceClusterName, srcClusterUid, BackupOrgID, destClusterContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of first all namespaces schedule backup [%s] in cluster [%s]", restoreName, firstAllNSScheduleBackupName, restoreName))
 			restoreNames = append(restoreNames, restoreName)
 		})
@@ -967,7 +967,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			restoreName := fmt.Sprintf("%s-%s", "test-restore-all-ns", RandomString(4))
 			log.InfoD("Restoring next all namespaces schedule backup [%s] in cluster [%s] with restore [%s]", nextScheduleBackupName, SourceClusterName, restoreName)
 			namespaceMapping := make(map[string]string)
-			err = CreateRestoreWithValidation(ctx, restoreName, nextScheduleBackupName, namespaceMapping, make(map[string]string), SourceClusterName, BackupOrgID, destClusterContexts)
+			err = CreateRestoreWithValidation(ctx, restoreName, nextScheduleBackupName, namespaceMapping, make(map[string]string), SourceClusterName, srcClusterUid, BackupOrgID, destClusterContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of next all namespaces schedule backup [%s] in cluster [%s]", restoreName, nextScheduleBackupName, restoreName))
 			restoreNames = append(restoreNames, restoreName)
 		})
@@ -1083,6 +1083,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 		backupLocationUid                  string
 		backupLocationMap                  map[string]string
 		srcClusterUid                      string
+		destClusterUid                     string
 		preRuleNames                       map[string]string
 		preRuleUids                        map[string]string
 		postRuleNames                      map[string]string
@@ -1198,6 +1199,8 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 			log.Infof("Cluster [%s] uid: [%s]", SourceClusterName, srcClusterUid)
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 		Step("Create pre and post exec rules for applications", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -1293,7 +1296,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 				labelSelectors := make(map[string]string)
 				singleNSScheduleName := fmt.Sprintf("%s-single-namespace-schedule-%v", namespace, time.Now().Unix())
 				log.InfoD("Creating schedule backup with schedule [%s] of source cluster namespace [%s]", singleNSScheduleName, namespace)
-				err = CreateScheduleBackup(singleNSScheduleName, SourceClusterName, backupLocationName, backupLocationUid, []string{namespace},
+				err = CreateScheduleBackup(singleNSScheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUid, []string{namespace},
 					labelSelectors, BackupOrgID, preRuleNames[appName], preRuleUids[appName], postRuleNames[appName], postRuleUids[appName], schedulePolicyName, schedulePolicyUid, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", singleNSScheduleName))
 				firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, singleNSScheduleName, BackupOrgID)
@@ -1422,7 +1425,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 					storageClassMapping := make(map[string]string)
 					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 					log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
-					err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
+					err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, backupToContextMapping[backupName])
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of backup [%s] in cluster [%s]", restoreName, backupName, DestinationClusterName))
 					restoreNames = append(restoreNames, restoreName)
 				}
@@ -1432,7 +1435,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 					storageClassMapping := make(map[string]string)
 					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 					log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
-					err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
+					err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, backupToContextMapping[backupName])
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of backup [%s] in cluster [%s]", restoreName, backupName, restoreName))
 					restoreNames = append(restoreNames, restoreName)
 				}
@@ -1446,7 +1449,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 					storageClassMapping := make(map[string]string)
 					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 					log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
-					err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
+					err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, backupToContextMapping[backupName])
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of backup [%s] in cluster [%s]", restoreName, backupName, DestinationClusterName))
 					restoreNames = append(restoreNames, restoreName)
 				}
@@ -1456,7 +1459,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 					storageClassMapping := make(map[string]string)
 					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", backupName, time.Now().Unix())
 					log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s]", backupName, DestinationClusterName, restoreName)
-					err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, BackupOrgID, backupToContextMapping[backupName])
+					err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, backupToContextMapping[backupName])
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of backup [%s] in cluster [%s]", restoreName, backupName, restoreName))
 					restoreNames = append(restoreNames, restoreName)
 				}
@@ -1507,7 +1510,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 						log.InfoD("Restoring next single namespace schedule backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v", nextScheduleBackupName, DestinationClusterName, restoreName, config.namespaceMapping)
 						if config.replacePolicy == ReplacePolicyRetain {
 							appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
-							err = CreateRestoreWithValidation(ctx, restoreName, nextScheduleBackupName, config.namespaceMapping, config.storageClassMapping, DestinationClusterName, BackupOrgID, appContextsToBackup)
+							err = CreateRestoreWithValidation(ctx, restoreName, nextScheduleBackupName, config.namespaceMapping, config.storageClassMapping, DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 						} else if config.replacePolicy == ReplacePolicyDelete {
 							err = CreateRestoreWithReplacePolicy(restoreName, nextScheduleBackupName, config.namespaceMapping, DestinationClusterName, BackupOrgID, ctx, config.storageClassMapping, config.replacePolicy)
 						}
@@ -1570,6 +1573,7 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 		backupLocationMap         map[string]string
 		providers                 []string
 		sourceClusterUid          string
+		destClusterUid            string
 		preUpgradeBackupName      string
 		postUpgradeBackupName     string
 		namespaceMap              map[string]string
@@ -1651,6 +1655,8 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 
 			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Taking backup of application from source cluster before upgrade", func() {
@@ -1744,7 +1750,7 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 					namespaceMap[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-res-old"
 				}
 				log.InfoD("Restoring from the [%s] backup", preUpgradeBackupName)
-				err = CreateRestoreWithValidation(ctx, restoreName, preUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+				err = CreateRestoreWithValidation(ctx, restoreName, preUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 			} else {
 				// Restore should fail because backups taken before 2.7.0 will be azure native driver based which require all the non-mandatory fields to be present
@@ -1756,7 +1762,7 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 					namespaceMap[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-res-old"
 				}
 				log.InfoD("Restoring from the [%s] backup", preUpgradeBackupName)
-				err = CreateRestoreWithValidation(ctx, restoreName, preUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+				err = CreateRestoreWithValidation(ctx, restoreName, preUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts)
 				dash.VerifyFatal(strings.Contains(err.Error(), "Failed to refresh the Token for request"), true, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 				log.Infof("Error message is [%s]", err.Error())
 			}
@@ -1785,7 +1791,7 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 					namespaceMap[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-res-new"
 				}
 				log.InfoD("Restoring from the [%s] backup", postUpgradeBackupName)
-				err = CreateRestoreWithValidation(ctx, restoreName, postUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+				err = CreateRestoreWithValidation(ctx, restoreName, postUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 			} else {
 				// Updating the azure creds to have all the fields and then restoring the backups taken before and after upgrade
@@ -1850,7 +1856,7 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 				log.InfoD("Restoring from the [%s] backup", preUpgradeBackupName)
 				err = os.Setenv("BACKUP_TYPE", "azure")
 				log.FailOnError(err, "Setting BACKUP_TYPE env variable to azure")
-				err = CreateRestoreWithValidation(ctx, restoreName, preUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+				err = CreateRestoreWithValidation(ctx, restoreName, preUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 
 				restoreName = fmt.Sprintf("%s-%s", "restore-post-upgrade-backup", RandomString(4))
@@ -1861,7 +1867,7 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 				log.InfoD("Restoring from the [%s] backup", postUpgradeBackupName)
 				err = os.Setenv("BACKUP_TYPE", "native_csi")
 				log.FailOnError(err, "Setting BACKUP_TYPE env variable to native_csi")
-				err = CreateRestoreWithValidation(ctx, restoreName, postUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+				err = CreateRestoreWithValidation(ctx, restoreName, postUpgradeBackupName, namespaceMap, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, scheduledAppContexts)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 
 			}
