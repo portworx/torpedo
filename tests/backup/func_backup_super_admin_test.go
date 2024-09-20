@@ -1152,13 +1152,13 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 			log.InfoD("Creating BackupSchedule with Admin Context")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, RandomString(6))
 			labelSelectors := make(map[string]string)
-			err = CreateScheduleBackup(scheduleName, SourceClusterName, backupLocationName, backupLocationUID, bkpNamespaces, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, adminCtx)
+			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, adminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s] using admix ctx", scheduleName))
 
 			for _, namespace := range bkpNamespaces {
 				namespaceMapping[namespace] = namespace
 			}
-			err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, adminCtx, make(map[string]string))
+			err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, clusterUid, BackupOrgID, adminCtx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s] using admin ctx", restoreName))
 		})
 		Step("Share Backup as restore access using user with super admin role", func() {
@@ -1190,6 +1190,9 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 			err = AddSourceCluster(testUser1Ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding source cluster [%s] using [%s] ctx", SourceClusterName, testUser1Name))
 
+			testUser1ClusterUid, err := Inst().Backup.GetClusterUID(testUser1Ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid using testuser1 ctx", SourceClusterName))
+
 			// Create restore from backup
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			namespaceMapping := make(map[string]string)
@@ -1198,7 +1201,7 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 				namespaceMapping[namespace] = restoreNamespace
 			}
 
-			err = CreateRestore(restoreName2, backupName, namespaceMapping, SourceClusterName, BackupOrgID, testUser1Ctx, make(map[string]string))
+			err = CreateRestore(restoreName2, backupName, namespaceMapping, SourceClusterName, testUser1ClusterUid, BackupOrgID, testUser1Ctx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore [%s]", restoreName))
 		})
 		Step("Verify Backup access and share to user 3", func() {
@@ -1231,7 +1234,7 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, adminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using admin ctx", backupName))
 
-			err = SuspendAndDeleteSchedule(scheduleName, periodicSchedulePolicyName, SourceClusterName, BackupOrgID, adminCtx, false)
+			err = SuspendAndDeleteSchedule(scheduleName, periodicSchedulePolicyName, SourceClusterName, clusterUid, BackupOrgID, adminCtx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of schedule [%s] using admin ctx", scheduleName))
 
 			// Delete the restore
