@@ -307,6 +307,9 @@ var autoPilotRuleCreated bool
 
 var cloudsnapMap = make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
 
+var cloudSnapStartTime time.Time
+var localSnapStartTime time.Time
+
 // Counter is a thread-safe generic counter for keys of a comparable type
 type Counter[K comparable] struct {
 	sync.RWMutex
@@ -3331,6 +3334,8 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
+			var retain int
+			var snapshotInterval time.Duration
 			if strings.Contains(ctx.App.Key, "localsnap") {
 
 				appNamespace := ctx.App.Key + "-" + ctx.UID
@@ -3341,8 +3346,9 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 					policyName := "localintervalpolicy"
 					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 					if err != nil {
-						retain := 2
+						retain = 5
 						interval := getCloudSnapInterval(LocalSnapShot)
+						snapshotInterval = time.Duration(interval) * time.Minute
 						log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
 						schedPolicy = &storkv1.SchedulePolicy{
 							ObjectMeta: metav1.ObjectMeta{
@@ -3361,9 +3367,17 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 						updateLongevityStats(LocalSnapShot, stats.LocalsnapEventName, dashStats)
 						_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
 						log.Infof("Waiting for 10 mins for Snapshots to be completed")
+						localSnapStartTime = time.Now()
 						time.Sleep(10 * time.Minute)
 					} else {
 						log.Infof("schedPolicy is %v already exists", schedPolicy.Name)
+						retain = int(schedPolicy.Policy.Interval.Retain)
+						interval := int(schedPolicy.Policy.Interval.IntervalMinutes)
+						snapshotInterval = time.Duration(interval) * time.Minute
+						if localSnapStartTime.IsZero() {
+							localSnapStartTime = schedPolicy.CreationTimestamp.Time
+						}
+						log.Infof("Schedule policy retain: %v interval: %v", retain, snapshotInterval)
 					}
 
 					UpdateOutcome(event, err)
@@ -3429,6 +3443,42 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 						log.InfoD("Got error while getting volume snapshot status :%v", err.Error())
 					}
 					UpdateOutcome(event, err)
+
+					snapMap := make(map[storkv1.SchedulePolicyType][]*storkv1.ScheduledVolumeSnapshotStatus)
+					newSnapStatuses, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+					if err != nil {
+						UpdateOutcome(event, err)
+						return
+					}
+					for v, snapshotStatuses := range newSnapStatuses.Status.Items {
+						if len(snapshotStatuses) > 0 {
+							var statuses []*storkv1.ScheduledVolumeSnapshotStatus
+							for _, status := range snapshotStatuses {
+								if status == nil {
+									UpdateOutcome(event, fmt.Errorf("SnapshotSchedule has an empty migration in its most recent status. Error getting latest snapshot status for [%s]", snapshotScheduleName))
+									return
+								}
+								if status.Status == snapv1.VolumeSnapshotConditionReady {
+									statuses = append(statuses, status)
+								}
+							}
+							snapMap[v] = statuses
+						}
+					}
+					elapsed := time.Since(localSnapStartTime)
+					log.Infof("snap shot taken time : %v", elapsed)
+					expectedCount := int(elapsed / snapshotInterval)
+					scheduleCount := len(snapMap["Interval"])
+
+					if expectedCount >= retain {
+						expectedCount = retain
+					}
+					if scheduleCount == expectedCount || scheduleCount == expectedCount+1 {
+						log.InfoD("Expected local Snapshot count: %v or %v, Actual local Snapshot count: %v", expectedCount, expectedCount+1, scheduleCount)
+					} else {
+						UpdateOutcome(event, fmt.Errorf("local snapshot retain validation failed: Expected count = %d or %d, Actual count = %d", expectedCount, expectedCount+1, scheduleCount))
+					}
+
 				}
 
 			}
@@ -3698,7 +3748,8 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 			var appVolumes []*volume.Volume
 			var err error
 			if strings.Contains(ctx.App.Key, "cloudsnap") {
-
+				var retain int
+				var snapshotInterval time.Duration
 				appNamespace := ctx.App.Key + "-" + ctx.UID
 				log.Infof("Namespace : %v", appNamespace)
 				stepLog = fmt.Sprintf("create schedule policy for %s app", ctx.App.Key)
@@ -3707,8 +3758,9 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 					policyName := "intervalpolicy"
 					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 					if err != nil {
-						retain := 10
+						retain = 5
 						interval := getCloudSnapInterval(CloudSnapShot)
+						snapshotInterval = time.Duration(interval) * time.Minute
 						log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
 						schedPolicy = &storkv1.SchedulePolicy{
 							ObjectMeta: metav1.ObjectMeta{
@@ -3728,9 +3780,17 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 						updateLongevityStats(CloudSnapShot, stats.CloudsnapEventName, dashStats)
 						_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
 						log.Infof("Waiting for 10 mins for Snapshots to be completed")
+						cloudSnapStartTime = time.Now()
 						time.Sleep(10 * time.Minute)
 					} else {
 						log.Infof("schedPolicy is %v already exists", schedPolicy.Name)
+						retain = int(schedPolicy.Policy.Interval.Retain)
+						interval := int(schedPolicy.Policy.Interval.IntervalMinutes)
+						snapshotInterval = time.Duration(interval) * time.Minute
+						if cloudSnapStartTime.IsZero() {
+							cloudSnapStartTime = schedPolicy.CreationTimestamp.Time
+						}
+						log.Infof("Schedule policy retain: %v interval: %v", retain, snapshotInterval)
 					}
 					UpdateOutcome(event, err)
 				})
@@ -3849,6 +3909,43 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 								snapMap[v] = status
 							}
 						}
+
+						snapMap := make(map[storkv1.SchedulePolicyType][]*storkv1.ScheduledVolumeSnapshotStatus)
+						newSnapStatuses, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+						if err != nil {
+							UpdateOutcome(event, err)
+							return
+						}
+						for v, snapshotStatuses := range newSnapStatuses.Status.Items {
+							if len(snapshotStatuses) > 0 {
+								var statuses []*storkv1.ScheduledVolumeSnapshotStatus
+								for _, status := range snapshotStatuses {
+									if status == nil {
+										UpdateOutcome(event, fmt.Errorf("SnapshotSchedule has an empty migration in its most recent status. Error getting latest snapshot status for [%s]", snapshotScheduleName))
+										return
+									}
+									if status.Status == snapv1.VolumeSnapshotConditionReady {
+										statuses = append(statuses, status)
+									}
+								}
+								snapMap[v] = statuses
+							}
+						}
+
+						elapsed := time.Since(cloudSnapStartTime)
+						log.InfoD("Time taken for cloud snapshot: %v", elapsed)
+						expectedCount := int(elapsed / snapshotInterval)
+						scheduleCount := len(snapMap["Interval"])
+
+						if expectedCount >= retain {
+							expectedCount = retain
+						}
+						if scheduleCount == expectedCount || scheduleCount == expectedCount+1 {
+							log.InfoD("Expected cloud Snapshot count: %v or %v, Actual cloud Snapshot count: %v", expectedCount, expectedCount+1, scheduleCount)
+						} else {
+							UpdateOutcome(event, fmt.Errorf("cloud snapshot retain validation failed: Expected count = %d or %d, Actual count = %d", expectedCount, expectedCount+1, scheduleCount))
+						}
+
 					}
 					cloudsnapMap[appNamespace] = snapMap
 				}
