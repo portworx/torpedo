@@ -796,7 +796,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", Label(TestCaseLabelsMap[Resiz
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, DestinationClusterName))
-			appClusterName = DestinationClusterName
+			appClusterName = SourceClusterName
 			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, appClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", appClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", appClusterName))

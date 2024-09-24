@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/go-version"
 	"strings"
 	"sync"
 	"time"
@@ -915,12 +916,11 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", Label(TestCaseLab
 				log.FailOnError(err, "failed to fetch user owner id %s", user)
 				backupScheduleNamesByOwnerID, err := GetAllBackupScheduleNamesByOwnerID(userOwnerID, BackupOrgID, ctx)
 				log.FailOnError(err, "failed to fetch backup schedule names with owner id %s from the admin", userOwnerID)
-				for _, backupScheduleName := range userScheduleNameMap {
-					if !IsPresent(backupScheduleNamesByOwnerID, backupScheduleName) {
-						err := fmt.Errorf("backup schedule %s is not listed in backup schedule names %s", backupScheduleName, backupScheduleNamesByOwnerID)
-						log.FailOnError(fmt.Errorf(""), err.Error())
-					}
+				if !IsPresent(backupScheduleNamesByOwnerID, userScheduleNameMap[user]) {
+					err := fmt.Errorf("backup schedule %v is not listed in backup schedule names %s", userScheduleNameMap[user], backupScheduleNamesByOwnerID)
+					log.FailOnError(fmt.Errorf(""), err.Error())
 				}
+
 			})
 			Step(fmt.Sprintf("Verify restores of the user %s from the admin", user), func() {
 				log.InfoD(fmt.Sprintf("Verifying restores of the user %s from the admin", user))
@@ -941,8 +941,16 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", Label(TestCaseLab
 		Step(fmt.Sprintf("Add new user to %s group", adminGroup), func() {
 			log.InfoD(fmt.Sprintf("Adding new user to %s group", adminGroup))
 			for _, user := range CreateUsers(1) {
-				err := backup.AddGroupToUser(user, adminGroup)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addition of user %s to the group %s", user, adminGroup))
+				adminGroupNotSupported, err := CompareCurrentPxBackupVersion("2.8.0", (*version.Version).GreaterThanOrEqual)
+				log.FailOnError(err, "failed to compare current px-backup version")
+				if adminGroupNotSupported {
+					log.InfoD("Assigning user as super admin role as px-admin-group is not supported from 2.8.0")
+					err := backup.AddRoleToUser(user, backup.SuperAdmin, fmt.Sprintf("Adding %v role to %s", backup.SuperAdmin, user))
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addition of role %s to the user %s", backup.SuperAdmin, user))
+				} else {
+					err := backup.AddGroupToUser(user, adminGroup)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addition of user %s to the group %s", user, adminGroup))
+				}
 				newAdmin = user
 			}
 		})
@@ -973,11 +981,9 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", Label(TestCaseLab
 				log.FailOnError(err, "failed to fetch user owner id %s", user)
 				backupScheduleNamesByOwnerID, err := GetAllBackupScheduleNamesByOwnerID(userOwnerID, BackupOrgID, newAdminCtx)
 				log.FailOnError(err, "failed to fetch backup schedule names with owner id %s from the new admin %s", userOwnerID, newAdmin)
-				for _, backupScheduleName := range userScheduleNameMap {
-					if !IsPresent(backupScheduleNamesByOwnerID, backupScheduleName) {
-						err := fmt.Errorf("backup schedule %s is not listed in backup schedule names %s", backupScheduleName, backupScheduleNamesByOwnerID)
-						log.FailOnError(fmt.Errorf(""), err.Error())
-					}
+				if !IsPresent(backupScheduleNamesByOwnerID, userScheduleNameMap[user]) {
+					err := fmt.Errorf("backup schedule %v is not listed in backup schedule names %s", userScheduleNameMap[user], backupScheduleNamesByOwnerID)
+					log.FailOnError(fmt.Errorf(""), err.Error())
 				}
 			})
 			Step(fmt.Sprintf("Verify restores of the user %s from the new admin %s", user, newAdmin), func() {

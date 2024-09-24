@@ -4905,6 +4905,10 @@ func DeleteBackupWithClusterUID(backupName string, backupUID string, clusterName
 func DeleteCluster(name string, orgID string, ctx context1.Context, cleanupBackupsRestores bool) error {
 	backupDriver := Inst().Backup
 	clusterUid, err := backupDriver.GetClusterUID(ctx, orgID, name)
+	err = DeleteAllScheduleFromCluster(name, clusterUid, ctx)
+	if err != nil {
+		return err
+	}
 	if cleanupBackupsRestores {
 		err = DeleteAllBackupsWithClusterUid(ctx, BackupOrgID, clusterUid)
 		if err != nil {
@@ -4927,6 +4931,10 @@ func DeleteCluster(name string, orgID string, ctx context1.Context, cleanupBacku
 // DeleteClusterWithUID deletes cluster with the given cluster name and uid
 func DeleteClusterWithUID(name string, uid string, orgID string, ctx context1.Context, cleanupBackupsRestores bool) error {
 	backupDriver := Inst().Backup
+	err := DeleteAllScheduleFromCluster(name, uid, ctx)
+	if err != nil {
+		return err
+	}
 	if cleanupBackupsRestores {
 		err := DeleteAllBackupsWithClusterUid(ctx, BackupOrgID, uid)
 		if err != nil {
@@ -4939,13 +4947,47 @@ func DeleteClusterWithUID(name string, uid string, orgID string, ctx context1.Co
 		Uid:            uid,
 		DeleteRestores: cleanupBackupsRestores,
 	}
-	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
+	_, err = backupDriver.DeleteCluster(ctx, clusterDeleteReq)
 	if err != nil {
 		return err
 	}
 	err = backupDriver.WaitForClusterDeletionWithUID(ctx, name, uid, orgID, clusterDeleteTimeout, clusterDeleteRetryTime)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+// DeleteAllScheduleFromCluster deletes all schedules from a cluster
+func DeleteAllScheduleFromCluster(clusterName string, clusterUid string, ctx context1.Context) error {
+	errors := make([]string, 0)
+	var wg sync.WaitGroup
+	var mutex sync.Mutex
+	semaphore := make(chan struct{}, 5)
+	scheduleNames, err := GetAllBackupSchedulesFromCluster(clusterUid, ctx)
+	if err != nil {
+		return err
+	}
+	for _, scheduleName := range scheduleNames {
+		wg.Add(1)
+		go func(scheduleName string) {
+			defer ginkgo.GinkgoRecover()
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+			log.Infof("Deleting schedule %s from cluster %s", scheduleName, clusterName)
+			err = DeleteSchedule(scheduleName, clusterName, BackupOrgID, ctx, true)
+			if err != nil {
+				mutex.Lock()
+				errors = append(errors, err.Error())
+				mutex.Unlock()
+			}
+		}(scheduleName)
+	}
+
+	wg.Wait()
+	if len(errors) > 0 {
+		return fmt.Errorf("Errors generated while deleting schedules - %s", strings.Join(errors, "}\n{"))
 	}
 	return nil
 }
@@ -5161,7 +5203,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 	clusterCreation := func(clusterCredName string, clusterCredUid string, clusterName string) error {
 		clusterStatus := func() (interface{}, bool, error) {
 			err = CreateCluster(clusterName, ClusterConfigPathMap[clusterName], orgID, clusterCredName, clusterCredUid, ctx)
-			if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
+			if err != nil && !(strings.Contains(err.Error(), "already exists with status: Online") || strings.Contains(err.Error(), "object already exists")) {
 				return "", true, err
 			}
 			srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)

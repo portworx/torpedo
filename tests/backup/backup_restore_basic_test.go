@@ -2438,7 +2438,7 @@ var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", Label(TestCaseLabelsMa
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, DestinationClusterName))
-			appClusterName := DestinationClusterName
+			appClusterName := SourceClusterName
 			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, appClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", appClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", appClusterName))
@@ -3350,7 +3350,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", Label(TestCaseLabelsMap[Delet
 			srcClusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-			srcClusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 			log.Infof("Cluster [%s] uid: [%s]", SourceClusterName, srcClusterUid)
 		})

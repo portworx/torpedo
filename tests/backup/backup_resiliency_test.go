@@ -414,7 +414,6 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", Label(TestCaseLabelsMa
 	var users []string
 	var backupName string
 	var clusterUid string
-	var destClusterUid string
 	var cloudCredName string
 	var backupUID string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
@@ -467,8 +466,6 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", Label(TestCaseLabelsMa
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
 			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
-			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Creating backup location", func() {
@@ -535,6 +532,9 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", Label(TestCaseLabelsMa
 				err = CreateApplicationClusters(BackupOrgID, "", "", ctxNonAdmin)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source and destination cluster for user %s", user))
 
+				userDestClusterUid, err := Inst().Backup.GetClusterUID(ctxNonAdmin, BackupOrgID, DestinationClusterName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+
 				// Get Backup UID
 				backupDriver := Inst().Backup
 				backupUID, err = backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
@@ -542,7 +542,8 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", Label(TestCaseLabelsMa
 
 				// Start Restore. Here the restore is expected to fail as the backup is shared with ViewOnlyAccess
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-				err = CreateRestore(restoreName, backupName, nil, DestinationClusterName, destClusterUid, BackupOrgID, ctxNonAdmin, nil)
+				err = CreateRestore(restoreName, backupName, nil, DestinationClusterName, userDestClusterUid, BackupOrgID, ctxNonAdmin, nil)
+				log.Infof("The expected error returned is %v", err)
 				// Restore validation to make sure that the user with cannot restore
 				dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true,
 					fmt.Sprintf("Verifying backup restore [%s] is not possible for backup [%s] with user [%s]", restoreName, backupName, user))
@@ -575,10 +576,11 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", Label(TestCaseLabelsMa
 				ctxNonAdmin, err := backup.GetNonAdminCtx(user, CommonPassword)
 				log.FailOnError(err, "Fetching non admin ctx")
 				for _, backup := range backupNames {
-					// Start Restore
+					userDestClusterUid, err := Inst().Backup.GetClusterUID(ctxNonAdmin, BackupOrgID, DestinationClusterName)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 					restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-					err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
+					err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore the backup %s for user %s", backup, user))
 					// Delete restore
 					err = DeleteRestore(restoreName, BackupOrgID, ctxNonAdmin)

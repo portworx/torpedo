@@ -395,7 +395,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", Label(TestCaseLabelsMap[VerifyRBAC
 				log.FailOnError(err, "failed to fetch user %s ctx", user)
 				userScheduleName := fmt.Sprintf("backup-schedule-%v", RandomString(5))
 				scheduleNameMap[user] = userScheduleName
-				scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, userScheduleName, SourceClusterName, srcClusterUid, backupLocationNameMap[infraAdminUser], backupLocationUIDMap[infraAdminUser], scheduledAppContexts, make(map[string]string), BackupOrgID, preRuleNameMap[infraAdminUser], preRuleUidMap[infraAdminUser], postRuleNameMap[infraAdminUser], postRuleUidMap[infraAdminUser], periodicSchedulePolicyNameMap[infraAdminUser], periodicSchedulePolicyUidMap[infraAdminUser])
+				scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, userScheduleName, SourceClusterName, userClusterMap[user][SourceClusterName], backupLocationNameMap[infraAdminUser], backupLocationUIDMap[infraAdminUser], scheduledAppContexts, make(map[string]string), BackupOrgID, preRuleNameMap[infraAdminUser], preRuleUidMap[infraAdminUser], postRuleNameMap[infraAdminUser], postRuleUidMap[infraAdminUser], periodicSchedulePolicyNameMap[infraAdminUser], periodicSchedulePolicyUidMap[infraAdminUser])
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", userScheduleName))
 				userBackupNamesMap[user] = SafeAppend(&mutex, userBackupNamesMap[user], scheduleBackupName).([]string)
 				err = SuspendBackupSchedule(scheduleNameMap[user], periodicSchedulePolicyNameMap[infraAdminUser], BackupOrgID, nonAdminCtx)
@@ -550,7 +550,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", Label(TestCaseLabelsMap[VerifyRBAC
 			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
 			restoreNameMap[customUser] = fmt.Sprintf("%s-%s", RestoreNamePrefix, backupNameMap[customUser])
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(nonAdminCtx, restoreNameMap[customUser], backupNameMap[customUser], make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
+			err = CreateRestoreWithValidation(nonAdminCtx, restoreNameMap[customUser], backupNameMap[customUser], make(map[string]string), make(map[string]string), DestinationClusterName, userClusterMap[customUser][DestinationClusterName], BackupOrgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", restoreNameMap[customUser], backupNameMap[customUser]))
 		})
 
@@ -574,7 +574,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", Label(TestCaseLabelsMap[VerifyRBAC
 			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
 			restoreForManualBackupWithLabel = fmt.Sprintf("%s-%s", RestoreNamePrefix, manualBackupWithLabel)
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(nonAdminCtx, restoreForManualBackupWithLabel, manualBackupWithLabel, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsExpectedInBackup)
+			err = CreateRestoreWithValidation(nonAdminCtx, restoreForManualBackupWithLabel, manualBackupWithLabel, make(map[string]string), make(map[string]string), DestinationClusterName, userClusterMap[customUser][DestinationClusterName], BackupOrgID, appContextsExpectedInBackup)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration of backup %s", manualBackupWithLabel))
 			customUserLabelledRestoreNames = append(customUserLabelledRestoreNames, restoreForManualBackupWithLabel)
 		})
@@ -585,7 +585,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", Label(TestCaseLabelsMap[VerifyRBAC
 			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
 			backupScheduleWithLabel = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(4))
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			scheduledBackupNameWithLabel, err = CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, backupScheduleWithLabel, SourceClusterName, srcClusterUid, backupLocationNameMap[customUser], backupLocationUIDMap[customUser], appContextsExpectedInBackup,
+			scheduledBackupNameWithLabel, err = CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, backupScheduleWithLabel, SourceClusterName, userClusterMap[customUser][SourceClusterName], backupLocationNameMap[customUser], backupLocationUIDMap[customUser], appContextsExpectedInBackup,
 				nil, BackupOrgID, "", "", "", "", nsLabelStringCustomUser, periodicSchedulePolicyNameMap[customUser], periodicSchedulePolicyUidMap[customUser])
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating first schedule backup %s with labels [%v]", backupScheduleWithLabel, nsLabelStringCustomUser))
 			err = SuspendBackupSchedule(backupScheduleWithLabel, periodicSchedulePolicyNameMap[customUser], BackupOrgID, nonAdminCtx)
@@ -608,7 +608,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", Label(TestCaseLabelsMap[VerifyRBAC
 			}
 			customRestoreName = fmt.Sprintf("%s-%v", "customrestore", RandomString(4))
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateRestoreWithValidation(nonAdminCtx, customRestoreName, scheduledBackupNameWithLabel, multipleRestoreMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsExpectedInBackup)
+			err = CreateRestoreWithValidation(nonAdminCtx, customRestoreName, scheduledBackupNameWithLabel, multipleRestoreMapping, make(map[string]string), DestinationClusterName, userClusterMap[customUser][DestinationClusterName], BackupOrgID, appContextsExpectedInBackup)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying multiple backup restore [%s] in custom namespace [%v]", customRestoreName, multipleRestoreMapping))
 			customUserLabelledRestoreNames = append(customUserLabelledRestoreNames, customRestoreName)
 		})

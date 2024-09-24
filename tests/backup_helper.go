@@ -2494,7 +2494,7 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 	log.InfoD("Registering Source and Destination clusters from user context")
 	err = CreateApplicationClusters(BackupOrgID, "", "", userCtx)
 	Inst().Dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-	destClusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+	destClusterUid, err := Inst().Backup.GetClusterUID(userCtx, BackupOrgID, DestinationClusterName)
 	Inst().Dash.VerifyFatal(err, nil, "Getting destination cluster UID")
 	log.InfoD("Validating if user [%s] with access [%v] can restore and delete backup %s or not", user, BackupAccessKeyValue[access], backupName)
 	backupDriver := Inst().Backup
@@ -6599,7 +6599,7 @@ func CreateRuleForVMBackup(ruleName string, vms []kubevirtv1.VirtualMachine, rul
 
 // GetAllBackupNamesByOwnerID gets all backup names associated with the given ownerID
 func GetAllBackupNamesByOwnerID(ownerID string, orgID string, ctx context1.Context) ([]string, error) {
-	isAdminCtx, err := portworx.IsAdminCtx(ctx)
+	isAdminCtx, err := IsAdminCtx(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -6633,7 +6633,7 @@ func GetAllBackupNamesByOwnerID(ownerID string, orgID string, ctx context1.Conte
 
 // GetAllBackupScheduleNamesByOwnerID gets all backup schedule names associated with the given ownerID
 func GetAllBackupScheduleNamesByOwnerID(ownerID string, orgID string, ctx context1.Context) ([]string, error) {
-	isAdminCtx, err := portworx.IsAdminCtx(ctx)
+	isAdminCtx, err := IsAdminCtx(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -6667,7 +6667,7 @@ func GetAllBackupScheduleNamesByOwnerID(ownerID string, orgID string, ctx contex
 
 // GetAllRestoreNamesByOwnerID gets all restore names associated with the given ownerID
 func GetAllRestoreNamesByOwnerID(ownerID string, orgID string, ctx context1.Context) ([]string, error) {
-	isAdminCtx, err := portworx.IsAdminCtx(ctx)
+	isAdminCtx, err := IsAdminCtx(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -6710,6 +6710,26 @@ func GetAllBackupSchedulesForUser(username, password string) ([]string, error) {
 
 	scheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
 		OrgId: BackupOrgID,
+	}
+	currentSchedules, err := backupDriver.EnumerateBackupSchedule(ctx, scheduleEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, schedule := range currentSchedules.GetBackupSchedules() {
+		scheduleNames = append(scheduleNames, schedule.GetName())
+	}
+	return scheduleNames, nil
+}
+
+// GetAllBackupSchedulesFromCluster returns all backup schedules within a cluster.
+func GetAllBackupSchedulesFromCluster(ClusterUid string, ctx context1.Context) ([]string, error) {
+	scheduleNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	scheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId: BackupOrgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			ClusterUidFilter: ClusterUid,
+		},
 	}
 	currentSchedules, err := backupDriver.EnumerateBackupSchedule(ctx, scheduleEnumerateReq)
 	if err != nil {
@@ -11413,4 +11433,41 @@ func ValidateUnShareCluster(ctx context1.Context, clusterName string, clusterUid
 	}
 
 	return nil
+}
+
+// IsAdminCtx checks if the given ctx is associated with any user in px-admin-group or role is SuperAdmin
+func IsAdminCtx(ctx context1.Context) (bool, error) {
+	var found bool
+	adminGroupNotSupported, err := CompareCurrentPxBackupVersion("2.8.0", (*version.Version).GreaterThanOrEqual)
+	if err != nil {
+		return false, err
+	}
+	if adminGroupNotSupported {
+		log.Infof("Admin group is not supported in this version")
+		ctxRoles, err := portworx.GetRolesFromCtx(ctx)
+		if err != nil {
+			return false, err
+		}
+		if IsPresent(ctxRoles, backup.SuperAdmin) {
+			found = true
+		}
+		if found {
+			return true, nil
+		}
+	} else {
+		log.Infof("Admin group is supported in this version")
+		ctxGroups, err := portworx.GetGroupsFromCtx(ctx)
+		if err != nil {
+			return false, err
+		}
+		for _, group := range ctxGroups {
+			if group == "/px-admin-group" {
+				found = true
+			}
+		}
+		if found {
+			return true, nil
+		}
+	}
+	return false, nil
 }

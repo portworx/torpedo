@@ -2557,22 +2557,22 @@ func GetGroupsFromCtx(ctx context.Context) ([]string, error) {
 	return groups, nil
 }
 
-// IsAdminCtx checks if the given ctx is associated with any user in px-admin-group
-func IsAdminCtx(ctx context.Context) (bool, error) {
-	ctxGroups, err := GetGroupsFromCtx(ctx)
+// GetRolesFromCtx extracts and decodes the JWT token from the outgoing context and then returns the roles
+func GetRolesFromCtx(ctx context.Context) ([]string, error) {
+	claims, err := GetTokenClaimsFromCtx(ctx)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	found := false
-	for _, group := range ctxGroups {
-		if group == "/px-admin-group" {
-			found = true
-		}
+	roles := make([]string, 0)
+	roleClaims, ok := claims["roles"].([]interface{})
+	log.Infof("Role claims: %v", roleClaims)
+	if !ok {
+		return nil, fmt.Errorf("roles not found or is of invalid type")
 	}
-	if found {
-		return true, nil
+	for _, roleClaim := range roleClaims {
+		roles = append(roles, roleClaim.(string))
 	}
-	return false, nil
+	return roles, nil
 }
 
 func (p *portworx) EnumerateActivityTimeLine(ctx context.Context, req *api.ActivityEnumerateRequest) (*api.ActivityEnumerateResponse, error) {
