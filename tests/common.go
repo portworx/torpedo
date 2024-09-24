@@ -29,8 +29,6 @@ import (
 
 	"github.com/portworx/torpedo/drivers/applications/databases"
 
-	"github.com/vmware/govmomi/object"
-
 	"cloud.google.com/go/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/Masterminds/semver/v3"
@@ -14696,7 +14694,7 @@ func ValidateNodePDB(minAvailable int, totalNodes int, errChan ...*chan error) {
 }
 
 // ValidateDatastoreUpdate validates the cloud drive configmap after Storage vmotion is done
-func ValidateDatastoreUpdate(preData, postData map[string]node.DriveSet, nodeUUID string, targetDatastore *object.Datastore) error {
+func ValidateDatastoreUpdate(movedDisks map[string]string, preData, postData map[string]node.DriveSet, nodeUUID string, expectedDatastoreMap map[string]string) error {
 	preNodeData, preExists := preData[nodeUUID]
 	postNodeData, postExists := postData[nodeUUID]
 
@@ -14716,31 +14714,40 @@ func ValidateDatastoreUpdate(preData, postData map[string]node.DriveSet, nodeUUI
 
 	allMoved := true
 	for preDiskID, preDrive := range preNodeData.Configs {
-		postDSName, exists := postDiskDatastores[preDrive.DiskUUID]
-		if !exists {
-			return fmt.Errorf("no post-migration data found for disk with UUID %v", preDrive.DiskUUID)
-		}
+		if _, ok := movedDisks[preDrive.DiskUUID]; ok {
 
-		postDS, err := Inst().N.FindDatastoreByName(postDSName)
-		if err != nil {
-			return fmt.Errorf("failed to find datastore with name %v: %v", postDSName, err)
-		}
-		postDSID := postDS.Reference().Value
+			postDSName, exists := postDiskDatastores[preDrive.DiskUUID]
+			if !exists {
+				return fmt.Errorf("no post-migration data found for disk with UUID %v", preDrive.DiskUUID)
+			}
+			postDS, err := Inst().N.FindDatastoreByName(postDSName)
+			if err != nil {
+				return fmt.Errorf("failed to find datastore with name %v: %v", postDSName, err)
+			}
+			postDSID := postDS.Reference().Value
+			if _, ok = expectedDatastoreMap[preDrive.DiskUUID]; !ok {
+				return fmt.Errorf("disk with ID [%v] not found in the expected datastore map", preDrive.DiskUUID)
 
-		if !(postDSID == targetDatastore.Reference().Value) {
-			log.Errorf("Disk with UUID %v did not move to the target datastore %v as expected, or was not already there. This is for Node %v", preDrive.DiskUUID, targetDatastore.Name(), nodeUUID)
-			allMoved = false
+			}
+			expectedTargetDataStoreName := expectedDatastoreMap[preDrive.DiskUUID]
+			expectedPostDS, err := Inst().N.FindDatastoreByName(expectedTargetDataStoreName)
+			if err != nil {
+				return fmt.Errorf("failed to find datastore with name %v: %v", expectedTargetDataStoreName, err)
+			}
+			if !(postDSID == expectedPostDS.Reference().Value) {
+				log.Errorf("Disk with UUID %v did not move to the target datastore %v as expected, or was not already there. This is for Node %v", preDrive.DiskUUID, expectedPostDS.Name(), nodeUUID)
+				allMoved = false
+			}
+			if config, ok := postNodeData.Configs[preDiskID]; ok {
+				log.Infof("Pre-migration disk config: %+#v", preDrive)
+				log.Infof("Post-migration disk config: %+#v", config)
+				return fmt.Errorf("disk config with ID [%v] still exists in the node [%s] after storage vmotion", preDiskID, nodeUUID)
+			}
 		}
-		if config, ok := postNodeData.Configs[preDiskID]; ok {
-			log.Infof("Pre-migration disk config: %+#v", preDrive)
-			log.Infof("Post-migration disk config: %+#v", config)
-			return fmt.Errorf("disk config with ID [%v] still exists in the node [%s] after storage vmotion", preDiskID, nodeUUID)
-		}
-
 	}
 
 	if !allMoved {
-		return fmt.Errorf("not all disks in the node [%s] moved to the target datastore %v as expected", targetDatastore.Name(), nodeUUID)
+		return fmt.Errorf("not all disks in the node [%s] moved to the target datastore(s) as expected", nodeUUID)
 	}
 
 	alertResponse, err := Inst().V.GetAlertsUsingResourceTypeBySeverity(opsapi.ResourceType_RESOURCE_TYPE_DRIVE,
@@ -14752,17 +14759,21 @@ func ValidateDatastoreUpdate(preData, postData map[string]node.DriveSet, nodeUUI
 
 	isAlertFound := false
 	for _, alert := range alerts {
-		log.Infof("Alert: %+#v", alert)
 		if alert.ResourceId == nodeUUID {
 			currTime := time.Now()
 			alertTime := time.Unix(alert.Timestamp.Seconds, 0)
 			log.Infof("alert time: %v, current time: %v", alertTime, currTime)
 			log.Infof("diff time: %v", currTime.Sub(alertTime))
-			if !(currTime.Sub(alertTime) < 2*time.Minute) {
+			if currTime.Sub(alertTime) < 2*time.Minute {
 				alertMsg := alert.Message
-				if strings.Contains(alertMsg, "New paths after Storage vMotion persisted") && strings.Contains(alertMsg, targetDatastore.Name()) {
+				if strings.Contains(alertMsg, "New paths after Storage vMotion persisted") {
 					log.InfoD("SvMotionMonitoringSuccess found for node %v: %v", nodeUUID, alertMsg)
 					isAlertFound = true
+					for diskUUID, dsName := range expectedDatastoreMap {
+						if !(strings.Contains(alertMsg, diskUUID) && strings.Contains(alertMsg, dsName)) {
+							isAlertFound = false
+						}
+					}
 				}
 			}
 		}
@@ -14776,9 +14787,7 @@ func ValidateDatastoreUpdate(preData, postData map[string]node.DriveSet, nodeUUI
 	}
 
 	ctx := context1.Background()
-
 	n := node.Node{}
-
 	n = node.GetNodesByVoDriverNodeID()[nodeUUID]
 
 	if n.Name == "" {

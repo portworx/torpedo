@@ -769,15 +769,14 @@ func (v *vsphere) RemoveNonRootDisks(n node.Node) error {
 	return nil
 }
 
-// StorageVmotion relocates the largest disks of a VM from one datastore to another within the same prefix group
-// With moveAllDisks true we will be moving all disks attached to a VM onto same Datastore
-// If moveAllDisks is set to False then we will choose the largest sized disk and move that only to a new Datastore
-func (v *vsphere) StorageVmotion(ctx context.Context, node node.Node, datastorePrefix string, moveAllDisks bool) (*object.Datastore, error) {
+// StorageVmotion relocates the given disks of a VM from one datastore to another within the same prefix group
+func (v *vsphere) StorageVmotion(ctx context.Context, node node.Node, datastorePrefix string, disksToMove map[string]string) (map[string]string, error) {
 	log.Infof("Trying to find the VM on vSphere: %v", node.Name)
 	vm, err := v.FindVMByIP(node)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving VM: %v", err)
 	}
+	expectedDatastrores := make(map[string]string)
 
 	var vmProps mo.VirtualMachine
 	err = vm.Properties(ctx, vm.Reference(), []string{"config.hardware"}, &vmProps)
@@ -791,83 +790,68 @@ func (v *vsphere) StorageVmotion(ctx context.Context, node node.Node, datastoreP
 		return nil, fmt.Errorf("error retrieving compatible datastores: %v", err)
 	}
 
-	originalDatastoreIDs := map[string]string{}
-	for _, device := range vmProps.Config.Hardware.Device {
-		if disk, ok := device.(*types.VirtualDisk); ok {
-			if disk.DeviceInfo != nil {
-				if backing, ok := disk.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
-					originalDatastoreIDs[disk.DeviceInfo.GetDescription().Label] = backing.Datastore.Value
-				}
-			}
-		}
-	}
+	diskLocators := make([]types.VirtualMachineRelocateSpecDiskLocator, 0)
 
-	var targetDatastores []*object.Datastore
-
-	largestDisks := findLargestDisksOnDatastores(vmProps.Config.Hardware.Device, compatibleDatastores)
-	if len(largestDisks) == 0 {
-		return nil, fmt.Errorf("no large disks found on specified prefix datastores")
-	}
-
-	sourceDatastore := object.NewDatastore(vm.Client(), largestDisks[0].Datastore)
-
-	targetDatastores, err = filterTargetDatastores(ctx, sourceDatastore, compatibleDatastores, &vmProps)
-	if err != nil {
-		return nil, fmt.Errorf("error filtering target datastores: %v", err)
-	}
-
-	var targetDatastore *object.Datastore
-	if len(targetDatastores) == 0 {
-		return nil, fmt.Errorf("no compatible datastores available for storage vMotion")
-	}
-	if len(targetDatastores) > 1 {
-		maxAvailableSpace := int64(-1)
-		for _, ds := range targetDatastores {
-			var dsProps mo.Datastore
-			if err := ds.Properties(ctx, ds.Reference(), []string{"summary"}, &dsProps); err == nil {
-				if available := dsProps.Summary.FreeSpace; available > maxAvailableSpace {
-					maxAvailableSpace = available
-					targetDatastore = ds
-				}
-			}
-		}
-	} else {
-		targetDatastore = targetDatastores[0]
-	}
-
-	if targetDatastore == nil {
-		return nil, fmt.Errorf("failed to select a target datastore")
-	}
-
-	if !moveAllDisks {
-		log.Infof("Trying to Move largest disk on VM %v from Datastore %v to Datastore : %v", node.Name, sourceDatastore.Name(), targetDatastore.Name())
-		err = initiateStorageVmotion(ctx, vm, largestDisks[:1], targetDatastore)
-		if err != nil {
-			return nil, fmt.Errorf("error during storage vMotion: %v", err)
-		}
-	} else {
-		log.Infof("Trying to Move all disks of %v from Datastore %v to Datastore : %v", node.Name, sourceDatastore.Name(), targetDatastore.Name())
-		diskLocators := make([]types.VirtualMachineRelocateSpecDiskLocator, 0)
+	for cmDiskUUID, currPath := range disksToMove {
+		log.Infof("Getting Target Datastore for disk path %s", currPath)
 		for _, device := range vmProps.Config.Hardware.Device {
 			if disk, ok := device.(*types.VirtualDisk); ok {
-				diskLocators = append(diskLocators, types.VirtualMachineRelocateSpecDiskLocator{
-					DiskId:    disk.Key,
-					Datastore: targetDatastores[0].Reference(),
-				})
+				if disk.Backing != nil {
+					if backing, ok := disk.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
+						log.Infof("Checking for Backing filename %s", backing.FileName)
+						if currPath == backing.FileName {
+							log.Infof("Getting Source Datastore for disk path %s", currPath)
+							sourceDatastoreDiskLocator := getSourceDataStoreDiskLocator(currPath, vmProps.Config.Hardware.Device, compatibleDatastores)
+							sourceDatastoreObject := object.NewDatastore(vm.Client(), sourceDatastoreDiskLocator.Datastore)
+							driveProps := strings.Split(currPath, " ")
+							sourceDatastoreName := driveProps[0]
+							log.Infof("Getting target datastores for disk [%s] in datastore %s to move", currPath, sourceDatastoreName)
+							targetDatastores, err := filterTargetDatastores(ctx, sourceDatastoreObject, compatibleDatastores, &vmProps)
+							if err != nil {
+								return nil, fmt.Errorf("error filtering target datastores: %v", err)
+							}
+							var targetDatastore *object.Datastore
+							if len(targetDatastores) > 1 {
+								maxAvailableSpace := int64(-1)
+								for _, ds := range targetDatastores {
+									var dsProps mo.Datastore
+									if err := ds.Properties(ctx, ds.Reference(), []string{"summary"}, &dsProps); err == nil {
+										if available := dsProps.Summary.FreeSpace; available > maxAvailableSpace {
+											maxAvailableSpace = available
+											targetDatastore = ds
+										}
+									}
+								}
+							} else {
+								targetDatastore = targetDatastores[0]
+							}
+
+							if targetDatastore == nil {
+								return nil, fmt.Errorf("failed to select a target datastore")
+							}
+							log.Infof("Trying to Move disk %s on VM %v from Datastore: %v to Datastore: %v", currPath, node.Name, sourceDatastoreName, targetDatastore.Name())
+							expectedDatastrores[cmDiskUUID] = targetDatastore.Name()
+							sourceDatastoreDiskLocator.Datastore = targetDatastore.Reference()
+							diskLocators = append(diskLocators, sourceDatastoreDiskLocator)
+						}
+					}
+				}
 			}
 		}
-		if len(diskLocators) == 0 {
-			return nil, fmt.Errorf("no disks found on the VM")
-		}
-		log.Infof("Going to trigger Storage Vmotion for %v", node.Name)
-		err = initiateStorageVmotion(ctx, vm, diskLocators, targetDatastore)
-		if err != nil {
-			return nil, fmt.Errorf("error during storage vMotion: %v", err)
-		}
-		log.Infof("Sleeping for a minute to let config map be updated with latest changes")
-		time.Sleep(1 * time.Minute)
+
 	}
-	return targetDatastore, nil
+	if len(diskLocators) == 0 {
+		return nil, fmt.Errorf("no disks found on the VM")
+	}
+	log.Infof("Going to trigger Storage Vmotion for %v", node.Name)
+	err = initiateStorageVmotion(ctx, vm, diskLocators)
+	if err != nil {
+		return nil, fmt.Errorf("error during storage vMotion: %v", err)
+	}
+	log.Infof("Sleeping for a minute to let config map be updated with latest changes")
+	time.Sleep(1 * time.Minute)
+
+	return expectedDatastrores, nil
 }
 
 func (v *vsphere) GetUUIDFromVMDKPath(ctx context.Context, node node.Node, vmdkPath string) (string, error) {
@@ -991,6 +975,34 @@ func filterTargetDatastores(ctx context.Context, sourceDatastore *object.Datasto
 	return filteredDatastores, nil
 }
 
+func getSourceDataStoreDiskLocator(currPath string, devices []types.BaseVirtualDevice, datastores []*object.Datastore) types.VirtualMachineRelocateSpecDiskLocator {
+
+	datastoreMap := make(map[types.ManagedObjectReference]*object.Datastore)
+	for _, ds := range datastores {
+		datastoreMap[ds.Reference()] = ds
+	}
+	var diskLocator types.VirtualMachineRelocateSpecDiskLocator
+	for _, device := range devices {
+		if disk, ok := device.(*types.VirtualDisk); ok {
+			if disk.Backing != nil {
+				if backingInfo, ok := disk.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
+					if backingInfo.FileName == currPath {
+						log.Infof("Found disk %s to move", currPath)
+						diskLocator = types.VirtualMachineRelocateSpecDiskLocator{
+							DiskId:    disk.Key,
+							Datastore: *backingInfo.Datastore,
+						}
+
+					}
+				}
+			}
+		}
+	}
+
+	return diskLocator
+
+}
+
 // findLargestDisksOnDatastores identifies the largest disks on the specified datastores for a VM
 func findLargestDisksOnDatastores(devices []types.BaseVirtualDevice, datastores []*object.Datastore) []types.VirtualMachineRelocateSpecDiskLocator {
 	datastoreMap := make(map[types.ManagedObjectReference]*object.Datastore)
@@ -1041,11 +1053,7 @@ func findLargestDisksOnDatastores(devices []types.BaseVirtualDevice, datastores 
 }
 
 // initiateStorageVmotion starts the Storage vMotion process for the disks, targeting a specific datastore.
-func initiateStorageVmotion(ctx context.Context, vm *object.VirtualMachine, diskLocators []types.VirtualMachineRelocateSpecDiskLocator, targetDatastore *object.Datastore) error {
-
-	for i := range diskLocators {
-		diskLocators[i].Datastore = targetDatastore.Reference()
-	}
+func initiateStorageVmotion(ctx context.Context, vm *object.VirtualMachine, diskLocators []types.VirtualMachineRelocateSpecDiskLocator) error {
 
 	relocateSpec := types.VirtualMachineRelocateSpec{
 		Disk: diskLocators,

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/utils/strings/slices"
 	"math/rand"
 	"path"
 	"strings"
@@ -1882,18 +1883,51 @@ var _ = Describe("{PerformStorageVMotions}", func() {
 				log.FailOnError(fmt.Errorf("no worker nodes available for svmotion"), "No worker nodes available")
 
 			}
-			moveAllDisks = rand.Intn(2) == 0
-			if moveAllDisks {
-				log.Infof("Moving all disks on worker node %v", workerNodes[randomIndex].Name)
-			} else {
-				log.Infof("Moving only largest sized disk(s) on worker node %v", workerNodes[randomIndex].Name)
-			}
-
 			stc, err := Inst().V.GetDriver()
 			log.FailOnError(err, "Failed to get storage driver")
 
+			selectedIds := make([]string, 0)
+
 			preData, err := Inst().S.GetPXCloudDriveConfigMap(stc)
 			log.FailOnError(err, "Failed to get pre-vMotion cloud drive config")
+			diskUUIDMap := make(map[string]string)
+			moveAllDisks = rand.Intn(2) == 0
+			preNodeConfigs := preData[workerNodes[randomIndex].VolDriverNodeID]
+			if moveAllDisks {
+				log.Infof("Moving all disks on worker node %v", workerNodes[randomIndex].Name)
+
+				for id, _ := range preNodeConfigs.Configs {
+					selectedIds = append(selectedIds, id)
+				}
+			} else {
+				log.Infof("Moving only largest sized disk(s) on worker node %v", workerNodes[randomIndex].Name)
+				maxSize := int64(0)
+				selectedId := ""
+				for id, postDrive := range preNodeConfigs.Configs {
+					if postDrive.Size > maxSize {
+						selectedId = id
+					}
+				}
+				for id, _ := range preNodeConfigs.Configs {
+					if id == selectedId {
+						selectedIds = append(selectedIds, id)
+					}
+				}
+			}
+			for id, preDriveConfig := range preNodeConfigs.Configs {
+				if slices.Contains(selectedIds, id) {
+					dsName := preDriveConfig.Labels["datastore"]
+					driveProps := strings.Split(preDriveConfig.ID, " ")
+					if len(driveProps) < 2 {
+						log.FailOnError(fmt.Errorf("invalid drive id %v", preDriveConfig.ID), "Invalid drive id")
+					}
+					dsPath := driveProps[1]
+
+					driveID := fmt.Sprintf("[%s] %s", dsName, dsPath)
+					diskUUIDMap[preDriveConfig.DiskUUID] = driveID
+				}
+			}
+			log.Infof("Ndde [%s],Disk UUIDs to be moved %v", workerNodes[randomIndex].Name, diskUUIDMap)
 
 			var envVariables []v1.EnvVar
 			envVariables = stc.Spec.CommonConfig.Env
@@ -1906,12 +1940,14 @@ var _ = Describe("{PerformStorageVMotions}", func() {
 			}
 
 			ctx := ctxt.Background()
-			targetDatastore, err := Inst().N.StorageVmotion(ctx, workerNodes[randomIndex], prefixName, moveAllDisks)
+			expectedDatastoreMap, err := Inst().N.StorageVmotion(ctx, workerNodes[randomIndex], prefixName, diskUUIDMap)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("validate storage vmotion on node [%s]", workerNodes[randomIndex].Name))
+			log.Infof("Waiting for 5 seconds for configmap to be updated")
+			time.Sleep(5 * time.Second)
 
 			postData, err := Inst().S.GetPXCloudDriveConfigMap(stc)
 			log.FailOnError(err, "Failed to get post-vMotion cloud drive config")
-			err = ValidateDatastoreUpdate(preData, postData, workerNodes[randomIndex].VolDriverNodeID, targetDatastore)
+			err = ValidateDatastoreUpdate(diskUUIDMap, preData, postData, workerNodes[randomIndex].VolDriverNodeID, expectedDatastoreMap)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("validate datastore update in cloud drive config after storage vmotion on node [%s]", workerNodes[randomIndex].Name))
 		})
 

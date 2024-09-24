@@ -745,6 +745,8 @@ func endLongevityTest() {
 }
 
 func updateLongevityStats(name, eventStatName string, dashStats map[string]string) {
+	mutex.Lock()
+	defer mutex.Unlock()
 	name = strings.Split(name, "<br>")[0] //discarding the extra strings attached to name if any
 	version, err := Inst().V.GetDriverVersion()
 	product := "px-enterprise"
@@ -12650,25 +12652,56 @@ func TriggerSvMotionSingleNode(contexts *[]*scheduler.Context, recordChan *chan 
 			UpdateOutcome(event, fmt.Errorf("No worker nodes available for svmotion"))
 			return
 		}
-		moveAllDisks = rand.Intn(2) == 0
-		if moveAllDisks {
-			log.Infof("Moving all disks on worker node %v", workerNodes[randomIndex].Name)
-		} else {
-			log.Infof("Moving only largest sized disk(s) on worker node %v", workerNodes[randomIndex].Name)
-		}
-
 		stc, err := Inst().V.GetDriver()
 		if err != nil {
 			UpdateOutcome(event, err)
 			return
 
 		}
-
 		preData, err := Inst().S.GetPXCloudDriveConfigMap(stc)
 		if err != nil {
 			UpdateOutcome(event, err)
 			return
 		}
+		diskUUIDMap := make(map[string]string)
+		moveAllDisks = rand.Intn(2) == 0
+		preNodeConfigs := preData[workerNodes[randomIndex].VolDriverNodeID]
+		selectedIds := make([]string, 0)
+		if moveAllDisks {
+			log.Infof("Moving all disks on worker node %v", workerNodes[randomIndex].Name)
+
+			for id, _ := range preNodeConfigs.Configs {
+				selectedIds = append(selectedIds, id)
+			}
+		} else {
+			log.Infof("Moving only largest sized disk(s) on worker node %v", workerNodes[randomIndex].Name)
+			maxSize := int64(0)
+			selectedId := ""
+			for id, postDrive := range preNodeConfigs.Configs {
+				if postDrive.Size > maxSize {
+					selectedId = id
+				}
+			}
+			for id, _ := range preNodeConfigs.Configs {
+				if id == selectedId {
+					selectedIds = append(selectedIds, id)
+				}
+			}
+		}
+		for id, preDriveConfig := range preNodeConfigs.Configs {
+			if slices.Contains(selectedIds, id) {
+				dsName := preDriveConfig.Labels["datastore"]
+				driveProps := strings.Split(preDriveConfig.ID, " ")
+				if len(driveProps) < 2 {
+					log.FailOnError(fmt.Errorf("invalid drive id %v", preDriveConfig.ID), "Invalid drive id")
+				}
+				dsPath := driveProps[1]
+
+				driveID := fmt.Sprintf("[%s] %s", dsName, dsPath)
+				diskUUIDMap[preDriveConfig.DiskUUID] = driveID
+			}
+		}
+		log.Infof("Node[%s], Disk UUIDs to be moved %v", workerNodes[randomIndex].Name, diskUUIDMap)
 
 		var envVariables []v1.EnvVar
 		envVariables = stc.Spec.CommonConfig.Env
@@ -12681,7 +12714,7 @@ func TriggerSvMotionSingleNode(contexts *[]*scheduler.Context, recordChan *chan 
 		}
 
 		ctx := ctxt.Background()
-		targetDatastore, err := Inst().N.StorageVmotion(ctx, workerNodes[randomIndex], prefixName, moveAllDisks)
+		expectedDatastoreMap, err := Inst().N.StorageVmotion(ctx, workerNodes[randomIndex], prefixName, diskUUIDMap)
 		if err != nil {
 			UpdateOutcome(event, err)
 			return
@@ -12692,7 +12725,7 @@ func TriggerSvMotionSingleNode(contexts *[]*scheduler.Context, recordChan *chan 
 			err = fmt.Errorf("error fetching post-vMotion cloud drive config: %v", err)
 			UpdateOutcome(event, err)
 		}
-		err = ValidateDatastoreUpdate(preData, postData, workerNodes[randomIndex].VolDriverNodeID, targetDatastore)
+		err = ValidateDatastoreUpdate(diskUUIDMap, preData, postData, workerNodes[randomIndex].VolDriverNodeID, expectedDatastoreMap)
 		UpdateOutcome(event, err)
 	})
 	updateMetrics(*event)
@@ -12771,14 +12804,47 @@ func TriggerSvMotionMultipleNodes(contexts *[]*scheduler.Context, recordChan *ch
 				defer wg.Done()
 
 				moveAllDisks := rand.Intn(2) == 0
+				diskUUIDMap := make(map[string]string)
+				preNodeConfigs := preData[node.VolDriverNodeID]
+				selectedIds := make([]string, 0)
 				if moveAllDisks {
 					log.Infof("Moving all disks on worker node %v", node.Name)
+
+					for id, _ := range preNodeConfigs.Configs {
+						selectedIds = append(selectedIds, id)
+					}
 				} else {
 					log.Infof("Moving only largest sized disk(s) on worker node %v", node.Name)
+					maxSize := int64(0)
+					selectedId := ""
+					for id, postDrive := range preNodeConfigs.Configs {
+						if postDrive.Size > maxSize {
+							selectedId = id
+						}
+					}
+					for id, _ := range preNodeConfigs.Configs {
+						if id == selectedId {
+							selectedIds = append(selectedIds, id)
+						}
+					}
 				}
+				for id, preDriveConfig := range preNodeConfigs.Configs {
+					if slices.Contains(selectedIds, id) {
+						dsName := preDriveConfig.Labels["datastore"]
+						driveProps := strings.Split(preDriveConfig.ID, " ")
+						if len(driveProps) < 2 {
+							log.FailOnError(fmt.Errorf("invalid drive id %v", preDriveConfig.ID), "Invalid drive id")
+						}
+						dsPath := driveProps[1]
+
+						driveID := fmt.Sprintf("[%s] %s", dsName, dsPath)
+						diskUUIDMap[preDriveConfig.DiskUUID] = driveID
+					}
+				}
+				log.Infof("Node [%s] Disk UUIDs to be moved %v", node.Name, diskUUIDMap)
 
 				ctx := ctxt.Background()
-				targetDatastore, err := Inst().N.StorageVmotion(ctx, node, prefixName, moveAllDisks)
+				expectedDatastoreMap, err := Inst().N.StorageVmotion(ctx, node, prefixName, diskUUIDMap)
 				if err != nil {
 					log.Errorf("Storage vMotion failed for node %v. Error: %v", node.Name, err)
 					UpdateOutcome(event, err)
@@ -12789,7 +12855,7 @@ func TriggerSvMotionMultipleNodes(contexts *[]*scheduler.Context, recordChan *ch
 					err = fmt.Errorf("error fetching post-vMotion cloud drive config: %v", err)
 					UpdateOutcome(event, err)
 				}
-				err = ValidateDatastoreUpdate(preData, postData, node.VolDriverNodeID, targetDatastore)
+				err = ValidateDatastoreUpdate(diskUUIDMap, preData, postData, node.VolDriverNodeID, expectedDatastoreMap)
 				UpdateOutcome(event, err)
 
 			}(workerNodes[i])

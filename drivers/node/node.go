@@ -314,7 +314,7 @@ type Driver interface {
 	GetSupportedDriveTypes() ([]string, error)
 
 	// StorageVmotion selectively relocates specific disks of a virtual machine to a new datastore
-	StorageVmotion(ctx context.Context, node Node, portworxNamespace string, moveAllDisks bool) (*object.Datastore, error)
+	StorageVmotion(ctx context.Context, node Node, portworxNamespace string, disksToMove map[string]string) (map[string]string, error)
 
 	// GetUUIDFromVMDKPath returns the UUID of the VMDK file
 	GetUUIDFromVMDKPath(ctx context.Context, node Node, vmdkPath string) (string, error)
@@ -641,7 +641,7 @@ func (d *notSupportedDriver) RemoveNonRootDisks(node Node) error {
 	}
 }
 
-func (d *notSupportedDriver) StorageVmotion(ctx context.Context, node Node, portworxNamespace string, moveAllDisks bool) (*object.Datastore, error) {
+func (d *notSupportedDriver) StorageVmotion(ctx context.Context, node Node, portworxNamespace string, disksToMove map[string]string) (map[string]string, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "StorageVmotion()",
