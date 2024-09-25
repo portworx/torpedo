@@ -956,8 +956,7 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", Label(TestCaseLab
 		})
 		newAdminCtx, err := backup.GetNonAdminCtx(newAdmin, CommonPassword)
 		log.FailOnError(err, "Fetching new admin %s ctx", newAdmin)
-		cleanupUserObjectsFromAdmin := func(user string) {
-			defer GinkgoRecover()
+		for _, user := range infraAdminUsers {
 			Step(fmt.Sprintf("Verify backups of the user %s from the new admin %s", user, newAdmin), func() {
 				log.InfoD(fmt.Sprintf("Verifying backups of the user %s from new admin %s", user, newAdmin))
 				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
@@ -1001,6 +1000,9 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", Label(TestCaseLab
 					}
 				}
 			})
+		}
+		cleanupUserObjectsFromAdmin := func(user string) {
+			defer GinkgoRecover()
 			Step(fmt.Sprintf("Delete user %s schedule backups, backup schedule and schedule policy from the admin", user), func() {
 				log.InfoD(fmt.Sprintf("Deleting user %s schedule backups, backup schedule and schedule policy from the admin", user))
 				var wg sync.WaitGroup
