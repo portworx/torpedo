@@ -3,6 +3,8 @@ package utils
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -13,12 +15,183 @@ import (
 	"math/rand"
 	"net/http"
 	"regexp"
+	"sync"
+	"time"
 )
 
 var (
 	IsTorpedoInitDone bool                 // flag to check if Drivers init is done
 	context           []*scheduler.Context // Application context will be maintained globally for now
 )
+
+type JobStatus struct {
+	Status string      // "in-progress", "completed", "failed"
+	Result interface{} // Could be error messages or success messages
+}
+
+type CompositeJobStatus struct {
+	Status    string // Overall status: "in-progress", "completed", "failed"
+	SubTasks  map[string]*JobStatus
+	StartTime time.Time
+	EndTime   time.Time
+}
+
+var compositeJobStatuses = make(map[string]*CompositeJobStatus)
+var mutex = &sync.Mutex{}
+
+// Generate a unique job ID
+func generateJobID() string {
+	return uuid.New().String()
+}
+
+func RunCompositeJob(c *gin.Context) {
+	gomega.RegisterFailHandler(func(m string, _ ...int) { c.String(500, m) })
+	jobID := generateJobID()
+
+	mutex.Lock()
+	compositeJobStatuses[jobID] = &CompositeJobStatus{
+		Status:    "in-progress",
+		SubTasks:  make(map[string]*JobStatus),
+		StartTime: time.Now(),
+	}
+	mutex.Unlock()
+
+	go func(jobID string) {
+		defer func() {
+			if r := recover(); r != nil {
+				mutex.Lock()
+				compositeJobStatuses[jobID].Status = "failed"
+				mutex.Unlock()
+			}
+		}()
+
+		//subTasks := []string{"ResizeVolumeAfterFull"}
+		subTasks := []string{"ResizeDiskVolUpdate"}
+		//subTasks := []string{"RunSetupTeardown", "AppScaleUpAndDown", "CreateLargeNumberOfVolumesTest",
+		//	"EnableTrashCanDeleteVol", "ChainedLocalSnapAndValidateRestoreTest", "LocalSkinnySnap",
+		//	"VerifyNoPxRestartDueToPxPodRestart", "MultiVolumeMountsForSharedV4", "StoragePoolExpandDiskAuto"
+		//  "AutopilotPvcResize", "AutopilotPvcVolDetached", "AutToggleAutopilot"}
+		//subTasks := []string{"VolHAIncreaseAllVolumes"}
+		//subTasks := []string{"ValidateSvMotion"}
+
+		mutex.Lock()
+		for _, task := range subTasks {
+			compositeJobStatuses[jobID].SubTasks[task] = &JobStatus{Status: "in-progress"}
+		}
+		mutex.Unlock()
+
+		// Running sub-tasks concurrently
+		var wg sync.WaitGroup
+		for _, task := range subTasks {
+			wg.Add(1)
+			go func(taskName string) {
+				defer wg.Done()
+				runSubTask(jobID, taskName)
+			}(task)
+		}
+
+		wg.Wait()
+
+		mutex.Lock()
+		allCompleted := true
+		for _, status := range compositeJobStatuses[jobID].SubTasks {
+			if status.Status != "completed" {
+				allCompleted = false
+				break
+			}
+		}
+		if allCompleted {
+			compositeJobStatuses[jobID].Status = "completed"
+		} else {
+			compositeJobStatuses[jobID].Status = "failed"
+		}
+		compositeJobStatuses[jobID].EndTime = time.Now()
+		mutex.Unlock()
+	}(jobID)
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"job_id": jobID,
+		"status": "in-progress",
+	})
+}
+
+func runSubTask(jobID string, taskName string) {
+	var err error
+	var res string
+
+	switch taskName {
+	case "ResizeVolumeAfterFull":
+		err, res = tests.ResizeVolumeAfterFull()
+	case "ResizeDiskVolUpdate": // PASS
+		err, res = tests.ResizeDiskVolUpdate()
+	case "RunSetupTeardown": // PASS
+		err, res = tests.RunSetupTeardownTest()
+	case "AppScaleUpAndDown": // PASS
+		err, res = tests.AppScaleUpAndDownTest()
+	case "CreateLargeNumberOfVolumesTest": // PASS
+		err, res = tests.CreateLargeNumberOfVolumesTest()
+	case "EnableTrashCanDeleteVol": // PASS
+		err, res = tests.EnableTrashCanDeleteVol()
+	case "ChainedLocalSnapAndValidateRestoreTest": // PASS
+		err, res = tests.ChainedLocalSnapAndValidateRestoreTest()
+	case "LocalSkinnySnap": // PASS
+		err, res = tests.LocalSkinnySnap()
+	case "VerifyNoPxRestartDueToPxPodRestart": // PASS
+		err, res = tests.VerifyNoPxRestartDueToPxPodRestart()
+	case "AutoPilotPvcPoolExpand": // Re-Run
+		err, res = tests.AutoPilotPvcPoolExpand()
+	case "MultiVolumeMountsForSharedV4": // PASS
+		err, res = tests.MultiVolumeMountsForSharedV4()
+	case "StoragePoolExpandDiskAuto": // PASS
+		err, res = tests.StoragePoolExpandDiskAuto()
+	case "AutopilotPvcResize": // PASS
+		err, res = tests.AutopilotPvcResize()
+	case "AutopilotPvcVolDetached": // PASS
+		err, res = tests.AutopilotPvcVolDetached()
+	case "AutToggleAutopilot": // PASS
+		err, res = tests.AutToggleAutopilot()
+	case "VolHAIncreaseAllVolumes": // FAIL
+		err, res = tests.VolHAIncreaseAllVolumes()
+	case "ValidateSvMotion": // FAIL
+		err, res = tests.ValidateSvMotion()
+
+	default:
+		err = fmt.Errorf("Unknown task: %s", taskName)
+	}
+
+	mutex.Lock()
+	defer mutex.Unlock()
+	if err != nil {
+		compositeJobStatuses[jobID].SubTasks[taskName].Status = "failed"
+		compositeJobStatuses[jobID].SubTasks[taskName].Result = err.Error()
+	} else if res == "Test executed successfully" {
+		compositeJobStatuses[jobID].SubTasks[taskName].Status = "completed"
+		compositeJobStatuses[jobID].SubTasks[taskName].Result = res
+	} else {
+		compositeJobStatuses[jobID].SubTasks[taskName].Status = "failed"
+		compositeJobStatuses[jobID].SubTasks[taskName].Result = "Failure"
+	}
+}
+
+func GetCompositeJobStatus(c *gin.Context) {
+	jobID := c.Param("job_id")
+	mutex.Lock()
+	jobStatus, exists := compositeJobStatuses[jobID]
+	mutex.Unlock()
+	if !exists {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Job ID not found",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"job_id":     jobID,
+		"status":     jobStatus.Status,
+		"sub_tasks":  jobStatus.SubTasks,
+		"start_time": jobStatus.StartTime,
+		"end_time":   jobStatus.EndTime,
+	})
+}
 
 // This method checks if test has done InitInstance once or not. If not, we will try to do it.
 func checkTorpedoInit(c *gin.Context) bool {
@@ -586,4 +759,429 @@ func GetPxBackupNamespace(c *gin.Context) {
 	}
 	// Return the namespace in which px-backup is deployed
 	c.JSON(http.StatusOK, response)
+}
+
+func RunSetupTeardownTestGin(c *gin.Context) {
+	gomega.RegisterFailHandler(func(m string, _ ...int) { c.String(500, m) })
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.RunSetupTeardownTest()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func CreateLargeNumberOfVolumesTestGin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.CreateLargeNumberOfVolumesTest()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func ChainedLocalSnapAndValidateRestoreTestGin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.ChainedLocalSnapAndValidateRestoreTest()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func AppScaleUpAndDownTestGin(c *gin.Context) {
+	gomega.RegisterFailHandler(func(m string, _ ...int) { c.String(500, m) })
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.AppScaleUpAndDownTest()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func AutoPilotPvcPoolExpandGin(c *gin.Context) {
+	gomega.RegisterFailHandler(func(m string, _ ...int) { c.String(500, m) })
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.AutoPilotPvcPoolExpand()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func LocalSkinnySnapGin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.LocalSkinnySnap()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func MultiVolumeMountsForSharedV4Gin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.MultiVolumeMountsForSharedV4()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func StoragePoolExpandDiskAutoGin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.StoragePoolExpandDiskAuto()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func EnableTrashCanDeleteVolGin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.EnableTrashCanDeleteVol()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func AutopilotPvcResizeGin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.AutopilotPvcResize()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func AutopilotPvcVolDetachedGin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.AutopilotPvcVolDetached()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func AutToggleAutopilotGin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.AutToggleAutopilot()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func VolHAIncreaseAllVolumesGin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.VolHAIncreaseAllVolumes()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func ValidateSvMotionGin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.ValidateSvMotion()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func LoggingTestGin(c *gin.Context) {
+	gomega.RegisterFailHandler(func(m string, _ ...int) { c.String(500, m) })
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.LoggingTest()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func VerifyNoPxRestartDueToPxPodRestartGin(c *gin.Context) {
+	gomega.RegisterFailHandler(func(m string, _ ...int) { c.String(500, m) })
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.VerifyNoPxRestartDueToPxPodRestart()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func VolumeDriverDownGin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.VolumeDriverDown()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func VolumeIOThrottleGin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.VolumeIOThrottle()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func StickyVolumeTestGin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.StickyVolumeTest()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func ResizeVolumeAfterFullGin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.ResizeVolumeAfterFull()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
+}
+
+func ResizeDiskVolUpdateGin(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
+		return
+	}
+	err, res := tests.ResizeDiskVolUpdate()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if res == "Test executed successfully" {
+		c.JSON(http.StatusOK, res)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failure"})
+		return
+	}
 }
