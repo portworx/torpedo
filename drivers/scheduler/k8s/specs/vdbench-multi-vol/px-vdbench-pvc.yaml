@@ -1,0 +1,30 @@
+{{/* Portworx persistent volume claim */}}
+{{ if .ClaimsCount }}
+{{- range $val := Iterate .ClaimsCount }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vdbench-pvc-{{ $val }}
+spec:
+  storageClassName: vdbench-sc-multi-vol
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+{{- end }}
+{{ else }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vdbench-pvc
+spec:
+  storageClassName: vdbench-sc-multi-vol
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+{{- end }}
