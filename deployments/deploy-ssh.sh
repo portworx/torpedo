@@ -832,6 +832,12 @@ spec:
       value: "${GOOGLE_APPLICATION_CREDENTIALS}"
     - name: TOGGLE_PURE_MGMT_IP
       value: "${TOGGLE_PURE_MGMT_IP}"
+    - name: BACKUP_DELETE_RETRY_TIME
+      value: "${BACKUP_DELETE_RETRY_TIME}"
+    - name: BACKUP_DELETE_WAIT_TIME
+      value: "${BACKUP_DELETE_WAIT_TIME}"
+    - name: VOLUME_COUNT_FOR_PARALLEL_DELETE
+      value: "${VOLUME_COUNT_FOR_PARALLEL_DELETE}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
