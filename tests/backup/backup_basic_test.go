@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"encoding/csv"
 	"fmt"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -17,11 +18,17 @@ import (
 	"github.com/portworx/torpedo/pkg/s3utils"
 	. "github.com/portworx/torpedo/tests"
 	"os"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
+
+// var WgDelete sync.WaitGroup
+var DeleteDoneChannel = make(chan bool)
+var errorChannel = make(chan error, 100)
 
 func getBucketNameSuffix() string {
 	bucketNameSuffix, present := os.LookupEnv("BUCKET_NAME")
@@ -160,6 +167,28 @@ func BackupInitInstance() {
 }
 
 var dash *aetosutil.Dashboard
+
+// This function verifies if the given backup name is present or not
+func IsBackupAvailable(uid string, currentBackups *api.BackupEnumerateResponse) bool {
+	for _, b := range currentBackups.GetBackups() {
+		if b.Metadata.Uid == uid {
+			return true
+		}
+	}
+	return false
+}
+
+func GetTestcaseName() string {
+	testCaseName := CurrentSpecReport().FullText()
+	matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(testCaseName)
+	if matches != nil {
+		if len(matches) > 1 {
+			testCaseName = matches[1]
+		}
+	}
+	return testCaseName
+}
+
 var _ = BeforeSuite(func() {
 	var err error
 	dash = Inst().Dash
@@ -253,6 +282,94 @@ var _ = BeforeSuite(func() {
 	PvcListBeforeRun, err = GetPVCListForNamespace(pxBackupNamespace)
 	log.FailOnError(err, "failed to list PVCs before run")
 	log.Infof("PVC list before the run is [%s]", PvcListBeforeRun)
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
+
+	go func() {
+		log.InfoD("Starting the thread to get the time taken to delete backups")
+		ticker := time.NewTicker(BackupDeleteTickerTime)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-DeleteDoneChannel:
+				log.InfoD("Thread which is used to get the time taken to delete backups is Completed now")
+				return
+			case <-ticker.C:
+				backupEnumerateReq := &api.BackupEnumerateRequest{
+					OrgId: BackupOrgID,
+				}
+				currentBackups, err := Inst().Backup.EnumerateBackup(ctx, backupEnumerateReq)
+				if err != nil {
+					log.Errorf("Failed to enumerate backup: %v", err)
+					errorChannel <- fmt.Errorf("failed to enumerate backup: %v", err)
+					return
+				}
+				testCaseName := GetTestcaseName()
+				for _, backup := range currentBackups.GetBackups() {
+					backupName := backup.GetName()
+					status := backup.BackupInfo.Status.GetStatus()
+					uid := backup.Metadata.Uid
+					info, ok := BackupDeleteTimeMap[uid]
+					totalSize := backup.BackupInfo.TotalSize
+
+					// Handle Deleting or Delete Pending states
+					if status == api.BackupInfo_StatusInfo_Deleting || status == api.BackupInfo_StatusInfo_DeletePending {
+						if ok {
+							// Backup exists in the map but DeleteStartTime is not set
+							if info.DeleteStartTime.IsZero() {
+								info.DeleteStartTime = time.Now()
+								info.BackupStatus = status
+								BackupDeleteTimeMap[uid] = info
+							}
+						} else {
+							// Backup doesn't exist in the map, add it
+							BackupDeleteTimeMap[uid] = BackupDeleteInfoStruct{
+								BackupStatus:    status,
+								DeleteStartTime: time.Now(),
+								TestcaseName:    testCaseName,
+								BackupName:      backupName,
+							}
+						}
+					} else {
+						// Handle non-deleting states
+						if !ok {
+							// Backup doesn't exist in the map, add it
+							BackupDeleteTimeMap[uid] = BackupDeleteInfoStruct{
+								BackupStatus: status,
+								TestcaseName: testCaseName,
+								BackupName:   backupName,
+							}
+						} else if info.BackupStatus != status {
+							// Backup exists but the status changed
+							info.BackupStatus = status
+							BackupDeleteTimeMap[uid] = info
+						}
+						// Updating the backup size only after backup is successful
+						if status == api.BackupInfo_StatusInfo_Success && info.TotalSize != totalSize {
+							info.TotalSize = totalSize
+							BackupDeleteTimeMap[uid] = info
+						}
+					}
+				}
+
+				for uid, info := range BackupDeleteTimeMap {
+					// Here if it is not zero that means end time is already added, if we update the end time again we will be adding more delete time
+					if info.DeleteEndTime.IsZero() {
+						if !IsBackupAvailable(uid, currentBackups) {
+							endTime := time.Now()
+							info.BackupStatus = "Deleted"
+							info.DeleteEndTime = endTime
+							info.DeletionTime = endTime.Sub(info.DeleteStartTime).String()
+							BackupDeleteTimeMap[uid] = info
+							log.InfoD("Delete Info:\nTestcase: %s, Backup: %s, UID: %s,Status: %v, TotalSize: %v,DeleteStartTime: %v, DeleteEndTime: %v, TimeTakeToDelete: %v",
+								info.TestcaseName, info.BackupName, uid, info.BackupStatus, info.TotalSize, info.DeleteStartTime, info.DeleteEndTime, info.DeletionTime)
+						}
+					}
+				}
+			}
+		}
+	}()
 })
 
 var _ = AfterSuite(func() {
@@ -261,10 +378,10 @@ var _ = AfterSuite(func() {
 	defer EndTorpedoTest()
 
 	cleanup := TriggerCleanup()
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
 	log.InfoD(fmt.Sprintf("Cleanup state is set to %t", cleanup))
 	if cleanup {
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
 
 		//Cleanup policy
 		s3EncryptionPolicy := os.Getenv("S3_ENCRYPTION_POLICY")
@@ -274,13 +391,79 @@ var _ = AfterSuite(func() {
 		}
 
 		// Cleanup all backups
+		// Added the below code so that the thread to get the time taken to delete backup should still be running in background
+		// If we do not have this code, control will immediately go to DeleteDoneChannel <- true and time taken to delete these backups will not be calculated
 		allBackups, err := GetAllBackupsAdmin()
 		dash.VerifySafely(err, nil, "Verifying fetching of all backups")
 		for _, backupName := range allBackups {
-			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
-			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
+			backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the backup %s uid", backupName))
+			_, err = DeleteBackup(backupName, backupUid, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the backup %s deletion", backupName))
+		}
+		for _, backup := range allBackups {
+			err := DeleteBackupAndWait(backup, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Waiting for the backup %s to be deleted", backup))
+		}
+
+		DeleteDoneChannel <- true
+		close(errorChannel)
+		for err := range errorChannel {
+			log.Errorf("failed to enumerate backup : %v", err)
+		}
+
+		log.InfoD("The BackupDeleteTimeMap is:")
+		for uid, info := range BackupDeleteTimeMap {
+			log.InfoD("Testcase: %s, Backup: %s, UID: %s,Status: %v,TotalSize: %vDeleteStartTime: %v, DeleteEndTime: %v, TimeTakeToDelete: %v",
+				info.TestcaseName, info.BackupName, uid, info.BackupStatus, info.TotalSize, info.DeleteStartTime, info.DeleteEndTime, info.DeletionTime)
+		}
+		deleteInfoFileName := fmt.Sprintf("/testresults" + "/backup_delete_info_" + RandomString(5) + ".csv")
+		file, err := os.Create(deleteInfoFileName)
+		if err != nil {
+			log.Errorf("failed to create file: %v", err)
+		}
+
+		defer func() {
+			if err := file.Close(); err != nil {
+				log.Errorf("Error closing file: %v", err)
+			}
+		}()
+
+		// Create a new CSV writer
+		writer := csv.NewWriter(file)
+
+		defer writer.Flush()
+
+		// Write the header
+		header := []string{"TestcaseName", "BackupName", "BackupUID", "BackupStatus", "TotalSize", "DeleteStartTime", "DeleteEndTime", "TimeTakeToDelete"}
+
+		if err := writer.Write(header); err != nil {
+			log.Errorf("error writing header to csv: %v", err)
+		}
+
+		// Get all keys and sort them for consistent output
+		keys := make([]string, 0, len(BackupDeleteTimeMap))
+		for k := range BackupDeleteTimeMap {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		// Write the data in path /mnt/testresults
+		for _, uid := range keys {
+			info := BackupDeleteTimeMap[uid]
+			row := []string{
+				info.TestcaseName,
+				info.BackupName,
+				uid,
+				fmt.Sprintf("%v", info.BackupStatus),
+				fmt.Sprintf("%v", info.TotalSize),
+				info.DeleteStartTime.Format(time.RFC3339),
+				info.DeleteEndTime.Format(time.RFC3339),
+				fmt.Sprintf("%v", info.DeletionTime),
+			}
+			if err := writer.Write(row); err != nil {
+				log.Errorf("error writing record to csv: %v", err)
+			}
 		}
 
 		// Cleanup all restores

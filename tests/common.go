@@ -688,6 +688,18 @@ type (
 	TestcaseQuarter string
 )
 
+type BackupDeleteInfoStruct struct {
+	DeleteStartTime time.Time
+	DeleteEndTime   time.Time
+	DeletionTime    string
+	BackupStatus    interface{}
+	TestcaseName    string
+	BackupName      string
+	TotalSize       uint64
+}
+
+var BackupDeleteTimeMap = make(map[string]BackupDeleteInfoStruct)
+
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
 	var err error

@@ -198,6 +198,7 @@ const (
 	PrivilegedPSA                             = "privileged"
 	PrivilegedPSAVersion                      = "latest"
 	CustomPrivilegedPSADescription            = "Custom Privileged PSA"
+	BackupDeleteTickerTime                    = 5 * time.Second
 )
 
 var (
@@ -4479,6 +4480,18 @@ func AppendList[T comparable](dataSlice1 []T, dataSlice2 []T) []T {
 }
 
 func DeleteBackupAndWait(backupName string, ctx context1.Context) error {
+	bkpDeleteWaitTime := os.Getenv("BACKUP_DELETE_WAIT_TIME")
+	if bkpDeleteWaitTime == "" {
+		bkpDeleteWaitTime = "60m"
+	}
+	deleteWaitTime, err := time.ParseDuration(bkpDeleteWaitTime)
+
+	bkpDeleteRetryTime := os.Getenv("BACKUP_DELETE_RETRY_TIME")
+	if bkpDeleteRetryTime == "" {
+		bkpDeleteRetryTime = "60s"
+	}
+	deleteRetryTime, err := time.ParseDuration(bkpDeleteRetryTime)
+
 	backupDriver := Inst().Backup
 	backupEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: BackupOrgID,
@@ -4496,7 +4509,7 @@ func DeleteBackupAndWait(backupName string, ctx context1.Context) error {
 		}
 		return "", false, nil
 	}
-	_, err := task.DoRetryWithTimeout(backupDeletionSuccessCheck, BackupDeleteTimeout, BackupDeleteRetryTime)
+	_, err = task.DoRetryWithTimeout(backupDeletionSuccessCheck, deleteWaitTime, deleteRetryTime)
 	return err
 }
 

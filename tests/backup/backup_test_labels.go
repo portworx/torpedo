@@ -145,6 +145,7 @@ const (
 	PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege                              TestCaseName = "PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege"
 	SuperAdmin                                                                         TestCaseName = "SuperAdmin"
 	SuperAdminBackupShare                                                              TestCaseName = "SuperAdminBackupShare"
+	TimeTakenToDeleteBackupWithHeavyLoad                                               TestCaseName = "TimeTakenToDeleteBackupWithHeavyLoad"
 )
 
 // Test case labels
@@ -288,6 +289,7 @@ const (
 	PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilegeLabel                              TestCaseLabel = "PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege"
 	SuperAdminLabel                                                                         TestCaseLabel = "SuperAdmin"
 	SuperAdminBackupShareLabel                                                              TestCaseLabel = "SuperAdminBackupShare"
+	TimeTakenToDeleteBackupWithHeavyLoadLabel                                               TestCaseLabel = "TimeTakenToDeleteBackupWithHeavyLoad"
 )
 
 // Common Labels
@@ -540,6 +542,7 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	DeleteVerifyBackupDeletionWhenRetentionIsMet:                                       {DeleteVerifyBackupDeletionWhenRetentionIsMetLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, S3LockedBucket, AzureImmutableBucket},
 	VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules:                        {VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day0LockedBucketLabel, S3LockedBucket, AzureImmutableBucket},
 	DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules:                  {DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, S3LockedBucket, AzureImmutableBucket},
-	SuperAdmin:            {SuperAdminLabel},
-	SuperAdminBackupShare: {SuperAdminBackupShareLabel},
+	SuperAdmin:                           {SuperAdminLabel},
+	SuperAdminBackupShare:                {SuperAdminBackupShareLabel},
+	TimeTakenToDeleteBackupWithHeavyLoad: {TimeTakenToDeleteBackupWithHeavyLoadLabel, vanillaPipeline, SystemTest, P0, PxLabel, NfsBackupLocationLabel, S3BackupLocationLabel},
 }
