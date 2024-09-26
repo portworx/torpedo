@@ -6,7 +6,6 @@ data:
     fio.job: |
         [global]
         name=fio-rand-RW
-        directory=/scratch/
         rw=randwrite
         randrepeat=1
         blocksize_range=4k-512k

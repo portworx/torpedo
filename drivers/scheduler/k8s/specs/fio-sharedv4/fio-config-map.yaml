@@ -6,7 +6,6 @@ data:
     fio.job: |
         [global]
         name=fio-rand-RW
-        directory=/scratch/
         rw=randwrite
         rwmixread=40
         randrepeat=1
