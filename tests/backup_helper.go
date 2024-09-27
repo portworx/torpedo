@@ -94,6 +94,7 @@ const (
 	Dbinnal        TestcaseAuthor = "dbinnal-px"
 	Sgajawada      TestcaseAuthor = "sgajawada-px"
 	Pamathur       TestcaseAuthor = "pallav-px"
+	Dchothani      TestcaseAuthor = "dchothani"
 )
 
 // TestcaseQuarter List
@@ -227,17 +228,19 @@ var (
 		{"app.kubernetes.io/component": "keycloak"},
 		{"app.kubernetes.io/component": "pxcentral-lh-middleware"},
 		{"app.kubernetes.io/component": "pxcentral-mysql"}}
-	cloudPlatformList          = []string{"rke", "aws", "azure", "gke"}
-	NfsBackupExecutorPodLabel  = map[string]string{"kdmp.portworx.com/driver-name": "nfsbackup"}
-	NfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
-	queryCountForValidation    = 10
-	IsBackupLongevityRun       = false
-	PvcListBeforeRun           []string
-	PvcListAfterRun            []string
-	RestrictedPSALabel         = map[string]string{"pod-security.kubernetes.io/enforce": "restricted"}
-	BaselinePSALabel           = map[string]string{"pod-security.kubernetes.io/enforce": "baseline"}
-	PrivilegedPSALabel         = map[string]string{"pod-security.kubernetes.io/enforce": "privileged"}
-	PSAAppMap                  = map[string]string{"postgres-backup": "postgres-restricted", "mysql-backup": "mysql-restricted"}
+	cloudPlatformList            = []string{"rke", "aws", "azure", "gke"}
+	NfsBackupExecutorPodLabel    = map[string]string{"kdmp.portworx.com/driver-name": "nfsbackup"}
+	NfsRestoreExecutorPodLabel   = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
+	KopiaBackupExecutorPodLabel  = map[string]string{"kdmp.portworx.com/driver-name": "kopiabackup"}
+	KopiaRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "kopiarestore"}
+	queryCountForValidation      = 10
+	IsBackupLongevityRun         = false
+	PvcListBeforeRun             []string
+	PvcListAfterRun              []string
+	RestrictedPSALabel           = map[string]string{"pod-security.kubernetes.io/enforce": "restricted"}
+	BaselinePSALabel             = map[string]string{"pod-security.kubernetes.io/enforce": "baseline"}
+	PrivilegedPSALabel           = map[string]string{"pod-security.kubernetes.io/enforce": "privileged"}
+	PSAAppMap                    = map[string]string{"postgres-backup": "postgres-restricted", "mysql-backup": "mysql-restricted"}
 )
 
 type UserRoleAccess struct {

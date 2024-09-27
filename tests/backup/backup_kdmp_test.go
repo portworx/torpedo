@@ -1,12 +1,14 @@
 package tests
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
+	"golang.org/x/sync/errgroup"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -1405,4 +1407,180 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 
 	})
+})
+
+// This TC deletes the kopia executor pod while backup and restore are in progress and validates their status
+var _ = Describe("{CrashKopiaToolWhenBackUpRestoreInProgress}", func() {
+
+	/*
+		Steps:
+		1. Schedule applications
+		2. Create a backup location and cloud setting
+		3. Register source and destination clusters for backup and restore
+		4. Create a backup of application from source cluster
+		5. Delete the kopia executor pod while the backup is in progress
+		6. Verify backup status after deleting the kopia executor pod
+		7. Restore the backup on the destination cluster
+		8. Delete the kopia executor pod while the restore is in progress
+		9. Verify restore status after deleting the kopia executor pod
+	*/
+
+	var (
+		err                   error
+		ctx                   context.Context
+		backupName            string
+		restoreName           string
+		providers             []string
+		namespaces            []string
+		scheduledAppContexts  []*scheduler.Context
+		appContextsToBackup   []*scheduler.Context
+		backupLocationMap     map[string]string
+		cloudCredName         string
+		cloudCredUID          string
+		backupLocationName    string
+		backupLocationUID     string
+		sourceClusterUid      string
+		destinationClusterUid string
+		controlChannel        chan string
+		errorGroup            *errgroup.Group
+	)
+
+	JustBeforeEach(func() {
+		backupLocationMap = make(map[string]string)
+		providers = GetBackupProviders()
+
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		StartPxBackupTorpedoTest("CrashKopiaToolWhenBackUpRestoreInProgress", "Crash the Kopia tool when Backup and Restore is in progress", nil, 58078, Dchothani, Q3FY25)
+
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				if !Contains(namespaces, appCtx.ScheduleOptions.Namespace) {
+					namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
+				}
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
+		}
+
+		appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{namespaces[0]})
+	})
+
+	It("Crash the kopia tool when the backup and restore is in progress", func() {
+
+		Step("Validating deployed applications", func() {
+			log.InfoD("Validating deployed applications")
+
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				backupLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		Step("Registering clusters for backup", func() {
+			log.InfoD("Registering clusters for backup")
+
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+
+			destinationClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+		})
+
+		Step("Creating backup of application from source cluster", func() {
+			log.InfoD("Creating backup of application from source cluster")
+
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+
+			_, err = CreateBackupWithoutCheck(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), BackupOrgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] with namespace [%s]", backupName, namespaces[0]))
+		})
+
+		Step("Deleting the kopia executor pod while the backup is in progress", func() {
+			log.InfoD("deleting the kopia executor pod while backup %s is in progress", backupName)
+
+			err = DeletePodWhileBackupInProgress(ctx, BackupOrgID, backupName, namespaces[0], KopiaBackupExecutorPodLabel)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Delete kopia executor pod while backup %s in progress", backupName))
+		})
+
+		Step("Verifying backup status after deleting the kopia executor pod", func() {
+			log.InfoD("Verifying backup status after deleting the kopia executor pod")
+
+			err = BackupSuccessCheckWithValidation(ctx, backupName, appContextsToBackup, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, []string{}...)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of backup:[%s] after deleting kopia executor pod", backupName))
+		})
+
+		Step("Restoring the backup on the destination cluster", func() {
+			log.InfoD("Restoring the backup on the destination cluster")
+
+			log.Infof("Switching the context to destination cluster")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+
+			log.InfoD("Restoring the backup %s", backupName)
+			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			_, err = CreateRestoreWithoutCheck(restoreName, backupName, make(map[string]string), DestinationClusterName, destinationClusterUid, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Restore [%s] from backup %s", restoreName, backupName))
+		})
+
+		Step("Deleting the kopia executor pod while the restore is in progress", func() {
+			log.InfoD("deleting the kopia executor pod while restore %s is in progress", restoreName)
+
+			err = DeletePodWhileRestoreInProgress(ctx, BackupOrgID, restoreName, namespaces[0], KopiaRestoreExecutorPodLabel)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting kopia executor pod while restore %s is in progress", restoreName))
+		})
+
+		Step("Verifying restore status after deleting the kopia executor pod", func() {
+			log.InfoD("Verifying restore %s status after deleting kopia executor pod", restoreName)
+
+			err = RestoreSuccessCheck(restoreName, BackupOrgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, RestoreJobProgressRetryTime*time.Minute, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore %s taken from backup %v after deleting kopia executor pod", restoreName, backupName))
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed applications")
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
+
+		err = SetSourceKubeConfig()
+		log.FailOnError(err, "Switching context to destination cluster failed")
+
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+
 })
