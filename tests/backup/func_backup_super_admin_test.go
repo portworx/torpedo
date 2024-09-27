@@ -473,10 +473,6 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 		superAdmin                 string
 		periodicSchedulePolicyName string
 		periodicSchedulePolicyUid  string
-		testUser1Name              = "testuser1"
-		testUser1FirstName         = "testUser1FirstName"
-		testUser1LastName          = "testUser1LastName"
-		testUser1Email             = "testuser1email@cnbu.com"
 	)
 
 	BeforeEach(func() {
@@ -1105,15 +1101,13 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 	It("VerifyClusterBackupShareWithBackupCreationAndRestoreBySharedUser", func() {
 		StartPxBackupTorpedoTest("VerifyClusterBackupShareWithBackupCreationAndRestoreBySharedUser", "Verify Cluster Backup Share with Backup Creation and Restore by Shared User", nil, 301216, Pamathur, Q2FY25)
 		var (
-			backupName         = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-			restoreName        = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			restoreName2       = fmt.Sprintf("%s-%v-2", RestoreNamePrefix, time.Now().Unix())
-			namespaceMapping   = make(map[string]string)
-			scheduleName       string
-			testUser2Name      = "testuser2"
-			testUser2FirstName = "testUser2FirstName"
-			testUser2LastName  = "testUser2LastName"
-			testUser2Email     = "testuser2email@cnbu.com"
+			backupName       = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			restoreName      = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			restoreName2     = fmt.Sprintf("%s-%v-2", RestoreNamePrefix, time.Now().Unix())
+			namespaceMapping = make(map[string]string)
+			scheduleName     string
+			testUser2Name    string
+			testUser1Name    string
 		)
 		Step("Create Cluster with Admin Context and create backup/backupSchedule/restore objects on it", func() {
 
@@ -1156,7 +1150,7 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching super.admin user [%s] ctx", superAdmin))
 
 			// Create testuser1
-			err = backup.AddUser(testUser1Name, testUser1FirstName, testUser1LastName, testUser1Email, CommonPassword)
+			testUser1Name = CreateUsers(1)[0]
 			log.FailOnError(err, "Failed to create user - %s", testUser1Name)
 
 			err = backup.AddRoleToUser(testUser1Name, backup.ApplicationOwner, fmt.Sprintf("Adding %v role to %s", backup.SuperAdmin, testUser1Name))
@@ -1206,7 +1200,7 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] is accessible to user [%s]", backupName, superAdmin))
 
 			// Create testuser2
-			err = backup.AddUser(testUser2Name, testUser2FirstName, testUser2LastName, testUser2Email, CommonPassword)
+			testUser2Name = CreateUsers(1)[0]
 			log.FailOnError(err, "Failed to create user - %s", testUser2Name)
 
 			err = ShareBackup(backupName, nil, []string{testUser2Name}, RestoreAccess, superAdminCtx)
@@ -1221,7 +1215,7 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] backup uid using admin ctx", backupName))
 
 			// Delete the backup
-			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, adminCtx)
+			err = DeleteBackupAndWaitForCompletion(backupName, backupUID, BackupOrgID, adminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s] using admin ctx", backupName))
 
 			err = SuspendAndDeleteSchedule(scheduleName, periodicSchedulePolicyName, SourceClusterName, clusterUid, BackupOrgID, adminCtx, false)
