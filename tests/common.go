@@ -14589,15 +14589,27 @@ func DoParallelUpgradePDBValidation(stopSignal <-chan struct{}, mError *error) {
 	}
 	quorumValue := (len(nodes) / 2) + 1
 
-	if stc.Annotations != nil {
-		if userMinAvailable >= quorumValue && userMinAvailable < len(nodes) {
-			quorumValue = userMinAvailable
-		} else if stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] == "true" {
-			log.Infof("Non Disruptive Upgrade is disabled without providing valid minAvailable. Upgrading 1 node at a time")
-			quorumValue = len(nodes) - 1
-		}
-
+	// TODO: Remove this when smart and parallel upgrades is enabled by default
+	if userMinAvailable >= quorumValue && userMinAvailable < len(nodes) {
+		log.Infof("MinAvailable annotation found, upgrading %d nodes at a time", userMinAvailable)
+		quorumValue = userMinAvailable
+	} else if stc.Annotations == nil || func() bool {
+		val, ok := stc.Annotations["portworx.io/disable-non-disruptive-upgrade"]
+		return !ok || val == "true"
+	}() {
+		log.Infof("Non Disruptive Upgrade is disabled without providing valid minAvailable. Upgrading 1 node at a time")
+		quorumValue = len(nodes) - 1
 	}
+
+	// TODO: Uncomment this when smart and parallel upgrades is enabled by default
+	// if stc.Annotations != nil {
+	// 	if userMinAvailable >= quorumValue && userMinAvailable < len(nodes) {
+	// 		quorumValue = userMinAvailable
+	// 	} else if stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] == "true" {
+	// 		log.Infof("Non Disruptive Upgrade is disabled without providing valid minAvailable. Upgrading 1 node at a time")
+	// 		quorumValue = len(nodes) - 1
+	// 	}
+	// }
 
 	itr := 1
 	for {

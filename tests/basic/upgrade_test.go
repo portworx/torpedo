@@ -2,14 +2,16 @@ package tests
 
 import (
 	"fmt"
+
 	"github.com/hashicorp/go-version"
 
-	"go.uber.org/multierr"
 	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"go.uber.org/multierr"
 
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/pkg/kvdbutils"
@@ -158,24 +160,6 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				close(stopSignal)
 			}()
 
-			var vQuorumError error
-			opver, err := optest.GetPxOperatorVersion()
-			log.FailOnError(err, "error getting operator version")
-			pxver, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
-			log.FailOnError(err, "error getting driver version")
-			pxVersion, _ := version.NewVersion(pxver)
-
-			if opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
-				log.Info("Starting volume quorum validation for Portworx upgrade")
-				stopVolumeQuorumValidationSignal := make(chan struct{})
-				go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQuorumError)
-				defer close(stopVolumeQuorumValidationSignal)
-			} else {
-				log.Warnf("Skipping volume quorum validation due to version constraints.......")
-				log.Warnf("Required Operator version: %s, actual Operator version: %s", ParallelUpgradeMinOpVersion, opver)
-				log.Warnf("Required PX version: %s, actual PX version: %s", ParallelUpgradeMinPxVersion, pxVersion)
-			}
-
 			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
 			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
 				var volName string
@@ -209,9 +193,26 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				isDmthinBeforeUpgrade, errDmthinCheck := IsDMthin()
 				dash.VerifyFatal(errDmthinCheck, nil, "verified is setup dmthin before upgrade? ")
 
+				var vQuorumError error
+				opver, err := optest.GetPxOperatorVersion()
+				dash.VerifyFatal(err, nil, "error getting operator version")
+				pxVersion, _ := version.NewVersion(currPXVersion)
+
+				if opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
+					log.Info("Starting volume quorum validation for cluster upgrade .......")
+					stopVolumeQuorumValidationSignal := make(chan struct{})
+					go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQuorumError)
+					defer close(stopVolumeQuorumValidationSignal)
+				} else {
+					log.Warnf("Skipping volume quorum validation due to version constraints")
+					log.Warnf("Required Operator version: %s, actual Operator version: %s", PDBValidationMinOpVersion, opver)
+					log.Warnf("Required PX version: %s, actual PX version: %s", ParallelUpgradeMinPxVersion, pxVersion)
+				}
+
 				err = Inst().V.UpgradeDriver(upgradeHop)
 				timeAfterUpgrade = time.Now()
 				dash.VerifyFatal(err, nil, "Volume driver upgrade successful?")
+				dash.VerifyFatal(vQuorumError, nil, "validate volume quorum during PX upgrade succesful")
 
 				durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
 				expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
@@ -252,7 +253,6 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				}
 			}
 			dash.VerifyFatal(mError, nil, "validate apps during PX upgrade")
-			dash.VerifyFatal(vQuorumError, nil, "validate volume quorum during PX upgrade")
 		})
 
 		Step("Destroy apps", func() {

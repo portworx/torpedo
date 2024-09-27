@@ -102,14 +102,18 @@ var _ = Describe("{UpgradeCluster}", func() {
 				}
 
 				var vQuorumError error
+				stc, err := Inst().V.GetDriver()
+				log.FailOnError(err, "failed to get storage cluster")
 				// validate volume quorum during upgrade
-				if opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
+				// TODO: When smart and parallel upgrades feature is enabled by default then remove condition "stc.Annotations!=nil && stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] == "false""
+				if opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) && stc.Annotations != nil && stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] == "false" {
 					log.Info("Starting volume quorum validation for cluster upgrade .......")
 					stopVolumeQuorumValidationSignal := make(chan struct{})
 					go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQuorumError)
 					defer close(stopVolumeQuorumValidationSignal)
 				} else {
-					log.Warnf("Skipping volume quorum validation due to version constraints.......")
+					// TODO: Change log as well
+					log.Warnf("Skipping volume quorum validation due to version constraints or annotation portworx.io/disable-non-disruptive-upgrade not set to false")
 					log.Warnf("Required Operator version: %s, actual Operator version: %s", PDBValidationMinOpVersion, opver)
 					log.Warnf("Required PX version: %s, actual PX version: %s", ParallelUpgradeMinPxVersion, pxVersion)
 				}
