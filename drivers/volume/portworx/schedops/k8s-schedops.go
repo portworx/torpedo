@@ -299,8 +299,8 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 	}
 
 	gctx := context1.Background()
-	gctx = context1.WithValue(gctx, torpedotask.TimeBeforeRetryKey, 5*time.Second)
-	gctx = context1.WithValue(gctx, torpedotask.TimeoutKey, 2*time.Minute)
+	gctx = context1.WithValue(gctx, torpedotask.TimeBeforeRetryKey, defaultRetryInterval)
+	gctx = context1.WithValue(gctx, torpedotask.TimeoutKey, 30*time.Minute)
 	gctx = context1.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
 
 	_, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx)

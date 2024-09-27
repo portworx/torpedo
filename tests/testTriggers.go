@@ -4738,6 +4738,8 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 // TriggerEmailReporter sends email with all reported errors
 func TriggerEmailReporter() {
 	// emailRecords stores events to be notified
+	defer endLongevityTest()
+	startLongevityTest(EmailReporter)
 
 	emailData := emailData{}
 	timeString := time.Now().Format(time.RFC1123)

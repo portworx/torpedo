@@ -73,7 +73,7 @@ func DoRetryWithTimeoutWithCtx(t func() (interface{}, bool, error), parentContex
 				if err != nil {
 					if retry {
 						errInRetires = append(errInRetires, err.Error())
-						log.Infof("DoRetryWithTimeout - Error: {%v}, Next try in [%v], timeout [%v]", err, timeBeforeRetry, timeout)
+						log.Infof("DoRetryWithTimeoutWithCtx - Error: {%v}, Next try in [%v], timeout [%v]", err, timeBeforeRetry, timeout)
 						time.Sleep(timeBeforeRetry)
 					} else {
 						errChan <- err
