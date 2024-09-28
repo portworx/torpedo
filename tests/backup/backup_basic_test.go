@@ -346,7 +346,7 @@ var _ = BeforeSuite(func() {
 							BackupDeleteTimeMap[uid] = info
 						}
 						// Updating the backup size only after backup is successful
-						if status == api.BackupInfo_StatusInfo_Success && info.TotalSize != totalSize {
+						if info.BackupStatus == api.BackupInfo_StatusInfo_Success && info.TotalSize != totalSize {
 							info.TotalSize = totalSize
 							BackupDeleteTimeMap[uid] = info
 						}
@@ -362,7 +362,7 @@ var _ = BeforeSuite(func() {
 							info.DeleteEndTime = endTime
 							info.DeletionTime = endTime.Sub(info.DeleteStartTime).String()
 							BackupDeleteTimeMap[uid] = info
-							log.InfoD("Delete Info:\nTestcase: %s, Backup: %s, UID: %s,Status: %v, TotalSize: %v,DeleteStartTime: %v, DeleteEndTime: %v, TimeTakeToDelete: %v",
+							log.InfoD("Delete Info:\nTestcase: %s, Backup: %s, UID: %s,Status: %v, TotalSize: %v, DeleteStartTime: %v, DeleteEndTime: %v, TimeTakeToDelete: %v",
 								info.TestcaseName, info.BackupName, uid, info.BackupStatus, info.TotalSize, info.DeleteStartTime, info.DeleteEndTime, info.DeletionTime)
 						}
 					}
@@ -414,7 +414,7 @@ var _ = AfterSuite(func() {
 
 		log.InfoD("The BackupDeleteTimeMap is:")
 		for uid, info := range BackupDeleteTimeMap {
-			log.InfoD("Testcase: %s, Backup: %s, UID: %s,Status: %v,TotalSize: %vDeleteStartTime: %v, DeleteEndTime: %v, TimeTakeToDelete: %v",
+			log.InfoD("Testcase: %s, Backup: %s, UID: %s,Status: %v,TotalSize: %v,DeleteStartTime: %v, DeleteEndTime: %v, TimeTakeToDelete: %v",
 				info.TestcaseName, info.BackupName, uid, info.BackupStatus, info.TotalSize, info.DeleteStartTime, info.DeleteEndTime, info.DeletionTime)
 		}
 		deleteInfoFileName := fmt.Sprintf("/testresults" + "/backup_delete_info_" + RandomString(5) + ".csv")
