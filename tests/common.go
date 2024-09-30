@@ -422,6 +422,7 @@ const (
 	KubeApiServerWait           = 15 * time.Minute
 	NSWaitTimeout               = 10 * time.Minute
 	NSWaitTimeoutRetry          = 20 * time.Second
+	defaultDeleteBackupTimeOut  = 30 * time.Minute
 )
 
 const (
@@ -4891,7 +4892,7 @@ func DeleteBackupAndWaitForCompletion(backupName string, backupUID string, orgID
 		return err
 	}
 
-	err = Inst().Backup.WaitForBackupDeletion(ctx, backupName, orgID, defaultTimeout, defaultRetryInterval)
+	err = Inst().Backup.WaitForBackupDeletion(ctx, backupName, orgID, defaultDeleteBackupTimeOut, defaultRetryInterval)
 	return err
 }
 
