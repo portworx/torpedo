@@ -30,7 +30,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/storkctlcli"
-
 	//"github.com/portworx/torpedo/driver	"github.com/portworx/torpedo/drivers/scheduler"
 	//"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -38,7 +37,7 @@ import (
 )
 
 const (
-	migrationRetryTimeout     = 10 * time.Minute
+	migrationRetryTimeout     = 30 * time.Minute
 	migrationRetryInterval    = 10 * time.Second
 	domainCheckRetryTimeout   = 1 * time.Minute
 	defaultClusterPairDir     = "cluster-pair"
@@ -1105,6 +1104,10 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 		contexts:                  contexts,
 	}
 	performFailoverFailback(failoverParam)
+	if clusterType != "asyncdr" {
+		time.Sleep(1 * time.Minute)
+		validateDomains("failover", kubeConfigPathDest)
+	}
 	if skipSourceOp {
 		err = hardSetConfig(kubeConfigPathSrc)
 		log.FailOnError(err, "Error setting source config: %v", err)
@@ -1137,6 +1140,10 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 			contexts:                  contexts,
 		}
 		performFailoverFailback(failoverback)
+		if clusterType != "asyncdr" {
+			time.Sleep(1 * time.Minute)
+			validateDomains("failback", kubeConfigPathSrc)
+		}
 	}
 	err = asyncdr.WaitForNamespaceDeletion(migrationNamespaces)
 	if err != nil {
@@ -1379,6 +1386,18 @@ func validatePodsRunning(action string, single, includeNs, excludeNs bool, conte
 			}
 		}
 	}
+}
+
+func validateDomains(failoverfailback, configPath string) {
+	src, dest, witness, err := storkctlcli.GetActualClusterDomainStatus(failoverfailback, configPath)
+	log.FailOnError(err, "Failed to get actual cluster domain status")
+	if failoverfailback == "failover" {
+		dash.VerifyFatal(src == "Inactive", true, "source cluster domain should not active")
+	} else {
+		dash.VerifyFatal(src == "Active", true, "source cluster domain should active")
+	}
+	dash.VerifyFatal(dest == "Active", true, "destination cluster domain should active")
+	dash.VerifyFatal(witness == "Active", true, "witness cluster domain should active")
 }
 
 func hardSetConfig(configPath string) error {
