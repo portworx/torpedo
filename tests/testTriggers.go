@@ -1606,7 +1606,8 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 				}
 				for _, pvc := range pvcs {
 					if pvc.Spec.VolumeName == vol.Name {
-						_, err = Inst().S.ResizePVC(ctx, pvc, newSize)
+						log.InfoD("increasing pvc [%s/%s]  size to %dGiB", pvc.Namespace, pvc.Name, newSize)
+						_, err = Inst().S.ResizePVC(ctx, pvc, uint64(10))
 						if err != nil {
 							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failure of resizing the volume", vol.Name, vol.ID, vol.Namespace)
 							PrintInspectVolume(vol.ID)
@@ -3268,7 +3269,7 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 						return
 					}
 					for _, pvc := range pvcs {
-						log.InfoD("increasing pvc [%s/%s]  size to %d", pvc.Namespace, pvc.Name, chaosLevel)
+						log.InfoD("increasing pvc [%s/%s]  size by %dGiB", pvc.Namespace, pvc.Name, chaosLevel)
 						dashStats := make(map[string]string)
 						dashStats["pvc-name"] = pvc.Name
 						dashStats["resize-by"] = fmt.Sprintf("%dGiB", chaosLevel)
@@ -3677,10 +3678,28 @@ func TriggerLocalSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 				}
 				err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
 				dash.VerifySafely(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destination: %s in namespace %s", restore.Name, v.Name, v.Namespace))
-				UpdateOutcome(event, err)
-
+				if err == nil {
+					err = storkops.Instance().DeleteVolumeSnapshotRestore(restore.Name, restore.Namespace)
+					if err != nil {
+						UpdateOutcome(event, err)
+						return
+					}
+				} else {
+					UpdateOutcome(event, err)
+					snapshotRestore, err := storkops.Instance().GetVolumeSnapshotRestore(restore.Name, restore.Namespace)
+					if err != nil {
+						UpdateOutcome(event, err)
+						return
+					}
+					log.Infof("SnapshotRestore Resposne: %+v", snapshotRestore)
+					fields := fmt.Sprintf("involvedObject.kind=%s,involvedObject.name=%s", "VolumeSnapshotRestore", restore.Name)
+					events, err := k8sCore.ListEvents(restore.Namespace, metav1.ListOptions{FieldSelector: fields})
+					if err != nil {
+						log.Errorf("error getting events for VolumeSnapshotRestore [%s/%s]. Error: [%v]", restore.Namespace, restore.Name, err)
+					}
+					log.Infof("Events of SnapshotRestore Failure: %+v", events)
+				}
 			}
-
 		}
 	}
 
@@ -4419,6 +4438,8 @@ func CollectEventRecords(recordChan *chan *EventRecord) {
 }
 
 func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
+	defer endLongevityTest()
+	startLongevityTest("SSIE Run Validation")
 	pxLabel := map[string]string{"name": "portworx"}
 	storkLabel := map[string]string{"name": "stork"}
 	autopilotLabel := map[string]string{"name": "autopilot"}
@@ -4710,7 +4731,7 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 				OnHost:        true,
 				Live:          true,
 			}
-			diagsErr := Inst().V.CollectDiags(n, config, volume.DiagOps{Validate: true})
+			diagsErr := Inst().V.CollectDiags(n, config, volume.DiagOps{Validate: true, PxDir: "/etc/pwx/"})
 			if diagsErr != nil {
 				log.Errorf("error collecting diags for node [%s]. Err: %v", n.Name, diagsErr)
 			}

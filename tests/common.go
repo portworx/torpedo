@@ -8188,9 +8188,6 @@ func ParseFlags() {
 				SkipSystemChecks:                    skipSystemChecks,
 				FaSecret:                            faSecret,
 			}
-			if instance.S.String() == "openshift" {
-				instance.LogLoc = "/mnt"
-			}
 		})
 	}
 
@@ -8255,12 +8252,26 @@ func CreateLogFile(filename string) *os.File {
 // CreateLogger creates file and return the file object
 func CreateLogger(filename string) *lumberjack.Logger {
 	var filePath string
+	var chkPath string
 	if strings.Contains(filename, "/") {
 		filePath = filename
+		chkPath = filePath[:strings.LastIndex(filePath, "/")]
 	} else {
 		filePath = fmt.Sprintf("%s/%s", Inst().LogLoc, filename)
+		chkPath = Inst().LogLoc
 	}
-	_, err := os.Create(filePath)
+
+	_, err := os.Lstat(chkPath)
+	if err != nil && os.IsNotExist(err) {
+		log.Infof("setting file path directory to /mnt")
+		if strings.Contains(filename, "/") {
+			filePath = fmt.Sprintf("/mnt/%s", filename[strings.LastIndex(filename, "/")+1:])
+		} else {
+			filePath = fmt.Sprintf("%s/%s", "/mnt", filename)
+		}
+	}
+
+	_, err = os.Create(filePath)
 	if err != nil {
 		log.Infof("Error creating log file. Err: %v", err)
 		return nil
