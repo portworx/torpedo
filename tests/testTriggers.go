@@ -11312,7 +11312,7 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 
 			curSize := apiVol.Spec.Size
 			newSize := curSize + (uint64(10) * units.GiB)
-			log.Infof("Initiating volume size increase on volume [%v] by size [%v] to [%v]",
+			log.Infof("Initiating volume size increase on volume [%v] by size [%vGB] to [%vGB]",
 				vol.ID, curSize/units.GiB, newSize/units.GiB)
 
 			err = Inst().V.ResizeVolume(vol.ID, newSize)
@@ -11331,7 +11331,7 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 
 			updatedSize := volumeInspect.Spec.Size
 			if updatedSize <= curSize {
-				return fmt.Errorf("volume did not update from [%v] to [%v] ",
+				return fmt.Errorf("volume did not update from [%vGB] to [%vGB] ",
 					curSize/units.GiB, updatedSize/units.GiB)
 			}
 			return nil

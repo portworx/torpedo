@@ -158,16 +158,17 @@ var _ = Describe("{VolumeUpdate}", func() {
 						})
 				}
 				var requestedVols []*volume.Volume
-				stepLog = fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
-					Inst().V.String(), ctx.App.Key, appVolumes)
+				stepLog = fmt.Sprintf("increase volume size %s on app %s's volumes: %v from %vGB to %vGB",
+					Inst().V.String(), ctx.App.Key, appVolumes, appVolumes[0].Size/units.GiB, (appVolumes[0].Size/units.GiB)+1)
 				Step(stepLog,
 					func() {
 						log.InfoD(stepLog)
 						requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
 						log.FailOnError(err, "Volume resize successful ?")
 					})
-				stepLog = fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
-					ctx.App.Key, appVolumes)
+
+				stepLog = fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v from %vGB to %vGB",
+					ctx.App.Key, appVolumes, appVolumes[0].Size/units.GiB, (appVolumes[0].Size/units.GiB)+1)
 				Step(stepLog,
 					func() {
 						log.InfoD(stepLog)
@@ -852,7 +853,7 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 
 			curSize := apiVol.Spec.Size
 			newSize := curSize + (uint64(5) * units.GiB)
-			log.Infof("Initiating volume size increase on volume [%v] by size [%v] to [%v]",
+			log.Infof("Initiating volume size increase on volume [%v] by size [%vGB] to [%vGB]",
 				vol.ID, curSize/units.GiB, newSize/units.GiB)
 
 			err = Inst().V.ResizeVolume(vol.ID, newSize)
@@ -872,7 +873,7 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 			updatedSize := volumeInspect.Spec.Size
 			if updatedSize <= curSize {
 				terminateflow()
-				return fmt.Errorf("volume did not update from [%v] to [%v] ",
+				return fmt.Errorf("volume did not update from [%vGB] to [%vGB] ",
 					curSize/units.GiB, updatedSize/units.GiB)
 			}
 

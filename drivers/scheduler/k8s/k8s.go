@@ -4617,6 +4617,7 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 				return nil, err
 			}
 			if shouldResize {
+				log.InfoD("Resizing the volume corev1.PersistentVolumeClaim from [%vGB] to [%vGB]", updatedPVC.Spec.Size(), updatedPVC.Spec.Size()+1)
 				vol, err := k.ResizePVC(ctx, updatedPVC, 1)
 				if err != nil {
 					return nil, err
@@ -4646,6 +4647,7 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 					return nil, err
 				}
 				if shouldResize {
+					log.InfoD("Resizing the volume appsapi.StatefulSet from [%vGB] to [%vGB]", pvc.Spec.Size(), pvc.Spec.Size()+1)
 					vol, err := k.ResizePVC(ctx, &pvc, 1)
 					if err != nil {
 						return nil, err
@@ -4676,6 +4678,7 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 					return nil, err
 				}
 				if shouldResize {
+					log.InfoD("Resizing the volume pds.ModelsDeployment from [%vGB] to [%vGB]", pvc.Spec.Size(), pvc.Spec.Size()+1)
 					vol, err := k.ResizePVC(ctx, &pvc, 1)
 					if err != nil {
 						return nil, err
@@ -4688,6 +4691,7 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 
 	return vols, nil
 }
+
 func (k *K8s) ResizePVC(ctx *scheduler.Context, pvc *corev1.PersistentVolumeClaim, sizeInGb uint64) (*volume.Volume, error) {
 	var vol *volume.Volume
 
