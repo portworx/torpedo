@@ -11822,6 +11822,163 @@ var _ = Describe("{PoolDeleteMultiplePools}", func() {
 
 })
 
+
+var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "add_disk"), func() {
+
+	/*
+	   Each Pool should have max of 6 drives
+	   should keep adding Drives to the Pool
+	   once pool count reaches 6 Px should error out adding new Drives to the pool
+	   there should be check in the code to support add-drive only for BTRFS , on DMTHIN this is not allowed
+	*/
+	var testrailID = 0
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddingDrivesBeyondSupportedLimit", "Adding more drives than the supported limit and expecting error", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	stepLog := "Test adding more drives than the supported limit in the pool"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldrivemax-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		isDmthinSetup, _ := IsDMthin()
+		if isDmthinSetup {
+			log.FailOnError(fmt.Errorf("DMthin not supporting for add drive"), "Pool expansion request of add-drive for dmthin failed")
+		}
+
+		var selectedNode node.Node
+		stepStr := "Get random storage nodes"
+		Step(stepStr, func() {
+			// Get all storage nodes
+			storageNodes := node.GetStorageNodes()
+			dash.VerifyFatal(len(storageNodes) > 0, true, "Storage nodes found?")
+
+			// Select a random node from the available storage nodes
+			randomIndex := rand.Intn(len(storageNodes))
+			selectedNode = storageNodes[randomIndex]
+			log.Infof("Selected node: %v", selectedNode)
+		})
+
+		// Get the maximum drive limit for the selected node
+		maxDriveLimit, err := GetPoolMaxCloudDriveLimit(&selectedNode)
+		log.FailOnError(err, "Failed to get pool drive limit")
+		log.Infof("Max drive limit for the node is: %v", maxDriveLimit)
+
+		stepStr = "Adding more drives than the supported limit"
+		Step(stepStr, func() {
+			log.InfoD(stepStr)
+
+			systemOpts := node.SystemctlOpts{
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: defaultRetryInterval,
+				},
+				Action: "start",
+			}
+
+			drivesMapBefore, err := Inst().N.GetBlockDrives(selectedNode, systemOpts)
+			log.FailOnError(err, "Error getting block drives from node [%s]", selectedNode.Name)
+
+			numDrivesInNode := GetNodeDrivesCount(drivesMapBefore)
+			log.Infof("Number drives count from node [%v]: %v and max drive limit is: %v", selectedNode.Name, numDrivesInNode, maxDriveLimit)
+
+			remainingDrivesForNode := int(maxDriveLimit) - numDrivesInNode
+			log.Infof("Remaining allowable drives for the node: %v", remainingDrivesForNode)
+
+			poolListForOps, err := GetPoolsDetailsOnNode(&selectedNode)
+			log.FailOnError(err, "Failed to get updated node pool list")
+			log.Infof("Pool list from the selected node: %v", poolListForOps)
+
+			for _, selectedPool := range poolListForOps {
+				drvMap, err := Inst().V.GetPoolDrives(&selectedNode)
+				log.FailOnError(err, "Error in getting pool drives")
+				log.Infof("Pool drives for the selected node: %v", drvMap)
+
+				if drvs, ok := drvMap[fmt.Sprintf("%d", selectedPool.ID)]; ok {
+					maxDrivesAllowed := POOL_MAX_CLOUD_DRIVES - len(drvs)
+					log.Infof("Max drives allowed for the pool: %v", maxDrivesAllowed)
+
+					if maxDrivesAllowed > remainingDrivesForNode {
+						log.Infof("Max drives allowed (%d) exceeds remaining drives for node (%d). Adjusting maxDrivesAllowed.", maxDrivesAllowed, remainingDrivesForNode)
+						maxDrivesAllowed = remainingDrivesForNode
+					}
+
+					if maxDrivesAllowed >= 0 {
+						isjournal, err := IsJournalEnabled()
+						log.FailOnError(err, "Failed to check if journal is enabled")
+						log.Infof("Is journal enabled: %v", isjournal)
+
+						for j := 1; j <= maxDrivesAllowed+1; j++ {
+							drvSize, err := getPoolDiskSize(selectedPool)
+							log.FailOnError(err, "Failed to get pool size")
+							log.Infof("Pool disk size: %v", drvSize)
+
+							driveSize := drvSize * uint64(j)
+							log.Infof("Drive size: %v", driveSize)
+
+							expectedSize := (selectedPool.TotalSize / units.GiB) + driveSize
+							log.Infof("Expected pool size: %v", expectedSize)
+
+							err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+							log.FailOnError(err, "Error while expanding pool")
+
+							resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
+							if resizeErr != nil {
+								errorMsg := resizeErr.Error()
+								strContMsg := strings.Contains(errorMsg, fmt.Sprintf("could not find a suitable storage distribution candidate: node has reached it's maximum supported drive count: %v", VSPHERE_MAX_CLOUD_DRIVES))
+								dash.VerifyFatal(strContMsg, true, "Pool reached maximum drive limit")
+							}
+
+							if j == maxDrivesAllowed+1 {
+								// Validate the pool status after reaching the maximum drives
+								poolStatus, err := getPoolLastOperation(selectedPool.Uuid)
+								log.FailOnError(err, "Error getting pool status")
+								log.Infof("Pool status: %v", poolStatus)
+
+								if poolStatus != nil {
+									strContMsg := strings.Contains(poolStatus.Msg, fmt.Sprintf("could not find a suitable storage distribution candidate: node has reached it's maximum supported drive count: %v", VSPHERE_MAX_CLOUD_DRIVES))
+									dash.VerifyFatal(strContMsg, true, "Error expected as drive added more than allowed per pool")
+								}
+
+								// Verify if drives were added to the node correctly
+								drivesMap, err := Inst().N.GetBlockDrives(selectedNode, systemOpts)
+								log.FailOnError(err, "Error getting block drives from node [%s]", selectedNode.Name)
+
+								driveCount := GetNodeDrivesCount(drivesMap)
+								log.Infof("Added drives count from node [%v]: %v and max drive limit is: %v", selectedNode.Name, driveCount, maxDriveLimit)
+
+								if driveCount != int(maxDriveLimit) {
+									log.FailOnError(err, "Expected number of drives %v not added in node: %v", driveCount, selectedNode.Name)
+								}
+								dash.VerifyFatal(driveCount == int(maxDriveLimit), true, "Expected number of drives added in node")
+							}
+						}
+					} else {
+						log.Infof("No drives can be added to the node, maxDrivesAllowed: %v", maxDrivesAllowed)
+					}
+				}
+			}
+
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "Error refreshing volume endpoints")
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
 var _ = Describe("{PoolDeleteWithNodeReboot}", func() {
 	/*
 		1.	Create volume and do IOs / deploy apps to do IOs
@@ -12019,5 +12176,6 @@ var _ = Describe("{PoolDeleteWithNodeReboot}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+
 	})
 })

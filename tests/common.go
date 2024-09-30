@@ -15026,3 +15026,53 @@ func VerifySourceClusterAccessWithHavingNoBackupsRestoresANDBackupScheduleObject
 	}
 	return nil
 }
+
+func GetNumOfDrivesInNode(stNode node.Node) (int, error) {
+	numofDrivesInNode := 0
+	poolListForOps, err := GetPoolsDetailsOnNode(&stNode)
+	if err != nil {
+		return 0, err
+	}
+	for i := 0; i < len(poolListForOps); i++ {
+		drvMap, err := Inst().V.GetPoolDrives(&stNode)
+		if err != nil {
+			return 0, err
+		}
+		if drvs, ok := drvMap[fmt.Sprintf("%d", poolListForOps[i].ID)]; ok {
+			numofDrivesInNode = numofDrivesInNode + len(drvs)
+		}
+	}
+	return numofDrivesInNode, nil
+}
+
+// GetPoolMaxCloudDriveLimit identifying the max drives allowed based on type of setup
+func GetPoolMaxCloudDriveLimit(stNode *node.Node) (int32, error) {
+	var err error
+
+	namespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return 0, err
+	}
+
+	var maxCloudDrives int32
+
+	if _, err := core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
+		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
+	} else if _, err := core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
+		maxCloudDrives = FA_MAX_CLOUD_DRIVES
+	} else {
+		maxCloudDrives = CLOUD_PROVIDER_MAX_CLOUD_DRIVES
+	}
+	return maxCloudDrives, nil
+}
+
+func GetNodeDrivesCount(blockDrives map[string]*node.BlockDrive) int {
+	var driveCounts int
+	for _, drv := range blockDrives {
+		log.Infof("Drive detail from node %v", drv)
+		if drv.MountPoint == "" && drv.Type == "disk" && strings.Contains(drv.Path, "sd") {
+			driveCounts++
+		}
+	}
+	return driveCounts
+}
