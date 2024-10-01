@@ -16,6 +16,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
+	"github.com/portworx/torpedo/drivers/scheduler/anthos"
 	"github.com/portworx/torpedo/drivers/scheduler/eks"
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	"github.com/portworx/torpedo/drivers/scheduler/iks"
@@ -87,12 +88,14 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 				var mError error
 				opver, err := oputil.GetPxOperatorVersion()
-				if err == nil && opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
+				// Disabling PDB check for anthos as PDB validation doesn't work
+				// Opened a ticket: https://purestorage.atlassian.net/browse/PTX-26450
+				if Inst().S.String() != anthos.SchedName && err == nil && opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
 					go DoParallelUpgradePDBValidation(stopSignal, &mError)
 					defer func() {
 						close(stopSignal)
 					}()
-				} else if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) && (opver.LessThan(ParallelUpgradeMinOpVersion) || pxVersion.LessThan(ParallelUpgradeMinPxVersion)) {
+				} else if Inst().S.String() != anthos.SchedName && err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) && (opver.LessThan(ParallelUpgradeMinOpVersion) || pxVersion.LessThan(ParallelUpgradeMinPxVersion)) {
 					go DoPDBValidation(stopSignal, &mError)
 					defer func() {
 						close(stopSignal)
@@ -168,6 +171,24 @@ var _ = Describe("{UpgradeCluster}", func() {
 						"The replacement might affect cluster capacity temporarily, requiring time for stabilization.", Inst().S.String(), strings.ToUpper(Inst().S.String()))
 					log.Infof("Sleeping for %d minutes to let the cluster stabilize after the upgrade..", waitTime)
 					time.Sleep(time.Duration(waitTime) * time.Minute)
+				}
+
+				// PX pod restart needed for Anthos cluster upgrade after disabling IPv6 in nodes
+				if Inst().S.String() == anthos.SchedName {
+					volumeDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+					err = DeletePXPods(volumeDriverNamespace)
+					dash.VerifyFatal(err, nil, "failed to get volume driver namespace")
+
+					// Wait for PX pods to be up
+					log.Info("Waiting for Volume Driver to be up and running")
+					for _, n := range node.GetWorkerNodes() {
+						err = Inst().V.WaitForPxPodsToBeUp(n)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("px pod failed to come up in a node: [%s]", n.Name))
+					}
+					waitTime := 30
+					log.Infof("Sleeping for %d minutes to let px node to pull images after the upgrade..", waitTime)
+					time.Sleep(time.Duration(waitTime) * time.Minute)
+
 				}
 
 				PrintK8sClusterInfo()

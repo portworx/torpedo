@@ -126,6 +126,8 @@ const (
 	defaultWaitUpgradeRetry      = 10 * time.Second
 	defaultRetryInterval         = 1 * time.Minute
 	skipReconcilePreflightFlag   = "--skip-reconcile-before-preflight"
+	skipPDBUpgradePreflightFlag  = "--skip-pre-upgrade-checks=true"
+	skipValidationAllFlag        = "--skip-validation-all"
 	project                      = "portworx-eng"
 	location                     = "us-west1"
 	storagePDBMinAvailable       = "portworx.io/storage-pdb-min-available"
@@ -246,6 +248,9 @@ func (anth *anthos) execOnAdminWSNode(cmd string) (string, error) {
 	}
 	out, err := anth.adminWsSSHInstance.RunCommand(*anth.adminWsNode, cmd, connectOpts)
 	if err != nil {
+		if err = anth.unsetUserNameAndKey(); err != nil {
+			return out, fmt.Errorf("failed to unset torpedo user name and key. Err: %v", err)
+		}
 		return out, err
 	}
 	if err := anth.unsetUserNameAndKey(); err != nil {
@@ -294,6 +299,10 @@ func (anth *anthos) UpgradeScheduler(version string) error {
 	timeTaken := time.Since(startTime)
 	log.Infof("Anthos user cluster took: %v time to complete the upgrade", timeTaken)
 	if err := anth.RefreshNodeRegistry(); err != nil {
+		return err
+	}
+	log.Infof("Disable IPv6 in nodes after upgrade")
+	if err := disableIPv6Conf(); err != nil {
 		return err
 	}
 	if err := anth.checkUserClusterNodesUpgradeTime(); err != nil {
@@ -499,8 +508,10 @@ func (anth *anthos) upgradeUserCluster(version string) error {
 	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
 		return fmt.Errorf("preparing user cluster for upgrade is failing: [%s]. Err: (%v)", out, err)
 	}
-	cmd = fmt.Sprintf("%s --kubeconfig %s --config %s %s",
-		upgradeUserClusterCmd, adminKubeconfPath, userClusterConfPath, skipReconcilePreflightFlag)
+	// skipPDBUpgradePreflightFlag is needed to skip PDB check
+	cmd = fmt.Sprintf("%s --kubeconfig %s --config %s %s %s %s",
+		upgradeUserClusterCmd, adminKubeconfPath, userClusterConfPath, skipReconcilePreflightFlag, skipPDBUpgradePreflightFlag, skipValidationAllFlag)
+
 	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
 		return fmt.Errorf("upgrading user cluster is failing: [%s]. Err: (%v)", out, err)
 	}
@@ -1118,6 +1129,29 @@ func (anth *anthos) SetASGClusterSize(perZoneCount int64, timeout time.Duration)
 		Type:      "Function",
 		Operation: "SetASGClusterSize()",
 	}
+}
+
+// disableIPv6Conf disable IPv6 conf in Anthos nodes
+// Anthos nodes always try to pull image over ipv6 and it fails
+func disableIPv6Conf() error {
+	nodeDriver := &ssh.SSH{}
+	cmds := []string{
+		"sysctl net.ipv6.conf.all.disable_ipv6=1",
+		"sysctl net.ipv6.conf.default.disable_ipv6=1",
+		"systemctl restart docker",
+	}
+	for _, n := range node.GetWorkerNodes() {
+		for _, cmd := range cmds {
+			if _, err := nodeDriver.RunCommand(n, cmd, node.ConnectionOpts{
+				Timeout:         kube.DefaultTimeout,
+				TimeBeforeRetry: kube.DefaultRetryInterval,
+				Sudo:            true,
+			}); err != nil {
+				return fmt.Errorf("failed to execute command: %s. Err: %v", cmd, err)
+			}
+		}
+	}
+	return nil
 }
 
 // init registering anthos sheduler

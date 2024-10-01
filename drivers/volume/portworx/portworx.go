@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	torpedotask "github.com/portworx/torpedo/pkg/task"
 	"io/ioutil"
 	"math"
 	"net"
@@ -20,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	torpedotask "github.com/portworx/torpedo/pkg/task"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/hashicorp/go-version"
@@ -971,6 +972,7 @@ func (d *portworx) CreateSnapshot(volumeID string, snapName string) (*api.SdkVol
 }
 
 func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
+	d.refreshEndpoint = true
 	response, err := d.getVolDriver().Inspect(d.getContextWithToken(context.Background(), d.token), &api.SdkVolumeInspectRequest{VolumeId: name})
 	if err != nil {
 		return nil, err
