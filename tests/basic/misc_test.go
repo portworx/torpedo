@@ -3,9 +3,11 @@ package tests
 import (
 	ctxt "context"
 	"fmt"
+
 	"github.com/google/uuid"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/strings/slices"
+
 	"math/rand"
 	"path"
 	"strings"
@@ -15,6 +17,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
+	corev1 "k8s.io/api/core/v1"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/pkg/log"
@@ -1968,5 +1971,109 @@ var _ = Describe("{PerformStorageVMotions}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+})
+var _ = Describe("{DrainAllNodes}", Label("p1", "node_ops"), func() {
+	/*
+			1. Schedule apps
+		    2. Pick one node
+		    3. Drain it
+		    4. Wait for all app pods to get drained from node
+		    5. Uncordon node
+			6. kill the px on uncordon node
+		    6. Pick next node
+		    7. Do again steps from 3-5
+	*/
+	var testrailID = 0
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("DrainAllNodes", "Drain the node wait for all app pods get drained from node", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	stepLog := "Drain all nodes from cluster "
+	It("has to drain node wait for all app pods get drained from node", func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		log.InfoD("Scheduling Applications")
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("drainnode-%d", i))...)
+		}
+		namespace := contexts[0].App.NameSpace
+		log.Infof("Namespace for the app: %s", namespace)
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+		Step("get all nodes and drain one by one", func() {
+			k8sOps := k8sCore
+			log.InfoD("get all nodes and drain one by one")
+			nodesTodrain := node.GetStorageDriverNodes()
+			Step(fmt.Sprintf("drain node one at a time from the node(s): %v", nodesTodrain), func() {
+				log.InfoD("drain node one at a time from the node(s): %v", nodesTodrain)
+				for _, n := range nodesTodrain {
+					// Skip  master nodes, for drain
+					if node.IsMasterNode(n) {
+						log.InfoD("This node [%s] is master, will skip for drain it..", n.Name)
+						continue
+					}
+					stepLog := "Getting pods from node for drain"
+					podsUsingStorage := make([]corev1.Pod, 0)
+					Step("Getting pods from the node", func() {
+						log.InfoD(stepLog)
+						k8sOps := k8sCore
+						podslist, err := k8sOps.GetPodsByNode(n.Name, namespace)
+						log.FailOnNoError(err, "Failed to get pods from node")
+						pods := podslist
+						log.Infof("Retrieved pods list from %v: %v", n.Name, podslist)
+						for _, pod := range pods.Items {
+							if pod.Name != "" {
+								podsUsingStorage = append(podsUsingStorage, pod)
+							}
+
+						}
+
+					})
+					Step("Drain all the pods from node", func() {
+						log.Infof("Starting to drain all pods from node: '%s'", n.Name)
+						timeout := 10 * time.Minute
+						DefaultRetryInterval := 10 * time.Second
+						err := k8sOps.DrainPodsFromNode(n.Name, podsUsingStorage, timeout, DefaultRetryInterval)
+						log.FailOnError(err, "Failed to drain pods from node")
+
+					})
+					Step("validate pods are not in node", func() {
+						time.Sleep(5 * time.Minute)
+						pods, err := k8sOps.GetPodsByNode(n.Name, namespace)
+						log.FailOnNoError(err, "Failed to get pods on the node")
+						var PodItems []corev1.Pod
+						for _, pod := range pods.Items {
+							if pod.Name != "" {
+								PodItems = append(PodItems, pod)
+							}
+						}
+						//The number of items in PodItems
+						log.Infof("Total pods found on node %s: %d", n.Name, len(PodItems))
+						// Verify that there are no pods in PodItems
+						dash.VerifyFatal(len(PodItems) == 0, true, "Validation : pods exist on the node.")
+						log.Infof("Validation succeeded: No running pods found on node %s.", n.Name)
+					})
+
+					stepLog = "Uncordon the node"
+					Step("Uncordon the node", func() {
+						log.InfoD(stepLog)
+						err := k8sCore.UnCordonNode(n.Name, 1*time.Minute, 5*time.Second)
+						log.FailOnError(err, fmt.Sprintf("Verifying uncordon the node %s", n))
+					})
+					stepLog = fmt.Sprintf("Kill the PX on the node %v", n.Name)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						CrashVolDriverAndWait([]node.Node{n})
+					})
+
+				}
+			})
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
