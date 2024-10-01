@@ -1457,13 +1457,12 @@ var _ = Describe("{SuperAdminBackupShare}", Label(TestCaseLabelsMap[SuperAdminBa
 			err = DeleteRestore(restoreName, BackupOrgID, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 
-			err = DeleteCluster(SourceClusterName, BackupOrgID, pxbUsers[0].ctx, false)
+			err = DeleteClusterWithUID(SourceClusterName, sourceClusterUID, BackupOrgID, pxbUsers[0].ctx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", SourceClusterName))
 
-			err = DeleteCluster(DestinationClusterName, BackupOrgID, pxbUsers[2].ctx, false)
+			err = DeleteClusterWithUID(DestinationClusterName, destinationClusterUID, BackupOrgID, pxbUsers[2].ctx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", DestinationClusterName))
 		})
-
 	})
 
 	JustAfterEach(func() {
