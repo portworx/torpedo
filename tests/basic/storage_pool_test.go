@@ -6681,13 +6681,16 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 			err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, poolUUID,
 				api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, false)
 			if err != nil && strings.Contains(fmt.Sprintf("%v", err), "Please re-issue expand with force") {
+				log.Infof("Pool Expand failed because of Unclean Volumes, trying the test to use force option")
 				err = Inst().V.ExpandPoolUsingPxctlCmd(*nodeDetail, poolUUID,
 					api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
 			}
 			log.FailOnError(err, "Failed to resize pool with UUID [%s]", poolToBeResized.Uuid)
+
+			log.Infof("Pool expansion initiated successfully, waiting for pool to be resized")
 			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
 			dash.VerifyFatal(resizeErr, nil,
-				fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", poolUUID, nodeDetail.Name))
+				fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto with Error [%v]", poolUUID, nodeDetail.Name, resizeErr))
 
 			// Sleep for 1 minute to check if there is some alerts generated
 			time.Sleep(60 * time.Second)
@@ -11821,7 +11824,6 @@ var _ = Describe("{PoolDeleteMultiplePools}", func() {
 	})
 
 })
-
 
 var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "add_disk"), func() {
 
