@@ -27,8 +27,9 @@ import (
 )
 
 // var WgDelete sync.WaitGroup
-var DeleteDoneChannel = make(chan bool)
+var DeleteDoneChannel = make(chan struct{})
 var errorChannel = make(chan error, 100)
+var IsBackupDeleteCheckAlive bool
 
 func getBucketNameSuffix() string {
 	bucketNameSuffix, present := os.LookupEnv("BUCKET_NAME")
@@ -287,9 +288,16 @@ var _ = BeforeSuite(func() {
 	log.FailOnError(err, "Fetching px-central-admin ctx")
 
 	go func() {
+		IsBackupDeleteCheckAlive = true
 		log.InfoD("Starting the thread to get the time taken to delete backups")
 		ticker := time.NewTicker(BackupDeleteTickerTime)
-		defer ticker.Stop()
+		defer func() {
+			log.InfoD("Go routine for collecting backup delete time ended")
+			GinkgoRecover()
+			ticker.Stop()
+			IsBackupDeleteCheckAlive = false
+		}()
+
 		for {
 			select {
 			case <-DeleteDoneChannel:
@@ -405,8 +413,9 @@ var _ = AfterSuite(func() {
 			err := DeleteBackupAndWait(backup, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Waiting for the backup %s to be deleted", backup))
 		}
-
-		DeleteDoneChannel <- true
+		if IsBackupDeleteCheckAlive {
+			DeleteDoneChannel <- struct{}{}
+		}
 		close(errorChannel)
 		for err := range errorChannel {
 			log.Errorf("failed to enumerate backup : %v", err)
