@@ -1229,7 +1229,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", Label(
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
+			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, false)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
 		err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, []string{periodicSchPolicyName})
