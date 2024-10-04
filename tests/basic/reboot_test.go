@@ -2,11 +2,14 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
 	"time"
 
+	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -395,5 +398,158 @@ var _ = Describe("{ClusterPxRestart}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{NodeWipeWithNodeReboot}", func() {
+
+	/*
+	   1.  Create volume and do IOs / deploy apps to do IOs
+	   2.  Validate and destroy app
+	   3.  Prepare node for decommission
+	   4.  Decommission node
+	   5.  Wipe node
+	   6.  Reboot Node with some random Delay
+	   7.  After node comes up run the node wipe again and verify it
+	   8.  Rejoin node
+	   9.  Verify node rejoin
+	*/
+
+	var contexts []*scheduler.Context
+	BeforeEach(func() {
+		StartTorpedoTest("NodeWipeWithNodeReboot", "node wipe with node reboot", nil, 0)
+	})
+
+	ItLog := "NodeWipeWithNodeReboot"
+	It(ItLog, func() {
+		stepLog := "Schedule apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = scheduleApps()
+			log.Info("schedule app succeed")
+			time.Sleep(5 * time.Minute)
+		})
+
+		// appsValidateAndDestroy this will delete all the app including the app we install while setting-up the job
+		stepLog = "validate and destroy app"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			appsValidateAndDestroy(contexts)
+			time.Sleep(time.Minute)
+			log.Info("app validate and destroy succeed")
+		})
+
+		workerNodes := node.GetStorageDriverNodes()
+		index := rand.Intn(len(workerNodes))
+		selectedNode := workerNodes[index]
+
+		stepLog = "Prepare node for decommission"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().S.PrepareNodeToDecommission(selectedNode, Inst().Provisioner)
+			log.FailOnError(err, fmt.Sprintf("Failed prepare node [%v] for decommission", selectedNode.Name))
+			log.Info("prepare node for decommission succeed")
+		})
+
+		// decommission node
+		stepLog = "Decommission node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.DecommissionNode(&selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to decommission node [%v]", selectedNode.Name))
+			log.Info("decommission node succeed")
+		})
+		time.Sleep(1 * time.Minute)
+
+		stepLog = "Wipe node"
+		Step(stepLog, func() {
+			output, err := Inst().N.RunCommand(selectedNode, "echo Yes | pxctl sv node-wipe -s --all ", node.ConnectionOpts{
+				Timeout:         2 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			})
+			log.FailOnError(err, "Failed to wipe node")
+			dash.VerifyFatal(strings.Contains(output, "Wiped node successfully"), true, fmt.Sprintf("node [%s] is Wiped", selectedNode.Name))
+			log.Info("Node wipe is succeed")
+		})
+		sleepTime := rand.Intn(100) + 1
+		time.Sleep(time.Second * (time.Duration(sleepTime)))
+
+		stepLog = fmt.Sprintf("Verify reboot after [%d] seconds", sleepTime)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().N.RebootNodeAndWait(selectedNode)
+			log.FailOnError(err, "Failed to reboot node and wait till it is up")
+			log.Info("Verify reboot succeed")
+		})
+
+		//Wiped node
+		stepLog = "Node wipe after reboot"
+		Step(stepLog, func() {
+			output, err := runPxctlCommand("sv node-wipe --all", selectedNode, nil)
+			log.FailOnError(err, "Failed to wipe node")
+			dash.VerifyFatal(strings.Contains(output, "Wiped node successfully"), true, fmt.Sprintf("node [%s] is Wiped", selectedNode.Name))
+			log.Info("Node wipe is successfull")
+		})
+
+		stepLog = fmt.Sprintf("Rejoin node %s and verify", selectedNode.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.RejoinNode(&selectedNode)
+			log.FailOnError(err, "Failed to rejoin node [%v]", selectedNode)
+			log.Info("rejoin node successfull")
+
+		})
+
+		stepLog = "Verify node rejoin"
+		Step(stepLog, func() {
+			var rejoinedNode *api.StorageNode
+			t := func() (interface{}, bool, error) {
+				drvNodes, err := Inst().V.GetDriverNodes()
+				if err != nil {
+					return false, true, err
+				}
+
+				for _, n := range drvNodes {
+					if n.Hostname == selectedNode.Hostname {
+						rejoinedNode = n
+						return true, false, nil
+					}
+				}
+
+				return false, true, fmt.Errorf("node %s not joined yet", selectedNode.Name)
+			}
+			_, err = task.DoRetryWithTimeout(t, 20*time.Minute, defaultRetryInterval)
+			log.FailOnError(err, fmt.Sprintf("error joining the node [%s]", selectedNode.Name))
+
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing node registry")
+			log.Info("refreshing node registry succeed")
+
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing storage drive endpoints")
+			log.Info("refreshing storage drive endpoints succeed")
+
+			selectedNode = node.Node{}
+			for _, n := range node.GetStorageDriverNodes() {
+				if n.Name == rejoinedNode.Hostname {
+					selectedNode = n
+					break
+				}
+			}
+			if selectedNode.Name == "" {
+				log.FailOnError(fmt.Errorf("rejoined node not found"), fmt.Sprintf("node [%s] not found in the node registry", rejoinedNode.Hostname))
+			}
+			log.Info("rejoined node found succesfully")
+
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+			log.FailOnError(err, "error refreshing storage drive endpoints")
+
+			log.Info("Validate driver up on rejoined node after rejoining succeed")
+
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })
