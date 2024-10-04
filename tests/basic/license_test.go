@@ -26,6 +26,35 @@ const (
 	expiredLicString    = "License is expired"
 
 	essentialsFaFbSKU = "Portworx CSI for FA/FB"
+	pxEssentials      = "PX-Essential"
+)
+
+var (
+	essentialLicense = map[LabLabel]interface{}{
+		LabNodes:                 &pxapi.LicensedFeature_Count{Count: 5},
+		LabVolumes:               &pxapi.LicensedFeature_Count{Count: 200},
+		LabVolumeSize:            &pxapi.LicensedFeature_CapacityTb{CapacityTb: 1},
+		LabNodeCapacity:          &pxapi.LicensedFeature_CapacityTb{CapacityTb: 1},
+		LabNodeCapacityExtend:    &pxapi.LicensedFeature_Enabled{Enabled: false}, //feature upgrade needed
+		LabSnapshots:             &pxapi.LicensedFeature_Count{Count: 5},
+		LabLocalAttaches:         &pxapi.LicensedFeature_Count{Count: 30},
+		LabAggregatedVol:         &pxapi.LicensedFeature_Enabled{Enabled: false}, //feature upgrade needed
+		LabSharedVol:             &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabScaledVol:             &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabEncryptedVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabGlobalSecretsOnly:     &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabResizeVolume:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabFastPath:              &pxapi.LicensedFeature_Enabled{Enabled: false}, //feature upgrade needed
+		LabCloudSnap:             &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnapDaily:        &pxapi.LicensedFeature_Count{Count: 1},
+		LabCloudMigration:        &pxapi.LicensedFeature_Enabled{Enabled: false}, //feature upgrade needed
+		LabDisasterRecovery:      &pxapi.LicensedFeature_Enabled{Enabled: false}, //feature upgrade needed
+		LabAUTCapacityMgmt:       &pxapi.LicensedFeature_Enabled{Enabled: false}, //feature upgrade needed
+		LabOIDCSecurity:          &pxapi.LicensedFeature_Enabled{Enabled: false}, //feature upgrade needed
+		LabPlatformBare:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabPlatformVM:            &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabMultiTenantFlashArray: &pxapi.LicensedFeature_Enabled{Enabled: false}, //feature upgrade needed
+	}
 )
 
 var (
@@ -661,6 +690,56 @@ var _ = Describe("{LicenseValidation}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+	})
+})
+
+// This test performs basic test of starting an application
+// Validating those applications
+// Getting Volume License Summary
+// Validating License Summary with pxEssentials License defined
+// and destroying it (along with storage)
+var _ = Describe("{BasicEssentialsTest}", Label("pxEssentials", "p1", "essentialLicense"), func() {
+	var testrailID = 53350
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("BasicEssentialsTest", "Validates `Portworx for Essentials` license SKU", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	It("has to setup, validate and teardown apps", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-license-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		Step("Get SKU and compare with PX-Essentials", func() {
+			summary, err := Inst().V.GetLicenseSummary()
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+
+			Expect(summary.SKU).To(Equal(pxEssentials),
+				fmt.Sprintf("SKU did not match: [%v]", pxEssentials))
+			log.InfoD("Comparing Px-Essentials List with Activated License List!!")
+			Step("Compare PX-Essentials features vs activated license", func() {
+				for _, feature := range summary.Features {
+					// if the feature limit exists in the hardcoded license limits we test it.
+					if labelFeatureName, ok := essentialLicense[LabLabel(feature.Name)]; ok {
+						log.InfoD("Verifying the feature [%v] from the List Expected: [%v] == Actual: [%v]", feature.Name, labelFeatureName, feature.Quantity)
+						Expect(feature.Quantity).To(Equal(labelFeatureName),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, labelFeatureName))
+					}
+				}
+			})
+		})
+		ValidateAndDestroy(contexts, nil)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 

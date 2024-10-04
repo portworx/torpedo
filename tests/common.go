@@ -506,6 +506,8 @@ const (
 	LabGlobalSecretsOnly LabLabel = "GlobalSecretsOnly"
 	// LabFastPath - FastPath extension [PX-FAST]
 	LabFastPath LabLabel = "FastPath"
+	//Multi-tenant extension for FlashArray
+	LabMultiTenantFlashArray LabLabel = "MultiTenantFlashArray"
 	// UnlimitedNumber represents the unlimited number of licensed resource.
 	// note - the max # Flex counts handle, is actually 999999999999999990
 	UnlimitedNumber = int64(0x7FFFFFFF) // C.FLX_FEATURE_UNCOUNTED_VALUE = 0x7FFFFFFF  (=2147483647)
