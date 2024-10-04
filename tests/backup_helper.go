@@ -94,6 +94,7 @@ const (
 	Dbinnal        TestcaseAuthor = "dbinnal-px"
 	Sgajawada      TestcaseAuthor = "sgajawada-px"
 	Pamathur       TestcaseAuthor = "pallav-px"
+	Prikumar       TestcaseAuthor = "prikumar"
 	Dchothani      TestcaseAuthor = "dchothani"
 )
 
@@ -9080,6 +9081,42 @@ func GetRestoreCRs(
 		allRestoreCRNames = append(allRestoreCRNames, restore.Name)
 	}
 	return allRestoreCRNames, nil
+}
+
+// DeleteBackupCR deletes the applicationbackup CR created for backupName in the given Namespace
+func DeleteBackupCR(currentCrNamespace string, backupName string, clusterName string, clusterUID string, orgID string, ctx context1.Context) error {
+
+	log.Infof("Current CR Namespace: [%s]", currentCrNamespace)
+
+	backupDriver := Inst().Backup
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
+	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+	if err != nil {
+		return err
+	}
+
+	clusterObj := clusterResp.GetCluster()
+	backupCrs, err := GetBackupCRs(currentCrNamespace, clusterObj)
+	if err != nil {
+		return err
+	}
+	log.Infof("All backup CRs in [%s] are [%v]", currentCrNamespace, backupCrs)
+
+	_, storkClient, err := portworx.GetKubernetesInstance(clusterObj)
+	if err != nil {
+		return err
+	}
+
+	for _, backupCrName := range backupCrs {
+		if strings.Contains(backupCrName, backupName) {
+			err = storkClient.DeleteApplicationBackup(backupCrName, currentCrNamespace)
+			if err != nil {
+				log.Warnf("Failed to delete application backup CR from [%s]. Error [%v]", currentCrNamespace, err)
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // UpdateKDMPConfigMap updates the KDMP configMap with the given key and value.
