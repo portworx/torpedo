@@ -12181,3 +12181,175 @@ var _ = Describe("{PoolDeleteWithNodeReboot}", func() {
 
 	})
 })
+
+var _ = Describe("{PXInstallWithNodeReboot}", func() {
+
+	/*
+			1. Prepare node for decommission
+			2. Decommission node
+			3. check if node was decommissioned
+			4. Verify reboot after decommission
+			5. Do node wipe
+			6. Rejoin node
+			7. Verify reboot after rejoin
+			8. Verify node rejoin
+			9. check px status
+		   10. check pools status
+	*/
+
+	BeforeEach(func() {
+		StartTorpedoTest("PXInstallWithNodeReboot", "PX install with node reboot", nil, 0)
+	})
+	ItLog := "PXInstallWithNodeReboot"
+	It(ItLog, func() {
+		workerNodes := node.GetStorageDriverNodes()
+		index := rand.Intn(len(workerNodes))
+		nodeToDecommission := workerNodes[index]
+
+		// Prepare node for decommission
+		stepLog := "Prepare node for decommission"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().S.PrepareNodeToDecommission(nodeToDecommission, Inst().Provisioner)
+			log.FailOnError(err, fmt.Sprintf("Failed prepare node [%v] for decommission", nodeToDecommission.Name))
+			log.Info("prepare node for decommission succeed")
+		})
+
+		// decommission node
+		stepLog = "Decommission node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.DecommissionNode(&nodeToDecommission)
+			log.FailOnError(err, fmt.Sprintf("Failed to decommission node [%v]", nodeToDecommission.Name))
+			log.Info("decommission node succeed")
+		})
+		time.Sleep(1 * time.Minute)
+
+		// check if the node was decommissioned
+		stepLog = fmt.Sprintf("Check if node %s was decommissioned", nodeToDecommission.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			result := false
+			t := func() (interface{}, bool, error) {
+				status, err := Inst().V.GetNodeStatus(nodeToDecommission)
+				if err != nil {
+					return false, true, err
+				}
+				if *status == api.Status_STATUS_NONE {
+					return true, false, nil
+				}
+				return false, true, fmt.Errorf("node %s not decomissioned yet", nodeToDecommission.Name)
+			}
+			decommissioned, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+			log.FailOnError(err, "Failed to get decommissioned node status")
+			result = decommissioned.(bool)
+
+			dash.VerifyFatal(result, true, fmt.Sprintf("Validate node [%s] is decommissioned", nodeToDecommission.Name))
+
+		})
+
+		stepLog = "Verify reboot after decommission"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().N.RebootNodeAndWait(nodeToDecommission)
+			log.FailOnError(err, "Failed to reboot node and wait till it is up")
+			log.Info("Verify reboot succeed")
+			time.Sleep(time.Minute * 1)
+		})
+
+		stepLog = fmt.Sprintf("Rejoin node %s and verify", nodeToDecommission.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.RejoinNode(&nodeToDecommission)
+			log.FailOnError(err, "Failed to rejoin node [%v]", nodeToDecommission)
+			log.Info("rejoin node successfull")
+
+		})
+		sleepTime := rand.Intn(100) + 1
+		time.Sleep(time.Second * (time.Duration(sleepTime)))
+
+		stepLog = fmt.Sprintf("Verify reboot after [%d] seconds", sleepTime)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().N.RebootNodeAndWait(nodeToDecommission)
+			log.FailOnError(err, "Failed to reboot node and wait till it is up")
+			log.Info("Verify reboot after rejoin succeed")
+			time.Sleep(time.Minute * 1)
+		})
+		/// verfy node rejoin
+		stepLog = "Verify node rejoin"
+		Step(stepLog, func() {
+			var rejoinedNode *api.StorageNode
+			t := func() (interface{}, bool, error) {
+				drvNodes, err := Inst().V.GetDriverNodes()
+				if err != nil {
+					return false, true, err
+				}
+
+				for _, n := range drvNodes {
+					if n.Hostname == nodeToDecommission.Hostname {
+						rejoinedNode = n
+						return true, false, nil
+					}
+				}
+
+				return false, true, fmt.Errorf("node %s not joined yet", nodeToDecommission.Name)
+			}
+			_, err = task.DoRetryWithTimeout(t, 20*time.Minute, defaultRetryInterval)
+			log.FailOnError(err, fmt.Sprintf("error joining the node [%s]", nodeToDecommission.Name))
+
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing node registry")
+			log.Info("refreshing node registry succeed")
+
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing storage drive endpoints")
+			log.Info("refreshing storage drive endpoints succeed")
+
+			nodeToDecommission = node.Node{}
+			for _, n := range node.GetStorageDriverNodes() {
+				if n.Name == rejoinedNode.Hostname {
+					nodeToDecommission = n
+					break
+				}
+			}
+			if nodeToDecommission.Name == "" {
+				log.FailOnError(fmt.Errorf("rejoined node not found"), fmt.Sprintf("node [%s] not found in the node registry", rejoinedNode.Hostname))
+			}
+			log.Info("rejoined node found succesfully")
+
+			err = Inst().V.WaitDriverUpOnNode(nodeToDecommission, Inst().DriverStartTimeout)
+			log.FailOnError(err, "error refreshing storage drive endpoints")
+
+			log.Info("Validate driver up on rejoined node [%s] after rejoining succeed")
+
+		})
+
+		// portworx status
+		stepLog = "Check px status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			status, err := Inst().V.GetPxctlStatus(nodeToDecommission)
+			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", nodeToDecommission.Name))
+			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+				nodeToDecommission.Name, api.Status_STATUS_OK, status))
+			log.InfoD("px status %v", status)
+
+		})
+
+		// check pool status is healthy after node rejoin
+		stepLog = "Check pool status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(nodeToDecommission)
+			log.FailOnError(err, "error getting pool status on node %s", nodeToDecommission.Name)
+			for pooluuid, status := range poolsStatus {
+				dash.VerifyFatal(status, "Online", fmt.Sprintf("Pool %s Status not Online", pooluuid))
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
