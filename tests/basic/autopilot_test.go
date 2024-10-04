@@ -928,7 +928,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), func() {
 	})
 })
 
-// Restart Volume driver during resize pool with add-disk option
+// Restart Volume driver during resize pool with add-disk option.
 var _ = Describe(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName), func() {
 	tags["poolChange"] = "true"
 	JustBeforeEach(func() {
@@ -938,53 +938,71 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName)
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sPoolExpandRestartVolDriver", testSuiteName))
 		poolLabel := map[string]string{"autopilot": "adddisk"}
+		log.InfoD("Select storage node for operations")
 		storageNode := node.GetStorageDriverNodes()[2]
+		log.InfoD("Created autopilot rule to expand disk using add drive")
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNode)/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabel),
 		}
 
 		Step("schedule apps with autopilot rules for pool expand", func() {
+			log.Infof("Attempting to add labels on storage node %v with pool label %v", storageNode, poolLabel)
 			err := AddLabelsOnNode(storageNode, poolLabel)
 			Expect(err).NotTo(HaveOccurred())
 			contexts = scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{PvcSize: 20 * units.GiB})
+			log.Infof(fmt.Sprintf("Successfully scheduled apps with autopilot rules for pool expansion. Test name: %v, Pool label: %v, Contexts: %v", testName, poolLabel, contexts))
+
 		})
 
 		Step("restart Volume driver when resize of pool is triggered", func() {
+			log.InfoD("Wait for the autopilot event indicating the resize has been triggered")
 			err := aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.AnyToTriggeredEvent})
 			Expect(err).NotTo(HaveOccurred())
+			log.InfoD("Wait for the autopilot event indicating that actions are pending")
 			err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
 			Expect(err).NotTo(HaveOccurred())
+			log.InfoD("Restarting volume driver on node: %v", storageNode)
 			err = Inst().V.RestartDriver(storageNode, nil)
 			Expect(err).NotTo(HaveOccurred())
+			log.InfoD("Waiting for volume driver to go down on node:%v", storageNode)
 			err = Inst().V.WaitDriverDownOnNode(storageNode)
 			Expect(err).NotTo(HaveOccurred())
+			log.InfoD("Waiting for volume driver to come up on node: %v", storageNode)
 			err = Inst().V.WaitDriverUpOnNode(storageNode, Inst().DriverStartTimeout)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
+				log.Infof("Checking workload status for context: %v", ctx)
 				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
 				Expect(err).NotTo(HaveOccurred())
+				log.Infof("Workload successfully completed for context: %s", ctx)
 			}
 		})
 
 		Step("validating and verifying size of storage pools", func() {
+			log.InfoD("Starting validation of storage pools")
 			ValidateStoragePools(contexts)
 		})
 
 		Step("destroy apps", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			log.InfoD("Starting teardown of application contexts...")
 			for _, ctx := range contexts {
 				TearDownContext(ctx, opts)
 			}
+			log.Infof("Completed teardown of application contexts.")
+			log.Infof("Deleting autopilot rules...")
 			for _, apRule := range apRules {
 				Inst().S.DeleteAutopilotRule(apRule.Name)
 			}
+			log.Infof("Removing labels from storage node...")
 			for key := range poolLabel {
 				Inst().S.RemoveLabelOnNode(storageNode, key)
 			}
+			log.InfoD("All cleanup actions completed.")
 		})
 
 	})
@@ -2155,16 +2173,23 @@ func scheduleAppsWithAutopilot(testName string, testScaleFactor int, apRules []a
 	})
 
 	Step("wait until all volumes are created", func() {
+		log.InfoD("Starting validation of volumes")
 		for _, ctx := range contexts {
 			ValidateVolumes(ctx)
 		}
+		log.InfoD("Completed validation of all volumes")
 	})
 
 	Step("apply autopilot rules for storage pools", func() {
+		log.InfoD("Starting to apply autopilot rules for storage pools %v:", apRules)
 		for _, apRule := range apRules {
 			_, err := Inst().S.CreateAutopilotRule(apRule)
 			Expect(err).NotTo(HaveOccurred())
+			log.InfoD("Successfully applied autopilot rule %v", apRule.Name)
+
 		}
+		log.InfoD("Completed applying all autopilot rules for storage pools")
+
 	})
 
 	return contexts

@@ -2819,10 +2819,12 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 		// for each replica set add the workloadSize of app workload to each storage pool where replica resides on
 		for _, ctx := range contexts {
 			Step(fmt.Sprintf("get replica sets for app: %s's volumes", ctx.App.Key), func() {
+				log.InfoD("Retrieving volumes for application: %s", ctx.App.Key)
 				appVolumes, err := Inst().S.GetVolumes(ctx)
 				expect(err).NotTo(haveOccurred())
 				expect(appVolumes).NotTo(beEmpty())
 				for _, vol := range appVolumes {
+					log.Infof("Checking volume: %s", vol)
 					if Inst().S.IsAutopilotEnabledForVolume(vol) {
 						replicaSets, err := Inst().V.GetReplicaSets(vol)
 						expect(err).NotTo(haveOccurred())
@@ -2839,9 +2841,11 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 		}
 
 		// update each storage pool with the app workload sizes
+		log.InfoD("update each storage pool with the app workload sizes")
 		nodes := node.GetWorkerNodes()
 		expect(nodes).NotTo(beEmpty())
 		for _, n := range nodes {
+			log.Infof("Updating storage pools for node: %s", n.Name)
 			for id, sPool := range n.StoragePools {
 				if workloadSizeForPool, ok := workloadSizesByPool[sPool.Uuid]; ok {
 					n.StoragePools[id].WorkloadSize = workloadSizeForPool
@@ -2851,11 +2855,14 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 			}
 			err = node.UpdateNode(n)
 			expect(err).NotTo(haveOccurred())
+			log.Infof("Node %s updated successfully.", n.Name)
+
 		}
 	}
-
+	log.InfoD("Validate storage pools on the node")
 	err = Inst().V.ValidateStoragePools()
 	expect(err).NotTo(haveOccurred())
+	log.InfoD("Storage pools validated successfully.")
 
 }
 
