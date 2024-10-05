@@ -4727,6 +4727,7 @@ func PxBackupUpgrade(versionToUpgrade string) error {
 				{Name: "pxBackupPrometheusConfigReloaderImage"},
 				{Name: "preUpgradeHookImage"},
 				{Name: "mongodbImageMap"},
+				{Name: "mysqlInitImage"},
 			},
 		}
 
