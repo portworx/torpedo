@@ -125,6 +125,9 @@ var _ = Describe("{UpgradeCluster}", func() {
 				if err != nil {
 					neErr := Inst().S.RefreshNodeRegistry()
 					log.FailOnError(neErr, "Refresh Node Registry failed")
+					if Inst().S.String() == anthos.SchedName {
+						waitForAnthosClusterStable()
+					}
 					neErr = Inst().V.RefreshDriverEndpoints()
 					log.FailOnError(neErr, "Refresh Driver Endpoints failed")
 					PrintPxctlStatus()
@@ -175,20 +178,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 				// PX pod restart needed for Anthos cluster upgrade after disabling IPv6 in nodes
 				if Inst().S.String() == anthos.SchedName {
-					volumeDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
-					err = DeletePXPods(volumeDriverNamespace)
-					dash.VerifyFatal(err, nil, "failed to get volume driver namespace")
-
-					// Wait for PX pods to be up
-					log.Info("Waiting for Volume Driver to be up and running")
-					for _, n := range node.GetWorkerNodes() {
-						err = Inst().V.WaitForPxPodsToBeUp(n)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("px pod failed to come up in a node: [%s]", n.Name))
-					}
-					waitTime := 30
-					log.Infof("Sleeping for %d minutes to let px node to pull images after the upgrade..", waitTime)
-					time.Sleep(time.Duration(waitTime) * time.Minute)
-
+					waitForAnthosClusterStable()
 				}
 
 				PrintK8sClusterInfo()
@@ -336,4 +326,20 @@ func validateClusterNodes(stopSignal <-chan struct{}, mError *error) {
 		itr++
 		time.Sleep(30 * time.Second)
 	}
+}
+
+func waitForAnthosClusterStable() {
+	volumeDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	err = DeletePXPods(volumeDriverNamespace)
+	dash.VerifyFatal(err, nil, "failed to get volume driver namespace")
+
+	// Wait for PX pods to be up
+	log.Info("Waiting for Volume Driver to be up and running")
+	for _, n := range node.GetWorkerNodes() {
+		err = Inst().V.WaitForPxPodsToBeUp(n)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("px pod failed to come up in a node: [%s]", n.Name))
+	}
+	waitTime := 30
+	log.Infof("Sleeping for %d minutes to let px node to pull images after the upgrade..", waitTime)
+	time.Sleep(time.Duration(waitTime) * time.Minute)
 }

@@ -132,6 +132,7 @@ const (
 	location                     = "us-west1"
 	storagePDBMinAvailable       = "portworx.io/storage-pdb-min-available"
 	clusterNameSpace             = "default"
+	skipFlagCheckVersion         = "1.29.0"
 )
 
 var (
@@ -190,6 +191,7 @@ type anthos struct {
 	instPath            string
 	confPath            string
 	adminClusterUpgrade bool
+	skipPDBFlag         bool
 	clusterName         string
 	Ops                 anthosops.Ops
 }
@@ -220,7 +222,7 @@ func (anth *anthos) Init(schedOpts scheduler.InitOptions) error {
 	if err := anth.adminWsSSHInstance.Init(node.InitOptions{SpecDir: schedOpts.SpecDir}); err != nil {
 		return err
 	}
-	if err := anth.unsetUserNameAndKey(); err != nil {
+	if err := unsetUserNameAndKey(); err != nil {
 		return err
 	}
 	if err := anth.getVersion(); err != nil {
@@ -248,12 +250,12 @@ func (anth *anthos) execOnAdminWSNode(cmd string) (string, error) {
 	}
 	out, err := anth.adminWsSSHInstance.RunCommand(*anth.adminWsNode, cmd, connectOpts)
 	if err != nil {
-		if err = anth.unsetUserNameAndKey(); err != nil {
+		if err = unsetUserNameAndKey(); err != nil {
 			return out, fmt.Errorf("failed to unset torpedo user name and key. Err: %v", err)
 		}
 		return out, err
 	}
-	if err := anth.unsetUserNameAndKey(); err != nil {
+	if err := unsetUserNameAndKey(); err != nil {
 		return "", err
 	}
 	return out, err
@@ -391,9 +393,17 @@ func (anth *anthos) VerifyUpgradeVersion(upgradeVersion string) error {
 	if err != nil {
 		return err
 	}
+	skipFlagVersion, err := version.NewVersion(skipFlagCheckVersion)
+	if err != nil {
+		return fmt.Errorf("failed to parse skip PDB flag check version: %s. Err: %v", skipFlagCheckVersion, err)
+	}
 	if version1.GreaterThanOrEqual(version2) {
 		return fmt.Errorf("incorrect upgrade version:%s is provided."+
 			"Upgrade version should be higher", upgradeVersion)
+	}
+	if version1.GreaterThanOrEqual(skipFlagVersion) {
+		log.Infof("Setting skip PDB flag to true for next anthos version [%s] upgrade", anth.version)
+		anth.skipPDBFlag = true
 	}
 	toVersion := vReg.FindAllStringSubmatch(v1, -1)
 	fromVersion := vReg.FindAllStringSubmatch(v2, -1)
@@ -472,7 +482,7 @@ func (anth *anthos) upgradeAdminWorkstation(version string) error {
 		Timeout:         defaultTestConnectionTimeout,
 		TimeBeforeRetry: defaultWaitUpgradeRetry,
 	})
-	if err := anth.unsetUserNameAndKey(); err != nil {
+	if err := unsetUserNameAndKey(); err != nil {
 		return err
 	}
 	if err != nil {
@@ -508,9 +518,14 @@ func (anth *anthos) upgradeUserCluster(version string) error {
 	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
 		return fmt.Errorf("preparing user cluster for upgrade is failing: [%s]. Err: (%v)", out, err)
 	}
+
 	// skipPDBUpgradePreflightFlag is needed to skip PDB check
-	cmd = fmt.Sprintf("%s --kubeconfig %s --config %s %s %s %s",
-		upgradeUserClusterCmd, adminKubeconfPath, userClusterConfPath, skipReconcilePreflightFlag, skipPDBUpgradePreflightFlag, skipValidationAllFlag)
+	cmd = fmt.Sprintf("%s --kubeconfig %s --config %s %s %s",
+		upgradeUserClusterCmd, adminKubeconfPath, userClusterConfPath, skipReconcilePreflightFlag, skipValidationAllFlag)
+
+	if anth.skipPDBFlag {
+		cmd += fmt.Sprintf(" %s", skipPDBUpgradePreflightFlag)
+	}
 
 	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
 		return fmt.Errorf("upgrading user cluster is failing: [%s]. Err: (%v)", out, err)
@@ -601,7 +616,7 @@ func (anth *anthos) setUserNameAndKey() error {
 }
 
 // unsetUserNameAndKey unset torpedo username and keyPath
-func (anth *anthos) unsetUserNameAndKey() error {
+func unsetUserNameAndKey() error {
 	if err := os.Unsetenv("TORPEDO_SSH_KEY"); err != nil {
 		return err
 	}
