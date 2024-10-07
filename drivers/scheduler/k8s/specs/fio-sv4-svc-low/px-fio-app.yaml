@@ -19,6 +19,8 @@ spec:
         app: fio-sv4-svc
     spec:
       schedulerName: stork
+      securityContext:
+        fsGroupChangePolicy: "OnRootMismatch"
       containers:
         - name: fio-sv4-svc
           image: joshuarobinson/fio:3.19

@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/portworx/torpedo/drivers/node"
@@ -69,6 +70,7 @@ type vsphere struct {
 
 var (
 	vmMap = make(map[string]*object.VirtualMachine)
+	mutex sync.Mutex
 )
 
 func (v *vsphere) String() string {
@@ -248,6 +250,8 @@ func (v *vsphere) GetDatastoresFromDatacenter() ([]*object.Datastore, error) {
 
 func (v *vsphere) connect() error {
 	var f *find.Finder
+	mutex.Lock()
+	defer mutex.Unlock()
 
 	// Getting finder instance
 	f, err := v.getVMFinder()

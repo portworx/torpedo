@@ -1,0 +1,48 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bonnie-sv4-svc
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: bonnie-sv4-svc
+  template:
+    metadata:
+      labels:
+        app: bonnie-sv4-svc
+    spec:
+      containers:
+        - name: bonnie-sv4-svc
+          image: polinux/bonnie
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              memory: "8Gi"
+              cpu: "16"
+          command: [ "sh", "-c" ]
+          args:
+            - |
+              while true; do
+                  # Create a dedicated directory for the pod
+                  mkdir -p /testdir/$(POD_NAME)
+
+                  # Run Bonnie++ benchmark with file creation
+                  bonnie++ -d /testdir/$(POD_NAME) -s 100G -r 96652M -n 5:5:1:5 -c 2 -x 1 -b
+
+                  # Wait for 30 seconds before the next run
+                  sleep 30
+              done
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: bonnie-persistent-storage
+              mountPath: /testdir
+      volumes:
+        - name: bonnie-persistent-storage
+          persistentVolumeClaim:
+            claimName: bonnie-pvc

@@ -1074,14 +1074,14 @@ var _ = Describe("{StopPXResizePVCDeleteApps}", func() {
 				Step(stepLog,
 					func() {
 						log.InfoD(stepLog)
-						pvcs, err := GetContextPVCs(ctx)
+						pvcs, err := GetAllPVCFromNs(ctx.App.NameSpace, nil)
 						log.FailOnError(err, "Failed to get pvc's from context")
 						for _, pvc := range pvcs {
 							pvcSize := pvc.Spec.Resources.Requests.Storage().String()
 							pvcSize = strings.TrimSuffix(pvcSize, "Gi")
 							pvcSizeInt, err := strconv.Atoi(pvcSize)
 							log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
-							resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSizeInt))
+							resizedVol, err := Inst().S.ResizePVC(ctx, &pvc, uint64(2*pvcSizeInt))
 							log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
 							log.InfoD("Vol uid %v", resizedVol.ID)
 							requestedVols = append(requestedVols, resizedVol)
@@ -1246,7 +1246,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 			ValidateApplications(contexts)
 
 			for _, ctx := range contexts {
-				pvcs, err := GetContextPVCs(ctx)
+				pvcs, err := GetAllPVCFromNs(ctx.App.NameSpace, nil)
 				log.FailOnError(err, "Failed to get pvc's from context")
 				for _, pvc := range pvcs {
 					requestedVols = append(requestedVols, pvc.Spec.VolumeName)

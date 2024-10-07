@@ -876,8 +876,11 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 				for _, appVol := range appVolumes {
 					log.Infof(fmt.Sprintf("updating volume %s [app:%s] with volume spec: %+v", appVol.Name, ctx.App.Key, volumeSpecUpdate))
 					err = Inst().V.UpdateVolumeSpec(appVol, volumeSpecUpdate)
-					log.Errorf("error updating volume spec for volume %s [app:%s] err: %v", appVol.Name, ctx.App.Key, err)
-					UpdateOutcome(event, err)
+					if err != nil {
+						log.Errorf("error updating volume spec for volume %s [app:%s] err: %v", appVol.Name, ctx.App.Key, err)
+						UpdateOutcome(event, err)
+					}
+
 				}
 			}
 		}
@@ -1415,6 +1418,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, err)
 					continue
 				}
+				log.Infof("Current Replication Status for volume %s is %s", v.Name, replStatus)
 				if replStatus != "Up" {
 					continue
 				}
@@ -1477,7 +1481,6 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 								PrintInspectVolume(v.ID)
 								log.Errorf("There is a error setting repl [%v]", err.Error())
 							}
-
 							UpdateOutcome(event, err)
 						} else {
 							log.Warnf("cannot peform HA increase as new repl factor value is greater than max allowed %v", MaxRF)
@@ -1596,18 +1599,19 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 
 				curSize := apiVol.Spec.Size
 				newSize := curSize + (uint64(10) * units.GiB)
-				log.Infof("Initiating volume size increase on volume [%v] by size [%v] to [%v]",
+				log.Infof("Initiating volume size increase on volume [%s/%v] by size [%v] to [%v]", ctx.App.Key,
 					vol.ID, curSize/units.GiB, newSize/units.GiB)
 
-				pvcs, err := GetContextPVCs(ctx)
+				pvcs, err := GetAllPVCFromNs(ctx.App.NameSpace, nil)
 				if err != nil {
 					log.Errorf("Error getting PVCs for context %s", ctx.App.Key)
 					return err
 				}
 				for _, pvc := range pvcs {
-					if pvc.Spec.VolumeName == vol.Name {
-						log.InfoD("increasing pvc [%s/%s]  size to %dGiB", pvc.Namespace, pvc.Name, newSize)
-						_, err = Inst().S.ResizePVC(ctx, pvc, uint64(10))
+					log.Debugf("checking pvc:[%s], with vol name [%s]", pvc.Name, vol.Name)
+					if pvc.Name == vol.Name {
+						log.InfoD("increasing pvc [%s/%s] size to %dGiB", pvc.Namespace, pvc.Name, newSize/units.GiB)
+						_, err = Inst().S.ResizePVC(ctx, &pvc, uint64(10))
 						if err != nil {
 							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failure of resizing the volume", vol.Name, vol.ID, vol.Namespace)
 							PrintInspectVolume(vol.ID)
@@ -1649,6 +1653,7 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 					continue
 				}
 
+				log.Infof("Current Replication Status for volume %s is %s", v.Name, replStatus)
 				if replStatus != "Up" {
 					continue
 				}
@@ -1806,6 +1811,18 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					log.Warnf("Repl decrease on Pure DA volume:[%s] not supported.Skipping repl decrease operation in pure volume", v.Name)
 					continue
 				}
+
+				replStatus, err := GetVolumeReplicationStatus(v)
+				if err != nil {
+					UpdateOutcome(event, err)
+					continue
+				}
+				log.Infof("Current Replication Status for volume %s is %s", v.Name, replStatus)
+
+				if replStatus != "Up" {
+					continue
+				}
+
 				MinRF := Inst().V.GetMinReplicationFactor()
 				stepLog = fmt.Sprintf("repl decrease volume driver %s on app %s's volume: %v",
 					Inst().V.String(), ctx.App.Key, v)
@@ -3263,18 +3280,18 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 				func() {
 					log.InfoD(stepLog)
 					chaosLevel := getPoolExpandPercentage(VolumeResize)
-					pvcs, err := GetContextPVCs(ctx)
+					pvcs, err := GetAllPVCFromNs(ctx.App.NameSpace, nil)
 					if err != nil {
 						UpdateOutcome(event, err)
 						return
 					}
 					for _, pvc := range pvcs {
-						log.InfoD("increasing pvc [%s/%s]  size by %dGiB", pvc.Namespace, pvc.Name, chaosLevel)
+						log.InfoD("increasing pvc [%s/%s] size by %dGiB", pvc.Namespace, pvc.Name, chaosLevel)
 						dashStats := make(map[string]string)
 						dashStats["pvc-name"] = pvc.Name
 						dashStats["resize-by"] = fmt.Sprintf("%dGiB", chaosLevel)
 						updateLongevityStats(VolumeResize, stats.VolumeResizeEventName, dashStats)
-						resizedVol, err := Inst().S.ResizePVC(ctx, pvc, chaosLevel)
+						resizedVol, err := Inst().S.ResizePVC(ctx, &pvc, chaosLevel)
 						if err != nil && !(strings.Contains(err.Error(), "only dynamically provisioned pvc can be resized")) {
 							UpdateOutcome(event, err)
 							continue
@@ -3869,8 +3886,16 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 								status, err = WaitForSnapShotToReady(snapshotScheduleName, status.Name, appNamespace)
 								log.Infof("Snapshot [%s] has status [%v]", status.Name, status.Status)
 								if status.Status == snapv1.VolumeSnapshotConditionError {
-									resp, _ := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
-									log.Infof("SnapshotSchedule resp: %+v", resp)
+									resp, _ = storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+								outer:
+									for _, ss := range resp.Status.Items {
+										for _, snapStatus := range ss {
+											if snapStatus.Name == status.Name {
+												log.Errorf("Failed snapshot status for [%+v]", snapStatus)
+												break outer
+											}
+										}
+									}
 									snapData, _ := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
 									if snapData != nil {
 										log.Infof("snapData : %v", snapData)
@@ -4439,7 +4464,7 @@ func CollectEventRecords(recordChan *chan *EventRecord) {
 
 func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 	defer endLongevityTest()
-	startLongevityTest("SSIE Run Validation")
+	startLongevityTest("SSIEValidation")
 	pxLabel := map[string]string{"name": "portworx"}
 	storkLabel := map[string]string{"name": "stork"}
 	autopilotLabel := map[string]string{"name": "autopilot"}
@@ -4514,7 +4539,7 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 		}
 
 		if len(file) != 0 {
-			log.Errorf(fmt.Sprintf("core file [%s] found on node %s", file, n.Name))
+			dash.VerifySafely(len(file) != 0, false, fmt.Sprintf("core file [%s] found on node %s", file, n.Name))
 		}
 
 	}
@@ -7778,7 +7803,7 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 				t := func() (interface{}, bool, error) {
 					fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(attachedNode)
 					if err != nil {
-						return nil, true, fmt.Errorf("error autofstrim status node %v status", attachedNode)
+						return nil, true, fmt.Errorf("error autofstrim status node %v status, err: [%v]", attachedNode, err)
 					}
 					val, ok := fsTrimStatuses[appVol.Id]
 					var fsTrimStatus opsapi.FilesystemTrim_FilesystemTrimStatus
@@ -7802,7 +7827,7 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 						return nil, true, fmt.Errorf("autofstrim for volume %v not started yet", v.ID)
 					}
 				}
-				_, err = task.DoRetryWithTimeout(t, defaultDriverStartTimeout, defaultRetryInterval)
+				_, err = task.DoRetryWithTimeout(t, 30*time.Minute, defaultRetryInterval)
 				if err != nil {
 					UpdateOutcome(event, err)
 					return
@@ -13218,24 +13243,6 @@ func CreateVclusterStorageClass(scName string, opts ...storageClassOption) error
 		return err
 	}
 	return nil
-}
-
-// GetContextPVCs returns pvc from the given context
-func GetContextPVCs(context *scheduler.Context) ([]*v1.PersistentVolumeClaim, error) {
-	updatedPVCs := make([]*v1.PersistentVolumeClaim, 0)
-	for _, specObj := range context.App.SpecList {
-
-		if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
-			pvc, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
-			if err != nil {
-				return nil, err
-			}
-			updatedPVCs = append(updatedPVCs, pvc)
-
-		}
-	}
-	return updatedPVCs, nil
-
 }
 
 func prepareEmailBody(eventRecords emailData) (string, error) {

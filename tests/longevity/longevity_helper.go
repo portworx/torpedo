@@ -318,12 +318,9 @@ func populateDisruptiveTriggers() {
 		VolumesDelete,
 		ResizeDiskAndReboot,
 		AddDiskAndReboot,
-		PowerOffAllVMs,
 		OCPStorageNodeRecycle,
 		ReallocateSharedMount,
 		VolumeDriverDownVCluster,
-		SVMotionSingleNode,
-		SVMotionMultipleNodes,
 	}
 }
 
