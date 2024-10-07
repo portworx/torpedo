@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: querying-app-1
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      {{ if .Parallelism }}
+      parallelism: {{ .Parallelism }}
+      completions: {{ .Parallelism }}
+      {{ else }}
+      parallelism: 10
+      completions: 10 {{ end }}
+      backoffLimit: 3
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: ml-workload
+              image: portworx/ml-workload:rent-prediction-2
+              command: ["/bin/bash", "-c"]
+              args: ["python query.py && sleep 60"]
+              env:
+                - name: OUTPUT_FILE
+                  value: query_output_1.csv
+              volumeMounts:
+                - name: ml-shared-data
+                  mountPath: /mnt/data
+          volumes:
+            - name: ml-shared-data
+              persistentVolumeClaim:
+                claimName: ml-workload-pvc

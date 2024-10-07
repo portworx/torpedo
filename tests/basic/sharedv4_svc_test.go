@@ -1310,7 +1310,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 	})
 })
 
-// This test runs a ML Workload that predicts Housing rents. It contains one pod that preprocesses model
+// This test runs an ML Workload that predicts Housing rents. It contains one pod that preprocesses model
 // and prepares training data. One pod runs continuously and keeps on retraining the model every 5 mins.
 // The other pods that are deployments run once every 5 mins and read the model, do some prediction and
 // writes their predictions to shared volume on which model is saved. Retraining pod picks this data up
@@ -1457,6 +1457,86 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 		}
 		Inst().AppList = origAppList
 		log.Infof("Restored original App list : %v", Inst().AppList)
+	})
+})
+
+// This test deploys a cron job for a machine learning workload that predicts housing rents.
+// It consists of a preprocessing pod that prepares the model and training data,
+// and a continuous retraining pod that updates the model every 5 minutes.
+// Additional deployment jobs run every 15 minutes, reading the model, making predictions,
+// and writing those predictions to a shared volume where the model is stored.
+// The retraining pod retrieves this data to refine the model further. This setup utilizes a simple feed-forward neural network.
+var _ = Describe("{CreateMlWorkloadOnSharedv4SvcWithCronJob}", Label("p0", "positive", "sharedv4"), func() {
+	ns := "ml-workload-ns"
+	customAppName := "ml-workload-rwx-cronjob"
+	appContexts := make([]*scheduler.Context, 0)
+	prereqContexts := make([]*scheduler.Context, 0)
+	taskName := "prepare-ml-workload"
+	var origAppList []string
+	var provider string
+	totalRunTime := 45
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateMlWorkloadOnSharedv4SvcWithCronJob", "Create multiple pods coming and going and trying to edit/read a model on same volume", nil, 0)
+		log.Infof("Original App list : %v", Inst().AppList)
+		origAppList = Inst().AppList
+		// Runs Preprocess Workload to prepare the model
+		Inst().AppList = []string{"ml-workload-preprocess-rwx"}
+		prereqContexts = append(prereqContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
+		// Runs Continuous Retraining module
+		Inst().AppList = []string{"ml-workload-continuous-training"}
+		prereqContexts = append(prereqContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
+
+		if Inst().CustomAppConfig[customAppName].Parallelism != 0 {
+			cronParallelism := ReadEnvVariable("CRON_JOB_PARALLELISM")
+			var err error
+			parallelism, err := strconv.Atoi(cronParallelism)
+			if err != nil {
+				log.Errorf("Failed to convert value [%v] to int with error: [%v]", cronParallelism, err)
+				parallelism = 10
+			}
+			Inst().AppList = []string{customAppName}
+			Inst().CustomAppConfig[customAppName] = scheduler.AppConfig{
+				Parallelism: parallelism,
+			}
+
+			log.Infof("Dynamic values for the cronJob are Added..")
+			provider = Inst().V.String()
+			err = Inst().S.RescanSpecs(Inst().SpecDir, provider)
+		}
+	})
+
+	It("Create Multiple ML Apps going and reading from the Model created. Continuous Retraining Module is already running", func() {
+
+		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, provider)
+		// Running Several Workload pods that read the model, make some predictions and write them to shared vol
+		log.Infof("App List for ScheduleApplication on Namespace : [%v]", Inst().AppList)
+		appContexts = append(appContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
+		log.Infof("Successfully created App querying-app")
+		log.Infof("All Workload apps are now up. Will let them run for %d minutes", totalRunTime)
+		time.Sleep(time.Duration(totalRunTime) * time.Minute)
+		ValidateApplications(appContexts)
+	})
+
+	JustAfterEach(func() {
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		defer func() {
+			log.Infof("Resetting applist and removing the custom app config")
+			Inst().AppList = origAppList
+			delete(Inst().CustomAppConfig, customAppName)
+			err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+			log.FailOnError(err, "Failed while rescanning specs")
+		}()
+		//delete the cronJob after validation
+		log.Infof("Tear down the appContext")
+		for _, ctx := range appContexts {
+			TearDownContext(ctx, opts)
+		}
+		for _, ctx := range prereqContexts {
+			TearDownContext(ctx, opts)
+		}
+		log.Infof("Restored original App list : [%v]", Inst().AppList)
 	})
 })
 

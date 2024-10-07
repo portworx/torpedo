@@ -770,6 +770,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*batchv1beta1.CronJob); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*batchv1.CronJob); ok {
+		return specObj, nil
 	} else if specObj, ok := in.(*batchv1.Job); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*corev1.LimitRange); ok {
@@ -3385,6 +3387,31 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			log.Warnf("Failed to destroy core objects. Cause: %v", err)
 		}
 	}
+
+	for _, appSpec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyBatchObjects(appSpec, opts, ctx.App)
+			// during helm upgrade or uninstall, objects may be deleted but not removed from the SpecList
+			// so tolerate non-existing errors for those objects during tear down
+			if err != nil && !strings.Contains(err.Error(), "not found") {
+				return nil, true, err
+			}
+			return nil, false, nil
+		}
+		pods, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		if err != nil {
+			// in case we're not waiting for resource cleanup
+			if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; !ok || !value {
+				return err
+			}
+			if pods != nil {
+				podList = append(podList, pods.([]corev1.Pod)...)
+			}
+			// we're ignoring this error since we want to verify cleanup down below, so simply logging it
+			log.Warnf("Failed to destroy core objects. Cause: %v", err)
+		}
+	}
+
 	for _, appSpec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			err := k.destroyVolumeSnapshotRestoreObject(appSpec, ctx.App)
@@ -6449,9 +6476,26 @@ func (k *K8s) createBatchObjects(
 				Cause: fmt.Sprintf("Failed to create CronJob: %v. Err: %v", obj.Name, err),
 			}
 		}
-
 		log.Infof("[%v] Created CronJob: %v", app.Key, cronjob.Name)
 		return cronjob, nil
+	} else if obj, ok := spec.(*batchv1.CronJob); ok {
+		obj.Namespace = ns.Name
+		cronjob, err := k8sBatch.CreateCronJob(obj)
+		if k8serrors.IsAlreadyExists(err) {
+			if cronjob, err = k8sBatch.GetCronJob(obj.Name, obj.Namespace); err == nil {
+				log.Infof("[%v] Found existing CronJob: [%v]", app.Key, cronjob.Name)
+				return cronjob, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create CronJob: %v. Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Created CronJob: %v", app.Key, cronjob.Name)
+		return cronjob, nil
+
 	} else if obj, ok := spec.(*batchv1.Job); ok {
 		obj.Namespace = ns.Name
 		job, err := k8sBatch.CreateJob(obj)
@@ -6472,6 +6516,46 @@ func (k *K8s) createBatchObjects(
 		return job, nil
 	}
 	return nil, nil
+}
+
+func (k *K8s) destroyBatchObjects(
+	spec interface{},
+	opts map[string]bool,
+	app *spec.AppSpec,
+) error {
+	if obj, ok := spec.(*batchv1beta1.CronJob); ok {
+		err := k8sBatch.DeleteCronJobV1beta1(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to Delete the batchv1beta1 CronJob: [%v]. Err: [%v]", obj.Name, err),
+			}
+		}
+		log.Infof("Deleted the batchv1beta1 CronJob: [%v] From nameSpace [%v]", obj.Name, obj.Namespace)
+		return nil
+	} else if obj, ok := spec.(*batchv1.CronJob); ok {
+		err := k8sBatch.DeleteCronJob(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to Delete the CronJob: [%v]. Err: [%v]", obj.Name, err),
+			}
+		}
+		log.Infof("Deleted the CronJob: [%v] From nameSpace [%v]", obj.Name, obj.Namespace)
+		return nil
+
+	} else if obj, ok := spec.(*batchv1.Job); ok {
+		err := k8sBatch.DeleteJob(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to Delete the Job: [%v]. Err: [%v]", obj.Name, err),
+			}
+		}
+		log.Infof("Deleted the Job: [%v] From nameSpace [%v]", obj.Name, obj.Namespace)
+		return nil
+	}
+	return nil
 }
 
 func (k *K8s) createServiceMonitorObjects(

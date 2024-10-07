@@ -834,6 +834,8 @@ spec:
       value: "${GOOGLE_APPLICATION_CREDENTIALS}"
     - name: TOGGLE_PURE_MGMT_IP
       value: "${TOGGLE_PURE_MGMT_IP}"
+    - name: CRON_JOB_PARALLELISM
+      value: "${CRON_JOB_PARALLELISM}"
     - name: BACKUP_DELETE_RETRY_TIME
       value: "${BACKUP_DELETE_RETRY_TIME}"
     - name: BACKUP_DELETE_WAIT_TIME
