@@ -269,7 +269,7 @@ case $FOCUS_TESTS in
     ;;
 esac
 
-if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"longevity.test"* ]]; then
+if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"longevity.test"* ]] && [[ "$TEST_SUITE" != *"platform.test"* ]] && [[ "$TEST_SUITE" != *"pds2.test"* ]]; then
     TEST_SUITE='"bin/basic.test"'
 fi
 
@@ -720,6 +720,10 @@ spec:
       value: "${DEPLOY_ALL_DATASERVICE}"
     - name: GCP_PROJECT_ID
       value: "${GCP_PROJECT_ID}"
+    - name: PDS_QA_GCP_JSON_PATH
+      value: "${PDS_QA_GCP_JSON_PATH}"
+    - name: INSECURE_FLAG
+      value: "${INSECURE_FLAG}"
     - name: PDS_USERNAME
       value: "${PDS_USERNAME}"
     - name: PDS_PASSWORD
@@ -732,6 +736,14 @@ spec:
       value: "${PDS_PARAM_CM}"
     - name: PDS_ISSUER_URL
       value: "${PDS_ISSUER_URL}"
+    - name: PX_CENTRAL_USERNAME
+      value: "${PX_CENTRAL_USERNAME}"
+    - name: PX_CENTRAL_PASSWORD
+      value: "${PX_CENTRAL_PASSWORD}"
+    - name: PX_CENTRAL_API
+      value: "${PX_CENTRAL_API}"
+    - name: BACKEND_TYPE
+      value: "${BACKEND_TYPE}"
     - name: CLUSTER_TYPE
       value: "${CLUSTER_TYPE}"
     - name: TARGET_KUBECONFIG
@@ -904,7 +916,7 @@ fi
 
 if [ -z "${ANTHOS_HOST_PATH}" ]; then
   sed -i  '/GOOGLE_APPLICATION_CREDENTIALS/, +1d' torpedo.yaml
-fi 
+fi
 
 # If these are passed, we will create a docker config secret to use to pull images
 if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
