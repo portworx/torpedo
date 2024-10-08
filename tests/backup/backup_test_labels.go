@@ -146,6 +146,7 @@ const (
 	SuperAdmin                                                                         TestCaseName = "SuperAdmin"
 	SuperAdminBackupShare                                                              TestCaseName = "SuperAdminBackupShare"
 	TimeTakenToDeleteBackupWithHeavyLoad                                               TestCaseName = "TimeTakenToDeleteBackupWithHeavyLoad"
+	BackupShare                                                                        TestCaseName = "BackupShare"
 )
 
 // Test case labels
