@@ -331,9 +331,21 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 			Step(stepMsg, func() {
 				log.InfoD(stepMsg)
 
-				err = Inst().V.CollectDiags(currNode, collectDiagRequest, torpedovolume.DiagOps{Validate: false, Async: false, PxDir: pxDir})
+				t := func() (interface{}, bool, error) {
+					err = Inst().V.CollectDiags(currNode, collectDiagRequest, torpedovolume.DiagOps{Validate: false, Async: false, PxDir: pxDir})
+					if err != nil {
+						if strings.Contains(err.Error(), "Diags collection already in progress, unable to collect diags at this time") {
+							log.Infof("Ignoring Diags collection already in progress error: %v", err)
+							return nil, true, err
+						}
+						return nil, false, err
+					}
+					log.InfoD("Successfully collected profile only diags on node [%s]", currNode.Name)
+					return nil, false, nil
+				}
+				_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+
 				log.FailOnError(err, "failed to collect profile only diags on node [%s]", currNode.Name)
-				log.InfoD("Successfully collected profile only diags on node [%s]", currNode.Name)
 
 				// This sleep is required because the heap and stack logs might not have been written at same time.
 				time.Sleep(10 * time.Second)
