@@ -15017,6 +15017,25 @@ func VerifySourceClusterAccessWithHavingNoBackupsRestoresANDBackupScheduleObject
 	return nil
 }
 
+func GetVolumeReplicationStatusOnPxservicenode(n node.Node, vol *volume.Volume) (string, error) {
+	apiVol, err := Inst().V.InspectVolume(vol.ID)
+	if err != nil {
+		return "", err
+	}
+	cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", apiVol.Id)
+
+	output, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
+		Timeout:         1 * time.Minute,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	})
+	if err != nil {
+		return "", err
+	}
+	//sample output : "Replication Status       :  Up"
+	output = strings.Split(strings.TrimSpace(output), ":")[1]
+	return strings.TrimSpace(output), nil
+}
 func GetNumOfDrivesInNode(stNode node.Node) (int, error) {
 	numofDrivesInNode := 0
 	poolListForOps, err := GetPoolsDetailsOnNode(&stNode)
@@ -15065,4 +15084,5 @@ func GetNodeDrivesCount(blockDrives map[string]*node.BlockDrive) int {
 		}
 	}
 	return driveCounts
+
 }

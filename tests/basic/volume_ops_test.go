@@ -3854,3 +3854,124 @@ var _ = Describe("{EnableThrashCanForvolume}", Label("p2", "positive", "px_vol_o
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+// For each volume, get replica nodes, bring PX down, bring it back up, and ensure PX and pods are running
+var _ = Describe("{BringVolumeoutofQuorum}", Label("p0", "negative", "px_ops"), func() {
+	/*
+		For each volume, get it's replicas
+		Stop PX on all replica nodes
+		Wait for 10 minutes to stop. 10 minutes is needed because if the volume goes out of quorum PX can hang for 10 minutes for the IO to abort
+		Bring PX back up
+		Ensure PX comes up
+		Ensure app pods are fine
+	*/
+	var testrailID = 0
+	JustBeforeEach(func() {
+		StartTorpedoTest("BringVolumeoutofQuorum", "For each volume, get replica nodes, bring PX down, bring it back up, and ensure PX and pods are running", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "For each volume, get replica nodes, bring PX down, bring it back up, and ensure PX and pods are running"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		var err error
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volumeout-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+		stepLog := "Get Replicaset for the volumes and  and then bring PX down,start PX service, ensure pods and PX are running"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				var appVolumes []*volume.Volume
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+				})
+				var replicaSets []*opsapi.ReplicaSet
+				var nodes []string
+				volume := appVolumes[0]
+				log.Infof("selected volume from the context: %v", volume)
+				replicaSets, err = Inst().V.GetReplicaSets(volume)
+				log.FailOnError(err, "Failed to get Replica Sets for volume : %v", volume)
+				for _, replicaSet := range replicaSets {
+					nodes = append(nodes, replicaSet.Nodes...)
+				}
+				var nodeDetails []node.Node
+				Step(fmt.Sprintf("Stop PX on the replica node for app %s", ctx.App.Key), func() {
+					// Collect node details
+					for _, nodeID := range nodes {
+						nodeInfo, err := node.GetNodeDetailsByNodeID(nodeID)
+						log.FailOnError(err, "Error getting node details for node [%s]", nodeID)
+						nodeDetails = append(nodeDetails, nodeInfo)
+					}
+					// Stop the PX service on the collected node details
+					log.InfoD("Stopping PX service on nodes: %+v", nodeDetails)
+					StopVolDriverAndWait(nodeDetails[:len(nodeDetails)-1])
+					log.InfoD("Waiting for 10 minutes for volume to be out of quorum. I/O abort by PX.")
+					time.Sleep(10 * time.Minute)
+					log.InfoD("Successfully stopped PX service on nodes: %+v", nodeDetails[:len(nodeDetails)-1])
+
+				})
+				var PxserviceNode node.Node
+				Step("Check the replica status is not in quorum", func() {
+					log.InfoD("Stopping PX service on nodes: %+v", nodeDetails[len(nodeDetails)-1:])
+					StopVolDriverAndWait(nodeDetails[len(nodeDetails)-1:])
+					log.InfoD("Waiting for 2 minutes after stopping PX service")
+					time.Sleep(2 * time.Minute)
+					log.InfoD("Successfully stopped PX service on nodes: %+v", nodeDetails[len(nodeDetails)-1:])
+					log.InfoD("Starting Px service on nodes: %+v", nodeDetails[:1])
+					StartVolDriverAndWait(nodeDetails[:1])
+					log.InfoD("Successfully start PX service on nodes: %+v", nodeDetails[:1])
+					PxserviceNode = nodeDetails[0]
+					replStatus, err := GetVolumeReplicationStatusOnPxservicenode(PxserviceNode, volume)
+					log.FailOnError(err, "Failed to get replication status for volume:%v", volume)
+					log.Infof("Replication status for volume:%v", replStatus)
+					dash.VerifyFatal(replStatus == "Not in quorum", true, "Verified status 'Not in quorum' for the volume")
+				})
+				Step("Initialize and start the Px service on all available nodes", func() {
+					// Start the Px service on the collected node details.
+					log.InfoD("Starting Px service on nodes: %+v", nodeDetails)
+					StartVolDriverAndWait(nodeDetails[1:])
+					log.InfoD("Successfully started Px service on nodes: %+v", nodeDetails)
+				})
+				Step("Check the replica status is up", func() {
+					time.Sleep(5 * time.Minute)
+					replStatus, err := GetVolumeReplicationStatus(volume)
+					log.FailOnError(err, "Failed to get replication status for volume:%v", volume)
+					log.Infof("Replication status for volume:%v", replStatus)
+					log.InfoD(replStatus)
+					dash.VerifyFatal(replStatus == "Up", true, "Verified status to be 'Up' for volume")
+				})
+				Step("Verify that the pod and Px are ready on all nodes", func() {
+					for _, node := range nodeDetails {
+						isPodReady := Inst().V.IsPxReadyOnNode(node)
+						if isPodReady {
+							log.InfoD("Pod and Px are running and healthy on node: %s", node)
+						} else {
+							err := fmt.Errorf("pod and Px are not running or not healthy on node: %s", node)
+							log.FailOnError(err, "pod and Px verification failed for the node")
+						}
+					}
+
+				})
+			}
+
+		})
+		stepLog = "Validate the applications are in running state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+})
