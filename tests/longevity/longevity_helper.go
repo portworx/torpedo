@@ -280,6 +280,8 @@ func populateTriggerFuncs() {
 		SVMotionMultipleNodes:             TriggerSvMotionMultipleNodes,
 		PoolExpansionAuto:                 TriggerPoolExpansionAuto,
 		PoolExpansionResizeDisk:           TriggerPoolExpansionResizeDisk,
+		PowerOffStoragelessNodes:          TriggerPowerOffStoragelessNodes,
+		PowerOffStorageNodes:              TriggerPowerOffStorageNodes,
 	}
 
 	//Creating a distinct trigger to make sure email triggers at regular intervals
@@ -738,6 +740,8 @@ func populateIntervals() {
 	triggerInterval[DefragSchedules] = make(map[int]time.Duration)
 	triggerInterval[SVMotionSingleNode] = make(map[int]time.Duration)
 	triggerInterval[SVMotionMultipleNodes] = make(map[int]time.Duration)
+	triggerInterval[PowerOffStoragelessNodes] = make(map[int]time.Duration)
+	triggerInterval[PowerOffStorageNodes] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -1880,6 +1884,28 @@ func populateIntervals() {
 	triggerInterval[DefragSchedules][7] = 10 * baseInterval
 	triggerInterval[DefragSchedules][6] = 12 * baseInterval
 
+	triggerInterval[PowerOffStorageNodes][10] = 1 * baseInterval
+	triggerInterval[PowerOffStorageNodes][9] = 3 * baseInterval
+	triggerInterval[PowerOffStorageNodes][8] = 6 * baseInterval
+	triggerInterval[PowerOffStorageNodes][7] = 9 * baseInterval
+	triggerInterval[PowerOffStorageNodes][6] = 12 * baseInterval
+	triggerInterval[PowerOffStorageNodes][5] = 15 * baseInterval
+	triggerInterval[PowerOffStorageNodes][4] = 18 * baseInterval
+	triggerInterval[PowerOffStorageNodes][3] = 21 * baseInterval
+	triggerInterval[PowerOffStorageNodes][2] = 24 * baseInterval
+	triggerInterval[PowerOffStorageNodes][1] = 27 * baseInterval
+
+	triggerInterval[PowerOffStoragelessNodes][10] = 1 * baseInterval
+	triggerInterval[PowerOffStoragelessNodes][9] = 3 * baseInterval
+	triggerInterval[PowerOffStoragelessNodes][8] = 6 * baseInterval
+	triggerInterval[PowerOffStoragelessNodes][7] = 9 * baseInterval
+	triggerInterval[PowerOffStoragelessNodes][6] = 12 * baseInterval
+	triggerInterval[PowerOffStoragelessNodes][5] = 15 * baseInterval
+	triggerInterval[PowerOffStoragelessNodes][4] = 18 * baseInterval
+	triggerInterval[PowerOffStoragelessNodes][3] = 21 * baseInterval
+	triggerInterval[PowerOffStoragelessNodes][2] = 24 * baseInterval
+	triggerInterval[PowerOffStoragelessNodes][1] = 27 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -1980,6 +2006,9 @@ func populateIntervals() {
 	triggerInterval[PoolDelete][0] = 0
 	triggerInterval[DefragSchedules][0] = 0
 	triggerInterval[DefragScheduleCRUDOperations][0] = 0
+	triggerInterval[PowerOffStorageNodes][0] = 0
+	triggerInterval[PowerOffStoragelessNodes][0] = 0
+
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

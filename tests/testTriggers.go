@@ -5,7 +5,6 @@ import (
 	"container/ring"
 	ctxt "context"
 	"fmt"
-	"github.com/libopenstorage/openstorage/pkg/dbg"
 	"math"
 	"math/rand"
 	"net/url"
@@ -19,6 +18,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/libopenstorage/openstorage/pkg/dbg"
 
 	torpedotask "github.com/portworx/torpedo/pkg/task"
 	"gopkg.in/inf.v0"
@@ -539,6 +540,7 @@ const (
 	UpdateIOProfile = "updateIOProfile"
 	DetachDrives    = "detachDrives"
 	PowerOffAllVMs  = "powerOffAllVMs"
+
 	// NodeDecommission decommission random node in the PX cluster
 	NodeDecommission = "nodeDecomm"
 	// Delelete cloudsnaps
@@ -670,7 +672,9 @@ const (
 	SVMotionSingleNode = "svmotionSingleNode"
 
 	// SVMotionMultipleNodes does storage vmotions for 50% of the worker nodes in parallel (Max 20 at a time)
-	SVMotionMultipleNodes = "svmotionMultipleNodes"
+	SVMotionMultipleNodes    = "svmotionMultipleNodes"
+	PowerOffStoragelessNodes = "powerOffStoragelessNodes"
+	PowerOffStorageNodes     = "powerOffStorageNodes"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -7526,6 +7530,278 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		})
 		updateMetrics(*event)
 	})
+}
+
+// TriggerPowerOffStorageVMs power off storage Vms
+func TriggerPowerOffStorageNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(PowerOffStorageNodes)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PowerOffStorageNodes,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	numberOfThread := 5
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	stepLog := "Power off all Storage nodes"
+	Step(stepLog, func() {
+		log.Infof(stepLog)
+		storageWorkerNodes := node.GetStorageNodes()
+		var numberOfNodePerThread int
+		if len(storageWorkerNodes) > 0 {
+			// If number of VMs to restarted is less than  numberOfThread then
+			// only one vm assigned to each thread, else assign  len(workerNodes)/numberOfThread
+			// to per thread
+			if len(storageWorkerNodes) < numberOfThread {
+				numberOfThread = len(storageWorkerNodes)
+				numberOfNodePerThread = 1
+			} else {
+				numberOfNodePerThread = len(storageWorkerNodes) / numberOfThread
+			}
+			counter := 0
+			// Assign vms to every thread.
+			nodesInThread := make([][]node.Node, numberOfThread)
+			for t := 0; t < numberOfThread; t++ {
+				nodesInThread[t] = make([]node.Node, numberOfNodePerThread)
+				for n := 0; n < numberOfNodePerThread; n++ {
+					nodesInThread[t][n] = storageWorkerNodes[counter]
+					counter++
+				}
+			}
+			//Create an additional thread for remainder. Example if 12 VMs, assign first 10 vms to
+			// 5 threads and assign remaining 2 vms 6th thread.
+			if counter < len(storageWorkerNodes) {
+				log.Infof("Additional nodes  : %d", len(storageWorkerNodes)-counter)
+				additonalThread := make([]node.Node, len(storageWorkerNodes)-counter)
+				index := 0
+				for counter < len(storageWorkerNodes) {
+					additonalThread[index] = storageWorkerNodes[counter]
+					index++
+					counter++
+				}
+				nodesInThread = append(nodesInThread, additonalThread)
+				numberOfThread++
+			}
+			stepLog = "Power off all storage nodes in batches"
+			Step(stepLog, func() {
+				log.Infof(stepLog)
+				var poweroffwg sync.WaitGroup
+				for i := 0; i < numberOfThread; i++ {
+					poweroffwg.Add(1)
+					go func(nodeList []node.Node) {
+						defer poweroffwg.Done()
+						for _, nodeInfo := range nodeList {
+							log.Infof("Powering Off Node: %v", nodeInfo.Name)
+							err := Inst().N.PowerOffVM(nodeInfo)
+							UpdateOutcome(event, err)
+						}
+					}(nodesInThread[i])
+				}
+				poweroffwg.Wait()
+				log.Infof("Completed power off storage nodes")
+				log.Infof("Wait for 5 minutes")
+				time.Sleep(5 * time.Minute)
+			})
+			stepLog = "Power on all storage nodes"
+			Step(stepLog, func() {
+				log.Infof(stepLog)
+				var poweronwg sync.WaitGroup
+				log.Infof("Poweron thread starts")
+				for i := 0; i < numberOfThread; i++ {
+					poweronwg.Add(1)
+					go func(nodeList []node.Node) {
+						defer poweronwg.Done()
+						for _, nodeInfo := range nodeList {
+							log.Infof("Powering On Node: %v", nodeInfo.Name)
+							err := Inst().N.PowerOnVM(nodeInfo)
+							UpdateOutcome(event, err)
+						}
+					}(nodesInThread[i])
+				}
+				poweronwg.Wait()
+				log.Infof("Completed power on storage Nodes")
+				for _, n := range storageWorkerNodes {
+					err := Inst().S.IsNodeReady(n)
+					err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+					UpdateOutcome(event, err)
+				}
+			})
+			stepLog = "Verify APP, volume status and check data integrity if enabled"
+			// //Wait for PX to be up on all worker nodes
+			Step(stepLog, func() {
+				log.Infof(stepLog)
+				for _, ctx := range *contexts {
+					log.Infof("Validating context: %v", ctx.App.Key)
+					ctx.SkipVolumeValidation = false
+					errorChan := make(chan error, errorChannelSize)
+					ValidateContext(ctx, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				}
+				err := ValidateDataIntegrity(contexts)
+				UpdateOutcome(event, err)
+				log.InfoD("verify apps and volume completed")
+			})
+			stepLog = "Check px status"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				status, err := Inst().V.GetPxctlStatus(storageWorkerNodes[0])
+				log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", storageWorkerNodes[0].Name))
+				UpdateOutcome(event, err)
+				log.InfoD("px status %v", status)
+			})
+		} else {
+			log.InfoD("Storage nodes not found")
+		}
+		log.InfoD("Power off all Storage nodes test completed")
+	})
+	updateMetrics(*event)
+}
+
+// TriggerPowerOffStoragelessVMs power off storageless Vms
+func TriggerPowerOffStoragelessNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(PowerOffStoragelessNodes)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PowerOffStoragelessNodes,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	numberOfThread := 5
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+
+	stepLog := "Power off all Storageless nodes"
+	Step(stepLog, func() {
+		log.Infof(stepLog)
+		storagelessWorkerNodes := node.GetStorageLessNodes()
+		var numberOfNodePerThread int
+		if len(storagelessWorkerNodes) > 0 {
+			// If number of VMs to restarted is less than  numberOfThread then
+			// only one vm assigned to each thread, else assign  len(workerNodes)/numberOfThread
+			// to per thread
+			if len(storagelessWorkerNodes) < numberOfThread {
+				numberOfThread = len(storagelessWorkerNodes)
+				numberOfNodePerThread = 1
+			} else {
+				numberOfNodePerThread = len(storagelessWorkerNodes) / numberOfThread
+			}
+			counter := 0
+			// Assign vms to every thread.
+			nodesInThread := make([][]node.Node, numberOfThread)
+			for t := 0; t < numberOfThread; t++ {
+				nodesInThread[t] = make([]node.Node, numberOfNodePerThread)
+				for n := 0; n < numberOfNodePerThread; n++ {
+					nodesInThread[t][n] = storagelessWorkerNodes[counter]
+					counter++
+				}
+			}
+			//Create an additional thread for remainder. Example if 12 VMs, assign first 10 vms to
+			// 5 threads and assign remaining 2 vms 6th thread.
+			if counter < len(storagelessWorkerNodes) {
+				log.Infof("Additional nodes  : %d", len(storagelessWorkerNodes)-counter)
+				additonalThread := make([]node.Node, len(storagelessWorkerNodes)-counter)
+				index := 0
+				for counter < len(storagelessWorkerNodes) {
+					additonalThread[index] = storagelessWorkerNodes[counter]
+					index++
+					counter++
+				}
+				nodesInThread = append(nodesInThread, additonalThread)
+				numberOfThread++
+			}
+			stepLog = "Power off all storageless nodes in batches"
+			Step(stepLog, func() {
+				log.Infof(stepLog)
+				var poweroffwg sync.WaitGroup
+				for i := 0; i < numberOfThread; i++ {
+					poweroffwg.Add(1)
+					go func(nodeList []node.Node) {
+						defer poweroffwg.Done()
+						for _, nodeInfo := range nodeList {
+							log.Infof("Powering Off Node: %v", nodeInfo.Name)
+							err := Inst().N.PowerOffVM(nodeInfo)
+							UpdateOutcome(event, err)
+						}
+					}(nodesInThread[i])
+				}
+				poweroffwg.Wait()
+				log.Infof("Completed power off storageless nodes")
+				log.Infof("Wait for 5 minutes")
+				time.Sleep(5 * time.Minute)
+			})
+			stepLog = "Power on all storageless nodes"
+			Step(stepLog, func() {
+				log.Infof(stepLog)
+				var poweronwg sync.WaitGroup
+				log.Infof("Poweron thread starts")
+				for i := 0; i < numberOfThread; i++ {
+					poweronwg.Add(1)
+					go func(nodeList []node.Node) {
+						defer poweronwg.Done()
+						for _, nodeInfo := range nodeList {
+							log.Infof("Powering On Node: %v", nodeInfo.Name)
+							err := Inst().N.PowerOnVM(nodeInfo)
+							UpdateOutcome(event, err)
+						}
+					}(nodesInThread[i])
+				}
+				poweronwg.Wait()
+				log.Infof("Completed power on Nodes")
+				for _, n := range storagelessWorkerNodes {
+					err := Inst().S.IsNodeReady(n)
+					err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+					UpdateOutcome(event, err)
+				}
+			})
+			stepLog = "Verify APP, volume status and check data integrity if enabled"
+			// //Wait for PX to be up on all worker nodes
+			Step(stepLog, func() {
+				log.Infof(stepLog)
+				for _, ctx := range *contexts {
+					log.Infof("Validating context: %v", ctx.App.Key)
+					ctx.SkipVolumeValidation = false
+					errorChan := make(chan error, errorChannelSize)
+					ValidateContext(ctx, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				}
+				err := ValidateDataIntegrity(contexts)
+				UpdateOutcome(event, err)
+				log.InfoD("verify apps and volume completed")
+			})
+			stepLog = "Check px status"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				status, err := Inst().V.GetPxctlStatus(storagelessWorkerNodes[0])
+				UpdateOutcome(event, err)
+				log.InfoD("px status %v", status)
+			})
+		} else {
+			log.InfoD("Storageless nodes not found")
+		}
+		log.InfoD("Power off all Storageless nodes test completed")
+	})
+	updateMetrics(*event)
 }
 
 // TriggerVolumeIOProfileUpdate enables to test volume update
