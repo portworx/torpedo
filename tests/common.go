@@ -4868,29 +4868,10 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 	return backupDeleteResponse, err
 }
 
-// DeleteBackup deletes a backup with the given backup reference without checking the cluster reference, suitable for normal backup deletion where the cluster reference is not needed.
+// DeleteBackupAndWaitForCompletion deletes a backup with the given backup reference without checking the cluster reference, suitable for normal backup deletion where the cluster reference is not needed.
 func DeleteBackupAndWaitForCompletion(backupName string, backupUID string, orgID string, ctx context1.Context) error {
 	var err error
-	var backupObj *api.BackupObject
-
 	backupDriver := Inst().Backup
-
-	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID}
-	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
-	if err != nil {
-		return err
-	}
-	for _, bkp := range curBackups.GetBackups() {
-		if bkp.Uid == backupUID {
-			backupObj = bkp
-			break
-		}
-	}
-	if backupObj == nil {
-		return fmt.Errorf("unable to find backup [%s] with uid [%s]", backupName, backupUID)
-	}
-
 	bkpDeleteRequest := &api.BackupDeleteRequest{
 		Name:  backupName,
 		OrgId: orgID,
