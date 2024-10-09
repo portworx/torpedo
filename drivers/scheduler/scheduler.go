@@ -90,6 +90,7 @@ type AppConfig struct {
 	PureFaPodName               string   `yaml:"pure_fa_pod_name"`
 	FsType                      string   `yaml:"csi.storage.k8s.io/fstype"`
 	CreateOptions               string   `yaml:"createoptions"`
+	MountOptions                []string `yaml:"mountOptions"`
 	Parallelism                 int      `yaml:"parallelism"`
 }
 

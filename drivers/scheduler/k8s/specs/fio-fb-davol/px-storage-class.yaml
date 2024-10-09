@@ -7,9 +7,13 @@ provisioner: pxd.portworx.com
 parameters:
   backend: "pure_file"
   pure_export_rules: "*(rw)"
+{{ if .MountOptions }}
+mountOptions: {{ .MountOptions | array }}
+{{ else }}
 mountOptions:
   - nfsvers=4.1
   - tcp
+{{ end }}
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 ---
@@ -22,8 +26,12 @@ provisioner: pxd.portworx.com
 parameters:
   backend: "pure_file"
   pure_export_rules: "*(rw)"
+{{ if .MountOptions }}
+mountOptions: {{ .MountOptions | array }}
+{{ else }}
 mountOptions:
   - nfsvers=4.1
   - tcp
+{{ end }}
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true

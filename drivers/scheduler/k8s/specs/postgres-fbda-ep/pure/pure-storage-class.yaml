@@ -10,8 +10,12 @@ parameters:
   {{ if .StorageClassPureNfsEndpoint}}
   pure_nfs_endpoint: "{{ .StorageClassPureNfsEndpoint }}"
   {{ end }}
+{{ if .MountOptions }}
+mountOptions: {{ .MountOptions | array }}
+{{ else }}
 mountOptions:
   - nfsvers=4.1
   - tcp
+{{ end }}
 volumeBindingMode: Immediate
 allowVolumeExpansion: true

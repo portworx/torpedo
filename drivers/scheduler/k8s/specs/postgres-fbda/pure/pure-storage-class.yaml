@@ -7,8 +7,12 @@ provisioner: pxd.portworx.com
 parameters:
   backend: "pure_file"
   pure_export_rules: "*(no_root_squash,rw)"
+{{ if .MountOptions }}
+mountOptions: {{ .MountOptions | array }}
+{{ else }}
 mountOptions:
   - nfsvers=4.1
   - tcp
+{{ end }}
 volumeBindingMode: Immediate
 allowVolumeExpansion: true
