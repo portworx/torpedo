@@ -3,19 +3,27 @@ package tests
 import (
 	"fmt"
 	"math/rand"
+	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/k8s/talisman"
 	"github.com/portworx/talisman/pkg/apis/portworx/v1beta1"
 	"github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/portworx/torpedo/pkg/vpsutil"
 	. "github.com/portworx/torpedo/tests"
+	corev1 "k8s.io/api/core/v1"
+	storageApi "k8s.io/api/storage/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("{VolumePlacementStrategyFunctional}", func() {
@@ -438,3 +446,184 @@ func getApiVols(vols []*volume.Volume) ([]*api.Volume, error) {
 	}
 	return apiVols, nil
 }
+
+var _ = Describe("{ValidateVPSruleWithPoolRestriction}", func() {
+	/*
+		1.	select two random pools and get their uid
+		2.	label them mediatype=SSD and mediatype=SATA
+		3.	Apply the vps,storage class, and pvc
+		4.	check if replica 1 created in pool labeled SSD and replica 2 on pool labeled SATA
+		5.  remove the labels and delete the pvc, stc, vps
+	*/
+	var testrailID = 0
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateVPSruleWithPoolRestriction", "Validate behavior when VPS rules are used in conjunction with storage pool restrictions", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	stepLog := "Test adding label for two pools and apply vps rule to create volumes in the labeled pool"
+	It(stepLog, func() {
+
+		var selectedPools []string
+		stepLog = "Select two random pools uuid"
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			poolsAvailable, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "Failed to list storage pools")
+			log.Infof("List of pools present in the cluster [%v]", poolsAvailable)
+			var poolIDs []string
+			for _, v := range poolsAvailable {
+				log.Infof("each pool details [%v]", v)
+				log.Infof("pool id is [%v]", v.Uuid)
+				poolIDs = append(poolIDs, v.Uuid)
+			}
+			if len(poolIDs) < 2 {
+				log.FailOnError(fmt.Errorf("Not enough pools to select from."), "Failled to select random pools")
+			}
+			selectedPools = append(selectedPools, poolIDs[0], poolIDs[1])
+			log.Infof("Selected pools for add label [%v]", selectedPools)
+		})
+
+		stepLog = "Get node details by pool uuid and add pool label"
+		poolLabelToUpdate := make(map[string]string)
+		labels := []string{"SSD", "SATA"}
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			for i, poolID := range selectedPools {
+				storageNode, err := GetNodeWithGivenPoolID(poolID)
+				log.FailOnError(err, "Failed to get node with given pool ID")
+				poolLabelToUpdate["mediatype"] = labels[i]
+				err = Inst().V.UpdatePoolLabels(*storageNode, poolID, poolLabelToUpdate)
+				dash.VerifyFatal(err, nil, "Check if able to update the label on the pool")
+			}
+		})
+
+		stepLog = "Apply volume placement strategy"
+		vpsName := fmt.Sprintf("mongo-vps-%v", time.Now().Unix())
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			vpsSpec := vpsutil.ReplicaAffinityPool(vpsName)
+			_, err = talisman.Instance().CreateVolumePlacementStrategy(&vpsSpec)
+			dash.VerifyFatal(err, nil, "Check if able to apply volume placement strategy")
+		})
+
+		scName := fmt.Sprintf("mongo-sc-%v", time.Now().Unix())
+		params := make(map[string]string)
+		stepLog = "Apply storage class"
+		k8sStorage := storage.Instance()
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			params["repl"] = "2"
+			params["placement_strategy"] = vpsName
+			v1obj := metav1.ObjectMeta{
+				Name: scName,
+			}
+			bindMode := storageApi.VolumeBindingImmediate
+			scObj := storageApi.StorageClass{
+				ObjectMeta:        v1obj,
+				Provisioner:       k8s.CsiProvisioner,
+				Parameters:        params,
+				VolumeBindingMode: &bindMode,
+			}
+			_, err := k8sStorage.CreateStorageClass(&scObj)
+			dash.VerifyFatal(err, nil, "Verifying creation of new storage class")
+		})
+
+		stepLog = "Apply persistent volume claim"
+		pvcName := fmt.Sprintf("mongo-pvc-%v", time.Now().Unix())
+		namespace := "default"
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			_, err := core.Instance().CreatePersistentVolumeClaim(&corev1.PersistentVolumeClaim{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "PersistentVolumeClaim",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: pvcName,
+				},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+					StorageClassName: &scName,
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceStorage: resource.MustParse("10Gi"),
+						},
+					},
+				},
+			})
+			dash.VerifyFatal(err, nil, "Verifying creation of new storage class")
+		})
+
+		_, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+		log.FailOnError(err, "Failed to get pvc")
+		err = Inst().S.WaitForSinglePVCToBound(pvcName, namespace, 3)
+		log.FailOnError(err, "Failed to wait for pvc to bound")
+
+		stepLog = "Validate replicas created on the given pools"
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			var poolsFromRepl []string
+
+			log.Infof("Get volume list")
+			volIDs, err := Inst().V.ListAllVolumes()
+			log.FailOnError(err, "Failed to get volumes")
+			log.Infof("volume IDs list: %v", volIDs)
+
+			log.Infof("Get volume details by ID")
+			apiVol, err := Inst().V.InspectVolume(volIDs[0])
+			log.FailOnError(err, "Failed to inspect volume details")
+			log.Infof("Volume created by pvc: %v", apiVol)
+
+			log.Infof("Get replicas from the volume")
+			replicaSets := apiVol.ReplicaSets
+			log.Infof("Replica details for the volume: %v, %v", volIDs[0], replicaSets)
+
+			for _, rel := range replicaSets {
+				poolsFromRepl = append(poolsFromRepl, rel.PoolUuids...)
+			}
+			log.Infof("Created replicasets pool IDs: %v", poolsFromRepl)
+
+			if len(poolsFromRepl) != 2 {
+				log.FailOnError(fmt.Errorf("Created replicas count not matching"), "Failed to compare replica count : %v", poolsFromRepl)
+			}
+
+			for _, poolID := range poolsFromRepl {
+				if poolID != selectedPools[0] && poolID != selectedPools[1] {
+					log.FailOnError(fmt.Errorf("Replicas not created on the given pools"), "Failed to compare replicas %v with [%v or %v]", poolsFromRepl, selectedPools[0], selectedPools[1])
+				}
+				dash.VerifyFatal(poolID == selectedPools[0] || poolID == selectedPools[1], true, fmt.Sprintf("Replica should created in the given pools %v or %v", selectedPools[0], selectedPools[1]))
+			}
+
+		})
+
+		stepLog = "Remove all newly created specs"
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			err = core.Instance().DeletePersistentVolumeClaim(pvcName, namespace)
+			log.FailOnError(err, "Failed to remove pvc: %v", pvcName)
+
+			log.Infof("Deleting the newly created storage class")
+			err = k8sStorage.DeleteStorageClass(scName)
+			log.FailOnError(err, "Failed to remove storage class: %v", scName)
+
+			log.Infof("Deleting the newly created VPS")
+			err = talisman.Instance().DeleteVolumePlacementStrategy(vpsName)
+			log.FailOnError(err, "Failed to remove VPS: %v", vpsName)
+
+			log.Infof("Deleting the newly created labels on the selected pools")
+			for _, poolID := range selectedPools {
+				storageNode, err := GetNodeWithGivenPoolID(poolID)
+				log.FailOnError(err, "Failed to get node with given pool ID")
+				poolLabelToUpdate["mediatype"] = ""
+				err = Inst().V.UpdatePoolLabels(*storageNode, poolID, poolLabelToUpdate)
+				dash.VerifyFatal(err, nil, "Check if able to delete the label on the pool")
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
