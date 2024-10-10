@@ -2,6 +2,11 @@ package tests
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"regexp"
+
 	"github.com/devans10/pugo/flasharray"
 	"github.com/ghodss/yaml"
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
@@ -13,9 +18,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 
 	"math/rand"
 	"sort"
@@ -7523,6 +7525,136 @@ var _ = Describe("{EnableTrashCanDeleteVol}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{ValidateFBDAPodsWithHostInterfaceDown}", func() {
+	/*
+	   https://purestorage.atlassian.net/browse/HAZEL-738
+	   1.Deploy Applications
+	   2.Validate Applications are Deployed
+	   3.Bring down the interface of the host where the FBDA volume is attached and bring up interface in sometime.
+	   4.Validate the Applications are running
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateFBDAPodsWithHostInterfaceDown",
+			"Bring down the interface of the host where the FBDA volume is attached and bring up interface in few minutes", nil, 0)
+	})
+	var contexts []*scheduler.Context
+
+	itLog := "Testing Host interface down and up, validate the application"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("hostdown-%d", i))...)
+		}
+		for _, ctx := range contexts {
+			ctx.SkipVolumeValidation = true
+		}
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		var selectedNode node.Node
+		numberofpods := 20
+		stepLog := "Get node where FBDA volume is attached"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			stNodes := node.GetStorageNodes()
+
+			for _, ctx := range contexts {
+				appVolumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes")
+
+				for _, v := range appVolumes {
+					log.Infof("Volume details: %v", v)
+					isPureVol, err := Inst().V.IsPureVolume(v)
+					log.FailOnError(err, "Failed to validate ")
+					dash.VerifyFatal(isPureVol, true, "is pure volume?")
+
+					if isPureVol {
+						cmd := fmt.Sprintf(`pxctl volume inspect %v | grep -A 10 "Volume consumers"`, v.ID)
+						output, err := Inst().N.RunCommand(stNodes[0], cmd, node.ConnectionOpts{
+							Timeout:         10 * time.Minute,
+							TimeBeforeRetry: 30 * time.Second,
+							Sudo:            true,
+						})
+						var runningOnIPs []string
+						lines := strings.Split(output, "\n")
+						ipRegex := regexp.MustCompile(`Running on\s+:\s+([^\s]+)`)
+
+						for _, line := range lines {
+							if strings.Contains(line, "Running on") {
+								matches := ipRegex.FindStringSubmatch(line)
+								if len(matches) > 1 {
+									runningOnIPs = append(runningOnIPs, matches[1])
+								}
+							}
+						}
+						log.Infof("Volume attached node IDs %v", runningOnIPs)
+
+						selectedNode, err = node.GetNodeByName(runningOnIPs[0])
+						log.FailOnError(err, "Failed to get FB details")
+						log.Infof("Selected node details %v", selectedNode)
+						dash.VerifyFatal(selectedNode.Status == api.Status_STATUS_OK, true, "is node status up ?")
+						break
+					}
+				}
+
+				log.Infof("scaling app %s to %v", ctx.App.Key, numberofpods)
+				applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
+				log.FailOnError(err, "Failed to get scale up map")
+
+				for name := range applicationScaleUpMap {
+					applicationScaleUpMap[name] = int32(numberofpods)
+				}
+
+				err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+				log.FailOnError(err, "Failed to get scale the application")
+				log.Infof("application scaled to %v", numberofpods)
+			}
+		})
+
+		stepLog = "Make the host interface down for few minutes and UP"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			cmd := fmt.Sprintf("sudo ip link set eth0 down && sleep 1m && sudo ip link set eth0 up")
+			outPut, err := Inst().N.RunCommand(selectedNode, cmd, node.ConnectionOpts{
+				Timeout:         10 * time.Minute,
+				TimeBeforeRetry: 30 * time.Second,
+				Sudo:            true,
+			})
+			log.FailOnError(err, "Failed to run the command in node: %v", selectedNode.Name)
+			log.Infof("Run command output is: %v", outPut)
+
+			nodeStatusBefore, err := Inst().V.GetNodeStatus(selectedNode)
+			log.FailOnError(err, "Failed to get node details")
+			log.Infof("Node status after cod run is: %v", nodeStatusBefore)
+			dash.VerifyFatal(*nodeStatusBefore == api.Status_STATUS_OFFLINE, true, "is node status down ?")
+
+			nodeStatusCheck := func() (interface{}, bool, error) {
+				status, err := Inst().V.GetNodeStatus(selectedNode)
+				if err != nil {
+					return false, true, err
+				}
+				if *status == api.Status_STATUS_OK {
+					return true, false, nil
+				}
+				return false, true, fmt.Errorf("node %s status is: %v", selectedNode.Name, status)
+			}
+			nodeStatusAfter, err := task.DoRetryWithTimeout(nodeStatusCheck, 5*time.Minute, defaultRetryInterval)
+			log.FailOnError(err, "Failed to get node details")
+			dash.VerifyFatal(nodeStatusAfter.(bool), true, "is node status up ?")
+		})
+
+		stepLog = "Validate the applications are in running state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 })
