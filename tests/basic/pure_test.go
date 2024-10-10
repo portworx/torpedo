@@ -2889,6 +2889,149 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 	})
 })
 
+var _ = Describe("{DetachVolumeFromHost}", func() {
+
+	/*
+		                    https://purestorage.atlassian.net/browse/HAZEL-747
+		 		  		    1. Select a node
+					        2. Stop porttworx
+					        3. Get FA secret
+					        4. Get host and volume
+							5. Detach volume from selected host
+					        6. Restart portworx
+					        7. Check px status
+							8. Validate volume is attached on the same host
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("DetachVolumeFromHost", "Stop portworx, Detach volume from a host and Restart portworx ", nil, 0)
+	})
+
+	var (
+		selectedNode   node.Node
+		hostName       string
+		volumeName     string
+		FAclient       *flasharray.Client
+		faMgmtEndPoint string
+		faAPIToken     string
+		host           *flasharray.Host
+	)
+	itLog := "DetachVolumeFromHost"
+	It(itLog, func() {
+		stepLog := fmt.Sprintf("Select nodes")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes := node.GetStorageNodes()
+			selectedNode = storageNodes[rand.Intn(len(storageNodes))]
+		})
+		stepLog = "Stop portworx"
+		Step(stepLog, func() {
+			log.Infof("Stop portworx on node: [%s]", selectedNode.Name)
+			StopVolDriverAndWait([]node.Node{selectedNode})
+			log.InfoD("stop portworx succeed")
+		})
+
+		stepLog = "Get FA secret"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//get the flash array details
+			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+
+			pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+			log.FailOnError(err, "Failed to get secret %v", pxPureSecret)
+			flashArraysInSecret := pxPureSecret.Arrays
+
+			if len(flashArraysInSecret) == 0 {
+				log.FailOnError(fmt.Errorf("no FlashArrays details found"), fmt.Sprintf("error getting FlashArrays creds from %s [%s]", PureSecretName, pxPureSecret))
+			}
+
+			faAPIToken = flashArraysInSecret[0].APIToken
+			faMgmtEndPoint = flashArraysInSecret[0].MgmtEndPoint
+
+			if len(faMgmtEndPoint) == 0 || len(faAPIToken) == 0 {
+				log.FailOnError(fmt.Errorf("no FlashArrays details found"), fmt.Sprintf("error getting FlashArrays creds from %s [%s]", PureSecretName, pxPureSecret))
+			}
+			log.InfoD("famanagement endpoint: %v, faAPIToken: %v", faMgmtEndPoint, faAPIToken)
+		})
+
+		stepLog = "Get host and volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			iqn, err := GetIQNOfNode(selectedNode)
+			log.FailOnError(err, "Failed to get iqn of the node %v", selectedNode.Name)
+			log.InfoD("Iqn of the node: %v", iqn)
+
+			//create a connections to the FA whose credentials not present in the pure secret
+			FAclient, err = pureutils.PureCreateClientAndConnect(faMgmtEndPoint, faAPIToken)
+			log.FailOnError(err, "Failed to create client and connect to FA")
+
+			host, err = pureutils.GetHostFromIqn(FAclient, iqn)
+			log.FailOnError(err, "Failed to get host from FA")
+			log.InfoD("Host recived from FA: %v", host.Name)
+			hostName = host.Name
+
+			volumeMap, err := pureutils.ListVolumesFromHosts(FAclient)
+			log.FailOnError(err, "Failed to get volume complete name from FA")
+			dash.VerifyFatal(len(volumeMap[hostName]) > 0, true, fmt.Sprintf("volume found for host [%s]", hostName))
+			volumeName = volumeMap[hostName][0].Vol
+			log.InfoD("volume complete name : %v", volumeName)
+		})
+
+		stepLog = fmt.Sprintf("Detach volume [%v] from host [%v] ", volumeName, hostName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err = pureutils.DisConnectVolumeFromHost(FAclient, hostName, volumeName)
+			log.FailOnError(err, "Failed to disconnect volume from host")
+			log.InfoD("Volume [%v] disconnected from host : [%v]", volumeName, hostName)
+		})
+
+		stepLog = "Restart Portworx"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			StopVolDriverAndWait([]node.Node{selectedNode})
+			log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), selectedNode.Name)
+			StartVolDriverAndWait([]node.Node{selectedNode})
+			log.Infof("Giving a few seconds for volume driver to stabilize")
+			time.Sleep(20 * time.Second)
+		})
+
+		stepLog = "Check px status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			status, err := Inst().V.GetPxctlStatus(selectedNode)
+			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", selectedNode.Name))
+			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+				selectedNode.Name, api.Status_STATUS_OK, status))
+			log.InfoD("px status %v", status)
+
+		})
+
+		stepLog = fmt.Sprintf("Validate volume [%s] is attached on the same host [%s]", volumeName, hostName)
+		Step(stepLog, func() {
+			found := false
+			volumeMap, err := pureutils.ListVolumesFromHosts(FAclient)
+			log.FailOnError(err, fmt.Sprintf("failed to list volume [%s]", selectedNode.Name))
+			for _, volumes := range volumeMap[hostName] {
+				if volumes.Vol == volumeName {
+					found = true
+					break
+				}
+			}
+			if found {
+				log.InfoD("detached volume [%s] is attached back in host [%s]", volumeName, hostName)
+			} else {
+				log.FailOnError(err, fmt.Sprintf("detached volume [%s] is not attached back in host [%s]", volumeName, hostName))
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 /*
 This test deploys app with FBDA volume having storageClass with pure_nfs_endpoint parameter.
 It validates that FBDA volume gets consumed over IP mentioned in `pure_nfs_endpoint` parameter of storageClass.

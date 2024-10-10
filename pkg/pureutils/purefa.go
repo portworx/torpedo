@@ -2,9 +2,10 @@ package pureutils
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/devans10/pugo/flasharray"
 	tpflasharray "github.com/portworx/torpedo/drivers/pure/flasharray"
-	"strings"
 
 	"github.com/portworx/torpedo/pkg/units"
 )
