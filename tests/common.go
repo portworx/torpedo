@@ -10761,7 +10761,7 @@ func CreateNamespaces(nsName string, numberOfNamespaces int) ([]string, error) {
 }
 
 // createConfigMaps with the given number of entries on specified namespaces
-func createConfigMaps(namespaces []string, numberOfConfigmap int, numberOfEntries int) error {
+func CreateConfigMaps(namespaces []string, numberOfConfigmap int, numberOfEntries int) error {
 
 	// Create random data to add in ConfigMap
 	var randomData = make(map[string]string)

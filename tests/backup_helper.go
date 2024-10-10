@@ -11526,3 +11526,15 @@ func IsAdminCtx(ctx context1.Context) (bool, error) {
 	}
 	return false, nil
 }
+
+func IsLargeResourceBackup(ctx context1.Context, backupName string, orgId string) (bool, error) {
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		OrgId: orgId,
+	}
+	res, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return false, err
+	}
+	return res.Backup.LargeResourceEnabled, nil
+}

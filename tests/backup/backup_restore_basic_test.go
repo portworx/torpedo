@@ -4351,3 +4351,171 @@ var _ = Describe("{IssueMultipleBackupsAndRestoreInterleavedCopies}", Label(Test
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
 	})
 })
+
+// Take backup of a namespace with huge configmap and restore on the destnation cluster
+var _ = Describe("{NamespaceBackupRestoreWithHugeConfigMap}", func() {
+
+	/*
+		1. Create a namespace.
+		2. Create one huge configmap in the namespace.
+		3. Deploy some applications in the namespace.
+		4. Create backup location and cloud setting.
+		5. Register source and destination clusters for backup.
+		5. Create backup of the namespace with only the configmap.
+		6. Restore the backup on the destination cluster.
+		7. Check whether the restore is successful.
+	*/
+
+	var (
+		err                      error
+		ctx                      context.Context
+		providers                []string
+		cloudCredName            string
+		cloudCredUID             string
+		backupLocationName       string
+		backupLocationUID        string
+		backupLocationMap        map[string]string
+		namespace                string
+		scheduledAppContexts     []*scheduler.Context
+		sourceClusterUid         string
+		destinationClusterUid    string
+		backupName               string
+		restoreName              string
+		numberOfConfigMaps       int
+		numberofConfigMapEntries int
+		isLargeResourceBackup    bool
+		controlChannel           chan string
+		errorGroup               *errgroup.Group
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("NamespaceBackupRestoreWithHugeConfigMap", "Backup and restore a namespace with huge configmap", nil, 85774, Dchothani, Q3FY25)
+
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		backupLocationMap = make(map[string]string)
+		providers = GetBackupProviders()
+		numberOfConfigMaps = 1
+		numberofConfigMapEntries = 6000
+	})
+
+	It("Backup and restore a namespace with huge configmap", func() {
+
+		Step("Creating namespace", func() {
+			log.InfoD("Creating namespace")
+			namespaces, err := CreateNamespaces(fmt.Sprintf("namespace-%d", time.Now().Unix()), 1)
+			log.FailOnError(err, "Creating namespace")
+
+			namespace = namespaces[0]
+
+			log.InfoD("Created namespace : %v", namespace)
+		})
+
+		Step("Scheduling applications in the namespace", func() {
+			log.InfoD("Scheduing applications in the namespace")
+
+			log.InfoD("scheduling applications")
+			scheduledAppContexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+				appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
+				for _, appCtx := range appContexts {
+					appCtx.ReadinessTimeout = AppReadinessTimeout
+					scheduledAppContexts = append(scheduledAppContexts, appCtx)
+				}
+			}
+		})
+
+		Step("Creating huge configmap in the namespace", func() {
+			log.InfoD("Creating huge configmap in the namespace")
+
+			err = CreateConfigMaps([]string{namespace}, numberOfConfigMaps, numberofConfigMapEntries)
+			log.FailOnError(err, "Creating large number of configmaps")
+		})
+
+		Step("Validating deployed applications", func() {
+			log.InfoD("Validating deployed applications")
+
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				backupLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Creation of backup location [%s]", backupLocationName))
+			}
+		})
+
+		Step("Registering clusters for backup", func() {
+			log.InfoD("Registering clusters for backup")
+
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+
+			destinationClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+		})
+
+		Step("Creating backup of application from source cluster with only configmap", func() {
+			log.InfoD("Creating backup of application from source cluster with only configmap")
+
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+
+			err = CreateBackupWithCustomResourceTypeWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, []string{"ConfigMap"}, nil, BackupOrgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] with custom resources [%s]", backupName, []string{"ConfigMap"}))
+		})
+
+		Step("Checking whether the backup is a large resource backup", func() {
+			log.InfoD("Checking whether the backup [%s] is a large resource backup", backupName)
+
+			isLargeResourceBackup, err = IsLargeResourceBackup(ctx, backupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Checking the backup [%s] is a large resource backup", backupName))
+			dash.VerifyFatal(isLargeResourceBackup, true, fmt.Sprintf("Verifying the backup [%s] is a large resource backup", backupName))
+		})
+
+		Step("Restoring the backup on the destination cluster", func() {
+			log.InfoD("Restoring the backup on the destination cluster")
+
+			log.InfoD("Restoring the backup %s", backupName)
+			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+
+			err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destinationClusterUid, BackupOrgID, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, backupName))
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed applications")
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
+
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+
+})
