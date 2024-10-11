@@ -3,45 +3,42 @@ package tests
 import (
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
-
-	"github.com/devans10/pugo/flasharray"
-	"github.com/ghodss/yaml"
-	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	v12 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s/batch"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/sched-ops/k8s/storage"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
-	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
-
-	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	storageApi "k8s.io/api/storage/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
-
-	"github.com/libopenstorage/openstorage/api"
-	appsv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
+	"github.com/devans10/pugo/flasharray"
+	"github.com/ghodss/yaml"
 	"github.com/google/uuid"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	"github.com/libopenstorage/openstorage/api"
+	v12 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/sched-ops/k8s/storage"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
+	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	storageApi "k8s.io/api/storage/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -7672,6 +7669,125 @@ var _ = Describe("{EnableTrashCanDeleteVol}", func() {
 	})
 })
 
+var _ = Describe("{ScaleUpandScaleDownwithFBDAApp}", func() {
+	/*
+	   Ticket id:https://purestorage.atlassian.net/browse/HAZEL-732
+	   Deploy FBDA applications
+	   Scale up  the application.
+	   verify application scaled up.
+	   scale down the application.
+	   verify application scaled down.
+	   do for multiple times
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ScaleUpandScaleDownwithFBDAApp", "Deploy FBDA applications Scale Up and Scale Down the app for multiple times", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "Deploy FBDA applications Scale Up and Scale Down the app for multiple times using same volume"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		k8sOps := k8sCore
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("scaleupdown-%d", i))...)
+		}
+		namespace := contexts[0].App.NameSpace
+		log.Infof("Namespace for the app: %s", namespace)
+		for _, ctx := range contexts {
+			ctx.SkipVolumeValidation = true
+		}
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+		numberofpods := 20
+		stepLog := "Initiating multiple up and down scaling operations for the application."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				for i := 0; i < 5; i++ {
+					stepLog = "Scaling the application to the specified number of pods"
+					Step(stepLog, func() {
+						log.Infof("scaling app %s to %v", ctx.App.Key, numberofpods)
+						applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
+						log.FailOnError(err, "Failed to get scale up map")
+						log.Infof("Application scale-up details: %v", applicationScaleUpMap)
+						for name := range applicationScaleUpMap {
+							applicationScaleUpMap[name] = int32(numberofpods)
+						}
+						err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+						log.FailOnError(err, "Failed to scale the application")
+						log.Infof("Application scaled to %d pods", numberofpods)
+					})
+					stepLog = "verify that the deployment has been scaled up"
+					Step(stepLog, func() {
+						log.InfoD("Checking deployment scaling...")
+						checkDeploymentScaling := func() (interface{}, bool, error) {
+							podList, err := k8sOps.GetPods(namespace, nil)
+							if err != nil {
+								return false, true, err
+							}
+							runningPods := 0
+							for _, pod := range podList.Items {
+								if pod.Status.Phase == corev1.PodRunning {
+									runningPods++
+								}
+							}
+							if runningPods == numberofpods {
+								log.Infof("Deployment has successfully scaled to %d replicas.", numberofpods)
+								return true, false, nil
+							} else {
+								log.Infof("Deployment has %d replicas. Expected: %d", runningPods, numberofpods)
+								return false, true, fmt.Errorf("Deployment  has not scaled to expected replicas")
+							}
+						}
+						CheckDeploymentisScaled, err := task.DoRetryWithTimeout(checkDeploymentScaling, 30*time.Minute, 30*time.Second)
+						log.FailOnError(err, "Failed to wait for pods to scale up.")
+						dash.VerifyFatal(CheckDeploymentisScaled.(bool), true, "Is the deployment scaled correctly?")
+
+					})
+					stepLog = "Scaling down the application to zero replicas"
+					Step(stepLog, func() {
+						log.Infof("Scale down app %s to Zero", ctx.App.Key)
+						applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
+						log.FailOnError(err, "Failed to get scale down map")
+						log.Infof("Application scale-up details: %v", applicationScaleDownMap)
+						for name := range applicationScaleDownMap {
+							applicationScaleDownMap[name] = 0
+						}
+						err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
+						log.FailOnError(err, "Failed to scale the application")
+						log.Infof("Application has been scaled down to zero pods.")
+					})
+					stepLog = "verify that the deployment has been scaled down"
+					Step(stepLog, func() {
+						log.InfoD("Checking deployment scaling down ...")
+						waitForPodsToTerminate := func() (interface{}, bool, error) {
+							podCount := 0
+							pods, err := k8sOps.GetPods(namespace, nil)
+							if err != nil {
+								return nil, true, err
+							}
+							podCount = len(pods.Items)
+							if podCount > 0 {
+								return false, true, fmt.Errorf("expected no pods, but found [%d] remaining", podCount)
+							}
+							return true, false, nil
+						}
+						CheckDeploymentisScaleDown, err := task.DoRetryWithTimeout(waitForPodsToTerminate, 10*time.Minute, 30*time.Second)
+						log.FailOnError(err, "failed to scale down app [%s] and ensure all pods are deleted", ctx.App.Key)
+						dash.VerifyFatal(CheckDeploymentisScaleDown.(bool), true, "Is the deployment scale down correctly?")
+
+					})
+
+				}
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
 var _ = Describe("{ValidateFBDAPodsWithHostInterfaceDown}", func() {
 	/*
 	   https://purestorage.atlassian.net/browse/HAZEL-738
@@ -7697,7 +7813,6 @@ var _ = Describe("{ValidateFBDAPodsWithHostInterfaceDown}", func() {
 		}
 		ValidateApplications(contexts)
 		defer DestroyApps(contexts, nil)
-
 		var selectedNode node.Node
 		numberofpods := 20
 		stepLog := "Get node where FBDA volume is attached"
