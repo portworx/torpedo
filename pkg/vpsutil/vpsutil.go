@@ -183,3 +183,43 @@ func ReplicaAffinityPool(name string) talisman_v1beta2.VolumePlacementStrategy {
 		},
 	}
 }
+
+func ReplicaAffinityandAntiAffinity(name string) talisman_v1beta2.VolumePlacementStrategy {
+	return talisman_v1beta2.VolumePlacementStrategy{
+		ObjectMeta: v1.ObjectMeta{
+			Name: name,
+		},
+		Spec: talisman_v1beta2.VolumePlacementSpec{
+			ReplicaAffinity: []*talisman_v1beta2.ReplicaPlacementSpec{
+				{
+					AffectedReplicas: 1,
+					CommonPlacementSpec: talisman_v1beta2.CommonPlacementSpec{
+						Enforcement: v1beta1.EnforcementRequired,
+						MatchExpressions: []*v1beta1.LabelSelectorRequirement{
+							{
+								Key:      "zone",
+								Operator: v1beta1.LabelSelectorOpIn,
+								Values:   []string{"A"},
+							},
+						},
+					},
+				},
+			},
+			ReplicaAntiAffinity: []*talisman_v1beta2.ReplicaPlacementSpec{
+				{
+					AffectedReplicas: 1,
+					CommonPlacementSpec: talisman_v1beta2.CommonPlacementSpec{
+						Enforcement: v1beta1.EnforcementRequired,
+						MatchExpressions: []*v1beta1.LabelSelectorRequirement{
+							{
+								Key:      "zone",
+								Operator: v1beta1.LabelSelectorOpIn,
+								Values:   []string{"A"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
