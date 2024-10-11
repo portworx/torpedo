@@ -7669,6 +7669,127 @@ var _ = Describe("{EnableTrashCanDeleteVol}", func() {
 	})
 })
 
+var _ = Describe("{ScaleUpFBDAAppWithRestartPX}", func() {
+	/*
+	   Ticket id:https://purestorage.atlassian.net/browse/HAZEL-733
+	   Deploy FBDA applications
+	   Scale the application.
+	   Restart Px on the node  during scale up.
+	   verify application scaled up.
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ScaleUpFBDAAppWithRestartPX", "Deploy FBDA applications restart px during the deployment", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Deploy FBDA applications restart px during the deployment"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		k8sOps := k8sCore
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pxrestart-%d", i))...)
+		}
+		namespace := contexts[0].App.NameSpace
+		log.Infof("Namespace for the app: %s", namespace)
+		numberofpods := 1000
+		var selectedPxrestartNode node.Node
+		stepLog := "Restarting Px during scaling up to pods using the same volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				stepLog = "Identifying the node with volume consumption"
+				Step(stepLog, func() {
+					appVolumes, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "Failed to get volumes")
+					log.InfoD("waiting for a minute for volume name to populate")
+					time.Sleep(1 * time.Minute)
+					for _, v := range appVolumes {
+						isPureVol, err := Inst().V.IsPureVolume(v)
+						log.FailOnError(err, "Failed to determine if volume '%s' is a pure volume: %v", v.ID, err)
+						storageNode := node.GetStorageNodes()
+						if isPureVol {
+							cmd := fmt.Sprintf(`pxctl volume inspect %v | grep -A 10 "Volume consumers"`, v.ID)
+							output, err := Inst().N.RunCommand(storageNode[0], cmd, node.ConnectionOpts{
+								Timeout:         10 * time.Minute,
+								TimeBeforeRetry: 30 * time.Second,
+								Sudo:            true,
+							})
+							var runningOnIPs []string
+							lines := strings.Split(output, "\n")
+							ipRegex := regexp.MustCompile(`Running on\s+:\s+([^\s]+)`)
+							for _, line := range lines {
+								if strings.Contains(line, "Running on") {
+									matches := ipRegex.FindStringSubmatch(line)
+									if len(matches) > 1 {
+										runningOnIPs = append(runningOnIPs, matches[1])
+									}
+								}
+							}
+							log.Infof("Volume attached node IDs %v", runningOnIPs)
+							attachedNode := runningOnIPs[0]
+							log.InfoD("Attached node for the volume : %v", attachedNode)
+							selectedPxrestartNode, err = node.GetNodeByName(attachedNode)
+							log.FailOnError(err, "Failed to retrieve the node by name: %s", attachedNode)
+							log.InfoD("selected node for px restart : %v", selectedPxrestartNode)
+							break
+						}
+					}
+				})
+				stepLog = "Scaling the application to the specified number of pods"
+				Step(stepLog, func() {
+					log.Infof("scaling app %s to %v", ctx.App.Key, numberofpods)
+					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
+					log.FailOnError(err, "Failed to get scale up map")
+					log.Infof("Application scale-up details: %v", applicationScaleUpMap)
+					for name := range applicationScaleUpMap {
+						applicationScaleUpMap[name] = int32(numberofpods)
+					}
+					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+					log.FailOnError(err, "Failed to scale the application")
+					log.Infof("Application scaled to %d pods", numberofpods)
+				})
+				stepLog = "Restarting PX on the node where the volume is attached"
+				Step(stepLog, func() {
+					log.Infof("Restarting Px on the node %s after scaling", selectedPxrestartNode)
+					err = Inst().V.RestartDriver(selectedPxrestartNode, nil)
+					log.FailOnError(err, "Error occured while Restart PX on node: %v", selectedPxrestartNode)
+					log.InfoD("PX restarted successfully on node %v", selectedPxrestartNode)
+				})
+				stepLog = "verifiy that the deployment has been scaled."
+				Step(stepLog, func() {
+					log.InfoD("Checking deployment scaling...")
+					checkDeploymentScaling := func() (interface{}, bool, error) {
+						podList, err := k8sOps.GetPods(namespace, nil)
+						if err != nil {
+							return nil, true, err
+						}
+						runningPods := 0
+						for _, pod := range podList.Items {
+							if pod.Status.Phase == corev1.PodRunning {
+								runningPods++
+							}
+						}
+						if runningPods == numberofpods {
+							log.Infof("Deployment has successfully scaled to %d replicas.", numberofpods)
+							return nil, false, nil
+						} else {
+							log.Infof("Deployment has %d replicas. Expected: %d", runningPods, numberofpods)
+							return nil, true, fmt.Errorf("Deployment  has not scaled to expected replicas")
+						}
+					}
+					_, err = task.DoRetryWithTimeout(checkDeploymentScaling, 30*time.Minute, 30*time.Second)
+					log.FailOnError(err, "Failed to wait for pods to scale up.")
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
 var _ = Describe("{ScaleUpandScaleDownwithFBDAApp}", func() {
 	/*
 	   Ticket id:https://purestorage.atlassian.net/browse/HAZEL-732
@@ -7698,7 +7819,7 @@ var _ = Describe("{ScaleUpandScaleDownwithFBDAApp}", func() {
 		}
 		ValidateApplications(contexts)
 		defer DestroyApps(contexts, nil)
-		numberofpods := 20
+		numberofpods := 1000
 		stepLog := "Initiating multiple up and down scaling operations for the application."
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -7775,7 +7896,6 @@ var _ = Describe("{ScaleUpandScaleDownwithFBDAApp}", func() {
 						CheckDeploymentisScaleDown, err := task.DoRetryWithTimeout(waitForPodsToTerminate, 10*time.Minute, 30*time.Second)
 						log.FailOnError(err, "failed to scale down app [%s] and ensure all pods are deleted", ctx.App.Key)
 						dash.VerifyFatal(CheckDeploymentisScaleDown.(bool), true, "Is the deployment scale down correctly?")
-
 					})
 
 				}
@@ -7801,7 +7921,6 @@ var _ = Describe("{ValidateFBDAPodsWithHostInterfaceDown}", func() {
 			"Bring down the interface of the host where the FBDA volume is attached and bring up interface in few minutes", nil, 0)
 	})
 	var contexts []*scheduler.Context
-
 	itLog := "Testing Host interface down and up, validate the application"
 	It(itLog, func() {
 		log.InfoD(itLog)
@@ -7819,17 +7938,14 @@ var _ = Describe("{ValidateFBDAPodsWithHostInterfaceDown}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			stNodes := node.GetStorageNodes()
-
 			for _, ctx := range contexts {
 				appVolumes, err := Inst().S.GetVolumes(ctx)
 				log.FailOnError(err, "Failed to get volumes")
-
 				for _, v := range appVolumes {
 					log.Infof("Volume details: %v", v)
 					isPureVol, err := Inst().V.IsPureVolume(v)
 					log.FailOnError(err, "Failed to validate ")
 					dash.VerifyFatal(isPureVol, true, "is pure volume?")
-
 					if isPureVol {
 						cmd := fmt.Sprintf(`pxctl volume inspect %v | grep -A 10 "Volume consumers"`, v.ID)
 						output, err := Inst().N.RunCommand(stNodes[0], cmd, node.ConnectionOpts{
@@ -7840,7 +7956,6 @@ var _ = Describe("{ValidateFBDAPodsWithHostInterfaceDown}", func() {
 						var runningOnIPs []string
 						lines := strings.Split(output, "\n")
 						ipRegex := regexp.MustCompile(`Running on\s+:\s+([^\s]+)`)
-
 						for _, line := range lines {
 							if strings.Contains(line, "Running on") {
 								matches := ipRegex.FindStringSubmatch(line)
@@ -7850,7 +7965,6 @@ var _ = Describe("{ValidateFBDAPodsWithHostInterfaceDown}", func() {
 							}
 						}
 						log.Infof("Volume attached node IDs %v", runningOnIPs)
-
 						selectedNode, err = node.GetNodeByName(runningOnIPs[0])
 						log.FailOnError(err, "Failed to get FB details")
 						log.Infof("Selected node details %v", selectedNode)
@@ -7858,7 +7972,6 @@ var _ = Describe("{ValidateFBDAPodsWithHostInterfaceDown}", func() {
 						break
 					}
 				}
-
 				log.Infof("scaling app %s to %v", ctx.App.Key, numberofpods)
 				applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
 				log.FailOnError(err, "Failed to get scale up map")
@@ -7866,13 +7979,11 @@ var _ = Describe("{ValidateFBDAPodsWithHostInterfaceDown}", func() {
 				for name := range applicationScaleUpMap {
 					applicationScaleUpMap[name] = int32(numberofpods)
 				}
-
 				err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
 				log.FailOnError(err, "Failed to get scale the application")
 				log.Infof("application scaled to %v", numberofpods)
 			}
 		})
-
 		stepLog = "Make the host interface down for few minutes and UP"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -7884,7 +7995,6 @@ var _ = Describe("{ValidateFBDAPodsWithHostInterfaceDown}", func() {
 			})
 			log.FailOnError(err, "Failed to run the command in node: %v", selectedNode.Name)
 			log.Infof("Run command output is: %v", outPut)
-
 			nodeStatusBefore, err := Inst().V.GetNodeStatus(selectedNode)
 			log.FailOnError(err, "Failed to get node details")
 			log.Infof("Node status after cod run is: %v", nodeStatusBefore)
@@ -7904,7 +8014,6 @@ var _ = Describe("{ValidateFBDAPodsWithHostInterfaceDown}", func() {
 			log.FailOnError(err, "Failed to get node details")
 			dash.VerifyFatal(nodeStatusAfter.(bool), true, "is node status up ?")
 		})
-
 		stepLog = "Validate the applications are in running state"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
