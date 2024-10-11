@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 	"github.com/devans10/pugo/flasharray"
 	"github.com/ghodss/yaml"
 	"github.com/google/uuid"
@@ -7901,6 +7900,133 @@ var _ = Describe("{ScaleUpandScaleDownwithFBDAApp}", func() {
 				}
 			}
 		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{ScaleUpFBDAAppWithRestartNode}", func() {
+	/*
+	   Ticket id:https://purestorage.atlassian.net/browse/HAZEL-734
+	   Deploy FBDA applications
+	   Scale the application.
+	   Restart node during scale up.
+	   verify application scaledup.
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ScaleUpFBDAAppWithRestartNode", "Deploy FBDA applications restart node during the deployment", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Deploy FBDA applications restart node during the deployment"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		k8sOps := k8sCore
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebootnode-%d", i))...)
+		}
+		namespace := contexts[0].App.NameSpace
+		log.Infof("Namespace for the app: %s", namespace)
+		numberofpods := 1000
+		var selectedNodeReboot node.Node
+		stepLog := "Restarting node during scaling up to pods using the same volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				stepLog = "Identifying the node with volume consumption"
+				Step(stepLog, func() {
+					appVolumes, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "Failed to get volumes")
+					log.InfoD("waiting for a minute for volume name to populate")
+					time.Sleep(1 * time.Minute)
+					for _, v := range appVolumes {
+						isPureVol, err := Inst().V.IsPureVolume(v)
+						log.FailOnError(err, "Failed to get FB details")
+						storageNode := node.GetStorageNodes()
+						if isPureVol {
+							cmd := fmt.Sprintf(`pxctl volume inspect %v | grep -A 10 "Volume consumers"`, v.ID)
+							output, err := Inst().N.RunCommand(storageNode[0], cmd, node.ConnectionOpts{
+								Timeout:         10 * time.Minute,
+								TimeBeforeRetry: 30 * time.Second,
+								Sudo:            true,
+							})
+							var runningOnIPs []string
+							lines := strings.Split(output, "\n")
+							ipRegex := regexp.MustCompile(`Running on\s+:\s+([^\s]+)`)
+							for _, line := range lines {
+								if strings.Contains(line, "Running on") {
+									matches := ipRegex.FindStringSubmatch(line)
+									if len(matches) > 1 {
+										runningOnIPs = append(runningOnIPs, matches[1])
+									}
+								}
+							}
+							log.Infof("Volume attached node IDs %v", runningOnIPs)
+							attachedNode := runningOnIPs[0]
+							log.InfoD("Attached node for the volume : %v", attachedNode)
+							selectedNodeReboot, err = node.GetNodeByName(attachedNode)
+							log.FailOnError(err, "Failed to retrieve the node by name: %s", attachedNode)
+							log.InfoD("Selected node for reboot : %v", selectedNodeReboot)
+							break
+						}
+					}
+				})
+				stepLog := fmt.Sprintf("Scaling  app: [ %s ] to 1000 replicas", ctx.App.Key)
+				Step(stepLog, func() {
+					log.Infof("scaling app %s to %v", ctx.App.Key, numberofpods)
+					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
+					log.FailOnError(err, "Failed to get scale up map")
+					log.Infof("appicationscalupformap: %v", applicationScaleUpMap)
+					for name := range applicationScaleUpMap {
+						applicationScaleUpMap[name] = int32(numberofpods)
+					}
+					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+					log.FailOnError(err, "Failed to get scale the application")
+					log.Infof("application scaled to %v", numberofpods)
+				})
+				stepLog = "Reboot the node where the volume is attached"
+				Step(stepLog, func() {
+					log.Infof("Rebooting node %s after scaling", selectedNodeReboot)
+					err = Inst().N.RebootNode(selectedNodeReboot, node.RebootNodeOpts{
+						Force: true,
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         1 * time.Minute,
+							TimeBeforeRetry: 5 * time.Second,
+						},
+					})
+					log.FailOnError(err, "Failed to reboot on node: %v", selectedNodeReboot)
+				})
+				stepLog = "verifiy that the deployment has been scaled."
+				Step(stepLog, func() {
+					log.InfoD("Checking deployment scaling...")
+					checkDeploymentScaling := func() (interface{}, bool, error) {
+						podList, err := k8sOps.GetPods(namespace, nil)
+						if err != nil {
+							return nil, true, err
+						}
+						runningPods := 0
+						for _, pod := range podList.Items {
+							if pod.Status.Phase == corev1.PodRunning {
+								runningPods++
+							}
+						}
+						if int32(runningPods) == int32(numberofpods) {
+							log.Infof("Deployment has successfully scaled to %d replicas.", numberofpods)
+							return nil, false, nil
+						} else {
+							log.Infof("Deployment has %d replicas. Expected: %d", runningPods, numberofpods)
+							return nil, true, fmt.Errorf("Deployment  has not scaled to expected replicas")
+						}
+					}
+					_, err = task.DoRetryWithTimeout(checkDeploymentScaling, 30*time.Minute, 30*time.Second)
+					log.FailOnError(err, "Failed to wait for pods to scale up.")
+				})
+			}
+		})
+
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
