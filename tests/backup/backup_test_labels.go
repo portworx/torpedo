@@ -147,6 +147,7 @@ const (
 	SuperAdminBackupShare                                                              TestCaseName = "SuperAdminBackupShare"
 	TimeTakenToDeleteBackupWithHeavyLoad                                               TestCaseName = "TimeTakenToDeleteBackupWithHeavyLoad"
 	BackupShare                                                                        TestCaseName = "BackupShare"
+	TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheSchedule             TestCaseName = "TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheSchedule"
 )
 
 // Test case labels
@@ -291,6 +292,7 @@ const (
 	SuperAdminLabel                                                                         TestCaseLabel = "SuperAdmin"
 	SuperAdminBackupShareLabel                                                              TestCaseLabel = "SuperAdminBackupShare"
 	TimeTakenToDeleteBackupWithHeavyLoadLabel                                               TestCaseLabel = "TimeTakenToDeleteBackupWithHeavyLoad"
+	TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheScheduleLabel             TestCaseLabel = "TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheSchedule"
 )
 
 // Common Labels
@@ -545,5 +547,6 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules:                  {DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, S3LockedBucket, AzureImmutableBucket},
 	SuperAdmin:                           {SuperAdminLabel},
 	SuperAdminBackupShare:                {SuperAdminBackupShareLabel},
-	TimeTakenToDeleteBackupWithHeavyLoad: {TimeTakenToDeleteBackupWithHeavyLoadLabel, vanillaPipeline, SystemTest, P0, PxLabel, NfsBackupLocationLabel, S3BackupLocationLabel},
+	TimeTakenToDeleteBackupWithHeavyLoad: {TimeTakenToDeleteBackupWithHeavyLoadLabel, PerformanceTest, P0, PxLabel, S3BackupLocationLabel},
+	TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheSchedule: {TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheScheduleLabel, PerformanceTest, P0, PxLabel, S3BackupLocationLabel},
 }

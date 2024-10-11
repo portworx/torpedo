@@ -11538,3 +11538,98 @@ func IsLargeResourceBackup(ctx context1.Context, backupName string, orgId string
 	}
 	return res.Backup.LargeResourceEnabled, nil
 }
+
+// DeleteListOfBackupsAtOnce deletes the list of given backups at once
+func DeleteListOfBackupsAtOnce(ctx context1.Context, listOfBackups []string, WaitForBackupDelete bool) error {
+	log.InfoD("Deleting all the given backups at once")
+	var errorChannel = make(chan error, len(listOfBackups))
+	var wg sync.WaitGroup
+	var errorMessages []string
+	semaphore := make(chan struct{}, 50)
+	for _, backupName := range listOfBackups {
+		wg.Add(1)
+		go func(backupName string) {
+			defer GinkgoRecover()
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+			backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+			if err != nil {
+				errorChannel <- fmt.Errorf("failed to get backup UID: %v", err)
+				return
+			}
+			_, err = DeleteBackup(backupName, backupUid, BackupOrgID, ctx)
+			if err != nil {
+				errorChannel <- fmt.Errorf("failed to start delete backup: %v", err)
+				return
+			}
+		}(backupName)
+	}
+	wg.Wait()
+	if WaitForBackupDelete {
+		for _, backup := range listOfBackups {
+			wg.Add(1)
+			go func(backup string) {
+				defer wg.Done()
+				err := DeleteBackupAndWait(backup, ctx)
+				if err != nil {
+					errorChannel <- fmt.Errorf("failed to delete backup: %v", err)
+				}
+			}(backup)
+		}
+	}
+	close(errorChannel)
+	for err := range errorChannel {
+		errorMessages = append(errorMessages, err.Error())
+	}
+	if len(errorMessages) > 0 {
+		return fmt.Errorf("delete backup errors: %s", strings.Join(errorMessages, "; "))
+	}
+	return nil
+}
+
+// GetNumberOfScheduleBackupsFromListOfAllBackups get the number of schedule backup of the given schedule policy from list of all backups
+func GetNumberOfScheduleBackupsFromListOfAllBackups(scheduleName string, currentBackups *api.BackupEnumerateResponse) int {
+	var count int
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	backups := currentBackups.GetBackups()
+	wg.Add(len(backups))
+	for _, backup := range backups {
+		go func(backup string) {
+			defer wg.Done()
+			if strings.HasPrefix(backup, scheduleName) {
+				mu.Lock()
+				count++
+				mu.Unlock()
+			}
+		}(backup.GetName())
+	}
+	wg.Wait()
+	return count
+}
+
+// TimeTakenToDeleteListOfAllScheduleBackupObjects continuously monitor and returns the time taken to delete all schedule backup objects of a given schedule policy
+func TimeTakenToDeleteListOfAllScheduleBackupObjects(ctx context1.Context, scheduleName string, TimeOutForScheduleBackupDelete time.Duration, RetryTimeForScheduleBackupDelete time.Duration) (string, error) {
+	ScheduleBackupDeleteStartTime := time.Now()
+	log.InfoD("Time at which deletion of all schedule backups started is %v", ScheduleBackupDeleteStartTime)
+	backupEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: BackupOrgID,
+	}
+	noOfScheduleBackups := func() (interface{}, bool, error) {
+		currentBackups, _ := Inst().Backup.EnumerateBackup(ctx, backupEnumerateReq)
+		totalCount := GetNumberOfScheduleBackupsFromListOfAllBackups(scheduleName, currentBackups)
+		if totalCount != 0 {
+			return "", true, fmt.Errorf("schedules backups %v are still present for the schedule %v", totalCount, scheduleName)
+		}
+		return "", false, nil
+	}
+	_, err := DoRetryWithTimeoutWithGinkgoRecover(noOfScheduleBackups, TimeOutForScheduleBackupDelete, RetryTimeForScheduleBackupDelete)
+	if err != nil {
+		return "", err
+	}
+	ScheduleBackupDeleteEndTime := time.Now()
+	log.InfoD("Time at which deletion of all schedule backups completed is %v", ScheduleBackupDeleteEndTime)
+	TimeTakenToDeleteAllScheduleBackups := ScheduleBackupDeleteEndTime.Sub(ScheduleBackupDeleteStartTime).String()
+	return TimeTakenToDeleteAllScheduleBackups, nil
+}

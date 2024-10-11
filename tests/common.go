@@ -15086,3 +15086,60 @@ func GetNodeDrivesCount(blockDrives map[string]*node.BlockDrive) int {
 	return driveCounts
 
 }
+
+// GetVolumeFromContexts return the list of volume of the given context
+func GetVolumeFromContexts(contexts []*scheduler.Context) ([]*volume.Volume, error) {
+	log.InfoD("Getting the list of volume for given context")
+	var volSelected []*volume.Volume
+	var err error
+	for _, ctx := range contexts {
+		volSelected, err = Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	log.Infof("The list of volumes are %v", volSelected)
+	return volSelected, nil
+}
+
+// WaitForVolToHaveMinimumSize wait until the given volume reaches the specified size during the given time interval
+func WaitForVolToHaveMinimumSize(vol *volume.Volume, size int64, timeout time.Duration, retryTime time.Duration) (bool, error) {
+	log.InfoD("Waiting until the given volume reaches the specified size during the given time interval")
+	f := func() (interface{}, bool, error) {
+		byteUsedAfter, err := GetVolumeBytesUsed(vol)
+		if err != nil {
+			return nil, false, fmt.Errorf("unable to get bytes used by the volume %v", vol.Name)
+		}
+		log.Infof("Bytes used by the volume is %s", byteUsedAfter)
+		bytesUsed, _ := strconv.ParseInt(strings.Fields(byteUsedAfter)[0], 10, 64)
+		if bytesUsed >= size {
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("vol %s is not having required used bytes size yet", vol.Name)
+	}
+	_, err := task.DoRetryWithTimeout(f, timeout, retryTime)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// GetVolumeBytesUsed returns PX volume used bytes
+func GetVolumeBytesUsed(vol *volume.Volume) (string, error) {
+	log.InfoD("Getting the byes used by the volume %v", vol.Name)
+	apiVol, err := Inst().V.InspectVolume(vol.ID)
+	if err != nil {
+		return "", err
+	}
+	cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Bytes used\"", apiVol.Id)
+	output, err := Inst().N.RunCommand(node.GetStorageDriverNodes()[0], cmd, node.ConnectionOpts{
+		Timeout:         1 * time.Minute,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	})
+	if err != nil {
+		return "", err
+	}
+	output = strings.Split(strings.TrimSpace(output), ":")[1]
+	return strings.TrimSpace(output), nil
+}
