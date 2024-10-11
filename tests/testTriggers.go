@@ -1327,15 +1327,21 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 				}
 				if err == nil {
 					err := HaIncreaseErrorInjectionTargetNode(event, selctx, v, storageNodeMap, errorInj)
-					log.Error(err)
-					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after HaIncreaseErrorInjectionTargetNode ", v.Name, v.ID, v.Namespace)
-					PrintInspectVolume(v.ID)
-					UpdateOutcome(event, err)
+					if err != nil {
+						log.Error(err)
+						log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after HaIncreaseErrorInjectionTargetNode ", v.Name, v.ID, v.Namespace)
+						PrintInspectVolume(v.ID)
+						UpdateOutcome(event, err)
+						return
+					}
+
 					err = HaIncreaseErrorInjectSourceNode(event, selctx, v, storageNodeMap, errorInj)
-					log.Error(err)
-					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after HaIncreaseErrorInjectSourceNode ", v.Name, v.ID, v.Namespace)
-					PrintInspectVolume(v.ID)
-					UpdateOutcome(event, err)
+					if err != nil {
+						log.Error(err)
+						log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after HaIncreaseErrorInjectSourceNode ", v.Name, v.ID, v.Namespace)
+						PrintInspectVolume(v.ID)
+						UpdateOutcome(event, err)
+					}
 				}
 			}
 
@@ -2117,41 +2123,56 @@ func TriggerKubeletRestart(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		*recordChan <- event
 	}()
 	setMetrics(*event)
-	stepLog := "restart kubelet in all nodes"
+	stepLog := "restart kubelet in nodes selected"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		for _, appNode := range node.GetStorageDriverNodes() {
+		driverNodesToRestart := getNodesByChaosLevel(RestartManyVolDriver, node.GetStorageDriverNodes())
+		var wg sync.WaitGroup
+		validateNodeContexts := make(map[string]*scheduler.Context)
+		for _, appNode := range driverNodesToRestart {
 			err := isNodeHealthy(appNode, event.Event.Type)
 			if err != nil {
 				UpdateOutcome(event, err)
 				continue
 			}
-			stepLog = fmt.Sprintf("crash volume driver %s on node: %v",
-				Inst().V.String(), appNode.Name)
-			nodeContexts, err := GetContextsOnNode(contexts, &appNode)
-			UpdateOutcome(event, err)
-
-			Step(stepLog,
-				func() {
-					log.InfoD(stepLog)
-					taskStep := fmt.Sprintf("restart driver on node: %s",
-						appNode.MgmtIp)
-					event.Event.Type += "<br>" + taskStep
-					errorChan := make(chan error, errorChannelSize)
-					dashStats := make(map[string]string)
-					dashStats["node"] = appNode.Name
-					updateLongevityStats(RestartKubeletService, stats.RestartKubeletEventName, dashStats)
-					RestartKubelet([]node.Node{appNode}, &errorChan)
-					for err := range errorChan {
-						UpdateOutcome(event, err)
+			wg.Add(1)
+			go func(appNode node.Node) {
+				log.SetTestName(RestartKubeletService)
+				stepLog = fmt.Sprintf("crash volume driver %s on node: %v",
+					Inst().V.String(), appNode.Name)
+				tmpNodeContexts, err := GetContextsOnNode(contexts, &appNode)
+				UpdateOutcome(event, err)
+				if err != nil {
+					for _, nc := range tmpNodeContexts {
+						if _, ok := validateNodeContexts[nc.App.Key]; !ok {
+							validateNodeContexts[nc.App.Key] = nc
+						}
 					}
-				})
-
-			err = ValidateDataIntegrity(&nodeContexts)
-			UpdateOutcome(event, err)
-			validateContexts(event, contexts)
-
+				}
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						taskStep := fmt.Sprintf("restart driver on node: %s",
+							appNode.MgmtIp)
+						event.Event.Type += "<br>" + taskStep
+						errorChan := make(chan error, errorChannelSize)
+						dashStats := make(map[string]string)
+						dashStats["node"] = appNode.Name
+						updateLongevityStats(RestartKubeletService, stats.RestartKubeletEventName, dashStats)
+						RestartKubelet([]node.Node{appNode}, &errorChan)
+						for err := range errorChan {
+							UpdateOutcome(event, err)
+						}
+					})
+			}(appNode)
 		}
+		var nodeContexts []*scheduler.Context
+		for _, nc := range validateNodeContexts {
+			nodeContexts = append(nodeContexts, nc)
+		}
+		err := ValidateDataIntegrity(&nodeContexts)
+		UpdateOutcome(event, err)
+		validateContexts(event, contexts)
 		updateMetrics(*event)
 	})
 }
@@ -2261,60 +2282,75 @@ func TriggerNodeMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 	stepLog := "get nodes and perform maintenance cycle"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		for _, appNode := range node.GetStorageNodes() {
+		driverNodesToRestart := getNodesByChaosLevel(RestartManyVolDriver, node.GetStorageNodes())
+		var wg sync.WaitGroup
+		validateNodeContexts := make(map[string]*scheduler.Context)
+		for _, appNode := range driverNodesToRestart {
 			err := isNodeHealthy(appNode, event.Event.Type)
 			if err != nil {
 				UpdateOutcome(event, err)
 				continue
 			}
-			stepLog = fmt.Sprintf("enter maintenance on node: %s", appNode.Name)
-			nodeContexts, err := GetContextsOnNode(contexts, &appNode)
-			UpdateOutcome(event, err)
-			Step(stepLog,
-				func() {
-					log.InfoD(stepLog)
-					taskStep := fmt.Sprintf("enter maintenance on node: %s.",
-						appNode.Name)
-					event.Event.Type += "<br>" + taskStep
-					dashStats := make(map[string]string)
-					dashStats["node"] = appNode.Name
-					updateLongevityStats(NodeMaintenanceCycle, stats.NodeMaintenanceEventName, dashStats)
-					err = Inst().V.EnterMaintenance(appNode)
-					if err != nil {
-						UpdateOutcome(event, err)
-						return
+			wg.Add(1)
+			go func(appNode node.Node) {
+				log.SetTestName(NodeMaintenanceCycle)
+				defer wg.Done()
+				stepLog = fmt.Sprintf("enter maintenance on node: %s", appNode.Name)
+				tmpNodeContexts, err := GetContextsOnNode(contexts, &appNode)
+				UpdateOutcome(event, err)
+				if err != nil {
+					for _, nc := range tmpNodeContexts {
+						if _, ok := validateNodeContexts[nc.App.Key]; !ok {
+							validateNodeContexts[nc.App.Key] = nc
+						}
 					}
+				}
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						taskStep := fmt.Sprintf("enter maintenance on node: %s.",
+							appNode.Name)
+						event.Event.Type += "<br>" + taskStep
+						dashStats := make(map[string]string)
+						dashStats["node"] = appNode.Name
+						updateLongevityStats(NodeMaintenanceCycle, stats.NodeMaintenanceEventName, dashStats)
+						err = Inst().V.EnterMaintenance(appNode)
+						if err != nil {
+							UpdateOutcome(event, err)
+							return
+						}
 
-				})
-			stepLog = "wait for 15 mins for apps and volumes to reallocate"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				time.Sleep(15 * time.Minute)
-
-			})
-			stepLog = fmt.Sprintf("exit maintenance on node %s", appNode.Name)
-			Step(stepLog,
-				func() {
+					})
+				stepLog = "wait for 15 mins for apps and volumes to reallocate"
+				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					taskStep := fmt.Sprintf("exit maintenance on node: %s.",
-						appNode.Name)
-					event.Event.Type += "<br>" + taskStep
-					err = Inst().V.ExitMaintenance(appNode)
-					if err != nil {
-						UpdateOutcome(event, err)
-						return
-					}
+					time.Sleep(15 * time.Minute)
 				})
-
-			Step("Giving few seconds for volume driver to stabilize", func() {
-				time.Sleep(20 * time.Second)
-			})
-
-			err = ValidateDataIntegrity(&nodeContexts)
-			UpdateOutcome(event, err)
-			validateContexts(event, contexts)
-
+				stepLog = fmt.Sprintf("exit maintenance on node %s", appNode.Name)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						taskStep := fmt.Sprintf("exit maintenance on node: %s.",
+							appNode.Name)
+						event.Event.Type += "<br>" + taskStep
+						err = Inst().V.ExitMaintenance(appNode)
+						if err != nil {
+							UpdateOutcome(event, err)
+							return
+						}
+					})
+			}(appNode)
 		}
+		Step("Giving few seconds for volume driver to stabilize", func() {
+			time.Sleep(20 * time.Second)
+		})
+		var nodeContexts []*scheduler.Context
+		for _, nc := range validateNodeContexts {
+			nodeContexts = append(nodeContexts, nc)
+		}
+		err := ValidateDataIntegrity(&nodeContexts)
+		UpdateOutcome(event, err)
+		validateContexts(event, contexts)
 		updateMetrics(*event)
 	})
 }
@@ -2338,67 +2374,84 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 		*recordChan <- event
 	}()
 	setMetrics(*event)
+
 	stepLog := "get nodes and perform pool maintenance cycle"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		for _, appNode := range node.GetStorageNodes() {
+		driverNodesToRestart := getNodesByChaosLevel(RestartManyVolDriver, node.GetStorageNodes())
+		var wg sync.WaitGroup
+
+		validateNodeContexts := make(map[string]*scheduler.Context)
+		for _, appNode := range driverNodesToRestart {
 			err := isNodeHealthy(appNode, event.Event.Type)
 			if err != nil {
 				UpdateOutcome(event, err)
 				continue
 			}
-
-			stepLog = fmt.Sprintf("enter pool maintenance on node: %s", appNode.Name)
-			nodeContexts, err := GetContextsOnNode(contexts, &appNode)
-			UpdateOutcome(event, err)
-			Step(stepLog,
-				func() {
-					log.InfoD(stepLog)
-					taskStep := fmt.Sprintf("enter pool maintenance on node: %s.",
-						appNode.Name)
-					event.Event.Type += "<br>" + taskStep
-					dashStats := make(map[string]string)
-					dashStats["node"] = appNode.Name
-					updateLongevityStats(PoolMaintenanceCycle, stats.PoolMaintenanceEventName, dashStats)
-					err = Inst().V.EnterPoolMaintenance(appNode)
-					if err != nil {
-						log.InfoD(fmt.Sprintf("Printing The storage pool status on Node:%s after entering pool Maintenance", appNode.Name))
-						PrintSvPoolStatus(appNode)
-						UpdateOutcome(event, err)
-						return
+			wg.Add(1)
+			go func(appNode node.Node) {
+				log.SetTestName(PoolMaintenanceCycle)
+				defer wg.Done()
+				stepLog = fmt.Sprintf("enter pool maintenance on node: %s", appNode.Name)
+				tmpNodeContexts, err := GetContextsOnNode(contexts, &appNode)
+				UpdateOutcome(event, err)
+				if err != nil {
+					for _, nc := range tmpNodeContexts {
+						if _, ok := validateNodeContexts[nc.App.Key]; !ok {
+							validateNodeContexts[nc.App.Key] = nc
+						}
 					}
+				}
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						taskStep := fmt.Sprintf("enter pool maintenance on node: %s.",
+							appNode.Name)
+						event.Event.Type += "<br>" + taskStep
+						dashStats := make(map[string]string)
+						dashStats["node"] = appNode.Name
+						updateLongevityStats(PoolMaintenanceCycle, stats.PoolMaintenanceEventName, dashStats)
+						err = Inst().V.EnterPoolMaintenance(appNode)
+						if err != nil {
+							log.InfoD(fmt.Sprintf("Printing The storage pool status on Node:%s after entering pool Maintenance", appNode.Name))
+							PrintSvPoolStatus(appNode)
+							UpdateOutcome(event, err)
+							return
+						}
 
-				})
-			stepLog = "wait for 15 mins for apps and volumes to reallocate"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				time.Sleep(15 * time.Minute)
-			})
-			stepLog = fmt.Sprintf("exit pool maintenance on node %s", appNode.Name)
-			Step(stepLog,
-				func() {
+					})
+				stepLog = "wait for 15 mins for apps and volumes to reallocate"
+				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					taskStep := fmt.Sprintf("exit pool maintenance on node: %s.",
-						appNode.Name)
-					event.Event.Type += "<br>" + taskStep
-					err = Inst().V.ExitPoolMaintenance(appNode)
-					if err != nil {
-						log.InfoD(fmt.Sprintf("Printing The storage pool status on Node:%s after pool Maintenance", appNode.Name))
-						PrintSvPoolStatus(appNode)
-						UpdateOutcome(event, err)
-						return
-					}
+					time.Sleep(15 * time.Minute)
 				})
-
-			Step("Giving few seconds for volume driver to stabilize", func() {
-				time.Sleep(20 * time.Second)
-			})
-
-			err = ValidateDataIntegrity(&nodeContexts)
-			UpdateOutcome(event, err)
-			validateContexts(event, contexts)
-
+				stepLog = fmt.Sprintf("exit pool maintenance on node %s", appNode.Name)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						taskStep := fmt.Sprintf("exit pool maintenance on node: %s.",
+							appNode.Name)
+						event.Event.Type += "<br>" + taskStep
+						err = Inst().V.ExitPoolMaintenance(appNode)
+						if err != nil {
+							log.InfoD(fmt.Sprintf("Printing The storage pool status on Node:%s after pool Maintenance", appNode.Name))
+							PrintSvPoolStatus(appNode)
+							UpdateOutcome(event, err)
+							return
+						}
+					})
+			}(appNode)
 		}
+		Step("Giving few seconds for volume driver to stabilize", func() {
+			time.Sleep(20 * time.Second)
+		})
+		var nodeContexts []*scheduler.Context
+		for _, nc := range validateNodeContexts {
+			nodeContexts = append(nodeContexts, nc)
+		}
+		err := ValidateDataIntegrity(&nodeContexts)
+		UpdateOutcome(event, err)
+		validateContexts(event, contexts)
 		updateMetrics(*event)
 	})
 }
@@ -2611,7 +2664,7 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 
 	setMetrics(*event)
 
-	driverNodesToRestart := getNodesByChaosLevel(RestartManyVolDriver)
+	driverNodesToRestart := getNodesByChaosLevel(RestartManyVolDriver, node.GetStorageDriverNodes())
 	var wg sync.WaitGroup
 	stepLog := "get nodes bounce volume driver"
 	Step(stepLog, func() {
@@ -2928,7 +2981,7 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 	stepLog := "get all nodes and reboot one by one"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		nodesToReboot := getNodesByChaosLevel(RebootManyNodes)
+		nodesToReboot := getNodesByChaosLevel(RebootManyNodes, node.GetStorageDriverNodes())
 		selectedNodes := make([]node.Node, 0)
 		for _, n := range nodesToReboot {
 			err := isNodeHealthy(n, event.Event.Type)
@@ -3040,9 +3093,8 @@ func randIntn(n, maxNo int) []int {
 	return generatedNs
 }
 
-func getNodesByChaosLevel(triggerType string) []node.Node {
+func getNodesByChaosLevel(triggerType string, stNodes []node.Node) []node.Node {
 	t := ChaosMap[triggerType]
-	stNodes := node.GetStorageDriverNodes()
 	stNodesLen := len(stNodes)
 	nodes := make([]node.Node, 0)
 	var nodeLen float32
@@ -3647,39 +3699,44 @@ func TriggerLocalSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 			for _, v := range appVolumes {
 				snapshotScheduleName := v.Name + "-interval-schedule"
 				log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
-				var volumeSnapshotStatus *storkv1.ScheduledVolumeSnapshotStatus
-				checkSnapshotSchedules := func() (interface{}, bool, error) {
-					resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
-					if err != nil {
-						return "", false, fmt.Errorf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
-					}
-					if len(resp.Status.Items) == 0 {
-						return "", false, fmt.Errorf("no snapshot schedules found for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
-					}
 
-					log.Infof("%v", resp.Status.Items)
-					for _, snapshotStatuses := range resp.Status.Items {
-						if len(snapshotStatuses) > 0 {
-							volumeSnapshotStatus = snapshotStatuses[len(snapshotStatuses)-1]
-							if volumeSnapshotStatus == nil {
-								return "", true, fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status")
-							}
-							if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionReady {
-								return nil, false, nil
-							}
-							if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionError {
-								return nil, false, fmt.Errorf("volume snapshot: %s failed. status: %v", volumeSnapshotStatus.Name, volumeSnapshotStatus.Status)
-							}
-							if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionPending {
-								return nil, true, fmt.Errorf("volume Sanpshot %s is still pending", volumeSnapshotStatus.Name)
-							}
-						}
-					}
-					return nil, true, fmt.Errorf("volume Sanpshots for %s is not found", v.Name)
-				}
-				_, err = task.DoRetryWithTimeout(checkSnapshotSchedules, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
+				resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
 				if err != nil {
 					UpdateOutcome(event, err)
+					return
+				}
+				snapshotStatusMap := make(map[storkv1.SchedulePolicyType][]*storkv1.ScheduledVolumeSnapshotStatus)
+				log.Infof("TriggerLocalSnapshotRestore: The snapshot [%s] response :", snapshotScheduleName)
+				for policyType, snapshotStatuses := range resp.Status.Items {
+					log.Infof("TriggerLocalSnapshotRestore: PolicyType [%s] has [%v] snapshotStatuses", policyType, len(snapshotStatuses))
+
+				}
+				for policyType, snapshotStatuses := range resp.Status.Items {
+					sort.Slice(snapshotStatuses, func(i, j int) bool {
+						return snapshotStatuses[i].FinishTimestamp.After(snapshotStatuses[j].FinishTimestamp.Time)
+					})
+					for i, snapshotStatus := range snapshotStatuses {
+						if snapshotStatus.Status == snapv1.VolumeSnapshotConditionReady {
+							log.Infof("TriggerLocalSnapshotRestore: Found Ready snapshot [%s/%v] for policyType [%s]", snapshotStatus.Name, snapshotStatus.FinishTimestamp, policyType)
+							snapshotStatusMap[policyType] = []*storkv1.ScheduledVolumeSnapshotStatus{snapshotStatuses[i]}
+							break
+						}
+					}
+					break
+				}
+				log.Infof("TriggerLocalSnapshotRestore: Updated SnapshotStatusMap: %v", snapshotStatusMap)
+				var volumeSnapshotStatus *storkv1.ScheduledVolumeSnapshotStatus
+			outer:
+				for _, snapshotStatuses := range snapshotStatusMap {
+					for _, vsStatus := range snapshotStatuses {
+						if vsStatus.Status == snapv1.VolumeSnapshotConditionReady {
+							volumeSnapshotStatus = vsStatus
+							break outer
+						}
+					}
+				}
+				if volumeSnapshotStatus == nil {
+					UpdateOutcome(event, fmt.Errorf("no ready snapshot found for volume %s", v.Name))
 					return
 				}
 				dashStats := make(map[string]string)
@@ -4574,7 +4631,7 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 				return "", true, fmt.Errorf("px-storage on node [%s] has CPU [%v%%] and memory [%v%%]", pod.Name, cpu, mem)
 			}
 
-			log.Infof("px-storage on node [%s] has CPU [%v%%] and Memory [%v%%]", pod.Name, cpu, mem)
+			log.InfoD("px-storage on node [%s] has CPU [%v%%] and Memory [%v%%]", pod.Name, cpu, mem)
 			return "", false, nil
 		}
 
@@ -4594,7 +4651,7 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 	}
 
 	for _, pod := range podList.Items {
-		log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
+		log.InfoD("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
 		dash.VerifySafely(pod.Status.Phase, v1.PodRunning, fmt.Sprintf("pod [%s] in namespace [%s] has status [%s]", pod.Name, pod.Namespace, pod.Status.Phase))
 		dash.VerifySafely(pod.Status.ContainerStatuses[0].State.Running != nil, true, fmt.Sprintf("pod [%s] in namespace [%s] has container state [%v]", pod.Name, pod.Namespace, pod.Status.ContainerStatuses[0].State))
 
@@ -4604,16 +4661,16 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 			continue
 		}
 
-		log.Infof("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
+		log.InfoD("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
 
 		memoryInGib := pm.Containers[0].Usage.Memory().Value() / (1024 * 1024)
-		log.Infof("pod [%s] in namespace [%s] has memory [%v] in MiB", pod.Name, pod.Namespace, memoryInGib)
+		log.InfoD("pod [%s] in namespace [%s] has memory [%v] in MiB", pod.Name, pod.Namespace, memoryInGib)
 		multiplier := inf.NewDec(1, 0)
 
 		res, ok := new(inf.Dec).Mul(pm.Containers[0].Usage.Cpu().AsDec(), multiplier).Unscaled()
 		if ok {
 			cpuInMilliCores := res
-			log.Infof("pod [%s] in namespace [%s] has CPU in millicores: [%v]", pod.Name, pod.Namespace, cpuInMilliCores)
+			log.InfoD("pod [%s] in namespace [%s] has CPU in millicores: [%v]", pod.Name, pod.Namespace, cpuInMilliCores)
 		}
 
 	}
@@ -4622,7 +4679,7 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 		log.Errorf("error getting pods in namespace [%s] with label [%v]. Err: %v", namespace, autopilotLabel, err)
 	} else {
 		for _, pod := range podList.Items {
-			log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
+			log.InfoD("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
 			dash.VerifySafely(pod.Status.Phase, v1.PodRunning, fmt.Sprintf("pod [%s] in namespace [%s] has status [%s]", pod.Name, pod.Namespace, pod.Status.Phase))
 			dash.VerifySafely(pod.Status.ContainerStatuses[0].State.Running != nil, true, fmt.Sprintf("pod [%s] in namespace [%s] has container state [%v]", pod.Name, pod.Namespace, pod.Status.ContainerStatuses[0].State))
 
@@ -4631,9 +4688,9 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 				log.Errorf("error getting metrics for pod %s in namespace %s. Err: %v", pod.Name, pod.Namespace, err)
 				continue
 			}
-			log.Infof("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
+			log.InfoD("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
 			memoryInGib := pm.Containers[0].Usage.Memory().Value() / (1024 * 1024)
-			log.Infof("pod [%s] in namespace [%s] has memory [%v] in MiB", pod.Name, pod.Namespace, memoryInGib)
+			log.InfoD("pod [%s] in namespace [%s] has memory [%v] in MiB", pod.Name, pod.Namespace, memoryInGib)
 			multiplier := inf.NewDec(1, 0)
 
 			res, ok := new(inf.Dec).Mul(pm.Containers[0].Usage.Cpu().AsDec(), multiplier).Unscaled()
@@ -4651,7 +4708,7 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 	}
 
 	for _, pod := range podList.Items {
-		log.Infof("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
+		log.InfoD("Pod [%s] in namespace [%s] has status [%s] and Container state [%v]", pod.Name, pod.Namespace, pod.Status.Phase, pod.Status.ContainerStatuses[0].State)
 		dash.VerifySafely(pod.Status.Phase, v1.PodRunning, fmt.Sprintf("pod [%s] in namespace [%s] has status [%s]", pod.Name, pod.Namespace, pod.Status.Phase))
 		dash.VerifySafely(pod.Status.ContainerStatuses[0].State.Running != nil, true, fmt.Sprintf("pod [%s] in namespace [%s] has container state [%v]", pod.Name, pod.Namespace, pod.Status.ContainerStatuses[0].State))
 
@@ -4660,15 +4717,15 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 			log.Errorf("error getting metrics for pod %s in namespace %s. Err: %v", pod.Name, pod.Namespace, err)
 			continue
 		}
-		log.Infof("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
+		log.InfoD("Pod [%s] in namespace [%s] has metrics [%v]", pod.Name, pod.Namespace, pm.Containers)
 		memoryInGib := pm.Containers[0].Usage.Memory().Value() / (1024 * 1024)
-		log.Infof("pod [%s] in namespace [%s] has memory [%v] in MiB", pod.Name, pod.Namespace, memoryInGib)
+		log.InfoD("pod [%s] in namespace [%s] has memory [%v] in MiB", pod.Name, pod.Namespace, memoryInGib)
 		multiplier := inf.NewDec(1, 0)
 
 		res, ok := new(inf.Dec).Mul(pm.Containers[0].Usage.Cpu().AsDec(), multiplier).Unscaled()
 		if ok {
 			cpuInMilliCores := res
-			log.Infof("pod [%s] in namespace [%s] has CPU in millicores: [%v]", pod.Name, pod.Namespace, cpuInMilliCores)
+			log.InfoD("pod [%s] in namespace [%s] has CPU in millicores: [%v]", pod.Name, pod.Namespace, cpuInMilliCores)
 		}
 	}
 
@@ -4698,7 +4755,7 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 			f := func() (interface{}, bool, error) { return checkVolumeStateIsResync(v) }
 			gctx := ctxt.Background()
 			gctx = ctxt.WithValue(gctx, torpedotask.TimeBeforeRetryKey, 1*time.Minute)
-			gctx = ctxt.WithValue(gctx, torpedotask.TimeoutKey, 180*time.Minute)
+			gctx = ctxt.WithValue(gctx, torpedotask.TimeoutKey, 10*time.Minute)
 			gctx = ctxt.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
 
 			_, err = torpedotask.DoRetryWithTimeoutWithCtx(f, gctx)
@@ -4723,7 +4780,7 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 			f = func() (interface{}, bool, error) { return checkVolumeStateIsResync(v) }
 			gctx = ctxt.Background()
 			gctx = ctxt.WithValue(gctx, torpedotask.TimeBeforeRetryKey, 1*time.Minute)
-			gctx = ctxt.WithValue(gctx, torpedotask.TimeoutKey, 15*time.Minute)
+			gctx = ctxt.WithValue(gctx, torpedotask.TimeoutKey, 10*time.Minute)
 			gctx = ctxt.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
 
 			_, err = torpedotask.DoRetryWithTimeoutWithCtx(f, gctx)
@@ -4774,7 +4831,6 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 		if record != nil {
 			ev := *record.(*EventRecord)
 			if ev.Outcome != nil && len(ev.Outcome) > 0 {
-
 				log.Errorf("Event [%s] failed with error [%v]", ev.Event.Type, ev.Outcome)
 			}
 			eventRing.Value = nil
@@ -6468,7 +6524,7 @@ func getStorageMetadataPoolsToExpand(expandType opsapi.SdkStoragePool_ResizeOper
 }
 
 func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.StoragePool, chaosLevel uint64, resizeOperationType opsapi.SdkStoragePool_ResizeOperationType, doNodeReboot bool) {
-
+	log.SetTestName(event.Event.Type)
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -12790,9 +12846,9 @@ func TriggerDefragScheduleCRUDOps(contexts *[]*scheduler.Context, recordChan *ch
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			Step(stepLog, func() {
-				storageNodes := node.GetStorageDriverNodes()
-				for _, node := range storageNodes {
-					nodeIds = append(nodeIds, node.Id)
+				storageNodes := node.GetStorageNodes()
+				for _, n := range storageNodes {
+					nodeIds = append(nodeIds, n.Id)
 				}
 				defragJob = getDfragJob(uint32(len(nodeIds)), nodeIds, false)
 				resp, err := Inst().V.CreateDefragSchedule(startTime, &defragJob)
@@ -12882,9 +12938,9 @@ func TriggerDefragSchedules(contexts *[]*scheduler.Context, recordChan *chan *Ev
 				UpdateOutcome(event, err)
 			}
 			log.Infof("Setting up defrag schedule at: [%s]", startTime)
-			storageNodes := node.GetStorageDriverNodes()
-			for _, node := range storageNodes {
-				nodeIds = append(nodeIds, node.Id)
+			storageNodes := node.GetStorageNodes()
+			for _, n := range storageNodes {
+				nodeIds = append(nodeIds, n.Id)
 			}
 			defragJob = getDfragJob(uint32(len(nodeIds)), nodeIds, false)
 			resp, err := Inst().V.CreateDefragSchedule(startTime, &defragJob)

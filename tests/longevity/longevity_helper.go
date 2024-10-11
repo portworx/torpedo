@@ -312,7 +312,6 @@ func populateDisruptiveTriggers() {
 		OCPStorageNodeRecycle,
 		CrashPXDaemon,
 		PowerOffAllVMs,
-		RestartKubeletService,
 		PoolDelete,
 		NodeMaintenanceCycle,
 		RestartKubeletService,
@@ -323,6 +322,8 @@ func populateDisruptiveTriggers() {
 		OCPStorageNodeRecycle,
 		ReallocateSharedMount,
 		VolumeDriverDownVCluster,
+		PowerOffStoragelessNodes,
+		PowerOffStorageNodes,
 	}
 }
 

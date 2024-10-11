@@ -3274,7 +3274,6 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 	} else {
 		replicationUpdateTimeout = validateReplicationUpdateTimeout
 	}
-	log.Infof("Setting ReplicationUpdateTimeout to %s-%v\n", replicationUpdateTimeout, replicationUpdateTimeout)
 	log.Infof("Setting ReplicationFactor to: %v", replFactor)
 
 	t := func() (interface{}, bool, error) {
@@ -3331,6 +3330,7 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 }
 
 func (d *portworx) WaitForReplicationToComplete(vol *torpedovolume.Volume, replFactor int64, replicationUpdateTimeout time.Duration) error {
+	log.InfoD("Setting volume [%s/%s] ReplicationUpdateTimeout to %s-%v\n", vol.Name, vol.ID, replicationUpdateTimeout, replicationUpdateTimeout)
 	volumeName := d.schedOps.GetVolumeName(vol)
 	volDriver := d.getVolDriver()
 	volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
