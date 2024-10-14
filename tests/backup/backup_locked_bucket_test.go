@@ -1292,7 +1292,7 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", Label(TestCaseLabels
 				periodicSchedulePolicyName := fmt.Sprintf("%s-%v-auto-%v", "periodic", RandomString(5), autoDelete)
 				periodicSchedulePolicyUid := uuid.New()
 				periodicSchedulePolicyInterval := int64(15)
-				err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, ctx, true, autoDelete)
+				err = CreateBackupScheduleIntervalPolicy(0, periodicSchedulePolicyInterval, 0, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, ctx, true, autoDelete)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s]", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
 				schedulePolicyNames = append(schedulePolicyNames, periodicSchedulePolicyName)
 			}
@@ -1447,7 +1447,9 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", Label(TestCaseLabels
 					for _, clusterName := range []string{SourceClusterName, DestinationClusterName} {
 						restoreName := fmt.Sprintf("%s-restore-%v-%s", backupName, time.Now().Unix(), clusterName)
 						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-						err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), clusterName, clusterUidMap[clusterName], BackupOrgID, appContextsToBackup)
+						clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", clusterName))
+						err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), clusterName, clusterUid, BackupOrgID, appContextsToBackup)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
 						restoreNames = append(restoreNames, restoreName)
 					}
@@ -1462,7 +1464,8 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", Label(TestCaseLabels
 			for _, customUser := range userNames {
 				ctx, err := backup.GetNonAdminCtx(customUser, CommonPassword)
 				log.FailOnError(err, "failed to fetch user %s ctx", customUser)
-
+				clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 				for backupLocationUID, backupLocationName := range BackupLocationMap {
 					for _, schedulePolicyName := range schedulePolicyNames {
 						userScheduleName := fmt.Sprintf("backup-schedule-%v-%s", time.Now().Unix(), backupLocationName)
@@ -1470,7 +1473,7 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", Label(TestCaseLabels
 						postRuleUid, _ := Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleName)
 						periodicSchedulePolicyUid, err := Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, schedulePolicyName)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Getting schedulepolicy object for  - %s", schedulePolicyName))
-						_, err = CreateScheduleBackupWithValidation(ctx, userScheduleName, SourceClusterName, clusterUidMap[SourceClusterName], backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schedulePolicyName, periodicSchedulePolicyUid)
+						_, err = CreateScheduleBackupWithValidation(ctx, userScheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schedulePolicyName, periodicSchedulePolicyUid)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", schedulePolicyName))
 						scheduleList = append(scheduleList, userScheduleName)
 					}
@@ -1491,7 +1494,9 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", Label(TestCaseLabels
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 					for _, clusterName := range []string{SourceClusterName, DestinationClusterName} {
 						restoreName := fmt.Sprintf("%s-restore-%v-%s", firstScheduleBackupName, time.Now().Unix(), clusterName)
-						err = CreateRestoreWithValidation(ctx, restoreName, firstScheduleBackupName, make(map[string]string), make(map[string]string), clusterName, clusterUidMap[clusterName], BackupOrgID, appContextsToBackup)
+						clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", clusterName))
+						err = CreateRestoreWithValidation(ctx, restoreName, firstScheduleBackupName, make(map[string]string), make(map[string]string), clusterName, clusterUid, BackupOrgID, appContextsToBackup)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
 						restoreNames = append(restoreNames, restoreName)
 					}

@@ -6785,20 +6785,34 @@ func GetAllRestoresForUser(username string, password string) ([]string, error) {
 // CreateBackupScheduleIntervalPolicy create periodic schedule policy with given context.
 func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCount uint64, periodicSchedulePolicyName string, periodicSchedulePolicyUid string, OrgID string, ctx context1.Context, ObjectLock bool, AutoDeleteForObjectLock bool) (err error) {
 	backupDriver := Inst().Backup
-	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  periodicSchedulePolicyName,
-			Uid:   periodicSchedulePolicyUid,
-			OrgId: OrgID,
-		},
+	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{}
+	if ObjectLock {
+		schedulePolicyCreateRequest = &api.SchedulePolicyCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  periodicSchedulePolicyName,
+				Uid:   periodicSchedulePolicyUid,
+				OrgId: OrgID,
+			},
 
-		SchedulePolicy: &api.SchedulePolicyInfo{
-			Interval:      &api.SchedulePolicyInfo_IntervalPolicy{Retain: retian, Minutes: intervalMins, IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{Count: incrCount}},
-			ForObjectLock: ObjectLock,
-			AutoDelete:    AutoDeleteForObjectLock,
-		},
+			SchedulePolicy: &api.SchedulePolicyInfo{
+				Interval:      &api.SchedulePolicyInfo_IntervalPolicy{Minutes: intervalMins},
+				ForObjectLock: ObjectLock,
+				AutoDelete:    AutoDeleteForObjectLock,
+			},
+		}
+	} else {
+		schedulePolicyCreateRequest = &api.SchedulePolicyCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  periodicSchedulePolicyName,
+				Uid:   periodicSchedulePolicyUid,
+				OrgId: OrgID,
+			},
+
+			SchedulePolicy: &api.SchedulePolicyInfo{
+				Interval: &api.SchedulePolicyInfo_IntervalPolicy{Retain: retian, Minutes: intervalMins, IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{Count: incrCount}},
+			},
+		}
 	}
-
 	_, err = backupDriver.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
 	if err != nil {
 		return
