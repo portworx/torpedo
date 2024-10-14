@@ -9,7 +9,6 @@ import (
 
 var (
 	client                       *testrail.Client
-	runIDs                       []int
 	testRailConnectionSuccessful bool
 	// MilestoneName for testrail
 	MilestoneName string
@@ -95,7 +94,6 @@ func AddRunsToMilestone(testrailID int) int {
 		MilestoneID: []int{MilestoneNameToID[MilestoneName]},
 	}
 	runID := getRunID(PwxProjectID, RunName, filter)
-	runIDs = append(runIDs, runID)
 	if runID == 0 {
 		log.Debugf("Creating run %s for milestone", RunName)
 		includeAll := false
@@ -143,6 +141,7 @@ func AddRunsToMilestone(testrailID int) int {
 
 // AddRunsToMilestones Adds a run to the milestones provided as comma separated values
 func AddRunsToMilestones(testrailID int) []int {
+	runIDs := make([]int, 0)
 	if !testRailConnectionSuccessful {
 		return nil
 	}
