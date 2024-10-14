@@ -11647,3 +11647,24 @@ func TimeTakenToDeleteListOfAllScheduleBackupObjects(ctx context1.Context, sched
 	TimeTakenToDeleteAllScheduleBackups := ScheduleBackupDeleteEndTime.Sub(ScheduleBackupDeleteStartTime).String()
 	return TimeTakenToDeleteAllScheduleBackups, nil
 }
+
+// ValidatePxBackupIsReady validates if px-backup is ready by checking the version string
+func ValidatePxBackupIsReady() error {
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		_, err := Inst().Backup.GetPxBackupVersion(ctx, &api.VersionGetRequest{})
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get px-backup version string, error [%s]", err.Error())
+		}
+		log.Infof(fmt.Sprintf("fetched px-backup version %s", PxBackupVersion))
+		return nil, false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to verify px-backup is ready %v", err)
+	}
+	return nil
+}

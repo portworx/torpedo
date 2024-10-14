@@ -1534,6 +1534,8 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", Labe
 			log.FailOnError(err, "Validating if the px_backup pod is ready")
 			log.Infof("Number of px-backup pods in Ready state are %v", backupDeployment.Status.ReadyReplicas)
 			dash.VerifyFatal(backupDeployment.Status.ReadyReplicas == originalReplicaCount, true, "Verifying if the px-backup pod is in Ready state")
+			err = ValidatePxBackupIsReady()
+			dash.VerifyFatal(err, nil, "Validating px-backup pod is ready")
 		})
 		Step("Check if backup is successful after px-backup deployment is scaled back to original replica", func() {
 			log.InfoD("Check if backup is successful after px-backup deployment is scaled back to original replica")
@@ -1587,6 +1589,8 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", Labe
 			log.FailOnError(err, "Validating if the px_backup pod is ready")
 			log.Infof("Number of px_backup pod in Ready state are %v", backupDeployment.Status.ReadyReplicas)
 			dash.VerifyFatal(backupDeployment.Status.ReadyReplicas == originalReplicaCount, true, "Verifying that px_backup pod is in Ready state")
+			err = ValidatePxBackupIsReady()
+			dash.VerifyFatal(err, nil, "Validating px-backup pod is ready")
 		})
 		Step("Check if restore is successful after px_backup deployment is scaled back to original replica", func() {
 			log.InfoD("Check if restore is successful after px_backup deployment is scaled back to original replica")
