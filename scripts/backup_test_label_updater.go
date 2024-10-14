@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/csv"
+	"flag"
 	"fmt"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests/backup"
@@ -13,30 +14,52 @@ import (
 	"strings"
 )
 
-// updateTestCaseLabelsMap updates the TestCaseLabelsMap
-func updateTestCaseLabelsMap(testCaseName tests.TestCaseName, newLabel tests.TestCaseLabel) {
-	log.Infof("Updating test case labels map for test case: %s, label: %s", testCaseName, newLabel)
+// updateTestCaseLabelsMap updates or deletes the TestCaseLabelsMap
+func updateTestCaseLabelsMap(testCaseName tests.TestCaseName, newLabels []tests.TestCaseLabel, delete bool) {
+	log.Infof("Updating test case labels map for test case: %s, labels: %v", testCaseName, newLabels)
 	if labels, exists := tests.TestCaseLabelsMap[testCaseName]; exists {
-		for _, label := range labels {
-			if label == newLabel {
-				log.Infof("Label already exists, no need to add")
-				// Label already exists, no need to add
-				return
+		if delete {
+			for _, newLabel := range newLabels {
+				for i, label := range labels {
+					if label == newLabel {
+						// Remove the label
+						tests.TestCaseLabelsMap[testCaseName] = append(labels[:i], labels[i+1:]...)
+						log.Infof("Label %s removed from the test case", newLabel)
+						break
+					}
+				}
 			}
+			log.Infof("Updated labels: %v", tests.TestCaseLabelsMap[testCaseName])
+		} else {
+			for _, newLabel := range newLabels {
+				exists := false
+				for _, label := range labels {
+					if label == newLabel {
+						exists = true
+						break
+					}
+				}
+				if !exists {
+					// Append the new label
+					tests.TestCaseLabelsMap[testCaseName] = append(tests.TestCaseLabelsMap[testCaseName], newLabel)
+					log.Infof("Label %s added to the test case", newLabel)
+				}
+			}
+			log.Infof("Updated labels: %v", tests.TestCaseLabelsMap[testCaseName])
 		}
-		// Append the new label
-		tests.TestCaseLabelsMap[testCaseName] = append(labels, newLabel)
-		log.Infof("Label added to the test case")
-		log.Infof("Updated labels: %v", tests.TestCaseLabelsMap[testCaseName])
 	} else {
-		log.Infof("Test case not found, adding new test case with the label")
-		// Add the new test case with the label
-		tests.TestCaseLabelsMap[testCaseName] = []tests.TestCaseLabel{newLabel}
+		if delete {
+			log.Infof("Test case not found, nothing to delete")
+		} else {
+			log.Infof("Test case not found, adding new test case with the labels")
+			// Add the new test case with the labels
+			tests.TestCaseLabelsMap[testCaseName] = newLabels
+		}
 	}
 }
 
 // updateMapFromCSV updates the global TestCaseLabelsMap based on the CSV file provided
-func updateMapFromCSV(csvFile string) error {
+func updateMapFromCSV(csvFile string, delete bool) error {
 	file, err := os.Open(csvFile)
 	if err != nil {
 		return err
@@ -51,12 +74,12 @@ func updateMapFromCSV(csvFile string) error {
 
 	for _, record := range records {
 		log.Infof("Record from csv: %v", record)
-		if len(record) != 2 {
+		if len(record) < 2 {
 			return fmt.Errorf("invalid record: %v", record)
 		}
 		testCaseName := record[0]
-		newLabel := record[1]
-		updateTestCaseLabelsMap(testCaseName, newLabel)
+		newLabels := record[1:]
+		updateTestCaseLabelsMap(testCaseName, newLabels, delete)
 	}
 	return nil
 }
@@ -126,27 +149,24 @@ func writeUpdatedMapToFile(filename, labelFilePath string) error {
 }
 
 func main() {
-	if len(os.Args) < 3 {
-		log.Infof("Usage: go run backup_test_label_updater.go <input.csv> <output.go> [label_file.go]")
+	inputFile := flag.String("inputfile", "", "Path to the input CSV file")
+	outputFile := flag.String("outputfile", "", "Path to the output Go file")
+	labelFile := flag.String("labelfile", "../tests/backup/backup_test_labels.go", "Path to the label file")
+	deleteFlag := flag.Bool("delete", false, "Delete the label from the test case")
+	flag.Parse()
+
+	if *inputFile == "" || *outputFile == "" {
+		log.Infof("Usage: go run backup_test_label_updater.go --inputfile=/path/to/input.csv --outputfile=/path/to/output.go [--labelfile=/path/to/label_file.go] [--delete]")
 		return
 	}
 
-	inputCSV := os.Args[1]
-	outputFile := os.Args[2]
-	// Default value
-	labelFilePath := "../tests/backup/backup_test_labels.go"
-
-	if len(os.Args) >= 4 {
-		labelFilePath = os.Args[3]
-	}
-
-	err := updateMapFromCSV(inputCSV)
+	err := updateMapFromCSV(*inputFile, *deleteFlag)
 	if err != nil {
 		log.Infof("Error updating map from CSV: %v\n", err)
 		return
 	}
 
-	err = writeUpdatedMapToFile(outputFile, labelFilePath)
+	err = writeUpdatedMapToFile(*outputFile, *labelFile)
 	if err != nil {
 		log.Infof("Error writing updated map to file: %v\n", err)
 		return
