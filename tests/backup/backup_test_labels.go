@@ -148,6 +148,7 @@ const (
 	TimeTakenToDeleteBackupWithHeavyLoad                                               TestCaseName = "TimeTakenToDeleteBackupWithHeavyLoad"
 	BackupShare                                                                        TestCaseName = "BackupShare"
 	TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheSchedule             TestCaseName = "TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheSchedule"
+	ValidateUserAccessLevel                                                            TestCaseName = "ValidateUserAccessLevel"
 )
 
 // Test case labels
@@ -293,6 +294,7 @@ const (
 	SuperAdminBackupShareLabel                                                              TestCaseLabel = "SuperAdminBackupShare"
 	TimeTakenToDeleteBackupWithHeavyLoadLabel                                               TestCaseLabel = "TimeTakenToDeleteBackupWithHeavyLoad"
 	TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheScheduleLabel             TestCaseLabel = "TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheSchedule"
+	ValidateUserAccessLevelLabel                                                            TestCaseLabel = "ValidateUserAccessLevel"
 )
 
 // Common Labels
@@ -577,6 +579,7 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	UpgradePxBackup:                                                                    {UpgradePxBackupLabel, SystemTest, PxBackupLabel},
 	UserGroupManagement:                                                                {UserGroupManagementLabel, SystemTest, PxBackupLabel, S3BackupLocationLabel, FACDLabel, PxLabel, FADALabel},
 	ValidateFiftyVolumeBackups:                                                         {ValidateFiftyVolumeBackupsLabel, vanillaPipeline, ScaleTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	ValidateUserAccessLevel:                                                            {ValidateUserAccessLevelLabel},
 	VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules:                        {VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day0LockedBucketLabel, S3LockedBucket, AzureImmutableBucket},
 	VerifyBackupDeletionWhenRetentionIsMet:                                             {VerifyBackupDeletionWhenRetentionIsMetLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day0LockedBucketLabel, S3LockedBucket, AzureImmutableBucket},
 	VerifyRBACForAppAdmin:                                                              {VerifyRBACForAppAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel, gkePipeline},
