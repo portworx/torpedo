@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bufio"
+	"bytes"
 	context1 "context"
 	"crypto/tls"
 	"encoding/base64"
@@ -10,6 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"io/ioutil"
 	"maps"
 	"math"
@@ -25,11 +27,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/portworx/torpedo/drivers/applications/databases"
 
 	"cloud.google.com/go/storage"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/Masterminds/semver/v3"
 	"github.com/aws/aws-sdk-go/aws"
@@ -15142,4 +15146,123 @@ func GetVolumeBytesUsed(vol *volume.Volume) (string, error) {
 	}
 	output = strings.Split(strings.TrimSpace(output), ":")[1]
 	return strings.TrimSpace(output), nil
+}
+
+// GetAllBlobObjects Get a list of all the objects
+func GetAllBlobObjects(containerName string) (*azblob.ListBlobsFlatSegmentResponse, error) {
+	_, _, _, _, _, safeAccountLevelSA, safeAccountLevelSAKey := GetAzureImmutabilityCredsFromEnv()
+	azureEndpoint := os.Getenv("AZURE_ENDPOINT")
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", safeAccountLevelSA, containerName)
+	if azureEndpoint == AzureChinaEndpoint {
+		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn/%s", safeAccountLevelSA, containerName)
+	}
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse URL [%v]: %v", urlStr, err)
+	}
+
+	// Create credential for container and blob operations
+	credential, err := azblob.NewSharedKeyCredential(safeAccountLevelSA, safeAccountLevelSAKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create container URL for listing blobs
+	containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
+	ctx := context1.Background()
+
+	// List blobs, including directories (prefixes)
+	// List blobs with hierarchy (prefix support for virtual directories)
+	listBlob, err := containerURL.ListBlobsFlatSegment(ctx, azblob.Marker{}, azblob.ListBlobsSegmentOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return listBlob, nil
+}
+
+// RestoreContainer restores a container which is marked for soft deletion
+func RestoreContainer(containerName string) error {
+	_, _, _, _, _, safeAccountLevelSA, safeAccountLevelSAKey := GetAzureImmutabilityCredsFromEnv()
+	azureRegion := os.Getenv("AZURE_ENDPOINT")
+
+	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net", safeAccountLevelSA)
+	if azureRegion == "CHINA" {
+		urlStr = fmt.Sprintf("https://%s.blob.core.chinacloudapi.cn", safeAccountLevelSA)
+	}
+	log.Infof("Restore container for the following URL url %s", urlStr)
+	credential, err := container.NewSharedKeyCredential(safeAccountLevelSA, safeAccountLevelSAKey)
+	if err != nil {
+		return err
+	}
+	client, err := service.NewClientWithSharedKeyCredential(urlStr, credential, &service.ClientOptions{})
+	if err != nil {
+		return err
+	}
+	pager := client.NewListContainersPager(&service.ListContainersOptions{
+		Include: service.ListContainersInclude{Deleted: true},
+	})
+	for pager.More() {
+		resp, err := pager.NextPage(context1.Background())
+		if err != nil {
+			return err
+		}
+		for _, container := range resp.ContainerItems {
+			if *container.Name == containerName && *container.Deleted {
+				// Restore the deleted container
+				_, err = client.RestoreContainer(context1.Background(), containerName, *container.Version, nil)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// RestoreObjects restores a set of objects which are marked for soft deletion, including blobs within directories
+func RestoreObjects(containerName string) error {
+	tenantID, clientID, clientSecret, _, _, _ := GetAzureCredsFromEnv()
+	_, _, _, _, _, accountName, accountKey := GetAzureImmutabilityCredsFromEnv()
+	azureEndpoint := os.Getenv("AZURE_ENDPOINT")
+	cmd := fmt.Sprintf("az login --service-principal --username %s --password %s --tenant %s",
+		clientID, clientSecret, tenantID)
+	_, _, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return err
+	}
+	endpoint := "blob.core.windows.net"
+	if azureEndpoint == "CHINA" {
+		cmd = fmt.Sprintf("az cloud set --name AzureChinaCloud")
+		_, _, err = osutils.ExecShell(cmd)
+		if err != nil {
+			return err
+		}
+		endpoint = "blob.core.chinacloudapi.cn"
+	}
+	blobListCommandTemplate := `az storage blob list --account-name {{.AccountName}} --account-key {{.AccountKey}} --container-name {{.ContainerName}} --include div --output json | jq -r '.[] | select(.deleted == true and (.name | startswith("px-backup") | not)) | [.name, .versionId] | @tsv' | while IFS=$'\t' read -r blobName versionId; do echo "Restoring $blobName with version ID $versionId"; az storage blob undelete --account-name {{.AccountName}} --account-key {{.AccountKey}} -c {{.ContainerName}} -n "$blobName";az storage blob copy start --account-name {{.AccountName}} --account-key {{.AccountKey}} --destination-container {{.ContainerName}} --destination-blob "$blobName" --source-uri "https://{{.AccountName}}.{{.EndPoint}}/{{.ContainerName}}/$blobName?versionId=$versionId"; done`
+	data := struct {
+		AccountName   string
+		AccountKey    string
+		ContainerName string
+		EndPoint      string
+	}{
+		AccountName:   accountName,
+		AccountKey:    accountKey,
+		ContainerName: containerName,
+		EndPoint:      endpoint,
+	}
+	tmpl, err := template.New("blobListCommand").Parse(blobListCommandTemplate)
+	if err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return err
+	}
+	_, _, err = osutils.ExecShell(buf.String())
+	if err != nil {
+		return err
+	}
+	return nil
 }

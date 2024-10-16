@@ -8184,6 +8184,25 @@ func GetCreationTimestamp(ctx context1.Context, backupName string, orgID string)
 	return backupRetentionTimestamp, nil
 }
 
+// GetBackupNamespaces gets a list of namespaces in a give backup
+func GetBackupNamespaces(ctx context1.Context, backupName string, orgID string) ([]string, error) {
+	backupDriver := Inst().Backup
+	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch backup - %s : error [%v]", backupName, err)
+	}
+	bkpInspectReq := &api.BackupInspectRequest{
+		Name:  backupName,
+		OrgId: orgID,
+		Uid:   bkpUid,
+	}
+	bkpInspectResponse, err := backupDriver.InspectBackup(ctx, bkpInspectReq)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch backup - %s : error [%v]", backupName, err)
+	}
+	return bkpInspectResponse.GetBackup().Namespaces, nil
+}
+
 // IsRetentionTimestampUpdated check if the retention timestamp is updated or not
 func IsRetentionTimestampUpdated(ctx context1.Context, backupName string, orgID string, oldtimeStamp *types.Timestamp) (bool, error) {
 	backupRetentionTimestamp, err := GetRetentionTimeStamp(ctx, backupName, orgID)

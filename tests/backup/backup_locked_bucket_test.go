@@ -2,12 +2,11 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/torpedo/drivers"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/portworx/sched-ops/k8s/storage"
-	"github.com/portworx/torpedo/drivers"
 
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"golang.org/x/sync/errgroup"
@@ -2430,6 +2429,364 @@ var _ = Describe("{DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSched
 				}
 			}
 		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest([]*scheduler.Context{})
+	})
+})
+
+// SoftDeleteAndRecoverBackupOnContainerAndBlobLevel soft delete and recover backup on container and blob level
+var _ = Describe("{SoftDeleteAndRecoverBackupOnContainerAndBlobLevel}", Label(TestCaseLabelsMap[SoftDeleteAndRecoverBackupOnContainerAndBlobLevel]...), func() {
+	var (
+		preRuleNameList      []string
+		postRuleNameList     []string
+		backupNames          []string
+		scheduledAppContexts []*scheduler.Context
+		backupLocation       string
+		preRuleUid           string
+		preRule              string
+		postRuleUid          string
+		postRule             string
+		appList              []string
+		cloudCredential      map[Mode]AzureCredential
+		BackupLocationMap    map[string]string
+		bkpNamespaces        []string
+		data                 map[string]string
+		backupNSMap          map[string]string
+		bucketMap            map[string]string
+		err                  error
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("SoftDeleteAndRecoverBackupOnContainerAndBlobLevel", "Verify Soft delete and recover of volume on container and blob level", nil, 300680, Kshithijiyer, Q3FY25)
+
+		log.InfoD("Deploy applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		cloudCredential = make(map[Mode]AzureCredential)
+		BackupLocationMap = make(map[string]string)
+		bkpNamespaces = make([]string, 0)
+		data = make(map[string]string)
+		appList = Inst().AppList
+		backupNSMap = make(map[string]string)
+		bucketMap = make(map[string]string)
+		scale := 2
+		for i := 0; i < scale; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = AppReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+	})
+	It("Verify Soft delete and recover of volume on container and blob level", func() {
+		providers := GetBackupProviders()
+		for _, provider := range providers {
+			if provider == drivers.ProviderAzure {
+				Step("Validate applications", func() {
+					log.InfoD("Validating apps")
+					ValidateApplications(scheduledAppContexts)
+				})
+
+				Step("Creating rules for backup", func() {
+					log.InfoD("Creating pre rule for deployed apps")
+					for i := 0; i < len(appList); i++ {
+						preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], BackupOrgID, "pre")
+						log.FailOnError(err, "Creating pre rule for deployed apps failed")
+						dash.VerifyFatal(preRuleStatus, true, fmt.Sprintf("Verifying pre rule %s for backup", ruleName))
+						if ruleName != "" {
+							preRuleNameList = append(preRuleNameList, ruleName)
+						}
+					}
+
+					log.InfoD("Creating post rule for deployed apps")
+					for i := 0; i < len(appList); i++ {
+						postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], BackupOrgID, "post")
+						log.FailOnError(err, "Creating post rule for deployed apps failed")
+						dash.VerifyFatal(postRuleStatus, true, fmt.Sprintf("Verifying post rule %s for backup", ruleName))
+						if ruleName != "" {
+							postRuleNameList = append(postRuleNameList, ruleName)
+						}
+					}
+					ctx, err := backup.GetAdminCtxFromSecret()
+					log.FailOnError(err, "Fetching px-central-admin ctx")
+					preRuleUid, preRule = "", ""
+					if len(preRuleNameList) > 0 {
+						preRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleNameList[0])
+						log.FailOnError(err, "Fetching pre backup rule [%s] uid", preRuleNameList[0])
+						preRule = preRuleNameList[0]
+					}
+					postRuleUid, postRule = "", ""
+					if len(postRuleNameList) > 0 {
+						postRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleNameList[0])
+						log.FailOnError(err, "Fetching post backup rule [%s] uid", postRuleNameList[0])
+						postRule = postRuleNameList[0]
+					}
+				})
+
+				Step("Creating cloud credentials", func() {
+					log.InfoD("Creating cloud credentials")
+					ctx, err := backup.GetAdminCtxFromSecret()
+					log.FailOnError(err, "Fetching px-central-admin ctx")
+					for _, provider := range providers {
+						cloudCredential, err = CreateAzureCredentialsForImmutableBackupLocations(ctx, true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, BackupOrgID, provider))
+					}
+				})
+
+				Step("Creating a locked bucket and backup location", func() {
+					log.InfoD("Creating locked buckets and backup location")
+					for _, provider := range providers {
+						bucketMap, err = CreateLockedBucket(provider, 3, true)
+						dash.VerifyFatal(err, nil, "Check if locked buckets are created or not")
+						bucketName := bucketMap[string(SOFT_SA_LEVEL)]
+						lockedCredName := cloudCredential[SOFT_SA_LEVEL].CredName
+						lockedCredUid := cloudCredential[SOFT_SA_LEVEL].CredUID
+						backupLocation = fmt.Sprintf("%s-%s-lock-%v", getGlobalLockedBucketName(provider), strings.Split(string(SOFT_SA_LEVEL), "_")[0], time.Now().Unix())
+						BackupLocationUID = uuid.New()
+						err = CreateAzureBackupLocation(backupLocation, BackupLocationUID, lockedCredName, lockedCredUid, bucketName, BackupOrgID, true, true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+						BackupLocationMap[BackupLocationUID] = backupLocation
+					}
+					log.InfoD("Successfully created locked buckets and backup location")
+				})
+
+				Step("Adding Clusters for backup", func() {
+					log.InfoD("Adding Clusters for backup")
+					ctx, err := backup.GetAdminCtxFromSecret()
+					log.FailOnError(err, "Fetching px-central-admin ctx")
+					err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating source - %s and destination - %s clusters", SourceClusterName, DestinationClusterName))
+					for _, cluster := range []string{SourceClusterName, DestinationClusterName} {
+						clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, cluster, ctx)
+						log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", cluster))
+						dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", cluster))
+						_, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, cluster)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", cluster))
+					}
+				})
+
+				Step("Taking backup of all the namespaces created", func() {
+					log.InfoD("Taking backup of all the namespaces created")
+					ctx, err := backup.GetAdminCtxFromSecret()
+					log.FailOnError(err, "Fetching px-central-admin ctx")
+					var wg sync.WaitGroup
+					var mutex sync.Mutex
+					var sem = make(chan struct{}, 10)
+					labelSelectors := make(map[string]string)
+					sourceClusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", sourceClusterUid))
+					for backupLocationUID, backupLocationName := range BackupLocationMap {
+						for _, namespace := range bkpNamespaces {
+							wg.Add(1)
+							sem <- struct{}{}
+							backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, RandomString(10))
+							go func(namespace, backupLocationName, backupLocationUID string) {
+								defer wg.Done()
+								defer GinkgoRecover()
+								defer func() { <-sem }()
+
+								appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+								err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, sourceClusterUid, preRule, preRuleUid, postRule, postRuleUid)
+								dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] of namespace [%s]", backupName, namespace))
+
+								mutex.Lock()
+								backupNames = append(backupNames, backupName)
+								backupNSMap[backupName] = namespace
+								mutex.Unlock()
+							}(namespace, backupLocationName, backupLocationUID)
+						}
+					}
+					wg.Wait()
+				})
+
+			} else {
+				Step(fmt.Sprintf("Skip the test for provider %s", provider), func() {
+					log.InfoD("Skipping the test for provider %s as it's Azure specific", provider)
+				})
+			}
+		}
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		log.InfoD("Dump info in configmap")
+		data["backups"] = strings.Join(backupNames, ",")
+		data["buckets"] = strings.Join([]string{fmt.Sprintf("%v", bucketMap[string(SOFT_SA_LEVEL)])}, ",")
+		data["namespaces"] = strings.Join(bkpNamespaces, ",")
+		err := UpdateConfigmap(strings.ToLower("SoftDeleteAndRecoverBackupOnContainerAndBlobLevel"), data)
+		dash.VerifyFatal(err, nil, "Updating configmap with first test data")
+
+		// The test has followed by test DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel hence there will be no cleanup
+	})
+})
+
+var _ = Describe("{DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel}", Label(TestCaseLabelsMap[DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel]...), func() {
+	var (
+		backups []string
+		//	buckets []string
+		//	bkpNamespaces       []string
+		storageClassMapping map[string]string
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules", "Verify Soft delete and recover on container and blob level", nil, 300680, Kshithijiyer, Q3FY25)
+		k8sCore := core.Instance()
+		configmap, err := k8sCore.GetConfigMap(strings.ToLower("SoftDeleteAndRecoverBackupOnContainerAndBlobLevel"), defaultTorpedoNamespace)
+		dash.VerifySafely(err, nil, "Fetching configmap")
+		backups = strings.Split(configmap.Data["backups"], ",")
+		//	buckets = strings.Split(configmap.Data["buckets"], ",")
+		//bkpNamespaces = strings.Split(configmap.Data["namespaces"], ",")
+		storageClassMapping = make(map[string]string)
+
+	})
+	It("Verify SoftDeleteAndRecoverBackupOnContainerAndBlobLevel case", func() {
+		/*Step("Create new storage class for restore", func() {
+			log.InfoD("Getting storage class of the destination cluster")
+			err := SetDestinationKubeConfig()
+			dash.VerifyFatal(err, nil, "Setting destination kubeconfig")
+			pvcs, err := core.Instance().GetPersistentVolumeClaims(bkpNamespaces[0], make(map[string]string))
+			log.FailOnError(err, "Getting PVC on source cluster")
+			for _, singlePvc := range pvcs.Items {
+				storageClass, err := core.Instance().GetStorageClassForPVC(&singlePvc)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting SC %v from PVC in source cluster",
+					storageClass.Name))
+				oldScName := storageClass.Name
+				storageClass.Name += "-new-sc"
+				_, err = storage.Instance().CreateStorageClass(storageClass)
+				log.FailOnError(err, "Creating sc on dest cluster")
+				storageClassMapping[oldScName] = storageClass.Name
+			}
+			err = SetSourceKubeConfig()
+			dash.VerifyFatal(err, nil, "Setting source kubeconfig")
+		})
+		Step("Attempt delete of container and backups once the retention is met", func() {
+			log.InfoD("Delete objects from both buckets")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "failed to fetch px-admin ctx")
+			for _, backup := range backups {
+				backupUID, err := Inst().Backup.GetBackupUID(ctx, backup, BackupOrgID)
+				log.FailOnError(err, "Failed while trying to get backup UID for - %s", backup)
+				_, err = DeleteBackup(backup, backupUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s from the backup cluster", backup))
+			}
+			log.InfoD("Wait for blobs to be deleted")
+			time.Sleep(10 * time.Minute)
+		})
+
+		Step("Recover backups deleted earlier", func() {
+			log.InfoD("Recover container and backups deleted earlier")
+			log.InfoD("Recovering the objects from the backend")
+			for _, i := range []int{0} {
+				err := RestoreObjects(buckets[i])
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring objects of container %s", buckets[i]))
+			}
+		})
+
+		Step("Check if all backups are synced or not", func() {
+			log.InfoD("Check if backups created before are synced or not")
+
+			// Wait for backups to get synced
+			checkBackupSync := func() (interface{}, bool, error) {
+				fetchedBackupNames, err := GetAllBackupsAdmin()
+				// Debug lines tobe removed in the next patch with the fix
+				log.InfoD(fmt.Sprintf("The list of backups fetched %s", fetchedBackupNames))
+				if err != nil {
+					return "", true, fmt.Errorf("unable to fetch backups. Error: %s", err.Error())
+				}
+				if len(fetchedBackupNames) == len(backups) {
+					return "", false, nil
+				}
+				return "", true, fmt.Errorf("expected: %d and actual: %d", len(backups), len(fetchedBackupNames))
+			}
+			_, err := DoRetryWithTimeoutWithGinkgoRecover(checkBackupSync, 100*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Wait for BackupSync to complete")
+			fetchedBackupNames, err := GetAllBackupsAdmin()
+			log.FailOnError(err, "Getting a list of all backups")
+
+			// Iterating through all backup and check if they are present in the fetched backup list or not
+			listOfFetchedBackups := strings.Join(fetchedBackupNames, "")
+			for _, backup := range backups {
+				re := regexp.MustCompile(fmt.Sprintf("%s-*", backup))
+				dash.VerifyFatal(re.MatchString(listOfFetchedBackups), true, fmt.Sprintf("Checking if backup [%s] was synced or not", backup))
+			}
+
+			var bkp *api.BackupObject
+			backupDriver := Inst().Backup
+			bkpEnumerateReq := &api.BackupEnumerateRequest{
+				OrgId: BackupOrgID}
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+			for _, bkp = range curBackups.GetBackups() {
+				backupInspectRequest := &api.BackupInspectRequest{
+					Name:  bkp.Name,
+					Uid:   bkp.Uid,
+					OrgId: BackupOrgID,
+				}
+				resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+				log.FailOnError(err, "Inspect each backup from list")
+				actual := resp.GetBackup().GetStatus().Status
+				expected := api.BackupInfo_StatusInfo_Success
+				dash.VerifyFatal(actual, expected, fmt.Sprintf("Check each backup for success status %s", bkp.Name))
+			}
+		})*/
+
+		Step("Restore backups from restored backup to same cluster with NS mapping", func() {
+			log.InfoD("Restore backups from undeleted container to same cluster with NS mapping")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "failed to fetch px-admin ctx")
+			backups, err = GetAllBackupsAdmin()
+			dash.VerifyFatal(err, nil, "Fetching all backups")
+			for _, backup := range backups {
+				nsMapping := make(map[string]string)
+				namespaces, err := GetBackupNamespaces(ctx, backup, BackupOrgID)
+				dash.VerifyFatal(err, nil, "Fetching namespaces from backup")
+				for _, namespace := range namespaces {
+					nsMapping[namespace] = fmt.Sprintf("%s-soft-deleted", namespace)
+				}
+				restoreName := fmt.Sprintf("%s-%s-%s", backup, "restored", RandomString(5))
+				sourceClusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+				err = CreateRestore(restoreName, backup, nsMapping, SourceClusterName, sourceClusterUid, BackupOrgID, ctx, make(map[string]string))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
+			}
+		})
+
+		Step("Restore backups from restored backup to destination cluster with NS and storage class mapping", func() {
+			log.InfoD("Restore backups from undeleted container to destination cluster with NS and storage class mapping")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "failed to fetch px-admin ctx")
+			backups, err = GetAllBackupsAdmin()
+			dash.VerifyFatal(err, nil, "Fetching all backups")
+			for _, backup := range backups {
+				nsMapping := make(map[string]string)
+				namespaces, err := GetBackupNamespaces(ctx, backup, BackupOrgID)
+				dash.VerifyFatal(err, nil, "Fetching namespaces from backup")
+				for _, namespace := range namespaces {
+					nsMapping[namespace] = fmt.Sprintf("%s-soft-deleted", namespace)
+				}
+				restoreName := fmt.Sprintf("%s-%s-%s", backup, "restored", RandomString(5))
+				destinationClusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+				err = CreateRestore(restoreName, backup, nsMapping, DestinationClusterName, destinationClusterUid, BackupOrgID, ctx, storageClassMapping)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
+			}
+		})
+
+		Step("Restore backups from restored backup container with default values", func() {
+			log.InfoD("Restore backups from restored backup container with default values")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "failed to fetch px-admin ctx")
+			backups, err = GetAllBackupsAdmin()
+			dash.VerifyFatal(err, nil, "Fetching all backups")
+			for _, backup := range backups {
+				restoreName := fmt.Sprintf("%s-%s-%s", backup, "restored", RandomString(5))
+				err = CreateRestoreWithReplacePolicy(restoreName, backup, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating retore with default parameters %s", restoreName))
+			}
+		})
+
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest([]*scheduler.Context{})
