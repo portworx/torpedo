@@ -3,9 +3,26 @@ package tests
 import (
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"path/filepath"
+
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	v12 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/sched-ops/k8s/storage"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
+	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
+
+	"github.com/devans10/pugo/flasharray"
+	"github.com/ghodss/yaml"
+	"github.com/google/uuid"
+	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/sched-ops/k8s/core"
+
+	"math/rand"
 	"regexp"
 	"sort"
 	"strconv"
@@ -13,21 +30,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/devans10/pugo/flasharray"
-	"github.com/ghodss/yaml"
-	"github.com/google/uuid"
-	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	"github.com/libopenstorage/openstorage/api"
-	v12 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s/batch"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/sched-ops/k8s/storage"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/pkg/log"
@@ -8293,6 +8296,156 @@ var _ = Describe("{ValidateFBDAPodsWithHostInterfaceDown}", func() {
 	})
 	JustAfterEach(func() {
 		EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{SpaceReclaimed}", func() {
+	/*
+	   https://portworx.testrail.net/index.php?/cases/view/298122
+	   https://purestorage.atlassian.net/browse/HAZEL-743
+
+	   /*
+	   https://purestorage.atlassian.net/browse/HAZEL-738
+	   1.create volume
+	   2.Attach volume
+	   3.Get pool on which volume is attached
+	   4.Get pool used size
+	   5.Do some IO's on created volume and wait for 30 min
+	   6.Get pool used size after ios and compare it with intial size
+	   7.Delete the created volume
+	   8.verify space reclaimed or not
+
+	*/
+
+	var (
+		selectedNode                                                      node.Node
+		poolUsedSize, poolUsedSizeAfterIos, poolUsedSizeAfterVolumeDelete uint64
+		volumeName                                                        = fmt.Sprintf("fioVol-%d", time.Now().Unix())
+		poolUUID, volumeId                                                string
+		volume                                                            *api.Volume
+		selectedPool                                                      *api.StoragePool
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("SpaceReclaimed", "space reclaimed from volume delete", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	itLog := "SpaceReclaimed"
+	It(itLog, func() {
+		stepLog = fmt.Sprintf("create volume [%v]", volumeName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volCreateRequest := &api.SdkVolumeCreateRequest{
+				Name: volumeName,
+				Spec: &api.VolumeSpec{
+					Size:      6368709120,
+					HaLevel:   int64(rand.Intn(3-1) + 1),
+					Format:    api.FSType_FS_TYPE_EXT4,
+					Nodiscard: true,
+
+					AutoFstrim: true,
+				}}
+			t := func() (interface{}, bool, error) {
+				out, err := Inst().V.CreateVolumeUsingRequest(volCreateRequest)
+				return out, true, err
+			}
+
+			out, err := task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+			log.FailOnError(err, fmt.Sprintf("Failed to create volume  [%v]", volumeName))
+
+			volumeId = fmt.Sprintf("%v", out)
+			log.InfoD("volume [%s] created", volumeName)
+		})
+
+		stepLog = fmt.Sprintf("Attach volume [%v]", volumeName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			path, err := Inst().V.AttachVolume(volumeId)
+			log.FailOnError(err, fmt.Sprintf("Failed to attach volume to host [%v]", path))
+			log.InfoD("volume [%s] attached [%v]", volumeName, path)
+		})
+		time.Sleep(2 * time.Minute)
+
+		stepLog = fmt.Sprintf("Get pool on which volume [%v] is attached", volumeName)
+		Step(stepLog, func() {
+			volume, err = Inst().V.InspectVolume(volumeId)
+			log.FailOnError(err, "Failed to inspect volume")
+			log.InfoD(stepLog)
+			poolUUIDs, err := GetPoolIDsFromVolName(volume.Id)
+			log.FailOnError(err, "Failed to get pool uuid from volume [%v]", volumeName)
+			poolUUID = poolUUIDs[0]
+			log.InfoD("selected pool [%v]", poolUUID)
+
+			volumeAttachedNode, err := GetNodeFromIPAddress(volume.GetAttachedOn())
+			log.FailOnError(err, "Failed to get attached node from volume  [%v] [%v] [%v] [%v] ", volumeName, volume.State.SimpleString(), volume.State.String(), volume.GetAttachedOn())
+			selectedNode = *volumeAttachedNode
+			log.InfoD("selected node [%v]", selectedNode.Name)
+		})
+
+		stepLog = fmt.Sprintf("Get pool [%v] used size", poolUUID)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedPool, err = GetStoragePoolByUUID(poolUUID)
+			log.FailOnError(err, "Failed to get pool used size from uuid [%v] ", poolUUID)
+			poolUsedSize = selectedPool.GetUsed()
+			log.InfoD("pool used size  [%d]", poolUsedSize)
+
+		})
+
+		stepLog = fmt.Sprintf("Do some IO's on volume  [%v]", volumeName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = writeFioDataToVolume(volumeName, selectedNode, 3)
+			log.FailOnError(err, "Failed to do IOs on volume [%v]", volumeName)
+			log.InfoD("IOs done on volume [%s]", volumeName)
+		})
+
+		time.Sleep(time.Minute * 30)
+
+		stepLog = fmt.Sprint("Get pool used size after ios")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedPool, err = GetStoragePoolByUUID(poolUUID)
+			log.FailOnError(err, "Failed to get pool used size from uuid [%v] ", poolUUID)
+			poolUsedSizeAfterIos = selectedPool.GetUsed()
+			log.InfoD("pool used size after IOs  [%v]", poolUsedSizeAfterIos)
+			if poolUsedSizeAfterIos <= poolUsedSize {
+				log.FailOnError(err, "pool used size is not increased after IOs")
+			}
+		})
+
+		stepLog = fmt.Sprintf("Delete volume")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			unmountCmd := fmt.Sprintf("pxctl host unmount --path %s %s", fmt.Sprintf("/var/lib/osd/mounts/%s", volumeName), volumeName)
+			log.Infof("Running command %s on %s", unmountCmd, selectedNode.Name)
+			_, err = Inst().N.RunCommandWithNoRetry(selectedNode, unmountCmd, node.ConnectionOpts{
+				Timeout:         15 * time.Second,
+				TimeBeforeRetry: 5 * time.Second,
+				Sudo:            true,
+			})
+			log.FailOnError(err, fmt.Sprintf("Failed to unmount volume [%v]", volumeName))
+
+			err = Inst().V.DeleteVolume(volume.Id)
+			log.FailOnError(err, fmt.Sprintf("Failed to delete volume [%v]", volumeName))
+			log.InfoD("volume [%v] deleted", volumeName)
+		})
+		time.Sleep(time.Minute * 3)
+
+		stepLog = fmt.Sprintf("verify space reclaimed or not")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedPool, err = GetStoragePoolByUUID(poolUUID)
+			log.FailOnError(err, "Failed to get pool used size from uuid [%v] ", poolUUID)
+			poolUsedSizeAfterVolumeDelete = selectedPool.GetUsed()
+			log.InfoD("pool size after volume delete [%v]", poolUsedSizeAfterVolumeDelete)
+			dash.VerifyFatal(poolUsedSizeAfterVolumeDelete < poolUsedSizeAfterIos, true, "space reclaimed")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 })
