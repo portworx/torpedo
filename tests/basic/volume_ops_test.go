@@ -26,6 +26,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -3967,6 +3968,222 @@ var _ = Describe("{BringVolumeoutofQuorum}", Label("p0", "negative", "px_ops"), 
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{VerifySanpWhenVolumeDown}", Label("p0", "negative", "px_ops"), func() {
+	/*
+		Ticket ID:https://purestorage.atlassian.net/browse/HAZEL-156
+		Steps:
+		Create volume
+		Write some data
+		Create snapshot schedule
+		Verify snap schedule is working
+		Make volume down
+		Expected:
+		Scheduled snap should not happen.
+	*/
+	var testrailID = 0
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifySanpWhenVolumeDown", "For the volume, create a snapshot schedule, then bring the volume down. Verify that the snapshot should not occur again.", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "For the volume, create a snapshot schedule, then bring the volume down. Verify that the snapshot should not occur again."
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		var (
+			err                     error
+			appVolumes              []*volume.Volume
+			nodeDetails             []node.Node
+			replicaSets             []*opsapi.ReplicaSet
+			nodes                   []string
+			PxserviceNode           node.Node
+			volume                  *volume.Volume
+			snapshotScheduleName    string
+			snapshotNames           []string
+			snapshotNamesVolumedown []string
+		)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volumeout-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+		stepLog := "Get the volume from context, create a snapshot schedule for that volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				appNamespace := ctx.App.Key + "-" + ctx.UID
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					volume = appVolumes[0]
+					log.Infof("selected volume from the context: %v", volume)
+					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+				})
+				stepLog = fmt.Sprintf("create schedule policy for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					policyName := "localintervalpolicy"
+					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+					if err != nil {
+						snapshotInterval := 15
+						log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, snapshotInterval)
+						schedPolicy = &storkv1.SchedulePolicy{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: policyName,
+							},
+							Policy: storkv1.SchedulePolicyItem{
+								Interval: &storkv1.IntervalPolicy{
+									IntervalMinutes: snapshotInterval,
+								},
+							}}
+						_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+						log.FailOnError(err, "Unable to create schedule policy")
+						log.Infof("Waiting for 15 mins for Snapshots to be completed")
+						time.Sleep(15 * time.Minute)
+					} else {
+						log.Infof("schedPolicy is %v already exists", schedPolicy.Name)
+					}
+				})
+				stepLog = "Scheduling snapshot creation for volume"
+				stepLog = fmt.Sprintf("Stop PX on the replica node for app %s", ctx.App.Key)
+				Step(stepLog, func() {
+					replicaSets, err = Inst().V.GetReplicaSets(volume)
+					log.FailOnError(err, "Failed to get Replica Sets for volume : %v", volume)
+					for _, replicaSet := range replicaSets {
+						nodes = append(nodes, replicaSet.Nodes...)
+					}
+
+					for _, nodeID := range nodes {
+						nodeInfo, err := node.GetNodeDetailsByNodeID(nodeID)
+						log.FailOnError(err, "Error getting node details for node [%s]", nodeID)
+						nodeDetails = append(nodeDetails, nodeInfo)
+					}
+					// Stop the PX service on the collected node details
+					log.InfoD("Stopping PX service on nodes: %+v", nodeDetails[:len(nodeDetails)-1])
+					StopVolDriverAndWait(nodeDetails[:len(nodeDetails)-1])
+					log.InfoD("Waiting for 10 minutes for volume to be out of quorum. I/O abort by PX.")
+					time.Sleep(10 * time.Minute)
+					log.InfoD("Successfully stopped PX service on nodes: %+v", nodeDetails[:len(nodeDetails)-1])
+
+				})
+				Step("Check the replica status is not in quorum", func() {
+					log.InfoD("Stopping PX service on nodes: %+v", nodeDetails[len(nodeDetails)-1:])
+					StopVolDriverAndWait(nodeDetails[len(nodeDetails)-1:])
+					log.InfoD("Waiting for 2 minutes after stopping PX service")
+					time.Sleep(2 * time.Minute)
+					log.InfoD("Successfully stopped PX service on nodes: %+v", nodeDetails[len(nodeDetails)-1:])
+					log.InfoD("Starting Px service on nodes: %+v", nodeDetails[:1])
+					StartVolDriverAndWait(nodeDetails[:1])
+					log.InfoD("Successfully start PX service on nodes: %+v", nodeDetails[:1])
+					snapshotScheduleName = volume.Name + "-interval-schedule"
+					snapMap := make(map[storkv1.SchedulePolicyType][]*storkv1.ScheduledVolumeSnapshotStatus)
+					newSnapStatuses, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+					log.FailOnError(err, "Failed to retrieve snapshot schedule")
+					for v, snapshotStatuses := range newSnapStatuses.Status.Items {
+						if len(snapshotStatuses) > 0 {
+							var statuses []*storkv1.ScheduledVolumeSnapshotStatus
+							for _, status := range snapshotStatuses {
+								if status == nil {
+									err := fmt.Errorf("Snapshot not found for volume")
+									log.FailOnError(err, "Failed to find snapshot for the specified volume")
+								}
+								if status.Status == snapv1.VolumeSnapshotConditionReady {
+									statuses = append(statuses, status)
+								}
+							}
+							snapMap[v] = statuses
+						}
+					}
+					for _, snapname := range snapMap["Interval"] {
+						snapshotNames = append(snapshotNames, snapname.Name)
+					}
+					log.Infof("Snapshot before volume down %v", len(snapMap["Interval"]))
+					dash.VerifyFatal(len(snapMap["Interval"]) > 0, true, "validate snapshot is created for that volume ")
+					PxserviceNode = nodeDetails[0]
+					log.InfoD("Volume name :%v", volume)
+					replStatus, err := GetVolumeReplicationStatusOnPxservicenode(PxserviceNode, volume)
+					log.FailOnError(err, "Failed to get replication status for volume:%v", volume)
+					log.Infof("Replication status for volume:%v", replStatus)
+					dash.VerifyFatal(replStatus == "Not in quorum", true, "Verified status 'Not in quorum' for the volume")
+					log.Infof("Wait for 15 mins snapshot not take again")
+					time.Sleep(15 * time.Minute)
+
+				})
+				stepLog = "Validate: Snapshot should not occur after volume is down."
+				Step(stepLog, func() {
+					snapMap := make(map[storkv1.SchedulePolicyType][]*storkv1.ScheduledVolumeSnapshotStatus)
+					newSnapStatuses, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+					log.FailOnError(err, "unable to get snapschedule")
+					for v, snapshotStatuses := range newSnapStatuses.Status.Items {
+						if len(snapshotStatuses) > 0 {
+							var statuses []*storkv1.ScheduledVolumeSnapshotStatus
+							for _, status := range snapshotStatuses {
+								if status == nil {
+									err := fmt.Errorf("Snapshot not found for volume")
+									log.FailOnError(err, "Failed to find snapshot for the specified volume")
+								}
+								if status.Status == snapv1.VolumeSnapshotConditionReady {
+									statuses = append(statuses, status)
+								}
+							}
+							snapMap[v] = statuses
+							log.Infof("Snapshot status for this volume: %+v", snapMap)
+						}
+					}
+					for _, snapname := range snapMap["Interval"] {
+						snapshotNamesVolumedown = append(snapshotNamesVolumedown, snapname.Name)
+
+					}
+					log.Infof("Sanpshot count before:%d volumes are down and snaphot names:%v", len(snapshotNames), snapshotNames)
+					log.Infof("Sanpshot count after:%d volumes are down and snaphot names:%v", len(snapshotNamesVolumedown), snapshotNamesVolumedown)
+					dash.VerifyFatal(len(snapshotNames) == len(snapshotNamesVolumedown), true, "snapshot is created after volume down")
+					snapshotCount := make(map[string]int)
+					for _, name := range snapshotNames {
+						snapshotCount[name]++
+					}
+					for _, name := range snapshotNamesVolumedown {
+						snapshotCount[name]--
+					}
+
+					ismatch := true
+					for _, count := range snapshotCount {
+						if count != 0 {
+							ismatch = false
+							break
+						}
+					}
+					dash.VerifyFatal(ismatch, true, "Snapshots do not match after volume down")
+				})
+
+				Step("Initialize and start the Px service on all available nodes", func() {
+					// Start the Px service on the collected node details.
+					log.InfoD("Starting Px service on nodes: %+v", nodeDetails)
+					StartVolDriverAndWait(nodeDetails[1:])
+					log.InfoD("Successfully started Px service on nodes: %+v", nodeDetails)
+				})
+				Step("Verify that the pod and Px are ready on all nodes", func() {
+					for _, node := range nodeDetails {
+						isPodReady := Inst().V.IsPxReadyOnNode(node)
+						if isPodReady {
+							log.InfoD("Pod and Px are running and healthy on node: %s", node)
+						} else {
+							err := fmt.Errorf("pod and Px are not running or not healthy on node: %s", node)
+							log.FailOnError(err, "pod and Px verification failed for the node")
+						}
+					}
+
+				})
+			}
+
 		})
 	})
 	JustAfterEach(func() {
