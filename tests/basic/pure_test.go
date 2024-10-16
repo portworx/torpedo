@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+
 	"github.com/devans10/pugo/flasharray"
 	"github.com/ghodss/yaml"
 	"github.com/google/uuid"
@@ -8027,6 +8028,150 @@ var _ = Describe("{ScaleUpFBDAAppWithRestartNode}", func() {
 			}
 		})
 
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{FBDAAppWithShutDownNode}", func() {
+	/*
+	   Jira ticket:https://purestorage.atlassian.net/browse/HAZEL-735
+	   Deploy FBDA applications
+	   Shutdown the node
+	   verify application is move to another node
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("FBDAAppWithShutDownNode", "Deploy FBDA applications  and shutdown the node", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Deploy FBDA applications shutdown the node"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("shutdown-%d", i))...)
+		}
+		namespace := contexts[0].App.NameSpace
+		log.Infof("Namespace for the app: %s", namespace)
+		for _, ctx := range contexts {
+			ctx.SkipVolumeValidation = true
+		}
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+		var shutdownnode node.Node
+		var attachedNodeforshutdown string
+		var storageNode []node.Node
+		var volumeId string
+		stepLog := "Shutting down the node and validating that the application moves to another node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				stepLog = "Identifying the node with volume consumption"
+				Step(stepLog, func() {
+					appVolumes, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, fmt.Sprintf("Failed to retrieve volumes in context '%s': %v", ctx.App.Key, err))
+					storageNode = node.GetStorageNodes()
+					for _, v := range appVolumes {
+						isPureVol, err := Inst().V.IsPureVolume(v)
+						log.FailOnError(err, fmt.Sprintf("Failed to determine if volume '%s' is a pure volume: %v", v.ID, err))
+						if isPureVol {
+							volumeId = v.ID
+							cmd := fmt.Sprintf(`pxctl volume inspect %v | grep -A 10 "Volume consumers"`, v.ID)
+							output, err := Inst().N.RunCommand(storageNode[0], cmd, node.ConnectionOpts{
+								Timeout:         10 * time.Minute,
+								TimeBeforeRetry: 30 * time.Second,
+								Sudo:            true,
+							})
+							log.FailOnError(err, fmt.Sprintf("Unable to run command on the node '%s'", storageNode[0]))
+							var runningOnIPs []string
+							lines := strings.Split(output, "\n")
+							ipRegex := regexp.MustCompile(`Running on\s+:\s+([^\s]+)`)
+							for _, line := range lines {
+								if strings.Contains(line, "Running on") {
+									matches := ipRegex.FindStringSubmatch(line)
+									if len(matches) > 1 {
+										runningOnIPs = append(runningOnIPs, matches[1])
+									}
+								}
+							}
+							log.Infof("Volume attached node IDs %v", runningOnIPs)
+							attachedNodeforshutdown = runningOnIPs[0]
+							log.InfoD("Attached node for the volume : %v", attachedNodeforshutdown)
+							shutdownnode, err = node.GetNodeByName(attachedNodeforshutdown)
+							log.FailOnError(err, fmt.Sprintf("Failed to retrieve the node by name '%s': %v", attachedNodeforshutdown, err))
+							log.InfoD("selected node for shutdown : %v", shutdownnode)
+							break
+						}
+					}
+				})
+				stepLog = "Stopping PX on the node where the volume is attached"
+				Step(stepLog, func() {
+					log.Infof("Shutting down the node %s and stopping volume driver [%s] on that node", shutdownnode, Inst().V.String())
+					err := Inst().V.StopDriver([]node.Node{shutdownnode}, false, nil)
+					log.FailOnError(err, fmt.Sprintf("Failed to stop portworx on node [%s]", shutdownnode))
+					err = Inst().V.WaitDriverDownOnNode(shutdownnode)
+					log.FailOnError(err, fmt.Sprintf("Driver is up on node [%s]", shutdownnode))
+				})
+				stepLog = "verifiy that application running on another node."
+				Step(stepLog, func() {
+					checkVolumeAttachedAnotherNode := func() (interface{}, bool, error) {
+						options := node.ConnectionOpts{
+							Timeout:         10 * time.Minute,
+							TimeBeforeRetry: 30 * time.Second,
+							Sudo:            true,
+						}
+
+						for _, node := range storageNode {
+							// Skip the shutdown node
+							if node.Name == shutdownnode.Name {
+								continue
+							}
+
+							cmd := fmt.Sprintf(`pxctl volume inspect %v | grep -A 10 "Volume consumers"`, volumeId)
+							output, err := Inst().N.RunCommand(node, cmd, options)
+							log.FailOnError(err, "Unable to run command on the node")
+
+							lines := strings.Split(output, "\n")
+							ipRegex := regexp.MustCompile(`Running on\s+:\s+([^\s]+)`)
+							var runningOnIPsAfterShutdown []string
+
+							for _, line := range lines {
+								if strings.Contains(line, "Running on") {
+									matches := ipRegex.FindStringSubmatch(line)
+									if len(matches) > 1 {
+										runningOnIPsAfterShutdown = append(runningOnIPsAfterShutdown, matches[1])
+									}
+								}
+							}
+
+							log.Infof("Volume attached node IDs: %v", runningOnIPsAfterShutdown)
+							// Check if the volume is still attached on the shutdown node
+							for _, runningOnIP := range runningOnIPsAfterShutdown {
+								if runningOnIP == shutdownnode.Name {
+									log.InfoD("Volume is still running on shutdown node: %v", runningOnIP)
+									return false, true, fmt.Errorf("Volume still not attached on another node")
+								}
+							}
+						}
+						return true, false, nil
+					}
+					checkVolumeAttached, err := task.DoRetryWithTimeout(checkVolumeAttachedAnotherNode, 10*time.Minute, 30*time.Second)
+					log.FailOnError(err, "Volume check failed")
+					dash.VerifyFatal(checkVolumeAttached, true, "Application should not be running on the shutdown node")
+				})
+
+				stepLog = "Starting PX on the node where the volume is attached."
+				Step(stepLog, func() {
+					err = Inst().V.StartDriver(shutdownnode)
+					log.FailOnError(err, fmt.Sprintf("Failed to start portworx on node [%s]", shutdownnode))
+					err = Inst().V.WaitDriverUpOnNode(shutdownnode, 5*time.Minute)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Driver status verification failed after starting Portworx on node %s", shutdownnode))
+				})
+			}
+		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
