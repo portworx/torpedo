@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/torpedo/drivers"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -2624,9 +2625,9 @@ var _ = Describe("{SoftDeleteAndRecoverBackupOnContainerAndBlobLevel}", Label(Te
 
 var _ = Describe("{DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel}", Label(TestCaseLabelsMap[DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel]...), func() {
 	var (
-		backups []string
-		//	buckets []string
-		//	bkpNamespaces       []string
+		backups             []string
+		buckets             []string
+		bkpNamespaces       []string
 		storageClassMapping map[string]string
 	)
 	JustBeforeEach(func() {
@@ -2635,13 +2636,13 @@ var _ = Describe("{DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel}", La
 		configmap, err := k8sCore.GetConfigMap(strings.ToLower("SoftDeleteAndRecoverBackupOnContainerAndBlobLevel"), defaultTorpedoNamespace)
 		dash.VerifySafely(err, nil, "Fetching configmap")
 		backups = strings.Split(configmap.Data["backups"], ",")
-		//	buckets = strings.Split(configmap.Data["buckets"], ",")
-		//bkpNamespaces = strings.Split(configmap.Data["namespaces"], ",")
+		buckets = strings.Split(configmap.Data["buckets"], ",")
+		bkpNamespaces = strings.Split(configmap.Data["namespaces"], ",")
 		storageClassMapping = make(map[string]string)
 
 	})
 	It("Verify SoftDeleteAndRecoverBackupOnContainerAndBlobLevel case", func() {
-		/*Step("Create new storage class for restore", func() {
+		Step("Create new storage class for restore", func() {
 			log.InfoD("Getting storage class of the destination cluster")
 			err := SetDestinationKubeConfig()
 			dash.VerifyFatal(err, nil, "Setting destination kubeconfig")
@@ -2730,7 +2731,7 @@ var _ = Describe("{DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel}", La
 				expected := api.BackupInfo_StatusInfo_Success
 				dash.VerifyFatal(actual, expected, fmt.Sprintf("Check each backup for success status %s", bkp.Name))
 			}
-		})*/
+		})
 
 		Step("Restore backups from restored backup to same cluster with NS mapping", func() {
 			log.InfoD("Restore backups from undeleted container to same cluster with NS mapping")
