@@ -137,6 +137,8 @@ func BackupInitInstance() {
 	Inst().Dash.TestSetUpdate(t)
 	// Setting the common password
 	CommonPassword = backup.PxCentralAdminPwd + RandomString(4)
+	CurrentPxBackupVersion, err = GetPxBackupVersionSemVer()
+	log.FailOnError(err, "Error getting Current Px Backup version")
 	// Dumping source and destination kubeconfig to file system path
 	log.Infof("Dumping source and destination kubeconfig to file system path")
 	kubeconfigs := os.Getenv("KUBECONFIGS")
@@ -617,7 +619,7 @@ var _ = AfterSuite(func() {
 		}
 
 		// Cleanup all non admin groups
-		allGroups, err := backup.GetAllUsers()
+		allGroups, err := backup.GetAllGroups()
 		dash.VerifySafely(err, nil, "Verifying cleaning up of all groups from keycloak")
 		for _, group := range allGroups {
 			if !strings.Contains(group.Name, "admin") && !strings.Contains(group.Name, "app") {

@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/backup"
 	"sync"
 
 	"github.com/portworx/torpedo/pkg/log"
@@ -19,13 +20,19 @@ var _ = Describe("{BackupLongevity}", func() {
 	var triggerLock sync.Mutex
 	var emailTriggerLock sync.Mutex
 	var populateDone bool
+	CommonPassword = backup.PxCentralAdminPwd + RandomString(4)
 	triggerEventsChan := make(chan *EventRecord, 100)
 	triggerBackupFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
 		CreatePxBackup:           TriggerCreateBackup,
 		CreatePxBackupAndRestore: TriggerCreateBackupAndRestore,
 		CreateRandomRestore:      TriggerCreateRandomRestore,
 		DeployBackupApps:         TriggerDeployBackupApps,
-		CreatePxLockedBackup:     TriggerCreateLockedBackup,
+		//CreatePxLockedBackup:                  TriggerCreateLockedBackup,
+		CreateClusterShare:                                    TriggerShareCluster,
+		CreateClusterUnshare:                                  TriggerUnShareCluster,
+		CreateBackupWithUserFromSharedCluster:                 TriggerCreateBackupWithUserFromSharedCluster,
+		CreateBackupRestoreAndDeleteWithUserFromSharedCluster: TriggerCreateBackupRestoreAndDeleteWithUserFromSharedCluster,
+		DeletePxBackup:                                        TriggerDeleteSingleBackup,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -58,7 +65,8 @@ var _ = Describe("{BackupLongevity}", func() {
 		TriggerDeployBackupApps(&contexts, &triggerEventsChan)
 		TriggerAddBackupCluster(&contexts, &triggerEventsChan)
 		TriggerAddBackupCredAndBucket(&contexts, &triggerEventsChan)
-		TriggerAddLockedBackupCredAndBucket(&contexts, &triggerEventsChan)
+		//TriggerAddLockedBackupCredAndBucket(&contexts, &triggerEventsChan)
+		TriggerCreateUsers(&contexts, &triggerEventsChan)
 
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {

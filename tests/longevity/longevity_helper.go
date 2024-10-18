@@ -115,6 +115,11 @@ func populateBackupIntervals() {
 	triggerInterval[CreatePxBackupAndRestore] = map[int]time.Duration{}
 	triggerInterval[CreateRandomRestore] = map[int]time.Duration{}
 	triggerInterval[DeployBackupApps] = map[int]time.Duration{}
+	triggerInterval[CreateClusterShare] = map[int]time.Duration{}
+	triggerInterval[CreateClusterUnshare] = map[int]time.Duration{}
+	triggerInterval[CreateBackupWithUserFromSharedCluster] = map[int]time.Duration{}
+	triggerInterval[DeletePxBackup] = map[int]time.Duration{}
+	triggerInterval[CreateBackupRestoreAndDeleteWithUserFromSharedCluster] = map[int]time.Duration{}
 
 	baseInterval := 1 * time.Minute
 
@@ -172,6 +177,63 @@ func populateBackupIntervals() {
 	triggerInterval[DeployBackupApps][3] = 6 * 60 * baseInterval
 	triggerInterval[DeployBackupApps][2] = 12 * 60 * baseInterval
 	triggerInterval[DeployBackupApps][1] = 24 * 60 * baseInterval
+
+	triggerInterval[CreateClusterShare][10] = 6 * baseInterval
+	triggerInterval[CreateClusterShare][9] = 12 * baseInterval
+	triggerInterval[CreateClusterShare][8] = 18 * baseInterval
+	triggerInterval[CreateClusterShare][7] = 24 * baseInterval
+	triggerInterval[CreateClusterShare][6] = 30 * baseInterval
+	triggerInterval[CreateClusterShare][5] = 36 * baseInterval
+	triggerInterval[CreateClusterShare][4] = 42 * baseInterval
+	triggerInterval[CreateClusterShare][3] = 48 * baseInterval
+	triggerInterval[CreateClusterShare][2] = 54 * baseInterval
+	triggerInterval[CreateClusterShare][1] = 60 * baseInterval
+
+	triggerInterval[CreateBackupWithUserFromSharedCluster][10] = 6 * baseInterval
+	triggerInterval[CreateBackupWithUserFromSharedCluster][9] = 12 * baseInterval
+	triggerInterval[CreateBackupWithUserFromSharedCluster][8] = 18 * baseInterval
+	triggerInterval[CreateBackupWithUserFromSharedCluster][7] = 24 * baseInterval
+	triggerInterval[CreateBackupWithUserFromSharedCluster][6] = 30 * baseInterval
+	triggerInterval[CreateBackupWithUserFromSharedCluster][5] = 36 * baseInterval
+	triggerInterval[CreateBackupWithUserFromSharedCluster][4] = 42 * baseInterval
+	triggerInterval[CreateBackupWithUserFromSharedCluster][3] = 48 * baseInterval
+	triggerInterval[CreateBackupWithUserFromSharedCluster][2] = 54 * baseInterval
+	triggerInterval[CreateBackupWithUserFromSharedCluster][1] = 60 * baseInterval
+
+	triggerInterval[DeletePxBackup][10] = 10 * baseInterval
+	triggerInterval[DeletePxBackup][9] = 16 * baseInterval
+	triggerInterval[DeletePxBackup][8] = 24 * baseInterval
+	triggerInterval[DeletePxBackup][7] = 30 * baseInterval
+	triggerInterval[DeletePxBackup][6] = 36 * baseInterval
+	triggerInterval[DeletePxBackup][5] = 42 * baseInterval
+	triggerInterval[DeletePxBackup][4] = 48 * baseInterval
+	triggerInterval[DeletePxBackup][3] = 54 * baseInterval
+	triggerInterval[DeletePxBackup][2] = 60 * baseInterval
+	triggerInterval[DeletePxBackup][1] = 66 * baseInterval
+
+	triggerInterval[CreateBackupRestoreAndDeleteWithUserFromSharedCluster][10] = 12 * baseInterval
+	triggerInterval[CreateBackupRestoreAndDeleteWithUserFromSharedCluster][9] = 18 * baseInterval
+	triggerInterval[CreateBackupRestoreAndDeleteWithUserFromSharedCluster][8] = 24 * baseInterval
+	triggerInterval[CreateBackupRestoreAndDeleteWithUserFromSharedCluster][7] = 30 * baseInterval
+	triggerInterval[CreateBackupRestoreAndDeleteWithUserFromSharedCluster][6] = 36 * baseInterval
+	triggerInterval[CreateBackupRestoreAndDeleteWithUserFromSharedCluster][5] = 42 * baseInterval
+	triggerInterval[CreateBackupRestoreAndDeleteWithUserFromSharedCluster][4] = 48 * baseInterval
+	triggerInterval[CreateBackupRestoreAndDeleteWithUserFromSharedCluster][3] = 54 * baseInterval
+	triggerInterval[CreateBackupRestoreAndDeleteWithUserFromSharedCluster][2] = 60 * baseInterval
+	triggerInterval[CreateBackupRestoreAndDeleteWithUserFromSharedCluster][1] = 66 * baseInterval
+
+	baseInterval = 3 * time.Minute
+
+	triggerInterval[CreateClusterUnshare][10] = 6 * baseInterval
+	triggerInterval[CreateClusterUnshare][9] = 12 * baseInterval
+	triggerInterval[CreateClusterUnshare][8] = 18 * baseInterval
+	triggerInterval[CreateClusterUnshare][7] = 24 * baseInterval
+	triggerInterval[CreateClusterUnshare][6] = 30 * baseInterval
+	triggerInterval[CreateClusterUnshare][5] = 36 * baseInterval
+	triggerInterval[CreateClusterUnshare][4] = 42 * baseInterval
+	triggerInterval[CreateClusterUnshare][3] = 48 * baseInterval
+	triggerInterval[CreateClusterUnshare][2] = 54 * baseInterval
+	triggerInterval[CreateClusterUnshare][1] = 60 * baseInterval
 
 	baseInterval = 1 * time.Hour
 

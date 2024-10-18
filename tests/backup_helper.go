@@ -243,6 +243,7 @@ var (
 	BaselinePSALabel             = map[string]string{"pod-security.kubernetes.io/enforce": "baseline"}
 	PrivilegedPSALabel           = map[string]string{"pod-security.kubernetes.io/enforce": "privileged"}
 	PSAAppMap                    = map[string]string{"postgres-backup": "postgres-restricted", "mysql-backup": "mysql-restricted"}
+	CurrentPxBackupVersion       string
 )
 
 type UserRoleAccess struct {
@@ -1016,7 +1017,7 @@ func CreateBackupWithCustomResourceTypeWithValidation(ctx context1.Context, back
 }
 
 // TakeMultipleBackupsPerDeployment takes multiple backups for each deployment in the specified cluster.
-func TakeMultipleBackupsPerDeployment(ctx context1.Context, backupOrgID, clusterName string, numOfBackups, snapShotLimitPerVolume int, backupLocationName, backupLocationUid string, scheduledAppContextsToBackup []*scheduler.Context, backupNamePrefix string) ([]string, error) {
+func TakeMultipleBackupsPerDeployment(ctx context1.Context, backupOrgID, clusterName string, clusterUid string, numOfBackups, snapShotLimitPerVolume int, backupLocationName, backupLocationUid string, scheduledAppContextsToBackup []*scheduler.Context, backupNamePrefix string) ([]string, error) {
 	labelSelectors := make(map[string]string)
 	type backupResult struct {
 		name       string
@@ -1032,10 +1033,6 @@ func TakeMultipleBackupsPerDeployment(ctx context1.Context, backupOrgID, cluster
 		wg             sync.WaitGroup
 		backupResults  = make(chan backupResult)
 	)
-	clusterUid, err := Inst().Backup.GetClusterUID(ctx, backupOrgID, clusterName)
-	if err != nil {
-		return backupNameList, err
-	}
 
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		wg.Add(1)
@@ -1117,6 +1114,79 @@ func TakeMultipleBackupsPerDeployment(ctx context1.Context, backupOrgID, cluster
 	return backupNameList, nil
 }
 
+// TakeMultipleBackupsPerDeploymentWithoutCheck takes multiple backups for each deployment in the specified cluster without validating the backups.
+func TakeMultipleBackupsPerDeploymentWithoutCheck(ctx context1.Context, backupOrgID, clusterName string, clusterUid string, numOfBackups, snapShotLimitPerVolume int, backupLocationName, backupLocationUid string, scheduledAppContextsToBackup []*scheduler.Context, backupNamePrefix string) ([]string, error) {
+	labelSelectors := make(map[string]string)
+	type backupResult struct {
+		name       string
+		err        error
+		bkpContext *scheduler.Context
+	}
+	ctx, cancel := context1.WithCancel(ctx)
+	defer cancel()
+
+	var (
+		backupNameList []string
+		errList        []error
+		wg             sync.WaitGroup
+		backupResults  = make(chan backupResult)
+	)
+
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		wg.Add(1)
+		go func(scheduledAppContext *scheduler.Context) {
+			defer wg.Done()
+			defer GinkgoRecover()
+
+			var innerWg sync.WaitGroup
+			semaphore := make(chan struct{}, snapShotLimitPerVolume)
+			for i := 0; i < numOfBackups; i++ {
+				innerWg.Add(1)
+				go func(i int) {
+					defer innerWg.Done()
+					defer GinkgoRecover()
+
+					select {
+					case semaphore <- struct{}{}:
+						defer func() { <-semaphore }()
+					case <-ctx.Done():
+						return
+					}
+					currentBackupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, RandomString(8), i+1)
+					err := CreateBackup(currentBackupName, clusterName, backupLocationName, backupLocationUid, []string{scheduledAppContext.ScheduleOptions.Namespace}, labelSelectors, backupOrgID, clusterUid, "", "", "", "", ctx)
+					backupResults <- backupResult{name: currentBackupName, err: err, bkpContext: scheduledAppContext}
+				}(i)
+			}
+
+			innerWg.Wait()
+		}(scheduledAppContext)
+	}
+	go func() {
+		wg.Wait()
+		close(backupResults)
+	}()
+
+	backupMap := make(map[string]*scheduler.Context)
+	for result := range backupResults {
+		if result.err != nil {
+			log.Errorf("Failed to create backup: %v", result.err)
+			errList = append(errList, result.err)
+			cancel()
+			break
+		} else {
+			log.Infof("Successfully created backup [%s]", result.name)
+			backupNameList = append(backupNameList, result.name)
+			backupMap[result.name] = result.bkpContext
+		}
+	}
+
+	if len(errList) > 0 {
+		return backupNameList, fmt.Errorf("some backups failed: %v", errList)
+	}
+
+	return backupNameList, nil
+}
+
 // CreateScheduleBackup creates a schedule backup and checks for success of first (immediately triggered) backup
 func CreateScheduleBackup(scheduleName string, clusterName string, clusterUid string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
@@ -1173,12 +1243,12 @@ func CreateScheduleBackupWithValidation(ctx context1.Context, scheduleName strin
 	if err != nil {
 		return "", err
 	}
-	time.Sleep(1 * time.Minute)
 	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 	if err != nil {
 		return "", err
 	}
 	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
+	time.Sleep(1 * time.Minute)
 	return firstScheduleBackupName, BackupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, resourceTypes...)
 }
 
@@ -1884,6 +1954,101 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 	return nil
 }
 
+// ClusterUpdateBackupShareWithClusterUid shares all backup with the users and/or groups provided for a given cluster with cluster UID
+// addUsersOrGroups - provide true if the mentioned users/groups needs to be added
+// addUsersOrGroups - provide false if the mentioned users/groups needs to be deleted or removed
+func ClusterUpdateBackupShareWithClusterUid(clusterName string, clusterUID string, groupNames []string, userNames []string, accessLevel BackupAccess, addUsersOrGroups bool, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	groupIDs := make([]string, 0)
+	userIDs := make([]string, 0)
+
+	for _, groupName := range groupNames {
+		groupID, err := backup.FetchIDOfGroup(groupName)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	groupBackupShareAccessConfigs := make([]*api.BackupShare_AccessConfig, 0)
+
+	for _, groupName := range groupNames {
+		groupBackupShareAccessConfig := &api.BackupShare_AccessConfig{
+			Id:     groupName,
+			Access: api.BackupShare_AccessType(accessLevel),
+		}
+		groupBackupShareAccessConfigs = append(groupBackupShareAccessConfigs, groupBackupShareAccessConfig)
+	}
+
+	userBackupShareAccessConfigs := make([]*api.BackupShare_AccessConfig, 0)
+
+	for _, userID := range userIDs {
+		userBackupShareAccessConfig := &api.BackupShare_AccessConfig{
+			Id:     userID,
+			Access: api.BackupShare_AccessType(accessLevel),
+		}
+		userBackupShareAccessConfigs = append(userBackupShareAccessConfigs, userBackupShareAccessConfig)
+	}
+
+	backupShare := &api.BackupShare{
+		Groups:        groupBackupShareAccessConfigs,
+		Collaborators: userBackupShareAccessConfigs,
+	}
+
+	var clusterBackupShareUpdateRequest *api.ClusterBackupShareUpdateRequest
+
+	if addUsersOrGroups {
+		clusterBackupShareUpdateRequest = &api.ClusterBackupShareUpdateRequest{
+			OrgId:          BackupOrgID,
+			Name:           clusterName,
+			AddBackupShare: backupShare,
+			DelBackupShare: nil,
+			Uid:            clusterUID,
+		}
+	} else {
+		clusterBackupShareUpdateRequest = &api.ClusterBackupShareUpdateRequest{
+			OrgId:          BackupOrgID,
+			Name:           clusterName,
+			AddBackupShare: nil,
+			DelBackupShare: backupShare,
+			Uid:            clusterUID,
+		}
+	}
+
+	_, err := backupDriver.ClusterUpdateBackupShare(ctx, clusterBackupShareUpdateRequest)
+	if err != nil {
+		return err
+	}
+
+	clusterBackupShareStatusCheck := func() (interface{}, bool, error) {
+		clusterReq := &api.ClusterInspectRequest{OrgId: BackupOrgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
+		clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+		if err != nil {
+			return "", true, err
+		}
+		if clusterResp.GetCluster().BackupShareStatusInfo.GetStatus() != api.ClusterInfo_BackupShareStatusInfo_Success {
+			return "", true, fmt.Errorf("cluster backup share status for cluster %s is still %s", clusterName,
+				clusterResp.GetCluster().BackupShareStatusInfo.GetStatus())
+		}
+		log.Infof("Cluster %s has status - [%d]", clusterName, clusterResp.GetCluster().BackupShareStatusInfo.GetStatus())
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(clusterBackupShareStatusCheck, 1*time.Minute, 10*time.Second)
+	if err != nil {
+		return err
+	}
+	log.Infof("Cluster backup share check complete")
+	return nil
+}
+
 func GetAllBackupsForUser(username, password string) ([]string, error) {
 	backupNames := make([]string, 0)
 	backupDriver := Inst().Backup
@@ -2346,33 +2511,8 @@ func CreateUsers(numberOfUsers int) []string {
 func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context1.Context) {
 	log.InfoD("Cleaning backup locations in map [%v], cloud credential [%s], source [%s] and destination [%s] cluster", backupLocationMap, credName, SourceClusterName, DestinationClusterName)
 	if len(backupLocationMap) != 0 {
-		for backupLocationUID, bkpLocationName := range backupLocationMap {
-			// Delete the backup location object
-			err := DeleteBackupLocationWithContext(bkpLocationName, backupLocationUID, BackupOrgID, true, ctx)
-			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup location [%s]", bkpLocationName))
-			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
-				status, err := IsBackupLocationPresent(bkpLocationName, ctx, BackupOrgID)
-				if err != nil {
-					return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
-				}
-				if status {
-					backupLocationInspectRequest := api.BackupLocationInspectRequest{
-						Name:  bkpLocationName,
-						Uid:   backupLocationUID,
-						OrgId: BackupOrgID,
-					}
-					backupLocationObject, err := Inst().Backup.InspectBackupLocation(ctx, &backupLocationInspectRequest)
-					if err != nil {
-						return "", true, fmt.Errorf("inspect backup location - backup location %s still present with error %v", bkpLocationName, err)
-					}
-					backupLocationStatus := backupLocationObject.BackupLocation.BackupLocationInfo.GetStatus()
-					return "", true, fmt.Errorf("backup location %s is not deleted yet. Status - [%s]", bkpLocationName, backupLocationStatus)
-				}
-				return "", false, nil
-			}
-			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, BackupLocationDeleteTimeout, BackupLocationDeleteRetryTime)
-			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
-		}
+		err := DeleteAllBackupLocations(backupLocationMap, ctx)
+		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", backupLocationMap))
 		status, err := IsCloudCredPresent(credName, ctx, BackupOrgID)
 		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cloud cred [%s] is present", credName))
 		if status {
@@ -2610,21 +2750,20 @@ func GetAllBackupsAdmin() ([]string, error) {
 }
 
 // GetAllOwnedBackupsFromCluster returns all the backups from a cluster owned by the user.
-func GetAllOwnedBackupsFromCluster(ctx context1.Context, clusterName string, clusterUid string) ([]string, error) {
-	backupNames := make([]string, 0)
+func GetAllOwnedBackupsFromCluster(ctx context1.Context, clusterName string, clusterUid string) (map[string]string, error) {
+	backupNamesMap := make(map[string]string)
 	backupDriver := Inst().Backup
 	userName, err := portworx.GetPreferredUsernameFromCtx(ctx)
 	if err != nil {
 		return nil, err
 	}
-	ownerID, err := backup.FetchIDOfGroup(userName)
+	ownerID, err := backup.FetchIDOfUser(userName)
 	if err != nil {
 		return nil, err
 	}
 	backupEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: BackupOrgID,
 		EnumerateOptions: &api.EnumerateOptions{
-			Owners:            []string{ownerID},
 			ClusterNameFilter: clusterName,
 			ClusterUidFilter:  clusterUid,
 		},
@@ -2635,10 +2774,11 @@ func GetAllOwnedBackupsFromCluster(ctx context1.Context, clusterName string, clu
 	}
 	for _, backupObj := range backupEnumerateResp.GetBackups() {
 		if backupObj.GetOwnership().GetOwner() == ownerID {
-			backupNames = append(backupNames, backupObj.GetName())
+			backupUid := backupObj.GetUid()
+			backupNamesMap[backupObj.GetName()] = backupUid
 		}
 	}
-	return backupNames, nil
+	return backupNamesMap, nil
 }
 
 // GetAllRestoresAdmin returns all the backups that px-central-admin has access to
@@ -4392,7 +4532,7 @@ func GetFirstScheduleBackupName(ctx context1.Context, scheduleName string, orgID
 		}
 		return "", false, nil
 	}
-	_, err = task.DoRetryWithTimeout(getFirstScheduleBackup, 20*time.Second, 5*time.Second)
+	_, err = task.DoRetryWithTimeout(getFirstScheduleBackup, 60*time.Second, 5*time.Second)
 	if err != nil {
 		return "", err
 	}
@@ -4566,10 +4706,7 @@ func GetPxBackupBuildDate() (string, error) {
 
 // CompareCurrentPxBackupVersion compares the current PX Backup version against a specified target version using a comparison method provided as a parameter.
 func CompareCurrentPxBackupVersion(targetVersionStr string, comparisonMethod func(v1, v2 *version.Version) bool) (bool, error) {
-	currentVersionStr, err := GetPxBackupVersionSemVer()
-	if err != nil {
-		return false, err
-	}
+	currentVersionStr := CurrentPxBackupVersion
 
 	currentVersion, err := version.NewVersion(currentVersionStr)
 	if err != nil {
@@ -4800,6 +4937,8 @@ func PxBackupUpgrade(versionToUpgrade string) error {
 	if !strings.EqualFold(postUpgradeVersion, versionToUpgrade) {
 		return fmt.Errorf("expected version after upgrade was %s but got %s", versionToUpgrade, postUpgradeVersion)
 	}
+	//setting global variable CurrentPxBackupVersion to latest version.
+	CurrentPxBackupVersion = postUpgradeVersion
 	log.InfoD("Px-Backup upgrade from %s to %s is complete", currentBackupVersionString, postUpgradeVersion)
 	return nil
 }
@@ -9488,6 +9627,7 @@ func validateCRCleanup(resourceInterface interface{},
 	var err error
 	var getCRMethod func(string, *api.ClusterObject) ([]string, error)
 	var clusterName string
+	var clusterUid string
 	var resourceNamespaces []string
 	var resourceName string
 	var orgID string
@@ -9497,6 +9637,7 @@ func validateCRCleanup(resourceInterface interface{},
 		// Creating object and variables from backup object
 		getCRMethod = GetBackupCRs
 		clusterName = currentObject.Cluster
+		clusterUid = currentObject.ClusterRef.Uid
 		orgID = currentObject.OrgId
 		resourceNamespaces = currentObject.Namespaces
 		resourceName = currentObject.Name
@@ -9504,6 +9645,7 @@ func validateCRCleanup(resourceInterface interface{},
 		// Creating object and variables from Restore object
 		getCRMethod = GetRestoreCRs
 		clusterName = currentObject.Cluster
+		clusterUid = currentObject.ClusterRef.Uid
 		for _, value := range currentObject.RestoreInfo.NamespaceMapping {
 			resourceNamespaces = append(resourceNamespaces, value)
 		}
@@ -9523,7 +9665,7 @@ func validateCRCleanup(resourceInterface interface{},
 
 	// Comparing cluster names to the name from backup inspect response
 	for _, clusterObj := range enumerateClusterResponse.GetClusters() {
-		if clusterObj.Name == clusterName {
+		if clusterObj.Uid == clusterUid {
 			isValidCluster = true
 			break
 		}
@@ -9534,19 +9676,13 @@ func validateCRCleanup(resourceInterface interface{},
 		return nil
 	}
 
-	backupDriver := Inst().Backup
-	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, clusterName)
-	if err != nil {
-		return err
-	}
-
 	currentAdminNamespace, _ := getCurrentAdminNamespace()
 	if len(resourceNamespaces) == 1 {
 		currentAdminNamespace = resourceNamespaces[0]
 	}
 
 	driveName := Inst().Backup
-	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUid}
 	clusterResp, err := driveName.InspectCluster(ctx, clusterReq)
 	if err != nil {
 		return err
@@ -11205,13 +11341,18 @@ func ShareClusterWithValidation(ctx context1.Context, clusterName string, cluste
 	if err != nil {
 		return resp, err
 	}
+
+	// Sleep for 60 seconds to allow the share to take effect
+	time.Sleep(60 * time.Second)
 	// Validate the share cluster
+	log.Infof("Validating share cluster [%s] with users [%v] and groups [%v]", clusterName, userNames, groupNames)
 	err = ValidateShareCluster(ctx, clusterName, clusterUid, userNames, groupNames)
 	if err != nil {
 		return nil, err
 	}
 
 	if shareClusterBackups {
+		log.Infof("Validating share cluster backups [%s] with users [%v] and groups [%v]", clusterName, userNames, groupNames)
 		err = ValidateShareClusterBackup(ctx, clusterName, clusterUid, userNames, groupNames)
 		if err != nil {
 			return nil, err
@@ -11263,7 +11404,6 @@ func UnShareClusterWithValidation(ctx context1.Context, clusterName string, clus
 	return resp, nil
 }
 
-// ValidateShareCluster validates that a cluster is shared with users and groups by validating collaborators list and inspecting cluster from user.
 func ValidateShareCluster(ctx context1.Context, clusterName string, clusterUid string, userNames []string, groupNames []string) error {
 	backupDriver := Inst().Backup
 	userIds := []string{}
@@ -11310,40 +11450,39 @@ func ValidateShareCluster(ctx context1.Context, clusterName string, clusterUid s
 		}
 	}
 
-	// Validate that the entire list matches
-	if !AreStringSlicesEqual(userIds, users) {
-		return fmt.Errorf("User list [%v] does not match the collaborators users list [%v] for cluster [%s]", users, userIds, clusterName)
-	}
-
-	if !AreStringSlicesEqual(groupIds, groupNames) {
-		return fmt.Errorf("Group list [%v] does not match the collaborators group list [%v] for cluster [%s]", groupNames, groupIds, clusterName)
-	}
-
 	// Expand the users list with members from groups
+	uniqueUsers := make(map[string]struct{})
+	for _, user := range userNames {
+		uniqueUsers[user] = struct{}{}
+	}
 	for _, groupName := range groupNames {
 		usersFromGroup, _ := backup.GetMembersOfGroup(groupName)
 		for _, user := range usersFromGroup {
-			if !IsPresent(users, user) {
-				userNames = append(userNames, user)
-			}
+			uniqueUsers[user] = struct{}{}
 		}
 	}
 
-	// Validation that the cluster is accessible to shared users
-	errorChan := make(chan error, len(users))
-	defer close(errorChan)
+	var allUsers []string
+	for user := range uniqueUsers {
+		allUsers = append(allUsers, user)
+	}
 
+	// Validation that the cluster is accessible to shared users
+	errorChan := make(chan error, len(allUsers))
 	var wg sync.WaitGroup
-	for _, user := range userNames {
+	semaphore := make(chan struct{}, 5)
+	for _, user := range allUsers {
 		wg.Add(1)
 		go func(user string) {
 			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 			nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
 			if err != nil {
 				errorChan <- err
 				return
 			}
-			log.Infof("Inspecting cluster [%s] with user [%s]", clusterName, user)
+			log.Infof("Inspecting cluster [%s] with uid [%s] with user [%s]", clusterName, clusterUid, user)
 			_, err = backupDriver.InspectCluster(nonAdminCtx, req)
 			if err != nil {
 				errorChan <- fmt.Errorf("User with id [%s] is not able to access the cluster [%s]", user, clusterName)
@@ -11352,6 +11491,7 @@ func ValidateShareCluster(ctx context1.Context, clusterName string, clusterUid s
 	}
 
 	wg.Wait()
+	close(errorChan)
 
 	// Collect errors from the channel
 	var errorMessages []string
@@ -11362,14 +11502,15 @@ func ValidateShareCluster(ctx context1.Context, clusterName string, clusterUid s
 	if len(errorMessages) > 0 {
 		return fmt.Errorf("ValidateShareCluster Errors: %s", strings.Join(errorMessages, "; "))
 	}
-
+	log.Infof("Cluster [%s] is successfully shared with users [%v] and groups [%v], Validation complete", clusterName, userNames, groupNames)
 	return nil
 }
 
 // ValidateShareClusterBackup validates that a cluster's backups are shared with users and groups by validating the backup's access.
 func ValidateShareClusterBackup(ctx context1.Context, clusterName string, clusterUid string, userNames []string, groupNames []string) error {
 	backupDriver := Inst().Backup
-	clusterBackups, err := GetAllOwnedBackupsFromCluster(ctx, clusterName, clusterUid)
+	clusterBackupsMap, err := GetAllOwnedBackupsFromCluster(ctx, clusterName, clusterUid)
+	log.Infof("Validating share cluster backups [%v] with users [%v] and groups [%v]", clusterBackupsMap, userNames, groupNames)
 	if err != nil {
 		return err
 	}
@@ -11382,55 +11523,42 @@ func ValidateShareClusterBackup(ctx context1.Context, clusterName string, cluste
 			}
 		}
 	}
-	users := make([]string, 0)
-	for _, userName := range userNames {
-		userID, err := backup.FetchIDOfUser(userName)
-		if err != nil {
-			return err
-		}
-		users = append(users, userID)
-	}
 
-	errChan := make(chan error, len(clusterBackups)*len(users))
-	var wg sync.WaitGroup
-	for _, backupName := range clusterBackups {
-		for _, user := range users {
-			wg.Add(1)
-			go func(backupName, user string) {
-				defer wg.Done()
-				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
-				if err != nil {
-					errChan <- err
-					return
-				}
-				backupInspectRequest := &api.BackupInspectRequest{
-					OrgId: BackupOrgID,
-					Name:  backupName,
-				}
-				log.Infof("Inspecting backup [%s] with user [%s]", backupName, user)
-				backupObj, err := backupDriver.InspectBackup(nonAdminCtx, backupInspectRequest)
-				if err != nil {
-					errChan <- fmt.Errorf("User with id [%s] is not able to access the backup [%s]", user, backupName)
-					return
-				}
+	for _, user := range userNames {
+		for backupName, backupUid := range clusterBackupsMap {
+			expectedAccessType, err := GetExpectedAccessTypeForSharedBackupWithClusterShare(ctx, backupName, backupUid, user)
+			if err != nil {
+				return err
+			}
+			log.Infof("Validating share cluster backup [%s] with user [%s]", backupName, user)
+			nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+			if err != nil {
+				return err
+			}
+			allUserBackups, err := GetAllBackupsForUser(user, CommonPassword)
+			log.Infof("All user [%s] backups [%v]", user, allUserBackups)
+			backupInspectRequest := &api.BackupInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  backupName,
+				Uid:   backupUid,
+			}
+			log.Infof("Inspecting backup [%s] with user [%s]", backupName, user)
+			backupObj, err := backupDriver.InspectBackup(nonAdminCtx, backupInspectRequest)
+			if err != nil {
+				err = fmt.Errorf("user with id [%s] is not able to access the backup [%s],err [%v]", user, backupName, err.Error())
+				return err
+			}
 
-				if backupObj.GetBackup().UserBackupshareAccess != api.BackupShare_Restorable {
-					errChan <- fmt.Errorf("User with id [%s] is expected to have Restore access for the backup [%s] but got [%s]", user, backupName, backupObj.GetBackup().UserBackupshareAccess)
-				}
-			}(backupName, user)
+			if backupObj.GetBackup().UserBackupshareAccess != expectedAccessType {
+				err = fmt.Errorf("user with id [%s] is expected to have [%v] access for the backup [%s] but got [%s]", user, expectedAccessType, backupName, backupObj.GetBackup().UserBackupshareAccess)
+				return err
+			} else {
+				log.Infof("User with id [%s] has [%v] access for the backup [%s]", user, backupObj.GetBackup().UserBackupshareAccess, backupName)
+			}
 		}
 	}
 
-	wg.Wait()
-	close(errChan)
-
-	var errorMessages []string
-	for err := range errChan {
-		errorMessages = append(errorMessages, err.Error())
-	}
-	if len(errorMessages) > 0 {
-		return fmt.Errorf("ValidateShareClusterBackup Errors: %s", strings.Join(errorMessages, "; "))
-	}
+	log.Infof("Cluster backups [%v] are successfully shared with users [%v] and groups [%v], Validation complete", clusterBackupsMap, userNames, groupNames)
 	return nil
 }
 
@@ -11458,18 +11586,6 @@ func ValidateUnShareCluster(ctx context1.Context, clusterName string, clusterUid
 		collaboratorMap[group.Id] = true
 	}
 
-	// Validate that users and groups are NOT present in the collaborators list
-	for _, user := range userNames {
-		if collaboratorMap[user] {
-			return fmt.Errorf("User with id [%s] is present in the list of collaborators for cluster [%s]", user, clusterName)
-		}
-	}
-	for _, groupName := range groupNames {
-		if collaboratorMap[groupName] {
-			return fmt.Errorf("Group with id [%s] is present in the list of collaborators for cluster [%s]", groupName, clusterName)
-		}
-	}
-
 	// Combine users from groups into the users slice
 	for _, groupName := range groupNames {
 		usersFromGroup, _ := backup.GetMembersOfGroup(groupName)
@@ -11488,14 +11604,28 @@ func ValidateUnShareCluster(ctx context1.Context, clusterName string, clusterUid
 		users = append(users, userID)
 	}
 
+	// Validate that users and groups are NOT present in the collaborators list
+	for _, user := range users {
+		if collaboratorMap[user] {
+			return fmt.Errorf("user with id [%s] is present in the list of collaborators for cluster [%s]", user, clusterName)
+		}
+	}
+	for _, groupName := range groupNames {
+		if collaboratorMap[groupName] {
+			return fmt.Errorf("group with id [%s] is present in the list of collaborators for cluster [%s]", groupName, clusterName)
+		}
+	}
+
 	// Validation that the cluster is not accessible to previously shared users
 	errorChan := make(chan error, len(users))
 	var wg sync.WaitGroup
-
+	semaphore := make(chan struct{}, 5)
 	for _, user := range users {
 		wg.Add(1)
 		go func(user string) {
 			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 			nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
 			if err != nil {
 				errorChan <- err
@@ -11519,7 +11649,7 @@ func ValidateUnShareCluster(ctx context1.Context, clusterName string, clusterUid
 	if len(errorMessages) > 0 {
 		return fmt.Errorf("ValidateUnShareCluster Errors: %s", strings.Join(errorMessages, "; "))
 	}
-
+	log.Infof("Cluster [%s] is successfully unshared with users [%v] and groups [%v], Validation complete", clusterName, userNames, groupNames)
 	return nil
 }
 
@@ -11531,19 +11661,21 @@ func IsAdminCtx(ctx context1.Context) (bool, error) {
 		return false, err
 	}
 	if adminGroupNotSupported {
-		log.Infof("Admin group is not supported in this version")
 		ctxRoles, err := portworx.GetRolesFromCtx(ctx)
 		if err != nil {
 			return false, err
 		}
-		if IsPresent(ctxRoles, backup.SuperAdmin) {
-			found = true
+		superAdminRole := string(backup.SuperAdmin)
+		for _, role := range ctxRoles {
+			if role == superAdminRole {
+				found = true
+				break
+			}
 		}
 		if found {
 			return true, nil
 		}
 	} else {
-		log.Infof("Admin group is supported in this version")
 		ctxGroups, err := portworx.GetGroupsFromCtx(ctx)
 		if err != nil {
 			return false, err
@@ -11551,6 +11683,7 @@ func IsAdminCtx(ctx context1.Context) (bool, error) {
 		for _, group := range ctxGroups {
 			if group == "/px-admin-group" {
 				found = true
+				break
 			}
 		}
 		if found {
@@ -11570,6 +11703,414 @@ func IsLargeResourceBackup(ctx context1.Context, backupName string, orgId string
 		return false, err
 	}
 	return res.Backup.LargeResourceEnabled, nil
+}
+
+// GetAllBackupSchedulesAdmin returns all the schedule object that px-central-admin has access to
+func GetAllBackupSchedulesAdmin() ([]string, error) {
+	scheduleNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return scheduleNames, err
+	}
+
+	backupScheduleEnumerateRequest := &api.BackupScheduleEnumerateRequest{
+		OrgId: BackupOrgID,
+	}
+	backupScheduleResponse, err := backupDriver.EnumerateBackupSchedule(ctx, backupScheduleEnumerateRequest)
+	if err != nil {
+		return scheduleNames, err
+	}
+	for _, scheduleName := range backupScheduleResponse.GetBackupSchedules() {
+		scheduleNames = append(scheduleNames, scheduleName.Name)
+	}
+	return scheduleNames, nil
+}
+
+// GetAllClusterAdmin returns all the cluster object that px-central-admin has access to, it return map of cluster with uid as key and name as value.
+func GetAllClusterAdmin() (map[string]string, error) {
+	clusterList := make(map[string]string)
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return clusterList, err
+	}
+
+	enumerateClusterRequest := &api.ClusterEnumerateRequest{
+		OrgId: BackupOrgID,
+	}
+	enumerateClusterResponse, err := Inst().Backup.EnumerateAllCluster(ctx, enumerateClusterRequest)
+	if err != nil {
+		return clusterList, err
+	}
+	for _, clusterObj := range enumerateClusterResponse.GetClusters() {
+		clusterList[clusterObj.GetUid()] = clusterObj.GetName()
+	}
+	return clusterList, nil
+}
+
+// DeleteAllAdminClusters deletes all clusters created by the admin and returns an error if any cluster fails to delete.
+func DeleteAllAdminClusters() error {
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	adminClusterList, err := GetAllClusterAdmin()
+	if err != nil {
+		return fmt.Errorf("error fetching admin clusters: %v", err)
+	}
+
+	log.Infof("Deleting all the clusters [%v] created from the admin", adminClusterList)
+
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(adminClusterList))
+	for clusterUid, clusterName := range adminClusterList {
+		wg.Add(1)
+		go func(clusterName, clusterUid string) {
+			defer GinkgoRecover()
+			defer wg.Done()
+			err := DeleteClusterWithUID(clusterName, clusterUid, BackupOrgID, ctx, false)
+			if err != nil {
+				errChan <- fmt.Errorf("error deleting cluster [%s]: %v", clusterName, err)
+			}
+		}(clusterName, clusterUid)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	var collectedErrors []error
+	for err := range errChan {
+		collectedErrors = append(collectedErrors, err)
+	}
+	if len(collectedErrors) > 0 {
+		return fmt.Errorf("failed to delete some clusters: %v", collectedErrors)
+	}
+	return nil
+}
+
+// CleanupAllUserAndGroups deletes all non admin users and groups from keycloak
+func CleanupAllUserAndGroups() error {
+	// Cleanup all non admin users
+	allUsers, err := backup.GetAllUsers()
+	dash.VerifySafely(err, nil, "Verifying cleaning up of all users from keycloak")
+	for _, user := range allUsers {
+		if !strings.Contains(user.Name, "admin") {
+			err = backup.DeleteUser(user.Name)
+			if err != nil {
+				return fmt.Errorf("error deleting user %s: %v", user.Name, err)
+			}
+		} else {
+			log.Infof("User %s was not deleted", user.Name)
+		}
+	}
+
+	// Cleanup all non admin groups
+	allGroups, err := backup.GetAllGroups()
+	dash.VerifySafely(err, nil, "Verifying cleaning up of all groups from keycloak")
+	for _, group := range allGroups {
+		if !strings.Contains(group.Name, "admin") && !strings.Contains(group.Name, "app") {
+			err = backup.DeleteGroup(group.Name)
+			if err != nil {
+				return fmt.Errorf("error deleting group %s: %v", group.Name, err)
+			}
+		} else {
+			log.Infof("Group %s was not deleted", group.Name)
+		}
+	}
+	return nil
+}
+
+// GetExpectedAccessTypeForSharedBackupWithClusterShare returns the expected access type for a shared backup based on the user's role and the backup's ownership
+func GetExpectedAccessTypeForSharedBackupWithClusterShare(ctx context1.Context, backupName string, backupUid string, sharedUserName string) (api.BackupShare_AccessType, error) {
+	var expectedAccessType api.BackupShare_AccessType
+	sharedUserCtx, err := backup.GetNonAdminCtx(sharedUserName, CommonPassword)
+	if err != nil {
+		return 0, err
+	}
+
+	sharedUserIsAdminCtx, err := IsAdminCtx(sharedUserCtx)
+	if err != nil {
+		return 0, err
+	}
+
+	sharingUserIsAdminCtx, err := IsAdminCtx(ctx)
+	if err != nil {
+		return 0, err
+	}
+	backupDriver := Inst().Backup
+	backupInspectReq := &api.BackupInspectRequest{
+		OrgId: BackupOrgID,
+		Name:  backupName,
+		Uid:   backupUid,
+	}
+	backupInspectResp, err := backupDriver.InspectBackup(ctx, backupInspectReq)
+	if err != nil {
+		return 0, err
+	}
+	backupLocationName := backupInspectResp.GetBackup().BackupLocationRef.Name
+	backupLocationUid := backupInspectResp.GetBackup().BackupLocationRef.Uid
+	sharingUserIsOwnerOfBackupLocation, err := IsOwnerOfBackupLocation(backupLocationName, backupLocationUid, ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	if sharedUserIsAdminCtx {
+		log.Infof("Shared User [%s] is an admin. Backup [%s] will have FullAccess.", sharedUserName, backupName)
+		expectedAccessType = api.BackupShare_FullAccess
+	} else if sharingUserIsAdminCtx || sharingUserIsOwnerOfBackupLocation {
+		log.Infof("Shared User [%s] is not an admin. Sharing user is an admin or owner of backup location. Backup [%s] will have RestorableAccess.", sharedUserName, backupName)
+		expectedAccessType = api.BackupShare_Restorable
+	} else {
+		log.Infof("Shared User [%s] is not an admin. Sharing user is not an admin or owner of backup location. Backup [%s] will have ViewAccess.", sharedUserName, backupName)
+		expectedAccessType = api.BackupShare_View
+	}
+	return expectedAccessType, nil
+}
+
+// IsOwnerOfBackupLocation checks if the user is the owner of the backup location
+func IsOwnerOfBackupLocation(locationName string, locationUid string, ctx context1.Context) (bool, error) {
+	userName, err := portworx.GetPreferredUsernameFromCtx(ctx)
+	if err != nil {
+		return false, err
+	}
+	ownerID, err := backup.FetchIDOfUser(userName)
+	if err != nil {
+		return false, err
+	}
+	backupDriver := Inst().Backup
+	backupLocationInspectRequest := &api.BackupLocationInspectRequest{
+		OrgId: BackupOrgID,
+		Name:  locationName,
+		Uid:   locationUid,
+	}
+	backupLocationInspectResp, err := backupDriver.InspectBackupLocation(ctx, backupLocationInspectRequest)
+	if err != nil {
+		return false, err
+	}
+	ownershipMatches := func(owner string) bool {
+		return owner == ownerID
+	}
+	backupLocationType := backupLocationInspectResp.GetBackupLocation().GetBackupLocationInfo().GetType()
+	if backupLocationType != api.BackupLocationInfo_NFS {
+		cloudCredUid := backupLocationInspectResp.GetBackupLocation().GetBackupLocationInfo().CloudCredentialRef.Uid
+		cloudCredName := backupLocationInspectResp.GetBackupLocation().GetBackupLocationInfo().CloudCredentialRef.Name
+		cloudCredInspectReq := &api.CloudCredentialInspectRequest{
+			OrgId: BackupOrgID,
+			Name:  cloudCredName,
+			Uid:   cloudCredUid,
+		}
+		cloudCredInspectResp, err := backupDriver.InspectCloudCredential(ctx, cloudCredInspectReq)
+		if err != nil {
+			return false, err
+		}
+
+		if ownershipMatches(cloudCredInspectResp.GetCloudCredential().Ownership.Owner) && ownershipMatches(backupLocationInspectResp.GetBackupLocation().Ownership.Owner) {
+			return true, nil
+		}
+	} else {
+		if ownershipMatches(backupLocationInspectResp.GetBackupLocation().Ownership.Owner) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// DeleteAllScheduleFromCluster deletes all schedules from a cluster
+func DeleteAllScheduleFromCluster(clusterName string, clusterUid string, ctx context1.Context) error {
+	errors := make([]string, 0)
+	var wg sync.WaitGroup
+	var mutex sync.Mutex
+	semaphore := make(chan struct{}, 5)
+	scheduleNames, err := GetAllBackupSchedulesFromCluster(clusterUid, ctx)
+	if err != nil {
+		return err
+	}
+	clusterInspectReq := &api.ClusterInspectRequest{
+		OrgId: BackupOrgID,
+		Name:  clusterName,
+		Uid:   clusterUid,
+	}
+	clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterInspectReq)
+	if err != nil {
+		return err
+	}
+	for _, scheduleName := range scheduleNames {
+		// schedule deletion will not go through if cluster is not in online state
+		if clusterResp.GetCluster().GetStatus().GetStatus() == api.ClusterInfo_StatusInfo_Online {
+			wg.Add(1)
+			go func(scheduleName string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				semaphore <- struct{}{}
+				defer func() { <-semaphore }()
+				scheduleUid, err := Inst().Backup.GetBackupScheduleUID(ctx, scheduleName, BackupOrgID)
+				if err != nil {
+					mutex.Lock()
+					errors = append(errors, err.Error())
+					mutex.Unlock()
+				}
+				log.Infof("Deleting schedule %s from cluster %s", scheduleName, clusterName)
+				err = DeleteScheduleWithUIDAndWait(scheduleName, scheduleUid, clusterName, clusterUid, BackupOrgID, ctx)
+				if err != nil {
+					mutex.Lock()
+					errors = append(errors, err.Error())
+					mutex.Unlock()
+				}
+			}(scheduleName)
+		}
+	}
+
+	wg.Wait()
+	if len(errors) > 0 {
+		return fmt.Errorf("Errors generated while deleting schedules - %s", strings.Join(errors, "}\n{"))
+	}
+	return nil
+}
+
+// DeleteBackupSchedulesFromBackupLocation deletes all schedules from a backup location
+func DeleteBackupSchedulesFromBackupLocation(ctx context1.Context, backupLocationName string, backupLocationUID string) error {
+	bkpEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId:          BackupOrgID,
+		BackupLocation: backupLocationName,
+		BackupLocationRef: &api.ObjectRef{
+			Name: backupLocationName,
+			Uid:  backupLocationUID,
+		},
+	}
+	curBackupSchedules, err := Inst().Backup.EnumerateBackupSchedule(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	errChan := make(chan error, len(curBackupSchedules.GetBackupSchedules()))
+	var wg sync.WaitGroup
+	for _, bkpSchedule := range curBackupSchedules.GetBackupSchedules() {
+		wg.Add(1)
+		go func(bkpSchedule *api.BackupScheduleObject) {
+			defer wg.Done()
+			scheduleName := bkpSchedule.GetName()
+			OrgId := bkpSchedule.GetOrgId()
+			scheduleUid := bkpSchedule.GetUid()
+			clusterName := bkpSchedule.GetClusterRef().GetName()
+			clusterUid := bkpSchedule.GetClusterRef().GetUid()
+			err := DeleteScheduleWithUIDAndWait(scheduleName, scheduleUid, clusterName, clusterUid, OrgId, ctx)
+			if err != nil {
+				errChan <- err
+				return
+			}
+		}(bkpSchedule)
+	}
+	wg.Wait()
+	close(errChan)
+	var errList []string
+	for err := range errChan {
+		errList = append(errList, err.Error())
+	}
+	if len(errList) > 0 {
+		return fmt.Errorf(strings.Join(errList, "; "))
+	}
+	return nil
+}
+
+// DeleteClusterWithoutScheduleDelete deletes cluster with the given cluster name and uid without deleting schedules
+func DeleteClusterWithoutScheduleDelete(clusterName string, clusterUid string, orgID string, ctx context1.Context, cleanupBackupsRestores bool) error {
+	backupDriver := Inst().Backup
+	if cleanupBackupsRestores {
+		err := DeleteAllBackupsWithClusterUid(ctx, BackupOrgID, clusterUid)
+		if err != nil {
+			return err
+		}
+	}
+	clusterDeleteReq := &api.ClusterDeleteRequest{
+		OrgId:          orgID,
+		Name:           clusterName,
+		Uid:            clusterUid,
+		DeleteRestores: cleanupBackupsRestores,
+	}
+	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
+	if err != nil {
+		return err
+	}
+	err = backupDriver.WaitForClusterDeletionWithUID(ctx, clusterName, clusterUid, orgID, clusterDeleteTimeout, clusterDeleteRetryTime)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetAllClusterFromUser returns all the clusters Uid that a user has access to
+func GetAllClusterFromUser(userName string) ([]string, error) {
+	clusterUids := []string{}
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetNonAdminCtx(userName, CommonPassword)
+	if err != nil {
+		return nil, err
+	}
+	// Fetching all clusters
+	enumerateClusterRequest := &api.ClusterEnumerateRequest{
+		OrgId: BackupOrgID,
+	}
+	enumerateClusterResponse, err := backupDriver.EnumerateAllCluster(ctx, enumerateClusterRequest)
+	if err != nil {
+		return nil, err
+
+	}
+	for _, clusterObj := range enumerateClusterResponse.GetClusters() {
+		clusterUids = append(clusterUids, clusterObj.GetUid())
+	}
+	return clusterUids, nil
+}
+
+// UpdateBackupSchedulePolicy updates the schedule policy of a backup schedule.
+func UpdateBackupSchedulePolicy(scheduleName string, scheduleUid string, schedulePolicyName, schedulePolicyUid string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	backupScheduleUpdateRequest := &api.BackupScheduleUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			OrgId: BackupOrgID,
+			Name:  scheduleName,
+			Uid:   scheduleUid,
+		},
+		SchedulePolicy: schedulePolicyName,
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schedulePolicyName,
+			Uid:  schedulePolicyUid,
+		},
+	}
+	_, err := backupDriver.UpdateBackupSchedule(ctx, backupScheduleUpdateRequest)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ValidateClusterSharedBackupAccess validate the access type of shared backup during cluster share.
+func ValidateClusterSharedBackupAccess(ctx context1.Context, backupName string, sharedUserName string) error {
+	sharedUserCtx, err := backup.GetNonAdminCtx(sharedUserName, CommonPassword)
+	if err != nil {
+		return err
+	}
+	backupDriver := Inst().Backup
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+	if err != nil {
+		return err
+	}
+	expectedAccessType, err := GetExpectedAccessTypeForSharedBackupWithClusterShare(ctx, backupName, backupUid, sharedUserName)
+	if err != nil {
+		return err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		OrgId: BackupOrgID,
+		Name:  backupName,
+		Uid:   backupUid,
+	}
+	log.Infof("Inspecting backup [%s] ", backupName)
+	backupObj, err := backupDriver.InspectBackup(sharedUserCtx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+	if backupObj.GetBackup().UserBackupshareAccess != expectedAccessType {
+		return fmt.Errorf("backup [%s] is expected to have access type [%s] but got [%s]", backupName, expectedAccessType, backupObj.GetBackup().UserBackupshareAccess)
+	}
+	return nil
 }
 
 // DeleteListOfBackupsAtOnce deletes the list of given backups at once
@@ -11618,6 +12159,236 @@ func DeleteListOfBackupsAtOnce(ctx context1.Context, listOfBackups []string, Wai
 	if len(errorMessages) > 0 {
 		return fmt.Errorf("delete backup errors: %s", strings.Join(errorMessages, "; "))
 	}
+	return nil
+}
+
+// ValidateSharedBackupAccess validate the access type of shared backup.
+func ValidateSharedBackupAccess(ctx context1.Context, backupName string, actualAccessType api.BackupShare_AccessType, sharedUserName string) error {
+	backupDriver := Inst().Backup
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+	if err != nil {
+		return err
+	}
+	expectedAccessType, err := GetExpectedAccessTypeForBackupShare(ctx, backupName, backupUid, actualAccessType, sharedUserName)
+	if err != nil {
+		return err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		OrgId: BackupOrgID,
+		Name:  backupName,
+		Uid:   backupUid,
+	}
+	allBackupsUser, err := GetAllBackupsForUser(sharedUserName, CommonPassword)
+	if err != nil {
+		return err
+	}
+	log.Infof("The list of backups for user [%s] is  [%v]", sharedUserName, allBackupsUser)
+	log.Infof("Inspecting backup [%s] from user [%s] ", backupName, sharedUserName)
+	sharedUserCtx, err := backup.GetNonAdminCtx(sharedUserName, CommonPassword)
+	if err != nil {
+		return err
+	}
+	backupObj, err := backupDriver.InspectBackup(sharedUserCtx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+	if backupObj.GetBackup().UserBackupshareAccess != expectedAccessType {
+		return fmt.Errorf("backup [%s] is expected to have access type [%s] but got [%s]", backupName, expectedAccessType, backupObj.GetBackup().UserBackupshareAccess)
+	} else {
+		log.Infof("backup [%s] is expected to have access type [%s] and got [%s]", backupName, expectedAccessType, backupObj.GetBackup().UserBackupshareAccess)
+	}
+	return nil
+}
+
+// GetExpectedAccessTypeForBackupShare returns the expected access type for a shared backup based on the user's role and the backup's ownership
+func GetExpectedAccessTypeForBackupShare(ctx context1.Context, backupName string, backupUid string, actualAccessType api.BackupShare_AccessType, sharedUserName string) (api.BackupShare_AccessType, error) {
+	var expectedAccessType api.BackupShare_AccessType
+	sharedUserCtx, err := backup.GetNonAdminCtx(sharedUserName, CommonPassword)
+	if err != nil {
+		return 0, err
+	}
+
+	sharedUserIsAdminCtx, err := IsAdminCtx(sharedUserCtx)
+	if err != nil {
+		return 0, err
+	}
+
+	sharingUserIsAdminCtx, err := IsAdminCtx(ctx)
+	if err != nil {
+		return 0, err
+	}
+	backupDriver := Inst().Backup
+	backupInspectReq := &api.BackupInspectRequest{
+		OrgId: BackupOrgID,
+		Name:  backupName,
+		Uid:   backupUid,
+	}
+	backupInspectResp, err := backupDriver.InspectBackup(ctx, backupInspectReq)
+	if err != nil {
+		return 0, err
+	}
+	backupLocationName := backupInspectResp.GetBackup().BackupLocationRef.Name
+	backupLocationUid := backupInspectResp.GetBackup().BackupLocationRef.Uid
+	sharingUserIsOwnerOfBackupLocation, err := IsOwnerOfBackupLocation(backupLocationName, backupLocationUid, ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	if sharedUserIsAdminCtx || sharingUserIsAdminCtx {
+		log.Infof("Shared User [%s] is an admin. Backup [%s] will have FullAccess.", sharedUserName, backupName)
+		expectedAccessType = api.BackupShare_FullAccess
+	} else if sharingUserIsOwnerOfBackupLocation {
+		log.Infof("Sharing user [%s] is  owner of backup location. Backup [%s] will have actual access [%v].", sharedUserName, backupName, actualAccessType)
+		expectedAccessType = actualAccessType
+	} else {
+		log.Infof("Shared User [%s] is not an admin. Sharing user is not an admin or owner of backup location. Backup [%s] will have ViewAccess.", sharedUserName, backupName)
+		expectedAccessType = api.BackupShare_View
+	}
+	return expectedAccessType, nil
+}
+
+// DeleteAllBackupLocations deletes all backup locations with the given backup location names
+func DeleteAllBackupLocations(backupLocationMap map[string]string, ctx context1.Context) error {
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(backupLocationMap))
+	for backupLocationUID, bkpLocationName := range backupLocationMap {
+		wg.Add(1)
+		go func(backupLocationUID, bkpLocationName string) {
+			defer wg.Done()
+			err := DeleteBackupLocationWithContext(bkpLocationName, backupLocationUID, BackupOrgID, true, ctx)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to delete backup location [%s]: %v", bkpLocationName, err)
+				return
+			}
+			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
+				status, err := IsBackupLocationPresent(bkpLocationName, ctx, BackupOrgID)
+				if err != nil {
+					return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
+				}
+				if status {
+					backupLocationInspectRequest := api.BackupLocationInspectRequest{
+						Name:  bkpLocationName,
+						Uid:   backupLocationUID,
+						OrgId: BackupOrgID,
+					}
+					backupLocationObject, err := Inst().Backup.InspectBackupLocation(ctx, &backupLocationInspectRequest)
+					if err != nil {
+						return "", true, fmt.Errorf("inspect backup location - backup location %s still present with error %v", bkpLocationName, err)
+					}
+					backupLocationStatus := backupLocationObject.BackupLocation.BackupLocationInfo.GetStatus()
+					return "", true, fmt.Errorf("backup location %s is not deleted yet. Status - [%s]", bkpLocationName, backupLocationStatus)
+				}
+				return "", false, nil
+			}
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeleteStatusCheck, BackupLocationDeleteTimeout, BackupLocationDeleteRetryTime)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to verify backup location deletion status [%s]: %v", bkpLocationName, err)
+				return
+			}
+		}(backupLocationUID, bkpLocationName)
+	}
+
+	wg.Wait()
+	close(errChan)
+	var errList []string
+	for err := range errChan {
+		errList = append(errList, err.Error())
+	}
+	if len(errList) > 0 {
+		return fmt.Errorf(strings.Join(errList, "; "))
+	}
+	return nil
+}
+
+// GetAppContextsFromBackup inspects the backup and returns the app context of the backup
+func GetAppContextsFromBackup(backupName, BackupOrgID string, ctx context1.Context, namespaceAppContextMap map[string][]*scheduler.Context) ([]*scheduler.Context, error) {
+	backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get UID for backup %s: %v", backupName, err)
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUID,
+		OrgId: BackupOrgID,
+	}
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect backup %s: %v", backupName, err)
+	}
+	namespaces := resp.GetBackup().GetNamespaces()
+	var collectedAppContexts []*scheduler.Context
+	for _, namespace := range namespaces {
+		if appContexts, exists := namespaceAppContextMap[namespace]; exists {
+			collectedAppContexts = append(collectedAppContexts, appContexts...)
+		} else {
+			log.Errorf("No app contexts found for namespace: %s", namespace)
+		}
+	}
+	return collectedAppContexts, nil
+}
+
+// ScaleDeploymentReplicas is a generic function that scales a deployment to a desired replica count and waits for the desired number of Ready pods.
+func ScaleDeploymentReplicas(deploymentName string, namespace string, desiredReplicaCount int32, readyPodCount int32, podStatusTimeout, podStatusRetryTime time.Duration) error {
+	deployment, err := apps.Instance().GetDeployment(deploymentName, namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get deployment %s in namespace %s: %v", deploymentName, namespace, err)
+	}
+	*deployment.Spec.Replicas = desiredReplicaCount
+	updatedDeployment, err := apps.Instance().UpdateDeployment(deployment)
+	if err != nil {
+		return fmt.Errorf("failed to scale deployment %s to %d replicas: %v", deploymentName, desiredReplicaCount, err)
+	}
+	if *updatedDeployment.Spec.Replicas != desiredReplicaCount {
+		return fmt.Errorf("failed to verify the replica count after scaling deployment %s", deploymentName)
+	}
+
+	checkPodReadyStatus := func() (interface{}, bool, error) {
+		deployment, err = apps.Instance().GetDeployment(deploymentName, namespace)
+		if err != nil {
+			return "", true, err
+		}
+		if deployment.Status.ReadyReplicas < readyPodCount {
+			return "", true, fmt.Errorf("expected at least %d ready replicas but got %d", readyPodCount, deployment.Status.ReadyReplicas)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(checkPodReadyStatus, podStatusTimeout, podStatusRetryTime)
+	if err != nil {
+		return fmt.Errorf("failed to reach the desired number of ready replicas for deployment %s: %v", deploymentName, err)
+	}
+	log.Infof("Successfully scaled deployment %s to %d replicas with %d ready pods", deploymentName, desiredReplicaCount, deployment.Status.ReadyReplicas)
+	return nil
+}
+
+// ScaleStatefulSetReplicas is a generic function to scale a statefulset to a specific replica count and wait for the desired number of Ready pods.
+func ScaleStatefulSetReplicas(statefulSetName string, namespace string, desiredReplicaCount int32, readyPodCount int32, podStatusTimeout, podStatusRetryTime time.Duration) error {
+	statefulSet, err := apps.Instance().GetStatefulSet(statefulSetName, namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get statefulset %s in namespace %s: %v", statefulSetName, namespace, err)
+	}
+	*statefulSet.Spec.Replicas = desiredReplicaCount
+	statefulSet, err = apps.Instance().UpdateStatefulSet(statefulSet)
+	if err != nil {
+		return fmt.Errorf("failed to scale statefulset %s to %d replicas: %v", statefulSetName, desiredReplicaCount, err)
+	}
+	if *statefulSet.Spec.Replicas != desiredReplicaCount {
+		return fmt.Errorf("failed to verify the replica count after scaling statefulset %s", statefulSetName)
+	}
+	checkPodReadyStatus := func() (interface{}, bool, error) {
+		statefulSet, err = apps.Instance().GetStatefulSet(statefulSetName, namespace)
+		if err != nil {
+			return "", true, err
+		}
+		if statefulSet.Status.ReadyReplicas < readyPodCount {
+			return "", true, fmt.Errorf("expected at least %d ready replicas but got %d", readyPodCount, statefulSet.Status.ReadyReplicas)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(checkPodReadyStatus, podStatusTimeout, podStatusRetryTime)
+	if err != nil {
+		return fmt.Errorf("failed to reach the desired number of ready replicas for statefulset %s: %v", statefulSetName, err)
+	}
+
 	return nil
 }
 

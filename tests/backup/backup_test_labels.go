@@ -148,6 +148,11 @@ const (
 	TimeTakenToDeleteBackupWithHeavyLoad                                               TestCaseName = "TimeTakenToDeleteBackupWithHeavyLoad"
 	BackupShare                                                                        TestCaseName = "BackupShare"
 	TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheSchedule             TestCaseName = "TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheSchedule"
+	BackupSuperAdminRoleForLocalUser                                                   TestCaseName = "BackupSuperAdminRoleForLocalUser"
+	ClusterShareWithLargeNumberOfUsersAndClusters                                      TestCaseName = "ClusterShareWithLargeNumberOfUsersAndClusters"
+	ValidateClusterShareWhileBringDownPxBackupPods                                     TestCaseName = "ValidateClusterShareWhileBringDownPxBackupPods"
+	ValidateBackupShareUsingBackupsFromSharedCluster                                   TestCaseName = "ValidateBackupShareUsingBackupsFromSharedCluster"
+	ValidateClusterShareWithConcurrentBackupOperations                                 TestCaseName = "ValidateClusterShareWithConcurrentBackupOperations"
 	ValidateUserAccessLevel                                                            TestCaseName = "ValidateUserAccessLevel"
 	SoftDeleteAndRecoverBackupOnContainerAndBlobLevel                                  TestCaseName = "SoftDeleteAndRecoverBackupOnContainerAndBlobLevel"
 	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel                            TestCaseName = "DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel"
@@ -296,6 +301,11 @@ const (
 	SuperAdminBackupShareLabel                                                              TestCaseLabel = "SuperAdminBackupShare"
 	TimeTakenToDeleteBackupWithHeavyLoadLabel                                               TestCaseLabel = "TimeTakenToDeleteBackupWithHeavyLoad"
 	TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheScheduleLabel             TestCaseLabel = "TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheSchedule"
+	BackupSuperAdminRoleForLocalUserLabel                                                   TestCaseLabel = "BackupSuperAdminRoleForLocalUser"
+	ClusterShareWithLargeNumberOfUsersAndClustersLabel                                      TestCaseLabel = "ClusterShareWithLargeNumberOfUsersAndClusters"
+	ValidateClusterShareWhileBringDownPxBackupPodsLabel                                     TestCaseLabel = "ValidateClusterShareWhileBringDownPxBackupPods"
+	ValidateBackupShareUsingBackupsFromSharedClusterLabel                                   TestCaseLabel = "ValidateBackupShareUsingBackupsFromSharedCluster"
+	ValidateClusterShareWithConcurrentBackupOperationsLabel                                 TestCaseLabel = "ValidateClusterShareWithConcurrentBackupOperations"
 	ValidateUserAccessLevelLabel                                                            TestCaseLabel = "ValidateUserAccessLevel"
 	BackupShareLabel                                                                        TestCaseLabel = "BackupShare"
 	SoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel                                  TestCaseLabel = "SoftDeleteAndRecoverBackupOnContainerAndBlobLevel"
@@ -420,8 +430,9 @@ const (
 
 // Feature labels
 const (
-	PartialBackupLabel  TestCaseLabel = "partial-backup"
-	DiffK8sVersionLabel TestCaseLabel = "diff-k8s-version"
+	PartialBackupLabel             TestCaseLabel = "partial-backup"
+	DiffK8sVersionLabel            TestCaseLabel = "diff-k8s-version"
+	ClusterShareAndSuperAdminLabel TestCaseLabel = "cluster-share"
 )
 
 /*
@@ -593,6 +604,11 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	VerifyRBACForPxAdmin:                                                               {VerifyRBACForPxAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, gkePipeline},
 	ViewOnlyFullBackupRestoreIncrementalBackup:                                         {ViewOnlyFullBackupRestoreIncrementalBackupLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, gkePipeline, iksPipeline, roksPipeline},
 	TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheSchedule:             {TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTheScheduleLabel, PerformanceTest, P0, PxLabel, S3BackupLocationLabel},
+	BackupSuperAdminRoleForLocalUser:                                                   {BackupSuperAdminRoleForLocalUserLabel, ClusterShareAndSuperAdminLabel, vanillaPipeline, allPipeline, SystemTest, P0, PxLabel, NfsBackupLocationLabel, S3BackupLocationLabel},
+	ClusterShareWithLargeNumberOfUsersAndClusters:                                      {ClusterShareWithLargeNumberOfUsersAndClustersLabel, ClusterShareAndSuperAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	ValidateClusterShareWithConcurrentBackupOperations:                                 {ValidateClusterShareWithConcurrentBackupOperationsLabel, ClusterShareAndSuperAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	ValidateBackupShareUsingBackupsFromSharedCluster:                                   {ValidateBackupShareUsingBackupsFromSharedClusterLabel, ClusterShareAndSuperAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	ValidateClusterShareWhileBringDownPxBackupPods:                                     {ValidateClusterShareWhileBringDownPxBackupPodsLabel, ClusterShareAndSuperAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
 	BackupShare: {BackupShareLabel},
 	SoftDeleteAndRecoverBackupOnContainerAndBlobLevel:       {SoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
 	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel: {DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},

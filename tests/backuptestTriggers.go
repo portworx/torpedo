@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -54,27 +55,53 @@ const (
 
 	//CreateRandomRestore creates backup and Restores the backup
 	CreateRandomRestore = "pxbCreateRandomRestore"
+
+	//CreateClusterShare shares a cluster with users or groups
+	CreateClusterShare = "pxbClusterShare"
+
+	//CreatePxBLongevityUsers px-backup users
+	CreatePxBLongevityUsers = "pxbCreateUsers"
+
+	//CreateClusterUnshare un shares a cluster with users or groups
+	CreateClusterUnshare = "pxbClusterUnshare"
+
+	//CreateBackupWithUserFromSharedCluster creates backup for longevity as non-admin user from shared cluster
+	CreateBackupWithUserFromSharedCluster = "pxbCreateBackupWithUserFromSharedCluster"
+
+	//CreateBackupRestoreAndDeleteWithUserFromSharedCluster creates backups and restore and delete the backup for longevity as non-admin user from shared cluster
+	CreateBackupRestoreAndDeleteWithUserFromSharedCluster = "pxbCreateBackupRestoreAndDeleteWithUserFromSharedCluster"
+
+	//DeletePxBackup delete backups from the cluster
+	DeletePxBackup = "pxbDeleteBackup"
 )
 
 // Global variables to be used by all flows
 var (
-	LongevityBackupLocationName      string
-	LongevityBackupLocationUID       string
-	LongevityLockedBackupLocationMap = make(map[string]string)
-	LongevityAllNamespaces           []string
-	LongevitySourceClusterUID        string
-	LongevityDestinationClusterUID   string
-	LongevityScheduledAppContexts    []*scheduler.Context
-	LongevityAllBackupNames          []string
-	LongevityAllLockedBackupNames    []string
-	LongevityBackupAppContextMap     = make(map[string][]*scheduler.Context)
+	LongevityBackupLocationName          string
+	LongevityBackupLocationUID           string
+	LongevityLockedBackupLocationMap     = make(map[string]string)
+	LongevityAllNamespaces               []string
+	LongevitySourceClusterUID            string
+	LongevityDestinationClusterUID       string
+	LongevityScheduledAppContexts        []*scheduler.Context
+	LongevityAllBackupNames              []string
+	LongevityAllBackupUIDMap             = make(map[string]string)
+	LongevityAllLockedBackupNames        []string
+	LongevityBackupAppContextMap         = make(map[string][]*scheduler.Context)
+	LongevityAllNonAdminUserRoleMap      = make(map[string]backup.PxBackupRole)
+	LongevityAllNonAdminUserNames        []string
+	LongevityClusterSharedUserList       []string
+	LongevityAllClusterSharedBackupNames []string
 )
 
 type PxBackupLongevity struct {
-	CustomData      *CustomData
-	ApplicationData *ApplicationData
-	BackupData      *BackupData
-	RestoreData     *RestoreData
+	CustomData         *CustomData
+	ApplicationData    *ApplicationData
+	BackupData         *BackupData
+	RestoreData        *RestoreData
+	ClusterShareConfig *ClusterShareConfig
+	UserData           *UserData
+	BackupUserContext  context1.Context
 }
 
 type CustomData struct {
@@ -87,14 +114,20 @@ type BackupData struct {
 	BackupLocationName      string
 	BackupLocationUID       string
 	LockedBackupLocationMap map[string]string
+	ClusterName             string
 	ClusterUid              string
 	BackupName              string
+	BackupUid               string
 }
 
 type RestoreData struct {
-	RestoreMap         map[string]string
-	RestoreName        string
-	RestoreAppContexts []*scheduler.Context
+	RestoreMap          map[string]string
+	RestoreName         string
+	ClusterName         string
+	ClusterUid          string
+	NameSpaceMapping    map[string]string
+	StorageClassMapping map[string]string
+	RestoreAppContexts  []*scheduler.Context
 }
 
 type ApplicationData struct {
@@ -171,6 +204,19 @@ type BackupPodsInfo struct {
 	PodAge      string
 }
 
+type ClusterShareConfig struct {
+	ClusterName          string
+	ClusterUid           string
+	UserNames            []string
+	GroupNames           []string
+	ShareExistingBackups bool
+}
+
+type UserData struct {
+	numberOfUsers  int
+	numberOfGroups int
+}
+
 const (
 	EventScheduleApps                               = "EventScheduleApps"
 	EventValidateScheduleApplication                = "EventValidateScheduleApplication"
@@ -180,6 +226,10 @@ const (
 	EventCreateBackup                               = "EventCreateBackup"
 	EventCreateLockedBackup                         = "EventCreateLockedBackup"
 	EventRestore                                    = "EventRestore"
+	EventShareCluster                               = "EventShareCluster"
+	EventUnShareCluster                             = "EventUnShareCluster"
+	EventCreateUsers                                = "EventCreateUsers"
+	EventDeleteBackup                               = "EventDeleteBackup"
 )
 
 var AllBuilders = map[string]PxBackupEventBuilder{
@@ -191,6 +241,10 @@ var AllBuilders = map[string]PxBackupEventBuilder{
 	EventCreateBackup:                               eventCreateBackup,
 	EventCreateLockedBackup:                         eventCreateLockedBackup,
 	EventRestore:                                    eventRestore,
+	EventShareCluster:                               eventShareCluster,
+	EventUnShareCluster:                             eventUnShareCluster,
+	EventCreateUsers:                                eventCreateUsers,
+	EventDeleteBackup:                               eventDeleteBackup,
 }
 
 type PxBackupEventBuilder func(*PxBackupLongevity) (error, string, EventData)
@@ -203,26 +257,53 @@ func GetLongevityInputParams() PxBackupLongevity {
 	}
 
 	var backupData = BackupData{
-		Namespaces:         make([]string, 0),
-		BackupLocationName: "",
-		BackupLocationUID:  "",
-		ClusterUid:         "",
+		Namespaces:              make([]string, 0),
+		BackupLocationName:      "",
+		BackupLocationUID:       "",
+		ClusterUid:              "",
+		ClusterName:             "",
+		BackupName:              "",
+		BackupUid:               "",
+		LockedBackupLocationMap: make(map[string]string),
 	}
 
 	var restoreData = RestoreData{
-		RestoreMap:  make(map[string]string),
-		RestoreName: "",
+		RestoreMap:          make(map[string]string),
+		RestoreName:         "",
+		ClusterName:         "",
+		ClusterUid:          "",
+		NameSpaceMapping:    make(map[string]string),
+		StorageClassMapping: make(map[string]string),
+		RestoreAppContexts:  make([]*scheduler.Context, 0),
+	}
+
+	var userData = UserData{
+		numberOfUsers:  0,
+		numberOfGroups: 0,
 	}
 
 	var applicationData = ApplicationData{
 		SchedulerContext: make([]*scheduler.Context, 0),
 	}
 
+	var clusterShareConfig = ClusterShareConfig{
+		ClusterName:          "",
+		ClusterUid:           "",
+		UserNames:            make([]string, 0),
+		GroupNames:           make([]string, 0),
+		ShareExistingBackups: false,
+	}
+
+	var backupUserContext context1.Context
+
 	var longevityStruct = PxBackupLongevity{
-		CustomData:      &customData,
-		ApplicationData: &applicationData,
-		BackupData:      &backupData,
-		RestoreData:     &restoreData,
+		CustomData:         &customData,
+		ApplicationData:    &applicationData,
+		BackupData:         &backupData,
+		RestoreData:        &restoreData,
+		ClusterShareConfig: &clusterShareConfig,
+		UserData:           &userData,
+		BackupUserContext:  backupUserContext,
 	}
 
 	return longevityStruct
@@ -259,9 +340,8 @@ func GetRandomNamespacesForBackup() []string {
 	return allNamepsacesForBackup
 }
 
-func GetRandomBackupForRestore() string {
+func GetRandomBackupForRestoreOrDelete() string {
 	rand.Seed(time.Now().Unix()) // initialize global pseudo random generator
-
 	return LongevityAllBackupNames[rand.Intn(len(LongevityAllBackupNames))]
 }
 
@@ -340,9 +420,21 @@ func eventAddCredentialandBackupLocation(inputsForEventBuilder *PxBackupLongevit
 			return err, "", *eventData
 		}
 		log.InfoD("Created Cloud Credentials with name - %s", credName)
+		if provider != drivers.ProviderNfs {
+			log.Infof("Adding cloud credential ownership for %s to public", credName)
+			err = AddCloudCredentialOwnership(credName, cloudCredUID, nil, nil, Invalid, Read, ctx, BackupOrgID)
+			if err != nil {
+				return err, "", *eventData
+			}
+		}
 		customBackupLocationName := fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
 		BucketName := fmt.Sprintf("%s-pxb-longevity-%s", provider, RandomString(4))
 		err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, cloudCredUID, BucketName, BackupOrgID, "", true)
+		if err != nil {
+			return err, "", *eventData
+		}
+		log.Infof("Adding backup location ownership for %s to public", customBackupLocationName)
+		err = AddBackupLocationOwnership(customBackupLocationName, backupLocationUID, nil, nil, Invalid, Read, ctx)
 		if err != nil {
 			return err, "", *eventData
 		}
@@ -435,21 +527,26 @@ func eventAddSourceAndDestinationCluster(inputsForEventBuilder *PxBackupLongevit
 // Event for Backup Creation
 func eventCreateBackup(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	defer GinkgoRecover()
-
+	var ctx context1.Context
+	var err error
 	eventData := &EventData{}
 	var backupNames []string
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Fetching px-central-admin ctx")
+	if inputsForEventBuilder.BackupUserContext == nil {
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+	} else {
+		ctx = inputsForEventBuilder.BackupUserContext
+	}
 
-	log.Infof("Creating a manual backup")
 	for _, namespace := range inputsForEventBuilder.BackupData.Namespaces {
-		backupName := fmt.Sprintf("%s-%v-%s", BackupNamePrefix, time.Now().Unix(), RandomString(10))
+		backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, RandomString(4))
 		labelSelectors := make(map[string]string)
 		appContextsToBackup := FilterAppContextsByNamespace(inputsForEventBuilder.ApplicationData.SchedulerContext, []string{namespace})
+		log.Infof("Creating a manual backup for namespace - %s", namespace)
 		err := CreateBackupWithValidation(
 			ctx,
 			backupName,
-			SourceClusterName,
+			inputsForEventBuilder.BackupData.ClusterName,
 			inputsForEventBuilder.BackupData.BackupLocationName,
 			inputsForEventBuilder.BackupData.BackupLocationUID,
 			appContextsToBackup,
@@ -460,12 +557,17 @@ func eventCreateBackup(inputsForEventBuilder *PxBackupLongevity) (error, string,
 			return err, "Error occurred while taking backup", *eventData
 		}
 		backupNames = append(backupNames, backupName)
+		backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+		if err != nil {
+			return err, "Error occurred while taking backup uid", *eventData
+		}
 		LongevityBackupAppContextMap[backupName] = appContextsToBackup
+		LongevityAllBackupUIDMap[backupName] = backupUid
 	}
 
 	eventData.BackupNames = backupNames
 	LongevityAllBackupNames = append(LongevityAllBackupNames, backupNames...)
-
+	log.InfoD("Backup names created  - %v", backupNames)
 	return nil, "", *eventData
 }
 
@@ -530,7 +632,12 @@ func eventRestore(inputsForEventBuilder *PxBackupLongevity) (err error, restoreN
 
 	restoreName = fmt.Sprintf("%s-%s-%s", RestoreNamePrefix, inputsForEventBuilder.BackupData.BackupName, RandomString(5))
 	appContextsExpectedInBackup := inputsForEventBuilder.RestoreData.RestoreAppContexts
-	err = CreateRestoreWithValidation(ctx, restoreName, inputsForEventBuilder.BackupData.BackupName, make(map[string]string), make(map[string]string), DestinationClusterName, LongevityDestinationClusterUID, BackupOrgID, appContextsExpectedInBackup)
+	BackupName := inputsForEventBuilder.BackupData.BackupName
+	NameSpaceMapping := inputsForEventBuilder.RestoreData.NameSpaceMapping
+	StorageClassMapping := inputsForEventBuilder.RestoreData.StorageClassMapping
+	RestoreClusterName := inputsForEventBuilder.RestoreData.ClusterName
+	RestoreClusterUid := inputsForEventBuilder.RestoreData.ClusterUid
+	err = CreateRestoreWithValidation(ctx, restoreName, BackupName, NameSpaceMapping, StorageClassMapping, RestoreClusterName, RestoreClusterUid, BackupOrgID, appContextsExpectedInBackup)
 	if err != nil {
 		return err, fmt.Sprintf("Restore failed for %s", restoreName), eventData
 	}
@@ -779,6 +886,7 @@ func TriggerCreateBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 	log.Infof("Creating Backup")
 	inputForBuilder.BackupData.BackupLocationName = LongevityBackupLocationName
 	inputForBuilder.BackupData.BackupLocationUID = LongevityBackupLocationUID
+	inputForBuilder.BackupData.ClusterName = SourceClusterName
 	inputForBuilder.BackupData.ClusterUid = LongevitySourceClusterUID
 	inputForBuilder.BackupData.Namespaces = GetRandomNamespacesForBackup()
 	inputForBuilder.ApplicationData.SchedulerContext = LongevityScheduledAppContexts
@@ -859,6 +967,7 @@ func TriggerCreateBackupAndRestore(contexts *[]*scheduler.Context, recordChan *c
 
 	inputForBuilder.BackupData.BackupLocationName = LongevityBackupLocationName
 	inputForBuilder.BackupData.BackupLocationUID = LongevityBackupLocationUID
+	inputForBuilder.BackupData.ClusterName = SourceClusterName
 	inputForBuilder.BackupData.ClusterUid = LongevitySourceClusterUID
 	inputForBuilder.BackupData.Namespaces = GetRandomNamespacesForBackup()
 	inputForBuilder.ApplicationData.SchedulerContext = LongevityScheduledAppContexts
@@ -866,6 +975,8 @@ func TriggerCreateBackupAndRestore(contexts *[]*scheduler.Context, recordChan *c
 	eventData := RunBuilder(EventCreateBackup, &inputForBuilder, &result)
 
 	inputForBuilder.BackupData.BackupName = eventData.BackupNames[0]
+	inputForBuilder.RestoreData.ClusterName = DestinationClusterName
+	inputForBuilder.RestoreData.ClusterUid = LongevityDestinationClusterUID
 	inputForBuilder.RestoreData.RestoreAppContexts = LongevityBackupAppContextMap[inputForBuilder.BackupData.BackupName]
 	_ = RunBuilder(EventRestore, &inputForBuilder, &result)
 
@@ -901,7 +1012,9 @@ func TriggerCreateRandomRestore(contexts *[]*scheduler.Context, recordChan *chan
 	result.Name = "Create Restore From Random Backup"
 	inputForBuilder := GetLongevityInputParams()
 
-	inputForBuilder.BackupData.BackupName = GetRandomBackupForRestore()
+	inputForBuilder.BackupData.BackupName = GetRandomBackupForRestoreOrDelete()
+	inputForBuilder.RestoreData.ClusterName = DestinationClusterName
+	inputForBuilder.RestoreData.ClusterUid = LongevityDestinationClusterUID
 	inputForBuilder.RestoreData.RestoreAppContexts = LongevityBackupAppContextMap[inputForBuilder.BackupData.BackupName]
 	log.Infof("Creating restore from [%s]", inputForBuilder.BackupData.BackupName)
 
@@ -995,7 +1108,7 @@ func TriggerBackupEmailReporter() {
 	}
 }
 
-// Helper functions
+// collectNodeInfo collects node info
 func collectNodeInfo(nodes []node.Node) []nodeInfo {
 	var nodeInfoList []nodeInfo
 	var pxStatus string
@@ -1045,6 +1158,7 @@ func collectNodeInfo(nodes []node.Node) []nodeInfo {
 	return nodeInfoList
 }
 
+// collectBackupPodInfo collects backup pod info
 func collectBackupPodInfo(namespace string) []BackupPodsInfo {
 	var podInfoList []BackupPodsInfo
 	allPods, _ := core.Instance().GetPods(namespace, nil)
@@ -1067,6 +1181,7 @@ func collectBackupPodInfo(namespace string) []BackupPodsInfo {
 	return podInfoList
 }
 
+// prepareBackupEmailBody prepares the email body
 func prepareBackupEmailBody(eventRecords backupEmailData) (string, error) {
 	var err error
 	t := template.New("t").Funcs(templateFuncs)
@@ -1083,6 +1198,389 @@ func prepareBackupEmailBody(eventRecords backupEmailData) (string, error) {
 		return "", err
 	}
 	return buffer.String(), nil
+}
+
+// eventShareCluster for Cluster Share from admin
+func eventShareCluster(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
+	defer GinkgoRecover()
+	eventData := &EventData{}
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
+
+	log.Infof("Share cluster with random non-admin user")
+	_, err = ShareClusterWithValidation(
+		ctx,
+		inputsForEventBuilder.ClusterShareConfig.ClusterName,
+		inputsForEventBuilder.ClusterShareConfig.ClusterUid,
+		inputsForEventBuilder.ClusterShareConfig.UserNames,
+		inputsForEventBuilder.ClusterShareConfig.GroupNames,
+		inputsForEventBuilder.ClusterShareConfig.ShareExistingBackups)
+	if err != nil {
+		return err, "Error occurred while sharing cluster", *eventData
+	}
+	log.InfoD("Cluster [%s] shared successfully for user [%s]", inputsForEventBuilder.ClusterShareConfig.ClusterName, inputsForEventBuilder.ClusterShareConfig.UserNames)
+	return nil, "", *eventData
+}
+
+// eventUnShareCluster for cluster unShare from admin
+func eventUnShareCluster(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
+	defer GinkgoRecover()
+	eventData := &EventData{}
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
+
+	log.Infof("unshare cluster with random non-admin user")
+	_, err = UnShareClusterWithValidation(
+		ctx,
+		inputsForEventBuilder.ClusterShareConfig.ClusterName,
+		inputsForEventBuilder.ClusterShareConfig.ClusterUid,
+		inputsForEventBuilder.ClusterShareConfig.UserNames,
+		inputsForEventBuilder.ClusterShareConfig.GroupNames)
+	if err != nil {
+		return err, "Error occurred while sharing cluster", *eventData
+	}
+	log.InfoD("Cluster [%s] unshared successfully for user [%s]", inputsForEventBuilder.ClusterShareConfig.ClusterName, inputsForEventBuilder.ClusterShareConfig.UserNames)
+	return nil, "", *eventData
+}
+
+// TriggerShareCluster to share cluster with random non-admin user
+func TriggerShareCluster(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+
+	defer GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CreateClusterShare)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CreateClusterShare,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	result := GetLongevityEventResponse()
+	result.Name = "Share Cluster with random non-admin user"
+	inputForBuilder := GetLongevityInputParams()
+
+	inputForBuilder.ClusterShareConfig.UserNames = []string{GetRandomUserToShareCluster()}
+	inputForBuilder.ClusterShareConfig.ClusterName = SourceClusterName
+	inputForBuilder.ClusterShareConfig.ClusterUid = LongevitySourceClusterUID
+	inputForBuilder.ClusterShareConfig.ShareExistingBackups = false
+	log.InfoD("Sharing longevity cluster [%s with users [%s]", SourceClusterName, inputForBuilder.ClusterShareConfig.UserNames)
+
+	_ = RunBuilder(EventShareCluster, &inputForBuilder, &result)
+
+	inputForBuilder.ClusterShareConfig.ClusterName = DestinationClusterName
+	inputForBuilder.ClusterShareConfig.ClusterUid = LongevityDestinationClusterUID
+	inputForBuilder.ClusterShareConfig.ShareExistingBackups = false
+	log.InfoD("Sharing longevity cluster [%s with users [%s]", DestinationClusterName, inputForBuilder.ClusterShareConfig.UserNames)
+
+	_ = RunBuilder(EventShareCluster, &inputForBuilder, &result)
+
+	LongevityClusterSharedUserList = append(LongevityClusterSharedUserList, inputForBuilder.ClusterShareConfig.UserNames...)
+
+	UpdateEventResponse(&result)
+
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+}
+
+// TriggerUnShareCluster to unshare cluster with random non-admin user
+func TriggerUnShareCluster(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+
+	defer GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CreateClusterUnshare)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CreateClusterUnshare,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	result := GetLongevityEventResponse()
+	result.Name = "UnShare Cluster with random non-admin user"
+	inputForBuilder := GetLongevityInputParams()
+	inputForBuilder.ClusterShareConfig.UserNames = []string{GetRandomUserToUnShareCluster()}
+	inputForBuilder.ClusterShareConfig.ClusterName = SourceClusterName
+	inputForBuilder.ClusterShareConfig.ClusterUid = LongevitySourceClusterUID
+	log.InfoD("Un Sharing cluster [%s] from user [%s]", SourceClusterName, inputForBuilder.ClusterShareConfig.UserNames)
+
+	_ = RunBuilder(EventUnShareCluster, &inputForBuilder, &result)
+
+	inputForBuilder.ClusterShareConfig.ClusterName = DestinationClusterName
+	inputForBuilder.ClusterShareConfig.ClusterUid = LongevityDestinationClusterUID
+	log.InfoD("Un Sharing cluster [%s] from user [%s]", DestinationClusterName, inputForBuilder.ClusterShareConfig.UserNames)
+
+	_ = RunBuilder(EventUnShareCluster, &inputForBuilder, &result)
+
+	LongevityClusterSharedUserList = RemoveStringItemFromSlice(LongevityClusterSharedUserList, inputForBuilder.ClusterShareConfig.UserNames)
+
+	UpdateEventResponse(&result)
+
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+
+}
+
+// TriggerCreateUsers to creates non-admin users with random non-admin roles assigned.
+func TriggerCreateUsers(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CreatePxBLongevityUsers)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CreatePxBLongevityUsers,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	result := GetLongevityEventResponse()
+	result.Name = "Create non-admin user with random roles"
+	inputForBuilder := GetLongevityInputParams()
+
+	inputForBuilder.UserData.numberOfUsers, _ = strconv.Atoi(GetEnv(UsersToBeCreated, "100"))
+	_ = RunBuilder(EventCreateUsers, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+}
+
+// eventCreateUsers for creating users with random px-backup role assigned
+func eventCreateUsers(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
+	defer GinkgoRecover()
+	eventData := &EventData{}
+
+	numberOfUsers := inputsForEventBuilder.UserData.numberOfUsers
+	users := make([]string, 0)
+	roles := [4]backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.SuperAdmin, backup.ApplicationUser}
+	userRoleMap := make(map[string]backup.PxBackupRole)
+
+	log.InfoD("Creating %d users", numberOfUsers)
+	for _, userName := range CreateUsers(numberOfUsers) {
+		randomRole := roles[rand.Intn(len(roles))]
+		err := backup.AddRoleToUser(userName, randomRole, fmt.Sprintf("Adding %v role to %s", randomRole, userName))
+		log.FailOnError(err, "failed to add role %s to the user %s", randomRole, userName)
+		users = append(users, userName)
+		userRoleMap[userName] = randomRole
+	}
+	LongevityAllNonAdminUserNames = users
+	LongevityAllNonAdminUserRoleMap = userRoleMap
+	log.InfoD("Users [%v] created successfully ", LongevityAllNonAdminUserNames)
+	return nil, "", *eventData
+}
+
+// GetRandomUser returns a random user from the list of non-admin users
+func GetRandomUser() string {
+	rand.Seed(time.Now().Unix()) // initialize global pseudo random generator
+	return LongevityAllNonAdminUserNames[rand.Intn(len(LongevityAllNonAdminUserNames))]
+}
+
+// GetRandomUserToShareCluster returns a random user from the list of non-admin users
+func GetRandomUserToShareCluster() string {
+	randomUser := GetRandomUser()
+	if !IsPresent(LongevityClusterSharedUserList, randomUser) {
+		return randomUser
+	} else {
+		return GetRandomUserToShareCluster()
+	}
+}
+
+// GetRandomUserToUnShareCluster returns a random user from the list of non-admin users
+func GetRandomUserToUnShareCluster() string {
+	rand.Seed(time.Now().Unix())
+	sharedUser := LongevityClusterSharedUserList[rand.Intn(len(LongevityClusterSharedUserList))]
+	if sharedUser == "" {
+		return ""
+	} else {
+		return sharedUser
+	}
+}
+
+// TriggerCreateBackupWithUserFromSharedCluster to create backup from a shared cluster
+func TriggerCreateBackupWithUserFromSharedCluster(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CreateBackupWithUserFromSharedCluster)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CreateBackupWithUserFromSharedCluster,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	result := GetLongevityEventResponse()
+	result.Name = "Create Backup From Shared Cluster"
+	inputForBuilder := GetLongevityInputParams()
+
+	sharedUserName := LongevityClusterSharedUserList[rand.Intn(len(LongevityClusterSharedUserList))]
+
+	log.InfoD("Creating Backup From Shared Cluster [%s] with user [%s]", SourceClusterName, sharedUserName)
+	inputForBuilder.BackupData.BackupLocationName = LongevityBackupLocationName
+	inputForBuilder.BackupData.BackupLocationUID = LongevityBackupLocationUID
+	inputForBuilder.BackupData.ClusterName = SourceClusterName
+	inputForBuilder.BackupData.ClusterUid = LongevitySourceClusterUID
+	inputForBuilder.BackupData.Namespaces = GetRandomNamespacesForBackup()
+	inputForBuilder.ApplicationData.SchedulerContext = LongevityScheduledAppContexts
+	nonAdminCtx, _ := backup.GetNonAdminCtx(sharedUserName, CommonPassword)
+	inputForBuilder.BackupUserContext = nonAdminCtx
+
+	eventData := RunBuilder(EventCreateBackup, &inputForBuilder, &result)
+
+	LongevityAllClusterSharedBackupNames = append(LongevityAllClusterSharedBackupNames, eventData.BackupNames...)
+	UpdateEventResponse(&result)
+
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+}
+
+// TriggerCreateBackupRestoreAndDeleteWithUserFromSharedCluster to create backup and restore and delete it
+func TriggerCreateBackupRestoreAndDeleteWithUserFromSharedCluster(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CreateBackupRestoreAndDeleteWithUserFromSharedCluster)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CreateBackupRestoreAndDeleteWithUserFromSharedCluster,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	result := GetLongevityEventResponse()
+	result.Name = "Create Backup From Shared Cluster"
+	inputForBuilder := GetLongevityInputParams()
+
+	sharedUserName := LongevityClusterSharedUserList[rand.Intn(len(LongevityClusterSharedUserList))]
+	log.Infof("Creating Backup From Shared Cluster [%s] with user [%s]", SourceClusterName, sharedUserName)
+	inputForBuilder.BackupData.BackupLocationName = LongevityBackupLocationName
+	inputForBuilder.BackupData.BackupLocationUID = LongevityBackupLocationUID
+	inputForBuilder.BackupData.ClusterName = SourceClusterName
+	inputForBuilder.BackupData.ClusterUid = LongevitySourceClusterUID
+	inputForBuilder.BackupData.Namespaces = GetRandomNamespacesForBackup()
+	inputForBuilder.ApplicationData.SchedulerContext = LongevityScheduledAppContexts
+	nonAdminCtx, _ := backup.GetNonAdminCtx(sharedUserName, CommonPassword)
+	inputForBuilder.BackupUserContext = nonAdminCtx
+
+	eventData := RunBuilder(EventCreateBackup, &inputForBuilder, &result)
+
+	log.Infof("Creating restore from [%s]", eventData.BackupNames[0])
+	inputForBuilder.BackupData.BackupName = eventData.BackupNames[0]
+	inputForBuilder.RestoreData.ClusterName = DestinationClusterName
+	inputForBuilder.RestoreData.ClusterUid = LongevityDestinationClusterUID
+	inputForBuilder.RestoreData.RestoreAppContexts = LongevityBackupAppContextMap[inputForBuilder.BackupData.BackupName]
+	RunBuilder(EventRestore, &inputForBuilder, &result)
+
+	log.Infof("Deleting Backup [%s] with uid [%s]", inputForBuilder.BackupData.BackupName, inputForBuilder.BackupData.BackupUid)
+	inputForBuilder.BackupData.BackupName = eventData.BackupNames[0]
+	inputForBuilder.BackupData.BackupUid = LongevityAllBackupUIDMap[inputForBuilder.BackupData.BackupName]
+	RunBuilder(EventDeleteBackup, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+}
+
+// TriggerDeleteSingleBackup to delete a backup randomly from the created backups as admin
+func TriggerDeleteSingleBackup(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(DeletePxBackup)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DeletePxBackup,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	result := GetLongevityEventResponse()
+	result.Name = "Delete Backup"
+	inputForBuilder := GetLongevityInputParams()
+	inputForBuilder.BackupData.BackupName = GetRandomBackupForRestoreOrDelete()
+	inputForBuilder.BackupData.BackupUid = LongevityAllBackupUIDMap[inputForBuilder.BackupData.BackupName]
+	log.InfoD("Deleting Backup [%s] with uid [%s]", inputForBuilder.BackupData.BackupName, inputForBuilder.BackupData.BackupUid)
+	_ = RunBuilder(EventDeleteBackup, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+}
+
+// eventDeleteBackup to delete a backup
+func eventDeleteBackup(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
+	defer GinkgoRecover()
+	var ctx context1.Context
+	var err error
+	eventData := &EventData{}
+	// ctx has to be passed in trigger call , either admin ctx or user ctx
+	if inputsForEventBuilder.BackupUserContext == nil {
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+	} else {
+		ctx = inputsForEventBuilder.BackupUserContext
+	}
+	_, err = DeleteBackup(inputsForEventBuilder.BackupData.BackupName, inputsForEventBuilder.BackupData.BackupUid, BackupOrgID, ctx)
+	if err != nil {
+		return err, "Error occurred while deleting backup", *eventData
+	}
+	log.InfoD("Backup [%s] deleted successfully", inputsForEventBuilder.BackupData.BackupName)
+	LongevityAllBackupNames = RemoveStringItemFromSlice(LongevityAllBackupNames, []string{inputsForEventBuilder.BackupData.BackupName})
+	return nil, "", *eventData
 }
 
 var backuphtmlTemplate = `<!DOCTYPE html>

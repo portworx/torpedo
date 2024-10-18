@@ -591,7 +591,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", Label(Test
 			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-			clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid [%s]", SourceClusterName, clusterUid))
 		})
 
@@ -601,7 +601,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", Label(Test
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			log.InfoD("Taking %d backups", numberOfBackups)
-			backupNames, err = TakeMultipleBackupsPerDeployment(ctx, BackupOrgID, SourceClusterName, numberOfBackups, numberOfSimultaneousBackups, customBackupLocationName, backupLocationUID, appContextsToBackup, BackupNamePrefix)
+			backupNames, err = TakeMultipleBackupsPerDeployment(ctx, BackupOrgID, SourceClusterName, clusterUid, numberOfBackups, numberOfSimultaneousBackups, customBackupLocationName, backupLocationUID, appContextsToBackup, BackupNamePrefix)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupNames))
 		})
 

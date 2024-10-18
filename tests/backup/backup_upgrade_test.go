@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"github.com/hashicorp/go-version"
 	k8score "github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers"
+	"github.com/portworx/torpedo/drivers/backup/portworx"
 	"github.com/portworx/torpedo/drivers/node"
 	corev1 "k8s.io/api/core/v1"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -274,12 +277,67 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		partialBackupLocationMap           map[string]string
 		failedVolumes                      []*corev1.PersistentVolumeClaim
 		cancelFunc                         context1.CancelFunc
+		// ClusterShare testcase variables
+		clusterShareScheduledAppContexts    []*scheduler.Context
+		clusterShareAdminCloudCredName      string
+		clusterShareAdminCloudCredentialUID string
+		clusterShareBackupLocationUID       string
+		clusterShareBackupLocationName      string
+		clusterShareBackupLocationMap       map[string]string
+		clusterShareUserNamespaceMap        map[string]string
+		clusterShareSchedulePolicyName      string
+		clusterShareSchedulePolicyUID       string
+		clusterShareSchedulePolicyInterval  = int64(15)
+		clusterShareProviders               []string
+		clusterShareBackedUpNamespaces      []string
+		clusterShareNumberOfUsers           int
+		clusterShareNonAdminUsers           []string
+		clusterShareUserBackupsMap          map[string][]string
+		clusterShareNewUserBackupsMap       map[string][]string
+		clusterShareSharedUsersMap          map[string]string
+		clusterShareUserClusterMap          map[string]map[string]string
+		clusterShareNumOfNamespace          int
+		clusterShareUserShareConfigs        []struct {
+			user                 string
+			shareExistingBackups bool
+			shareUser            string
+			accessLevel          BackupAccess
+			clusterLevel         bool
+		}
+		runClusterShareTests bool
+		// SuperAdmin testcase variables
+		superAdminScheduledAppContexts   []*scheduler.Context
+		superAdminCloudCredName          string
+		superAdminBackupLocationName     string
+		superAdminCloudCredUID           string
+		superAdminBackupLocationUID      string
+		superAdminBackupLocationMap      map[string]string
+		superAdminProviders              = GetBackupProviders()
+		superAdminPxAdminUserList        []string
+		superAdminSharingUserList        []string
+		superAdminNumOfNonAdminUsers     int
+		superAdminNumOfPxAdminGroupUsers int
+		superAdminNumOfSharingUsers      int
+		superAdminNonAdminUserList       []string
+		superAdminLabelSelectors         map[string]string
+		superAdminSchedulePolicyName     string
+		superAdminSchedulePolicyUID      string
+		superAdminUserClusterMap         map[string]map[string]string
+		superAdminBackedUpNamespaces     []string
+		superAdminUserNamespaceMap       map[string]string
+		superAdminDeletedBackups         []string
+		superAdminNumOfNamespace         int
+		superAdminRole                   backup.PxBackupRole
+		adminGroup                       string
+		runSuperAdminTests               bool
+		wg                               sync.WaitGroup
 	)
 	updateBackupToContextMapping := func(backupName string, appContextsToBackup []*scheduler.Context) {
 		mutex.Lock()
 		defer mutex.Unlock()
 		backupToContextMapping[backupName] = appContextsToBackup
 	}
+
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("PXBackupEndToEndBackupAndRestoreWithUpgrade", "Validates end-to-end backup and restore operations with PX-Backup upgrade", nil, 84757, KPhalgun, Q1FY24)
 		log.Infof("Scheduling applications")
@@ -289,6 +347,29 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		}
 		destClusterContexts = make([]*scheduler.Context, 0)
 		destClusterAppNamespaces = make(map[string][]string)
+
+		//clusterShare testcase variables
+		clusterShareProviders = GetBackupProviders()
+		clusterShareNumOfNamespace = 12
+		clusterShareNumberOfUsers = 12
+		clusterShareBackupLocationMap = make(map[string]string)
+		clusterShareUserNamespaceMap = make(map[string]string)
+		clusterShareUserBackupsMap = make(map[string][]string)
+		clusterShareNewUserBackupsMap = make(map[string][]string)
+		clusterShareSharedUsersMap = make(map[string]string)
+		clusterShareUserClusterMap = make(map[string]map[string]string)
+
+		// SuperAdmin testcase variables
+		superAdminBackupLocationMap = make(map[string]string)
+		superAdminUserClusterMap = make(map[string]map[string]string)
+		superAdminUserNamespaceMap = make(map[string]string)
+		superAdminNumOfNamespace = 2
+		superAdminNumOfNonAdminUsers = 2      //Other users for creating backup objects
+		superAdminNumOfPxAdminGroupUsers = 10 //Users to be added to Px-Admin group
+		superAdminNumOfSharingUsers = 5
+		superAdminRole = backup.SuperAdmin
+		adminGroup = "px-admin-group"
+
 		log.InfoD("Scheduling applications in destination cluster")
 		err := SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
@@ -323,6 +404,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		}
 	})
 	It("PX-Backup End-to-End Backup and Restore with Upgrade", func() {
+
 		Step("Provision apps for partial success validation", func() {
 			if IsPxInstalled() {
 				log.InfoD("Provisioning two apps for partial success validation")
@@ -657,12 +739,444 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, partialScheduledBackupName, BackupOrgID)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the first scheduled backup with schedule [%s]", firstScheduleBackupName))
+				time.Sleep(30 * time.Second)
 				log.Infof("Validating if the first scheduled backup [%s] of schedule [%s] is Failed", partialScheduledBackupName, firstScheduleBackupName)
 				err = BackupFailedCheck(firstScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] of schedule [%s] is in failed state", firstScheduleBackupName, partialScheduledBackupName))
 			} else {
 				log.InfoD("Skipping this step as it is a Non-PX cluster")
 			}
+		})
+
+		// super admin share verification pre-upgrade
+		log.InfoD("Validating the migration of px-admin user to super-admin after upgrade to Px-Backup 2.8.0")
+		checkPxbVersionForSuperAdmin, err := CompareCurrentPxBackupVersion("2.8.0", (*version.Version).LessThan)
+		log.FailOnError(err, "Checking if current px-backup version is greater than or equal to 2.8.0")
+		if checkPxbVersionForSuperAdmin {
+			runSuperAdminTests = true
+			Step("Scheduling applications for super admin tests", func() {
+				log.InfoD("scheduling applications for super admin tests")
+				superAdminScheduledAppContexts = make([]*scheduler.Context, 0)
+				for i := 0; i < superAdminNumOfNamespace; i++ {
+					taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+					appContexts := ScheduleApplications(taskName)
+					for _, appCtx := range appContexts {
+						appCtx.ReadinessTimeout = AppReadinessTimeout
+						superAdminScheduledAppContexts = append(superAdminScheduledAppContexts, appCtx)
+						appNamespace := appCtx.ScheduleOptions.Namespace
+						superAdminBackedUpNamespaces = append(superAdminBackedUpNamespaces, appNamespace)
+					}
+				}
+			})
+			Step("Validate applications ", func() {
+				log.InfoD("Validating applications")
+				ValidateApplications(superAdminScheduledAppContexts)
+			})
+
+			Step("Create a set of users to be added to Px-Admin group", func() {
+				log.Infof("Creating a set of %d users and adding it to the Px-Admin group", superAdminNumOfPxAdminGroupUsers)
+				log.Infof("Creating %d px-admin users to be added to [%s] group and %d non-admin users", superAdminNumOfPxAdminGroupUsers, adminGroup, superAdminNumOfNonAdminUsers)
+				superAdminPxAdminUserList = CreateUsers(superAdminNumOfPxAdminGroupUsers)
+				for _, userName := range superAdminPxAdminUserList {
+					err := backup.AddGroupToUser(userName, adminGroup)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addition of user %s to the group %s", userName, adminGroup))
+				}
+				log.Infof("The px-admin users [%v] are added to the Px-Admin group", superAdminPxAdminUserList)
+
+				superAdminNonAdminUserList = CreateUsers(superAdminNumOfNonAdminUsers)
+				roles := [3]backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.ApplicationUser}
+				for i, userName := range superAdminNonAdminUserList {
+					randomRole := roles[rand.Intn(len(roles))]
+					log.Infof("Adding role %v to user %s", randomRole, userName)
+					err := backup.AddRoleToUser(userName, randomRole, fmt.Sprintf("Adding %v role to %s", randomRole, userName))
+					log.FailOnError(err, "failed to add role %s to the user %s", randomRole, userName)
+					superAdminUserNamespaceMap[userName] = superAdminBackedUpNamespaces[i]
+				}
+				log.Infof("The non-admin users [%v] are created", superAdminNonAdminUserList)
+
+				superAdminSharingUserList = CreateUsers(superAdminNumOfSharingUsers)
+				for _, userName := range superAdminSharingUserList {
+					randomRole := roles[rand.Intn(len(roles))]
+					err := backup.AddRoleToUser(userName, randomRole, fmt.Sprintf("Adding %v role to %s", randomRole, userName))
+					log.FailOnError(err, "failed to add role %s to the user %s", randomRole, userName)
+				}
+			})
+
+			Step("Adding Cloud credentials and Backup Location from Admin", func() {
+				log.InfoD(fmt.Sprintf("Adding Credentials and Backup Location from admin and making it public"))
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-admin ctx")
+				for _, provider := range superAdminProviders {
+					superAdminCloudCredUID = uuid.New()
+					superAdminCloudCredName = fmt.Sprintf("autogenerated-cred-%v", RandomString(5))
+					if provider != drivers.ProviderNfs {
+						err = CreateCloudCredential(provider, superAdminCloudCredName, superAdminCloudCredUID, BackupOrgID, ctx)
+						dash.VerifyFatal(err, nil, fmt.Sprintf(" create cloud credential %s using provider %s for px-admin user", superAdminCloudCredName, provider))
+						err = AddCloudCredentialOwnership(superAdminCloudCredName, superAdminCloudCredUID, nil, nil, Invalid, Read, ctx, BackupOrgID)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying public ownership update for cloud credential %s ", superAdminCloudCredName))
+					}
+					superAdminBackupLocationName = fmt.Sprintf("autogenerated-backup-location-%v", RandomString(5))
+					superAdminBackupLocationUID = uuid.New()
+					err = CreateBackupLocationWithContext(provider, superAdminBackupLocationName, superAdminBackupLocationUID, superAdminCloudCredName, superAdminCloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", ctx, true)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Add backup location %s using provider %s for px-admin user", superAdminBackupLocationName, provider))
+					err = AddBackupLocationOwnership(superAdminBackupLocationName, superAdminBackupLocationUID, nil, nil, Invalid, Read, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying public ownership update for backup location %s", superAdminBackupLocationName))
+					superAdminBackupLocationMap[superAdminBackupLocationUID] = superAdminBackupLocationName
+				}
+			})
+
+			Step("Create schedule policy and make it public", func() {
+				log.InfoD("Creating schedule policy and making it public")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				superAdminSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic-schedule-policy", RandomString(5))
+				superAdminSchedulePolicyUID = uuid.New()
+				err = CreateBackupScheduleIntervalPolicy(5, int64(15), 5, superAdminSchedulePolicyName, superAdminSchedulePolicyUID, BackupOrgID, ctx, false, false)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule policy %s", superAdminSchedulePolicyName))
+				log.InfoD("Update SchedulePolicy - %s ownership as public ", superAdminSchedulePolicyName)
+				err = AddSchedulePolicyOwnership(superAdminSchedulePolicyName, superAdminSchedulePolicyUID, nil, nil, Invalid, Read, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for schedulepolicy - %s", superAdminSchedulePolicyName))
+			})
+
+			Step("Add source and destination clusters for all users", func() {
+				log.InfoD("Adding source and destination clusters for all users")
+				addClustersFromUser := func(user string) {
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, fmt.Sprintf("Fetching user [%s] ctx", user))
+					log.Infof("Creating source [%s] and destination [%s] clusters for user [%s]", SourceClusterName, DestinationClusterName, user)
+					err = CreateApplicationClusters(BackupOrgID, "", "", nonAdminCtx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with user [%s] ctx", SourceClusterName, DestinationClusterName, user))
+					for _, clusterName := range []string{SourceClusterName, DestinationClusterName} {
+						userClusterUID, err := Inst().Backup.GetClusterUID(nonAdminCtx, BackupOrgID, clusterName)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", clusterName))
+						if superAdminUserClusterMap[user] == nil {
+							superAdminUserClusterMap[user] = make(map[string]string)
+						}
+						superAdminUserClusterMap[user][clusterName] = userClusterUID
+						log.Infof("Updated superAdminUserClusterMap for user [%s] with cluster [%s] and uid [%s]", user, clusterName, userClusterUID)
+					}
+				}
+				err := TaskHandler(append(superAdminPxAdminUserList, superAdminNonAdminUserList...), addClustersFromUser, Sequential)
+				log.FailOnError(err, "failed to create application cluster from user")
+			})
+
+			Step("Taking manual backups of application from source cluster for each non-admin user", func() {
+				log.InfoD("Taking manual backups of applications from source cluster for each non-admin user")
+				createManualBackupsFromUser := func(user string) {
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, fmt.Sprintf("Fetching user [%s] ctx", user))
+					appContextsToBackup := FilterAppContextsByNamespace(superAdminScheduledAppContexts, []string{superAdminUserNamespaceMap[user]})
+					BackupNamePrefix := fmt.Sprintf("%s-%s-%s", "manual-backup", user, RandomString(5))
+					backupNames, err := TakeMultipleBackupsPerDeployment(nonAdminCtx, BackupOrgID, SourceClusterName, superAdminUserClusterMap[user][SourceClusterName], 4, 3, superAdminBackupLocationName, superAdminBackupLocationUID, appContextsToBackup, BackupNamePrefix)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupNames))
+				}
+				err := TaskHandler(superAdminNonAdminUserList, createManualBackupsFromUser, Parallel)
+				log.FailOnError(err, "failed to create manual backups from user")
+			})
+
+			Step("Create scheduled backup from  source cluster from non-admin users ", func() {
+				log.InfoD("Create scheduled backup from  source cluster from non-admin users ")
+				createScheduleBackupsFromUser := func(user string) {
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "Fetching user [%s] ctx", user)
+					scheduleName := fmt.Sprintf("%s-%s-%s", "schedule", user, RandomString(5))
+					appContextsToBackup := FilterAppContextsByNamespace(superAdminScheduledAppContexts, []string{superAdminUserNamespaceMap[user]})
+					scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, scheduleName, SourceClusterName, superAdminUserClusterMap[user][SourceClusterName], superAdminBackupLocationName, superAdminBackupLocationUID, appContextsToBackup, superAdminLabelSelectors, BackupOrgID, "", "", "", "", superAdminSchedulePolicyName, superAdminSchedulePolicyUID)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup [%s] form user [%s]", scheduleName, user))
+					err = SuspendBackupSchedule(scheduleName, superAdminSchedulePolicyName, BackupOrgID, nonAdminCtx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Suspend schedule [%s]", scheduleBackupName))
+				}
+				err := TaskHandler(superAdminNonAdminUserList, createScheduleBackupsFromUser, Parallel)
+				log.FailOnError(err, "failed to create schedule backups from user on a shared cluster")
+			})
+
+			Step("Take restore per user for all non-admin users", func() {
+				log.Infof("Taking restore per user for all non-admin users")
+				createRestoreFromUser := func(user string) {
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "Fetching user [%s] ctx", user)
+					backupNames, err := GetAllBackupsForUser(user, CommonPassword)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all backups for user [%s]", user))
+					appContextsToRestore := FilterAppContextsByNamespace(superAdminScheduledAppContexts, []string{superAdminUserNamespaceMap[user]})
+					if len(backupNames) == 0 {
+						log.Errorf("No backups found for user %s", user)
+					}
+					restoreName := fmt.Sprintf("restore-%s-%s", backupNames[0], RandomString(4))
+					err = CreateRestoreWithValidation(nonAdminCtx, restoreName, backupNames[0], make(map[string]string), make(map[string]string), DestinationClusterName, superAdminUserClusterMap[user][DestinationClusterName], BackupOrgID, appContextsToRestore)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s] for user [%s]", restoreName, user))
+				}
+				err := TaskHandler(superAdminNonAdminUserList, createRestoreFromUser, Sequential)
+				log.FailOnError(err, "failed to create restore from user")
+			})
+
+			Step("Verify partial permissions of users belonging to Px-Admin group before upgrade", func() {
+				log.InfoD("Verifying partial permissions of users belonging to Px-Admin group before upgrade")
+				subsetOfPxAdminUsers, err := GetSubsetOfSlice(superAdminPxAdminUserList, 3)
+				log.FailOnError(err, "Fetching the subset of primary users")
+
+				log.Infof("From px-admin users validate access to backups from non-admin users")
+				validateBackupAccess := func(user string) {
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "Fetching user ctx")
+					for _, nonAdminUser := range superAdminNonAdminUserList {
+						backupNames, err := GetAllBackupsForUser(user, CommonPassword)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all backups for user [%s]", user))
+						log.Infof("Fetch the backups from secondary user [%s]", nonAdminUser)
+						nonAdminUserBackups, err := GetAllBackupsForUser(nonAdminUser, CommonPassword)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all backups for user [%s]", nonAdminUser))
+						for _, backupName := range nonAdminUserBackups {
+							if !IsPresent(backupNames, backupName) {
+								err = fmt.Errorf("backup [%s] not found for user [%s]", backupName, user)
+								log.FailOnError(err, "failed to validate the permissions for backup of users belonging to Px-Admin group before upgrade")
+							} else {
+								log.Infof("Backup [%s] found for user [%s]", backupName, user)
+								log.Infof("Validate user [%s] can't share the backup [%s] of user [%s]", user, backupName, nonAdminUser)
+								err = ShareBackup(backupName, nil, []string{user}, RestoreAccess, nonAdminCtx)
+								dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied"), true, fmt.Sprintf("Verifying user [%s] can't share the backup [%s] of user [%s]", user, backupName, nonAdminUser))
+								log.Infof("Validate user [%s] can't restore the backup [%s] of user [%s]", user, backupName, nonAdminUser)
+								restoreName := fmt.Sprintf("restore-%s", RandomString(8))
+								err = CreateRestore(restoreName, backupName, make(map[string]string), SourceClusterName, superAdminUserClusterMap[user][SourceClusterName], BackupOrgID, nonAdminCtx, make(map[string]string))
+								dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore"), true, fmt.Sprintf("Verifying user [%s] can't restore the backup [%s] of user [%s]", user, backupName, nonAdminUser))
+							}
+						}
+					}
+				}
+				err = TaskHandler(subsetOfPxAdminUsers, validateBackupAccess, Parallel)
+				log.FailOnError(err, "failed to validate the permissions for backup of users belonging to Px-Admin group before upgrade")
+
+				ValidateBackupDeleteAccess := func(user string) {
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "Fetching user ctx")
+					for _, nonAdminUser := range superAdminNonAdminUserList {
+						log.Infof("Fetch the backups from non-admin user [%s]", nonAdminUser)
+						nonAdminUserBackups, err := GetAllBackupsForUser(nonAdminUser, CommonPassword)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all backups for user [%s]", nonAdminUser))
+						log.Infof("validate user [%s] can delete the backups of user [%s]", user, nonAdminUser)
+						backupName, err := GetSubsetOfSlice(nonAdminUserBackups, 1)
+						if !IsPresent(superAdminDeletedBackups, backupName[0]) {
+							backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName[0], BackupOrgID)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the backup [%s] uid for user [%s]", backupName[0], nonAdminUser))
+							_, err = DeleteBackup(backupName[0], backupUid, BackupOrgID, nonAdminCtx)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying user [%s] can delete the backup [%s] of user [%s]", user, backupName[0], nonAdminUser))
+							superAdminDeletedBackups = append(superAdminDeletedBackups, backupName[0])
+						}
+					}
+				}
+				err = TaskHandler(subsetOfPxAdminUsers[:1], ValidateBackupDeleteAccess, Parallel)
+				log.FailOnError(err, "failed to validate the permissions for backup delete of users belonging to Px-Admin group before upgrade")
+
+				validateRestoreAccess := func(user string) {
+					for _, nonAdminUser := range superAdminNonAdminUserList {
+						restoreNames, err := GetAllRestoresForUser(user, CommonPassword)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all restores for user [%s]", user))
+						log.Infof("Fetch the restores from secondary user [%s]", nonAdminUser)
+						nonAdminUserRestores, err := GetAllRestoresForUser(nonAdminUser, CommonPassword)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all restores for user [%s]", nonAdminUser))
+						for _, restoreName := range nonAdminUserRestores {
+							if !IsPresent(restoreNames, restoreName) {
+								err = fmt.Errorf("restore [%s] not found for user [%s]", restoreName, user)
+								log.FailOnError(err, "failed to validate the permissions for restore of users belonging to Px-Admin group before upgrade")
+							} else {
+								log.Infof("Restore [%s] found for user [%s]", restoreName, user)
+							}
+						}
+					}
+				}
+				err = TaskHandler(subsetOfPxAdminUsers, validateRestoreAccess, Parallel)
+				log.FailOnError(err, "failed to validate the permissions for restore of users belonging to Px-Admin group before upgrade")
+
+				validateScheduleBackupAccess := func(user string) {
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "Fetching user ctx")
+					for _, nonAdminUser := range superAdminNonAdminUserList {
+						scheduleNames, err := GetAllBackupSchedulesForUser(user, CommonPassword)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups for user [%s]", user))
+						log.Infof("Fetch the schedule backups from secondary user [%s]", nonAdminUser)
+						nonAdminUserBackupSchedules, err := GetAllBackupSchedulesForUser(nonAdminUser, CommonPassword)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups for user [%s]", nonAdminUser))
+						for _, scheduleName := range nonAdminUserBackupSchedules {
+							if !IsPresent(scheduleNames, scheduleName) {
+								err = fmt.Errorf("schedule Backup [%s] not found for user [%s]", scheduleName, user)
+								log.FailOnError(err, "failed to validate the permissions for schedule backup of users belonging to Px-Admin group before upgrade")
+							} else {
+								log.Infof("Schedule Backup [%s] found for user [%s]", scheduleName, user)
+								log.Infof("Validate user can't resume the schedule backup [%s] of user [%s]", user, scheduleName)
+								err = ResumeBackupSchedule(scheduleName, superAdminSchedulePolicyName, BackupOrgID, nonAdminCtx)
+								dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied"), true, fmt.Sprintf("Verifying user [%s] can't resume the schedule backup [%s] of user [%s]", user, scheduleName, nonAdminUser))
+							}
+						}
+					}
+				}
+				err = TaskHandler(subsetOfPxAdminUsers, validateScheduleBackupAccess, Parallel)
+				log.FailOnError(err, "failed to validate the permissions for schedule backup of users belonging to Px-Admin group before upgrade")
+			})
+		}
+
+		// cluster share verification pre-upgrade
+		Step("validate backup share feature pre- and post-upgrade, including cluster share, with a different set of users and multiple access types", func() {
+			log.InfoD("Validating backup share feature pre- and post-upgrade, including cluster share, with a different set of users and multiple access types")
+			runClusterShareTests = true
+			Step("Scheduling applications for Cluster Share", func() {
+				log.InfoD("Scheduling applications for Cluster Share")
+				clusterShareScheduledAppContexts = make([]*scheduler.Context, 0)
+				// Schedule applications
+				for i := 0; i < clusterShareNumOfNamespace; i++ {
+					taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+					appContexts := ScheduleApplications(taskName)
+					for _, appCtx := range appContexts {
+						appCtx.ReadinessTimeout = AppReadinessTimeout
+						clusterShareScheduledAppContexts = append(clusterShareScheduledAppContexts, appCtx)
+						appNamespace := appCtx.ScheduleOptions.Namespace
+						clusterShareBackedUpNamespaces = append(clusterShareBackedUpNamespaces, appNamespace)
+					}
+				}
+			})
+
+			Step("Validating applications for Cluster Share", func() {
+				log.InfoD("Validating applications for Cluster Share")
+				ValidateApplications(clusterShareScheduledAppContexts)
+			})
+
+			Step(fmt.Sprintf("Create %d users with random roles and backup share , cluster share config", clusterShareNumberOfUsers), func() {
+				log.InfoD(fmt.Sprintf("Creating %d users with random role and backup share , cluster share config", clusterShareNumberOfUsers))
+				roles := [4]backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.ApplicationUser}
+				randomRole := roles[rand.Intn(len(roles))]
+				for _, user := range CreateUsers(clusterShareNumberOfUsers) {
+					err := backup.AddRoleToUser(user, randomRole, fmt.Sprintf("Adding %v role to %s", randomRole, user))
+					log.FailOnError(err, "failed to add role %s to the user %s", randomRole, user)
+					log.Infof(fmt.Sprintf("User %s is created with role %v", user, randomRole))
+					clusterShareNonAdminUsers = append(clusterShareNonAdminUsers, user)
+				}
+				for i, nonAdminUser := range clusterShareNonAdminUsers {
+					clusterShareUserNamespaceMap[nonAdminUser] = clusterShareBackedUpNamespaces[i]
+				}
+				log.Infof("Share config for cluster level and backup level share")
+				clusterShareUserShareConfigs = []struct {
+					user                 string
+					shareExistingBackups bool
+					shareUser            string
+					accessLevel          BackupAccess
+					clusterLevel         bool
+				}{
+					{clusterShareNonAdminUsers[0], true, clusterShareNonAdminUsers[6], RestoreAccess, true},
+					{clusterShareNonAdminUsers[1], false, clusterShareNonAdminUsers[7], FullAccess, false},
+					{clusterShareNonAdminUsers[2], true, clusterShareNonAdminUsers[8], ViewOnlyAccess, true},
+					{clusterShareNonAdminUsers[3], false, clusterShareNonAdminUsers[9], RestoreAccess, false},
+					{clusterShareNonAdminUsers[4], true, clusterShareNonAdminUsers[10], FullAccess, true},
+					{clusterShareNonAdminUsers[5], false, clusterShareNonAdminUsers[11], ViewOnlyAccess, false},
+				}
+
+				for _, shareConfig := range clusterShareUserShareConfigs {
+					clusterShareSharedUsersMap[shareConfig.user] = shareConfig.shareUser
+				}
+				log.Infof("The shared user map [%v]", clusterShareSharedUsersMap)
+			})
+
+			Step("Creating backup location and cloud setting as admin and make it public", func() {
+				log.InfoD("Creating backup location and cloud setting as admin and make it public")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				for _, provider := range clusterShareProviders {
+					clusterShareAdminCloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, RandomString(5))
+					clusterShareBackupLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), RandomString(5))
+					clusterShareAdminCloudCredentialUID = uuid.New()
+					clusterShareBackupLocationUID = uuid.New()
+					clusterShareBackupLocationMap[clusterShareBackupLocationUID] = clusterShareBackupLocationName
+					err := CreateCloudCredential(provider, clusterShareAdminCloudCredName, clusterShareAdminCloudCredentialUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", clusterShareAdminCloudCredName, BackupOrgID, provider))
+					if provider != drivers.ProviderNfs {
+						log.Infof("Update CloudAccount - %s ownership as public", clusterShareAdminCloudCredName)
+						err = AddCloudCredentialOwnership(clusterShareAdminCloudCredName, clusterShareAdminCloudCredentialUID, nil, nil, Invalid, Read, ctx, BackupOrgID)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of owbership for CloudCredential- %s", clusterShareAdminCloudCredName))
+					}
+					err = CreateBackupLocation(provider, clusterShareBackupLocationName, clusterShareBackupLocationUID, clusterShareAdminCloudCredName, clusterShareAdminCloudCredentialUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+					dash.VerifyFatal(err, nil, "Creating backup location")
+					err = AddBackupLocationOwnership(clusterShareBackupLocationName, clusterShareBackupLocationUID, nil, nil, Invalid, Read, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for backuplocation - %s", clusterShareBackupLocationName))
+
+				}
+			})
+
+			Step("Create schedule policy and make it public", func() {
+				log.InfoD("Create schedule policy and make it public")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				clusterShareSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic-schedule-policy", RandomString(5))
+				clusterShareSchedulePolicyUID = uuid.New()
+				err = CreateBackupScheduleIntervalPolicy(5, clusterShareSchedulePolicyInterval, 5, clusterShareSchedulePolicyName, clusterShareSchedulePolicyUID, BackupOrgID, ctx, false, false)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule policy %s", clusterShareSchedulePolicyName))
+				log.InfoD("Update SchedulePolicy - %s ownership as public ", clusterShareSchedulePolicyName)
+				err = AddSchedulePolicyOwnership(clusterShareSchedulePolicyName, clusterShareSchedulePolicyUID, nil, nil, Invalid, Read, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for schedulepolicy - %s", clusterShareSchedulePolicyName))
+			})
+
+			Step("Registering cluster for backup object from each user", func() {
+				log.InfoD("Registering cluster for backup  object from each user")
+				createClusterFromUser := func(user string) {
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "Fetching user [%s] ctx", user)
+					err = CreateApplicationClusters(BackupOrgID, "", "", nonAdminCtx)
+					dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+					for _, clusterName := range []string{SourceClusterName, DestinationClusterName} {
+						userClusterUID, err := Inst().Backup.GetClusterUID(nonAdminCtx, BackupOrgID, clusterName)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", clusterName))
+						if clusterShareUserClusterMap[user] == nil {
+							clusterShareUserClusterMap[user] = make(map[string]string)
+						}
+						clusterShareUserClusterMap[user][clusterName] = userClusterUID
+						log.Infof("Updated clusterShareUserClusterMap for user [%s] with cluster [%s] and uid [%s]", user, clusterName, userClusterUID)
+					}
+				}
+				err := TaskHandler(clusterShareNonAdminUsers, createClusterFromUser, Sequential)
+				log.FailOnError(err, "failed to create application cluster from user")
+			})
+
+			Step("Taking manual backups of application from source cluster for each user", func() {
+				log.InfoD("Taking manual backups of applications from source cluster for each user")
+				createManualBackupsFromUser := func(user string) {
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "Fetching user [%s] ctx", user)
+					appContextsToBackup := FilterAppContextsByNamespace(clusterShareScheduledAppContexts, []string{clusterShareUserNamespaceMap[user]})
+					BackupNamePrefix := fmt.Sprintf("%s-%s-%s", "manual-backup", user, RandomString(5))
+					backupNames, err := TakeMultipleBackupsPerDeployment(nonAdminCtx, BackupOrgID, SourceClusterName, clusterShareUserClusterMap[user][SourceClusterName], 3, 3, clusterShareBackupLocationName, clusterShareBackupLocationUID, appContextsToBackup, BackupNamePrefix)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%v] from user [%s]", backupNames, user))
+					clusterShareUserBackupsMap[user] = backupNames
+				}
+				err := TaskHandler(clusterShareNonAdminUsers, createManualBackupsFromUser, Parallel)
+				log.FailOnError(err, "failed to create manual backups from user")
+			})
+
+			Step("Share the backups with user with cluster level and per backup level", func() {
+				log.InfoD("Share the backups with user with cluster level and per backup level")
+				for _, shareConfig := range clusterShareUserShareConfigs[:3] {
+					shareClusterFromUser := func(user string) {
+						nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+						log.FailOnError(err, "Fetching user [%s] ctx", user)
+						log.Infof("Sharing cluster [%s] level backups from user [%s] to user [%s] with access [%v]", SourceClusterName, user, shareConfig.shareUser, shareConfig.accessLevel)
+						err = ClusterUpdateBackupShare(SourceClusterName, nil, []string{shareConfig.shareUser}, shareConfig.accessLevel, true, nonAdminCtx)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("share backup at cluster level from cluster [%s] with uid [%s] from user [%s] to user [%s]", SourceClusterName, clusterShareUserClusterMap[user][SourceClusterName], user, shareConfig.shareUser))
+						backupNames, _ := GetSubsetOfSlice(clusterShareUserBackupsMap[user], 1)
+						err = ValidateSharedBackupAccess(nonAdminCtx, backupNames[0], api.BackupShare_AccessType(shareConfig.accessLevel), shareConfig.shareUser)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("validate cluster level shared backup [%s] access from user [%s] to user [%s]", backupNames[0], user, shareConfig.shareUser))
+					}
+					err := TaskHandler([]string{shareConfig.user}, shareClusterFromUser, Parallel)
+					log.FailOnError(err, "failed to share cluster level backup from user")
+				}
+
+				for _, shareConfig := range clusterShareUserShareConfigs[3:6] {
+					shareBackupFromUser := func(user string) {
+						nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+						log.FailOnError(err, "Fetching user [%s] ctx", user)
+						backupName := clusterShareUserBackupsMap[user][0]
+						err = ShareBackup(backupName, nil, []string{shareConfig.shareUser}, shareConfig.accessLevel, nonAdminCtx)
+						log.FailOnError(err, fmt.Sprintf("share backup at backup level from user [%s] to user [%s]", user, shareConfig.shareUser))
+						err = ValidateSharedBackupAccess(nonAdminCtx, backupName, api.BackupShare_AccessType(shareConfig.accessLevel), shareConfig.shareUser)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("validate per backup level shared backup [%s] access from user [%s] to user [%s]", backupName, user, shareConfig.shareUser))
+					}
+					err := TaskHandler([]string{shareConfig.user}, shareBackupFromUser, Parallel)
+					log.FailOnError(err, "failed to per backup level share backup from user")
+				}
+			})
 		})
 
 		Step("Upgrading px-backup", func() {
@@ -715,6 +1229,451 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				}
 			})
 		}
+
+		Step("Validate the migration of px-admin user to super-admin after upgrade to Px-Backup 2.8.0", func() {
+			log.InfoD("Validate the migration of px-admin user to super-admin after upgrade to Px-Backup 2.8.0")
+			checkPxbVersionForSuperAdmin, err := CompareCurrentPxBackupVersion("2.8.0", (*version.Version).GreaterThanOrEqual)
+			log.FailOnError(err, "Checking if current px-backup version is greater than or equal to 2.8.0")
+			if checkPxbVersionForSuperAdmin && runSuperAdminTests {
+				Step("Verify access of users belonging to Px-Admin group after upgrade has been revoked", func() {
+					log.InfoD("Verifying access of users belonging to Px-Admin group after the upgrade has been revoked")
+
+					log.Infof("Validate the px-admin group has been deleted from the keycloak")
+					backupGroups, err := backup.GetAllGroups()
+					log.FailOnError(err, "Fetching all groups")
+					if IsPresent(backupGroups, adminGroup) {
+						err = fmt.Errorf("px-admin-group is still present in the groups")
+						log.FailOnError(err, "validate px-admin group group has been revoked from px-backup")
+					} else {
+						log.Infof("px-admin-group has been revoked from the groups")
+					}
+
+					log.Infof("Validate px-admin group has been revoked from primary users")
+					for _, userName := range superAdminPxAdminUserList {
+						nonAdminCtx, err := backup.GetNonAdminCtx(userName, CommonPassword)
+						log.FailOnError(err, "Fetching user ctx")
+						getUserGroups, err := portworx.GetGroupsFromCtx(nonAdminCtx)
+						if IsPresent(getUserGroups, adminGroup) {
+							err = fmt.Errorf("px-admin-group is still present in the groups for user %s", userName)
+							log.FailOnError(err, "validate px-admin group group has been revoked from primary user ")
+						} else {
+							log.Infof("User %s has been revoked from the group %s", userName, adminGroup)
+						}
+					}
+				})
+
+				Step("verify the permissions on backup objects for users belonging to Px-Admin group after upgrade", func() {
+					log.InfoD("Verifying the permissions on backup objects for users belonging to Px-Admin group after upgrade")
+
+					subsetOfPxAdminUsers, err := GetSubsetOfSlice(superAdminPxAdminUserList, 3)
+					log.FailOnError(err, "Fetching the subset of primary users")
+
+					log.Infof("From px-admin groups user validate access to backups from non-admin users")
+					validateBackupAccess := func(user string) {
+						for _, nonAdminUser := range superAdminNonAdminUserList {
+							backupNames, err := GetAllBackupsForUser(user, CommonPassword)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all backups for user [%s]", user))
+							log.Infof("Fetch the backups from secondary user [%s]", nonAdminUser)
+							nonAdminUserBackups, err := GetAllBackupsForUser(nonAdminUser, CommonPassword)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all backups for user [%s]", nonAdminUser))
+							for _, backupName := range nonAdminUserBackups {
+								if IsPresent(backupNames, backupName) {
+									err = fmt.Errorf("backup [%s] found for user [%s]", backupName, user)
+									log.FailOnError(err, "failed to validate the permissions for backup of users belonging to Px-Admin group after upgrade")
+								} else {
+									log.Infof("Backup [%s] not found for user [%s]", backupName, user)
+								}
+							}
+						}
+					}
+					err = TaskHandler(subsetOfPxAdminUsers, validateBackupAccess, Parallel)
+					log.FailOnError(err, "failed to validate the permissions for backup of users belonging to Px-Admin group after upgrade")
+
+					validateRestoreAccess := func(user string) {
+						for _, nonAdminUser := range superAdminNonAdminUserList {
+							restoreNames, err := GetAllRestoresForUser(user, CommonPassword)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all restores for user [%s]", user))
+							log.Infof("Fetch the restores from secondary user [%s]", nonAdminUser)
+							nonAdminUserRestores, err := GetAllRestoresForUser(nonAdminUser, CommonPassword)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all restores for user [%s]", nonAdminUser))
+							for _, restoreName := range nonAdminUserRestores {
+								if IsPresent(restoreNames, restoreName) {
+									err = fmt.Errorf("restore [%s] found for user [%s]", restoreName, user)
+									log.FailOnError(err, "failed to validate the permissions for restore of users belonging to Px-Admin group after upgrade")
+								} else {
+									log.Infof("Restore [%s] not found for user [%s]", restoreName, user)
+								}
+							}
+						}
+					}
+					err = TaskHandler(subsetOfPxAdminUsers, validateRestoreAccess, Parallel)
+					log.FailOnError(err, "failed to validate the permissions for restore of users belonging to Px-Admin group after upgrade")
+
+					validateScheduleBackupAccess := func(user string) {
+						for _, nonAdminUser := range superAdminNonAdminUserList {
+							scheduleNames, err := GetAllBackupSchedulesForUser(user, CommonPassword)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups for user [%s]", user))
+							log.Infof("Fetch the schedule backups from secondary user [%s]", nonAdminUser)
+							secondaryUserScheduleBackups, err := GetAllBackupSchedulesForUser(nonAdminUser, CommonPassword)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups for user [%s]", nonAdminUser))
+							for _, scheduleName := range secondaryUserScheduleBackups {
+								if IsPresent(scheduleNames, scheduleName) {
+									err = fmt.Errorf("schedule Backup [%s] found for user [%s]", scheduleName, user)
+									log.FailOnError(err, "failed to validate the permissions for schedule backup of users belonging to Px-Admin group after upgrade")
+								} else {
+									log.Infof("Schedule Backup [%s] not found for user [%s]", scheduleName, user)
+								}
+							}
+						}
+					}
+					err = TaskHandler(subsetOfPxAdminUsers, validateScheduleBackupAccess, Parallel)
+					log.FailOnError(err, "failed to validate the permissions for schedule backup of users belonging to Px-Admin group after upgrade")
+				})
+
+				Step("Assign the initial px-admin group users with super-admin role", func() {
+					log.InfoD("Assign the initial px-admin group users with super-admin role")
+					for _, userName := range superAdminPxAdminUserList {
+						err := backup.AddRoleToUser(userName, superAdminRole, fmt.Sprintf("Adding super-admin role to %s", userName))
+						log.FailOnError(err, "Failed to add super-admin role to user %s", userName)
+					}
+				})
+
+				Step("verify the permissions on backup objects for users belonging to Px-Admin group after upgrade and assigning superAdmin role", func() {
+					log.InfoD("Verifying the permissions on backup objects for users belonging to Px-Admin group after upgrade and assigning superAdmin role")
+
+					subsetOfPxAdminUsers, err := GetSubsetOfSlice(superAdminPxAdminUserList, 2)
+					log.FailOnError(err, "Fetching the subset of primary users")
+
+					log.Infof("From px-admin user with super admin role validate access to backups from non-admin users")
+					validateBackupAccess := func(user string) {
+						nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+						log.FailOnError(err, "Fetching user ctx")
+						for _, nonAdminUser := range superAdminNonAdminUserList {
+							backupNames, err := GetAllBackupsForUser(user, CommonPassword)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all backups for user [%s]", user))
+							log.Infof("Fetch the backups from secondary user [%s]", nonAdminUser)
+							nonAdminUserBackups, err := GetAllBackupsForUser(nonAdminUser, CommonPassword)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all backups for user [%s]", nonAdminUser))
+							for _, backupName := range nonAdminUserBackups {
+								if !IsPresent(backupNames, backupName) {
+									err = fmt.Errorf("backup [%s] not found for super admin user [%s]", backupName, user)
+									log.FailOnError(err, "failed to validate the permissions for backup of users belonging to Px-Admin group after upgrade and assigning superAdmin role")
+								} else {
+									log.Infof("Backup [%s] found for super admin user [%s]", backupName, user)
+									log.Infof("Validate user [%s] can share the backup [%s] of user [%s]", user, backupName, nonAdminUser)
+									err = ShareBackup(backupName, nil, []string{superAdminSharingUserList[0]}, RestoreAccess, nonAdminCtx)
+									dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying user [%s] can share the backup [%s] of user [%s]", user, backupName, nonAdminUser))
+									log.Infof("Validate user [%s] can restore the backup [%s] of user [%s]", user, backupName, nonAdminUser)
+									if !IsPresent(superAdminDeletedBackups, backupName) {
+										restoreName := fmt.Sprintf("restore-%s-%s", backupName, RandomString(4))
+										err = CreateRestore(restoreName, backupName, make(map[string]string), DestinationClusterName, superAdminUserClusterMap[user][DestinationClusterName], BackupOrgID, nonAdminCtx, make(map[string]string))
+										dash.VerifyFatal(err, nil, fmt.Sprintf("verifying restore of backup [%s]", restoreName))
+									}
+								}
+							}
+						}
+					}
+					err = TaskHandler(subsetOfPxAdminUsers, validateBackupAccess, Parallel)
+					log.FailOnError(err, "failed to validate the permissions for backup of users belonging to Px-Admin group after upgrade and assigning superAdmin role")
+
+					ValidateBackupDeleteAccess := func(user string) {
+						nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+						log.FailOnError(err, "Fetching user ctx")
+						for _, nonAdminUser := range superAdminNonAdminUserList {
+							log.Infof("Fetch the backups from non-admin user [%s]", nonAdminUser)
+							nonAdminUserBackups, err := GetAllBackupsForUser(nonAdminUser, CommonPassword)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all backups for user [%s]", nonAdminUser))
+							log.Infof("validate user [%s] can delete the backups of user [%s]", user, nonAdminUser)
+							backupName, err := GetSubsetOfSlice(nonAdminUserBackups, 1)
+							dash.VerifyFatal(err, nil, "Fetching the subset of backups")
+							if !IsPresent(superAdminDeletedBackups, backupName[0]) {
+								backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName[0], BackupOrgID)
+								dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the backup [%s] uid for user [%s]", backupName[0], nonAdminUser))
+								_, err = DeleteBackup(backupName[0], backupUid, BackupOrgID, nonAdminCtx)
+								dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying user [%s] can delete the backup [%s] of user [%s]", user, backupName[0], nonAdminUser))
+							}
+						}
+					}
+					err = TaskHandler(subsetOfPxAdminUsers[:1], ValidateBackupDeleteAccess, Parallel)
+					log.FailOnError(err, "failed to validate the permissions for backup delete of users belonging to Px-Admin group before upgrade")
+
+					validateRestoreAccess := func(user string) {
+						for _, secondaryUser := range superAdminNonAdminUserList {
+							restoreNames, err := GetAllRestoresForUser(user, CommonPassword)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all restores for user [%s]", user))
+							log.Infof("Fetch the restores from secondary user [%s]", secondaryUser)
+							nonAdminUserRestores, err := GetAllRestoresForUser(secondaryUser, CommonPassword)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all restores for user [%s]", secondaryUser))
+							if len(nonAdminUserRestores) != 0 {
+								for _, restoreName := range nonAdminUserRestores {
+									if !IsPresent(restoreNames, restoreName) {
+										err = fmt.Errorf("restore [%s] not found for super admin user [%s]", restoreName, user)
+										log.FailOnError(err, "failed to validate the permissions for restore of users belonging to Px-Admin group after upgrade and assigning superAdmin role")
+									} else {
+										log.Infof("Restore [%s] found for super admin user [%s]", restoreName, user)
+									}
+								}
+							}
+						}
+					}
+					err = TaskHandler(subsetOfPxAdminUsers, validateRestoreAccess, Parallel)
+					log.FailOnError(err, "failed to validate the permissions for restore of users belonging to Px-Admin group after upgrade and assigning superAdmin role")
+
+					ValidateRestoreDeleteAccess := func(user string) {
+						nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+						log.FailOnError(err, "Fetching user ctx")
+						for _, nonAdminUser := range superAdminNonAdminUserList {
+							log.Infof("Fetch the restores from non-admin user [%s]", nonAdminUser)
+							nonAdminUserRestores, err := GetAllRestoresForUser(nonAdminUser, CommonPassword)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all restores for user [%s]", nonAdminUser))
+							if len(nonAdminUserRestores) != 0 {
+								log.Infof("validate user [%s] can delete the restores of user [%s]", user, nonAdminUser)
+								restoreName, err := GetSubsetOfSlice(nonAdminUserRestores, 1)
+								dash.VerifyFatal(err, nil, "Fetching the subset of restores")
+								restoreUid, err := Inst().Backup.GetRestoreUID(nonAdminCtx, restoreName[0], BackupOrgID)
+								dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the restore [%s] uid for user [%s]", restoreName[0], nonAdminUser))
+								err = DeleteRestoreWithUID(restoreName[0], restoreUid, BackupOrgID, nonAdminCtx)
+								dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying user [%s] can delete the restore [%s] of user [%s]", user, restoreName[0], nonAdminUser))
+							}
+						}
+					}
+					err = TaskHandler(subsetOfPxAdminUsers[:1], ValidateRestoreDeleteAccess, Parallel)
+					log.FailOnError(err, "failed to validate the permissions for restore delete of users belonging to Px-Admin after upgrade and assigning superAdmin role")
+
+					validateScheduleBackupAccess := func(user string) {
+						for _, nonAdminUser := range superAdminNonAdminUserList {
+							scheduleNames, err := GetAllBackupSchedulesForUser(user, CommonPassword)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups for user [%s]", user))
+							log.Infof("Fetch the schedule backups from secondary user [%s]", nonAdminUser)
+							nonAdminUserBackupSchedules, err := GetAllBackupSchedulesForUser(nonAdminUser, CommonPassword)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups for user [%s]", nonAdminUser))
+							for _, scheduleName := range nonAdminUserBackupSchedules {
+								if !IsPresent(scheduleNames, scheduleName) {
+									err = fmt.Errorf("Schedule  [%s] not found for super admin user [%s]", scheduleName, user)
+									log.FailOnError(err, "failed to validate the permissions for schedule backup of users belonging to Px-Admin group after upgrade and assigning superAdmin role")
+								} else {
+									log.Infof("Schedule  [%s] found for super admin user [%s]", scheduleName, user)
+								}
+
+							}
+						}
+					}
+					err = TaskHandler(subsetOfPxAdminUsers, validateScheduleBackupAccess, Parallel)
+					log.FailOnError(err, "failed to validate the permissions for schedule backup of users belonging to Px-Admin group after upgrade")
+
+					validateScheduleDeleteAccess := func(user string) {
+						nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+						log.FailOnError(err, "Fetching user ctx")
+						for _, nonAdminUser := range superAdminNonAdminUserList {
+							log.Infof("Fetch the schedule backups from non-admin user [%s]", nonAdminUser)
+							nonAdminUserBackupSchedules, err := GetAllBackupSchedulesForUser(nonAdminUser, CommonPassword)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups for user [%s]", nonAdminUser))
+							log.Infof("validate user [%s] can delete the schedule backups of user [%s]", user, nonAdminUser)
+							scheduleName, err := GetSubsetOfSlice(nonAdminUserBackupSchedules, 1)
+							dash.VerifyFatal(err, nil, "Fetching the subset of schedule backups")
+							scheduleUid, err := Inst().Backup.GetBackupScheduleUID(nonAdminCtx, scheduleName[0], BackupOrgID)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the schedule [%s] uid for user [%s]", scheduleName[0], nonAdminUser))
+							err = DeleteScheduleWithUID(scheduleName[0], scheduleUid, BackupOrgID, nonAdminCtx)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying user [%s] can delete the schedule backup [%s] of user [%s]", user, scheduleName[0], nonAdminUser))
+						}
+					}
+					err = TaskHandler(subsetOfPxAdminUsers[:1], validateScheduleDeleteAccess, Parallel)
+					log.FailOnError(err, "failed to validate the permissions for schedule delete of users belonging to Px-Admin group after upgrade and assigning superAdmin role")
+				})
+			} else {
+				log.InfoD("Skipping the test as the px-backup version is less than 2.8.0")
+			}
+		})
+
+		Step("validate backup share feature post-upgrade,including cluster share, with a different set of users and multiple access types.", func() {
+			log.InfoD("validate backup share feature post-upgrade,including cluster share, with a different set of users and multiple access types.")
+			checkPxbVersionForClusterShare, err := CompareCurrentPxBackupVersion("2.8.0", (*version.Version).GreaterThanOrEqual)
+			log.FailOnError(err, "Checking if current px-backup version is greater than or equal to 2.8.0")
+			if checkPxbVersionForClusterShare && runClusterShareTests {
+				Step("Validate backup share access post upgrade and before cluster share", func() {
+					log.InfoD("Validate backup share access post upgrade and before cluster share")
+					log.Infof("Validate the shared backups share at cluster level post upgrade")
+					for _, shareConfig := range clusterShareUserShareConfigs[:3] {
+						validateClusterLevelShare := func(user string) {
+							nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+							log.FailOnError(err, "Fetching user [%s] ctx", user)
+							backupNames, _ := GetSubsetOfSlice(clusterShareUserBackupsMap[user], 1)
+							err = ValidateSharedBackupAccess(nonAdminCtx, backupNames[0], api.BackupShare_AccessType(shareConfig.accessLevel), shareConfig.shareUser)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("validate cluster level shared backup [%s] access from user post upgrade [%s] to user [%s]", backupNames[0], user, shareConfig.shareUser))
+						}
+						err := TaskHandler([]string{shareConfig.user}, validateClusterLevelShare, Parallel)
+						log.FailOnError(err, "failed to validate cluster level share access from user post upgrade")
+					}
+					log.Infof("Validate the shared backups share at backup level post upgrade")
+					for _, shareConfig := range clusterShareUserShareConfigs[3:6] {
+						validateBackupLevelShare := func(user string) {
+							nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+							log.FailOnError(err, "Fetching user [%s] ctx", user)
+							backupName := clusterShareUserBackupsMap[user][0]
+							err = ValidateSharedBackupAccess(nonAdminCtx, backupName, api.BackupShare_AccessType(shareConfig.accessLevel), shareConfig.shareUser)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("validate per backup level shared backup access from user post upgrade [%s] to user [%s]", user, shareConfig.shareUser))
+						}
+						err := TaskHandler([]string{shareConfig.user}, validateBackupLevelShare, Parallel)
+						log.FailOnError(err, "failed to validate backup level share access from user post upgrade")
+					}
+				})
+
+				Step("Initiate cluster share from the user in above backup share order", func() {
+					log.InfoD("Initiate cluster share from the user in above backup share order")
+					for _, shareConfig := range clusterShareUserShareConfigs {
+						shareClusterFromUser := func(user string) {
+							for _, clusterName := range []string{SourceClusterName, DestinationClusterName} {
+								nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+								log.FailOnError(err, "Fetching user [%s] ctx", user)
+								_, err = ShareClusterWithValidation(nonAdminCtx, clusterName, clusterShareUserClusterMap[user][clusterName], []string{shareConfig.shareUser}, nil, shareConfig.shareExistingBackups)
+								dash.VerifyFatal(err, nil, fmt.Sprintf("sharing cluster [%s]  with uid [%s] from user [%s] with user [%s]", clusterName, clusterShareUserClusterMap[user][clusterName], user, shareConfig.shareUser))
+							}
+						}
+						err := TaskHandler([]string{shareConfig.user}, shareClusterFromUser, Parallel)
+						log.FailOnError(err, "failed to share cluster from users")
+					}
+				})
+
+				Step("Create new manual backup from user from first 6 users whose backups and cluster is shared.", func() {
+					log.InfoD("Create new manual backup from user from first 6 users whose backups and cluster is shared.")
+					createManualBackupsFromUser := func(user string) {
+						nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+						log.FailOnError(err, "Fetching user [%s] ctx", user)
+						appContextsToBackup := FilterAppContextsByNamespace(clusterShareScheduledAppContexts, []string{clusterShareUserNamespaceMap[user]})
+						BackupNamePrefix := fmt.Sprintf("%s-%s-%s", "manual-backup-post-upgrade", user, RandomString(5))
+						backupNames, err := TakeMultipleBackupsPerDeployment(nonAdminCtx, BackupOrgID, SourceClusterName, clusterShareUserClusterMap[user][SourceClusterName], 3, 3, clusterShareBackupLocationName, clusterShareBackupLocationUID, appContextsToBackup, BackupNamePrefix)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupNames))
+						clusterShareNewUserBackupsMap[user] = backupNames
+					}
+					err := TaskHandler(clusterShareNonAdminUsers[:6], createManualBackupsFromUser, Parallel)
+					log.FailOnError(err, "failed to create manual backups from user")
+				})
+
+				Step("For cluster shared with existing backups validate the backup has expected share access for shared users", func() {
+					log.InfoD("For cluster shared with existing backups validate the backup has expected share access for shared users")
+					for _, shareConfig := range clusterShareUserShareConfigs[:6] {
+						validateClusterLevelShare := func(user string) {
+							if shareConfig.shareExistingBackups {
+								nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+								log.FailOnError(err, "Fetching user [%s] ctx", user)
+								backupNames, _ := GetSubsetOfSlice(clusterShareNewUserBackupsMap[user], 1)
+								err = ValidateClusterSharedBackupAccess(nonAdminCtx, backupNames[0], shareConfig.shareUser)
+								dash.VerifyFatal(err, nil, fmt.Sprintf("validate shared backup [%s] access from user shared with existing backups [%s] to user [%s]", backupNames[0], user, shareConfig.shareUser))
+							}
+						}
+						err := TaskHandler([]string{shareConfig.user}, validateClusterLevelShare, Parallel)
+						log.FailOnError(err, "failed to validate cluster level new backups share access from user")
+					}
+				})
+
+				Step("Share the backups with user with cluster level post upgrade and cluster share and validate it has expected access", func() {
+					log.InfoD("Share the backups with user with cluster level post upgrade and cluster share validate it has expected access")
+					for _, shareConfig := range clusterShareUserShareConfigs[:3] {
+						shareClusterFromUser := func(user string) {
+							nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+							log.FailOnError(err, "Fetching user [%s] ctx", user)
+							err = ClusterUpdateBackupShare(SourceClusterName, nil, []string{shareConfig.shareUser}, shareConfig.accessLevel, true, nonAdminCtx)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("share backup at cluster level from user [%s] to user [%s]", user, shareConfig.shareUser))
+							if shareConfig.clusterLevel {
+								log.Infof("Validate for cluster level share the backup still has the restore access")
+								backupName := clusterShareNewUserBackupsMap[user][0]
+								err = ValidateClusterSharedBackupAccess(nonAdminCtx, backupName, shareConfig.shareUser)
+								dash.VerifyFatal(err, nil, fmt.Sprintf("validate shared backup access with cluster level post upgrade and cluster share from user [%s] to user [%s]", user, shareConfig.shareUser))
+							}
+						}
+						err := TaskHandler([]string{shareConfig.user}, shareClusterFromUser, Parallel)
+						log.FailOnError(err, "failed to share cluster level backup from user")
+					}
+				})
+
+				Step("For users 0,2,3 initiate cluster unshare and validating the access of shared backup objects.", func() {
+					log.InfoD("For users 0,2,3 initiate cluster unshare and validating the access of shared backup objects.")
+					UnShareClusterFromUser := func(user string) {
+						nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+						log.FailOnError(err, "Fetching user [%s] ctx", user)
+						_, err = UnShareClusterWithValidation(nonAdminCtx, SourceClusterName, clusterShareUserClusterMap[user][SourceClusterName], []string{clusterShareSharedUsersMap[user]}, nil)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Unsharing cluster [%s] uid [%s] from user [%s] with user [%s]", SourceClusterName, clusterShareUserClusterMap[user][SourceClusterName], user, clusterShareSharedUsersMap[user]))
+					}
+					err := TaskHandler([]string{clusterShareNonAdminUsers[0], clusterShareNonAdminUsers[2], clusterShareNonAdminUsers[3]}, UnShareClusterFromUser, Parallel)
+					log.FailOnError(err, "failed to unshare cluster from user")
+
+					for _, shareConfig := range clusterShareUserShareConfigs {
+						validateSharedBackups := func(user string) {
+							if IsPresent([]string{clusterShareNonAdminUsers[0], clusterShareNonAdminUsers[2], clusterShareNonAdminUsers[3]}, user) {
+								nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+								log.FailOnError(err, "Fetching user [%s] ctx", user)
+								if shareConfig.shareExistingBackups {
+									backupName, _ := GetSubsetOfSlice(clusterShareUserBackupsMap[user], 1)
+									err := ValidateClusterSharedBackupAccess(nonAdminCtx, backupName[0], shareConfig.shareUser)
+									dash.VerifyFatal(err, nil, fmt.Sprintf("validate shared backup [%s] access from user [%s] to user [%s]", backupName[0], user, shareConfig.shareUser))
+									log.Infof("Validting the newly created backup is not unshared and has the restore access")
+									backupName, _ = GetSubsetOfSlice(clusterShareNewUserBackupsMap[user], 1)
+									err = ValidateClusterSharedBackupAccess(nonAdminCtx, backupName[0], shareConfig.shareUser)
+									dash.VerifyFatal(err, nil, fmt.Sprintf("validate new shared backup [%s]access from user [%s] to user [%s]", backupName[0], user, shareConfig.shareUser))
+								} else {
+									backupName := clusterShareUserBackupsMap[user][0]
+									err := ValidateSharedBackupAccess(nonAdminCtx, backupName, api.BackupShare_AccessType(shareConfig.accessLevel), shareConfig.shareUser)
+									dash.VerifyFatal(err, nil, fmt.Sprintf("validate shared backup access from user [%s] to user [%s]", user, shareConfig.shareUser))
+								}
+							}
+						}
+						err := TaskHandler([]string{shareConfig.user}, validateSharedBackups, Parallel)
+						log.FailOnError(err, "failed to validate shared backups")
+					}
+				})
+
+				Step("For users 1,4,5 initiate cluster unshare and backup un share validating the access of shared backup objects.", func() {
+					log.InfoD("For users 1,4,5 initiate cluster unshare and backup un share validating the access of shared backup objects.")
+					UnShareClusterFromUser := func(user string) {
+						nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+						log.FailOnError(err, "Fetching user [%s] ctx", user)
+						_, err = UnShareClusterWithValidation(nonAdminCtx, SourceClusterName, clusterShareUserClusterMap[user][SourceClusterName], []string{clusterShareSharedUsersMap[user]}, nil)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("unsharing cluster [%s] with uid [%s from user [%s] to user [%s]", SourceClusterName, clusterShareUserClusterMap[user][SourceClusterName], user, clusterShareSharedUsersMap[user]))
+					}
+					err := TaskHandler([]string{clusterShareNonAdminUsers[1], clusterShareNonAdminUsers[4], clusterShareNonAdminUsers[5]}, UnShareClusterFromUser, Sequential)
+					log.FailOnError(err, "failed to unshare cluster from user")
+
+					for _, shareConfig := range clusterShareUserShareConfigs {
+						unShareBackup := func(user string) {
+							if IsPresent([]string{clusterShareNonAdminUsers[1], clusterShareNonAdminUsers[4], clusterShareNonAdminUsers[5]}, user) {
+								nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+								log.FailOnError(err, "Fetching user [%s] ctx", user)
+								if shareConfig.clusterLevel {
+									err = ClusterUpdateBackupShare(SourceClusterName, nil, []string{shareConfig.shareUser}, shareConfig.accessLevel, false, nonAdminCtx)
+									dash.VerifyFatal(err, nil, fmt.Sprintf("Revoking cluster level backup share for user [%s]", user))
+								} else {
+									backupName := clusterShareUserBackupsMap[user][0]
+									err := ShareBackup(backupName, nil, nil, shareConfig.accessLevel, nonAdminCtx)
+									dash.VerifyFatal(err, nil, fmt.Sprintf("unshare backup from user [%s] to user [%s]", user, clusterShareSharedUsersMap[user]))
+								}
+							}
+						}
+						err := TaskHandler([]string{shareConfig.user}, unShareBackup, Sequential)
+						log.FailOnError(err, "failed to unshare backup from users")
+						validateUnshareBackup := func(user string) {
+							if IsPresent([]string{clusterShareNonAdminUsers[1], clusterShareNonAdminUsers[4], clusterShareNonAdminUsers[5]}, user) {
+								nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+								log.FailOnError(err, "Fetching user [%s] ctx", user)
+								if shareConfig.clusterLevel {
+									backupName := clusterShareUserBackupsMap[user][0]
+									err := ValidateClusterSharedBackupAccess(nonAdminCtx, backupName, clusterShareSharedUsersMap[user])
+									dash.VerifyFatal(strings.Contains(err.Error(), "object not found"), true, fmt.Sprintf("validate cluster level backup access from user [%s] to user [%s] is revoked", user, clusterShareSharedUsersMap[user]))
+								} else {
+									backupName := clusterShareUserBackupsMap[user][0]
+									err := ValidateSharedBackupAccess(nonAdminCtx, backupName, api.BackupShare_AccessType(shareConfig.accessLevel), clusterShareSharedUsersMap[user])
+									dash.VerifyFatal(strings.Contains(err.Error(), "object not found"), true, fmt.Sprintf("validate shared backup access from user [%s] to user [%s] is revoked", user, clusterShareSharedUsersMap[user]))
+								}
+							}
+						}
+						err = TaskHandler([]string{shareConfig.user}, validateUnshareBackup, Parallel)
+						log.FailOnError(err, "failed to validate shared backups")
+					}
+				})
+			} else {
+				log.InfoD("Skipping this step as it is a Cluster Share Feature is not supported in current pxb version")
+			}
+
+		})
 
 		Step("Validate the status of the scheduled backup with a failed volume after the upgrade and restore the same", func() {
 			if IsPxInstalled() {
@@ -1022,6 +1981,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		defer EndPxBackupTorpedoTest(allContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
+
 		deleteSingleNSScheduleTask := func(scheduleName string) {
 			log.InfoD("Deleting single namespace backup schedule [%s]", scheduleName)
 			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
@@ -1061,12 +2021,47 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
 		ValidateAndDestroy(destClusterContexts, opts)
+
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster failed")
 		err = DestroyAppsWithData(srcClusterContexts, opts, controlChannel, errorGroup)
 		log.FailOnError(err, "Data validations failed")
+		adminBackups, err := GetAllBackupsAdmin()
+		dash.VerifySafely(err, nil, "Verifying fetching of all backups")
+		log.Infof("Deleting all the backups [%v] created from the admin", adminBackups)
+		for _, backupName := range adminBackups {
+			wg.Add(1)
+			go func(backupName string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Fetching backup [%s] uid", backupName))
+				_, err = DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
+				err = DeleteBackupAndWait(backupName, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
+			}(backupName)
+		}
+		wg.Wait()
+		adminClusterList, err := GetAllClusterAdmin()
+		dash.VerifySafely(err, nil, "Verifying fetching of all clusters")
+		log.Infof("Deleting all the clusters [%v] created from the admin", adminClusterList)
+		for clusterUid, clusterName := range adminClusterList {
+			wg.Add(1)
+			go func(clusterName, clusterUid string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				err = DeleteClusterWithUID(clusterName, clusterUid, BackupOrgID, ctx, false)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster [%s]", clusterName))
+			}(clusterName, clusterUid)
+		}
+		wg.Wait()
+		err = CleanupAllUserAndGroups()
+		dash.VerifySafely(err, nil, "Verifying cleanup all user and groups")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUid, ctx)
 		CleanupCloudSettingsAndClusters(partialBackupLocationMap, partialCloudAccountName, partialCloudAccountUid, ctx)
+		CleanupCloudSettingsAndClusters(superAdminBackupLocationMap, superAdminCloudCredName, superAdminCloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(clusterShareBackupLocationMap, clusterShareAdminCloudCredName, clusterShareAdminCloudCredentialUID, ctx)
 	})
 })
 
@@ -1548,6 +2543,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 			err = DeleteRestore(restoreName, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of restore [%s]", restoreName))
 		}
+
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		err = SetDestinationKubeConfig()
