@@ -9604,7 +9604,7 @@ func pickPoolToResize(contexts []*scheduler.Context, expandType api.SdkStoragePo
 	poolsWithIO, err := GetPoolIDWithIOs(contexts)
 
 	if err != nil {
-		log.Warnf("Error identifying pool with IOs, Errot: %v", err)
+		log.Warnf("Error identifying pool with IOs, Error: %v", err)
 	}
 
 	for _, poolID := range poolsWithIO {
@@ -12116,7 +12116,7 @@ var _ = Describe("{PoolResizeWithNodeRebootWithTimeInterval}", func() {
 			log.InfoD(stepLog)
 			status, err := Inst().V.GetPxctlStatus(selectedNode)
 			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", selectedNode.Name))
-			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+			dash.VerifyFatal(status == api.Status_STATUS_OFFLINE.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
 				selectedNode.Name, api.Status_STATUS_OK, status))
 			log.InfoD("px status %v", status)
 		})
@@ -12468,3 +12468,116 @@ var _ = Describe("{PoolResizeWithNodeReboot}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{PoolExpandAddDriveWithNodeReboot}", func() {
+	/*
+		1. Create volume and do IOs / deploy apps to do IOs
+		2. Expand pool by adding drive
+		3. After some random delay reboot the node
+		4. Wait for node to comeup and check PX status
+		5. Verify pool expanded succesfully
+		6. Delete the pool
+		7. Receate the pool
+	*/
+
+	var (
+		poolIDToResize string
+		poolToResize   *api.StoragePool
+		contexts       []*scheduler.Context
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolExpandAddDriveWithNodeReboot", "Pool Expand Add Drive With Node Reboot", nil, 0)
+	})
+
+	itLog := "PoolExpandAddDriveWithNodeReboot"
+	It(itLog, func() {
+		stepLog := "Schedule Apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = scheduleApps()
+			time.Sleep(5 * time.Minute)
+			log.InfoD("schedule app succeed")
+		})
+
+		//Select a pool to expand
+		stepLog = "Select a pool to expand"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 128)
+			dash.VerifyFatal(len(poolIDToResize) > 0, true, fmt.Sprintf("Expected poolIDToResize to not be empty, pool id to resize %s", poolIDToResize))
+			poolToResize = getStoragePool(poolIDToResize)
+			log.InfoD(fmt.Sprintf("Pool going to resize is UUID: %s", poolIDToResize))
+		})
+
+		originalSizeInBytes := poolToResize.TotalSize
+		targetSizeInBytes := originalSizeInBytes + 128*units.GiB // getDesiredSize(originalSizeInBytes)
+		targetSizeGiB = targetSizeInBytes / units.GiB
+
+		//Pool expansion
+		stepLog = "Expanding pool by adding drive of 128GiB"
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			log.InfoD("Current size of pool [%s] is [%d] GiB. Expand to [%v] GiB with type add-disk...",
+				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+			log.InfoD(fmt.Sprintf("Pool expansion succeed [%s]", poolIDToResize))
+
+		})
+
+		//sleep for some random time
+		sleepTime := rand.Intn(100) + 1
+		time.Sleep(time.Second * (time.Duration(sleepTime)))
+		tNode, err := GetNodeWithGivenPoolID(poolIDToResize)
+		selectedNode := *tNode
+
+		//node restart
+		stepLog = fmt.Sprintf("Verify reboot after [%d] seconds", sleepTime)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info(stepLog)
+			err = Inst().N.RebootNodeAndWait(selectedNode)
+			log.FailOnError(err, "Failed to reboot node and wait till it is up")
+			log.InfoD("Verify reboot succeed")
+			time.Sleep(2 * time.Minute)
+		})
+
+		//Wait for pool expansion
+		stepLog = fmt.Sprint("Wait for pool to resize")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+			log.Info(fmt.Sprintf("Pool expansion succeed [%s]", poolIDToResize))
+		})
+
+		//Check PX status
+		stepLog = "Check PX status"
+		Step(stepLog, func() {
+			time.Sleep(2 * time.Minute)
+			log.InfoD(stepLog)
+			log.Info(stepLog)
+			status, err := Inst().V.GetPxctlStatus(selectedNode)
+			log.InfoD("PX staus [%v]", status)
+			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", selectedNode.Name))
+			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up and PX cluster is not ok. Expected: %v Actual: %v",
+				selectedNode.Name, api.Status_STATUS_OK, status))
+			log.InfoD("px status %v", status)
+		})
+
+		//Verify pool resize
+		time.Sleep(time.Minute * 2)
+		stepLog = fmt.Sprintf("Verify pool resized [%s]", poolIDToResize)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+			log.InfoD("Verify pool resized succeed")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})
+
