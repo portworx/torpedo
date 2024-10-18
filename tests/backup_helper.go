@@ -368,7 +368,7 @@ var (
 				},
 			},
 		},
-		"mysql-backup-psa-restricted": {
+		"mysql-restricted": {
 			PreRule: backup.PreRule{
 				Rule: backup.RuleSpec{
 					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH TABLES WITH READ LOCK;system ${WAIT_CMD};'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"true"}, RunInSinglePod: []string{"false"}, Container: []string{},
@@ -457,7 +457,7 @@ var (
 				},
 			},
 		},
-		"postgres-backup-psa-restricted": {
+		"postgres-restricted": {
 			PreRule: backup.PreRule{
 				Rule: backup.RuleSpec{
 					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
