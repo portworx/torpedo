@@ -3,19 +3,19 @@ package resiliency
 import (
 	"errors"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
-	"github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	dslibs "github.com/pure-px/torpedo/drivers/unifiedPlatform/pdsLibs"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/platformLibs"
+	"github.com/pure-px/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sync"
 	"time"
 
-	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
-	"github.com/portworx/torpedo/pkg/log"
+	_ "github.com/pure-px/torpedo/drivers/scheduler/dcos"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 const (

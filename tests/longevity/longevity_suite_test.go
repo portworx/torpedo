@@ -3,8 +3,8 @@ package tests
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/tests"
 	"os"
 	"testing"
 )

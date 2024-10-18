@@ -3,9 +3,9 @@ package utils
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/portworx/torpedo/drivers/pds/lib"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/pds/lib"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/tests"
 	v1 "k8s.io/api/core/v1"
 	"net/http"
 	"os/exec"

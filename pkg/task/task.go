@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 
 	"strings"
 	"time"

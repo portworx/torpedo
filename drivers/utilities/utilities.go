@@ -11,8 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/jinzhu/copier"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/pkg/log"
 	"io/ioutil"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler"
 	corev1 "k8s.io/api/core/v1"
 )
 

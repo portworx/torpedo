@@ -23,17 +23,17 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/pkg/applicationbackup"
-	"github.com/portworx/torpedo/pkg/asyncdr"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/portworx/torpedo/pkg/storkctlcli"
-	//"github.com/portworx/torpedo/driver	"github.com/portworx/torpedo/drivers/scheduler"
-	//"github.com/portworx/torpedo/drivers/scheduler/spec"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/pkg/applicationbackup"
+	"github.com/pure-px/torpedo/pkg/asyncdr"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/osutils"
+	"github.com/pure-px/torpedo/pkg/storkctlcli"
+	//"github.com/pure-px/torpedo/driver	"github.com/pure-px/torpedo/drivers/scheduler"
+	//"github.com/pure-px/torpedo/drivers/scheduler/spec"
+	"github.com/pure-px/torpedo/pkg/testrailuttils"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 const (

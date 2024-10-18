@@ -7,8 +7,8 @@ import (
 	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
-	"github.com/portworx/torpedo/pkg/log"
+	pdsdriver "github.com/pure-px/torpedo/drivers/pds"
+	"github.com/pure-px/torpedo/pkg/log"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"

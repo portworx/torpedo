@@ -2,22 +2,22 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 	"math/rand"
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/volume"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/portworx/torpedo/pkg/testrailuttils"
+	"github.com/pure-px/torpedo/pkg/testrailuttils"
 
 	. "github.com/onsi/ginkgo/v2"
-	. "github.com/portworx/torpedo/tests"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 const (
@@ -92,14 +92,14 @@ func getLegacySharedVolumeCount(contexts []*scheduler.Context) int {
 	for _, ctx := range contexts {
 		var vols []*volume.Volume
 		var err error
-		t := func() (interface{}, bool , error) {
+		t := func() (interface{}, bool, error) {
 			vols, err = Inst().S.GetVolumes(ctx)
 			if err != nil {
 				return "", true, err
 			}
 			return "", false, nil
 		}
-		_, err = task.DoRetryWithTimeout(t, 5 * time.Minute, 10 * time.Second)
+		_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
 		log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
 		for _, v := range vols {
 			vol, err := Inst().V.InspectVolume(v.ID)
@@ -932,7 +932,7 @@ var _ = Describe("{LegacySharedVolumeAppMigrateHAupdating}", func() {
 			}
 			return "", true, fmt.Errorf("Volume is still shared {%v}", volumeName)
 		}
-		_, err = task.DoRetryWithTimeout(t, 6 * time.Minute, time.Minute)
+		_, err = task.DoRetryWithTimeout(t, 6*time.Minute, time.Minute)
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("migration failed on volume [%v]", volumeName))
 		pxctlCmdFull = fmt.Sprintf("v d %s --force", volumeName)
 		Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)

@@ -39,8 +39,8 @@ endif
 
 ifndef PKGS
 # shell does not honor export command above, so we need to explicitly pass GOFLAGS here
-PKGS := $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/tests')
-PKGIN := $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/apiServer/taas')
+PKGS := $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/pure-px/torpedo/tests')
+PKGIN := $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/pure-px/torpedo/apiServer/taas')
 endif
 
 ifeq ($(BUILD_TYPE),debug)

@@ -11,7 +11,7 @@ import (
 
 	"github.com/hashicorp/nomad/api"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 	"golang.org/x/crypto/ssh"
 )
 

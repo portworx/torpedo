@@ -2,7 +2,7 @@ package pdslibs
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 var (

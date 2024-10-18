@@ -10,13 +10,13 @@ import (
 	lclient "github.com/LINBIT/golinstor/client"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
-	driver_api "github.com/portworx/torpedo/drivers/api"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/volume"
-	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
-	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/portworx/torpedo/pkg/log"
+	driver_api "github.com/pure-px/torpedo/drivers/api"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/volume"
+	torpedovolume "github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/drivers/volume/portworx/schedops"
+	"github.com/pure-px/torpedo/pkg/errors"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 const (

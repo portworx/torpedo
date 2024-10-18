@@ -3,8 +3,6 @@ package api
 import (
 	"context"
 	"fmt"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
-	"github.com/portworx/torpedo/pkg/log"
 	accountv1 "github.com/pure-px/platform-api-go-client/platform/v1/account"
 	backuplocationv1 "github.com/pure-px/platform-api-go-client/platform/v1/backuplocation"
 	backupPolicyV1 "github.com/pure-px/platform-api-go-client/platform/v1/backuppolicy"
@@ -19,6 +17,8 @@ import (
 	templatesv1 "github.com/pure-px/platform-api-go-client/platform/v1/template"
 	tenantv1 "github.com/pure-px/platform-api-go-client/platform/v1/tenant"
 	whoamiv1 "github.com/pure-px/platform-api-go-client/platform/v1/whoami"
+	. "github.com/pure-px/torpedo/drivers/unifiedPlatform/utils"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 type PLATFORM_API_V1 struct {

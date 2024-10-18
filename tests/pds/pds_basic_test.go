@@ -2,19 +2,19 @@ package tests
 
 import (
 	"fmt"
-	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
+	pdsbkp "github.com/pure-px/torpedo/drivers/pds/pdsbackup"
 	"os"
 	"strings"
 	"testing"
 
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
-	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	"github.com/portworx/torpedo/pkg/log"
+	pdsdriver "github.com/pure-px/torpedo/drivers/pds"
+	dataservices "github.com/pure-px/torpedo/drivers/pds/dataservice"
+	pdslib "github.com/pure-px/torpedo/drivers/pds/lib"
+	"github.com/pure-px/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	. "github.com/portworx/torpedo/tests"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 func TestDataService(t *testing.T) {

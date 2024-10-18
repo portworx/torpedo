@@ -1,10 +1,10 @@
 package pds
 
 import (
-	"github.com/portworx/torpedo/drivers/pds/parameters"
-	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/pds/parameters"
+	pdslibs "github.com/pure-px/torpedo/drivers/unifiedPlatform/pdsLibs"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/stworkflows/platform"
+	"github.com/pure-px/torpedo/pkg/log"
 	"strings"
 )
 

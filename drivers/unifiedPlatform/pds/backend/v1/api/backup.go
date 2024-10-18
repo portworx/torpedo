@@ -4,8 +4,8 @@ import (
 	"fmt"
 	status "net/http"
 
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/utilities"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/pure-px/torpedo/drivers/utilities"
 )
 
 // DeleteBackup will delete backup for a given deployment

@@ -21,9 +21,9 @@ import (
 	"github.com/portworx/sched-ops/k8s/externalstorage"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/pkg/aututils"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/pkg/aututils"
+	"github.com/pure-px/torpedo/pkg/log"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"

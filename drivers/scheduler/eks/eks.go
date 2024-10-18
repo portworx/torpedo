@@ -20,10 +20,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	kube "github.com/pure-px/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 const (

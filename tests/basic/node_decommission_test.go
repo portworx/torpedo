@@ -7,14 +7,14 @@ import (
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 var _ = Describe("{DecommissionNode}", func() {

@@ -4,9 +4,9 @@ import (
 	"bytes"
 	context1 "context"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/email"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/pkg/aetosutil"
+	"github.com/pure-px/torpedo/pkg/email"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"os"
@@ -21,11 +21,11 @@ import (
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers"
+	"github.com/pure-px/torpedo/drivers/backup"
+	"github.com/pure-px/torpedo/drivers/scheduler"
 
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo/v2"
 )

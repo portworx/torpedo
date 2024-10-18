@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/volume/portworx"
-	"github.com/portworx/torpedo/pkg/restutil"
+	"github.com/pure-px/torpedo/drivers/volume/portworx"
+	"github.com/pure-px/torpedo/pkg/restutil"
 
 	"github.com/google/uuid"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -23,20 +23,20 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/pkg/log"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
+	"github.com/pure-px/torpedo/pkg/testrailuttils"
 
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/units"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/pkg/units"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 const (

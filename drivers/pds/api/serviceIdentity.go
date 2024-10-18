@@ -3,7 +3,7 @@ package api
 import (
 	"fmt"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 	"math/rand"
 	status "net/http"
 	"strconv"

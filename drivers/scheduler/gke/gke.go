@@ -7,11 +7,11 @@ import (
 
 	"github.com/libopenstorage/cloudops"
 	"github.com/libopenstorage/cloudops/gce"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/node/ssh"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/node/ssh"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	kube "github.com/pure-px/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 const (

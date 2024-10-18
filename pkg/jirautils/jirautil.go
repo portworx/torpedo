@@ -2,7 +2,7 @@ package jirautils
 
 import (
 	"bytes"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 	"net/http"
 	"time"
 

@@ -3,8 +3,8 @@ package hammerdb
 import (
 	"fmt"
 	"github.com/portworx/sched-ops/task"
-	k8utils "github.com/portworx/torpedo/drivers/utilities"
-	"github.com/portworx/torpedo/pkg/log"
+	k8utils "github.com/pure-px/torpedo/drivers/utilities"
+	"github.com/pure-px/torpedo/pkg/log"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"os"

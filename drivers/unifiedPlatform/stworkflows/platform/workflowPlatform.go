@@ -1,10 +1,10 @@
 package platform
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/platformLibs"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/utils"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 type WorkflowPlatform struct {

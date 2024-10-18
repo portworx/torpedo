@@ -10,9 +10,9 @@ import (
 	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
-	"github.com/portworx/torpedo/drivers/pds/pdsutils"
-	"github.com/portworx/torpedo/pkg/log"
+	pdsapi "github.com/pure-px/torpedo/drivers/pds/api"
+	"github.com/pure-px/torpedo/drivers/pds/pdsutils"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 const (

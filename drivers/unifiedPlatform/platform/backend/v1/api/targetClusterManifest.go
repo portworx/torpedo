@@ -3,9 +3,9 @@ package api
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/pkg/log"
 	targetClusterManifestv1 "github.com/pure-px/platform-api-go-client/platform/v1/targetclusterregistrationmanifest"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/pure-px/torpedo/pkg/log"
 	status "net/http"
 	"time"
 )

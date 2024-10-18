@@ -2,9 +2,9 @@ package api
 
 import (
 	"fmt"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/utilities"
 	projectv1 "github.com/pure-px/platform-api-go-client/platform/v1/project"
+	. "github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/pure-px/torpedo/drivers/utilities"
 	status "net/http"
 )
 

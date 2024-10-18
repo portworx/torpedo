@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 type Parameter struct {

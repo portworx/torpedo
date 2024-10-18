@@ -13,10 +13,10 @@ import (
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	k8score "github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/backup"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 // This testcase Verifies partial backup and restore when CSI volume backup are failed.

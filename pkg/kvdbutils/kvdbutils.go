@@ -2,9 +2,9 @@ package kvdbutils
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 
-	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/drivers/volume"
 )
 
 // ValidateKVDBMembers health and availability.

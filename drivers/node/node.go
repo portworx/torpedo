@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/pure-px/torpedo/pkg/errors"
 	"github.com/vmware/govmomi/object"
 )
 

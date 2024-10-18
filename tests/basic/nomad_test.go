@@ -9,9 +9,9 @@ import (
 	"github.com/hashicorp/nomad/api"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/nomad"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/nomad"
+	"github.com/pure-px/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 var _ = Describe("{ListNodesOnNomadCluster}", func() {

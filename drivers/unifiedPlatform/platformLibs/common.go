@@ -1,6 +1,6 @@
 package platformLibs
 
-import "github.com/portworx/torpedo/drivers/unifiedPlatform"
+import "github.com/pure-px/torpedo/drivers/unifiedPlatform"
 
 const (
 	PROVIDER_UNSPECIFIED  int32 = 0

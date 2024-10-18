@@ -12,12 +12,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/pkg/log"
-	rest "github.com/portworx/torpedo/pkg/restutil"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/pkg/log"
+	rest "github.com/pure-px/torpedo/pkg/restutil"
+	"github.com/pure-px/torpedo/pkg/testrailuttils"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 const (

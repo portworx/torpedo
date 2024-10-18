@@ -2,7 +2,7 @@ package pureutils
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/pure/flasharray"
+	"github.com/pure-px/torpedo/drivers/pure/flasharray"
 	"strings"
 )
 

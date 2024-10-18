@@ -3,13 +3,13 @@ package tests
 import (
 	"fmt"
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
-	"github.com/portworx/torpedo/drivers/utilities"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
-	. "github.com/portworx/torpedo/tests/unifiedPlatform"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/stworkflows/platform"
+	"github.com/pure-px/torpedo/drivers/utilities"
+	"github.com/pure-px/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/tests"
+	. "github.com/pure-px/torpedo/tests/unifiedPlatform"
 	"strings"
 )
 

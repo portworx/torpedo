@@ -3,14 +3,14 @@ package tests
 import (
 	"context"
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/torpedo/drivers/applications/hammerdb"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/pds"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
-	tests "github.com/portworx/torpedo/tests/unifiedPlatform"
+	"github.com/pure-px/torpedo/drivers/applications/hammerdb"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	pdslibs "github.com/pure-px/torpedo/drivers/unifiedPlatform/pdsLibs"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/stworkflows"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/stworkflows/pds"
+	"github.com/pure-px/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/tests"
+	tests "github.com/pure-px/torpedo/tests/unifiedPlatform"
 )
 
 var ctx = context.Background()

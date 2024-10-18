@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/portworx/torpedo/apiServer/taas/utils"
+	"github.com/pure-px/torpedo/apiServer/taas/utils"
 	"log"
 )
 

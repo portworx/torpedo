@@ -7,7 +7,7 @@ import (
 
 	"github.com/docker/docker/errdefs"
 	neogo "github.com/neo4j/neo4j-go-driver/v5/neo4j"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 type Neo4jConfig struct {

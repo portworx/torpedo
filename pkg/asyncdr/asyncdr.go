@@ -27,10 +27,10 @@ import (
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/portworx/torpedo/pkg/stats"
+	"github.com/pure-px/torpedo/pkg/aetosutil"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/osutils"
+	"github.com/pure-px/torpedo/pkg/stats"
 )
 
 var dash *aetosutil.Dashboard

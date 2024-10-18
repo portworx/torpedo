@@ -9,17 +9,17 @@ import (
 	"time"
 
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 
-	"github.com/portworx/torpedo/pkg/testrailuttils"
+	"github.com/pure-px/torpedo/pkg/testrailuttils"
 
 	"github.com/libopenstorage/openstorage/pkg/dbg"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	torpedovolume "github.com/pure-px/torpedo/drivers/volume"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 const (

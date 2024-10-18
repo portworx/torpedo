@@ -1,7 +1,7 @@
 package pdslibs
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
 // CreateRestore creates restore for the backup

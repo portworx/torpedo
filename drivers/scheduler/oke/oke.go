@@ -4,21 +4,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/osutils"
 	"github.com/sirupsen/logrus"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/node/ssh"
+	"github.com/pure-px/torpedo/drivers/node/ssh"
 
 	"github.com/libopenstorage/cloudops"
 	oracleOps "github.com/libopenstorage/cloudops/oracle"
-	"github.com/portworx/torpedo/drivers/node"
-	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/drivers/node"
+	kube "github.com/pure-px/torpedo/drivers/scheduler/k8s"
 )
 
 const (

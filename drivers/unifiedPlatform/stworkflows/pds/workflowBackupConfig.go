@@ -3,10 +3,10 @@ package pds
 import (
 	"fmt"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	pdslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	pdslibs "github.com/pure-px/torpedo/drivers/unifiedPlatform/pdsLibs"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/stworkflows/platform"
+	"github.com/pure-px/torpedo/pkg/log"
 	"strings"
 	"time"
 )

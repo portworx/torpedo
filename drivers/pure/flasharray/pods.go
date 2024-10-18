@@ -1,6 +1,6 @@
 package flasharray
 
-import "github.com/portworx/torpedo/pkg/log"
+import "github.com/pure-px/torpedo/pkg/log"
 
 type PodServices struct {
 	client *Client

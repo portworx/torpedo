@@ -3,12 +3,12 @@ package grpc
 import (
 	"context"
 	"fmt"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
-	"github.com/portworx/torpedo/drivers/utilities"
-	"github.com/portworx/torpedo/pkg/log"
 	commonapiv1 "github.com/pure-px/apis/public/portworx/common/apiv1"
 	publictemplateapis "github.com/pure-px/apis/public/portworx/platform/template/apiv1"
+	. "github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	. "github.com/pure-px/torpedo/drivers/unifiedPlatform/utils"
+	"github.com/pure-px/torpedo/drivers/utilities"
+	"github.com/pure-px/torpedo/pkg/log"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/structpb"
 )

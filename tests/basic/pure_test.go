@@ -14,7 +14,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-	newFlashArray "github.com/portworx/torpedo/drivers/pure/flasharray"
+	newFlashArray "github.com/pure-px/torpedo/drivers/pure/flasharray"
 
 	"github.com/devans10/pugo/flasharray"
 	"github.com/ghodss/yaml"
@@ -31,10 +31,10 @@ import (
 	"time"
 
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/drivers/volume/portworx"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
+	"github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/drivers/volume/portworx"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/testrailuttils"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -43,17 +43,17 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/portworx/torpedo/pkg/pureutils"
-	"github.com/portworx/torpedo/pkg/units"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/drivers/scheduler/spec"
+	"github.com/pure-px/torpedo/pkg/osutils"
+	"github.com/pure-px/torpedo/pkg/pureutils"
+	"github.com/pure-px/torpedo/pkg/units"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	. "github.com/portworx/torpedo/tests"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 const (

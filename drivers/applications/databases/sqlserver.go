@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/portworx/torpedo/drivers/utilities"
-	"github.com/portworx/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/drivers/utilities"
+	"github.com/pure-px/torpedo/pkg/log"
 
 	_ "github.com/denisenkom/go-mssqldb"
 )

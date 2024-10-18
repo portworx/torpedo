@@ -1,6 +1,6 @@
 package platformLibs
 
-import "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+import "github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
 
 func CreateBackupPolicy(name string, typeOfPolicy string, minutes string, retainCount string, tenantId string) (automationModels.V1BackupPolicy, error) {
 

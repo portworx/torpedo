@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	. "github.com/portworx/torpedo/drivers/utilities"
+	. "github.com/pure-px/torpedo/drivers/utilities"
 )
 
 type Database struct {

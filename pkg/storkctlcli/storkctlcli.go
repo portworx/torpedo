@@ -13,8 +13,8 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
 
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/aetosutil"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 var dash *aetosutil.Dashboard

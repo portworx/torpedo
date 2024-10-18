@@ -10,8 +10,8 @@ import (
 
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/storage"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/scheduler/rke"
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/drivers/scheduler/rke"
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"
@@ -22,10 +22,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/backup"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 // EnableNsAndClusterLevelPSAWithBackupAndRestore verifies backup and restore of applications with namespace and cluster level PSA enabled on Vanilla Cluster

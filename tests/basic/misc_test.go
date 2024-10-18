@@ -14,23 +14,23 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/drivers/volume/portworx"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
+	"github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/drivers/volume/portworx"
+	"github.com/pure-px/torpedo/drivers/volume/portworx/schedops"
 	corev1 "k8s.io/api/core/v1"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/portworx/torpedo/pkg/pureutils"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/osutils"
+	"github.com/pure-px/torpedo/pkg/pureutils"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/pkg/testrailuttils"
+	. "github.com/pure-px/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

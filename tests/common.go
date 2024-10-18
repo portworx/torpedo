@@ -30,7 +30,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/applications/databases"
+	"github.com/pure-px/torpedo/drivers/applications/databases"
 
 	"cloud.google.com/go/storage"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
@@ -106,107 +106,107 @@ import (
 	"k8s.io/utils/strings/slices"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
-	"github.com/portworx/torpedo/drivers"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/monitor"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"github.com/portworx/torpedo/drivers/pds"
-	"github.com/portworx/torpedo/drivers/scheduler/aks"
-	"github.com/portworx/torpedo/drivers/scheduler/anthos"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
-	appUtils "github.com/portworx/torpedo/drivers/utilities"
-	"github.com/portworx/torpedo/drivers/volume"
-	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/asyncdr"
-	"github.com/portworx/torpedo/pkg/jirautils"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/portworx/torpedo/pkg/pureutils"
-	"github.com/portworx/torpedo/pkg/s3utils"
-	"github.com/portworx/torpedo/pkg/stats"
-	torpedotask "github.com/portworx/torpedo/pkg/task"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
-	"github.com/portworx/torpedo/pkg/units"
+	"github.com/pure-px/torpedo/drivers"
+	"github.com/pure-px/torpedo/drivers/backup"
+	"github.com/pure-px/torpedo/drivers/monitor"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/node/vsphere"
+	"github.com/pure-px/torpedo/drivers/pds"
+	"github.com/pure-px/torpedo/drivers/scheduler/aks"
+	"github.com/pure-px/torpedo/drivers/scheduler/anthos"
+	"github.com/pure-px/torpedo/drivers/scheduler/openshift"
+	appUtils "github.com/pure-px/torpedo/drivers/utilities"
+	"github.com/pure-px/torpedo/drivers/volume"
+	torpedovolume "github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/pkg/aetosutil"
+	"github.com/pure-px/torpedo/pkg/asyncdr"
+	"github.com/pure-px/torpedo/pkg/jirautils"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/osutils"
+	"github.com/pure-px/torpedo/pkg/pureutils"
+	"github.com/pure-px/torpedo/pkg/s3utils"
+	"github.com/pure-px/torpedo/pkg/stats"
+	torpedotask "github.com/pure-px/torpedo/pkg/task"
+	"github.com/pure-px/torpedo/pkg/testrailuttils"
+	"github.com/pure-px/torpedo/pkg/units"
 
 	// import ssh driver to invoke it's init
-	"github.com/portworx/torpedo/drivers/node/ssh"
+	"github.com/pure-px/torpedo/drivers/node/ssh"
 
 	// import backup driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/backup/portworx"
+	_ "github.com/pure-px/torpedo/drivers/backup/portworx"
 	// import aws driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/aws"
+	_ "github.com/pure-px/torpedo/drivers/node/aws"
 	// import vsphere driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/vsphere"
+	_ "github.com/pure-px/torpedo/drivers/node/vsphere"
 	// import ibm driver to invoke it's init
-	"github.com/portworx/torpedo/drivers/node/ibm"
-	_ "github.com/portworx/torpedo/drivers/node/ibm"
+	"github.com/pure-px/torpedo/drivers/node/ibm"
+	_ "github.com/pure-px/torpedo/drivers/node/ibm"
 
 	// import oracle driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/oracle"
+	_ "github.com/pure-px/torpedo/drivers/node/oracle"
 
 	// import ssh driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/ssh"
-	"github.com/portworx/torpedo/drivers/scheduler"
+	_ "github.com/pure-px/torpedo/drivers/node/ssh"
+	"github.com/pure-px/torpedo/drivers/scheduler"
 
 	// import scheduler drivers to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	_ "github.com/pure-px/torpedo/drivers/scheduler/dcos"
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/drivers/scheduler/spec"
 
 	// import ocp scheduler driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
+	_ "github.com/pure-px/torpedo/drivers/scheduler/openshift"
 
 	// import aks scheduler driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/scheduler/aks"
+	_ "github.com/pure-px/torpedo/drivers/scheduler/aks"
 
 	// import scheduler drivers to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/scheduler/eks"
+	_ "github.com/pure-px/torpedo/drivers/scheduler/eks"
 
 	// import gke scheduler driver to invoke it's init
-	"github.com/portworx/torpedo/drivers/scheduler/gke"
-	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
+	"github.com/pure-px/torpedo/drivers/scheduler/gke"
+	_ "github.com/pure-px/torpedo/drivers/scheduler/gke"
 
-	_ "github.com/portworx/torpedo/drivers/scheduler/oke"
+	_ "github.com/pure-px/torpedo/drivers/scheduler/oke"
 
 	// import rke scheduler drivers to invoke it's init
-	"github.com/portworx/torpedo/drivers/scheduler/rke"
+	"github.com/pure-px/torpedo/drivers/scheduler/rke"
 
 	// import portworx driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/portworx"
+	_ "github.com/pure-px/torpedo/drivers/volume/portworx"
 	// import gce driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/gce"
+	_ "github.com/pure-px/torpedo/drivers/volume/gce"
 	// import aws driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/aws"
+	_ "github.com/pure-px/torpedo/drivers/volume/aws"
 	// import azure driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/azure"
+	_ "github.com/pure-px/torpedo/drivers/volume/azure"
 
 	// import generic csi driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
+	_ "github.com/pure-px/torpedo/drivers/volume/generic_csi"
 
 	// import driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/monitor/prometheus"
+	_ "github.com/pure-px/torpedo/drivers/monitor/prometheus"
 
 	// import driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/pds/dataservice"
+	_ "github.com/pure-px/torpedo/drivers/pds/dataservice"
 
 	// import scheduler drivers to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/scheduler/anthos"
+	_ "github.com/pure-px/torpedo/drivers/scheduler/anthos"
 
 	// import pso driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/pso"
+	_ "github.com/pure-px/torpedo/drivers/volume/pso"
 
 	// import ibm driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/ibm"
+	_ "github.com/pure-px/torpedo/drivers/volume/ibm"
 
 	// import scheduler drivers to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/scheduler/iks"
+	_ "github.com/pure-px/torpedo/drivers/scheduler/iks"
 
 	// import ocp driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/ocp"
+	_ "github.com/pure-px/torpedo/drivers/volume/ocp"
 
-	newflasharray "github.com/portworx/torpedo/drivers/pure/flasharray"
+	newflasharray "github.com/pure-px/torpedo/drivers/pure/flasharray"
 )
 
 const (
@@ -7942,7 +7942,7 @@ func ParseFlags() {
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
 	flag.StringVar(&faSecret, faSecretCliFlag, "", "comma seperated list of famanagementip=tokenValue pairs")
 
-	// System checks https://github.com/portworx/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
+	// System checks https://github.com/pure-px/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
 	// should be skipped from AfterSuite() if this flag is set to true. This is to avoid distracting test failures due to
 	// unstable testing environments.
 	flag.BoolVar(&skipSystemChecks, skipSystemCheckCliFlag, false, "Skip system checks during after suite")

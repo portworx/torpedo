@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 	"strconv"
 )
 

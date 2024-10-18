@@ -2,15 +2,15 @@ package api
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/utilities"
+	"github.com/pure-px/torpedo/drivers/utilities"
 
 	"github.com/jinzhu/copier"
-	"github.com/portworx/torpedo/pkg/log"
 	"github.com/pure-px/platform-api-go-client/platform/v1/backuplocation"
+	"github.com/pure-px/torpedo/pkg/log"
 
 	status "net/http"
 
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	. "github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
 // ListBackupLocations return lis of backup locatiobackuploc

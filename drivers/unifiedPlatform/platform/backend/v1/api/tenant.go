@@ -3,8 +3,8 @@ package api
 import (
 	"fmt"
 	"github.com/jinzhu/copier"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/pure-px/torpedo/pkg/log"
 	status "net/http"
 )
 

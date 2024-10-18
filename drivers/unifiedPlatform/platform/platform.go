@@ -1,7 +1,7 @@
 package platform
 
 import (
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	. "github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
 type Platform interface {

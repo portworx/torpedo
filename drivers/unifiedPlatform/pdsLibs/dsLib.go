@@ -3,11 +3,11 @@ package pdslibs
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/applications/databases"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/utilities"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/applications/databases"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/pure-px/torpedo/drivers/utilities"
+	"github.com/pure-px/torpedo/pkg/log"
 	"golang.org/x/sync/errgroup"
 	"strings"
 )

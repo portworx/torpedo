@@ -25,8 +25,8 @@ import (
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/osutils"
 
 	yaml2 "gopkg.in/yaml.v2"
 
@@ -59,15 +59,15 @@ import (
 	"github.com/portworx/sched-ops/k8s/stork"
 	tektoncd "github.com/portworx/sched-ops/k8s/tektoncd"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/api"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/aututils"
-	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/portworx/torpedo/pkg/pureutils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/pure-px/torpedo/drivers/api"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler/spec"
+	"github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/pkg/aututils"
+	"github.com/pure-px/torpedo/pkg/errors"
+	"github.com/pure-px/torpedo/pkg/pureutils"
 	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
@@ -1518,7 +1518,7 @@ func GetUpdatedSpec(spec interface{}) (interface{}, error) {
 		}
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		dep.Kind = "Deployment"
 
 		return dep, nil
@@ -1529,7 +1529,7 @@ func GetUpdatedSpec(spec interface{}) (interface{}, error) {
 		}
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		ss.Kind = "StatefulSet"
 
 		return ss, nil
@@ -1546,7 +1546,7 @@ func GetUpdatedSpec(spec interface{}) (interface{}, error) {
 		}
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		svc.Kind = "Service"
 
 		return svc, nil
@@ -1557,7 +1557,7 @@ func GetUpdatedSpec(spec interface{}) (interface{}, error) {
 		}
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		pvc.Kind = "PersistentVolumeClaim"
 
 		return pvc, nil
@@ -1568,7 +1568,7 @@ func GetUpdatedSpec(spec interface{}) (interface{}, error) {
 		}
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		sc.Kind = "StorageClass"
 
 		return sc, nil
@@ -1579,7 +1579,7 @@ func GetUpdatedSpec(spec interface{}) (interface{}, error) {
 		}
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		snap.Kind = "VolumeSnapshot"
 
 		return snap, nil
@@ -1596,7 +1596,7 @@ func GetUpdatedSpec(spec interface{}) (interface{}, error) {
 		}
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		secret.Kind = "Secret"
 
 		return secret, nil
@@ -1607,7 +1607,7 @@ func GetUpdatedSpec(spec interface{}) (interface{}, error) {
 		}
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		cm.Kind = "ConfigMap"
 
 		return cm, nil
@@ -1998,7 +1998,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				log.Infof("[%v] Found existing storage class: %v", app.Key, sc.Name)
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
-				// Refer https://github.com/portworx/torpedo/pull/1345
+				// Refer https://github.com/pure-px/torpedo/pull/1345
 				sc.Kind = "StorageClass"
 
 				return sc, nil
@@ -2012,7 +2012,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		}
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		sc.Kind = "StorageClass"
 
 		log.Infof("[%v] Created storage class: %v", app.Key, sc.Name)
@@ -2072,7 +2072,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				log.Infof("[%v] Found existing PVC: %v", app.Key, pvc.Name)
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
-				// Refer https://github.com/portworx/torpedo/pull/1345
+				// Refer https://github.com/pure-px/torpedo/pull/1345
 				pvc.Kind = "PersistentVolumeClaim"
 
 				return pvc, nil
@@ -2111,7 +2111,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		}
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		pvc.Kind = "PersistentVolumeClaim"
 
 		log.Infof("[%v] Created PVC: %v", app.Key, pvc.Name)
@@ -2144,7 +2144,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				log.Infof("[%v] Found existing snapshot: %v", app.Key, snap.Metadata.Name)
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
-				// Refer https://github.com/portworx/torpedo/pull/1345
+				// Refer https://github.com/pure-px/torpedo/pull/1345
 				snap.Kind = "VolumeSnapshot"
 
 				return snap, nil
@@ -2158,7 +2158,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		}
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		snap.Kind = "VolumeSnapshot"
 
 		log.Infof("[%v] Created Snapshot: %v", app.Key, snap.Metadata.Name)
@@ -2480,7 +2480,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 			if dep, err = k8sApps.GetDeployment(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing deployment: %v", app.Key, dep.Name)
 				// This is a hack because the `Kind` field is empty due to K8s bug.
-				// Refer https://github.com/portworx/torpedo/pull/1345
+				// Refer https://github.com/pure-px/torpedo/pull/1345
 				dep.Kind = "Deployment"
 				return dep, nil
 			}
@@ -2493,7 +2493,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		}
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		dep.Kind = "Deployment"
 
 		log.Infof("[%v] Created deployment: %v", app.Key, dep.Name)
@@ -2559,7 +2559,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 				log.Infof("[%v] Found existing StatefulSet: %v", app.Key, ss.Name)
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
-				// Refer https://github.com/portworx/torpedo/pull/1345
+				// Refer https://github.com/pure-px/torpedo/pull/1345
 				ss.Kind = "StatefulSet"
 
 				return ss, nil
@@ -2575,7 +2575,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		log.Infof("[%v] Created StatefulSet: %v", app.Key, ss.Name)
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		ss.Kind = "StatefulSet"
 
 		return ss, nil
@@ -2588,7 +2588,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 				log.Infof("[%v] Found existing Service: %v", app.Key, svc.Name)
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
-				// Refer https://github.com/portworx/torpedo/pull/1345
+				// Refer https://github.com/pure-px/torpedo/pull/1345
 				svc.Kind = "Service"
 
 				return svc, nil
@@ -2602,7 +2602,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		}
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		svc.Kind = "Service"
 
 		log.Infof("[%v] Created Service: %v", app.Key, svc.Name)
@@ -2621,7 +2621,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 				log.Infof("[%v] Found existing Secret: %v", app.Key, secret.Name)
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
-				// Refer https://github.com/portworx/torpedo/pull/1345
+				// Refer https://github.com/pure-px/torpedo/pull/1345
 				secret.Kind = "Secret"
 
 				return secret, nil
@@ -2635,7 +2635,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		}
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		secret.Kind = "Secret"
 
 		log.Infof("[%v] Created Secret: %v", app.Key, secret.Name)
@@ -2700,7 +2700,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 				log.Infof("[%v] Found existing Config Maps: %v", app.Key, configMap.Name)
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
-				// Refer https://github.com/portworx/torpedo/pull/1345
+				// Refer https://github.com/pure-px/torpedo/pull/1345
 				configMap.Kind = "ConfigMap"
 
 				return configMap, nil
@@ -2716,7 +2716,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		log.Infof("[%v] Created Config Map: %v", app.Key, configMap.Name)
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
-		// Refer https://github.com/portworx/torpedo/pull/1345
+		// Refer https://github.com/pure-px/torpedo/pull/1345
 		configMap.Kind = "ConfigMap"
 
 		return configMap, nil

@@ -6,7 +6,7 @@ import (
 
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/stork"
-	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/pure-px/torpedo/pkg/errors"
 )
 
 var (

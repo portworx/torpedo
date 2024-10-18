@@ -9,19 +9,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/google/uuid"
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
-	"github.com/portworx/torpedo/pkg/units"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/testrailuttils"
+	"github.com/pure-px/torpedo/pkg/units"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 var (

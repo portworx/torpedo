@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/onsi/gomega"
-	rest "github.com/portworx/torpedo/pkg/restutil"
+	rest "github.com/pure-px/torpedo/pkg/restutil"
 )
 
 var (

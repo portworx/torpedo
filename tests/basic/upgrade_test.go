@@ -14,19 +14,19 @@ import (
 	"go.uber.org/multierr"
 
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/pkg/kvdbutils"
-	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/pure-px/torpedo/pkg/kvdbutils"
+	"github.com/pure-px/torpedo/pkg/osutils"
 
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
 
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 var storkLabel = map[string]string{"name": "stork"}

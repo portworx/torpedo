@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/node/ibm"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/node/ibm"
+	"github.com/pure-px/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	. "github.com/pure-px/torpedo/tests"
 
 	// https://github.com/kubernetes/client-go/issues/242
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"

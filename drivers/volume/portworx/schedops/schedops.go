@@ -4,9 +4,9 @@ import (
 	"fmt"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/pkg/errors"
 	"k8s.io/apimachinery/pkg/version"
 )
 

@@ -2,9 +2,9 @@ package monitor
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/portworx/torpedo/pkg/log"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/pure-px/torpedo/pkg/errors"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 type Driver interface {

@@ -6,9 +6,9 @@ import (
 
 	"github.com/jinzhu/copier"
 
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/pkg/log"
 	accountv1 "github.com/pure-px/platform-api-go-client/platform/v1/account"
+	. "github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 // GetAccount return pds account model.

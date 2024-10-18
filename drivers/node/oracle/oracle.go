@@ -2,16 +2,16 @@ package oracle
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 	"os"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/node/ssh"
+	"github.com/pure-px/torpedo/drivers/node/ssh"
 
 	"github.com/libopenstorage/cloudops"
 	oracleOps "github.com/libopenstorage/cloudops/oracle"
 	"github.com/oracle/oci-go-sdk/v65/core"
-	"github.com/portworx/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/node"
 )
 
 const (

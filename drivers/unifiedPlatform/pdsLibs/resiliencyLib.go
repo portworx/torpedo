@@ -3,9 +3,9 @@ package pdslibs
 import (
 	"errors"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/pds/parameters"
-	k8utils "github.com/portworx/torpedo/drivers/utilities"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/pds/parameters"
+	k8utils "github.com/pure-px/torpedo/drivers/utilities"
+	"github.com/pure-px/torpedo/pkg/log"
 	"sync"
 )
 

@@ -7,7 +7,7 @@ import (
 	"github.com/google/gnostic/compiler"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
-	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/pure-px/torpedo/pkg/aetosutil"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"io"

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
+	"github.com/pure-px/torpedo/drivers/volume/portworx/schedops"
 	"golang.org/x/sync/errgroup"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -13,17 +13,17 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/backup/portworx"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/backup"
+	"github.com/pure-px/torpedo/drivers/backup/portworx"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/pkg/log"
 	v1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	. "github.com/portworx/torpedo/tests"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 // This test case creates a backup location with encryption

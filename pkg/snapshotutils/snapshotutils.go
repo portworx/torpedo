@@ -2,7 +2,7 @@ package snapshotutils
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"

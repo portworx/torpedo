@@ -1,8 +1,8 @@
 package platformLibs
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 // GetTenantListV1

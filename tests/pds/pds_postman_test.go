@@ -3,9 +3,9 @@ package tests
 import (
 	"fmt"
 	. "github.com/onsi/ginkgo/v2"
-	postmanLib "github.com/portworx/torpedo/drivers/postmanApiLoadDriver"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
+	postmanLib "github.com/pure-px/torpedo/drivers/postmanApiLoadDriver"
+	"github.com/pure-px/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/tests"
 	"time"
 )
 

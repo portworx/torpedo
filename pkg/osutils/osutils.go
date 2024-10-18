@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 // Wget runs wget command

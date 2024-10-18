@@ -2,7 +2,7 @@ package grpc
 
 import (
 	"context"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
+	. "github.com/pure-px/torpedo/drivers/unifiedPlatform/utils"
 	"google.golang.org/grpc/metadata"
 )
 

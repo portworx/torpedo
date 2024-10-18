@@ -2,7 +2,7 @@ package pureutils
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/pure/flashblade"
+	"github.com/pure-px/torpedo/drivers/pure/flashblade"
 	"regexp"
 	"strings"
 )

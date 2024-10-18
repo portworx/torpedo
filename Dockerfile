@@ -2,7 +2,7 @@ FROM golang:1.21.6-alpine AS build
 LABEL maintainer="harsh@portworx.com"
 ARG MAKE_TARGET
 
-WORKDIR /go/src/github.com/portworx/torpedo
+WORKDIR /go/src/github.com/pure-px/torpedo
 
 # Install setup dependencies
 RUN apk update && apk add --no-cache bash git gcc musl-dev make curl openssh-client coreutils python3
@@ -84,7 +84,7 @@ RUN apk update && apk upgrade \
 # Install Newman globally using npm
 RUN npm install -g newman
 
-WORKDIR /go/src/github.com/portworx/torpedo
+WORKDIR /go/src/github.com/pure-px/torpedo
 
 # Install docker
 RUN apk add --update --no-cache docker
@@ -104,8 +104,8 @@ RUN wget https://github.com/mikefarah/yq/releases/download/v4.25.1/yq_linux_amd6
 
 # Copy ginkgo & binaries over from previous container
 COPY --from=build /go/bin/ginkgo /bin/ginkgo
-COPY --from=build /go/src/github.com/portworx/torpedo/bin bin
-COPY --from=build /go/src/github.com/portworx/torpedo/bin/aws-iam-authenticator /bin/aws-iam-authenticator
+COPY --from=build /go/src/github.com/pure-px/torpedo/bin bin
+COPY --from=build /go/src/github.com/pure-px/torpedo/bin/aws-iam-authenticator /bin/aws-iam-authenticator
 COPY --from=build /usr/local/bin/ibmcloud /bin/ibmcloud
 COPY --from=build /usr/local/bin/vcluster /bin/vcluster
 COPY --from=build /root/.bluemix/plugins /root/.bluemix/plugins

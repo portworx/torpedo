@@ -1,7 +1,7 @@
 package platformLibs
 
 import (
-	automationModels "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	automationModels "github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
 type TemplateInputs struct {

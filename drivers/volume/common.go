@@ -11,9 +11,9 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/pborman/uuid"
-	driver_api "github.com/portworx/torpedo/drivers/api"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/pkg/errors"
+	driver_api "github.com/pure-px/torpedo/drivers/api"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

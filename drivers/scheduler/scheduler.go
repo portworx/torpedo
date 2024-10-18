@@ -13,11 +13,11 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	"github.com/portworx/torpedo/drivers/api"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/pure-px/torpedo/drivers/api"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler/spec"
+	"github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/pkg/errors"
 )
 
 // Options specifies keys for a key-value pair that can be passed to scheduler methods

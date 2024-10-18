@@ -3,7 +3,7 @@ package vsphere
 import (
 	"context"
 	"fmt"
-	torpedotask "github.com/portworx/torpedo/pkg/task"
+	torpedotask "github.com/pure-px/torpedo/pkg/task"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/node/ssh"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/node/ssh"
+	"github.com/pure-px/torpedo/pkg/log"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"

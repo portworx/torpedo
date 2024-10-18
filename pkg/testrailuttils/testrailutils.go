@@ -3,7 +3,7 @@ package testrailuttils
 import (
 	"fmt"
 	"github.com/educlos/testrail"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 	"strings"
 )
 

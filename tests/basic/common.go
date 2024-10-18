@@ -2,7 +2,7 @@ package tests
 
 import (
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler"
 	"time"
 )
 

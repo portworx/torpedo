@@ -2,11 +2,11 @@ package spec
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 	"io/ioutil"
 	"path"
 
-	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/pure-px/torpedo/pkg/errors"
 )
 
 // Factory is an application spec factory

@@ -8,8 +8,8 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/aetosutil"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 const (

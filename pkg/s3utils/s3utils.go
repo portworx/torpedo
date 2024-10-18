@@ -2,7 +2,7 @@ package s3utils
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 	"os"
 	"strconv"
 	"strings"

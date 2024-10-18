@@ -2,9 +2,9 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo/v2"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
+	pdslib "github.com/pure-px/torpedo/drivers/pds/lib"
+	"github.com/pure-px/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 var _ = Describe("{DeleteAppConfigTemplates}", func() {

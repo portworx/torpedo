@@ -1,7 +1,7 @@
 package grpc
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
 func (deployment *PdsGrpc) ListDataServices() (*automationModels.CatalogResponse, error) {

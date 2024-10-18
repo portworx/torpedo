@@ -3,8 +3,8 @@ package tests
 import (
 	"errors"
 	"fmt"
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
-	"github.com/portworx/torpedo/drivers/pds/controlplane"
+	pdsdriver "github.com/pure-px/torpedo/drivers/pds"
+	"github.com/pure-px/torpedo/drivers/pds/controlplane"
 	"math/rand"
 	"net/http"
 	"os"
@@ -13,16 +13,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/pds/dataservice"
+	"github.com/pure-px/torpedo/drivers/pds/dataservice"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/node"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/node"
+	pdslib "github.com/pure-px/torpedo/drivers/pds/lib"
+	tc "github.com/pure-px/torpedo/drivers/pds/targetcluster"
+	"github.com/pure-px/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )

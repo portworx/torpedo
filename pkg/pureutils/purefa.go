@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/devans10/pugo/flasharray"
-	tpflasharray "github.com/portworx/torpedo/drivers/pure/flasharray"
+	tpflasharray "github.com/pure-px/torpedo/drivers/pure/flasharray"
 
-	"github.com/portworx/torpedo/pkg/units"
+	"github.com/pure-px/torpedo/pkg/units"
 )
 
 // GetAppDataDir checks the pod namespace prefix, and returns a path that we can

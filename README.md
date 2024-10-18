@@ -1,7 +1,7 @@
 # Torpedo
 
 [![Travis branch](https://img.shields.io/travis/portworx/torpedo/master.svg)](https://travis-ci.org/portworx/torpedo)
-[![Go Report Card](https://goreportcard.com/badge/github.com/portworx/torpedo)](https://goreportcard.com/report/github.com/portworx/torpedo)
+[![Go Report Card](https://goreportcard.com/badge/github.com/pure-px/torpedo)](https://goreportcard.com/report/github.com/pure-px/torpedo)
 
 
 Torpedo is a test suite to qualify storage providers for stateful containers running in a distributed environment.  It tests various scenarios that applications encounter when running in Linux containers and deployed via schedulers such as Kubernetes, Marathon or Swarm.

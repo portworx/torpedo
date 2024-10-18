@@ -2,7 +2,7 @@ package databases
 
 import (
 	"context"
-	"github.com/portworx/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/node"
 )
 
 type DatabaseDriver interface {

@@ -2,13 +2,13 @@ package platformLibs
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 	"os"
 	"strconv"
 	"strings"
 
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	utilities "github.com/portworx/torpedo/drivers/utilities"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	utilities "github.com/pure-px/torpedo/drivers/utilities"
 )
 
 var (

@@ -3,9 +3,9 @@ package tests
 import (
 	"fmt"
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/tests"
 	"math/rand"
 	"os"
 	"slices"

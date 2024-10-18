@@ -6,8 +6,8 @@ import (
 
 	"github.com/libopenstorage/openstorage/pkg/sched"
 	"github.com/portworx/sched-ops/task"
-	tp_errors "github.com/portworx/torpedo/pkg/errors"
-	"github.com/portworx/torpedo/pkg/log"
+	tp_errors "github.com/pure-px/torpedo/pkg/errors"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 // TriggerOptions are common options used to check if any action is okay to be triggered/performed

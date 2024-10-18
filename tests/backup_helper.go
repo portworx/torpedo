@@ -20,7 +20,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/applications/databases"
+	"github.com/pure-px/torpedo/drivers/applications/databases"
 
 	"github.com/gogo/protobuf/types"
 	optest "github.com/libopenstorage/operator/pkg/util/test"
@@ -35,17 +35,17 @@ import (
 	"github.com/portworx/sched-ops/k8s/storage"
 
 	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
-	"github.com/portworx/torpedo/drivers"
-	"github.com/portworx/torpedo/drivers/backup/portworx"
+	"github.com/pure-px/torpedo/drivers"
+	"github.com/pure-px/torpedo/drivers/backup/portworx"
 
 	appsapi "k8s.io/api/apps/v1"
 
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-	appUtils "github.com/portworx/torpedo/drivers/utilities"
+	appUtils "github.com/pure-px/torpedo/drivers/utilities"
 
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/batch"
-	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/pure-px/torpedo/pkg/osutils"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 
@@ -59,12 +59,12 @@ import (
 	"github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/backup"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/pkg/log"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 

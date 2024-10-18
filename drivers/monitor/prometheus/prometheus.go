@@ -1,12 +1,12 @@
 package prometheus
 
 import (
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 	"net/http"
 
-	"github.com/portworx/torpedo/drivers/monitor"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/pure-px/torpedo/drivers/monitor"
 )
 
 type Prom struct {

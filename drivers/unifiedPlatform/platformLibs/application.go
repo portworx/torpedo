@@ -1,7 +1,7 @@
 package platformLibs
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
 func ListAvailableApplicationsForCluster(clusterId string) (*automationModels.WorkFlowResponse, error) {

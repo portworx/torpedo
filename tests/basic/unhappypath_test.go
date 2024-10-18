@@ -2,7 +2,7 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 	"math"
 	"strings"
 	"time"
@@ -10,12 +10,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/stork"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/pkg/kvdbutils"
-	"github.com/portworx/torpedo/pkg/snapshotutils"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/pkg/kvdbutils"
+	"github.com/pure-px/torpedo/pkg/snapshotutils"
+	"github.com/pure-px/torpedo/pkg/testrailuttils"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 var (

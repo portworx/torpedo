@@ -1,4 +1,4 @@
-module github.com/portworx/torpedo
+module github.com/pure-px/torpedo
 
 go 1.21.4
 

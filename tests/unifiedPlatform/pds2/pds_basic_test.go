@@ -2,9 +2,9 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows/platform"
-	"github.com/portworx/torpedo/drivers/utilities"
-	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/stworkflows/platform"
+	"github.com/pure-px/torpedo/drivers/utilities"
+	"github.com/pure-px/torpedo/pkg/aetosutil"
 	"os"
 	"strings"
 	"testing"
@@ -12,12 +12,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	dsUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
-	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
-	. "github.com/portworx/torpedo/tests/unifiedPlatform"
+	pdslib "github.com/pure-px/torpedo/drivers/pds/lib"
+	dsUtils "github.com/pure-px/torpedo/drivers/unifiedPlatform/pdsLibs"
+	platformUtils "github.com/pure-px/torpedo/drivers/unifiedPlatform/platformLibs"
+	"github.com/pure-px/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/tests"
+	. "github.com/pure-px/torpedo/tests/unifiedPlatform"
 )
 
 const (

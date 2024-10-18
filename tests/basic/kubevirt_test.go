@@ -13,13 +13,13 @@ import (
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
 
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/aututils"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/pkg/aututils"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/units"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 var _ = Describe("{AddNewDiskToKubevirtVM}", func() {

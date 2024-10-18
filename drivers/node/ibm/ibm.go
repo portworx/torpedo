@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/pure-px/torpedo/pkg/osutils"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 
 	"github.com/libopenstorage/cloudops"
 	iks "github.com/libopenstorage/cloudops/ibm"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/node/ssh"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/node/ssh"
 )
 
 const (

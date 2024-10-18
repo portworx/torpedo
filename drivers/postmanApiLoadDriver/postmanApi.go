@@ -2,8 +2,8 @@ package postmanApiLoadDriver
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/osutils"
 	"path/filepath"
 	"strings"
 )

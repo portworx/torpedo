@@ -1,9 +1,9 @@
 package pds
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	resiLibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	resiLibs "github.com/pure-px/torpedo/drivers/unifiedPlatform/pdsLibs"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 type WorkflowPDSResiliency struct {

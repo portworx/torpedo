@@ -3,7 +3,7 @@ package pdsutils
 import (
 	"os"
 
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 const (

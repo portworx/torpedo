@@ -2,20 +2,20 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node"
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
+	"github.com/pure-px/torpedo/drivers/node"
+	pdsdriver "github.com/pure-px/torpedo/drivers/pds"
 	v1 "k8s.io/api/apps/v1"
 	"strings"
 	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
-	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
-	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
+	pdslib "github.com/pure-px/torpedo/drivers/pds/lib"
+	pdsbkp "github.com/pure-px/torpedo/drivers/pds/pdsbackup"
+	restoreBkp "github.com/pure-px/torpedo/drivers/pds/pdsrestore"
+	tc "github.com/pure-px/torpedo/drivers/pds/targetcluster"
+	"github.com/pure-px/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 var _ = Describe("{PerformRestoreValidatingHA}", func() {

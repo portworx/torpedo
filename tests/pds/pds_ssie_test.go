@@ -5,12 +5,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
-	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
+	pdsdriver "github.com/pure-px/torpedo/drivers/pds"
+	pdslib "github.com/pure-px/torpedo/drivers/pds/lib"
+	restoreBkp "github.com/pure-px/torpedo/drivers/pds/pdsrestore"
+	tc "github.com/pure-px/torpedo/drivers/pds/targetcluster"
+	"github.com/pure-px/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
 )
 

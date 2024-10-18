@@ -3,25 +3,25 @@ package lib
 import (
 	"errors"
 	"fmt"
-	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
+	tc "github.com/pure-px/torpedo/drivers/pds/targetcluster"
 	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
+	dataservices "github.com/pure-px/torpedo/drivers/pds/dataservice"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/node"
-	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
-	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
+	"github.com/pure-px/torpedo/drivers/node"
+	restoreBkp "github.com/pure-px/torpedo/drivers/pds/pdsrestore"
+	_ "github.com/pure-px/torpedo/drivers/scheduler/dcos"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/tests"
 )
 
 const (

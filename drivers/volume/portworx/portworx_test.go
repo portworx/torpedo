@@ -8,9 +8,9 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/pborman/uuid"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/pkg/aututils"
-	"github.com/portworx/torpedo/pkg/units"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/pkg/aututils"
+	"github.com/pure-px/torpedo/pkg/units"
 	"github.com/stretchr/testify/require"
 )
 

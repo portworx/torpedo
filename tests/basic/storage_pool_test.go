@@ -16,24 +16,24 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 
-	"github.com/portworx/torpedo/drivers/node/ssh"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/pure-px/torpedo/drivers/node/ssh"
+	"github.com/pure-px/torpedo/drivers/node/vsphere"
 
 	"github.com/google/uuid"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/drivers/volume"
 
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo/v2"
 
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
-	"github.com/portworx/torpedo/pkg/units"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/pkg/testrailuttils"
+	"github.com/pure-px/torpedo/pkg/units"
+	. "github.com/pure-px/torpedo/tests"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

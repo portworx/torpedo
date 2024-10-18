@@ -4,19 +4,19 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/pkg/units"
+	"github.com/pure-px/torpedo/pkg/units"
 	corev1 "k8s.io/api/core/v1"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/volume"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/volume"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 const (

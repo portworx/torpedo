@@ -6,9 +6,9 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/talisman/pkg/apis/portworx/v1beta1"
 	talisman_v1beta2 "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/tests"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

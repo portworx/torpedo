@@ -3,10 +3,10 @@ package platform
 import (
 	"fmt"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
-	k8utils "github.com/portworx/torpedo/drivers/utilities"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/platformLibs"
+	k8utils "github.com/pure-px/torpedo/drivers/utilities"
+	"github.com/pure-px/torpedo/pkg/log"
 	"strings"
 	"time"
 )

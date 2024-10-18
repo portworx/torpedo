@@ -2,8 +2,8 @@ package kubevirt
 
 import (
 	"fmt"
-	. "github.com/portworx/torpedo/drivers/utilities"
-	"github.com/portworx/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/drivers/utilities"
+	"github.com/pure-px/torpedo/pkg/log"
 	"strconv"
 )
 

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/stats"
+	"github.com/pure-px/torpedo/pkg/aetosutil"
+	"github.com/pure-px/torpedo/pkg/stats"
 )
 
 func main() {

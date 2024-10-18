@@ -6,8 +6,8 @@ import (
 	"time"
 
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/errors"
+	"github.com/pure-px/torpedo/pkg/log"
 )
 
 // Image Generic struct

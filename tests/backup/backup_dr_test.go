@@ -11,12 +11,12 @@ import (
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/pkg/asyncdr"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/backup"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/pkg/asyncdr"
+	"github.com/pure-px/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 // This testcase verifies backup and restore of applications when PX sync DR configured on application namespace.

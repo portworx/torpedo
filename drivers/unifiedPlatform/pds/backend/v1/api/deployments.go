@@ -3,13 +3,13 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/utilities"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/drivers/utilities"
+	"github.com/pure-px/torpedo/pkg/log"
 	status "net/http"
 
 	"github.com/jinzhu/copier"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	deploymentV1 "github.com/pure-px/platform-api-go-client/pds/v1/dataservicedeployment"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
 var (

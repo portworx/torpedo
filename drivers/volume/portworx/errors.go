@@ -3,7 +3,7 @@ package portworx
 import (
 	"fmt"
 
-	"github.com/portworx/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/node"
 )
 
 // ErrFailedToInspectVolume error type for failing to inspect a volume

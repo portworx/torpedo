@@ -12,21 +12,21 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/testrailuttils"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/errors"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/volume"
 	corev1 "k8s.io/api/core/v1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	. "github.com/portworx/torpedo/tests"
+	. "github.com/pure-px/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

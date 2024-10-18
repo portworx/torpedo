@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/node"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -18,16 +18,16 @@ import (
 	"strings"
 	"time"
 
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
+	pdsdriver "github.com/pure-px/torpedo/drivers/pds"
 
 	"github.com/libopenstorage/openstorage/api"
 
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/tests"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/tests"
+	. "github.com/pure-px/torpedo/tests"
 
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/units"
 
 	state "net/http"
 
@@ -37,8 +37,8 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/task"
-	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
-	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
+	pdsapi "github.com/pure-px/torpedo/drivers/pds/api"
+	pdscontrolplane "github.com/pure-px/torpedo/drivers/pds/controlplane"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"

@@ -6,11 +6,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/pkg/ipv6util"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
-	. "github.com/portworx/torpedo/tests"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/pkg/ipv6util"
+	"github.com/pure-px/torpedo/pkg/testrailuttils"
+	. "github.com/pure-px/torpedo/tests"
 )
 
 var _ = Describe("{IPv6PxctlFunctional}", func() {

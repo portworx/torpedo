@@ -5,13 +5,13 @@ import (
 
 	"github.com/libopenstorage/openstorage/api"
 
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/log"
 
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/volume"
-	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
-	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/volume"
+	torpedovolume "github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/drivers/volume/portworx/schedops"
+	"github.com/pure-px/torpedo/pkg/errors"
 )
 
 const (
