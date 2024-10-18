@@ -497,14 +497,29 @@ func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 func (d *portworx) RefreshDriverEndpoints() error {
 	mutex.Lock()
 	defer mutex.Unlock()
-	secretConfigMap := flag.Lookup("config-map").Value.(flag.Getter).Get().(string)
-	if secretConfigMap != "" {
-		log.Infof("Fetching token from configmap: %s", secretConfigMap)
-		token, err := d.schedOps.GetTokenFromConfigMap(secretConfigMap)
-		if err != nil {
-			return err
+	// Check if the config-map flag is defined
+	configMapFlag := flag.Lookup("config-map")
+	if configMapFlag == nil {
+		log.Warn("config-map flag not defined")
+	} else {
+		getter, ok := configMapFlag.Value.(flag.Getter)
+		if !ok {
+			return fmt.Errorf("config-map flag is not a flag.Getter")
 		}
-		d.token = token
+
+		secretConfigMap, ok := getter.Get().(string)
+		if !ok {
+			return fmt.Errorf("config-map value is not a string")
+		}
+
+		if secretConfigMap != "" {
+			log.Infof("Fetching token from configmap: %s", secretConfigMap)
+			token, err := d.schedOps.GetTokenFromConfigMap(secretConfigMap)
+			if err != nil {
+				return err
+			}
+			d.token = token
+		}
 	}
 
 	// getting namespace again (refreshing it) as namespace of portworx in switched context might have changed
