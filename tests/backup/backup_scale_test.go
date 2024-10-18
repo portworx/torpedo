@@ -459,6 +459,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", Label(Test
 		groups                      []string
 		backupNames                 []string
 		numberOfSimultaneousBackups int
+		clusterUid                  string
 		chosenUserDestClusterUid    string
 	)
 

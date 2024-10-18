@@ -63,6 +63,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 		usersToBeDeleted                 []string
 		userScheduleFromSharedClusterMap map[string]string
 		numberOfPrimaryBackups           int
+		wg                               sync.WaitGroup
 	)
 
 	JustBeforeEach(func() {
@@ -772,6 +773,21 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "failed to get admin context")
+		log.InfoD("Deleting the backups")
+		allBackups, err := GetAllBackupsAdmin()
+		dash.VerifySafely(err, nil, "Verifying fetching of all backups")
+		for _, bkp := range allBackups {
+			wg.Add(1)
+			go func(bkp string) {
+				defer wg.Done()
+				backupUID, err := Inst().Backup.GetBackupUID(ctx, bkp, BackupOrgID)
+				_, err = DeleteBackup(bkp, backupUID, BackupOrgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", bkp))
+				err = DeleteBackupAndWait(bkp, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion wait- %s", bkp))
+			}(bkp)
+		}
+		wg.Wait()
 		log.Infof("Cleanup any clusters, since it can have inactive and backup schedules active")
 		err = DeleteAllAdminClusters()
 		dash.VerifySafely(err, nil, "Verifying deletion of all admin clusters")
@@ -812,6 +828,7 @@ var _ = Describe("{BackupSuperAdminRoleForLocalUser}", Label(TestCaseLabelsMap[B
 		userBkpLocationNameMap           map[string]string
 		userBkpLocationUidMap            map[string]string
 		numOfSuperAdminUsers             int
+		wg                               sync.WaitGroup
 	)
 
 	JustBeforeEach(func() {
@@ -1379,7 +1396,21 @@ var _ = Describe("{BackupSuperAdminRoleForLocalUser}", Label(TestCaseLabelsMap[B
 		DestroyApps(scheduledAppContexts, opts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-
+		log.InfoD("Deleting the backups")
+		allBackups, err := GetAllBackupsAdmin()
+		dash.VerifySafely(err, nil, "Verifying fetching of all backups")
+		for _, bkp := range allBackups {
+			wg.Add(1)
+			go func(bkp string) {
+				defer wg.Done()
+				backupUID, err := Inst().Backup.GetBackupUID(ctx, bkp, BackupOrgID)
+				_, err = DeleteBackup(bkp, backupUID, BackupOrgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", bkp))
+				err = DeleteBackupAndWait(bkp, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion wait- %s", bkp))
+			}(bkp)
+		}
+		wg.Wait()
 		log.Infof("Cleanup any clusters in case of failure, since it can have inactive and backup schedules active")
 		err = DeleteAllAdminClusters()
 		dash.VerifySafely(err, nil, "Verifying deletion of all admin clusters")
