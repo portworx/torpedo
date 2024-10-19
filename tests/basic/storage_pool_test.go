@@ -12581,3 +12581,202 @@ var _ = Describe("{PoolExpandAddDriveWithNodeReboot}", func() {
 
 })
 
+var _ = Describe("{PoolDeleteWithPXRestart}",func(){
+	/*
+		1. Create volume and do IOs / deploy apps to do IOs
+		2. Destroy Apps
+		3. Delete pool
+		4. After some random delay restart Portworx
+		4. Wait for node to comeup and check PX status
+		5. Verify if pool deleted successfully
+	*/
+	var contexts []*scheduler.Context
+	var poolsMap map[string][]volume.DiskResource
+	var poolToDelete node.StoragePool
+	var jrnlPartPoolID string
+	var poolIDToDelete string
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolDeleteWithPXRestart", "Pool Delete With PXRestart", nil, 0)
+	})
+
+	ItLog := "PoolDeleteWithPXRestart"
+
+	It(ItLog, func() {
+		stepLog = "Schedule Apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = scheduleApps()
+			log.Info("schedule app succeed")
+			time.Sleep(1 * time.Minute)
+		})
+		stepLog = "Validate and destroy app"
+		// appsValidateAndDestroy this will delete all the app including the app we install while setting-up the job
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			appsValidateAndDestroy(contexts)
+			time.Sleep(time.Minute)
+			log.Info("app validate and destroy succeed")
+		})
+
+		testNode := selectPoolDeletableNode()
+		dash.VerifyFatal(testNode != nil, true, "verify if select test node ok")
+		selectedNode := *testNode
+		nodePools := selectedNode.StoragePools
+
+		stepLog := "Enter maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = EnterPoolMaintenance(selectedNode)
+			log.FailOnError(err, "Failed to enter in maintenance mode")
+			log.Info("enter pool maintenance mode succeed")
+		})
+
+		stepLog = "Selecting pool to delete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+			if isjournal && len(nodePools) > 1 {
+				jDev, err := Inst().V.GetJournalDevicePath(&selectedNode)
+				log.FailOnError(err, fmt.Sprintf("error getting journal device path from node %s", selectedNode.Name))
+				log.Infof("JournalDev: %s", jDev)
+				if jDev == "" {
+					log.FailOnError(fmt.Errorf("no journal device path found"), "error getting journal device path from storage spec")
+				}
+				drivesMap, err := Inst().V.GetPoolDrives(&selectedNode)
+				jPath := jDev[:len(jDev)-1]
+			outer:
+				for k, v := range drivesMap {
+					for _, dv := range v {
+						if strings.Contains(dv.Device, jPath) {
+							jrnlPartPoolID = k
+							break outer
+						}
+					}
+				}
+				for _, nodePool := range nodePools {
+					if strconv.Itoa(int(nodePool.ID)) != jrnlPartPoolID {
+						poolToDelete = nodePool
+						break
+					}
+				}
+			} else {
+				poolToDelete = nodePools[rand.Intn(len(nodePools))]
+			}
+			poolIDToDelete = strconv.Itoa(int(poolToDelete.GetID()))
+			log.Infof("pool selected for deletion [%s]", poolIDToDelete)
+		})
+
+		stepLog = fmt.Sprintf("Validate volumes are deleted or not")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volume, err := runPxctlCommand(fmt.Sprintf(" volume list --node %v | awk 'NR > 1 {print $1}'", poolToDelete.GetUuid()), selectedNode, nil)
+			log.FailOnError(err, fmt.Sprintf("unable to fetch volume on pool [%v] volumes: [%v]", poolToDelete.GetUuid(), volume))
+			dash.VerifyFatal(len(volume) == 0, true, fmt.Sprintf("all volumes are delete on pool [%v] volumes: [%v]", poolToDelete.GetUuid(), volume))
+			log.Info("validate volumes succeed")
+		})
+
+		stepLog = fmt.Sprintf("Delete the  pool [%v] on node [%v]", poolIDToDelete, selectedNode.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().V.DeletePool(selectedNode, poolIDToDelete, true)
+			log.FailOnError(err, fmt.Sprintf("Failed to delete pool [%v]", poolIDToDelete))
+			log.Infof("pool deleted succeed")
+		})
+		sleepTime := rand.Intn(100) + 1
+		time.Sleep(time.Second * (time.Duration(sleepTime)))
+
+		//Restart Portworx
+		stepLog = "Restart Portworx"
+		Step(stepLog, func() {
+			err := Inst().N.Systemctl(selectedNode, "portworx.service", node.SystemctlOpts{
+				Action: "restart",
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         5 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				}})
+			log.FailOnError(err, fmt.Sprintf("restart portworx failed on node [%v]", selectedNode.Name))
+			log.Info("portworx restart succeed")
+			time.Sleep(2 * time.Minute)
+		})
+
+		stepLog = "Exit pool maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = ExitPoolMaintenance(selectedNode)
+			log.FailOnError(err, "Failed to exit maintenance mode")
+			log.Info("exit pool maintenance mode succeed")
+		})
+
+		// portworx status
+		stepLog = "Check px status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			status, err := Inst().V.GetPxctlStatus(selectedNode)
+			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", selectedNode.Name))
+			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+				selectedNode.Name, api.Status_STATUS_OK, status))
+			log.InfoD("px status %v", status)
+		})
+		// Verify pool delete
+		stepLog = "Verify pool delete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolsMap, err = Inst().V.GetPoolDrives(&selectedNode)
+			if err != nil {
+				log.FailOnError(err, fmt.Sprintf("error getting pool drive from the node [%s] after pool deletion,Err: %v", selectedNode.Name, err))
+			}
+			if _, ok := poolsMap[poolToDelete.GetUuid()]; ok {
+				log.FailOnError(fmt.Errorf("pool [%s] still exists on the node [%s]", poolToDelete.GetUuid(), selectedNode.Name), fmt.Sprintf("pool [%s] still exists on the node [%s]", poolToDelete, selectedNode.Name))
+			}
+			log.InfoD("verify pool delete succeed")
+		})
+
+		newSpecSize := (poolToDelete.TotalSize / units.GiB) / 2
+		///creating a spec to perform add  drive
+		driveSpecs, err := GetCloudDriveDeviceSpecs()
+		log.FailOnError(err, "Error getting cloud drive specs")
+		deviceSpec := driveSpecs[0]
+		deviceSpecParams := strings.Split(deviceSpec, ",")
+		paramsArr := make([]string, 0)
+		for _, param := range deviceSpecParams {
+			if strings.Contains(param, "size") {
+				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", newSpecSize))
+			} else {
+				paramsArr = append(paramsArr, param)
+			}
+		}
+		newSpec := strings.Join(paramsArr, ",")
+		stepLog = fmt.Sprintf("Adding cloud drive to node %s with size %s", selectedNode.Name, newSpec)
+
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.AddCloudDrive(&selectedNode, newSpec, -1)
+			log.FailOnError(err, "error adding new drive to node %s", selectedNode.Name)
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing driver end points")
+			log.InfoD("Validate pool rebalance after drive add to the node %s", selectedNode.Name)
+			err = ValidateDriveRebalance(selectedNode)
+			log.FailOnError(err, "pool re-balance failed on node %s", selectedNode.Name)
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, addDriveUpTimeOut)
+			log.FailOnError(err, "volume drive down on node %s", selectedNode.Name)
+			log.InfoD("pool created succeed")
+		})
+
+		stepLog = "Verify pool created"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolsMapAfr, err := Inst().V.GetPoolDrives(&selectedNode)
+
+			log.FailOnError(err, "Failed to list storage pools")
+			dash.VerifyFatal((len(poolsMap)+1) == len(poolsMapAfr), true, "verify new pool is created")
+			log.InfoD("verify new pool created succeed")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+
+	})
+})
