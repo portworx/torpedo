@@ -11981,7 +11981,7 @@ var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "
 	})
 })
 
-var _ = Describe("{PoolResizeWithNodeRebootWithTimeInterval}", func() {
+var _ = Describe("{PoolDeleteWithNodeRebootWithTimeInterval}", func() {
 	/*
 		1.	Create volume and do IOs / deploy apps to do IOs
 		2.	Validate and destroy app
@@ -12003,10 +12003,10 @@ var _ = Describe("{PoolResizeWithNodeRebootWithTimeInterval}", func() {
 	var poolIDToDelete string
 
 	BeforeEach(func() {
-		StartTorpedoTest("PoolResizeWithNodeRebootWithTimeInterval", "Pool delete with node reboot with random time interval", nil, 0)
+		StartTorpedoTest("PoolDeleteWithNodeRebootWithTimeInterval", "Pool delete with node reboot with random time interval", nil, 0)
 	})
 
-	ItLog := "PoolResizeWithNodeRebootWithTimeInterval"
+	ItLog := "PoolDeleteWithNodeRebootWithTimeInterval"
 
 	It(ItLog, func() {
 		stepLog = "Schedule Apps"
@@ -12354,7 +12354,7 @@ var _ = Describe("{PXInstallWithNodeReboot}", func() {
 	})
 })
 
-var _ = Describe("{PoolResizeWithNodeReboot}", func() {
+var _ = Describe("{PoolResizeWithNodeRebootWithTimeInterval}", func() {
 
 	/*
 	   1.  Create volume and do IOs / deploy apps to do IOs
@@ -12376,7 +12376,7 @@ var _ = Describe("{PoolResizeWithNodeReboot}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("PoolResizeWithNodeReboot", "Pool resize with node reboot", nil, 0)
+		StartTorpedoTest("PoolResizeWithNodeRebootWithTimeInterval", "Pool resize with node reboot", nil, 0)
 		isJournalEnabled, err = IsJournalEnabled()
 		log.FailOnError(err, "Failed to get journal enable or not")
 		bufferSizeInGB = uint64(0)
@@ -12385,7 +12385,7 @@ var _ = Describe("{PoolResizeWithNodeReboot}", func() {
 		}
 	})
 
-	itLog := "PoolResizeWithNodeReboot"
+	itLog := "PoolResizeWithNodeRebootWithTimeInterval"
 	It(itLog, func() {
 		stepLog := "Schedule Apps"
 		Step(stepLog, func() {
@@ -12581,7 +12581,7 @@ var _ = Describe("{PoolExpandAddDriveWithNodeReboot}", func() {
 
 })
 
-var _ = Describe("{PoolDeleteWithPXRestart}",func(){
+var _ = Describe("{PoolDeleteWithPXRestart}", func() {
 	/*
 		1. Create volume and do IOs / deploy apps to do IOs
 		2. Destroy Apps
@@ -12792,7 +12792,7 @@ var _ = Describe("{AddDriveWithNodeMaintenance}", func() {
 	*/
 
 	var (
-		targetSizeGiB uint64
+		targetSizeGiB  uint64
 		poolIDToResize string
 		poolToResize   *api.StoragePool
 		contexts       []*scheduler.Context
@@ -12860,7 +12860,7 @@ var _ = Describe("{AddDriveWithNodeMaintenance}", func() {
 			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
 			log.Info(fmt.Sprintf("Pool expansion succeed [%s]", poolIDToResize))
 		})
-		
+
 		//Check PX status
 		stepLog = "Check PX status"
 		Step(stepLog, func() {
@@ -12886,4 +12886,122 @@ var _ = Describe("{AddDriveWithNodeMaintenance}", func() {
 		AfterEachTest(contexts)
 	})
 
+})
+
+var _ = Describe("{PoolResizeWithNodeMaintenanceCycleWithTimeInterval}", func() {
+
+	/*
+	   1.  Create volume and do IOs / deploy apps to do IOs
+	   2.  Select a pool to resize
+	   3.  Expand selected pool with resize-disk type
+	   4.  Performing node maintenance cycle on selected node with some random delay
+	   5.  Wait for pool to expand
+	   6.  Verify pool resized
+	   7.  Check px status
+	   8.  Check if apps are running
+	*/
+
+	var (
+		poolIDToResize                string
+		poolToResize                  *api.StoragePool
+		bufferSizeInGB, targetSizeGiB uint64
+		isJournalEnabled              bool
+		contexts                      []*scheduler.Context
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolResizeWithNodeMaintenanceCycleWithTimeInterval", "Pool expand resize disk with node maintenance cycle with random delay", nil, 0)
+		isJournalEnabled, err = IsJournalEnabled()
+		log.FailOnError(err, "Failed to get journal enable or not")
+		bufferSizeInGB = uint64(0)
+		if isJournalEnabled {
+			bufferSizeInGB = JournalDeviceSizeInGB
+		}
+	})
+
+	itLog := "PoolResizeWithNodeMaintenanceCycleWithTimeInterval"
+	It(itLog, func() {
+		stepLog := "Schedule Apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info("schedule app succeed")
+			contexts = scheduleApps()
+			time.Sleep(5 * time.Minute)
+		})
+
+		stepLog = "Select a pool to resize"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
+			dash.VerifyFatal(len(poolIDToResize) > 0, true, fmt.Sprintf("Expected poolIDToResize to not be empty, pool id to resize %s", poolIDToResize))
+			poolToResize = getStoragePool(poolIDToResize)
+			log.Info(fmt.Sprintf("Pool going to resize is UUID: %s", poolIDToResize))
+		})
+
+		originalSizeInBytes = poolToResize.TotalSize
+		targetSizeInBytes = originalSizeInBytes + 100*units.GiB // getDesiredSize(originalSizeInBytes)
+		targetSizeGiB = targetSizeInBytes / units.GiB
+
+		stepLog = "Expand it by 100 GiB with resize-disk type"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Current size of pool %s is %d GiB. Trying to expand to %v GiB",
+				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+			triggerPoolExpansion(poolIDToResize, targetSizeGiB+bufferSizeInGB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+			log.Info(fmt.Sprintf("Pool expansion started [%s]", poolIDToResize))
+		})
+
+		sleepTime := rand.Intn(100) + 1
+		time.Sleep(time.Second * (time.Duration(sleepTime)))
+		tNode, err := GetNodeWithGivenPoolID(poolIDToResize)
+		log.FailOnError(err, "Failed to get node from pool id")
+		selectedNode := *tNode
+
+		stepLog = fmt.Sprintf("Performing node maintenance cycle on node [%s] after [%d] seconds", selectedNode.Name, sleepTime)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.RecoverDriver(selectedNode)
+			log.FailOnError(err, fmt.Sprintf("error performing maintenance cycle on node %s", selectedNode.Name))
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, 5*time.Minute)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", selectedNode.Name))
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", selectedNode.Name))
+		})
+
+		stepLog = fmt.Sprint("Wait for pool to resize")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+			log.Info(fmt.Sprintf("Pool expansion succeed [%s]", poolIDToResize))
+		})
+		stepLog = fmt.Sprintf("Verify pool resized [%s]", poolIDToResize)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+			log.Info("Verify pool resized succeed")
+		})
+
+		stepLog = "Check px status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			status, err := Inst().V.GetPxctlStatus(selectedNode)
+			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", selectedNode.Name))
+			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+				selectedNode.Name, api.Status_STATUS_OK, status))
+			log.InfoD("px status %v", status)
+		})
+
+		stepLog = fmt.Sprintf("Check if apps are running")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+			log.Info("validate application succeed")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		appsValidateAndDestroy(contexts)
+		AfterEachTest(contexts)
+	})
 })
