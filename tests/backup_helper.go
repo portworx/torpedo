@@ -12458,3 +12458,57 @@ func ValidatePxBackupIsReady() error {
 	}
 	return nil
 }
+
+// RunCurlCmd to get all metric details from Prometheus endpoint
+func RunCurlCmd(namespace string) ([]string, error) {
+	svc := "px-backup"
+	url := fmt.Sprintf("http://%s.%s:%d/metrics", svc, namespace, 10001)
+	output, err := exec.Command("curl", "-s", url).CombinedOutput()
+	log.Infof("Output captured from given command [%v]", string(output))
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to run command: %v", err)
+	}
+
+	strOutput := strings.TrimSpace(string(output))
+	lines := strings.Split(strOutput, "\n")
+	return lines, nil
+}
+
+// GetMetricValue to get appropriate value for specific metrics parameter
+func GetMetricValue(lines []string, metricName, name string) string {
+	pattern := fmt.Sprintf(`%s{[^}]*name="%s"[^}]*} ([\d\.eE\+]+)`, metricName, name)
+	re := regexp.MustCompile(pattern)
+	value := ""
+
+	for _, line := range lines {
+		if strings.Contains(line, metricName) && strings.Contains(line, name) {
+			log.Infof("string matched with metrcis:", line)
+			match := re.FindStringSubmatch(line)
+			if len(match) > 1 {
+				// Return the matched status code (like 0 or 6)
+				log.Infof("Value found:: %v", line)
+				value = match[1]
+				break
+			}
+		}
+	}
+	return value
+}
+
+func ConvertSciNotationFloat64ToUint64(scientificNotation string) (uint64, error) {
+
+	// Parse the scientific notation to a float64
+	floatValue, err := strconv.ParseFloat(scientificNotation, 64)
+	if err != nil {
+		fmt.Println("Error parsing float:", err)
+		return 0, err
+	}
+
+	// Convert the float64 to uint64
+	uintValue := uint64(floatValue)
+
+	// Print the result
+	fmt.Println("The uint64 value is:", uintValue)
+	return uintValue, nil
+}

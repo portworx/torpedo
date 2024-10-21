@@ -156,6 +156,7 @@ const (
 	ValidateUserAccessLevel                                                            TestCaseName = "ValidateUserAccessLevel"
 	SoftDeleteAndRecoverBackupOnContainerAndBlobLevel                                  TestCaseName = "SoftDeleteAndRecoverBackupOnContainerAndBlobLevel"
 	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel                            TestCaseName = "DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel"
+	ValidateMetrics                                                                    TestCaseName = "ValidateMetrics"
 )
 
 // Test case labels
@@ -310,6 +311,7 @@ const (
 	BackupShareLabel                                                                        TestCaseLabel = "BackupShare"
 	SoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel                                  TestCaseLabel = "SoftDeleteAndRecoverBackupOnContainerAndBlobLevel"
 	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel                            TestCaseLabel = "DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel"
+	ValidateMetricsLabel                                                                    TestCaseLabel = "ValidateMetrics"
 )
 
 // Common Labels
