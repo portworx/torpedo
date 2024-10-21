@@ -614,4 +614,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	BackupShare: {BackupShareLabel},
 	SoftDeleteAndRecoverBackupOnContainerAndBlobLevel:       {SoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
 	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel: {DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
+	ValidateMetrics: {ValidateMetricsLabel},
 }

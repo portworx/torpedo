@@ -164,3 +164,140 @@ var _ = Describe("{PxBackupTotalSize}", Label(TestCaseLabelsMap[ValidateMetrics]
 
 	})
 })
+
+// Verify PxRestoreStatus from metris and validate for success.
+var _ = Describe("{PxRestoreStatus}", Label(TestCaseLabelsMap[ValidateMetrics]...), func() {
+	var (
+		scheduledAppContexts []*scheduler.Context
+		appContextsToBackup  []*scheduler.Context
+		bkpNamespaces        []string
+		clusterUid           string
+		destClusterUid       string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		backupLocationUID    string
+		cloudCredName        string
+		cloudCredUID         string
+		bkpLocationName      string
+		backupNames          []string
+		restoreName          string
+		restoreNames         []string
+	)
+
+	backupLocationMap := make(map[string]string)
+	bkpNamespaces = make([]string, 0)
+	backupNames = make([]string, 0)
+	labelSelectors := make(map[string]string)
+	metricsName := "pxbackup_restore_status"
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyPxRestoreStatus", "Verify px-backup-restore status from metrics.", nil, 91966, Pingle, Q2FY25)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		bkpNamespaces = make([]string, 0)
+
+		// Schedule an Application
+		appContexts := ScheduleApplications(TaskNamePrefix)
+		for _, ctx := range appContexts {
+			ctx.ReadinessTimeout = AppReadinessTimeout
+			namespace := GetAppNamespace(ctx, TaskNamePrefix)
+			bkpNamespaces = append(bkpNamespaces, namespace)
+			scheduledAppContexts = append(scheduledAppContexts, ctx)
+		}
+	})
+
+	//Verify px backup-restore success/fail status from metris and validate.
+	It("Verify px backup-restore success/fail status from metris and validate", func() {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching admin ctx")
+		numOfBackup := 1
+
+		// 1. validate application
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		// 2. Create backup location and cloud setting
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			providers := GetBackupProviders()
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+
+		// 3. Create application cluster for backup.
+		Step("Register cluster for backup", func() {
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.InfoD("Uid of [%s] cluster is %s", SourceClusterName, clusterUid)
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] dest cluster uid", SourceClusterName))
+		})
+
+		// 4. take backup
+		Step("Taking backup of applications", func() {
+			for i := 0; i < numOfBackup; i++ {
+				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
+				appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+				backupNames = append(backupNames, backupName)
+			}
+		})
+
+		//5. Create restore of backup
+		Step("Create restore", func() {
+			log.Infof("Restore for success case started")
+			backupName := backupNames[0]
+			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
+			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
+			restoreNames = append(restoreNames, restoreName)
+		})
+
+		// 6. Verify the success status of the restore from metrics endpoint
+		Step("Verify the success status of the backup-restore from metrics endpoint", func() {
+			pxbNamespace, err := backup.GetPxBackupNamespace()
+			dash.VerifyFatal(err, nil, "Getting px-backup namespace")
+
+			allMetricsData, err := RunCurlCmd(pxbNamespace)
+			log.FailOnError(err, "Fetching metrics data")
+
+			expected := "6"
+			status := GetMetricValue(allMetricsData, metricsName, restoreName)
+			log.Infof("pxbackup_restore_status recived:", status)
+			dash.VerifyFatal(status, expected, "Verify the success status of the pxbackup_backup_restore_status from metrics endpoint")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		log.InfoD("Deleting the deployed apps after the testcase")
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		err = DeleteRestore(restoreNames[0], BackupOrgID, ctx)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore[0] %s", restoreName))
+
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
+
+		// Clean up the cluster
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
+	})
+})
