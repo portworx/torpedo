@@ -227,7 +227,7 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", Label(TestCaseLabel
 				go func(backupLocationName, backupLocationUID string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					err := Inst().Backup.WaitForBackupLocationDeletion(ctx, backupLocationName, backupLocationUID, BackupOrgID, BackupLocationDeleteTimeout, BackupLocationDeleteRetryTime)
+					err := Inst().Backup.WaitForBackupLocationDeletion(ctx, backupLocationName, backupLocationUID, BackupOrgID, ScaleBackupLocationDeleteTimeout, BackupLocationDeleteRetryTime)
 					Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying waiting for backup location [%s] deletion", backupLocationName))
 				}(backupLocationName, backupLocationUID)
 			}

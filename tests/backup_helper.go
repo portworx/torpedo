@@ -150,6 +150,7 @@ const (
 	BackupDeleteTimeout                       = 60 * time.Minute
 	BackupDeleteRetryTime                     = 30 * time.Second
 	BackupLocationDeleteTimeout               = 60 * time.Minute
+	ScaleBackupLocationDeleteTimeout          = 120 * time.Minute
 	BackupLocationDeleteRetryTime             = 30 * time.Second
 	RebootNodeTimeout                         = 1 * time.Minute
 	RebootNodeTimeBeforeRetry                 = 5 * time.Second
