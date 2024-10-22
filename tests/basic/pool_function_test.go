@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -1931,4 +1932,133 @@ var _ = Describe("{DriveAddDifferentTypesAndResize}", func() {
 		}
 
 	})
+})
+
+var _ = Describe("{AddNewPoolWithPxRestart}", func() {
+	/*
+			Install portworx in a 5 node cluster
+		    Select a node and add drive to create new pool (pxctl sv drive add --newpool)
+			With some random delay force restart the portworx (systemctl restart portworx)
+		    After node comes up verify px status and check if pool is successfully added and apps are running.
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddNewPoolWithPxRestart", "Automate drive add newpool with px restart", nil, 0)
+	})
+
+	var (
+		storageNodes                                    []node.Node
+		selectedNode                                    node.Node
+		newPoolID                                       string
+		nodePoolMapBfrAddDrive, nodePoolMapAftrAddDrive map[string]string
+	)
+
+	itLog := "AddNewPoolWithPxRestart"
+	It(itLog, func() {
+
+		storageNodes = node.GetStorageNodes()
+		index := rand.Intn(len(storageNodes))
+		selectedNode = storageNodes[index]
+
+		log.Info("selected Node ID - %s , Name - %s", selectedNode.Id, selectedNode.Name)
+
+		nodePoolMapBfrAddDrive, err = Inst().V.GetNodePools(selectedNode)
+		log.FailOnError(err, fmt.Sprintf("Get Node pools failed on node %s", selectedNode.Name))
+
+		log.Info("Number of Pools available - %d", len(nodePoolMapBfrAddDrive))
+
+		if len(nodePoolMapBfrAddDrive) >= 6 {
+			Skip("Skipping the test as there can be a maximum of 6 pools allowed to be present in a node")
+		}
+
+		log.Info("list Pool UUIDs - %v", nodePoolMapBfrAddDrive)
+
+		//Get cloudrive spec
+		driveSpecs, err := GetCloudDriveDeviceSpecs()
+		log.FailOnError(err, "Error getting cloud drive specs")
+
+		deviceSpec := driveSpecs[0]
+		deviceSpecParams := strings.Split(deviceSpec, ",")
+		paramsArr := make([]string, 0)
+		for _, param := range deviceSpecParams {
+			if strings.Contains(param, "size") {
+				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", 128))
+			} else {
+				paramsArr = append(paramsArr, param)
+			}
+		}
+		//drive spec generated from actual cloudrive spec
+		newSpec := strings.Join(paramsArr, ",")
+
+		stepLog = "Add drive to create newpool"
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			err = Inst().V.AddCloudDrive(&selectedNode, newSpec, -1)
+			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", selectedNode.Name))
+		})
+
+		nodePoolMapAftrAddDrive, err = Inst().V.GetNodePools(selectedNode)
+		log.FailOnError(err, fmt.Sprintf("Get Node pools failed on node %s", selectedNode.Name))
+
+		//random delay in secs
+		sleepTime := rand.Intn(60-10) + 10
+		time.Sleep(time.Second * (time.Duration(sleepTime)))
+
+		stepLog = "Restart Portworx"
+		Step(stepLog, func() {
+			log.Info(stepLog)
+
+			if selectedNode.IsStorageDriverInstalled {
+				Step(fmt.Sprintf("node with Px restart is: %s", selectedNode.Name), func() {
+
+					err := Inst().V.RestartDriver(selectedNode, nil)
+					log.FailOnError(err, fmt.Sprintf("Error occured while Restart PX on node:%v", selectedNode.Name))
+				})
+
+				Step(fmt.Sprintf("wait for volume driver to restart on node: %v", selectedNode.Name), func() {
+					err := Inst().V.WaitForPxPodsToBeUp(selectedNode)
+					log.FailOnError(err, fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", selectedNode.Name))
+				})
+			}
+
+		})
+
+		stepLog = "verify the Px status"
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			pxReady := Inst().V.IsPxReadyOnNode(selectedNode)
+			dash.VerifyFatal(pxReady, true, fmt.Sprintf("expected Px status response to be true but received false"))
+
+		})
+
+		stepLog = "verify pool is added to the node"
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			dash.VerifyFatal(len(nodePoolMapAftrAddDrive) > len(nodePoolMapBfrAddDrive), true, fmt.Sprintf("expecting the pool count to be greater than the count before adding new pool . Expected %d , but received - %d", len(nodePoolMapBfrAddDrive)+1, len(nodePoolMapAftrAddDrive)))
+
+			//Identifying the newpool
+			for uuid, id := range nodePoolMapAftrAddDrive {
+				if _, ok := nodePoolMapBfrAddDrive[uuid]; !ok {
+					newPoolID = id
+				}
+			}
+
+			log.Info("Newly Added pool ID - %d ", newPoolID)
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		if len(nodePoolMapAftrAddDrive) > len(nodePoolMapBfrAddDrive) {
+			stepLog = "Delete the new pool"
+			Step(stepLog, func() {
+				log.Info(stepLog)
+				err = DeletePoolAndValidate(selectedNode, newPoolID)
+				log.FailOnError(err, fmt.Sprintf("Error occured while Validating the deleted pool %s in the node %s", newPoolID, selectedNode.Name))
+			})
+		}
+
+	})
+
 })
