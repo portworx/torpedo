@@ -119,6 +119,20 @@ var _ = Describe("{DeleteCustomResourceBackup}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] is in failed state", backupName))
 
 		})
+
+		//Verify the Failure status of the backup from metrics endpoint
+		Step("Verify the failure status of the backup from metrics endpoint", func() {
+			pxbNamespace, err := backup.GetPxBackupNamespace()
+			dash.VerifyFatal(err, nil, "Getting px-backup namespace")
+
+			allMetricsData, err := RunCurlCmd(pxbNamespace)
+			log.FailOnError(err, "Fetching metrics data")
+
+			expected := "4"
+			status := GetMetricValue(allMetricsData, PxBackupMetricsName, backupName)
+			log.Infof("pxbackup_backup_status recived:", status)
+			dash.VerifyFatal(status, expected, "Verify the failure status of the pxbackup_backup_status from metrics endpoint")
+		})
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)

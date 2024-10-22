@@ -315,6 +315,9 @@ const (
 	Sequential ExecutionMode = iota
 	Parallel
 )
+const (
+	PxBackupMetricsName = "pxbackup_backup_status"
+)
 
 var (
 	// AppRuleMaster is a map of struct for all the value for rules
