@@ -1,0 +1,707 @@
+package tests
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/pure-px/torpedo/drivers/utilities"
+
+	pdslib "github.com/pure-px/torpedo/drivers/pds/lib"
+	dslibs "github.com/pure-px/torpedo/drivers/unifiedPlatform/pdsLibs"
+	v1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+
+	. "github.com/onsi/ginkgo/v2"
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/torpedo/drivers/node"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/pure-px/torpedo/drivers/unifiedPlatform/stworkflows/pds"
+	"github.com/pure-px/torpedo/pkg/log"
+	. "github.com/pure-px/torpedo/tests"
+	. "github.com/pure-px/torpedo/tests/unifiedPlatform"
+)
+
+const (
+	PlatformNamespace = "px-system"
+)
+
+var (
+	tpccSupportedEngines []string = []string{"postgresql", "mysql"}
+	tlsSupportedEngines  []string = []string{"postgresql", "mongodb"}
+)
+
+var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
+	var (
+		deployment *automationModels.PDSDeploymentResponse
+		err        error
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("DeployDataServicesOnDemandAndScaleUp", "Deploy data services and perform scale up", nil, 0)
+	})
+
+	It("Deploy,Validate and ScaleUp DataService", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+			})
+
+			Step("ScaleUp DataService", func() {
+				log.InfoD("Scaling Up dataServices...")
+				updateDeployment, err := WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
+				log.FailOnError(err, "Error while updating ds")
+				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
+			})
+
+			stepLog := "Running Workloads after ScaleUp of DataService"
+			Step(stepLog, func() {
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
+	var (
+		deployment  *automationModels.PDSDeploymentResponse
+		err         error
+		dbPassword  string
+		dnsEndpoint string
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("RunTpccWorkloadOnDataServices", "Runs TPC-C Workload on Postgres and MySQL Deployment", nil, 0)
+	})
+
+	It("Deploy,Validate and ScaleUp DataService", func() {
+
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			if slices.Contains(tpccSupportedEngines, strings.ToLower(ds.Name)) {
+				Step("Deploy DataService", func() {
+					deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+					log.FailOnError(err, "Error while deploying ds")
+					log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+				})
+
+				Step("Get the database password", func() {
+					dbPassword, err = WorkflowDataService.GetDeploymentPassword(*deployment.Create.Meta.Uid)
+					log.FailOnError(err, "Unable to get deployment password")
+					log.Infof("Database Password: [%s]", dbPassword)
+				})
+
+				Step("Get DNS endpoint", func() {
+					dnsEndpoint, err = WorkflowDataService.GetDNSEndpoint(*deployment.Create.Meta.Uid)
+					log.FailOnError(err, "Unable to get deployment DNS endpoint")
+					log.Infof("Database DNS enpoint: [%s]", dnsEndpoint)
+				})
+
+				Step("Run Tpcc Workload", func() {
+					err := utilities.RunTpccWorkload(
+						"pds",
+						dbPassword,
+						dnsEndpoint,
+						"pds",
+						"",
+						"",
+						"",
+						"",
+						"tpcc",
+						PDS_DEFAULT_NAMESPACE,
+						ds.Name)
+
+					log.FailOnError(err, "Error while running tpcc workload")
+				})
+			} else {
+				Step("Skipping data service", func() {
+					log.InfoD("Skipping data service [%s] from TPCC run", ds.Name)
+				})
+			}
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{ValidateDSHealthStatusOnNodeFailures}", func() {
+	var (
+		deployment *automationModels.PDSDeploymentResponse
+		err        error
+		dsNodes    []node.Node
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("ValidateDSHealthStatusOnNodeFailures", "Bring down PX on ds hosted nodes and validate health status", nil, 0)
+	})
+
+	It("Bring down PX on ds hosted nodes and validate health status", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+			})
+
+			Step("Bring down PX on ds hosted nodes and validate health status", func() {
+				dsNodes, err = WorkflowDataService.GetAllDataServiceHostedNodes(*deployment.Create.Meta.Uid, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error occured while getting dsNodes")
+				log.Infof("All Nodes - [%v]", dsNodes)
+				Inst().V.StopDriver(dsNodes, false, nil)
+				log.InfoD("PX on ds hosted nodes stopped successfully")
+				log.Infof("Waiting to 1 minute for the changes to be reflected on PDS")
+			})
+
+			Step("Validating data service status", func() {
+				dsDetails, err := WorkflowDataService.GetDeployment(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while getting ds details")
+				log.Infof("Data service health - [%s]", *dsDetails.Status.Health)
+				dash.VerifyFatal(*dsDetails.Status.Health == "AVAILABLE", true, "Data service health is AVAILABLE")
+			})
+
+			Step("Wait for PX Failover to happen", func() {
+				log.InfoD("Waiting for PX Failover to happen - Sleeping for 5 minutes")
+				time.Sleep(5 * time.Minute)
+			})
+
+			stepLog := "Running Workloads after bringing down PX on one node"
+			Step(stepLog, func() {
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+
+			Step("Starting PX on ds hosted nodes and validate health status", func() {
+				for _, dsNode := range dsNodes {
+					log.Infof("Starting PX on node - [%s]", dsNode.Name)
+					Inst().V.StartDriver(dsNode)
+				}
+			})
+
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{UpgradeDataServiceImage}", func() {
+	var (
+		deployment *automationModels.PDSDeploymentResponse
+		err        error
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("UpgradeDataServiceImage", "Upgrade Data Service Image", nil, 0)
+	})
+
+	It("Deploy, Validate and Upgrade Data service Image", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.OldImage, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+			})
+
+			Step("Upgrade DataService Image", func() {
+				_, err := WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
+				log.FailOnError(err, "Error while updating ds")
+			})
+
+			stepLog := "Running Workloads after upgrading the ds image"
+			Step(stepLog, func() {
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{ScaleUpCpuMemLimitsandStorageOfDS}", func() {
+	var (
+		deployment         *automationModels.PDSDeploymentResponse
+		err                error
+		resConfigIdUpdated string
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("ScaleUpCpuMemLimitsandStorageOfDS", "Deploy a dataservice and scale up its CPU/MEM limits and storage size by editing the respective template", nil, 0)
+	})
+
+	It("Deploy,Validate and ScaleUp DataService", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+			})
+
+			//Update Ds With New Values of Resource Templates
+			resConfigIdUpdated, err = WorkflowPDSTemplate.CreateResourceTemplateWithCustomValue(NewPdsParams)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdated)
+			log.Infof("Associate newly created template to the project")
+			err = WorkflowProject.Associate(
+				[]string{},
+				[]string{},
+				[]string{},
+				[]string{},
+				[]string{resConfigIdUpdated},
+				[]string{},
+			)
+			log.FailOnError(err, "Unable to associate Templates to Project")
+			log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+
+			WorkflowDataService.UpdateDeploymentTemplates = true
+			WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
+			_, err = WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
+			log.FailOnError(err, "Error while updating ds")
+
+			stepLog := "Running Workloads after upgrading the ds image"
+			Step(stepLog, func() {
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{GetPVCFullCondition}", func() {
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("GetPVCFullCondition", "Deploy a dataservice and fill-up the PVC, Once full, resize the PVC", nil, 0)
+	})
+	var (
+		workflowDataservice pds.WorkflowDataService
+		deployment          *automationModels.PDSDeploymentResponse
+		err                 error
+	)
+	It("Deploy and Validate DataService", func() {
+
+		for _, ds := range NewPdsParams.DataServiceToTest {
+
+			if ds.Name != postgresql {
+				log.Infof("This test only runs for PostgreSQL")
+				continue
+			}
+
+			var deploymentID, deploymentName string
+			var pgBenchDeployment *v1.Deployment
+			Step("Deploy DataService", func() {
+				WorkflowDataService.SkipValidatation["VALIDATE_PDS_WORKLOADS"] = true
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				deploymentID = *deployment.Create.Meta.Uid
+				deploymentName = *deployment.Create.Status.CustomResourceName
+				log.Debugf("Source Deployment Id: [%s]", deploymentID)
+
+			})
+
+			Step("Running Workloads to fill up PVC", func() {
+				log.InfoD("Running Workloads to fill up the PVC")
+				log.Debugf("Deployment Id for running PGBench: [%s]", deploymentID)
+				log.Debugf("Deployment Name for running PGBench: [%s]", deploymentName)
+				_, pgBenchDeployment, err = workflowDataservice.RunStress(deploymentID, deploymentName, ds.Name, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+
+			Step("Wait for PVC to reach 85 percent and stop the workload", func() {
+				log.InfoD("Wait for PVC to reach 85 percent")
+				err = CheckStorageFullCondition(PDS_DEFAULT_NAMESPACE, deploymentName, 85)
+				log.FailOnError(err, "Error while checking for pvc full condition")
+
+				err = dslibs.DeleteWorkloadDeployments(pgBenchDeployment)
+				log.FailOnError(err, "Error while deleting pgbench deployment")
+			})
+
+			Step("Increase The Storage by updating the Data Service", func() {
+				log.InfoD("Once pvc has reached threshold, increase the ovc by 1gb")
+				//_, err = IncreasePVCize(PDS_DEFAULT_NAMESPACE, deploymentName, 10)
+				//log.FailOnError(err, "Failing while Increasing the PVC name...")
+				NewPdsParams.ResourceConfiguration.New_Storage_Request = "10G"
+				resConfigIdUpdated, err := WorkflowPDSTemplate.CreateResourceTemplateWithCustomValue(NewPdsParams)
+				log.FailOnError(err, "Unable to create Custom Templates for PDS")
+				log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdated)
+				log.Infof("Associate newly created template to the project")
+				err = WorkflowProject.Associate(
+					[]string{},
+					[]string{},
+					[]string{},
+					[]string{},
+					[]string{resConfigIdUpdated},
+					[]string{},
+				)
+				log.FailOnError(err, "Unable to associate Templates to Project")
+				log.Infof("Associated Resources - [%+v]", WorkflowProject.AssociatedResources)
+
+				WorkflowDataService.UpdateDeploymentTemplates = true
+				WorkflowDataService.PDSTemplates = WorkflowPDSTemplate
+				_, err = WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
+				log.FailOnError(err, "Error while updating ds")
+
+				log.InfoD("Validate deployment after PVC increase")
+				err = workflowDataservice.ValidatePdsDataServiceDeployments(deploymentID,
+					ds,
+					ds.Replicas,
+					WorkflowDataService.PDSTemplates.ResourceTemplateId,
+					WorkflowDataService.PDSTemplates.StorageTemplateId,
+					PDS_DEFAULT_NAMESPACE,
+					ds.Version,
+					ds.Image)
+			})
+		}
+	})
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{DeletePDSPods}", func() {
+	var (
+		deployment *automationModels.PDSDeploymentResponse
+		err        error
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataServices are not affected", nil, 0)
+	})
+
+	It("Delete pds pods and validate if its coming back online and dataservices are not affected", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+			})
+
+			Step("Delete PDSPods", func() {
+				err := WorkflowDataService.DeletePDSPods([]string{"pds-backups", "pds-target"}, PlatformNamespace)
+				log.FailOnError(err, "Error while deleting pds pods")
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(
+					*deployment.Create.Meta.Uid,
+					ds,
+					ds.Replicas,
+					WorkflowDataService.PDSTemplates.ResourceTemplateId,
+					WorkflowDataService.PDSTemplates.StorageTemplateId,
+					PDS_DEFAULT_NAMESPACE,
+					ds.Version,
+					ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice")
+			})
+
+			stepLog := "Running Workloads after deleting pods in Px-System namespace"
+			Step(stepLog, func() {
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+		}
+	})
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{ValidatePdsHealthIncaseofFailures}", func() {
+	var (
+		deployment *automationModels.PDSDeploymentResponse
+		err        error
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("ValidatePdsHealthIncaseofFailures", "Deploy data services and validate PDS health in case of PDS pod deletion", nil, 0)
+	})
+
+	It("Deploy data services, Delete Pds Agent pods and perform backup and restore on the same cluster", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+
+			steplog := "Deploy dataservice"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Infof("All deployments - [%+v]", WorkflowDataService.DataServiceDeployment)
+				WorkflowPDSRestore.SourceDeploymentConfigBeforeUpgrade = &deployment.Create.Config.DataServiceDeploymentTopologies[0]
+			})
+
+			steplog = "Restart PDS Agent Pods and Validate if it comes up"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				err := WorkflowDataService.DeletePDSPods([]string{*deployment.Create.Status.CustomResourceName}, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deleting pds pods")
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(
+					*deployment.Create.Meta.Uid,
+					ds,
+					ds.Replicas,
+					WorkflowDataService.PDSTemplates.ResourceTemplateId,
+					WorkflowDataService.PDSTemplates.StorageTemplateId,
+					PDS_DEFAULT_NAMESPACE,
+					ds.Version,
+					ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice")
+			})
+
+			steplog = "ScaleUp DataService"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				updateDeployment, err := WorkflowDataService.UpdateDataService(ds, *deployment.Create.Meta.Uid, ds.Image, ds.Version)
+				log.FailOnError(err, "Error while updating ds")
+				log.Debugf("Updated Deployment Id: [%s]", *updateDeployment.Update.Meta.Uid)
+			})
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{DrainAndDecommissionNode}", func() {
+	var (
+		deployment          *automationModels.PDSDeploymentResponse
+		err                 error
+		nodeName            string
+		k8sCore             core.Ops
+		timeOut             time.Duration
+		maxtimeInterval     time.Duration
+		deploymentNamespace string
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("DrainAndDecommissionNode", "Deploys a data service, drains one selected node, decommissions that node", nil, 0)
+		k8sCore = core.Instance()
+		timeOut = 30 * time.Minute
+		maxtimeInterval = 30 * time.Second
+	})
+
+	It("Deploys a data service, drains one selected node, decommissions that node", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+				nodes, err := pdslib.GetNodesOfSS(*deployment.Create.Status.CustomResourceName, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Cannot fetch nodes of the running Data Service")
+				nodeName = nodes[0].Name // Selecting the 1st node in the list to cordon
+			})
+
+			steplog := "Drain Pods from a node"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				podsList, err := pdslib.GetPodsOfSsByNode(*deployment.Create.Status.CustomResourceName, nodeName, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, fmt.Sprintf("Pod not found on this Node : %s", nodeName))
+				log.InfoD("Pods found on %v node. Trying to Drain pods from this node now.", nodeName)
+				err = k8sCore.DrainPodsFromNode(nodeName, podsList, timeOut, maxtimeInterval)
+				log.FailOnError(err, fmt.Sprintf("Draining pod from the node %s failed", nodeName))
+				log.InfoD("Pods successfully drained from the node %s", nodeName)
+			})
+
+			steplog = "Validate Data Service to see if Pods have rescheduled on another node"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice after cordoned node")
+			})
+
+			steplog = "Validate no pods are on the cordoned node anymore"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				nodes, err := pdslib.GetNodesOfSS(*deployment.Create.Status.CustomResourceName, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, fmt.Sprintf("Cannot fetch nodes of the running Data Service %v", *deployment.Create.Status.CustomResourceName))
+				for _, nodeObj := range nodes {
+					if nodeObj.Name == nodeName {
+						log.FailOnError(fmt.Errorf("New Pod came up on the node that was cordoned."), "Unexpected error")
+					}
+				}
+				log.InfoD("The pods of the Stateful Set %v are not on the cordoned node. Moving ahead now.", *deployment.Create.Status.CustomResourceName)
+			})
+
+			steplog = "Create a namespace for PDS"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				deploymentNamespace = fmt.Sprintf("%s-%s", strings.ToLower(ds.Name), RandomString(5))
+				_, err := WorkflowNamespace.CreateNamespaces(deploymentNamespace)
+				log.FailOnError(err, "Error while creating namespace for New Deployment")
+				log.Infof("Namespaces created - [%s]", WorkflowNamespace.Namespaces)
+			})
+
+			steplog = "Associate namespace to the project"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				err := WorkflowProject.Associate(
+					[]string{},
+					[]string{WorkflowNamespace.Namespaces[deploymentNamespace]},
+					[]string{},
+					[]string{},
+					[]string{},
+					[]string{},
+				)
+				log.FailOnError(err, "Error while associating namespace to the project")
+			})
+
+			Step("Deploy DataService", func() {
+				WorkflowDataService.WorkloadGenParams.Namespace = deploymentNamespace
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, deploymentNamespace)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+				nodes, err := pdslib.GetNodesOfSS(*deployment.Create.Status.CustomResourceName, deploymentNamespace)
+				log.FailOnError(err, "Cannot fetch nodes of the running Data Service")
+				for _, nodeObj := range nodes {
+					if nodeObj.Name == nodeName {
+						log.FailOnError(fmt.Errorf("New Pod came up on the node that was cordoned."), "Unexpected error")
+					}
+				}
+			})
+
+			steplog = "UnCordon Selected Node"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				err = k8sCore.UnCordonNode(nodeName, timeOut, maxtimeInterval)
+				log.FailOnError(err, fmt.Sprintf("UnCordoning the node %s Failed", nodeName))
+				log.InfoD("Node %s successfully UnCordoned", nodeName)
+			})
+
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{RollingRebootNodes}", func() {
+	var (
+		deployment *automationModels.PDSDeploymentResponse
+		err        error
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("RollingRebootNodes", "Reboot node(s) while the data services will be running", nil, 0)
+	})
+
+	It("Reboot node(s) while the data services will be running", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+			})
+
+			steplog := "Reboot nodes"
+			Step(steplog, func() {
+				log.InfoD("Reboot nodes")
+				nodesToReboot := node.GetWorkerNodes()
+				err = RebootNodes(nodesToReboot)
+				log.FailOnError(err, "Error while rebooting nodes")
+			})
+
+			steplog = "Validate Data Service to see if Pods have rescheduled on another node"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice after node reboot node")
+			})
+
+			steplog = "Running Workloads after node reoot"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
+
+var _ = Describe("{ScaleDownScaleupPXCluster}", func() {
+	var (
+		deployment *automationModels.PDSDeploymentResponse
+		err        error
+		nodeList   []*corev1.Node
+	)
+
+	JustBeforeEach(func() {
+		StartPDSTorpedoTest("ScaleDownScaleupPXCluster", "Scales Down the PX cluster, Verify Data Services and Scales up the Px cluster", nil, 0)
+	})
+
+	It("Scales Down the PX cluster, Verify Data Services and Scales up the Px cluster", func() {
+
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			Step("Deploy DataService", func() {
+				deployment, err = WorkflowDataService.DeployDataService(ds, ds.Image, ds.Version, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while deploying ds")
+				log.Debugf("Source Deployment Id: [%s]", *deployment.Create.Meta.Uid)
+				nodes, err := pdslib.GetNodesOfSS(*deployment.Create.Status.CustomResourceName, PDS_DEFAULT_NAMESPACE)
+				log.FailOnError(err, "Error while getting Data Serice Nodes")
+				nodeList = append(nodeList, nodes[0])
+			})
+
+			Step("Scale down PX Nodes on which Data Services are running", func() {
+				// disable PX Pod on the first node of each deployed Data Service
+				err := StopPxServiceOnNodes(nodeList)
+				log.FailOnError(err, "unable to stop px service on given nodes")
+				log.InfoD("Successfully Scaled Down PX Nodes...")
+			})
+
+			log.InfoD("Sleeping 300 seconds after scale down of Px Nodes before we check the health of Data Services")
+			time.Sleep(300 * time.Second)
+
+			Step("Verify the Data Services status after scaling down the Px Nodes", func() {
+				log.InfoD("Verify the Data Services status after scaling down the Px Nodes")
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice after px nodes scale down")
+			})
+
+			stepLog := "Running Workloads after scale down of PX Nodes"
+			Step(stepLog, func() {
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+
+			Step("Scale Up PX  Nodes", func() {
+				err := StartPxServiceOnNodes(nodeList)
+				log.FailOnError(err, "unable to start px service on given nodes")
+				log.InfoD("Successfully Scaled up Px Nodes")
+			})
+			log.InfoD("Sleeping 300 seconds again after scale up of Px Nodes before we check the health of Data Services")
+			time.Sleep(300 * time.Second)
+
+			Step("Verify the Data Services status after scaling up the Px Nodes", func() {
+				log.InfoD("Verify the Data Services status after scaling up the Px Nodes")
+				err = WorkflowDataService.ValidatePdsDataServiceDeployments(*deployment.Create.Meta.Uid, ds, ds.Replicas, WorkflowDataService.PDSTemplates.ResourceTemplateId, WorkflowDataService.PDSTemplates.StorageTemplateId, PDS_DEFAULT_NAMESPACE, ds.Version, ds.Image)
+				log.FailOnError(err, "Error while Validating dataservice after px nodes scale up")
+			})
+
+			stepLog = "Running Workloads after scale up of PX Nodes"
+			Step(stepLog, func() {
+				_, err := WorkflowDataService.RunDataServiceWorkloads(*deployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while running workloads on ds")
+			})
+
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPDSTorpedoTest()
+	})
+})
