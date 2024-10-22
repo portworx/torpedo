@@ -12516,3 +12516,56 @@ func ConvertSciNotationFloat64ToUint64(scientificNotation string) (uint64, error
 	fmt.Println("The uint64 value is:", uintValue)
 	return uintValue, nil
 }
+
+// DeleteAllBackupsForBackupLocationWithClusterReference deletes all backup for a given backup location
+func DeleteAllBackupsForBackupLocationWithClusterReference(ctx context1.Context, orgId, BackupLocationName, BackupLocationUid, clusterName, clusterUid string) error {
+	var backupsSelectedForDeletion []string
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgId,
+	}
+	curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	errChan := make(chan error, len(curBackups.GetBackups()))
+	var wg sync.WaitGroup
+	for _, bkp := range curBackups.GetBackups() {
+		if bkp.GetBackupLocationRef().GetName() == BackupLocationName && bkp.GetBackupLocationRef().GetUid() == BackupLocationUid {
+			backupsSelectedForDeletion = append(backupsSelectedForDeletion, bkp.GetName())
+			wg.Add(1)
+			go func(bkp *api.BackupObject) {
+				defer wg.Done()
+				bkpDeleteRequest := &api.BackupDeleteRequest{
+					Name:  bkp.GetName(),
+					OrgId: bkp.GetOrgId(),
+					Uid:   bkp.GetUid(),
+					ClusterRef: &api.ObjectRef{
+						Name: clusterName,
+						Uid:  clusterUid,
+					},
+				}
+				_, err := Inst().Backup.DeleteBackup(ctx, bkpDeleteRequest)
+				if err != nil {
+					errChan <- err
+					return
+				}
+			}(bkp)
+		}
+	}
+	wg.Wait()
+	close(errChan)
+	var errList []string
+	for err := range errChan {
+		errList = append(errList, err.Error())
+	}
+	if len(errList) > 0 {
+		return fmt.Errorf(strings.Join(errList, "; "))
+	}
+	for _, bkp := range backupsSelectedForDeletion {
+		err = Inst().Backup.WaitForBackupDeletion(ctx, bkp, BackupOrgID, BackupDeleteTimeout, BackupDeleteRetryTime)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

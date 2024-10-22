@@ -1349,6 +1349,12 @@ var _ = Describe("{BackupSyncBasicTest}", Label(TestCaseLabelsMap[BackupSyncBasi
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
+		clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+		dash.VerifySafely(err, nil, "Getting Cluster UID to pass for deletion")
+		for backupLocationUID, backupLocationName := range backupLocationMap {
+			err := DeleteAllBackupsForBackupLocationWithClusterReference(ctx, BackupOrgID, backupLocationName, backupLocationUID, SourceClusterName, clusterUid)
+			dash.VerifySafely(err, nil, "Deleting all backups by associating it with Source cluster and deleting them")
+		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 
 		// Post test custom bucket delete
