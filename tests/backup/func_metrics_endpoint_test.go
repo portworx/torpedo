@@ -490,3 +490,69 @@ var _ = Describe("{VerifyPxBackupClusterCount}", Label(TestCaseLabelsMap[Validat
 
 	})
 })
+
+// Verify PxBackup cloud credentials count from metrics
+var _ = Describe("{VerifyPxBackupCloudCredCount}", func() {
+	var (
+		contexts      []*scheduler.Context
+		cloudCredName string
+		cloudCredUID  string
+		pxbNamespace  string
+		credCount     int
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyPxBackupCloudCredCount", "Verify px-backup cloud credentials count from metrics.", nil, 91950, Prikumar, Q2FY25)
+	})
+
+	// Validate px-backup cloud credentials count from metrics
+	It("Validate px-backup cloud credentials count from metrics", func() {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching admin ctx")
+
+		// Creating cloud credentials
+		Step("Creating cloud credentials", func() {
+			log.InfoD("Creating cloud credentials")
+			credCount = 4
+			providers := GetBackupProviders()
+			for _, provider := range providers {
+				for i := 0; i < credCount; i++ {
+					cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, i)
+					cloudCredUID = uuid.New()
+					err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				}
+			}
+		})
+
+		// Check and validate the PxBackup_cloudcred_metrics count
+		Step("Verify the pxbackup cloud credential count from metrics endpoint", func() {
+			metricsName := "pxbackup_cloudcred_metrics"
+
+			//Get namespace of px-backup deployment
+			pxbNamespace, err = backup.GetPxBackupNamespace()
+			log.FailOnError(err, "Getting px-backup namespace")
+			log.Infof("namespace is [%v]", pxbNamespace)
+
+			//Fetch all datas from endpoint
+			allMetricsData, err := RunCurlCmd(pxbNamespace)
+			log.FailOnError(err, "Fetching metrics data")
+
+			//Get total px-backup cluster count
+			count, err := GetPxBackupCloudCredCount(allMetricsData, metricsName)
+			log.Infof("pxbackup_cloudcred_metrics count", count)
+			dash.VerifyFatal(credCount, count, "Validate cloud credential count")
+			dash.VerifyFatal(err, nil, "Verify the status of the pxbackup_cloudcred_metrics count from metrics endpoint")
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		// Clean up the cluster
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		CleanupCloudSettingsAndClusters(nil, cloudCredName, cloudCredUID, ctx)
+
+	})
+})

@@ -12606,3 +12606,38 @@ func GetPxBackupClusterCount(lines []string, metricName string) (int, error) {
 	}
 	return dataCount, nil
 }
+
+// GetPxBackupCloudCredCount to validate the PxBackup_cloudcred_metrics count from metrics
+func GetPxBackupCloudCredCount(lines []string, metricName string) (int, error) {
+	dataCount := 0
+	credCount := 0
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
+
+	cloudCredentials, err := GetAllCloudCredentials(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	for index, cloudCredentialName := range cloudCredentials {
+		log.InfoD("Verify cloud credential [%v] [%s]", index, cloudCredentialName)
+		credCount++
+	}
+
+	log.InfoD("Cloud credential count [%v]", credCount)
+	pattern := fmt.Sprintf(`%s\{name="([^"]*)",user_id="([^"]*)"\}`, metricName)
+	re := regexp.MustCompile(pattern)
+
+	for _, line := range lines {
+		if re.MatchString(line) {
+			log.Infof("Matched string [%v]", re.MatchString(line))
+			dataCount++
+		}
+	}
+	log.InfoD("data count [%v]", dataCount)
+
+	if credCount == dataCount {
+		log.InfoD("Total cloud credential count is [%v]", dataCount)
+	}
+	return dataCount, nil
+}
