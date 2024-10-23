@@ -4332,7 +4332,7 @@ var _ = Describe("{ExpandMultiplePoolsWhenFBDAVolumeCreationInProgress}", func()
 
 })
 
-var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() {
+var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", Label("p0", "positive", "px_ops", "pool_ops", "pure_ops"), func() {
 
 	/*
 			https://purestorage.atlassian.net/browse/PTX-23974
@@ -4471,7 +4471,7 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", func() 
 
 })
 
-var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeDeletionInProgress}", func() {
+var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeDeletionInProgress}", Label("p0", "positive", "px_ops", "pool_ops", "pure_ops"), func() {
 
 	/*
 			https://purestorage.atlassian.net/browse/PTX-25060
@@ -4675,7 +4675,7 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeDeletionInProgress}", func() 
 
 })
 
-var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
+var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", Label("p0", "positive", "px_vol_ops", "px_ops", "pure_ops"), func() {
 	/*
 				https://purestorage.atlassian.net/browse/PTX-23995
 		                1. Create storage class with max iops and max bandwidth for Normal Portworx Volumes , FADA and FBDA Pvc Deployment
@@ -5012,7 +5012,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		AfterEachTest(contexts)
 	})
 })
-var _ = Describe("{ValidateVolumeResizeInParallel}", func() {
+var _ = Describe("{ValidateVolumeResizeInParallel}", Label("p0", "positive", "px_vol_ops", "pure_ops", "VolResize"), func() {
 	/*
 		https://purestorage.atlassian.net/browse/PTX-23985
 		1. Deploy an app which uses FADA volume( uses csi provisioner and a pure_block backend) and an app which uses base volume(uses portworx-volume as provisioner)
@@ -5111,7 +5111,7 @@ var _ = Describe("{ValidateVolumeResizeInParallel}", func() {
 	})
 })
 
-var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
+var _ = Describe("{CreateCloneOfTheFADAVolume}", Label("p0", "positive", "px_ops", "px_vol_ops", "pure_ops"), func() {
 	/*
 		https://purestorage.atlassian.net/browse/PTX-24002
 		1.Deploy a FADA app
@@ -5205,7 +5205,7 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", func() {
 	})
 })
 
-var _ = Describe("{DeployAppsAndStopPortworx}", func() {
+var _ = Describe("{DeployAppsAndStopPortworx}", Label("p0", "negative", "error_injection", "px_ops", "pure_ops", "px_crash"), func() {
 	/*
 		https://purestorage.atlassian.net/browse/PTX-37401
 		1.Deploy Apps
@@ -5272,7 +5272,7 @@ var _ = Describe("{DeployAppsAndStopPortworx}", func() {
 	})
 })
 
-var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
+var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", Label("p0", "positive", "snapshot_ops", "px_vol_ops", "pure_ops"), func() {
 	/*
 		https://purestorage.atlassian.net/browse/PWX-37370
 		1.Deploy a FADA app
@@ -5364,7 +5364,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", func() {
 	})
 })
 
-var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingNodeAffinity}", func() {
+var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingNodeAffinity}", Label("p1", "negative", "error_injection", "pure_ops", "node_reboot"), func() {
 	/*
 	           	https://purestorage.atlassian.net/browse/PTX-23996
 	           	1.Label Nodes with topology labels
@@ -5518,7 +5518,7 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingNodeAffin
 	})
 })
 
-var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
+var _ = Describe("{DisableCsiTopologyandDeletePool}", Label("p1", "negative", "error_injection", "pool_ops", "pure_ops"), func() {
 	/*
 	   https://purestorage.atlassian.net/browse/PTX-37400
 	   1. Check if DMThin is enabled on the cluster , if not skip the test (Right now for FACD, delete pool option is not available on BTRFS)
@@ -5631,7 +5631,7 @@ var _ = Describe("{DisableCsiTopologyandDeletePool}", func() {
 	})
 })
 
-var _ = Describe("{TrashcanRecovery}", func() {
+var _ = Describe("{TrashcanRecovery}", Label("p0", "positive", "pure_ops", "px_vol_ops", "px_ops"), func() {
 	/*
 		1) Create volumes and app
 		2) delete all volumes.
@@ -5757,7 +5757,7 @@ var _ = Describe("{TrashcanRecovery}", func() {
 	})
 })
 
-var _ = Describe("{LocalSkinnySnap}", func() {
+var _ = Describe("{LocalSkinnySnap}", Label("p0", "positive", "px_vol_ops", "snapshot_ops", "pure_ops"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("LocalSkinnySnap", "Validate local skinny snap creation", nil, 0)
 	})
@@ -5957,7 +5957,7 @@ var _ = Describe("{LocalSkinnySnap}", func() {
 	})
 })
 
-var _ = Describe("{SkinnyCloudsnap}", func() {
+var _ = Describe("{SkinnyCloudsnap}", Label("p0", "positive", "px_ops", "snapshot_ops", "px_vol_ops", "pure_ops"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("SkinnyCloudsnap", "Validate skinny cloudsnap creation ", nil, 0)
 	})
@@ -6179,7 +6179,7 @@ var _ = Describe("{SkinnyCloudsnap}", func() {
 	})
 })
 
-var _ = Describe("{ValidatePodNameinVolume}", func() {
+var _ = Describe("{ValidatePodNameinVolume}", Label("p1", "positive", "pure_ops", "px_vol_ops"), func() {
 	/*
 	   https://purestorage.atlassian.net/browse/PWX-37369
 	   As part of Mulitenancy feature, we are deploying an app which has "pure_fa_pod_name" in the storage class
@@ -6328,7 +6328,7 @@ var _ = Describe("{ValidatePodNameinVolume}", func() {
 		AfterEachTest(contexts)
 	})
 })
-var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
+var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", Label("p0", "positive", "px_ops", "pure_ops", "FAMT"), func() {
 	/*
 			https://purestorage.atlassian.net/browse/PTX-24561
 			This Test Requires Pure.json with the following requirements:
@@ -6477,7 +6477,7 @@ var _ = Describe("{FAMultiTenancyMultiAppWithPodRealm}", func() {
 
 })
 
-var _ = Describe("{VerifyPoolCreateInProperZones}", func() {
+var _ = Describe("{VerifyPoolCreateInProperZones}", Label("p0", "positive", "pool_ops", "pure_ops"), func() {
 	/*
 		This test case assumes that it is being run on a setup with FACD topology enabled.
 		There are at least two different zones, each using a different flash array.
@@ -6626,7 +6626,7 @@ var _ = Describe("{VerifyPoolCreateInProperZones}", func() {
 		AfterEachTest(contexts)
 	})
 })
-var _ = Describe("{RestartPXonAllWorkerNodesandCheckVolumes}", func() {
+var _ = Describe("{RestartPXonAllWorkerNodesandCheckVolumes}", Label("p1", "negative", "error_injection", "px_vol_ops", "pure_ops", "px_restart"), func() {
 	/*
 	   https://purestorage.atlassian.net/browse/PTX-24005
 	   1.Deploy Applications
@@ -6754,7 +6754,7 @@ var _ = Describe("{RestartPXonAllWorkerNodesandCheckVolumes}", func() {
 		AfterEachTest(contexts)
 	})
 })
-var _ = Describe("{RestartPxandRestartNodeWithMgmtInterfaceDown}", func() {
+var _ = Describe("{RestartPxandRestartNodeWithMgmtInterfaceDown}", Label("p1", "negative", "error_injection", "px_ops", "pure_ops", "RecycleNode", "px_crash", "network_failure"), func() {
 	/*
 	   https://purestorage.atlassian.net/browse/PTX-24898
 	   1.Deploy Applications
@@ -6870,7 +6870,7 @@ var _ = Describe("{RestartPxandRestartNodeWithMgmtInterfaceDown}", func() {
 	})
 })
 
-var _ = Describe("{RestartPXAfterPureSecretRecreation}", func() {
+var _ = Describe("{RestartPXAfterPureSecretRecreation}", Label("p1", "negative", "error_injection", "px_ops", "pure_ops", "px_crash"), func() {
 	/*
 	   https://purestorage.atlassian.net/browse/PTX-24004
 	   1.Take the Existing px-pure secret as backup
@@ -6946,7 +6946,7 @@ var _ = Describe("{RestartPXAfterPureSecretRecreation}", func() {
 		EndTorpedoTest()
 	})
 })
-var _ = Describe("{CheckCloudDrivesinFA}", func() {
+var _ = Describe("{CheckCloudDrivesinFA}", Label("p0", "positive", "px_ops", "px_vol_ops", "pure_ops"), func() {
 	/*
 		https://purestorage.atlassian.net/browse/PTX-23972
 		1.Collect FA endpoints details from pure.json
@@ -7102,7 +7102,7 @@ var _ = Describe("{CheckCloudDrivesinFA}", func() {
 	})
 })
 
-var _ = Describe("{LocalSnapAndValidateRestore}", func() {
+var _ = Describe("{LocalSnapAndValidateRestore}", Label("p0", "positive", "snapshot_ops", "pure_ops"), func() {
 	/*
 		https://purestorage.atlassian.net/browse/PTX-25043
 		1. Creates an app that writes approx 50000 files in a multi directory structure
@@ -7283,7 +7283,7 @@ var _ = Describe("{LocalSnapAndValidateRestore}", func() {
 	})
 })
 
-var _ = Describe("{ChainedLocalSnapAndValidateRestore}", func() {
+var _ = Describe("{ChainedLocalSnapAndValidateRestore}", Label("p0", "positive", "px_ops", "px_vol_ops", "pure_ops", "MiniScale"), func() {
 	/*
 			https://purestorage.atlassian.net/browse/PTX-25051
 			1. Creates an app that writes approx 50000 files in a multi directory structure
@@ -7538,7 +7538,7 @@ func modifyPVCName(filePath, newPVCName string) error {
 	return nil
 }
 
-var _ = Describe("{EnableTrashCanDeleteVol}", func() {
+var _ = Describe("{EnableTrashCanDeleteVol}", Label("p0", "positive", "px_ops", "px_vol_ops", "pure_ops"), func() {
 	/*
 		https://portworx.testrail.net/index.php?/cases/view/298122
 		https://purestorage.atlassian.net/browse/PTX-25046
@@ -7672,7 +7672,7 @@ var _ = Describe("{EnableTrashCanDeleteVol}", func() {
 	})
 })
 
-var _ = Describe("{ScaleUpFBDAAppWithRestartPX}", func() {
+var _ = Describe("{ScaleUpFBDAAppWithRestartPX}", Label("p0", "negative", "error_injection", "pure_ops", "px_restart"), func() {
 	/*
 	   Ticket id:https://purestorage.atlassian.net/browse/HAZEL-733
 	   Deploy FBDA applications
@@ -7793,7 +7793,7 @@ var _ = Describe("{ScaleUpFBDAAppWithRestartPX}", func() {
 	})
 })
 
-var _ = Describe("{ScaleUpandScaleDownwithFBDAApp}", func() {
+var _ = Describe("{ScaleUpandScaleDownwithFBDAApp}", Label("p0", "positive", "px_ops", "pure_ops", "node_ops", "ClusterScale"), func() {
 	/*
 	   Ticket id:https://purestorage.atlassian.net/browse/HAZEL-732
 	   Deploy FBDA applications
@@ -7911,7 +7911,7 @@ var _ = Describe("{ScaleUpandScaleDownwithFBDAApp}", func() {
 	})
 })
 
-var _ = Describe("{ScaleUpFBDAAppWithRestartNode}", func() {
+var _ = Describe("{ScaleUpFBDAAppWithRestartNode}", Label("p1", "negative", "node_ops", "pure_ops", "ClusterScale", "node_reboot"), func() {
 	/*
 	   Ticket id:https://purestorage.atlassian.net/browse/HAZEL-734
 	   Deploy FBDA applications
@@ -8182,7 +8182,7 @@ var _ = Describe("{FBDAAppWithShutDownNode}", func() {
 	})
 })
 
-var _ = Describe("{ValidateFBDAPodsWithHostInterfaceDown}", func() {
+var _ = Describe("{ValidateFBDAPodsWithHostInterfaceDown}", Label("p1", "negative", "error_injection", "pure_ops", "network_failure"), func() {
 	/*
 	   https://purestorage.atlassian.net/browse/HAZEL-738
 	   1.Deploy Applications

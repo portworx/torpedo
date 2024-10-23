@@ -340,7 +340,7 @@ func annotateMonitor(context *scheduler.Context, releaseName string) {
 
 // This test performs basic test of installing px-central with helm
 // px-license-server and px-minotor will be installed after px-central is validated
-var _ = Describe("{InstallCentral}", func() {
+var _ = Describe("{InstallCentral}", Label("p0", "positive", "PxCentral"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("InstallCentral", "InstallCentral Test", nil, 0)
 	})
@@ -394,7 +394,7 @@ var _ = Describe("{InstallCentral}", func() {
 
 // This test installs px-central from release repo then upgrade using staging repo
 // testing 1.2.3 -> 1.3.0 multi charts to single chart upgrade
-var _ = Describe("{UpgradeCentralSingle}", func() {
+var _ = Describe("{UpgradeCentralSingle}", Label("p0", "positive", "PxCentral"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("UpgradeCentralSingle", "UpgradeCentralSingle Test", nil, 0)
 	})
@@ -502,7 +502,7 @@ var _ = Describe("{UpgradeCentralSingle}", func() {
 	})
 })
 
-var _ = Describe("{InstallCentralWithoutBackup}", func() {
+var _ = Describe("{InstallCentralWithoutBackup}", Label("p0", "positive", "PxCentral"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("InstallCentralWithoutBackup", "InstallCentralWithoutBackup Test", nil, 0)
 	})

@@ -27,7 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var _ = Describe("{VolumePlacementStrategyFunctional}", func() {
+var _ = Describe("{VolumePlacementStrategyFunctional}", Label("p0", "positive", "VPS"), func() {
 	var testrailID, runID int
 	var contexts []*scheduler.Context
 
@@ -448,7 +448,7 @@ func getApiVols(vols []*volume.Volume) ([]*api.Volume, error) {
 	return apiVols, nil
 }
 
-var _ = Describe("{ValidateVPSruleWithPoolRestriction}", func() {
+var _ = Describe("{ValidateVPSruleWithPoolRestriction}", Label("p0", "positive", "VPS"), func() {
 	/*
 		1.	select two random pools and get their uid
 		2.	label them mediatype=SSD and mediatype=SATA
@@ -629,7 +629,7 @@ var _ = Describe("{ValidateVPSruleWithPoolRestriction}", func() {
 	})
 })
 
-var _ = Describe("{ValidateVPSAffinityAndAntiAffinityConflict}", func() {
+var _ = Describe("{ValidateVPSAffinityAndAntiAffinityConflict}", Label("p0", "positive", "VPS"), func() {
 	/*
 		1.	Label all node zone=A
 		2.	Apply the volume placement strategy,storage class, and pvc

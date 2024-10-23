@@ -67,7 +67,7 @@ func validateVolumeTime(volumes []*volume.Volume) error {
 	return nil
 }
 
-var _ = Describe("{RebootOneNode}", func() {
+var _ = Describe("{RebootOneNode}", Label("p1", "negative", "node_ops", "error_injection", "node_reboot"), func() {
 	var testrailID = 35266
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35266
 	var runID int
@@ -199,7 +199,7 @@ var _ = Describe("{RebootOneNode}", func() {
 	})
 })
 
-var _ = Describe("{ReallocateSharedMount}", func() {
+var _ = Describe("{ReallocateSharedMount}", Label("p1", "negative", "node_ops", "error_injection", "node_reboot"), func() {
 
 	var testrailID = 58844
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58844
@@ -327,7 +327,7 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 	})
 })
 
-var _ = Describe("{ClusterPxRestart}", func() {
+var _ = Describe("{ClusterPxRestart}", Label("p1", "negative", "node_ops", "error_injection", "px_ops", "multiple_px_crash"), func() {
 	var testrailID = 60042
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/60042
 	var runID int
@@ -401,7 +401,7 @@ var _ = Describe("{ClusterPxRestart}", func() {
 	})
 })
 
-var _ = Describe("{NodeWipeWithNodeReboot}", func() {
+var _ = Describe("{NodeWipeWithNodeReboot}", Label("p1", "negative", "node_ops", "px_ops", "error_injection", "multiple_node_reboot"), func() {
 
 	/*
 	   1.  Create volume and do IOs / deploy apps to do IOs

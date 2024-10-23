@@ -34,7 +34,7 @@ const (
 )
 
 // This test is to verify stability of the system when there is a network error on the system.
-var _ = Describe("{NetworkErrorInjection}", func() {
+var _ = Describe("{NetworkErrorInjection}", Label("p1", "negative", "error_injection", "network_failure"), func() {
 	var testrailID = 3526435
 	injectionType := "drop"
 	//TODO need to fix this issue later.

@@ -36,7 +36,7 @@ const (
 )
 
 // UpgradeStork test performs upgrade hops of Stork based on a given list of upgradeEndpoints
-var _ = Describe("{UpgradeStork}", func() {
+var _ = Describe("{UpgradeStork}", Label("p0", "positive", "px_ops", "Upgrade"), func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35269
 	JustBeforeEach(func() {
 		upgradeHopsList := make(map[string]string)
@@ -105,7 +105,7 @@ var _ = Describe("{UpgradeStork}", func() {
 })
 
 // UpgradeVolumeDriver test performs upgrade hops of volume driver based on a given list of upgradeEndpoints
-var _ = Describe("{UpgradeVolumeDriver}", func() {
+var _ = Describe("{UpgradeVolumeDriver}", Label("p0", "positive", "px_ops", "Upgrade"), func() {
 	JustBeforeEach(func() {
 		upgradeHopsList := make(map[string]string)
 		upgradeHopsList["upgradeHops"] = Inst().UpgradeStorageDriverEndpointList
@@ -377,7 +377,7 @@ func readFIOData(volName, fioJobName string, n node.Node) error {
 }
 
 // UpgradeVolumeDriverFromCatalog test performs upgrade hops of volume driver based on a given list of upgradeEndpoints from marketplace
-var _ = Describe("{UpgradeVolumeDriverFromCatalog}", func() {
+var _ = Describe("{UpgradeVolumeDriverFromCatalog}", Label("p0", "positive", "px_ops", "Upgrade"), func() {
 	JustBeforeEach(func() {
 		upgradeHopsList := make(map[string]string)
 		upgradeHopsList["upgradeHops"] = Inst().UpgradeStorageDriverEndpointList
@@ -532,7 +532,7 @@ var _ = Describe("{UpgradeVolumeDriverFromCatalog}", func() {
 	})
 })
 
-var _ = Describe("{UpgradePxKvdbMemberDown}", func() {
+var _ = Describe("{UpgradePxKvdbMemberDown}", Label("p0", "negative", "kvdb_ops", "px_ops", "error_injection", "Upgrade", "KVDBFailover"), func() {
 	/*
 					https://purestorage.atlassian.net/browse/PTX-21450
 				    https://portworx.testrail.net/index.php?/cases/view/94371

@@ -115,7 +115,7 @@ func upgradeIKSWorkerNodes(schedVersion, poolName string) error {
 	return nil
 }
 
-var _ = Describe("{MigratePXCluster}", func() {
+var _ = Describe("{MigratePXCluster}", Label("p1", "positive", "px_ops"), func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("MigratePXCluster", "Validate Worker pool upgrade and PX migration", nil, 0)

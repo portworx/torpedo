@@ -23,7 +23,7 @@ const (
 	devicePathPrefix = "/dev/pxd/pxd"
 )
 
-var _ = Describe("{Sharedv4Functional}", func() {
+var _ = Describe("{Sharedv4Functional}", Label("p0", "positive", "px_vol_ops", "shared_v4"), func() {
 	var testrailID, runID int
 	var contexts, testSharedV4Contexts []*scheduler.Context
 	var workers []node.Node

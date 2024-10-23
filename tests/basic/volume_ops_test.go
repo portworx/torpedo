@@ -66,7 +66,7 @@ type CloudBackupSizeAPI struct {
 }
 
 // Volume replication change
-var _ = Describe("{VolumeUpdate}", func() {
+var _ = Describe("{VolumeUpdate}", Label("p0", "positive", "px_vol_ops"), func() {
 	var testrailID = 35271
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35271
 	var runID int
@@ -204,7 +204,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 })
 
 // Volume IO Throttle change
-var _ = Describe("{VolumeIOThrottle}", func() {
+var _ = Describe("{VolumeIOThrottle}", Label("p0", "positive", "px_vol_ops", "Throttling"), func() {
 	var contexts []*scheduler.Context
 	var namespace string
 	var speedBeforeUpdate, speedAfterUpdate int
@@ -287,7 +287,7 @@ var _ = Describe("{VolumeIOThrottle}", func() {
 })
 
 // Volume replication change
-var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
+var _ = Describe("{VolumeUpdateForAttachedNode}", Label("p0", "positive", "px_vol_ops"), func() {
 	var testrailID = 58838
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58838
 	var runID int
@@ -476,7 +476,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 })
 
 // Volume replication change
-var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
+var _ = Describe("{CreateLargeNumberOfVolumes}", Label("p0", "positive", "px_vol_ops", "MiniScale"), func() {
 	var testrailID = 0
 	// JIRA ID :https://portworx.atlassian.net/browse/PWX-26820
 	var runID int
@@ -601,7 +601,7 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 })
 
 // Volume replication change
-var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
+var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", Label("p1", "negative", "px_vol_ops", "error_injection", "kvdb_ops", "KVDBFailover"), func() {
 	var testrailID = 0
 	// JIRA ID :https://portworx.atlassian.net/browse/PTX-17728
 	var runID int
@@ -734,7 +734,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 
 })
 
-var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
+var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", Label("p1", "positive", "px_vol_ops", "MiniScale", "HA_Increase_Decrease"), func() {
 	var testrailID = 0
 	/*  Try Volume resize to 5 GB every time
 	        Try HA Refactor of the volume
@@ -988,7 +988,7 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", func() {
 	})
 })
 
-var _ = Describe("{CloudsnapAndRestore}", func() {
+var _ = Describe("{CloudsnapAndRestore}", Label("p0", "positive", "px_vol_ops", "px_ops", "CloudSnapAndRestore"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("CloudsnapAndRestore", "Validate cloudsnap creation and restore", nil, 0)
 	})
@@ -1278,7 +1278,7 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 	})
 })
 
-var _ = Describe("{LocalsnapAndRestore}", func() {
+var _ = Describe("{LocalsnapAndRestore}", Label("p0", "positive", "px_vol_ops", "px_ops", "CloudSnapAndRestore"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("LocalsnapAndRestore", "Validate localsnap creation and restore", nil, 0)
 	})
@@ -1503,7 +1503,7 @@ var _ = Describe("{LocalsnapAndRestore}", func() {
 	})
 })
 
-var _ = Describe("{ResizeVolumeAfterFull}", func() {
+var _ = Describe("{ResizeVolumeAfterFull}", Label("p1", "positive", "px_vol_ops", "VolResize"), func() {
 	/*
 		https://portworx.atlassian.net/browse/PTX-18927
 		Fill volumes completely , then resize volume by 50%, verify IO on volumes in Longevity
@@ -1594,7 +1594,7 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 
 })
 
-var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
+var _ = Describe("{CreateFastpathVolumeRebootNode}", Label("p1", "negative", "px_vol_ops", "error_injection", "px_ops", "node_reboot"), func() {
 	var testrailID = 0
 	// JIRA ID : https://portworx.atlassian.net/browse/PTX-15700
 	var runID int
@@ -1748,7 +1748,7 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 	})
 })
 
-var _ = Describe("{TrashcanRecoveryWithCloudsnap}", func() {
+var _ = Describe("{TrashcanRecoveryWithCloudsnap}", Label("p1", "positive", "px_vol_ops", "px_ops", "CloudSnapAndRestore"), func() {
 	/*
 		1) Create volumes
 		2) Put the volume in resync state
@@ -2287,7 +2287,7 @@ func deletePXVolume(volName string) error {
 	return err
 }
 
-var _ = Describe("{CloudSnapWithPXEvents}", func() {
+var _ = Describe("{CloudSnapWithPXEvents}", Label("p0", "positive", "px_vol_ops", "px_ops", "CloudSnapAndRestore"), func() {
 	var testrailID = 0
 	var runID int
 	JustBeforeEach(func() {
@@ -2661,7 +2661,7 @@ var _ = Describe("{CloudSnapWithPXEvents}", func() {
 	})
 })
 
-var _ = Describe("{PoolFullCloudsnap}", func() {
+var _ = Describe("{PoolFullCloudsnap}", Label("p1", "positive", "px_vol_ops", "Throttling", "CloudSnapAndRestore"), func() {
 
 	/*
 			Priority: P1
@@ -2913,7 +2913,7 @@ var _ = Describe("{PoolFullCloudsnap}", func() {
 	})
 })
 
-var _ = Describe("{NFSProxyVolumeValidation}", func() {
+var _ = Describe("{NFSProxyVolumeValidation}", Label("p1", "positive", "px_vol_ops"), func() {
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
 		StartTorpedoTest("NFSProxyVolumeValidation", "Validate PX operations with NFS proxy volumes", nil, 0)
@@ -3021,7 +3021,7 @@ var _ = Describe("{NFSProxyVolumeValidation}", func() {
 	})
 })
 
-var _ = Describe("{SharedVolFuseTest}", func() {
+var _ = Describe("{SharedVolFuseTest}", Label("p1", "positive", "px_vol_ops", "shared_v4"), func() {
 	/*
 					https://portworx.atlassian.net/browse/PWX-35639
 				   https://portworx.atlassian.net/browse/PTX-21805
@@ -3152,7 +3152,7 @@ var _ = Describe("{SharedVolFuseTest}", func() {
 	})
 })
 
-var _ = Describe("{FioClonedVolumeFaultInjection}", func() {
+var _ = Describe("{FioClonedVolumeFaultInjection}", Label("p1", "negative", "px_vol_ops", "error_injection", "shared_v4"), func() {
 	/*
 		https://portworx.atlassian.net/browse/PTX-15687
 			1. Create 1 Volume,  Run fio
@@ -3326,7 +3326,7 @@ var _ = Describe("{FioClonedVolumeFaultInjection}", func() {
 		}
 	})
 })
-var _ = Describe("{VolumePreCheck}", func() {
+var _ = Describe("{VolumePreCheck}", Label("p0", "positive", "px_vol_ops"), func() {
 	/*
 			https://portworx.atlassian.net/browse/PTX-20557
 			1. Deploy a basic volume on the cluster
@@ -3477,7 +3477,7 @@ func writeFioDataToVolume(volName string, n node.Node, size int64) error {
 
 }
 
-var _ = Describe("{OverCommitVolumeTest}", func() {
+var _ = Describe("{OverCommitVolumeTest}", Label("p1", "positive", "px_vol_ops"), func() {
 	/*
 						    https://portworx.atlassian.net/browse/PTX-19103
 							Total 5 scenarios Tested
@@ -3670,7 +3670,7 @@ var _ = Describe("{OverCommitVolumeTest}", func() {
 
 	})
 })
-var _ = Describe("{RestartPxandRestartNode}", func() {
+var _ = Describe("{RestartPxandRestartNode}", Label("p1", "negative", "px_vol_ops", "error_injection", "node_reboot", "px_restart"), func() {
 	/*
 	   https://purestorage.atlassian.net/browse/PTX-24483
 	   1.Deploy Applications
@@ -3748,7 +3748,7 @@ var _ = Describe("{RestartPxandRestartNode}", func() {
 })
 
 // Verify volume delete from the new node- Place volumes on the new node and enable trash can features on all volume.
-var _ = Describe("{EnableThrashCanForvolume}", Label("p2", "positive", "px_vol_ops", "trashcan"), func() {
+var _ = Describe("{EnableThrashCanForvolume}", Label("p0", "positive", "px_vol_ops"), Label("p2", "positive", "px_vol_ops", "trashcan"), func() {
 	/*
 		Step1: Take storage node from cluster
 		Step3: Create a  few Volumes on the new node.
@@ -3857,7 +3857,7 @@ var _ = Describe("{EnableThrashCanForvolume}", Label("p2", "positive", "px_vol_o
 })
 
 // For each volume, get replica nodes, bring PX down, bring it back up, and ensure PX and pods are running
-var _ = Describe("{BringVolumeoutofQuorum}", Label("p0", "negative", "px_ops"), func() {
+var _ = Describe("{BringVolumeoutofQuorum}", Label("p1", "positive", "px_vol_ops"), Label("p0", "negative", "px_ops"), func() {
 	/*
 		For each volume, get it's replicas
 		Stop PX on all replica nodes

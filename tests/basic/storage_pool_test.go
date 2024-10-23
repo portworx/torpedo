@@ -39,7 +39,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var _ = Describe("{StoragePoolExpandDiskResize}", func() {
+var _ = Describe("{StoragePoolExpandDiskResize}", Label("p0", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 	BeforeEach(func() {
 		StartTorpedoTest(testName, testDescription, nil, 0)
 		contexts = scheduleApps()
@@ -82,7 +82,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	})
 })
 
-var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
+var _ = Describe("{StoragePoolExpandDiskAdd}", Label("p0", "positive", "pool_ops", "PoolExpand", "AddDrive"), func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("StoragePoolExpandDiskAdd", "Validate storage pool expansion using add-disk option", nil, 0)
@@ -179,7 +179,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 	})
 })
 
-var _ = Describe("{StoragePoolExpandDiskAuto}", func() {
+var _ = Describe("{StoragePoolExpandDiskAuto}", Label("p0", "positive", "pool_ops", "PoolExpand", "AutoExpand"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("StoragePoolExpandDiskAuto", "Validate storage pool expansion using auto option", nil, 0)
 	})

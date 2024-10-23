@@ -26,7 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-var _ = Describe("{UpgradeCluster}", func() {
+var _ = Describe("{UpgradeCluster}", Label("p0", "positive", "node_ops", "Upgrade"), func() {
 	var contexts []*scheduler.Context
 
 	JustBeforeEach(func() {

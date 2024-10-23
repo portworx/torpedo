@@ -117,7 +117,7 @@ func oneTimeInit() {
 }
 
 // This test telemetry health via pxctl
-var _ = Describe("{DiagsTelemetryPxctlHealthyStatus}", func() {
+var _ = Describe("{DiagsTelemetryPxctlHealthyStatus}", Label("p1", "positive", "telemetry"), func() {
 	var contexts []*scheduler.Context
 	var runID int
 
@@ -156,7 +156,7 @@ var _ = Describe("{DiagsTelemetryPxctlHealthyStatus}", func() {
 })
 
 // This test performs basic test of starting an application and destroying it (along with storage)
-var _ = Describe("{DiagsBasic}", func() {
+var _ = Describe("{DiagsBasic}", Label("p1", "positive", "telemetry"), func() {
 	var contexts []*scheduler.Context
 
 	BeforeEach(func() {
@@ -194,7 +194,7 @@ var _ = Describe("{DiagsBasic}", func() {
 })
 
 // This test performs basic diags collection and validates them on S3 bucket
-var _ = Describe("{DiagsCCMOnS3}", func() {
+var _ = Describe("{DiagsCCMOnS3}", Label("p1", "positive", "telemetry"), func() {
 	var testrailIDs = []int{54917, 54912, 54910}
 	BeforeEach(func() {
 
@@ -257,7 +257,7 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 	})
 })
 
-var _ = Describe("{ProfileOnlyDiags}", func() {
+var _ = Describe("{ProfileOnlyDiags}", Label("p1", "positive", "telemetry"), func() {
 	var testrailID = 54911
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54917
 	var runID int
@@ -426,7 +426,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 })
 
 // Runs cluster wide diags collection and validates on S3
-var _ = Describe("{DiagsClusterWide}", func() {
+var _ = Describe("{DiagsClusterWide}", Label("p1", "positive", "telemetry"), func() {
 	var testrailID = 54916
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54916
 	var runID int
@@ -489,7 +489,7 @@ var _ = Describe("{DiagsClusterWide}", func() {
 })
 
 // This test performs basic test of starting an application and destroying it (along with storage)
-var _ = Describe("{DiagsAsyncBasic}", func() {
+var _ = Describe("{DiagsAsyncBasic}", Label("p1", "positive", "telemetry"), func() {
 	var contexts []*scheduler.Context
 
 	BeforeEach(func() {
@@ -533,7 +533,7 @@ var _ = Describe("{DiagsAsyncBasic}", func() {
 })
 
 // This test auto diags on storage crash
-var _ = Describe("{DiagsAutoStorage}", func() {
+var _ = Describe("{DiagsAutoStorage}", Label("p1", "positive", "telemetry"), func() {
 	var contexts []*scheduler.Context
 	var existingDiags string
 	var pxProcessNm string
@@ -659,7 +659,7 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 })
 
 // Stop driver and run diags
-var _ = Describe("{DiagsOnStoppedPXnode}", func() {
+var _ = Describe("{DiagsOnStoppedPXnode}", Label("p1", "positive", "telemetry"), func() {
 	var contexts []*scheduler.Context
 	var diagsValErr error
 	var diagsErr error
@@ -741,7 +741,7 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 })
 
 // Runs cluster wide diags collection and validates on S3
-var _ = Describe("{DiagsSpecificNode}", func() {
+var _ = Describe("{DiagsSpecificNode}", Label("p1", "positive", "telemetry"), func() {
 	var testrailID = 54915
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54916
 	var runID int

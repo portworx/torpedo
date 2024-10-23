@@ -19,7 +19,7 @@ const (
 )
 
 // This test performs multi volume mounts to a single deployment
-var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
+var _ = Describe("{MultiVolumeMountsForSharedV4}", Label("p0", "positive", "px_vol_ops", "shared_v4", "MiniScale"), func() {
 	var testrailID = 58846
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58846
 	var runID int
@@ -103,7 +103,7 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 })
 
 // This test performs sharedv4 nfs server pod termination failover use case
-var _ = Describe("{NFSServerNodeDelete}", func() {
+var _ = Describe("{NFSServerNodeDelete}", Label("p0", "negative", "px_vol_ops", "node_ops", "shared_v4"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("NFSServerNodeDelete", "Vslidate NFS server delete", nil, 0)
 	})

@@ -41,7 +41,7 @@ const (
 )
 
 // Verify that the pods on old and new NFS servers get terminated after a failover.
-var _ = Describe("{Sharedv4SvcPodRestart}", func() {
+var _ = Describe("{Sharedv4SvcPodRestart}", Label("p0", "positive", "px_vol_ops", "shared_v4", "error_injection", "px_restart"), func() {
 	var contexts []*scheduler.Context
 	var nodeReplicaMap map[string]bool
 	JustBeforeEach(func() {
@@ -238,7 +238,7 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 })
 
 // Verify different combination of storageClass.sharedv4 and PVC.accessMode settings
-var _ = Describe("{PVCAccessModeFunctional}", func() {
+var _ = Describe("{PVCAccessModeFunctional}", Label("p0", "positive", "px_ops", "px_vol_ops", "shared_v4"), func() {
 	var testrailID, runID int
 	var contexts []*scheduler.Context
 	var testName string
@@ -457,7 +457,7 @@ func (fm *failoverMethodMaintenance) sleepBetweenFailovers() time.Duration {
 	return 30 * time.Second
 }
 
-var _ = Describe("{Sharedv4SvcFunctional}", func() {
+var _ = Describe("{Sharedv4SvcFunctional}", Label("p0", "positive", "px_ops", "px_vol_ops", "shared_v4"), func() {
 	var testrailID, runID int
 	var contexts, testSv4Contexts []*scheduler.Context
 	var workers []node.Node
@@ -1315,7 +1315,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 // The other pods that are deployments run once every 5 mins and read the model, do some prediction and
 // writes their predictions to shared volume on which model is saved. Retraining pod picks this data up
 // and again retrains the model. This is a simple feed-forward neural network model.
-var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
+var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", Label("p0", "positive", "shared_v4", "MiniScale"), func() {
 	ns := "ml-workload-ns"
 	appContexts := make([]*scheduler.Context, 0)
 	prereqContexts := make([]*scheduler.Context, 0)
@@ -1466,7 +1466,7 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 // Additional deployment jobs run every 15 minutes, reading the model, making predictions,
 // and writing those predictions to a shared volume where the model is stored.
 // The retraining pod retrieves this data to refine the model further. This setup utilizes a simple feed-forward neural network.
-var _ = Describe("{CreateMlWorkloadOnSharedv4SvcWithCronJob}", Label("p0", "positive", "sharedv4"), func() {
+var _ = Describe("{CreateMlWorkloadOnSharedv4SvcWithCronJob}", Label("p0", "positive", "shared_v4", "MiniScale"), Label("p0", "positive", "sharedv4"), func() {
 	ns := "ml-workload-ns"
 	customAppName := "ml-workload-rwx-cronjob"
 	appContexts := make([]*scheduler.Context, 0)
@@ -1962,7 +1962,7 @@ func runCmd(cmd string, n node.Node) (string, error) {
 	return output, err
 }
 
-var _ = Describe("{StickyVolumeTest}", func() {
+var _ = Describe("{StickyVolumeTest}", Label("p0", "positive", "px_ops", "px_vol_ops", "shared_v4"), func() {
 	var testrailID = 0
 	//testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/TBD
 	var runID int

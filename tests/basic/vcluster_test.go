@@ -23,7 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var _ = Describe("{CreateAndRunFioOnVcluster}", func() {
+var _ = Describe("{CreateAndRunFioOnVcluster}", Label("p0", "positive", "vcluster"), func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -74,7 +74,7 @@ var _ = Describe("{CreateAndRunFioOnVcluster}", func() {
 	})
 })
 
-var _ = Describe("{CreateAndRunMultipleFioOnVcluster}", func() {
+var _ = Describe("{CreateAndRunMultipleFioOnVcluster}", Label("p0", "positive", "vcluster"), func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var appNS string
@@ -162,7 +162,7 @@ var _ = Describe("{CreateAndRunMultipleFioOnVcluster}", func() {
 	})
 })
 
-var _ = Describe("{ScaleUpScaleDownAppOnVcluster}", func() {
+var _ = Describe("{ScaleUpScaleDownAppOnVcluster}", Label("p0", "positive", "vcluster"), func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -226,7 +226,7 @@ var _ = Describe("{ScaleUpScaleDownAppOnVcluster}", func() {
 	})
 })
 
-var _ = Describe("{CreateAndRunFioOnVclusterRWX}", func() {
+var _ = Describe("{CreateAndRunFioOnVclusterRWX}", Label("p0", "positive", "vcluster", "shared_v4"), func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -290,7 +290,7 @@ var _ = Describe("{CreateAndRunFioOnVclusterRWX}", func() {
 	})
 })
 
-var _ = Describe("{CreateAndRunMultipleFioOnManyVclusters}", func() {
+var _ = Describe("{CreateAndRunMultipleFioOnManyVclusters}", Label("p0", "positive", "vcluster", "MiniScale"), func() {
 	envValueVcluster := vcluster.ReadEnvVariable("NUM_VCLUSTERS")
 	envValueBatch := vcluster.ReadEnvVariable("VCLUSTER_PARALLEL_APPS")
 	envValueIterations := vcluster.ReadEnvVariable("VCLUSTER_TOTAL_ITERATIONS")
@@ -401,7 +401,7 @@ var _ = Describe("{CreateAndRunMultipleFioOnManyVclusters}", func() {
 	})
 })
 
-var _ = Describe("{VolumeDriverDownVCluster}", func() {
+var _ = Describe("{VolumeDriverDownVCluster}", Label("p0", "negative", "vcluster", "error_injection", "px_ops"), func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -476,7 +476,7 @@ var _ = Describe("{VolumeDriverDownVCluster}", func() {
 	})
 })
 
-var _ = Describe("{VolumeDriverCrashVCluster}", func() {
+var _ = Describe("{VolumeDriverCrashVCluster}", Label("p1", "negative", "vcluster", "error_injection", "px_ops", "px_crash"), func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -540,7 +540,7 @@ var _ = Describe("{VolumeDriverCrashVCluster}", func() {
 })
 
 // This test case is failing due to : https://portworx.atlassian.net/browse/PWX-34762
-var _ = Describe("{VolumeDriverAppDownVCluster}", func() {
+var _ = Describe("{VolumeDriverAppDownVCluster}", Label("p1", "negative", "vcluster", "error_injection", "px_ops"), func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -639,7 +639,7 @@ var _ = Describe("{VolumeDriverAppDownVCluster}", func() {
 })
 
 // This test case is failing due to : https://portworx.atlassian.net/browse/PWX-34762
-var _ = Describe("{VolumeDriverDownVClusterOps}", func() {
+var _ = Describe("{VolumeDriverDownVClusterOps}", Label("p1", "negative", "vcluster"), func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -705,7 +705,7 @@ var _ = Describe("{VolumeDriverDownVClusterOps}", func() {
 	})
 })
 
-var _ = Describe("{CreateEncryptedVolVCluster}", func() {
+var _ = Describe("{CreateEncryptedVolVCluster}", Label("p0", "positive", "vcluster", "encryption"), func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -769,7 +769,7 @@ var _ = Describe("{CreateEncryptedVolVCluster}", func() {
 	})
 })
 
-var _ = Describe("{NodeRebootVCluster}", func() {
+var _ = Describe("{NodeRebootVCluster}", Label("p1", "negative", "vcluster", "node_ops", "error_injection", "node_reboot"), func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -844,7 +844,7 @@ var _ = Describe("{NodeRebootVCluster}", func() {
 })
 
 // This Test Case is failing due to : https://portworx.atlassian.net/browse/PWX-34792
-var _ = Describe("{VolumeSnapshotAndRestoreVcluster}", func() {
+var _ = Describe("{VolumeSnapshotAndRestoreVcluster}", Label("p2", "positive", "vcluster"), func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -935,7 +935,7 @@ var _ = Describe("{VolumeSnapshotAndRestoreVcluster}", func() {
 	})
 })
 
-var _ = Describe("{AutopilotPvcResizeTestVCluster}", func() {
+var _ = Describe("{AutopilotPvcResizeTestVCluster}", Label("p0", "positive", "vcluster", "autopilot", "PvcResize"), func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -1023,7 +1023,7 @@ var _ = Describe("{AutopilotPvcResizeTestVCluster}", func() {
 	})
 })
 
-var _ = Describe("{AutopilotMultiplePvcResizeTestVCluster}", func() {
+var _ = Describe("{AutopilotMultiplePvcResizeTestVCluster}", Label("p0", "positive", "vcluster", "autopilot", "PvcResize", "MiniScale"), func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var appNS string
@@ -1116,7 +1116,7 @@ var _ = Describe("{AutopilotMultiplePvcResizeTestVCluster}", func() {
 	})
 })
 
-var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
+var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", Label("p1", "positive", "vcluster", "autopilot", "MiniScale"), func() {
 	envValueVcluster := vcluster.ReadEnvVariable("NUM_VCLUSTERS")
 	envValueBatch := vcluster.ReadEnvVariable("VCLUSTER_PARALLEL_APPS")
 	envValueIterations := vcluster.ReadEnvVariable("VCLUSTER_TOTAL_ITERATIONS")

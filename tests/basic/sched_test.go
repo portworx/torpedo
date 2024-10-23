@@ -12,7 +12,7 @@ import (
 	. "github.com/pure-px/torpedo/tests"
 )
 
-var _ = Describe("{StopScheduler}", func() {
+var _ = Describe("{StopScheduler}", Label("p0", "negative", "error_injection", "px_ops"), func() {
 	var testrailID = 35268
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35268
 	var runID int
