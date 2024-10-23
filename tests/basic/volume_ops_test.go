@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/volume/portworx"
-	"github.com/portworx/torpedo/pkg/restutil"
 	"math"
 	"math/rand"
 	"net/http"
@@ -14,6 +12,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/volume/portworx"
+	"github.com/portworx/torpedo/pkg/restutil"
 
 	"github.com/google/uuid"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -3723,6 +3724,118 @@ var _ = Describe("{RestartPxandRestartNode}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{DetachVolSnapshotTest}", func() {
+	/*
+		1. Deploy Applications
+		2. Validate Applications are Deployed
+		3. Scale down the applications so that the volumes are detached
+		4. Take snapshot of one volume
+		5. Inspect the parent volume, make sure the pvc and namespace labels are present
+	*/
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("DetachVolSnapshotTest",
+			"Validate labels are present on detached volumes after taking snapshot", nil, 0)
+	})
+	itLog := "Check labels after detached volumes getting snapshotted"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		stepLog := "Schedule apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("detached-vol-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Scale down apps to detach volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// scaleDownApp scales an app to zero replicas using the given context and waits for pods to terminate
+			scaleDownApp := func(ctx *scheduler.Context) error {
+				scaleApp(ctx, 0)
+				waitForPodsToTerminate := func() (interface{}, bool, error) {
+					vols, err := Inst().S.GetVolumes(ctx)
+					if err != nil {
+						return nil, false, err
+					}
+					podCount := 0
+					for _, vol := range vols {
+						if vol.ID == "" {
+							return nil, false, fmt.Errorf("empty vol.ID in volume [%v]", vol)
+						}
+						pods, err := core.Instance().GetPodsUsingPV(vol.ID)
+						if err != nil {
+							return nil, false, err
+						}
+						podCount += len(pods)
+					}
+					if podCount > 0 {
+						return nil, true, fmt.Errorf("expected no pods, but found [%d] remaining", podCount)
+					}
+					return nil, false, nil
+				}
+				_, err := task.DoRetryWithTimeout(waitForPodsToTerminate, 10*time.Minute, 30*time.Second)
+				if err != nil {
+					return fmt.Errorf("failed to scale down app [%s] and ensure all pods are deleted. Err: [%v]", ctx.App.Key, err)
+				}
+				return nil
+			}
+			for _, ctx := range contexts {
+				log.InfoD("Scaling down app [%s]", ctx.App.Key)
+				err := scaleDownApp(ctx)
+				log.FailOnError(err, "failed to scale down app [%s]", ctx.App.Key)
+			}
+		})
+
+		var volume *volume.Volume
+		stepLog = "Get one detached volume and make a snapshot out of it"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "failed to get volumes for app [%s]", ctx.App.Key)
+				if len(vols) > 0 {
+					volume = vols[0]
+					break
+				}
+			}
+			if volume == nil {
+				err := fmt.Errorf("unable to find any volume in the cluster")
+				log.FailOnError(err, err.Error())
+			}
+
+			snapshotName := fmt.Sprintf("snapshot_%s", volume.ID)
+			snapshotResponse, err := Inst().V.CreateSnapshot(volume.ID, snapshotName)
+			log.FailOnError(err, "error creeating snapshot out of volume [%s]", volume.ID)
+			log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
+		})
+
+		stepLog = "Verify parent volume having desired labels"
+		labelsToVerify := []string{"namespace", "pvc"}
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volInspect, err := Inst().V.InspectVolume(volume.ID)
+			log.FailOnError(err, "Failed to inspect volume %v", volume.ID)
+			missingLabels := make([]string, 0)
+			for _, label := range labelsToVerify {
+				_, ok := volInspect.Locator.VolumeLabels[label]
+				if !ok {
+					missingLabels = append(missingLabels, label)
+				}
+			}
+			dash.VerifyFatal(len(missingLabels), 0, fmt.Sprintf("unable to find label(s) [%s] in the labels from the volume inspect result", strings.Join(missingLabels, ", ")))
 		})
 	})
 	JustAfterEach(func() {
