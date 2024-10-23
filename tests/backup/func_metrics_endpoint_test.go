@@ -556,3 +556,77 @@ var _ = Describe("{VerifyPxBackupCloudCredCount}", func() {
 
 	})
 })
+
+// Verify Backup location count from metrics
+var _ = Describe("{VerifyBackupLocationCount}", Label(TestCaseLabelsMap[ValidateMetrics]...), func() {
+	var (
+		contexts          []*scheduler.Context
+		cloudCredName     string
+		cloudCredUID      string
+		bkpLocationName   string
+		backupLocationUID string
+		bkpLocationCount  int
+	)
+
+	backupLocationMap := make(map[string]string)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyBackupLocationCount", "Verify backup location count from metrics.", nil, 91952, Prikumar, Q2FY25)
+	})
+
+	// Validate backup location count from metrics
+	It("Validate backup location count from metrics", func() {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching admin ctx")
+
+		// Creating backup location
+		Step("Creating backup location", func() {
+			log.InfoD("Creating backup location")
+			bkpLocationCount = 3
+			providers := GetBackupProviders()
+			for _, provider := range providers {
+				for i := 0; i < bkpLocationCount; i++ {
+					cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+					cloudCredUID = uuid.New()
+					bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), i)
+					backupLocationUID = uuid.New()
+					backupLocationMap[backupLocationUID] = bkpLocationName
+					err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+					err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+				}
+			}
+		})
+
+		// Check and validate the backup location status count
+		Step("Verify the backup location count from metrics endpoint", func() {
+			metricsName := "pxbackup_backup_location_status"
+
+			//Get namespace of px-backup deployment
+			pxbNamespace, err := backup.GetPxBackupNamespace()
+			log.FailOnError(err, "Getting px-backup namespace")
+			log.Infof("namespace is [%v]", pxbNamespace)
+
+			//Fetch all datas from endpoint
+			allMetricsData, err := RunCurlCmd(pxbNamespace)
+			log.FailOnError(err, "Fetching metrics data")
+
+			//Get total px-backup location count
+			count, err := GetBackupLocationCount(allMetricsData, metricsName)
+			log.Infof("pxbackup_backup_location_status count", count)
+			dash.VerifyFatal(bkpLocationCount, count, "Validate backup location count")
+			dash.VerifyFatal(err, nil, "Verify the status of the  pxbackup_backup_location_status count from metrics endpoint")
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+
+		// Clean up the cluster
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
+	})
+})

@@ -12641,3 +12641,38 @@ func GetPxBackupCloudCredCount(lines []string, metricName string) (int, error) {
 	}
 	return dataCount, nil
 }
+
+// GetBackupLocationCount to validate the pxbackup_backup_location_status count from metrics
+func GetBackupLocationCount(lines []string, metricName string) (int, error) {
+	dataCount := 0
+	bkpLocationCount := 0
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
+
+	bkpLocations, err := GetAllBackupLocations(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	for index, backupName := range bkpLocations {
+		log.InfoD("Verify backup location [%v] [%s]", index, backupName)
+		bkpLocationCount++
+	}
+
+	log.InfoD("Backup location count [%v]", bkpLocationCount)
+	pattern := fmt.Sprintf(`%s\{backfill="([^"]*)",error_reason="([^"]*)",name="([^"]*)",org_id="([^"]*)",timestamp_in_secs="([^"]*)",user_id="([^"]*)"\}`, metricName)
+	re := regexp.MustCompile(pattern)
+
+	for _, line := range lines {
+		if re.MatchString(line) {
+			log.Infof("Matched string [%v]", re.MatchString(line))
+			dataCount++
+		}
+	}
+	log.InfoD("data count [%v]", dataCount)
+
+	if bkpLocationCount == dataCount {
+		log.InfoD("Total backup location count is [%v]", dataCount)
+	}
+	return dataCount, nil
+}
