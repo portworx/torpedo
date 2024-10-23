@@ -12421,6 +12421,8 @@ var _ = Describe("{PoolResizeWithNodeRebootWithTimeInterval}", func() {
 		sleepTime := rand.Intn(100) + 1
 		time.Sleep(time.Second * (time.Duration(sleepTime)))
 		tNode, err := GetNodeWithGivenPoolID(poolIDToResize)
+		log.FailOnError(err, "Failed to get node from pool id [%v]", poolIDToResize)
+
 		selectedNode := *tNode
 
 		stepLog = fmt.Sprintf("Verify reboot after [%d] seconds", sleepTime)
@@ -12999,7 +13001,6 @@ var _ = Describe("{PoolResizeWithNodeMaintenanceCycleWithTimeInterval}", func() 
 			log.Info("validate application succeed")
 		})
 	})
-
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		appsValidateAndDestroy(contexts)
@@ -13007,7 +13008,7 @@ var _ = Describe("{PoolResizeWithNodeMaintenanceCycleWithTimeInterval}", func() 
 	})
 })
 
-var _ = Describe("{AddDriveWithPXRestart}",func(){
+var _ = Describe("{AddDriveWithPXRestart}", func() {
 	/*
 		1. Create volume and do IOs / deploy apps to do IOs
 		2. Expand pool by adding drive
