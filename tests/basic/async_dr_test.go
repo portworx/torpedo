@@ -30,6 +30,7 @@ import (
 	"github.com/pure-px/torpedo/pkg/log"
 	"github.com/pure-px/torpedo/pkg/osutils"
 	"github.com/pure-px/torpedo/pkg/storkctlcli"
+
 	//"github.com/pure-px/torpedo/driver	"github.com/pure-px/torpedo/drivers/scheduler"
 	//"github.com/pure-px/torpedo/drivers/scheduler/spec"
 	"github.com/pure-px/torpedo/pkg/testrailuttils"
@@ -836,7 +837,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", func() {
 			createMigSchdAndValidateMigration(migrationSchedName, cpName, defaultNs, kubeConfigPath[asyncdr.FirstCluster], extraArgs)
 		})
 
-		var stNodeClusterMap map[int][]node.Node
+		stNodeClusterMap := make(map[int][]node.Node)
 
 		for cluster, path := range kubeConfigPath {
 			if cluster == asyncdr.SecondCluster {
