@@ -3933,6 +3933,7 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 							UpdateOutcome(event, fmt.Errorf("error getting snapshot schedule [%s] for volume [%s] in namespace [%s]. Err: [%v]", snapshotScheduleName, v.Name, v.Namespace, err))
 							return
 						}
+						osutils.Kubectl([]string{"-n", appNamespace, "describe", "VolumeSnapshotSchedule", snapshotScheduleName})
 						if len(resp.Status.Items) <= 0 {
 							UpdateOutcome(event, fmt.Errorf("snapshots not found for snapshot schedule [%s] for volume [%s] in namespace [%s]", snapshotScheduleName, v.Name, v.Namespace))
 							return
@@ -3944,6 +3945,7 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 									UpdateOutcome(event, fmt.Errorf("SnapshotSchedule has an empty migration in its most recent status. Error getting latest snapshot status for [%s]", snapshotScheduleName))
 									return
 								}
+								osutils.Kubectl([]string{"-n", appNamespace, "describe", "volumesnapshot.volumesnapshot.external-storage.k8s.io", status.Name})
 								status, err = WaitForSnapShotToReady(snapshotScheduleName, status.Name, appNamespace)
 								log.Infof("Snapshot [%s] has status [%v]", status.Name, status.Status)
 								if status.Status == snapv1.VolumeSnapshotConditionError {
@@ -4189,6 +4191,7 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 						UpdateOutcome(event, err)
 						return
 					}
+					osutils.Kubectl([]string{"-n", appNamespace, "describe", "VolumeSnapshotSchedule", snapshotScheduleName})
 					snapshotStatusMap := make(map[storkv1.SchedulePolicyType][]*storkv1.ScheduledVolumeSnapshotStatus)
 					log.Infof("TriggerCloudSnapshotRestore: The snapshot [%s] response :", snapshotScheduleName)
 					for policyType, snapshotStatuses := range resp.Status.Items {
@@ -4226,6 +4229,7 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 						dashStats["destination-name"] = vol.Name
 						dashStats["destination-namespace"] = vol.Namespace
 						updateLongevityStats(CloudSnapShotRestore, stats.CloudsnapRestorEventName, dashStats)
+						osutils.Kubectl([]string{"-n", appNamespace, "describe", "volumesnapshot.volumesnapshot.external-storage.k8s.io", volumeSnapshotStatus.Name})
 						restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: metav1.ObjectMeta{
 							Name:      vol.Name,
 							Namespace: vol.Namespace,
@@ -4235,8 +4239,10 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 							UpdateOutcome(event, err)
 							return
 						}
+						osutils.Kubectl([]string{"-n", vol.Namespace, "describe", "VolumeSnapshotRestore", vol.Name})
 						err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
 						dash.VerifySafely(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destnation: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
+						osutils.Kubectl([]string{"-n", vol.Namespace, "describe", "VolumeSnapshotRestore", vol.Name})
 						if err == nil {
 							err = storkops.Instance().DeleteVolumeSnapshotRestore(restore.Name, restore.Namespace)
 							if err != nil {
@@ -7569,21 +7575,26 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				UpdateOutcome(event, err)
 			}
 		})
-		stepLog = "Verify APP, volume staus and check data integrity if enabled"
-		// //Wait for PX to be up on all worker nodes
-		Step(stepLog, func() {
-			for _, ctx := range *contexts {
-				log.Infof("Validating context: %v", ctx.App.Key)
-				ctx.SkipVolumeValidation = false
-				errorChan := make(chan error, errorChannelSize)
-				ValidateContext(ctx, &errorChan)
-				for err := range errorChan {
-					UpdateOutcome(event, err)
+		if !isSSIERun() {
+			stepLog = "Verify APP, volume staus and check data integrity if enabled"
+			// Wait for PX to be up on all worker nodes
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, ctx := range *contexts {
+					log.Infof("Validating context: %v", ctx.App.Key)
+					ctx.SkipVolumeValidation = false
+					errorChan := make(chan error, errorChannelSize)
+					ValidateContext(ctx, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
 				}
-			}
-			err := ValidateDataIntegrity(contexts)
-			UpdateOutcome(event, err)
-		})
+				err := ValidateDataIntegrity(contexts)
+				UpdateOutcome(event, err)
+			})
+		} else {
+			log.Infof("[TriggerPowerOffAllVMs] is running in SSIE")
+		}
 		updateMetrics(*event)
 	})
 }
@@ -7691,23 +7702,27 @@ func TriggerPowerOffStorageNodes(contexts *[]*scheduler.Context, recordChan *cha
 					UpdateOutcome(event, err)
 				}
 			})
-			stepLog = "Verify APP, volume status and check data integrity if enabled"
-			// //Wait for PX to be up on all worker nodes
-			Step(stepLog, func() {
-				log.Infof(stepLog)
-				for _, ctx := range *contexts {
-					log.Infof("Validating context: %v", ctx.App.Key)
-					ctx.SkipVolumeValidation = false
-					errorChan := make(chan error, errorChannelSize)
-					ValidateContext(ctx, &errorChan)
-					for err := range errorChan {
-						UpdateOutcome(event, err)
+			if !isSSIERun() {
+				stepLog = "Verify APP, volume status and check data integrity if enabled"
+				// //Wait for PX to be up on all worker nodes
+				Step(stepLog, func() {
+					log.Infof(stepLog)
+					for _, ctx := range *contexts {
+						log.Infof("Validating context: %v", ctx.App.Key)
+						ctx.SkipVolumeValidation = false
+						errorChan := make(chan error, errorChannelSize)
+						ValidateContext(ctx, &errorChan)
+						for err := range errorChan {
+							UpdateOutcome(event, err)
+						}
 					}
-				}
-				err := ValidateDataIntegrity(contexts)
-				UpdateOutcome(event, err)
-				log.InfoD("verify apps and volume completed")
-			})
+					err := ValidateDataIntegrity(contexts)
+					UpdateOutcome(event, err)
+					log.InfoD("verify apps and volume completed")
+				})
+			} else {
+				log.Infof("[TriggerPowerOffStorageNodes] is running in SSIE")
+			}
 			stepLog = "Check px status"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
@@ -7828,23 +7843,27 @@ func TriggerPowerOffStoragelessNodes(contexts *[]*scheduler.Context, recordChan 
 					UpdateOutcome(event, err)
 				}
 			})
-			stepLog = "Verify APP, volume status and check data integrity if enabled"
-			// //Wait for PX to be up on all worker nodes
-			Step(stepLog, func() {
-				log.Infof(stepLog)
-				for _, ctx := range *contexts {
-					log.Infof("Validating context: %v", ctx.App.Key)
-					ctx.SkipVolumeValidation = false
-					errorChan := make(chan error, errorChannelSize)
-					ValidateContext(ctx, &errorChan)
-					for err := range errorChan {
-						UpdateOutcome(event, err)
+			if !isSSIERun() {
+				stepLog = "Verify APP, volume status and check data integrity if enabled"
+				// //Wait for PX to be up on all worker nodes
+				Step(stepLog, func() {
+					log.Infof(stepLog)
+					for _, ctx := range *contexts {
+						log.Infof("Validating context: %v", ctx.App.Key)
+						ctx.SkipVolumeValidation = false
+						errorChan := make(chan error, errorChannelSize)
+						ValidateContext(ctx, &errorChan)
+						for err := range errorChan {
+							UpdateOutcome(event, err)
+						}
 					}
-				}
-				err := ValidateDataIntegrity(contexts)
-				UpdateOutcome(event, err)
-				log.InfoD("verify apps and volume completed")
-			})
+					err := ValidateDataIntegrity(contexts)
+					UpdateOutcome(event, err)
+					log.InfoD("verify apps and volume completed")
+				})
+			} else {
+				log.Infof("[TriggerPowerOffStoragelessNodes] is running in SSIE")
+			}
 			stepLog = "Check px status"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
