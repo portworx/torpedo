@@ -432,3 +432,61 @@ var _ = Describe("{PxBackupStatus}", Label(TestCaseLabelsMap[ValidateMetrics]...
 
 	})
 })
+
+// Verify PxBackupClusterCount from metrics
+var _ = Describe("{VerifyPxBackupClusterCount}", Label(TestCaseLabelsMap[ValidateMetrics]...), func() {
+	var (
+		contexts     []*scheduler.Context
+		pxbNamespace string
+		clusterCount int
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyPxBackupClusterCount", "Verify px-backup cluster count from metrics.", nil, 91949, Prikumar, Q2FY25)
+	})
+
+	// Validate px-backup cluster count from metrics
+	It("Validate px-backup cluster count from metrics", func() {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching admin ctx")
+
+		// Creating multiple clusters for backup
+		Step("Register cluster for backup", func() {
+			clusterCount = 4
+			clusterSuffix := fmt.Sprintf("%s-%s", "cluster", RandomString(5))
+			_, err = CreateDuplicateApplicationClusters(BackupOrgID, ctx, SourceClusterName, clusterCount, clusterSuffix)
+			dash.VerifyFatal(err, nil, "Creating duplicate cluster object")
+
+		})
+
+		// Check and validate the PxBackup_cluster_status count
+		Step("Verify the pxbackup cluster count from metrics endpoint", func() {
+			metricsName := "pxbackup_cluster_status"
+
+			//Get namespace of px-backup deployment
+			pxbNamespace, err = backup.GetPxBackupNamespace()
+			log.FailOnError(err, "Getting px-backup namespace")
+			log.Infof("namespace is [%v]", pxbNamespace)
+
+			//Fetch all datas from endpoint
+			allMetricsData, err := RunCurlCmd(pxbNamespace)
+			log.FailOnError(err, "Fetching metrics data")
+
+			//Get total px-backup cluster count
+			count, err := GetPxBackupClusterCount(allMetricsData, metricsName)
+			log.Infof("pxbackup_cluster_count", count)
+			dash.VerifyFatal(clusterCount, count, "Validate cluster count")
+			dash.VerifyFatal(err, nil, "Verify the status of the pxbackup_cluster_status count from metrics endpoint")
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		// Clean up the cluster
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
+
+	})
+})

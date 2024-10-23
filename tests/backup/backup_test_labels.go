@@ -598,6 +598,7 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	UserGroupManagement:                                                                {UserGroupManagementLabel, SystemTest, PxBackupLabel, S3BackupLocationLabel, FACDLabel, PxLabel, FADALabel},
 	ValidateFiftyVolumeBackups:                                                         {ValidateFiftyVolumeBackupsLabel, vanillaPipeline, ScaleTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
 	ValidateUserAccessLevel:                                                            {ValidateUserAccessLevelLabel},
+	ValidateMetrics:                                                                    {ValidateMetricsLabel},
 	VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules:                        {VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day0LockedBucketLabel, S3LockedBucket, AzureImmutableBucket},
 	VerifyBackupDeletionWhenRetentionIsMet:                                             {VerifyBackupDeletionWhenRetentionIsMetLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day0LockedBucketLabel, S3LockedBucket, AzureImmutableBucket},
 	VerifyRBACForAppAdmin:                                                              {VerifyRBACForAppAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel, gkePipeline},
@@ -614,5 +615,4 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	BackupShare: {BackupShareLabel},
 	SoftDeleteAndRecoverBackupOnContainerAndBlobLevel:       {SoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
 	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel: {DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
-	ValidateMetrics: {ValidateMetricsLabel},
 }

@@ -12569,3 +12569,40 @@ func DeleteAllBackupsForBackupLocationWithClusterReference(ctx context1.Context,
 	}
 	return nil
 }
+
+// GetPxBackupClusterCount to validate the PxBackup_cluster_status count from metrics
+func GetPxBackupClusterCount(lines []string, metricName string) (int, error) {
+	dataCount := 0
+	clusterCount := 0
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
+	clusterEnumerateReq := &api.ClusterEnumerateRequest{
+		OrgId: BackupOrgID,
+	}
+	enumerateRsp, err := Inst().Backup.EnumerateCluster(ctx, clusterEnumerateReq)
+	if err != nil {
+		return 0, err
+	}
+
+	for index, cluster := range enumerateRsp.GetClusters() {
+		log.InfoD("Verify cluster [%v] [%s]", index, cluster.GetName())
+		clusterCount++
+	}
+
+	log.InfoD("Cluster count [%v]", clusterCount)
+	pattern := fmt.Sprintf(`%s\{backfill="([^"]*)",cluster_uid="([^"]*)",error_reason="([^"]*)",name="([^"]*)",org_id="([^"]*)",timestamp_in_secs="([^"]*)",user_id="([^"]*)"\}`, metricName)
+	re := regexp.MustCompile(pattern)
+
+	for _, line := range lines {
+		if re.MatchString(line) {
+			log.Infof("Matched string [%v]", re.MatchString(line))
+			dataCount++
+		}
+	}
+	log.InfoD("data count [%v]", dataCount)
+
+	if clusterCount == dataCount {
+		log.InfoD("Total number of cluster is [%v]", dataCount)
+	}
+	return dataCount, nil
+}
