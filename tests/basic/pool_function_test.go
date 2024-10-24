@@ -23,6 +23,7 @@ import (
 	"github.com/pure-px/torpedo/pkg/testrailuttils"
 	"github.com/pure-px/torpedo/pkg/units"
 	. "github.com/pure-px/torpedo/tests"
+	. "github.com/onsi/gomega"
 )
 
 var (
@@ -2193,3 +2194,119 @@ var _ = Describe("{AddNewPoolWithPxRestart}", Label("p1", "hal_ops_disruption", 
 	})
 
 })
+
+var _ = Describe("{PoolExpandAddDriveWithPXRestart}", func() {
+	/*
+		1. Create volume and do IOs / deploy apps to do IOs
+		2. Expand pool by adding drive
+		3. After some randon time delay Restart the Portworx
+		4. Wait for node to comeup and check PX status
+		5. Verify pool expanded successfully
+	*/
+
+	var (
+		poolIDToResize                string
+		poolToResize                  *api.StoragePool
+		bufferSizeInGB, targetSizeGiB uint64
+		isJournalEnabled              bool
+		contexts                      []*scheduler.Context
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolExpandAddDriveWithPXRestart", "Pool Expand Add Drive With PX Restart", nil, 0)
+		isJournalEnabled, _ = IsJournalEnabled()
+		bufferSizeInGB = uint64(0)
+		if isJournalEnabled {
+			bufferSizeInGB = JournalDeviceSizeInGB
+		}
+	})
+
+	itLog := "AddDriveWithPXRestart"
+	It(itLog, func() {
+		stepLog := "Schedule Apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = scheduleApps()
+			time.Sleep(5 * time.Minute)
+			log.InfoD("schedule app succeed")
+		})
+
+		stepLog = "Select a pool to expand"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 128)
+			dash.VerifyFatal(len(poolIDToResize) > 0, true, fmt.Sprintf("Expected poolIDToResize to not be empty, pool id to resize %s", poolIDToResize))
+			poolToResize = getStoragePool(poolIDToResize)
+			log.Infof(fmt.Sprintf("Pool going to resize is UUID: [%s]", poolIDToResize))
+		})
+
+		originalSizeInBytes = poolToResize.TotalSize
+		targetSizeInBytes = originalSizeInBytes + 128*units.GiB // getDesiredSize(originalSizeInBytes)
+		targetSizeGiB = targetSizeInBytes / units.GiB
+
+		stepLog = "Expanding pool by adding drive of 128GiB"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("Current size of pool %s is %d GiB. Expand to %v GiB with type add-disk...",
+				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+			triggerPoolExpansion(poolIDToResize, targetSizeGiB+bufferSizeInGB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+			log.Infof(fmt.Sprintf("Pool expansion succeed [%s]", poolIDToResize))
+		})
+
+		//sleep for some random time
+		sleepTime := rand.Intn(100) + 1
+		time.Sleep(time.Second * (time.Duration(sleepTime)))
+		tNode, err := GetNodeWithGivenPoolID(poolToResize.Uuid)
+		dash.VerifyFatal(err, nil, " failed to get node deatils for the given PoolID")
+		selectedNode := *tNode
+
+		//Restart Portworx
+		Step("Restart Portworx", func() {
+
+			err := Inst().N.Systemctl(*tNode, "portworx.service", node.SystemctlOpts{
+				Action: "restart",
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         5 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				}})
+			Expect(err).NotTo(HaveOccurred())
+			log.Info("portworx restart succeed")
+		})
+
+		stepLog = fmt.Sprint("Wait for pool to resize")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+			log.Infof(fmt.Sprintf("Pool expansion succeed [%s]", poolIDToResize))
+		})
+
+		//Check PX status
+		stepLog = "Check PX status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info(stepLog)
+			status, err := Inst().V.GetPxctlStatus(selectedNode)
+			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", selectedNode.Name))
+			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+				selectedNode.Name, api.Status_STATUS_OK, status))
+			log.Infof("px status [%v]", status)
+
+		})
+
+		//verifying pool resize
+		stepLog = fmt.Sprintf("Verify pool resized")
+		Step("Verify pool resized", func() {
+			log.InfoD(stepLog)
+			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+			log.Info("pool resize verification done successfully")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		appsValidateAndDestroy(contexts)
+		AfterEachTest(contexts)
+	})
+
+})
+
