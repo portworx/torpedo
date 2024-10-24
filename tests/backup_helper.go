@@ -9635,9 +9635,14 @@ func validateCRCleanup(resourceInterface interface{},
 	var resourceNamespaces []string
 	var resourceName string
 	var orgID string
-	var isValidCluster = false
 
 	if currentObject, ok := resourceInterface.(*api.BackupObject); ok {
+		// Below code is added to skip the CR cleanup validation in case of synced backup
+		// For synced backup the cluster ref is nil and there are no CR associated for synced backup
+		if currentObject.ClusterRef == nil {
+			log.Infof("%s looks to be a synced backup with cluster name %s, skipping CR cleanup validation", currentObject.Name, currentObject.Cluster)
+			return nil
+		}
 		// Creating object and variables from backup object
 		getCRMethod = GetBackupCRs
 		clusterName = currentObject.Cluster
@@ -9655,29 +9660,6 @@ func validateCRCleanup(resourceInterface interface{},
 		}
 		orgID = currentObject.OrgId
 		resourceName = currentObject.Name
-	}
-
-	// Below code is added to skip the CR cleanup validation in case of synced backup
-	// For synced backup the cluster name has uuid suffix which is not supported/handled
-	// While creating the cluster object
-
-	// Fetching all clusters
-	enumerateClusterRequest := &api.ClusterEnumerateRequest{
-		OrgId: orgID,
-	}
-	enumerateClusterResponse, err := Inst().Backup.EnumerateAllCluster(ctx, enumerateClusterRequest)
-
-	// Comparing cluster names to the name from backup inspect response
-	for _, clusterObj := range enumerateClusterResponse.GetClusters() {
-		if clusterObj.Uid == clusterUid {
-			isValidCluster = true
-			break
-		}
-	}
-
-	if !isValidCluster {
-		log.Infof("%s looks to be a synced backup, skipping CR cleanup validation", clusterName)
-		return nil
 	}
 
 	currentAdminNamespace, _ := getCurrentAdminNamespace()
