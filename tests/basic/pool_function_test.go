@@ -2065,7 +2065,7 @@ var _ = Describe("{PoolResizeWithPXRestartWithTimeInterval}", Label("p1", "hal_o
 	})
 })
 
-var _ = Describe("{AddNewPoolWithPxRestart}", func() {
+var _ = Describe("{AddNewPoolWithPxRestart}", Label("p1", "hal_ops_disruption", "px_restart", "AddNewPool", "functional"), func() {
 	/*
 			Install portworx in a 5 node cluster
 		    Select a node and add drive to create new pool (pxctl sv drive add --newpool)
@@ -2132,7 +2132,7 @@ var _ = Describe("{AddNewPoolWithPxRestart}", func() {
 		log.FailOnError(err, fmt.Sprintf("Get Node pools failed on node %s", selectedNode.Name))
 
 		//random delay in secs
-		sleepTime := rand.Intn(60-10) + 10
+		sleepTime := rand.Intn(60-1) + 1
 		time.Sleep(time.Second * (time.Duration(sleepTime)))
 
 		stepLog = "Restart Portworx"
