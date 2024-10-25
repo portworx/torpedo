@@ -34,7 +34,7 @@ var (
 	storageNode   *node.Node
 	err           error
 )
-var _ = Describe("{PoolExpandMultipleTimes}", func() {
+var _ = Describe("{PoolExpandMultipleTimes}", Label("p0", "positive", "pool_ops", "px_ops", "PoolExpand", "AddDrive"), func() {
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -99,7 +99,7 @@ var _ = Describe("{PoolExpandMultipleTimes}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandSmoke}", func() {
+var _ = Describe("{PoolExpandSmoke}", Label("p0", "positive", "pool_ops", "px_ops", "PoolExpand"), func() {
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -167,7 +167,7 @@ var _ = Describe("{PoolExpandSmoke}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandRejectConcurrentDiskResize}", func() {
+var _ = Describe("{PoolExpandRejectConcurrentDiskResize}", Label("p1", "positive", "pool_ops", "px_ops", "PoolExpand", "ResizeDisk"), func() {
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -252,7 +252,7 @@ var _ = Describe("{PoolExpandRejectConcurrentDiskResize}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandRejectConcurrentDiskAdd}", func() {
+var _ = Describe("{PoolExpandRejectConcurrentDiskAdd}", Label("p1", "positive", "pool_ops", "px_ops", "PoolExpand", "AddDrive"), func() {
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -342,7 +342,7 @@ var _ = Describe("{PoolExpandRejectConcurrentDiskAdd}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandDiskResizeWithReboot}", func() {
+var _ = Describe("{PoolExpandDiskResizeWithReboot}", Label("p1", "negative", "pool_ops", "px_ops", "error_injection", "PoolExpand", "node_reboot", "ResizeDisk"), func() {
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -397,7 +397,7 @@ var _ = Describe("{PoolExpandDiskResizeWithReboot}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandDiskAddWithReboot}", func() {
+var _ = Describe("{PoolExpandDiskAddWithReboot}", Label("p1", "negative", "pool_ops", "error_injection", "PoolExpand", "node_reboot", "AddDrive"), func() {
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -452,7 +452,7 @@ var _ = Describe("{PoolExpandDiskAddWithReboot}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandDiskResizePXRestart}", func() {
+var _ = Describe("{PoolExpandDiskResizePXRestart}", Label("p1", "negative", "pool_ops", "error_injection", "PoolExpand", "px_restart", "ResizeDisk"), func() {
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -514,7 +514,7 @@ var _ = Describe("{PoolExpandDiskResizePXRestart}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandDiskAddPXRestart}", func() {
+var _ = Describe("{PoolExpandDiskAddPXRestart}", Label("p1", "negative", "pool_ops", "error_injection", "PoolExpand", "px_restart", "AddDrive"), func() {
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -576,7 +576,7 @@ var _ = Describe("{PoolExpandDiskAddPXRestart}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandInvalidSize}", func() {
+var _ = Describe("{PoolExpandInvalidSize}", Label("p2", "negative", "pool_ops", "PoolExpand"), func() {
 	// TestrailId: https://portworx.testrail.net/index.php?/tests/view/34542945
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpansionDiskResizeInvalidSize",
@@ -603,7 +603,7 @@ var _ = Describe("{PoolExpandInvalidSize}", func() {
 
 })
 
-var _ = Describe("{PoolExpandResizeInvalidPoolID}", func() {
+var _ = Describe("{PoolExpandResizeInvalidPoolID}", Label("p2", "negative", "pool_ops", "PoolExpand"), func() {
 	// TestrailID: https://portworx.testrail.net/index.php?/tests/view/34542946
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandResizeInvalidPoolID",
@@ -638,7 +638,7 @@ var _ = Describe("{PoolExpandResizeInvalidPoolID}", func() {
 
 })
 
-var _ = Describe("{PoolExpandDiskResizeAndVerifyFromOtherNode}", func() {
+var _ = Describe("{PoolExpandDiskResizeAndVerifyFromOtherNode}", Label("p0", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandDiskResizeAndVerifyFromOtherNode",
@@ -714,7 +714,7 @@ var _ = Describe("{PoolExpandDiskResizeAndVerifyFromOtherNode}", func() {
 
 })
 
-var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
+var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", Label("p0", "positive", "pool_ops", "PoolExpand", "AddDrive"), func() {
 	// TestrailID: https://portworx.testrail.net/index.php?/tests/view/34542840
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandDiskAddAndVerifyFromOtherNode",
@@ -790,7 +790,7 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 
 })
 
-var _ = Describe("{PoolExpandResizeWithSameSize}", func() {
+var _ = Describe("{PoolExpandResizeWithSameSize}", Label("p1", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 	// TestrailId: https://portworx.testrail.net/index.php?/tests/view/34542944
 
 	BeforeEach(func() {
@@ -826,7 +826,7 @@ var _ = Describe("{PoolExpandResizeWithSameSize}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", func() {
+var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", Label("p1", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 
 	var testrailID = 34542896
 	// TestrailId: https://portworx.testrail.net/index.php?/tests/view/34542896
@@ -894,7 +894,7 @@ var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", func() {
 
 })
 
-var _ = Describe("{PoolExpandResizePoolMaintenanceCycle}", func() {
+var _ = Describe("{PoolExpandResizePoolMaintenanceCycle}", Label("p1", "negative", "pool_ops", "error_injection", "PoolExpand", "NodeMaintenance"), func() {
 	var testrailID = 34542842
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542842
 
@@ -960,7 +960,7 @@ var _ = Describe("{PoolExpandResizePoolMaintenanceCycle}", func() {
 	})
 })
 
-var _ = Describe("{MaintenanceCycleDuringPoolExpandResizeDisk}", func() {
+var _ = Describe("{MaintenanceCycleDuringPoolExpandResizeDisk}", Label("p1", "negative", "pool_ops", "error_injection", "PoolExpand", "NodeMaintenance", "ResizeDisk"), func() {
 	var testrailID = 34542902
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542902
 
@@ -1039,7 +1039,7 @@ var _ = Describe("{MaintenanceCycleDuringPoolExpandResizeDisk}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandResizeDiskInMaintenanceMode}", func() {
+var _ = Describe("{PoolExpandResizeDiskInMaintenanceMode}", Label("p1", "negative", "pool_ops", "error_injection", "PoolExpand", "NodeMaintenance", "ResizeDisk"), func() {
 	var testrailID = 34542861
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542861
 
@@ -1119,7 +1119,7 @@ var _ = Describe("{PoolExpandResizeDiskInMaintenanceMode}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
+var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", Label("p1", "negative", "pool_ops", "error_injection", "PoolExpand", "NodeMaintenance", "AddDrive"), func() {
 	var testrailID = 34542888
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542888
 
@@ -1208,7 +1208,7 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 	})
 })
 
-var _ = Describe("{StorageFullPoolExpansion}", func() {
+var _ = Describe("{StorageFullPoolExpansion}", Label("p0", "positive", "pool_ops", "PoolExpand", "Throttling"), func() {
 	var (
 		appList      []string
 		selectedNode *node.Node
@@ -1268,7 +1268,7 @@ var _ = Describe("{StorageFullPoolExpansion}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandTestLimits}", func() {
+var _ = Describe("{PoolExpandTestLimits}", Label("p1", "positive", "pool_ops", "PoolExpand"), func() {
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -1327,7 +1327,7 @@ var _ = Describe("{PoolExpandTestLimits}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandAndCheckAlertsUsingResizeDisk}", func() {
+var _ = Describe("{PoolExpandAndCheckAlertsUsingResizeDisk}", Label("p0", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 
 	var testrailID = 34542894
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542894
@@ -1422,7 +1422,7 @@ func checkPoolShowMessageOutput(n *node.Node) bool {
 	return false
 }
 
-var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", func() {
+var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", Label("p0", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 
 	var testrailID = 34542904
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542904
@@ -1481,7 +1481,7 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", func() {
 
 })
 
-var _ = Describe("{CheckPoolLabelsAfterAddDisk}", func() {
+var _ = Describe("{CheckPoolLabelsAfterAddDisk}", Label("p0", "positive", "pool_ops", "PoolExpand", "AddDrive"), func() {
 
 	var testrailID = 34542906
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542906
@@ -1581,7 +1581,7 @@ var _ = Describe("{CheckPoolLabelsAfterAddDisk}", func() {
 
 })
 
-var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", func() {
+var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", Label("p1", "positive", "pool_ops", "PoolExpand", "AddDrive"), func() {
 
 	var testrailID = 34542894
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542894
@@ -1670,7 +1670,7 @@ var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", func() {
 
 })
 
-var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
+var _ = Describe("{PoolVolUpdateResizeDisk}", Label("p0", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 
 	// 1.The volumes originally have a HA of 2. We are adding a check at first to see if the HA is 3.
 	// 2.If it is, we decrease it to 2 and then increase it back to 3 again.
@@ -1753,7 +1753,7 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandStorageFullPoolResize}", func() {
+var _ = Describe("{PoolExpandStorageFullPoolResize}", Label("p1", "positive", "pool_ops", "px_ops", "PoolExpand", "Throttling"), func() {
 
 	//step1: feed p1 size GB I/O on the volume
 	//step2: After I/O done p1 should be offline and full, expand the pool p1 using resize-disk
@@ -1863,7 +1863,7 @@ var _ = Describe("{PoolExpandStorageFullPoolResize}", func() {
 	})
 })
 
-var _ = Describe("{DriveAddDifferentTypesAndResize}", func() {
+var _ = Describe("{DriveAddDifferentTypesAndResize}", Label("p1", "positive", "pool_ops", "px_ops", "PoolExpand", "AddDrive"), func() {
 
 	var testrailID = 34542903
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542903

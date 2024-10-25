@@ -17,7 +17,7 @@ import (
 	. "github.com/pure-px/torpedo/tests"
 )
 
-var _ = Describe("{DecommissionNode}", func() {
+var _ = Describe("{DecommissionNode}", Label("p0", "positive", "node_ops", "px_ops"), func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DecommissionNode", "Validate node decommission", nil, 0)
@@ -221,7 +221,7 @@ var _ = Describe("{DecommissionNode}", func() {
 	})
 })
 
-var _ = Describe("{KvdbDecommissionNode}", func() {
+var _ = Describe("{KvdbDecommissionNode}", Label("p0", "positive", "node_ops", "px_ops", "KVDBFailover"), func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("KvdbDecommissionNode", "Validate decommission of kvdb nodes", nil, 0)

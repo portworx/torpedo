@@ -37,7 +37,7 @@ import (
 var k8sCore = core.Instance()
 
 // This test performs basic test of starting an application and destroying it (along with storage)
-var _ = Describe("{SetupTeardown}", func() {
+var _ = Describe("{SetupTeardown}", Label("p1", "positive", "px_vol_ops", "shared_v4"), func() {
 	var testrailID = 35258
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35258
 	var runID int
@@ -157,7 +157,7 @@ func StartPureBackgroundWriteRoutines() func() {
 }
 
 // Volume Driver Plugin is down, unavailable - and the client container should not be impacted.
-var _ = Describe("{VolumeDriverDown}", func() {
+var _ = Describe("{VolumeDriverDown}", Label("p0", "negative", "px_vol_ops", "shared_v4", "px_restart"), func() {
 	var testrailID = 35259
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35259
 	var runID int
@@ -239,7 +239,7 @@ var _ = Describe("{VolumeDriverDown}", func() {
 
 // Volume Driver Plugin is down, unavailable on the nodes where the volumes are
 // attached - and the client container should not be impacted.
-var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
+var _ = Describe("{VolumeDriverDownAttachedNode}", Label("p0", "negative", "px_vol_ops", "shared_v4", "error_injection", "px_restart"), func() {
 	var testrailID = 35260
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35260
 	var runID int
@@ -311,7 +311,7 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 })
 
 // Volume Driver Plugin has crashed - and the client container should not be impacted.
-var _ = Describe("{VolumeDriverCrash}", func() {
+var _ = Describe("{VolumeDriverCrash}", Label("p0", "negative", "px_vol_ops", "shared_v4", "error_injection", "px_crash"), func() {
 	var testrailID = 35261
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35261
 	var runID int
@@ -369,7 +369,7 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 // Volume driver plugin is down and the client container gets terminated.
 // There is a lost unmount call in this case. When the volume driver is
 // back up, we should be able to detach and delete the volume.
-var _ = Describe("{VolumeDriverAppDown}", func() {
+var _ = Describe("{VolumeDriverAppDown}", Label("p1", "negative", "px_ops"), func() {
 	var testrailID = 35262
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35262
 	var runID int
@@ -443,7 +443,7 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 })
 
 // This test deletes all tasks of an application and checks if app converges back to desired state
-var _ = Describe("{AppScaleUpAndDown}", func() {
+var _ = Describe("{AppScaleUpAndDown}", Label("p1", "positive", "px_vol_ops"), func() {
 	var testrailID = 35263
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35264
 	var runID int
@@ -539,7 +539,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 })
 
 // This test scales up and down an application and checks if app has actually scaled accordingly
-var _ = Describe("{AppScaleUpAndDown}", func() {
+var _ = Describe("{AppScaleUpAndDown}", Label("p1", "positive", "px_vol_ops"), func() {
 	var testrailID = 35264
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35264
 	var runID int
@@ -625,7 +625,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 	})
 })
 
-var _ = Describe("{CordonDeployDestroy}", func() {
+var _ = Describe("{CordonDeployDestroy}", Label("p1", "negative", "px_ops"), func() {
 	var testrailID = 54373
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54373
 	var runID int
@@ -699,7 +699,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 	})
 })
 
-var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
+var _ = Describe("{CordonStorageNodesDeployDestroy}", Label("p1", "negative", "px_ops"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("CordonStorageNodesDeployDestroy", "Validate Cordon storage node , deploy and destroy app", nil, 0)
 
@@ -773,7 +773,7 @@ var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 	})
 })
 
-var _ = Describe("{SecretsVaultFunctional}", func() {
+var _ = Describe("{SecretsVaultFunctional}", Label("p1", "positive", "px_ops"), func() {
 	var testrailID, runID int
 	var contexts []*scheduler.Context
 	var provider string
@@ -822,7 +822,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 		}
 	})
 
-	var _ = Describe("{RunSecretsLogin}", func() {
+	var _ = Describe("{RunSecretsLogin}", Label("p2", "positive", "px_ops"), func() {
 		testrailID = 82774
 		// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/82774
 		JustBeforeEach(func() {
@@ -851,7 +851,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 	})
 })
 
-var _ = Describe("{VolumeCreatePXRestart}", func() {
+var _ = Describe("{VolumeCreatePXRestart}", Label("p1", "negative", "px_vol_ops", "px_restart"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("VolumeCreatePXRestart", "Validate restart PX while create and attach", nil, 0)
 
@@ -934,7 +934,7 @@ var _ = Describe("{VolumeCreatePXRestart}", func() {
 	})
 })
 
-var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
+var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", Label("p1", "positive", "px_vol_ops"), func() {
 	/*
 		1. Enable autofstrim, wait until autofstrim is actively trimming.
 		2. Run back to back cmd `pxctl c options update --auto-fstrim off` , then  `pxctl c options update --auto-fstrim on`
@@ -1189,7 +1189,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 })
 
 // Add a test to detach all the disks from a node and then reattach them to a different node
-var _ = Describe("{NodeDiskDetachAttach}", func() {
+var _ = Describe("{NodeDiskDetachAttach}", Label("p1", "positive", "node_ops", "error_injection", "drive_failure"), func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("NodeDiskDetachAttach", "Validate disk detach and attach", nil, 0)
@@ -1282,7 +1282,7 @@ var _ = Describe("{NodeDiskDetachAttach}", func() {
 	})
 })
 
-var _ = Describe("{DeployApps}", func() {
+var _ = Describe("{DeployApps}", Label("p2", "positive", "px_ops"), func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeployApps", "Validate Apps deployment", nil, 0)
@@ -1306,7 +1306,7 @@ var _ = Describe("{DeployApps}", func() {
 	})
 })
 
-var _ = Describe("{RestartMultipleStorageNodeOneKVDBMaster}", func() {
+var _ = Describe("{RestartMultipleStorageNodeOneKVDBMaster}", Label("p1", "negative", "pc_ops", "kvdb_ops", "error_injection", "px_restart", "KVDBFailover"), func() {
 	/*
 		Restart Multiple Storage Nodes with one KVDB Master in parallel and wait for the node to come back online
 		https://portworx.atlassian.net/browse/PTX-17618
@@ -1440,7 +1440,7 @@ var _ = Describe("{RestartMultipleStorageNodeOneKVDBMaster}", func() {
 	})
 })
 
-var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
+var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", Label("p1", "negative", "kvdb_ops", "px_restart", "KVDBFailover"), func() {
 	/*
 		KVDB failover when lots of snap create/delete, volume inspect requests are coming
 		https://portworx.atlassian.net/browse/PTX-17729
@@ -1630,7 +1630,7 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 })
 
 // Kubelet stopped on the nodes - and the client container should not be impacted.
-var _ = Describe("{StopKubeletOnNodes}", func() {
+var _ = Describe("{StopKubeletOnNodes}", Label("p0", "negative", "px_ops", "error_injection", "node_ops"), func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("StopKubeletOnNodes", "Validate PX after kubelet is restarted", nil, 0)
@@ -1695,7 +1695,7 @@ var _ = Describe("{StopKubeletOnNodes}", func() {
 
 // This test restarts master nodes too and hence this test should be enabled where torpedo is ran using
 // ginkgo command on the jenkins agent
-var _ = Describe("{KubeClusterRestart}", func() {
+var _ = Describe("{KubeClusterRestart}", Label("p1", "negative", "error_injection", "node_ops"), func() {
 	var testrailID = 86010
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/86010
 	var runID int
@@ -1811,7 +1811,7 @@ var _ = Describe("{KubeClusterRestart}", func() {
 	})
 })
 
-var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
+var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", Label("p1", "positive", "error_injection", "px_ops"), func() {
 	JustBeforeEach(func() {
 		// https://purestorage.atlassian.net/browse/PTX-24859
 		// https://portworx.testrail.net/index.php?/cases/view/300005
@@ -1854,7 +1854,7 @@ var _ = Describe("{VerifyNoPxRestartDueToPxPodStop}", func() {
 })
 
 // Kubelet stopped on the nodes - and the client container should not be impacted.
-var _ = Describe("{PerformStorageVMotions}", func() {
+var _ = Describe("{PerformStorageVMotions}", Label("p0", "positive", "node_ops", "pool_ops"), func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformStorageVMotions", "Perform Storage Vmotion and Validate PX", nil, 0)
@@ -1973,7 +1973,7 @@ var _ = Describe("{PerformStorageVMotions}", func() {
 		AfterEachTest(contexts)
 	})
 })
-var _ = Describe("{DrainAllNodes}", Label("p1", "node_ops"), func() {
+var _ = Describe("{DrainAllNodes}", Label("p2", "positive", "node_ops"), func() {
 	/*
 			1. Schedule apps
 		    2. Pick one node

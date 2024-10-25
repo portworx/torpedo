@@ -2,9 +2,10 @@ package tests
 
 import (
 	"fmt"
-	"github.com/pure-px/torpedo/pkg/log"
 	"math/rand"
 	"time"
+
+	"github.com/pure-px/torpedo/pkg/log"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -27,7 +28,7 @@ const (
 // Legacy Shared Volume Create
 // Automatically it should get created as Sharedv4 service volume.
 
-var _ = Describe("{LegacySharedVolumeCreate}", func() {
+var _ = Describe("{LegacySharedVolumeCreate}", Label("p0", "positive", "px_ops", "shared_v4"), func() {
 	var testrailID = 296369
 	// https://portworx.testrail.net/index.php?/cases/view/296369
 
@@ -233,7 +234,7 @@ func deleteSnapshotsAndClones(volMap map[string]bool, snapshotSuffix, cloneSuffi
 // Create Legacy Shared Volumes.
 // Turn on Migration, no Apps required, volumes should get converted to sharedv4 service volume.
 
-var _ = Describe("{LegacySharedVolumeMigrate_CreateIdle}", func() {
+var _ = Describe("{LegacySharedVolumeMigrate_CreateIdle}", Label("p0", "positive", "px_ops", "px_vol_ops", "shared_v4"), func() {
 	var testrailID = 296370
 	volumeName := "legacy-shared-volume-idle"
 	JustBeforeEach(func() {
@@ -279,7 +280,7 @@ var _ = Describe("{LegacySharedVolumeMigrate_CreateIdle}", func() {
 // Basic migration Test case:
 // Create apps, start migration.
 // apps should restart, shared volume should be
-var _ = Describe("{LegacySharedVolumeAppMigrateBasic}", func() {
+var _ = Describe("{LegacySharedVolumeAppMigrateBasic}", Label("p0", "positive", "px_ops", "px_vol_ops", "shared_v4"), func() {
 	var testrailID = 296374
 	var runID int
 	JustBeforeEach(func() {
@@ -324,7 +325,7 @@ var _ = Describe("{LegacySharedVolumeAppMigrateBasic}", func() {
 	})
 })
 
-var _ = Describe("{LegacySharedToSharedv4ServiceMigrationBasicMany}", func() {
+var _ = Describe("{LegacySharedToSharedv4ServiceMigrationBasicMany}", Label("p0", "positive", "px_ops", "px_vol_ops", "shared_v4"), func() {
 	var testrailID = 296728
 	var runID int
 	JustBeforeEach(func() {
@@ -370,7 +371,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationBasicMany}", func() {
 	})
 })
 
-var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart}", func() {
+var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart}", Label("p0", "negative", "px_ops", "error_injection", "px_vol_ops", "shared_v4"), func() {
 	var testrailID = 296736
 	var runID int
 	JustBeforeEach(func() {
@@ -428,7 +429,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart}", func() {
 	})
 })
 
-var _ = Describe("{LegacySharedToSharedv4ServicePxRestart}", func() {
+var _ = Describe("{LegacySharedToSharedv4ServicePxRestart}", Label("p1", "negative", "px_ops", "error_injection", "px_vol_ops", "shared_v4", "px_restart"), func() {
 	var testrailID = 296732
 	var runID int
 	JustBeforeEach(func() {
@@ -489,7 +490,7 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestart}", func() {
 	})
 })
 
-var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
+var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", Label("p1", "negative", "node_ops", "error_injection", "px_ops", "px_vol_ops", "shared_v4", "RecycleNode"), func() {
 	var testrailID = 297580
 	var runID int
 	var pxNode node.Node
@@ -602,7 +603,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", func() {
 	})
 })
 
-var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator}", func() {
+var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator}", Label("p1", "negative", "error_injection", "px_ops", "px_vol_ops", "shared_v4", "px_restart"), func() {
 	var testrailID = 296732
 	var runID int
 	JustBeforeEach(func() {
@@ -668,7 +669,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator}", func() {
 	})
 })
 
-var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() {
+var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", Label("p0", "positive", "snapshot_ops", "px_ops", "shared_v4"), func() {
 	var testrailID = 296731
 	var runID int
 	podMap := make(map[types.UID]bool)
@@ -723,7 +724,7 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", func() 
 	})
 })
 
-var _ = Describe("{LegacySharedToSharedv4ServicePxRestartAll}", func() {
+var _ = Describe("{LegacySharedToSharedv4ServicePxRestartAll}", Label("p1", "negative", "px_ops", "error_injection", "px_vol_ops", "shared_v4", "multiple_px_crash"), func() {
 	var testrailID = 297579
 	var runID int
 	JustBeforeEach(func() {
@@ -785,7 +786,7 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestartAll}", func() {
 	})
 })
 
-var _ = Describe("{LegacySharedToSharedv4ServicePxKill}", func() {
+var _ = Describe("{LegacySharedToSharedv4ServicePxKill}", Label("p0", "negative", "error_injection", "px_ops", "px_vol_ops", "shared_v4", "multiple_px_crash"), func() {
 	var testrailID = 297579
 	var runID int
 	JustBeforeEach(func() {
@@ -886,7 +887,7 @@ func writeHelper(pxNode node.Node, volumeName string) error {
 }
 
 // Migrate when volume state is ha-update.
-var _ = Describe("{LegacySharedVolumeAppMigrateHAupdating}", func() {
+var _ = Describe("{LegacySharedVolumeAppMigrateHAupdating}", Label("p0", "positive", "px_ops", "px_vol_ops", "shared_v4"), func() {
 	var testrailID = 297584
 	volumeName := "legacy-shared-volume-haupdate"
 	JustBeforeEach(func() {
@@ -943,7 +944,7 @@ var _ = Describe("{LegacySharedVolumeAppMigrateHAupdating}", func() {
 })
 
 // Migrate when volume state is Degraded.
-var _ = Describe("{LegacySharedVolumeAppDegraded}", func() {
+var _ = Describe("{LegacySharedVolumeAppDegraded}", Label("p1", "positive", "px_ops", "px_vol_ops", "shared_v4"), func() {
 	var testrailID = 297585
 	var runID int
 	JustBeforeEach(func() {
@@ -1026,7 +1027,7 @@ var _ = Describe("{LegacySharedVolumeAppDegraded}", func() {
 })
 
 // Migrate when volume state is Out of Quorum.
-var _ = Describe("{LegacySharedVolumeAppOutofQuorum}", func() {
+var _ = Describe("{LegacySharedVolumeAppOutofQuorum}", Label("p1", "positive", "px_ops", "px_vol_ops", "shared_v4"), func() {
 	var testrailID = 297586
 	var runID int
 	JustBeforeEach(func() {

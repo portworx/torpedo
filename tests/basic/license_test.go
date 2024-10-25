@@ -85,7 +85,7 @@ var (
 )
 
 // This test performs basic test of starting an application and destroying it (along with storage)
-var _ = Describe("{BasicEssentialsFaFbTest}", func() {
+var _ = Describe("{BasicEssentialsFaFbTest}", Label("p2", "positive", "license"), func() {
 	var testrailID = 56354
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/56354
 	var runID int
@@ -131,7 +131,7 @@ var _ = Describe("{BasicEssentialsFaFbTest}", func() {
 })
 
 // This test performs basic reboot test of starting an application and destroying it (along with storage)
-var _ = Describe("{BasicEssentialsRebootTest}", func() {
+var _ = Describe("{BasicEssentialsRebootTest}", Label("p1", "negative", "license", "node_reboot"), func() {
 	var testrailID = 56356
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/56356
 	var runID int
@@ -220,7 +220,7 @@ var _ = Describe("{BasicEssentialsRebootTest}", func() {
 })
 
 // This test performs basic limit test of starting an application and destroying it (along with storage)
-var _ = Describe("{BasicEssentialsAggrSnapLimitTest}", func() {
+var _ = Describe("{BasicEssentialsAggrSnapLimitTest}", Label("p1", "positive", "license"), func() {
 	var testrailID = 56355
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/56355
 	var runID int
@@ -287,7 +287,7 @@ var _ = Describe("{BasicEssentialsAggrSnapLimitTest}", func() {
 5. Waits for next metering interval
 6. Verifies that Essentials lic gets renewed again
 */
-var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
+var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", Label("p1", "negative", "license"), func() {
 	var testrailID = 56357
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/56357
 	var runID int
@@ -409,7 +409,7 @@ This Test:
 2. Restarts PX on all nodes
 3. Expects PX-Essentials FA/FB lic does not falls back to PX-Essentials license
 */
-var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
+var _ = Describe("{DeleteSecretRebootAllNodes}", Label("p0", "negative", "license", "node_reboot"), func() {
 	var testrailID = 84245
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/84245
 	var runID int
@@ -559,7 +559,7 @@ var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
 })
 
 // This test performs basic test disabling callhome and checking if the licnse stays valid
-var _ = Describe("{DisableCallHomeTest}", func() {
+var _ = Describe("{DisableCallHomeTest}", Label("p1", "negative", "license"), func() {
 	var testrailID = 84245
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/84245
 	var runID int
@@ -677,7 +677,7 @@ var _ = Describe("{DisableCallHomeTest}", func() {
 })
 
 // LicenseValidation validates license summary against expected SKU and features
-var _ = Describe("{LicenseValidation}", func() {
+var _ = Describe("{LicenseValidation}", Label("p1", "positive", "license", "Upgrade", "UpgradeVolDriver"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("LicenseValidation", "Validates license summary against expected SKU and features", nil, 0)
 	})
@@ -698,7 +698,7 @@ var _ = Describe("{LicenseValidation}", func() {
 // Getting Volume License Summary
 // Validating License Summary with pxEssentials License defined
 // and destroying it (along with storage)
-var _ = Describe("{BasicEssentialsTest}", Label("pxEssentials", "p1", "essentialLicense"), func() {
+var _ = Describe("{BasicEssentialsTest}", Label("p2", "positive", "license"), func() {
 	var testrailID = 53350
 	var runID int
 	JustBeforeEach(func() {

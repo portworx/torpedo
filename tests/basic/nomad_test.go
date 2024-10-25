@@ -14,7 +14,7 @@ import (
 	. "github.com/pure-px/torpedo/tests"
 )
 
-var _ = Describe("{ListNodesOnNomadCluster}", func() {
+var _ = Describe("{ListNodesOnNomadCluster}", Label("p2", "positive", "Nomad"), func() {
 	var client *nomad.NomadClient
 	var err error
 	JustBeforeEach(func() {
@@ -34,7 +34,7 @@ var _ = Describe("{ListNodesOnNomadCluster}", func() {
 	})
 })
 
-var _ = Describe("{CreateAndValidateNomadVolume}", func() {
+var _ = Describe("{CreateAndValidateNomadVolume}", Label("p2", "positive", "Nomad"), func() {
 	var client *nomad.NomadClient
 	var err error
 	var volumes []*api.CSIVolume
@@ -89,7 +89,7 @@ var _ = Describe("{CreateAndValidateNomadVolume}", func() {
 	})
 })
 
-var _ = Describe("{RunFioJobOnNomad}", func() {
+var _ = Describe("{RunFioJobOnNomad}", Label("p2", "positive", "Nomad"), func() {
 	var client *nomad.NomadClient
 	var err error
 	var volumeID string
@@ -162,7 +162,7 @@ var _ = Describe("{RunFioJobOnNomad}", func() {
 	})
 })
 
-var _ = Describe("{RunMultipleFioJobsOnNomad}", func() {
+var _ = Describe("{RunMultipleFioJobsOnNomad}", Label("p2", "positive", "Nomad"), func() {
 	var client *nomad.NomadClient
 	var err error
 	var volumeIDs []string
@@ -265,7 +265,7 @@ var _ = Describe("{RunMultipleFioJobsOnNomad}", func() {
 	})
 })
 
-var _ = Describe("{ScaleFioJobOnNomad}", func() {
+var _ = Describe("{ScaleFioJobOnNomad}", Label("p2", "positive", "Nomad"), func() {
 	var client *nomad.NomadClient
 	var err error
 	var jobID string
@@ -359,7 +359,7 @@ var _ = Describe("{ScaleFioJobOnNomad}", func() {
 	})
 })
 
-var _ = Describe("{RunFioJobWithSnapshotOperationsOnNomad}", func() {
+var _ = Describe("{RunFioJobWithSnapshotOperationsOnNomad}", Label("p2", "positive", "Nomad"), func() {
 	var client *nomad.NomadClient
 	var err error
 	var volumeID, snapshotID, jobID string
@@ -453,7 +453,7 @@ var _ = Describe("{RunFioJobWithSnapshotOperationsOnNomad}", func() {
 	})
 })
 
-var _ = Describe("{RunMultipleFioJobsOnSharedRWXVolume}", func() {
+var _ = Describe("{RunMultipleFioJobsOnSharedRWXVolume}", Label("p2", "positive", "Nomad"), func() {
 	var client *nomad.NomadClient
 	var err error
 	var volumeID, pluginID string
@@ -562,7 +562,7 @@ var _ = Describe("{RunMultipleFioJobsOnSharedRWXVolume}", func() {
 	})
 })
 
-var _ = Describe("{KillPxWhileAppsAreRunning}", func() {
+var _ = Describe("{KillPxWhileAppsAreRunning}", Label("p2", "negative", "Nomad"), func() {
 	var client *nomad.NomadClient
 	var err error
 	var volumeID, pluginID string
@@ -693,7 +693,7 @@ var _ = Describe("{KillPxWhileAppsAreRunning}", func() {
 	})
 })
 
-var _ = Describe("{AdjustVolumeReplFactor}", func() {
+var _ = Describe("{AdjustVolumeReplFactor}", Label("p2", "negative", "Nomad"), func() {
 	var client *nomad.NomadClient
 	var err error
 	var volumeID, pluginID string
@@ -747,7 +747,7 @@ var _ = Describe("{AdjustVolumeReplFactor}", func() {
 	})
 })
 
-var _ = Describe("{LongStopPxWhileAppsAreRunning}", func() {
+var _ = Describe("{LongStopPxWhileAppsAreRunning}", Label("p2", "negative", "Nomad"), func() {
 	var client *nomad.NomadClient
 	var err error
 	var volumeID, pluginID string
@@ -878,7 +878,7 @@ var _ = Describe("{LongStopPxWhileAppsAreRunning}", func() {
 	})
 })
 
-var _ = Describe("{RebootNodeWhileAppsAreRunning}", func() {
+var _ = Describe("{RebootNodeWhileAppsAreRunning}", Label("p2", "negative", "Nomad"), func() {
 	var client *nomad.NomadClient
 	var err error
 	var volumeID, pluginID string
@@ -1014,7 +1014,7 @@ var _ = Describe("{RebootNodeWhileAppsAreRunning}", func() {
 	})
 })
 
-var _ = Describe("{AdjustVolumeReplFactorAndVolumeResize}", func() {
+var _ = Describe("{AdjustVolumeReplFactorAndVolumeResize}", Label("p2", "negative", "Nomad"), func() {
 	var client *nomad.NomadClient
 	var err error
 	var volumeID, pluginID string
@@ -1076,7 +1076,7 @@ var _ = Describe("{AdjustVolumeReplFactorAndVolumeResize}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandWhileAppsAreRunning}", func() {
+var _ = Describe("{PoolExpandWhileAppsAreRunning}", Label("p2", "negative", "Nomad"), func() {
 	var client *nomad.NomadClient
 	var err error
 	var volumeID, pluginID string

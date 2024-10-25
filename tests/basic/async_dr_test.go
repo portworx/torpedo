@@ -77,7 +77,7 @@ type failoverFailbackParam struct {
 
 // This test performs basic test of starting an application, creating cluster pair,
 // and migrating application to the destination clsuter
-var _ = Describe("{MigrateDeployment}", func() {
+var _ = Describe("{MigrateDeployment}", Label("p0", "positive", "AsyncDR"), func() {
 	testrailID = 50803
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/50803
 	BeforeEach(func() {
@@ -187,7 +187,7 @@ var _ = Describe("{MigrateDeployment}", func() {
 	})
 })
 
-var _ = Describe("{MigrateDeploymentMetroAsync}", func() {
+var _ = Describe("{MigrateDeploymentMetroAsync}", Label("p0", "positive", "MetroDR"), func() {
 	testrailID = 297595
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/297595
 	BeforeEach(func() {
@@ -291,7 +291,7 @@ var _ = Describe("{MigrateDeploymentMetroAsync}", func() {
 	})
 })
 
-var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncSingle}", func() {
+var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncSingle}", Label("p0", "positive", "AsyncDR"), func() {
 	testrailID = 296255
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296255
 	BeforeEach(func() {
@@ -318,7 +318,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncSingle}", func() {
 	})
 })
 
-var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncSkipSourceOperations}", func() {
+var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncSkipSourceOperations}", Label("p1", "positive", "AsyncDR"), func() {
 	testrailID = 296256
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296256
 	BeforeEach(func() {
@@ -345,7 +345,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncSkipSourceOperatio
 	})
 })
 
-var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncIncludeNs}", func() {
+var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncIncludeNs}", Label("p1", "positive", "AsyncDR"), func() {
 	testrailID = 296368
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296368
 	BeforeEach(func() {
@@ -372,7 +372,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncIncludeNs}", func(
 	})
 })
 
-var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncExcludeNs}", func() {
+var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncExcludeNs}", Label("p0", "positive", "AsyncDR"), func() {
 	testrailID = 296367
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296367
 	BeforeEach(func() {
@@ -399,7 +399,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncExcludeNs}", func(
 	})
 })
 
-var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncMultiple}", func() {
+var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncMultiple}", Label("p1", "positive", "AsyncDR", "MiniScale"), func() {
 	testrailID = 296255
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296255
 	BeforeEach(func() {
@@ -426,7 +426,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncMultiple}", func()
 	})
 })
 
-var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroSingle}", func() {
+var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroSingle}", Label("p0", "positive", "MetroDR"), func() {
 	testrailID = 296291
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296291
 	BeforeEach(func() {
@@ -457,7 +457,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroSingle}", func() {
 	})
 })
 
-var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroMultiple}", func() {
+var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroMultiple}", Label("p0", "positive", "MetroDR", "MiniScale"), func() {
 	testrailID = 296291
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296291
 	BeforeEach(func() {
@@ -488,7 +488,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroMultiple}", func()
 	})
 })
 
-var _ = Describe("{StorkctlPerformFailoverFailbackPostgresql}", func() {
+var _ = Describe("{StorkctlPerformFailoverFailbackPostgresql}", Label("p1", "positive", "AsyncDR"), func() {
 	testrailID = 296287
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296287
 	BeforeEach(func() {
@@ -529,7 +529,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackPostgresql}", func() {
 	})
 })
 
-var _ = Describe("{StorkctlPerformFailoverFailbackElasticSearch}", func() {
+var _ = Describe("{StorkctlPerformFailoverFailbackElasticSearch}", Label("p1", "positive", "AsyncDR"), func() {
 	testrailID = 296285
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296285
 	BeforeEach(func() {
@@ -569,7 +569,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackElasticSearch}", func() {
 	})
 })
 
-var _ = Describe("{StorkctlPerformFailoverFailbackPostgresqlClusterwide}", func() {
+var _ = Describe("{StorkctlPerformFailoverFailbackPostgresqlClusterwide}", Label("p1", "positive", "AsyncDR"), func() {
 	testrailID = 297919
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/297919
 	BeforeEach(func() {
@@ -610,7 +610,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackPostgresqlClusterwide}", func(
 	})
 })
 
-var _ = Describe("{StorkctlPerformFailoverFailbackeckEsClusterwide}", func() {
+var _ = Describe("{StorkctlPerformFailoverFailbackeckEsClusterwide}", Label("p1", "positive", "AsyncDR"), func() {
 	testrailID = 297921
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/297921
 	BeforeEach(func() {
@@ -651,7 +651,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackeckEsClusterwide}", func() {
 	})
 })
 
-var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", func() {
+var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", Label("p2", "positive", "AsyncDR", "Upgrade"), func() {
 	BeforeEach(func() {
 		if !kubeConfigWritten {
 			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
@@ -779,7 +779,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", func() {
 	})
 })
 
-var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", func() {
+var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", Label("p2", "positive", "AsyncDR", "Upgrade"), func() {
 	BeforeEach(func() {
 		if !kubeConfigWritten {
 			// Write kubeconfig files after reading from the config maps created by torpedo deploy script

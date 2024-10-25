@@ -760,7 +760,7 @@ var _ = Describe("{ValidateVPSAffinityAndAntiAffinityConflict}", Label("p0", "po
 			log.Infof("Deleting the newly created labels from node")
 			for _, node := range nodes {
 				err = Inst().S.RemoveLabelOnNode(node, "zone")
-				log.FailOnError(err, "Failed to remove label from node")
+				log.FailOnError(err, "Failed to remove label from node.")
 			}
 		})
 	})

@@ -31,7 +31,7 @@ const (
 )
 
 // This test performs basic test of scaling up and down the asg cluster
-var _ = Describe("{ClusterScaleUpDown}", func() {
+var _ = Describe("{ClusterScaleUpDown}", Label("p0", "positive", "node_ops", "ClusterScale"), func() {
 	var testrailID = 58847
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58847
 	var runID int
@@ -126,7 +126,7 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 })
 
 // This test performs basic test of scaling up and down the asg cluster
-var _ = Describe("{ClusterScaleUpIncreasesMaxStorageNodesPerZone}", func() {
+var _ = Describe("{ClusterScaleUpIncreasesMaxStorageNodesPerZone}", Label("p0", "positive", "node_ops", "ClusterScale"), func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ClusterScaleUpIncreasesMaxStorageNodesPerZone", "Validate cluster nodes and storage nodes scale up", nil, testrailID)
@@ -233,7 +233,7 @@ var _ = Describe("{ClusterScaleUpIncreasesMaxStorageNodesPerZone}", func() {
 
 // This test randomly kills one volume driver node and ensures cluster remains
 // intact by ASG
-var _ = Describe("{ASGKillRandomNodes}", func() {
+var _ = Describe("{ASGKillRandomNodes}", Label("p0", "negative", "node_ops", "RecycleNode"), func() {
 	var testrailID = 58848
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58848
 	var runID int
@@ -433,7 +433,7 @@ func waitForIBMNodeTODeploy() error {
 	return err
 }
 
-var _ = Describe("{AddStorageNode}", func() {
+var _ = Describe("{AddStorageNode}", Label("p0", "positive", "node_ops", "ClusterScale"), func() {
 
 	var contexts []*scheduler.Context
 
@@ -562,7 +562,7 @@ var _ = Describe("{AddStorageNode}", func() {
 	})
 })
 
-var _ = Describe("{AddStoragelessNode}", func() {
+var _ = Describe("{AddStoragelessNode}", Label("p0", "positive", "node_ops", "ClusterScale"), func() {
 
 	var contexts []*scheduler.Context
 
@@ -672,7 +672,7 @@ var _ = Describe("{AddStoragelessNode}", func() {
 	})
 })
 
-var _ = Describe("{RecycleStorageDriverNode}", func() {
+var _ = Describe("{RecycleStorageDriverNode}", Label("p1", "negative", "node_ops", "RecycleNode"), func() {
 
 	var contexts []*scheduler.Context
 
@@ -792,7 +792,7 @@ var _ = Describe("{RecycleStorageDriverNode}", func() {
 	})
 })
 
-var _ = Describe("{RecycleAllStorageDriverNodes}", func() {
+var _ = Describe("{RecycleAllStorageDriverNodes}", Label("p1", "negative", "node_ops", "error_injection", "RecycleNode"), func() {
 
 	var contexts []*scheduler.Context
 

@@ -28,7 +28,7 @@ const (
 	rtOptMeteringInterval      = "metering_interval_mins"
 )
 
-var _ = Describe("{PodMetricFunctional}", func() {
+var _ = Describe("{PodMetricFunctional}", Label("p0", "positive", "telemetry"), func() {
 	var testrailID, runID int
 	var contexts []*scheduler.Context
 	var namespacePrefix string
@@ -100,7 +100,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 		}
 
 		// Simple pod metric test
-		Describe("{PodMetricScaleTest}", func() {
+		Describe("{PodMetricScaleTest}", Label("p0", "positive", "telemetry", "MiniScale"), func() {
 			JustBeforeEach(func() {
 				// testrailID =
 			})

@@ -51,7 +51,7 @@ var tags = map[string]string{
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
 // schedules apps and wait until workload is completed on the volumes and then validates
 // PVC sizes of the volumes
-var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), Label("p0", "positive", "autopilot", "PvcResize"), func() {
 	var testrailID = 85442
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/85442
 	var runID int
@@ -128,7 +128,7 @@ var autopilotPVCRule = []apapi.AutopilotRule{
 }
 
 // This testsuite is used applying autopilot rules on a detached volume and validates the size of PVC
-var _ = Describe(fmt.Sprintf("{%sPVCVolDetached}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sPVCVolDetached}", testSuiteName), Label("p0", "positive", "autopilot", "PvcResize"), func() {
 	var testrailID = 93300
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/93300
 	var runID int
@@ -195,7 +195,7 @@ var _ = Describe(fmt.Sprintf("{%sPVCVolDetached}", testSuiteName), func() {
 })
 
 // This testsuite is used applying autopilot rules on a detached volume and validates the size of PVC
-var _ = Describe(fmt.Sprintf("{%sToggleAutopilot}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sToggleAutopilot}", testSuiteName), Label("p1", "positive", "autopilot", "PvcResize"), func() {
 	var testrailID = 93323
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/93323
 	var runID int
@@ -281,7 +281,7 @@ var _ = Describe(fmt.Sprintf("{%sToggleAutopilot}", testSuiteName), func() {
 })
 
 // This testsuite is for testing, if disabling prometheus in STC disables autopilot
-var _ = Describe(fmt.Sprintf("{%sTogglePrometheus}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sTogglePrometheus}", testSuiteName), Label("p1", "positive", "autopilot", "PvcResize"), func() {
 	var testrailID = 93317
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/93317
 	var runID int
@@ -359,7 +359,7 @@ var _ = Describe(fmt.Sprintf("{%sTogglePrometheus}", testSuiteName), func() {
 var pvcRule = aututils.PVCRuleByTotalSize(10, 100, "20Gi")
 
 // This test checks if removing the label from PVC will not trigger a rule, but when added back it should update the PVC
-var _ = Describe(fmt.Sprintf("{%sPVCLabelChange}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sPVCLabelChange}", testSuiteName), Label("p1", "positive", "autopilot", "PvcResize"), func() {
 	var testrailID = 93307
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/93307
 	var runID int
@@ -436,7 +436,7 @@ var _ = Describe(fmt.Sprintf("{%sPVCLabelChange}", testSuiteName), func() {
 })
 
 // This testsuite validates the autopilot rule can be changed to apply new values to existing rule
-var _ = Describe(fmt.Sprintf("{%sPVCUpdateSize}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sPVCUpdateSize}", testSuiteName), Label("p0", "positive", "autopilot", "PvcResize", "VolResize"), func() {
 	var testrailID = 93308
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/93308
 	var runID int
@@ -520,7 +520,7 @@ var _ = Describe(fmt.Sprintf("{%sPVCUpdateSize}", testSuiteName), func() {
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
 // schedules apps and wait until workload is completed on the volumes. Restarts volume
 // driver and validates PVC sizes of the volumes
-var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), Label("p1", "negative", "autopilot", "error_injection", "shared_v4", "px_restart"), func() {
 	var testrailID = 85443
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/85443
 	var runID int
@@ -613,7 +613,7 @@ var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), func() {
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), Label("p1", "negative", "autopilot", "error_injection"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), "Restart Autopilot test", nil, 0)
 	})
@@ -714,7 +714,7 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 })
 
 // This test is used for performing upgrade autopilot when autopilot rules in ActionInProgress state
-var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), Label("p0", "positive", "autopilot", "Upgrade"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), "Upgrade Autopilot test", nil, 0)
 	})

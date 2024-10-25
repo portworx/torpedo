@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -10,7 +11,7 @@ import (
 	. "github.com/pure-px/torpedo/tests"
 )
 
-var _ = Describe("{CrashOneNode}", func() {
+var _ = Describe("{CrashOneNode}", Label("p1", "negative", "node_ops", "px_crash"), func() {
 	var testrailID = 35255
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35255
 	var runID int
