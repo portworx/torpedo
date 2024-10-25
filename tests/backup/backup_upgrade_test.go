@@ -304,7 +304,10 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			accessLevel          BackupAccess
 			clusterLevel         bool
 		}
-		runClusterShareTests bool
+		clusterShareOnPremCluster         []string
+		isClusterShareSupportedForAllRole bool
+		roles                             []backup.PxBackupRole
+		runClusterShareTests              bool
 		// SuperAdmin testcase variables
 		superAdminScheduledAppContexts   []*scheduler.Context
 		superAdminCloudCredName          string
@@ -1016,6 +1019,12 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		Step("validate backup share feature pre- and post-upgrade, including cluster share, with a different set of users and multiple access types", func() {
 			log.InfoD("Validating backup share feature pre- and post-upgrade, including cluster share, with a different set of users and multiple access types")
 			runClusterShareTests = true
+			clusterShareOnPremCluster = []string{"vanilla", "openshift"}
+			if Contains(clusterShareOnPremCluster, GetClusterProvider()) {
+				isClusterShareSupportedForAllRole = true
+			} else {
+				isClusterShareSupportedForAllRole = false
+			}
 			Step("Scheduling applications for Cluster Share", func() {
 				log.InfoD("Scheduling applications for Cluster Share")
 				clusterShareScheduledAppContexts = make([]*scheduler.Context, 0)
@@ -1039,16 +1048,31 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 
 			Step(fmt.Sprintf("Create %d users with random roles and backup share , cluster share config", clusterShareNumberOfUsers), func() {
 				log.InfoD(fmt.Sprintf("Creating %d users with random role and backup share , cluster share config", clusterShareNumberOfUsers))
-				roles := [4]backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.ApplicationUser}
-				randomRole := roles[rand.Intn(len(roles))]
-				for _, user := range CreateUsers(clusterShareNumberOfUsers) {
+				if isClusterShareSupportedForAllRole {
+					roles = []backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.SuperAdmin, backup.ApplicationUser}
+				} else {
+					roles = []backup.PxBackupRole{backup.SuperAdmin, backup.InfrastructureOwner}
+				}
+				//Set of user who is sharing the cluster
+				for _, user := range CreateUsers(clusterShareNumberOfUsers / 2) {
+					randomRole := roles[rand.Intn(len(roles))]
 					err := backup.AddRoleToUser(user, randomRole, fmt.Sprintf("Adding %v role to %s", randomRole, user))
 					log.FailOnError(err, "failed to add role %s to the user %s", randomRole, user)
 					log.Infof(fmt.Sprintf("User %s is created with role %v", user, randomRole))
 					clusterShareNonAdminUsers = append(clusterShareNonAdminUsers, user)
 				}
-				for i, nonAdminUser := range clusterShareNonAdminUsers {
-					clusterShareUserNamespaceMap[nonAdminUser] = clusterShareBackedUpNamespaces[i]
+				//Set of user where the cluster is shared.
+				roles = []backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.ApplicationUser}
+				for _, user := range CreateUsers(clusterShareNumberOfUsers / 2) {
+					randomRole := roles[rand.Intn(len(roles))]
+					err := backup.AddRoleToUser(user, randomRole, fmt.Sprintf("Adding %v role to %s", randomRole, user))
+					log.FailOnError(err, "failed to add role %s to the user %s", randomRole, user)
+					log.Infof(fmt.Sprintf("User %s is created with role %v", user, randomRole))
+					clusterShareNonAdminUsers = append(clusterShareNonAdminUsers, user)
+				}
+
+				for i, user := range clusterShareNonAdminUsers {
+					clusterShareUserNamespaceMap[user] = clusterShareBackedUpNamespaces[i]
 				}
 				log.Infof("Share config for cluster level and backup level share")
 				clusterShareUserShareConfigs = []struct {

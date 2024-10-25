@@ -26,52 +26,68 @@ import (
 // This testcase verifies cluster share feature with large number of users and larger number of clusters
 var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCaseLabelsMap[ClusterShareWithLargeNumberOfUsersAndClusters]...), func() {
 	var (
-		scheduledAppContexts             []*scheduler.Context
-		adminCloudCredName               string
-		adminCloudCredentialUID          string
-		backupLocationUID                string
-		backupLocationName               string
-		numberOfSharedUsers              int
-		numberOfGroups                   int
-		providers                        []string
-		schedulePolicyName               string
-		schedulePolicyUID                string
-		schedulePolicyInterval           = int64(15)
-		labelSelectors                   map[string]string
-		randomRole                       backup.PxBackupRole
-		sharedGroups                     []string
-		userIDMap                        map[string]string
-		userBackupsFromSharedClusterMap  map[string]string
-		userRestoreFromSharedClusterMap  map[string]string
-		backupNamespaceMap               map[string]string
-		backupLocationMap                map[string]string
-		userNamespaceMap                 map[string]string
-		scheduleNameUserMap              map[string]string
-		userClusterMap                   map[string]map[string]string
-		sharedUserClusterMap             map[string]map[string]string
-		masterUserBackupNames            []string
-		backedUpNamespaces               []string
-		sharedUsers                      []string
-		numberOfUsers                    int
-		nonAdminUsers                    []string
-		clusterSharedUsersList           []string
-		restoredNamespaces               []string
-		iter2ClusterUserMap              map[string]map[string]string
-		invalidKubeConfig                = "\"\""
-		mu                               sync.RWMutex
-		userCtx                          map[string]context1.Context
-		usersToBeDeleted                 []string
-		userScheduleFromSharedClusterMap map[string]string
-		numberOfPrimaryBackups           int
-		wg                               sync.WaitGroup
+		scheduledAppContexts               []*scheduler.Context
+		adminCloudCredName                 string
+		adminCloudCredentialUID            string
+		backupLocationUID                  string
+		backupLocationName                 string
+		numberOfSharedUsers                int
+		numberOfGroups                     int
+		providers                          []string
+		schedulePolicyName                 string
+		schedulePolicyUID                  string
+		schedulePolicyInterval             = int64(15)
+		labelSelectors                     map[string]string
+		randomRole                         backup.PxBackupRole
+		sharedGroups                       []string
+		userIDMap                          map[string]string
+		userBackupsFromSharedClusterMap    map[string]string
+		userRestoreFromSharedClusterMap    map[string]string
+		backupNamespaceMap                 map[string]string
+		backupLocationMap                  map[string]string
+		userNamespaceMap                   map[string]string
+		scheduleNameUserMap                map[string]string
+		userClusterMap                     map[string]map[string]string
+		sharedUserClusterMap               map[string]map[string]string
+		masterUserBackupNames              []string
+		backedUpNamespaces                 []string
+		sharedUsers                        []string
+		numberOfUsers                      int
+		nonAdminUsers                      []string
+		clusterSharedUsersList             []string
+		restoredNamespaces                 []string
+		iter2ClusterUserMap                map[string]map[string]string
+		invalidKubeConfig                  = "\"\""
+		inActiveClusterUsers               []string
+		configPath                         string
+		mu                                 sync.RWMutex
+		userCtx                            map[string]context1.Context
+		usersToBeDeleted                   []string
+		userScheduleFromSharedClusterMap   map[string]string
+		numberOfPrimaryBackups             int
+		wg                                 sync.WaitGroup
+		clusterShareOnPremCluster          []string
+		isClusterShareSupportedForAllRoles bool
+		roles                              []backup.PxBackupRole
+		unsupportedUsers                   []string
+		clusterSharePermissionError        = "PermissionDenied"
+		numOfUnsupportedUsers              int
 	)
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("ClusterShareWithLargeNumberOfUsersAndClusters", "Verifies cluster share with large number of users and larger number of clusters", nil, 301138, Ak, Q3FY25)
 		providers = GetBackupProviders()
+		// checking if cluster share is supported for all roles
+		clusterShareOnPremCluster = []string{"vanilla", "openshift"}
+		if Contains(clusterShareOnPremCluster, GetClusterProvider()) {
+			isClusterShareSupportedForAllRoles = true
+		} else {
+			isClusterShareSupportedForAllRoles = false
+		}
 		// keeping the user  and namespace count same , so that each user will take backup of each namespace
-		numOfNamespace := 2
-		numberOfUsers = 2
+		numOfNamespace := 8
+		numberOfUsers = 8
+		numOfUnsupportedUsers = 4
 		// initializing the count of user and groups where cluster share will be tested.
 		numberOfSharedUsers, _ = strconv.Atoi(GetEnv(UsersToBeCreated, "20"))
 		numberOfGroups, _ = strconv.Atoi(GetEnv(GroupsToBeCreated, "3"))
@@ -155,9 +171,13 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 			}
 		})
 
-		Step(fmt.Sprintf("Create %d users with random roles,cluster will shared from this users", numberOfUsers), func() {
-			log.InfoD(fmt.Sprintf("Creating %d users with random roles, cluster will shared from this users ", numberOfUsers))
-			roles := [4]backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.SuperAdmin, backup.ApplicationUser}
+		Step(fmt.Sprintf("Create %d users with random roles,cluster will be shared from this users", numberOfUsers), func() {
+			log.InfoD(fmt.Sprintf("Creating %d users with random roles, cluster will be shared from this users ", numberOfUsers))
+			if isClusterShareSupportedForAllRoles {
+				roles = []backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.SuperAdmin, backup.ApplicationUser}
+			} else {
+				roles = []backup.PxBackupRole{backup.SuperAdmin, backup.InfrastructureOwner}
+			}
 			for i, user := range CreateUsers(numberOfUsers) {
 				randomRole := roles[rand.Intn(len(roles))]
 				err := backup.AddRoleToUser(user, randomRole, fmt.Sprintf("Adding %v role to %s", randomRole, user))
@@ -184,7 +204,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 					log.Infof("Updated userClusterMap for user [%s] with cluster [%s] and uid [%s]", user, clusterName, userClusterUID)
 				}
 			}
-			err := TaskHandler(nonAdminUsers, createClusterFromUser, Sequential)
+			err := TaskHandler(nonAdminUsers[:2], createClusterFromUser, Sequential)
 			log.FailOnError(err, "failed to create application cluster from user")
 		})
 
@@ -200,7 +220,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 				_, err = CreateDuplicateApplicationClusters(BackupOrgID, userCtx[user], DestinationClusterName, 5, clusterSuffix)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating duplicate cluster object for user [%s]", user))
 			}
-			err := TaskHandler(nonAdminUsers, createDuplicateClusterFromUser, Sequential)
+			err := TaskHandler(nonAdminUsers[:2], createDuplicateClusterFromUser, Sequential)
 			log.FailOnError(err, "failed to create duplicate cluster objects from user")
 		})
 
@@ -213,7 +233,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupNames))
 				masterUserBackupNames = append(masterUserBackupNames, backupNames...)
 			}
-			err := TaskHandler(nonAdminUsers, createManualBackupsFromUser, Parallel)
+			err := TaskHandler(nonAdminUsers[:2], createManualBackupsFromUser, Parallel)
 			log.FailOnError(err, "failed to create manual backups from user")
 		})
 
@@ -230,7 +250,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 				err = SuspendAndDeleteSchedule(scheduleName, schedulePolicyName, SourceClusterName, userClusterMap[user][SourceClusterName], BackupOrgID, userCtx[user], false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Suspend schedule [%s]", scheduleBackupName))
 			}
-			err := TaskHandler(nonAdminUsers, createScheduleBackupsFromUser, Parallel)
+			err := TaskHandler(nonAdminUsers[:2], createScheduleBackupsFromUser, Parallel)
 			log.FailOnError(err, "failed to create duplicate cluster objects from user")
 		})
 
@@ -239,7 +259,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 			var wg sync.WaitGroup
 			userChan := make(chan string, numberOfSharedUsers)
 			groupChan := make(chan string, numberOfGroups)
-			roles := [4]backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.SuperAdmin, backup.ApplicationUser}
+			roles = []backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.SuperAdmin, backup.ApplicationUser}
 			for i := 1; i <= numberOfSharedUsers; i++ {
 				userName := fmt.Sprintf("shareduser%v", i)
 				firstName := fmt.Sprintf("FirstName%v", i)
@@ -278,11 +298,9 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 				}(groupName)
 			}
 
-			go func() {
-				wg.Wait()
-				close(userChan)
-				close(groupChan)
-			}()
+			wg.Wait()
+			close(userChan)
+			close(groupChan)
 
 			for userName := range userChan {
 				sharedUsers = append(sharedUsers, userName)
@@ -343,7 +361,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 					for _, clusterName := range []string{SourceClusterName, DestinationClusterName} {
 						log.Infof("Sharing cluster [%s] with uid [%s] with users from group [%s]", clusterName, userClusterMap[user][clusterName], groupShareConfig.groupName)
 						_, err := ShareClusterWithValidation(userCtx[user], clusterName, userClusterMap[user][clusterName], nil, []string{groupShareConfig.groupName}, groupShareConfig.shareExistingBackups)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Sharing cluster [%s] with from user [%s] with users from group[%s] ", clusterName, user, groupShareConfig.groupName))
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Sharing cluster [%s] from user [%s] with users from group[%s] ", clusterName, user, groupShareConfig.groupName))
 						log.Infof("Creating a map of cluster and shared user")
 						usersFromGroup, err := backup.GetMembersOfGroup(groupShareConfig.groupName)
 						log.FailOnError(err, "Fetching members of the group")
@@ -355,7 +373,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 						}
 					}
 				}
-				err := TaskHandler(nonAdminUsers, shareClusterFromUser, Parallel)
+				err := TaskHandler(nonAdminUsers[:2], shareClusterFromUser, Parallel)
 				log.FailOnError(err, "failed to share cluster object from user each group")
 				log.Infof("Updated sharedUserClusterMap with users: [%v] ", sharedUserClusterMap)
 			}
@@ -481,9 +499,9 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 					if !isUserAdmin {
 						for _, clusterName := range []string{SourceClusterName, DestinationClusterName} {
 							_, err := UnShareCluster(nonAdminCtx, clusterName, sharedUserClusterMap[user][clusterName], nil, []string{groupShareConfig.groupName})
-							log.Infof("Unsharing cluster [%s] with from user [%s] with users from group[%s] ", clusterName, user, groupShareConfig.groupName)
+							log.Infof("Unsharing cluster [%s] from user [%s] with users from group[%s] ", clusterName, user, groupShareConfig.groupName)
 							if err != nil {
-								dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied"), true, fmt.Sprintf("Verifying user [%s] cant unshare the cluster [%s]", user, SourceClusterName))
+								dash.VerifyFatal(strings.Contains(err.Error(), clusterSharePermissionError), true, fmt.Sprintf("Verifying user [%s] cant unshare the cluster [%s]", user, SourceClusterName))
 							}
 						}
 					} else {
@@ -501,7 +519,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 					if !isUserAdmin {
 						for _, clusterName := range []string{SourceClusterName, DestinationClusterName} {
 							err = DeleteClusterWithoutScheduleDelete(clusterName, sharedUserClusterMap[user][clusterName], BackupOrgID, nonAdminCtx, false)
-							dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied"), true, fmt.Sprintf("Verifying user [%s] cant delete the cluster [%s]", user, clusterName))
+							dash.VerifyFatal(strings.Contains(err.Error(), clusterSharePermissionError), true, fmt.Sprintf("Verifying user [%s] cant delete the cluster [%s]", user, clusterName))
 						}
 					} else {
 						log.Infof("User [%s] is admin, so skipping the delete cluster", user)
@@ -557,10 +575,10 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 						nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
 						log.FailOnError(err, "Fetching user [%s] ctx", user)
 						_, err = UnShareClusterWithValidation(nonAdminCtx, clusterName, userClusterMap[user][clusterName], nil, []string{sharedGroup})
-						dash.VerifyFatal(err, nil, fmt.Sprintf("UnSharing cluster [%s] with from user [%s] with users from group[%s] ", clusterName, user, sharedGroup))
+						dash.VerifyFatal(err, nil, fmt.Sprintf("UnSharing cluster [%s] from user [%s] with users from group[%s] ", clusterName, user, sharedGroup))
 					}
 				}
-				err := TaskHandler(nonAdminUsers, unShareClusterFromUser, Parallel)
+				err := TaskHandler(nonAdminUsers[:2], unShareClusterFromUser, Parallel)
 				log.FailOnError(err, "failed to unshare cluster object from user")
 			}
 		})
@@ -585,7 +603,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 					log.Infof("Updated userClusterMap for user [%s] with cluster [%s] and uid [%s]", user, clusterName, userClusterUID)
 				}
 			}
-			err := TaskHandler(sharedUsers[:6], createClusterFromUser, Sequential)
+			err := TaskHandler(nonAdminUsers[2:8], createClusterFromUser, Sequential)
 			log.FailOnError(err, "failed to create application cluster from user")
 		})
 
@@ -601,7 +619,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 				backupNames, err := TakeMultipleBackupsPerDeployment(nonAdminCtx, BackupOrgID, SourceClusterName, iter2ClusterUserMap[user][SourceClusterName], 1, 3, backupLocationName, backupLocationUID, appContextsToBackup, BackupNamePrefix)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupNames))
 			}
-			err := TaskHandler(sharedUsers[:6], createManualBackupsFromUser, Parallel)
+			err := TaskHandler(nonAdminUsers[2:8], createManualBackupsFromUser, Parallel)
 			log.FailOnError(err, "failed to create manual backups from user")
 		})
 
@@ -619,13 +637,13 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 				err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, nonAdminCtx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Suspend schedule [%s]", scheduleName))
 			}
-			err := TaskHandler(sharedUsers[:6], createScheduleBackupsFromUser, Parallel)
+			err := TaskHandler(nonAdminUsers[2:8], createScheduleBackupsFromUser, Parallel)
 			log.FailOnError(err, "failed to create schedule backups from user")
 		})
 
 		Step("For few user make cluster inactive by updating kubeConfig", func() {
 			log.InfoD("For few user make cluster inactive by updating kubeConfig")
-			sharedUsersSubset, _ := GetSubsetOfSlice(sharedUsers[:6], 3)
+			inActiveClusterUsers, _ = GetSubsetOfSlice(nonAdminUsers[2:8], 3)
 			makeClusterInactive := func(user string) {
 				defer GinkgoRecover()
 				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
@@ -664,7 +682,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 					}
 				}
 			}
-			err := TaskHandler(sharedUsersSubset, makeClusterInactive, Parallel)
+			err := TaskHandler(inActiveClusterUsers, makeClusterInactive, Parallel)
 			log.FailOnError(err, "failed to make cluster inactive")
 		})
 
@@ -686,7 +704,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 					_, err = ShareCluster(nonAdminCtx, SourceClusterName, iter2ClusterUserMap[user][SourceClusterName], shareConfig.users, nil, shareConfig.shareExistingBackups)
 					log.FailOnError(err, "failed to share cluster from user")
 				}
-				err := TaskHandler(sharedUsers[:6], shareClusterFromUser, Parallel)
+				err := TaskHandler(nonAdminUsers[2:8], shareClusterFromUser, Parallel)
 				log.FailOnError(err, "failed to share cluster from user")
 			}
 
@@ -699,7 +717,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 					err = ValidateShareCluster(nonAdminCtx, SourceClusterName, iter2ClusterUserMap[user][SourceClusterName], shareConfig.users, nil)
 					log.FailOnError(err, "failed to validate shared cluster")
 				}
-				err := TaskHandler(sharedUsers[:6], validateSharedCluster, Parallel)
+				err := TaskHandler(nonAdminUsers[2:8], validateSharedCluster, Parallel)
 				log.FailOnError(err, "failed to validate shared cluster")
 			}
 		})
@@ -743,10 +761,10 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 						Groups: nil,
 					}
 					_, err = Inst().Backup.UnShareCluster(nonAdminCtx, unshareClusterRequest)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Unsharing cluster [%s] with uid [%s] with from user [%s] with users [%v] ", SourceClusterName, iter2ClusterUserMap[user][SourceClusterName], user, shareConfig.users))
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Unsharing cluster [%s] with uid [%s] from user [%s] with users [%v] ", SourceClusterName, iter2ClusterUserMap[user][SourceClusterName], user, shareConfig.users))
 
 				}
-				err := TaskHandler(sharedUsers[:6], unshareClusterFromUser, Parallel)
+				err := TaskHandler(nonAdminUsers[2:8], unshareClusterFromUser, Parallel)
 				log.FailOnError(err, "failed to unshare cluster from user")
 			}
 			for _, shareConfig := range shareConfigs {
@@ -758,8 +776,63 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 					err = ValidateUnShareCluster(nonAdminCtx, SourceClusterName, iter2ClusterUserMap[user][SourceClusterName], shareConfig.users, nil)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("validate unshared cluster from user [%s]", user))
 				}
-				err := TaskHandler(sharedUsers[:6], validateUnshareCluster, Parallel)
+				err := TaskHandler(nonAdminUsers[2:8], validateUnshareCluster, Parallel)
 				log.FailOnError(err, "failed to validate unshared cluster")
+			}
+		})
+
+		Step("Validate app-user or app-admin can't share the cluster if they are not owning the cloud credential", func() {
+			log.InfoD("Validate app-user or app-admin can't share the cluster if they are not owning the cloud credential")
+			if !isClusterShareSupportedForAllRoles {
+				log.Infof("Creating user with app-user role and app-admin role")
+				for i := 1; i <= numOfUnsupportedUsers; i++ {
+					userName := fmt.Sprintf("unsupportedUser%v", i)
+					firstName := fmt.Sprintf("FirstName%v", i)
+					lastName := fmt.Sprintf("LastName%v", i)
+					email := fmt.Sprintf("unsupportedUser%v@cnbu.com", i)
+					err := backup.AddUser(userName, firstName, lastName, email, CommonPassword)
+					log.FailOnError(err, "Failed to create user - %s", userName)
+					unsupportedUsers = append(unsupportedUsers, userName)
+				}
+
+				for i, role := range []backup.PxBackupRole{backup.ApplicationUser, backup.ApplicationOwner} {
+					err := backup.AddRoleToUser(unsupportedUsers[i], role, fmt.Sprintf("Adding role [%s] to user [%s]", role, unsupportedUsers[i]))
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Adding role [%s] to user [%s]", role, unsupportedUsers[i]))
+				}
+
+				createClusterFromUser := func(user string) {
+					userCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "Fetching user [%s] ctx", user)
+					err = CreateApplicationClusters(BackupOrgID, "", "", userCtx)
+					dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+					for _, clusterName := range []string{SourceClusterName, DestinationClusterName} {
+						userClusterUID, err := Inst().Backup.GetClusterUID(userCtx, BackupOrgID, clusterName)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", clusterName))
+						if userClusterMap[user] == nil {
+							userClusterMap[user] = make(map[string]string)
+						}
+						userClusterMap[user][clusterName] = userClusterUID
+						log.Infof("Updated userClusterMap for user [%s] with cluster [%s] and uid [%s]", user, clusterName, userClusterUID)
+					}
+				}
+				err := TaskHandler(unsupportedUsers, createClusterFromUser, Sequential)
+				log.FailOnError(err, "failed to create application cluster from user")
+
+				log.Infof("Sharing the cluster from user [%s] with users [%s]", unsupportedUsers[0], sharedUsers[18:20])
+				nonAdminCtx, err := backup.GetNonAdminCtx(unsupportedUsers[0], CommonPassword)
+				log.FailOnError(err, "Fetching user [%s] ctx", unsupportedUsers[0])
+				_, err = ShareCluster(nonAdminCtx, SourceClusterName, userClusterMap[unsupportedUsers[0]][SourceClusterName], sharedUsers[18:20], nil, true)
+				log.Infof("The expected error is [%s]", err.Error())
+				dash.VerifyFatal(strings.Contains(err.Error(), clusterSharePermissionError), true, fmt.Sprintf("Verifying user [%s] cant share the cluster [%s]", unsupportedUsers[0], SourceClusterName))
+
+				log.Infof("Sharing the cluster from user [%s] with groups [%s]", unsupportedUsers[1], sharedGroups[0:2])
+				nonAdminCtx, err = backup.GetNonAdminCtx(unsupportedUsers[1], CommonPassword)
+				log.FailOnError(err, "Fetching user [%s] ctx", unsupportedUsers[1])
+				_, err = ShareCluster(nonAdminCtx, SourceClusterName, userClusterMap[unsupportedUsers[1]][SourceClusterName], nil, sharedGroups[0:2], true)
+				log.Infof("The expected error is [%s]", err.Error())
+				dash.VerifyFatal(strings.Contains(err.Error(), clusterSharePermissionError), true, fmt.Sprintf("Verifying user [%s] cant share the cluster [%s]", unsupportedUsers[1], SourceClusterName))
+			} else {
+				log.Infof("Skipping the Validation, As the cluster is of the provider type -[%s], the cluster share operation is supported for all roles", GetClusterProvider())
 			}
 		})
 	})
@@ -770,7 +843,23 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 			err := SetClusterContext("")
 			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		}()
-
+		log.Infof("Revert the cluster in inactive state to active state for backup delete")
+		updateCluster := func(user string) {
+			userCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+			log.FailOnError(err, "Fetching user [%s] ctx", user)
+			for _, clusterName := range []string{SourceClusterName, DestinationClusterName} {
+				if clusterName == SourceClusterName {
+					configPath, _ = GetSourceClusterConfigPath()
+				} else if clusterName == DestinationClusterName {
+					configPath, _ = GetDestinationClusterConfigPath()
+				}
+				log.Infof("Updating cluster %s with uid %s", clusterName, iter2ClusterUserMap[user][clusterName])
+				_, err = UpdateClusterWithKubeConfig(clusterName, iter2ClusterUserMap[user][clusterName], configPath, userCtx)
+				log.FailOnError(err, "failed to update cluster %s with uid %s", clusterName, iter2ClusterUserMap[user][clusterName])
+			}
+		}
+		err := TaskHandler(inActiveClusterUsers, updateCluster, Parallel)
+		log.FailOnError(err, "failed to update cluster")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "failed to get admin context")
 		log.InfoD("Deleting the backups")
@@ -829,6 +918,8 @@ var _ = Describe("{BackupSuperAdminRoleForLocalUser}", Label(TestCaseLabelsMap[B
 		userBkpLocationUidMap            map[string]string
 		numOfSuperAdminUsers             int
 		wg                               sync.WaitGroup
+		mu                               sync.Mutex
+		userTobeDemoted                  string
 	)
 
 	JustBeforeEach(func() {
@@ -1092,7 +1183,7 @@ var _ = Describe("{BackupSuperAdminRoleForLocalUser}", Label(TestCaseLabelsMap[B
 				sharingUserCtx, err := backup.GetNonAdminCtx(nonAdminUsers[8], CommonPassword)
 				log.FailOnError(err, "Fetching user [%s] ctx", nonAdminUsers[8])
 				_, err = ShareCluster(superAdminCtx, SourceClusterName, userClusterMap[user][SourceClusterName], []string{nonAdminUsers[8]}, nil, true)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Sharing cluster [%s] with from user[%s] to user [%s]", SourceClusterName, user, nonAdminUsers[8]))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Sharing cluster [%s] from user[%s] to user [%s]", SourceClusterName, user, nonAdminUsers[8]))
 				log.Infof("Validate [%s] doesnt not have access to backup of user [%s] since super admin has shared the cluster", nonAdminUsers[8], user)
 				backupName := userBackupsMap[user][0]
 				backupUid, err := Inst().Backup.GetBackupUID(userCtx, backupName, BackupOrgID)
@@ -1377,7 +1468,119 @@ var _ = Describe("{BackupSuperAdminRoleForLocalUser}", Label(TestCaseLabelsMap[B
 			}
 			err = TaskHandler(nonAdminUsers[4:5], validateClusterDeleteError, Sequential)
 			log.FailOnError(err, "failed to validate cluster delete for super admin user")
+		})
 
+		Step("Validate demotion of super Admin role to non-admin role, verify the existing superAdmin has access to backup,schedule,restore objects created by demoted superAdmin, And demoted superAdmin has access to his backup objects created pre and post demotion", func() {
+			log.InfoD("Validate demotion of super Admin role to non-admin role,verify the existing superAdmin has access to backup,schedule,restore objects created by demoted superAdmin,And demoted superAdmin has access to his backup objects created pre and post demotion")
+			userTobeDemoted = superAdminUsers[2]
+			var (
+				demotedUserBackups   []string
+				demotedUserSchedules []string
+				demotedUserRestores  []string
+			)
+
+			userCtx, err := backup.GetNonAdminCtx(userTobeDemoted, CommonPassword)
+			log.FailOnError(err, "Fetching user [%s] ctx", userTobeDemoted)
+
+			log.Infof("As a super admin user [%s] create manual backup on owned cluster and non-owned cluster", userTobeDemoted)
+			for _, clusterUser := range []string{userTobeDemoted, superAdminUsers[3]} {
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{userNamespaceMap[userTobeDemoted]})
+				manualBackupName := fmt.Sprintf("%s-%s-%s", "manual-backup-cluster", userTobeDemoted, userClusterMap[clusterUser][SourceClusterName])
+				err = CreateBackupWithValidation(userCtx, manualBackupName, SourceClusterName, userBkpLocationNameMap[userTobeDemoted], userBkpLocationUidMap[userTobeDemoted], appContextsToBackup, labelSelectors, BackupOrgID, userClusterMap[clusterUser][SourceClusterName], "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] from user [%s] on cluster [%s] with uid [%s] ", manualBackupName, userTobeDemoted, SourceClusterName, userClusterMap[clusterUser][SourceClusterName]))
+				demotedUserBackups = append(demotedUserBackups, manualBackupName)
+			}
+
+			log.Infof("As a super admin user [%s] create schedule backup on owned cluster and non-owned cluster ", userTobeDemoted)
+			for _, clusterUser := range []string{userTobeDemoted, superAdminUsers[3]} {
+				scheduleName := fmt.Sprintf("%s-%s-%s", "schedule-cluster", userTobeDemoted, userClusterMap[clusterUser][SourceClusterName])
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{userNamespaceMap[userTobeDemoted]})
+				scheduleBackupName, err := CreateScheduleBackupWithValidation(userCtx, scheduleName, SourceClusterName, userClusterMap[clusterUser][SourceClusterName], userBkpLocationNameMap[userTobeDemoted], userBkpLocationUidMap[userTobeDemoted], appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup for super admin from owned cluster[%s]", scheduleBackupName))
+				demotedUserSchedules = append(demotedUserSchedules, scheduleName)
+				demotedUserBackups = append(demotedUserBackups, scheduleBackupName)
+			}
+
+			log.Infof("As a super admin user [%s] create restore from owned cluster and non-owned cluster", userTobeDemoted)
+			for i, clusterUser := range []string{userTobeDemoted, superAdminUsers[3]} {
+				backupName := demotedUserBackups[i]
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{userNamespaceMap[userTobeDemoted]})
+				restoreName := fmt.Sprintf("%s-%s-%v", RestoreNamePrefix, backupName, RandomString(5))
+				restoreNamespace := fmt.Sprintf("%s-%s", "custom3", userNamespaceMap[userTobeDemoted])
+				namespaceMapping := map[string]string{userNamespaceMap[userTobeDemoted]: restoreNamespace}
+				err = CreateRestoreWithValidation(userCtx, restoreName, backupName, namespaceMapping, nil, DestinationClusterName, userClusterMap[clusterUser][DestinationClusterName], BackupOrgID, appContextsToBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup [%s]", backupName))
+				demotedUserRestores = append(demotedUserRestores, restoreName)
+			}
+
+			log.Infof("Demote the super admin user [%s] to non admin user", userTobeDemoted)
+			err = backup.DeleteRoleFromUser(userTobeDemoted, backup.SuperAdmin, fmt.Sprintf("Deleting %v role from %s", backup.SuperAdmin, userTobeDemoted))
+			log.FailOnError(err, "failed to delete role %s from the user %s", backup.SuperAdmin, userTobeDemoted)
+
+			log.Infof("As a demoted super admin user wait for next schedule backup to be created for owned and non-owned cluster")
+
+			for _, userSchedule := range demotedUserSchedules {
+				wg.Add(1)
+				go func(userSchedule string) {
+					defer wg.Done()
+					scheduleBackupName, err := GetNextCompletedScheduleBackupName(userCtx, userSchedule, time.Duration(schedulePolicyInterval))
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting next completed schedule backup name for schedule %s", userSchedule))
+					mu.Lock() // Ensure safe write access to shared variable
+					demotedUserBackups = append(demotedUserBackups, scheduleBackupName)
+					mu.Unlock()
+				}(userSchedule)
+			}
+			wg.Wait()
+
+			log.Infof("As a other super admin validate and delete the objects created by demoted super admin")
+			validateSuperAdmin := superAdminUsers[1]
+			superAdminCtx, err := backup.GetNonAdminCtx(validateSuperAdmin, CommonPassword)
+			log.FailOnError(err, "Fetching super admin user [%s] ctx", validateSuperAdmin)
+
+			log.Infof("Validate and delete manual backups from demoted super admin user [%s] from super admin user [%s]  ", userTobeDemoted, validateSuperAdmin)
+
+			allBackups, err := GetAllBackupsForUser(validateSuperAdmin, CommonPassword)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting all backups for user %s", validateSuperAdmin))
+			for _, backupName := range demotedUserBackups {
+				if !IsPresent(allBackups, backupName) {
+					err = fmt.Errorf("backup [%s] not found in the backup list", backupName)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] is found in the backup list", backupName))
+				} else {
+					log.Infof("Backup [%s] found in the backup list , verifying deletion of backup", backupName)
+					backupUid, err := Inst().Backup.GetBackupUID(superAdminCtx, backupName, BackupOrgID)
+					log.FailOnError(err, fmt.Sprintf("failed to get backup [%s] with uid [%s]", backupName, backupUid))
+					_, err = DeleteBackup(backupName, backupUid, BackupOrgID, superAdminCtx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
+				}
+			}
+
+			allRestores, err := GetAllRestoresForUser(validateSuperAdmin, CommonPassword)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting all restores for user %s", validateSuperAdmin))
+			for _, restoreName := range demotedUserRestores {
+				if !IsPresent(allRestores, restoreName) {
+					err = fmt.Errorf("restore [%s] not found in the restore list", restoreName)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore [%s] is found in the restore list", restoreName))
+				} else {
+					log.Infof("Restore [%s] found in the restore list , verifying deletion of restore", restoreName)
+					err = DeleteRestore(restoreName, BackupOrgID, superAdminCtx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+				}
+			}
+
+			allSchedules, err := GetAllBackupSchedulesForUser(validateSuperAdmin, CommonPassword)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting all schedules for user %s", validateSuperAdmin))
+			for _, scheduleName := range demotedUserSchedules {
+				if !IsPresent(allSchedules, scheduleName) {
+					err = fmt.Errorf("schedule [%s] not found in the schedule list", scheduleName)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying schedule [%s] is found in the schedule list", scheduleName))
+				} else {
+					log.Infof("Schedule [%s] found in the schedule list , verifying deletion of schedule", scheduleName)
+					scheduleUID, err := GetScheduleUID(scheduleName, BackupOrgID, superAdminCtx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting schedule UID for schedule %s", scheduleName))
+					err = DeleteScheduleWithUID(scheduleName, scheduleUID, BackupOrgID, superAdminCtx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting schedule [%s]", scheduleName))
+				}
+			}
 		})
 	})
 
@@ -1458,6 +1661,8 @@ var _ = Describe("{ValidateClusterShareWithConcurrentBackupOperations}", Label(T
 		wg                                  sync.WaitGroup
 		mu                                  sync.Mutex
 		roles                               []backup.PxBackupRole
+		clusterShareOnPremCluster           []string
+		isClusterShareSupportedForAllRoles  bool
 	)
 
 	JustBeforeEach(func() {
@@ -1481,7 +1686,13 @@ var _ = Describe("{ValidateClusterShareWithConcurrentBackupOperations}", Label(T
 		sharedUserClusterMap = make(map[string]map[string]string)  // Map to store Secondary users, Shared Cluster Names and Shared Cluster UIDs
 		backupAppContexts = make([]*scheduler.Context, 0)
 		namespaceAppContextMap = make(map[string][]*scheduler.Context)
-		roles = []backup.PxBackupRole{backup.SuperAdmin, backup.ApplicationUser, backup.ApplicationOwner, backup.InfrastructureOwner}
+
+		clusterShareOnPremCluster = []string{"vanilla", "openshift"}
+		if Contains(clusterShareOnPremCluster, GetClusterProvider()) {
+			isClusterShareSupportedForAllRoles = true
+		} else {
+			isClusterShareSupportedForAllRoles = false
+		}
 
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster failed")
@@ -1509,6 +1720,11 @@ var _ = Describe("{ValidateClusterShareWithConcurrentBackupOperations}", Label(T
 		Step("Create a set of primary users with different roles", func() {
 			log.Infof("Creating a set of %d primary users with different roles", numOfPrimaryUsers)
 			primaryUserList = CreateUsers(numOfPrimaryUsers)
+			if isClusterShareSupportedForAllRoles {
+				roles = []backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.SuperAdmin, backup.ApplicationUser}
+			} else {
+				roles = []backup.PxBackupRole{backup.SuperAdmin, backup.InfrastructureOwner}
+			}
 			for i, user := range primaryUserList {
 				role := roles[i%len(roles)]
 				err := backup.AddRoleToUser(user, role, fmt.Sprintf("Adding %v role to %s", role, user))
@@ -1518,6 +1734,7 @@ var _ = Describe("{ValidateClusterShareWithConcurrentBackupOperations}", Label(T
 
 		Step("Create a set of secondary users to share clusters with", func() {
 			log.Infof("Creating  a set of %d secondary users to share the clusters with", numOfSharedUsers)
+			roles = []backup.PxBackupRole{backup.SuperAdmin, backup.ApplicationUser, backup.ApplicationOwner, backup.InfrastructureOwner}
 			sharedUserList = CreateUsers(numOfSharedUsers)
 			for i, user := range sharedUserList {
 				role := roles[i%len(roles)]
@@ -1711,18 +1928,19 @@ var _ = Describe("{ValidateClusterShareWithConcurrentBackupOperations}", Label(T
 			}
 			wg.Wait()
 
-			// Validate restore for one of the backup
-			log.InfoD("Verifying the restore of shared backups for a shared user")
-			var collectedAppContexts []*scheduler.Context
-			collectedAppContexts, err = GetAppContextsFromBackup(backups[0], BackupOrgID, ctx, namespaceAppContextMap)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting app context from backup [%s] for user [%s]", backups[0], randomUser))
-			restoreName := fmt.Sprintf("restore-%s-%s", randomUser, RandomString(6))
-			err = CreateRestoreWithValidation(ctx, restoreName, backups[0], make(map[string]string), make(map[string]string), DestinationClusterName, sharedUserClusterMap[randomUser][DestinationClusterName], BackupOrgID, collectedAppContexts)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup [%s] from user [%s] for cluster [%s] with UID [%s]", restoreName, randomUser, DestinationClusterName, sharedUserClusterMap[randomUser][DestinationClusterName]))
-
-			//Validate backup deletion if user is admin
+			//Validate restore and backup deletion if user is admin
 			isUserAdmin, err := IsAdminCtx(ctx)
 			log.FailOnError(err, "Verifying if the user selected is an admin")
+			if isUserAdmin {
+				log.InfoD("Verifying the restore of shared backups for a shared user")
+				var collectedAppContexts []*scheduler.Context
+				collectedAppContexts, err = GetAppContextsFromBackup(backups[0], BackupOrgID, ctx, namespaceAppContextMap)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting app context from backup [%s] for user [%s]", backups[0], randomUser))
+				restoreName := fmt.Sprintf("restore-%s-%s", randomUser, RandomString(6))
+				err = CreateRestoreWithValidation(ctx, restoreName, backups[0], make(map[string]string), make(map[string]string), DestinationClusterName, sharedUserClusterMap[randomUser][DestinationClusterName], BackupOrgID, collectedAppContexts)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup [%s] from user [%s] for cluster [%s] with UID [%s]", restoreName, randomUser, DestinationClusterName, sharedUserClusterMap[randomUser][DestinationClusterName]))
+			}
+
 			if isUserAdmin {
 				log.InfoD("Verifying deletion of one of the shared backups for the shared user")
 				backupUid, err := Inst().Backup.GetBackupUID(ctx, backups[0], BackupOrgID)
@@ -1893,8 +2111,12 @@ var _ = Describe("{ValidateClusterShareWithConcurrentBackupOperations}", Label(T
 			backupNamesForUser, err := GetAllBackupsForUser(randomUser, CommonPassword)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all backups for user [%s]", randomUser))
 
+			ctx, err := backup.GetNonAdminCtx(randomUser, CommonPassword)
+			log.FailOnError(err, "Fetching user ctx")
+			isUserAdmin, err := IsAdminCtx(ctx)
+			log.FailOnError(err, "Verifying if the user selected is an admin")
 			for _, backupName := range backups {
-				if IsPresent(backupNamesForUser, backupName) {
+				if IsPresent(backupNamesForUser, backupName) && !isUserAdmin {
 					err = fmt.Errorf("backup [%s] found for user [%s]", backupName, randomUser)
 					log.FailOnError(err, "failed to validate the permissions for backup")
 				} else {
@@ -1942,31 +2164,32 @@ var _ = Describe("{ValidateClusterShareWithConcurrentBackupOperations}", Label(T
 // This test case is to validate the backup share operation using the shared cluster share
 var _ = Describe("{ValidateBackupShareUsingBackupsFromSharedCluster}", Label(TestCaseLabelsMap[ValidateBackupShareUsingBackupsFromSharedCluster]...), func() {
 	var (
-		numOfPrimaryUsers       int
-		numOfDeployments        int
-		snapshotLimit           int
-		numOfInitialBackups     int
-		numberOfGroups          int
-		numOfSecondaryUsers     int
-		primaryUserList         []string
-		secondaryUserList       []string
-		groupList               []string
-		adminCloudCredName      string
-		adminCloudCredentialUID string
-		userBkpLocationNameMap  map[string]string
-		userBkpLocationUidMap   map[string]string
-		clusterMap              map[string]string
-		backupLocationMap       map[string]string
-		backupMap               map[string][]string
-		backupAppContexts       []*scheduler.Context
-		infraAdminRole          backup.PxBackupRole
-		wg                      sync.WaitGroup
-		adminBackupLocationName string
-		adminBackupLocationUID  string
-		providers               []string
-		backupNameSpaces        []string
-		userNameSpaceMap        map[string]string
-		adminBackupNames        []string
+		numOfPrimaryUsers           int
+		numOfDeployments            int
+		snapshotLimit               int
+		numOfInitialBackups         int
+		numberOfGroups              int
+		numOfSecondaryUsers         int
+		primaryUserList             []string
+		secondaryUserList           []string
+		groupList                   []string
+		adminCloudCredName          string
+		adminCloudCredentialUID     string
+		userBkpLocationNameMap      map[string]string
+		userBkpLocationUidMap       map[string]string
+		clusterMap                  map[string]string
+		backupLocationMap           map[string]string
+		backupMap                   map[string][]string
+		backupAppContexts           []*scheduler.Context
+		infraAdminRole              backup.PxBackupRole
+		wg                          sync.WaitGroup
+		adminBackupLocationName     string
+		adminBackupLocationUID      string
+		providers                   []string
+		backupNameSpaces            []string
+		userNameSpaceMap            map[string]string
+		adminBackupNames            []string
+		clusterSharePermissionError = "PermissionDenied"
 	)
 
 	JustBeforeEach(func() {
@@ -2203,7 +2426,7 @@ var _ = Describe("{ValidateBackupShareUsingBackupsFromSharedCluster}", Label(Tes
 				nonAdminCtx, err := backup.GetNonAdminCtx(primaryUser[0], CommonPassword)
 				dash.VerifyFatal(err, nil, "Fetching non admin ctx")
 				err = ShareBackup(backupName, groupList, secondaryUserList, FullAccess, nonAdminCtx)
-				dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied"), true, fmt.Sprintf("Verifying user [%s] cant share the backup [%s]", primaryUser[0], backupName))
+				dash.VerifyFatal(strings.Contains(err.Error(), clusterSharePermissionError), true, fmt.Sprintf("Verifying user [%s] cant share the backup [%s]", primaryUser[0], backupName))
 			}
 			err := TaskHandler(adminBackupNames, validateAdminBackupShareByPrimaryUser, Sequential)
 			log.FailOnError(err, "failed to validate admin backup share by primary user")
@@ -2281,30 +2504,33 @@ var _ = Describe("{ValidateBackupShareUsingBackupsFromSharedCluster}", Label(Tes
 // This testcase is to validate cluster share operation while bringing down PxBackup pods
 var _ = Describe("{ValidateClusterShareWhileBringDownPxBackupPods}", Label(TestCaseLabelsMap[ValidateClusterShareWhileBringDownPxBackupPods]...), func() {
 	var (
-		cloudAccountName                string
-		cloudAccountUid                 string
-		backupLocationName              string
-		backupLocationUid               string
-		pxBackupNS                      string
-		primaryUserList                 []string
-		firstSharedUserList             []string
-		secondSharedUserList            []string
-		backupLocationMap               map[string]string
-		numDeployments                  int
-		numOfPrimaryUsers               int
-		numOfSharedUsers                int
-		originalDeploymentReplicaCount  int32
-		originalStatefulSetReplicaCount int32
-		scaledDownReplica               int32
-		userRoleMap                     map[string]backup.PxBackupRole
-		backupDeployment                *appsV1.Deployment
-		statefulSet                     *appsV1.StatefulSet
-		wg                              sync.WaitGroup
-		backupAppContexts               []*scheduler.Context
-		err                             error
-		userClusterMap                  map[string]map[string]string
-		backupNameSpaces                []string
-		userNamespaceMap                map[string]string
+		cloudAccountName                   string
+		cloudAccountUid                    string
+		backupLocationName                 string
+		backupLocationUid                  string
+		pxBackupNS                         string
+		primaryUserList                    []string
+		firstSharedUserList                []string
+		secondSharedUserList               []string
+		backupLocationMap                  map[string]string
+		numDeployments                     int
+		numOfPrimaryUsers                  int
+		numOfSharedUsers                   int
+		originalDeploymentReplicaCount     int32
+		originalStatefulSetReplicaCount    int32
+		scaledDownReplica                  int32
+		userRoleMap                        map[string]backup.PxBackupRole
+		backupDeployment                   *appsV1.Deployment
+		statefulSet                        *appsV1.StatefulSet
+		wg                                 sync.WaitGroup
+		backupAppContexts                  []*scheduler.Context
+		err                                error
+		userClusterMap                     map[string]map[string]string
+		backupNameSpaces                   []string
+		userNamespaceMap                   map[string]string
+		clusterShareOnPremCluster          []string
+		isClusterShareSupportedForAllRoles bool
+		userRoles                          []backup.PxBackupRole
 	)
 
 	JustBeforeEach(func() {
@@ -2317,6 +2543,13 @@ var _ = Describe("{ValidateClusterShareWhileBringDownPxBackupPods}", Label(TestC
 		backupLocationMap = make(map[string]string)
 		userClusterMap = make(map[string]map[string]string)
 		userNamespaceMap = make(map[string]string)
+
+		clusterShareOnPremCluster = []string{"vanilla", "openshift"}
+		if Contains(clusterShareOnPremCluster, GetClusterProvider()) {
+			isClusterShareSupportedForAllRoles = true
+		} else {
+			isClusterShareSupportedForAllRoles = false
+		}
 
 		StartPxBackupTorpedoTest("ValidateClusterShareWhileBringDownPxBackupPods", "TC to validate cluster share operation at scale while bringing down Px-Backup pods", nil, 301141, Sabrarhussaini, Q3FY25)
 		log.Infof("Scheduling applications")
@@ -2343,7 +2576,11 @@ var _ = Describe("{ValidateClusterShareWhileBringDownPxBackupPods}", Label(TestC
 
 		Step("Create a set of primary users for validation", func() {
 			log.Infof("Creating a set of %d primary users with different roles", numOfPrimaryUsers)
-			userRoles := []backup.PxBackupRole{backup.SuperAdmin, backup.ApplicationUser, backup.ApplicationOwner, backup.InfrastructureOwner}
+			if isClusterShareSupportedForAllRoles {
+				userRoles = []backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.SuperAdmin, backup.ApplicationUser}
+			} else {
+				userRoles = []backup.PxBackupRole{backup.SuperAdmin, backup.InfrastructureOwner}
+			}
 			userList := CreateUsers(numOfPrimaryUsers + numOfSharedUsers)
 			primaryUserList = userList[:numOfPrimaryUsers]
 			firstSharedUserList = userList[numOfPrimaryUsers : numOfPrimaryUsers+(numOfSharedUsers/2)]
@@ -2514,7 +2751,7 @@ var _ = Describe("{ValidateClusterShareWhileBringDownPxBackupPods}", Label(TestC
 			dash.VerifyFatal(err, nil, "Scaling down MongoDB statefulset replica to 0")
 			log.InfoD("Sleeping for 1 minute for the pods be scaled")
 			time.Sleep(1 * time.Minute)
-			err = ScaleStatefulSetReplicas(MongodbStatefulset, pxBackupNS, originalStatefulSetReplicaCount, originalStatefulSetReplicaCount, PodStatusTimeOut, PodStatusRetryTime)
+			err = ScaleStatefulSetReplicas(MongodbStatefulset, pxBackupNS, originalStatefulSetReplicaCount, 2, PodStatusTimeOut, PodStatusRetryTime)
 			dash.VerifyFatal(err, nil, "Scaling back MongoDB statefulset to original replica count")
 			err = IsMongoDBReady()
 			log.FailOnError(err, "Checking if mongo db pod is in running state")

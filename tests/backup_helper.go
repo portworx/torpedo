@@ -12658,3 +12658,39 @@ func GetBackupLocationCount(lines []string, metricName string) (int, error) {
 	}
 	return dataCount, nil
 }
+
+// UpdateCluster updates cluster with given kubeConfig
+func UpdateClusterWithKubeConfig(clusterName string, clusterUid string, kubeConfigPath string, ctx context1.Context) (*api.ClusterUpdateResponse, error) {
+	backupDriver := Inst().Backup
+	kubeconfigRaw, err := ioutil.ReadFile(kubeConfigPath)
+	if err != nil {
+		return nil, err
+	}
+
+	clusterInspectResp, err := Inst().Backup.InspectCluster(ctx, &api.ClusterInspectRequest{
+		OrgId: BackupOrgID,
+		Name:  clusterName,
+		Uid:   clusterUid,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	clusterUpdateRequest := &api.ClusterUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  clusterName,
+			Uid:   clusterUid,
+			OrgId: BackupOrgID,
+		},
+		Kubeconfig:            base64.StdEncoding.EncodeToString(kubeconfigRaw),
+		CloudCredential:       clusterInspectResp.GetCluster().GetCloudCredential(),
+		CloudCredentialRef:    clusterInspectResp.GetCluster().GetCloudCredentialRef(),
+		PlatformCredentialRef: clusterInspectResp.GetCluster().GetPlatformCredentialRef(),
+	}
+
+	status, err := backupDriver.UpdateCluster(ctx, clusterUpdateRequest)
+	if err != nil {
+		return nil, err
+	}
+	return status, err
+}
