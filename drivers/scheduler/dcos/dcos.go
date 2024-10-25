@@ -40,6 +40,14 @@ type dcos struct {
 	volDriverName string
 }
 
+func (d *dcos) CreateCSISnapshotClass(snapshotClassCreateRequest scheduler.CSISnapshotClassCreateRequest) (*volsnapv1.VolumeSnapshotClass, error) {
+	//CreateCsiSnapshotClass is not supported
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateCsiSnapshotClass()",
+	}
+}
+
 func (d *dcos) Init(schedOpts scheduler.InitOptions) error {
 	privateAgents, err := MesosClient().GetPrivateAgentNodes()
 	if err != nil {

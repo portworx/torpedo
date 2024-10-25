@@ -37,6 +37,10 @@ import (
 	"github.com/pure-px/torpedo/drivers/volume"
 	"github.com/pure-px/torpedo/pkg/units"
 	. "github.com/pure-px/torpedo/tests"
+
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
@@ -49,6 +53,7 @@ const (
 	fastpathAppName         = "fastpath"
 	fioPVScheduleName       = "tc-cs-volsnapsched"
 	fioOutputPVScheduleName = "tc-cs-volsnapsched-2"
+	CloudSnapShotClass      = "cloud-snapshotclass"
 )
 
 type volumeDataMap struct {
@@ -1502,6 +1507,236 @@ var _ = Describe("{LocalsnapAndRestore}", Label("p0", "positive", "px_vol_ops", 
 		AfterEachTest(contexts)
 	})
 })
+var _ = Describe("{CSIOnlyTestCloudSnapshot}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CSICloudsnapAndRestore", "Validate cloud-snap creation and restore", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	var listRestoredPVC []*corev1.PersistentVolumeClaim
+	stepLog := "has to schedule apps, create scheduled cloud snap and restore it"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		volumeSnapshotMap := make(map[string]map[string]*volsnapv1.VolumeSnapshot)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
+		n := node.GetStorageDriverNodes()[0]
+		uuidCmd := "pxctl cred list -j | grep uuid"
+		output, err := runCmd(uuidCmd, n)
+		log.FailOnError(err, "error getting uuid for cloudsnap credential")
+		if output == "" {
+			log.FailOnError(fmt.Errorf("cloud cred is not created"), "Check for cloud cred exists?")
+		}
+
+		credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
+		credUUID = strings.ReplaceAll(credUUID, "\"", "")
+		log.Infof("Got Cred UUID: %s", credUUID)
+		contexts = make([]*scheduler.Context, 0)
+
+		apps := Inst().CsiAppList
+		if apps == nil || len(apps) == 0 {
+			if Inst().Provisioner == k8s.CsiProvisioner {
+				apps = Inst().AppList
+			} else {
+				log.FailOnError(fmt.Errorf("could not find any CSI Apps to test"), "No CSI apps present to test")
+			}
+		}
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = apps
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("csi-cloudsnaprestore-%d", i))...)
+			}
+			ValidateApplications(contexts)
+
+		})
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName := CloudSnapShotClass
+			volSnapshotClass, err := Inst().S.CreateCSISnapshotClass(scheduler.CSISnapshotClassCreateRequest{
+				SnapClassName:  snapShotClassName,
+				DeletionPolicy: "Delete",
+				Parameters:     map[string]string{"csi.openstorage.org/snapshot-type": "cloud"},
+			})
+			if err != nil {
+				isSnapshotClassExists := strings.Contains(err.Error(), "already exists")
+				dash.VerifyFatal(isSnapshotClassExists, true, "Check if snapshot exists")
+			} else {
+				log.InfoD("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
+			}
+		})
+		stepLog = "Create cloud snapshot and verify status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				mapSnapshots := make(map[string]*volsnapv1.VolumeSnapshot)
+				response, err := Inst().S.CreateCsiSnapsForVolumes(ctx, CloudSnapShotClass)
+				log.FailOnError(err, "Failed to create the snapshots")
+				for k, v := range response {
+					mapSnapshots[k] = v
+				}
+				volumeSnapshotMap[ctx.UID] = mapSnapshots
+				err = Inst().S.ValidateCsiSnapshots(ctx, response)
+				log.FailOnError(err, "Failed to validate the snapshots")
+			}
+		})
+
+		stepLog = "Validating cloud snapshot backup size values"
+		Step(stepLog, func() {
+			log.Infof("Validating cloudsnapshot")
+			for _, ctx := range contexts {
+				// Validate the cloud snapshot backup size values [PTX-17342]
+				log.Infof("Validating cloud snapshot backup size values for app [%s]", ctx.App.Key)
+				vols, err := Inst().S.GetVolumeParameters(ctx)
+				log.FailOnError(err, fmt.Sprintf("error getting volume params for [%s]", ctx.App.Key))
+				for vol, params := range vols {
+					dash.VerifyFatal(validateCloudSnapValues(credUUID, vol, params), true, fmt.Sprintf("validate cloud snap values for volume [%s]", vol))
+				}
+			}
+		})
+
+		stepLog = "Verify cloud snap restore"
+		Step(stepLog, func() {
+			for _, ctx := range contexts {
+				mapSnapshots := volumeSnapshotMap[ctx.UID]
+				log.Infof("Validating cloudsnapshot restore")
+				vols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "error getting volumes")
+				for _, vol := range vols {
+					snapShot, ok := mapSnapshots[vol.VolumeName]
+					if !ok {
+						dash.VerifySafely(ok, true, "error getting volume snapshot for volume")
+						continue
+					}
+					log.Infof("Volume snapshot found for volume %s", vol.Name)
+					quantity, err := resource.ParseQuantity(strconv.FormatUint(vol.Size, 10))
+					log.FailOnError(err, "failed to parse size")
+					restoredPVCSpec, err := k8s.GeneratePVCRestoreSpec(quantity, vol.Namespace, vol.Name+"-restore", snapShot.Name, vol.StorageClass)
+					log.FailOnError(err, "failed to build restored PVC Spec")
+					log.Infof("Generating PVC from snapshot source snapshot %s, pvc name %s", snapShot.Name, restoredPVCSpec.Name)
+					_, err = k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+					log.FailOnError(err, "failed to restore PVC")
+					listRestoredPVC = append(listRestoredPVC, restoredPVCSpec)
+					log.Infof("Validating pvc with name %s after restore", restoredPVCSpec.Name)
+					err = k8sCore.ValidatePersistentVolumeClaim(restoredPVCSpec, 4*time.Minute, defaultRetryInterval)
+					log.FailOnError(err, "failed to restore PVC")
+					validatePodCreationWithPVCName(restoredPVCSpec)
+				}
+			}
+		})
+
+		stepLog = "Delete cloud snapshots"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				mapSnapshots := volumeSnapshotMap[ctx.UID]
+				for _, v := range mapSnapshots {
+					err = Inst().S.DeleteCsiSnapshot(ctx, v.Name, v.Namespace)
+					log.FailOnError(err, "Failed to delete the snapshots")
+				}
+			}
+		})
+
+		stepLog = "Validating apps after cloud snaphot restore"
+		Step(stepLog, func() {
+
+			for _, ctx := range contexts {
+				ctx.ReadinessTimeout = 15 * time.Minute
+				//skipping volume validation as ip_profiles are updated
+				ctx.SkipVolumeValidation = true
+				ValidateContext(ctx)
+			}
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		bucketName, err := GetCloudsnapBucketName(contexts)
+		log.FailOnError(err, "error getting cloud snap bucket name")
+		opts := make(map[string]bool)
+		DestroyApps(contexts, opts)
+		DeleteCloudSnapBucket(bucketName)
+		for _, pvc := range listRestoredPVC {
+			err := k8sCore.DeletePersistentVolumeClaim(pvc.Name, pvc.Namespace)
+			if err != nil {
+				log.Warnf("Could not delete pvc %s", pvc.Name)
+			}
+		}
+		AfterEachTest(contexts)
+	})
+})
+
+func validatePodCreationWithPVCName(restoredPVCSpec *corev1.PersistentVolumeClaim) {
+	podSpec := &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pod-" + restoredPVCSpec.Name,
+			Namespace: restoredPVCSpec.Namespace,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "nginx-container",
+					Image: "nginx:latest",
+					Ports: []corev1.ContainerPort{
+						{
+							ContainerPort: 80,
+						},
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							MountPath: "/usr/share/nginx/html",
+							Name:      "nginx-volume",
+						},
+					},
+				},
+			},
+			Volumes: []corev1.Volume{
+				{
+					Name: "nginx-volume",
+					VolumeSource: corev1.VolumeSource{
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: restoredPVCSpec.Name,
+						},
+					},
+				},
+			},
+		},
+	}
+	log.Infof("Creating nginx pod from restored spec")
+	pod, err := k8sCore.CreatePod(podSpec)
+	if err != nil {
+		log.FailOnError(err, "Failed to create pod from snapshot")
+	}
+	defer func() {
+		err := k8sCore.DeletePod(pod.Name, pod.Namespace, false)
+		if err != nil {
+			log.Warnf("Failed to delete pod %s: %v", pod.Name, err)
+		}
+	}()
+
+	t := func() (interface{}, bool, error) {
+		pod, err := k8sCore.GetPodByName(pod.Name, pod.Namespace)
+		if err != nil {
+			return "", false, err
+		}
+		if !k8sCore.IsPodRunning(*pod) {
+			return "", true, fmt.Errorf("waiting for pod %s to be in running state", pod.Name)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+	log.FailOnError(err, "Failed to create pods from snapshot")
+}
 
 var _ = Describe("{ResizeVolumeAfterFull}", Label("p1", "positive", "px_vol_ops", "VolResize"), func() {
 	/*
@@ -2221,6 +2456,10 @@ func validateCloudSnapValues(credUUID string, volName string, params map[string]
 	}
 	for _, cSnap := range cSnaps {
 		volData := cSnap.Metadata["volume"]
+		log.Infof("Volume being validated, source  %s, target %s", cSnap.SrcVolumeName, volName)
+		if cSnap.SrcVolumeName != volName {
+			continue
+		}
 		log.Infof("Volume Data from SDK: %v", volData)
 		var volumeData volumeDataMap
 		err := json.Unmarshal([]byte(volData), &volumeData)
