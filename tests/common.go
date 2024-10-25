@@ -2131,10 +2131,12 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 			log.InfoD(stepLog)
 			err = Inst().S.Destroy(ctx, opts)
 			if err != nil {
-				PrintDescribeContext(ctx)
+				log.Debugf("Failed to destroy app %s with error %v. waiting to destroy with timeout [%v]", ctx.App.Key, err, Inst().DestroyAppTimeout)
+				if dErr := Inst().S.WaitForDestroy(ctx, Inst().DestroyAppTimeout); dErr != nil {
+					PrintDescribeContext(ctx)
+					log.FailOnError(dErr, "Failed to destroy app %s", ctx.App.Key)
+				}
 			}
-			log.FailOnError(err, "Failed to destroy app %s", ctx.App.Key)
-
 		})
 
 		if !ctx.SkipVolumeValidation {
@@ -10157,36 +10159,46 @@ func ExitPoolMaintenance(stNode node.Node) error {
 func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) (err error) {
 
 	// Moving repls on the node before deletion
+
 	nodeVols, err := GetVolumesOnNode(stNode.VolDriverNodeID)
 	if err != nil {
 		return fmt.Errorf("error getting volumes node [%s],Err: %v ", stNode.Name, err)
 	}
 
 	for _, vol := range nodeVols {
-		newReplicaNode, err := GetNodeIdToMoveReplica(vol)
+
+		newReplicaNode, replicaErr := GetNodeIdToMoveReplica(vol)
 		log.Infof("New Replica node is [%s]", newReplicaNode)
-		if err != nil {
-			return fmt.Errorf("error getting replica node for volume [%s],Err: %v ", vol, err)
+		if replicaErr != nil {
+			return fmt.Errorf("error getting replica node for volume [%s],Err: %v ", vol, replicaErr)
 		}
 
-		err = MoveReplica(vol, stNode.VolDriverNodeID, newReplicaNode)
-		if err != nil {
-			return fmt.Errorf("error moving replica from node [%s] to volume [%s],Err: %v ", stNode.VolDriverNodeID, newReplicaNode, err)
+		moveErr := MoveReplica(vol, stNode.VolDriverNodeID, newReplicaNode)
+		if moveErr != nil {
+			return fmt.Errorf("error moving vol [%s] replica from node [%s] to node [%s],Err: %v ", vol, stNode.VolDriverNodeID, newReplicaNode, moveErr)
 		}
 	}
 
-	if err := EnterPoolMaintenance(stNode); err != nil {
-		return err
+	// Ensure ExitPoolMaintenance is called even if an error occurs
+	defer func() {
+		exitErr := ExitPoolMaintenance(stNode)
+		if exitErr != nil && !strings.Contains(exitErr.Error(), "not in pool maintenance mode") {
+			if err == nil {
+				// If no error has occurred yet, set err to exitErr
+				err = exitErr
+			} else {
+				// Append the error from the deferred function to the existing error
+				err = fmt.Errorf("%v; additionally failed to exit pool maintenance: %v", err, exitErr)
+			}
+		}
+	}()
+	if err = EnterPoolMaintenance(stNode); err != nil {
+		return fmt.Errorf("failed to enter pool maintenance on node [%s], Err: %v", stNode.Name, err)
 	}
-	if err := Inst().V.DeletePool(stNode, poolIDToDelete, retry); err != nil {
-		return err
+	if err = Inst().V.DeletePool(stNode, poolIDToDelete, retry); err != nil {
+		return fmt.Errorf("failed to delete pool [%s] on node [%s], Err: %v", poolIDToDelete, stNode.Name, err)
 	}
 
-	err = ExitPoolMaintenance(stNode)
-
-	if err != nil && !strings.Contains(err.Error(), "not in pool maintenance mode") {
-		return err
-	}
 	return nil
 }
 
@@ -10215,7 +10227,7 @@ func DeletePoolAndValidate(stNode node.Node, poolIDToDelete string) error {
 		return fmt.Errorf("error getting pool drive from the node [%s],Err: %v", stNode.Name, err)
 	}
 
-	log.InfoD(fmt.Sprintf("Delete poolID %s on node %s", poolIDToDelete, stNode.Name))
+	log.InfoD(fmt.Sprintf("Delete poolID %s on node [%s/%s]", poolIDToDelete, stNode.VolDriverNodeID, stNode.Name))
 	err = DeleteGivenPoolInNode(stNode, poolIDToDelete, true)
 	if err != nil {
 		return fmt.Errorf("error deleting pool [%s] in the node [%s], Err: %v", poolIDToDelete, stNode.Name, err)
@@ -13117,7 +13129,8 @@ func GetVolumesOnNode(nodeId string) ([]string, error) {
 		for _, replSet := range replSets {
 			replNodes = append(replNodes, replSet.GetNodes()...)
 		}
-		if Contains(replNodes, nodeId) {
+		log.Debugf("volume [%s] has repl nodes [%v]", vol.GetName(), replNodes)
+		if slices.Contains(replNodes, nodeId) {
 			volumes = append(volumes, vol.GetName())
 		}
 	}
@@ -13204,15 +13217,18 @@ func GetVolumeSnapShotScheduleOfVol(volName string) (*storkapi.VolumeSnapshotSch
 // MoveReplica moves the replica of a volume from one node to another
 func MoveReplica(volName, fromNode, toNode string) error {
 	appVol, err := Inst().V.InspectVolume(volName)
-	log.Infof("Updating replicas for volume [%s/%s]", appVol.Id, volName)
 	if err != nil {
 		return err
 	}
+	log.Infof("Updating replicas for volume [%s/%s]", appVol.Id, volName)
+	opts := volume.Options{
+		ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+	}
 	replNodes := appVol.GetReplicaSets()[0].GetNodes()
-	tpVol := &volume.Volume{ID: volName, Name: volName}
+	log.Infof("Volume %s current Repl node: %v", volName, replNodes)
+	tpVol := &volume.Volume{ID: appVol.Id, Name: volName}
 	if len(replNodes) == 1 {
-
-		err = Inst().V.SetReplicationFactor(tpVol, 2, []string{toNode}, nil, true)
+		err = Inst().V.SetReplicationFactor(tpVol, 2, []string{toNode}, nil, true, opts)
 		if err != nil {
 			return err
 		}
@@ -13223,9 +13239,13 @@ func MoveReplica(volName, fromNode, toNode string) error {
 	} else {
 		err = Inst().V.SetReplicationFactor(tpVol, int64(len(replNodes)-1), []string{fromNode}, nil, true)
 		if err != nil {
-			return err
+			if !strings.Contains(err.Error(), "does not belong to replication set") {
+				return err
+			}
+			log.Warnf("Ignoring error %v", err)
+			return nil
 		}
-		err = Inst().V.SetReplicationFactor(tpVol, int64(len(replNodes)), []string{toNode}, nil, true)
+		err = Inst().V.SetReplicationFactor(tpVol, int64(len(replNodes)), []string{toNode}, nil, true, opts)
 		if err != nil {
 			return err
 		}
@@ -13319,7 +13339,7 @@ func PrereqForNodeDecomm(nodeToDecommission node.Node, suspendedScheds []*storka
 
 		err = MoveReplica(vol, nodeToDecommission.VolDriverNodeID, newReplicaNode)
 		if err != nil {
-			return fmt.Errorf("error moving replica from node [%s] to volume [%s],Err: %v ", nodeToDecommission.VolDriverNodeID, newReplicaNode, err)
+			return fmt.Errorf("error moving vol [%s] replica from node [%s] to node [%s],Err: %v ", vol, nodeToDecommission.VolDriverNodeID, newReplicaNode, err)
 		}
 	}
 	return nil

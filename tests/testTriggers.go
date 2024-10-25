@@ -1061,6 +1061,7 @@ func TriggerVolumeCreatePXRestart(contexts *[]*scheduler.Context, recordChan *ch
 		wg := new(sync.WaitGroup)
 		wg.Add(1)
 		go func(appNode node.Node) {
+			log.SetTestName(VolumeCreatePxRestart)
 			createdVolIDs, err = CreateMultiVolumesAndAttach(wg, volCreateCount, selectedNode.Id)
 			if err != nil {
 				UpdateOutcome(event, err)
@@ -2681,6 +2682,7 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 			wg.Add(1)
 			go func(appNode node.Node) {
 				defer wg.Done()
+				log.SetTestName(RestartManyVolDriver)
 				stepLog = fmt.Sprintf("stop volume driver %s on node: %s", Inst().V.String(), appNode.Name)
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
@@ -2704,6 +2706,7 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 			wg.Add(1)
 			go func(appNode node.Node) {
 				defer wg.Done()
+				log.SetTestName(RestartManyVolDriver)
 				stepLog = fmt.Sprintf("starting volume %s driver on node %s", Inst().V.String(), appNode.Name)
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
@@ -3003,6 +3006,7 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 				wg.Add(1)
 				go func(n node.Node) {
 					defer wg.Done()
+					log.SetTestName(RebootManyNodes)
 					err := isNodeHealthy(n, event.Event.Type)
 					if err != nil {
 						UpdateOutcome(event, err)
@@ -3037,6 +3041,7 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 				wg.Add(1)
 				go func(n node.Node) {
 					defer wg.Done()
+					log.SetTestName(RebootManyNodes)
 					stepLog = fmt.Sprintf("wait for node: %s to be back up", n.Name)
 					Step(stepLog, func() {
 						log.InfoD(stepLog)
@@ -7540,6 +7545,7 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				poweroffwg.Add(1)
 				go func(nodeList []node.Node) {
 					defer poweroffwg.Done()
+					log.SetTestName(PowerOffAllVMs)
 					for _, nodeInfo := range nodeList {
 						log.Infof("Node Name : %v", nodeInfo.Name)
 						err := Inst().N.PowerOffVM(nodeInfo)
@@ -7560,6 +7566,7 @@ func TriggerPowerOffAllVMs(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				poweronwg.Add(1)
 				go func(nodeList []node.Node) {
 					defer poweronwg.Done()
+					log.SetTestName(PowerOffAllVMs)
 					for _, nodeInfo := range nodeList {
 						log.Infof("Node Name : %v", nodeInfo.Name)
 						err := Inst().N.PowerOnVM(nodeInfo)
@@ -7666,6 +7673,7 @@ func TriggerPowerOffStorageNodes(contexts *[]*scheduler.Context, recordChan *cha
 					poweroffwg.Add(1)
 					go func(nodeList []node.Node) {
 						defer poweroffwg.Done()
+						log.SetTestName(PowerOffStorageNodes)
 						for _, nodeInfo := range nodeList {
 							log.Infof("Powering Off Node: %v", nodeInfo.Name)
 							err := Inst().N.PowerOffVM(nodeInfo)
@@ -7687,6 +7695,7 @@ func TriggerPowerOffStorageNodes(contexts *[]*scheduler.Context, recordChan *cha
 					poweronwg.Add(1)
 					go func(nodeList []node.Node) {
 						defer poweronwg.Done()
+						log.SetTestName(PowerOffStorageNodes)
 						for _, nodeInfo := range nodeList {
 							log.Infof("Powering On Node: %v", nodeInfo.Name)
 							err := Inst().N.PowerOnVM(nodeInfo)
@@ -7807,6 +7816,7 @@ func TriggerPowerOffStoragelessNodes(contexts *[]*scheduler.Context, recordChan 
 					poweroffwg.Add(1)
 					go func(nodeList []node.Node) {
 						defer poweroffwg.Done()
+						log.SetTestName(PowerOffStoragelessNodes)
 						for _, nodeInfo := range nodeList {
 							log.Infof("Powering Off Node: %v", nodeInfo.Name)
 							err := Inst().N.PowerOffVM(nodeInfo)
@@ -7823,11 +7833,13 @@ func TriggerPowerOffStoragelessNodes(contexts *[]*scheduler.Context, recordChan 
 			Step(stepLog, func() {
 				log.Infof(stepLog)
 				var poweronwg sync.WaitGroup
+
 				log.Infof("Poweron thread starts")
 				for i := 0; i < numberOfThread; i++ {
 					poweronwg.Add(1)
 					go func(nodeList []node.Node) {
 						defer poweronwg.Done()
+						log.SetTestName(PowerOffStoragelessNodes)
 						for _, nodeInfo := range nodeList {
 							log.Infof("Powering On Node: %v", nodeInfo.Name)
 							err := Inst().N.PowerOnVM(nodeInfo)
@@ -9369,7 +9381,9 @@ func TriggerPoolDelete(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			}
 
 			nodeVols, err := GetVolumesOnNode(nodeSelected.VolDriverNodeID)
-			UpdateOutcome(event, fmt.Errorf("error getting volumes on the node [%s], Err : %v", nodeSelected.Name, err))
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("error getting volumes on the node [%s], Err : %v", nodeSelected.Name, err))
+			}
 
 			err = DeletePoolAndValidate(nodeSelected, poolIDToDelete)
 			if err != nil {
@@ -12781,6 +12795,7 @@ func TriggerScaleFADAVolumeAttach(contexts *[]*scheduler.Context, recordChan *ch
 			wg.Add(1)
 			sem <- struct{}{}
 			go func(scName string, pvcName string, ns string, depName string, wg *sync.WaitGroup, ctx *[]*scheduler.Context, event *EventRecord, sem chan struct{}) {
+				log.SetTestName(ScaleFADAVolumeAttach)
 				deployFadaApps(fadaScName, pvcName, namespace, deploymentName, wg, ctx, event)
 				<-sem
 			}(fadaScName, pvcName, namespace, deploymentName, &wg, &appContexts, event, sem)
@@ -13201,6 +13216,7 @@ func TriggerSvMotionMultipleNodes(contexts *[]*scheduler.Context, recordChan *ch
 		for i := 0; i < numSelectedNodes; i++ {
 			go func(node node.Node) {
 				defer wg.Done()
+				log.SetTestName(SVMotionMultipleNodes)
 
 				moveAllDisks := rand.Intn(2) == 0
 				diskUUIDMap := make(map[string]string)
