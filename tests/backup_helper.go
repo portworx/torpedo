@@ -12659,6 +12659,41 @@ func GetBackupLocationCount(lines []string, metricName string) (int, error) {
 	return dataCount, nil
 }
 
+// GetPxBackupSchedulePolicyCount to validate the PxBackup_schedulepolicy_metrics count
+func GetPxBackupSchedulePolicyCount(lines []string, metricName string, orgID string) (int, error) {
+	dataCount := 0
+	schedulePolicyCount := 0
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
+
+	//Get all schedulePolicy for the given org
+	schedulePolicyList, err := Inst().Backup.GetAllSchedulePolicies(ctx, orgID)
+	if err != nil {
+		err = fmt.Errorf("failed to get list of schedule policies with error: [%v]", err)
+		return 0, err
+	}
+	for _, policyList := range schedulePolicyList {
+		log.Infof("schedule policy list [%v]", policyList)
+		schedulePolicyCount++
+	}
+	log.InfoD("Schedule policy count [%v]", schedulePolicyCount)
+
+	pattern := fmt.Sprintf(`%s\{name="([^"]*)",type="([^"]*)",user_id="([^"]*)"\}`, metricName)
+	re := regexp.MustCompile(pattern)
+	for _, line := range lines {
+		if re.MatchString(line) {
+			log.Infof("Matched string [%v]", re.MatchString(line))
+			dataCount++
+		}
+	}
+	log.InfoD("data count [%v]", dataCount)
+
+	if schedulePolicyCount == dataCount {
+		log.InfoD("Total schedule policy count is [%v]", dataCount)
+	}
+	return dataCount, nil
+}
+
 // UpdateCluster updates cluster with given kubeConfig
 func UpdateClusterWithKubeConfig(clusterName string, clusterUid string, kubeConfigPath string, ctx context1.Context) (*api.ClusterUpdateResponse, error) {
 	backupDriver := Inst().Backup

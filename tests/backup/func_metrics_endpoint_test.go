@@ -792,3 +792,74 @@ var _ = Describe("{PxBackupTotalDuration}", Label(TestCaseLabelsMap[ValidateMetr
 
 	})
 })
+
+// Verify PxBackup schedule policy count from metrics
+var _ = Describe("{VerifyPxBackupSchedulePolicyCount}", Label(TestCaseLabelsMap[ValidateMetrics]...), func() {
+	var (
+		contexts            []*scheduler.Context
+		pxbNamespace        string
+		schedulePolicyNames []string
+		schedulePolicyCount int
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyPxBackupSchedulePolicyCount", "Verify px-backup schedule policy count from metrics.", nil, 91951, Prikumar, Q2FY25)
+	})
+
+	// Validate px-backup schedule policy count from metrics
+	It("Validate px-backup schedule policy count from metrics", func() {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching admin ctx")
+
+		// Creating multiple schedule policies for backup
+		Step("Create schedule policy for backup schedules", func() {
+			log.InfoD("Create schedule policy for backup schedules")
+			schedulePolicyCount = 4
+			for i := 0; i < schedulePolicyCount; i++ {
+				periodicSchedulePolicyName := fmt.Sprintf("%s-%v", "periodic", i)
+				periodicSchedulePolicyUid := uuid.New()
+				periodicSchedulePolicyInterval := int64(15)
+				err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, ctx, false, false)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s]", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
+				schedulePolicyNames = append(schedulePolicyNames, periodicSchedulePolicyName)
+			}
+		})
+
+		// Check and validate the PxBackup_schedulepolicy_metrics count
+		Step("Verify the pxbackup schedule policy count from metrics endpoint", func() {
+			metricsName := "pxbackup_schedpolicy_metrics"
+
+			//Get namespace of px-backup deployment
+			pxbNamespace, err = backup.GetPxBackupNamespace()
+			log.FailOnError(err, "Getting px-backup namespace")
+			log.Infof("namespace is [%v]", pxbNamespace)
+
+			//Fetch all datas from endpoint
+			allMetricsData, err := RunCurlCmd(pxbNamespace)
+			log.FailOnError(err, "Fetching metrics data")
+
+			//Get total px-backup schedule policy count
+			count, err := GetPxBackupSchedulePolicyCount(allMetricsData, metricsName, BackupOrgID)
+			log.Infof("pxbackup_cschedulePolicy count", count)
+			dash.VerifyFatal(schedulePolicyCount, count, "Validate the count")
+			dash.VerifyFatal(err, nil, "Verify the status of pxbackup schedule policy count from metrics endpoint")
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching admin ctx")
+
+		//Delete all schedule policies
+		log.Infof("Deleting backup schedule policy")
+		schedulePolicyNames, _ := Inst().Backup.GetAllSchedulePolicies(ctx, BackupOrgID)
+		for _, schedulePolicyName := range schedulePolicyNames {
+			err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, []string{schedulePolicyName})
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policy %s ", []string{schedulePolicyName}))
+		}
+		// Clean up the cluster
+		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
+	})
+})
