@@ -822,15 +822,22 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 				nonAdminCtx, err := backup.GetNonAdminCtx(unsupportedUsers[0], CommonPassword)
 				log.FailOnError(err, "Fetching user [%s] ctx", unsupportedUsers[0])
 				_, err = ShareCluster(nonAdminCtx, SourceClusterName, userClusterMap[unsupportedUsers[0]][SourceClusterName], sharedUsers[18:20], nil, true)
-				log.Infof("The expected error is [%s]", err.Error())
-				dash.VerifyFatal(strings.Contains(err.Error(), clusterSharePermissionError), true, fmt.Sprintf("Verifying user [%s] cant share the cluster [%s]", unsupportedUsers[0], SourceClusterName))
-
+				if err != nil {
+					log.Infof("The actual error is [%s]", err.Error())
+					dash.VerifyFatal(strings.Contains(err.Error(), clusterSharePermissionError), true, fmt.Sprintf("Verifying user [%s] cant share the cluster [%s]", unsupportedUsers[0], SourceClusterName))
+				} else {
+					log.FailOnError(err, fmt.Sprintf("Expected error, but got none for user [%s] attempting to share cluster [%s]", unsupportedUsers[0], SourceClusterName))
+				}
 				log.Infof("Sharing the cluster from user [%s] with groups [%s]", unsupportedUsers[1], sharedGroups[0:2])
 				nonAdminCtx, err = backup.GetNonAdminCtx(unsupportedUsers[1], CommonPassword)
 				log.FailOnError(err, "Fetching user [%s] ctx", unsupportedUsers[1])
 				_, err = ShareCluster(nonAdminCtx, SourceClusterName, userClusterMap[unsupportedUsers[1]][SourceClusterName], nil, sharedGroups[0:2], true)
-				log.Infof("The expected error is [%s]", err.Error())
-				dash.VerifyFatal(strings.Contains(err.Error(), clusterSharePermissionError), true, fmt.Sprintf("Verifying user [%s] cant share the cluster [%s]", unsupportedUsers[1], SourceClusterName))
+				if err != nil {
+					log.Infof("The actual error is [%s]", err.Error())
+					dash.VerifyFatal(strings.Contains(err.Error(), clusterSharePermissionError), true, fmt.Sprintf("Verifying user [%s] cant share the cluster [%s]", unsupportedUsers[1], SourceClusterName))
+				} else {
+					log.FailOnError(err, fmt.Sprintf("Expected error, but got none for user [%s] attempting to share cluster [%s]", unsupportedUsers[1], SourceClusterName))
+				}
 			} else {
 				log.Infof("Skipping the Validation, As the cluster is of the provider type -[%s], the cluster share operation is supported for all roles", GetClusterProvider())
 			}
