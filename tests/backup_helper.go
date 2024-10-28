@@ -97,6 +97,7 @@ const (
 	Prikumar       TestcaseAuthor = "prikumar"
 	Dchothani      TestcaseAuthor = "dchothani"
 	Pingle         TestcaseAuthor = "pingle-px"
+	ABadgujar      TestcaseAuthor = "abadgujar-px"
 )
 
 // TestcaseQuarter List
