@@ -12073,7 +12073,10 @@ var _ = Describe("{PoolDeleteWithNodeRebootWithTimeInterval}", func() {
 			poolIDToDelete = strconv.Itoa(int(poolToDelete.GetID()))
 			log.Infof("pool selected for deletion [%s]", poolIDToDelete)
 		})
-
+		metadataPoolUuids, err := GetPoolUUIDWithMetadataDisk(selectedNode)
+		if err != nil && !strings.Contains(err.Error(), "no pool with metadata in node") {
+			log.FailOnError(err, fmt.Sprintf("unable to fetch metadata pool on node: [%v]", selectedNode.Name))
+		}
 		stepLog = fmt.Sprintf("Validate volumes are deleted or not")
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -12116,7 +12119,7 @@ var _ = Describe("{PoolDeleteWithNodeRebootWithTimeInterval}", func() {
 			log.InfoD(stepLog)
 			status, err := Inst().V.GetPxctlStatus(selectedNode)
 			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", selectedNode.Name))
-			dash.VerifyFatal(status == api.Status_STATUS_OFFLINE.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
 				selectedNode.Name, api.Status_STATUS_OK, status))
 			log.InfoD("px status %v", status)
 		})
@@ -12131,9 +12134,18 @@ var _ = Describe("{PoolDeleteWithNodeRebootWithTimeInterval}", func() {
 			if _, ok := poolsMap[poolToDelete.GetUuid()]; ok {
 				log.FailOnError(fmt.Errorf("pool [%s] still exists on the node [%s]", poolToDelete.GetUuid(), selectedNode.Name), fmt.Sprintf("pool [%s] still exists on the node [%s]", poolToDelete, selectedNode.Name))
 			}
-			log.InfoD("verify pool delete succeed")
+			log.InfoD("verify pool delete [%s] succeed", poolToDelete.GetUuid())
 		})
 
+		if metadataPoolUuids == poolToDelete.GetUuid() && len(nodePools) > 1 {
+			stepLog = "check metadata transfered to other pool"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				metadataPoolUuids, err := GetPoolUUIDWithMetadataDisk(selectedNode)
+				log.FailOnError(err, fmt.Sprintf("failed to fetch metadata pool on node [%s]", selectedNode.Name))
+				log.InfoD("metadata transfered to pool:[%s]", metadataPoolUuids)
+			})
+		}
 		newSpecSize := (poolToDelete.TotalSize / units.GiB) / 2
 		///creating a spec to perform add  drive
 		driveSpecs, err := GetCloudDriveDeviceSpecs()
@@ -12903,6 +12915,11 @@ var _ = Describe("{PoolDeleteWithPXRestart}", func() {
 			log.Infof("pool selected for deletion [%s]", poolIDToDelete)
 		})
 
+		metadataPoolUuids, err := GetPoolUUIDWithMetadataDisk(selectedNode)
+		if err != nil && !strings.Contains(err.Error(), "no pool with metadata in node") {
+			log.FailOnError(err, fmt.Sprintf("unable to fetch metadata pool on node: [%v]", selectedNode.Name))
+		}
+
 		stepLog = fmt.Sprintf("Validate volumes are deleted or not")
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -12967,6 +12984,16 @@ var _ = Describe("{PoolDeleteWithPXRestart}", func() {
 			}
 			log.InfoD("verify pool delete succeed")
 		})
+
+		if metadataPoolUuids == poolToDelete.GetUuid() && len(nodePools) > 1 {
+			stepLog = "check metadata transfered to other pool"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				metadataPoolUuids, err := GetPoolUUIDWithMetadataDisk(selectedNode)
+				log.FailOnError(err, fmt.Sprintf("failed to fetch metadata pool on node [%s]", selectedNode.Name))
+				log.InfoD("metadata transfered to pool:[%s]", metadataPoolUuids)
+			})
+		}
 
 		newSpecSize := (poolToDelete.TotalSize / units.GiB) / 2
 		///creating a spec to perform add  drive
