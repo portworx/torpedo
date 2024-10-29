@@ -463,16 +463,16 @@ var _ = Describe("{VerifyPxBackupClusterCount}", Label(TestCaseLabelsMap[Validat
 		Step("Verify the pxbackup cluster count from metrics endpoint", func() {
 			metricsName := "pxbackup_cluster_status"
 
-			//Get namespace of px-backup deployment
+			// Get namespace of px-backup deployment
 			pxbNamespace, err = backup.GetPxBackupNamespace()
 			log.FailOnError(err, "Getting px-backup namespace")
 			log.Infof("namespace is [%v]", pxbNamespace)
 
-			//Fetch all datas from endpoint
+			// Fetch all datas from endpoint
 			allMetricsData, err := RunCurlCmd(pxbNamespace)
 			log.FailOnError(err, "Fetching metrics data")
 
-			//Get total px-backup cluster count
+			// Get total px-backup cluster count
 			count, err := GetPxBackupClusterCount(allMetricsData, metricsName)
 			log.Infof("pxbackup_cluster_count", count)
 			dash.VerifyFatal(clusterCount, count, "Validate cluster count")
@@ -529,16 +529,16 @@ var _ = Describe("{VerifyPxBackupCloudCredCount}", func() {
 		Step("Verify the pxbackup cloud credential count from metrics endpoint", func() {
 			metricsName := "pxbackup_cloudcred_metrics"
 
-			//Get namespace of px-backup deployment
+			// Get namespace of px-backup deployment
 			pxbNamespace, err = backup.GetPxBackupNamespace()
 			log.FailOnError(err, "Getting px-backup namespace")
 			log.Infof("namespace is [%v]", pxbNamespace)
 
-			//Fetch all datas from endpoint
+			// Fetch all datas from endpoint
 			allMetricsData, err := RunCurlCmd(pxbNamespace)
 			log.FailOnError(err, "Fetching metrics data")
 
-			//Get total px-backup cluster count
+			// Get total px-backup cluster count
 			count, err := GetPxBackupCloudCredCount(allMetricsData, metricsName)
 			log.Infof("pxbackup_cloudcred_metrics count", count)
 			dash.VerifyFatal(credCount, count, "Validate cloud credential count")
@@ -602,16 +602,16 @@ var _ = Describe("{VerifyBackupLocationCount}", Label(TestCaseLabelsMap[Validate
 		Step("Verify the backup location count from metrics endpoint", func() {
 			metricsName := "pxbackup_backup_location_status"
 
-			//Get namespace of px-backup deployment
+			// Get namespace of px-backup deployment
 			pxbNamespace, err := backup.GetPxBackupNamespace()
 			log.FailOnError(err, "Getting px-backup namespace")
 			log.Infof("namespace is [%v]", pxbNamespace)
 
-			//Fetch all datas from endpoint
+			// Fetch all datas from endpoint
 			allMetricsData, err := RunCurlCmd(pxbNamespace)
 			log.FailOnError(err, "Fetching metrics data")
 
-			//Get total px-backup location count
+			// Get total px-backup location count
 			count, err := GetBackupLocationCount(allMetricsData, metricsName)
 			log.Infof("pxbackup_backup_location_status count", count)
 			dash.VerifyFatal(bkpLocationCount, count, "Validate backup location count")
@@ -631,7 +631,7 @@ var _ = Describe("{VerifyBackupLocationCount}", Label(TestCaseLabelsMap[Validate
 	})
 })
 
-// Verify VerifyPxBackupTotalDuration from metrcis
+// Verify VerifyPxBackupTotalDuration from metrics
 var _ = Describe("{PxBackupTotalDuration}", Label(TestCaseLabelsMap[ValidateMetrics]...), func() {
 	var (
 		contexts             []*scheduler.Context
@@ -829,16 +829,16 @@ var _ = Describe("{VerifyPxBackupSchedulePolicyCount}", Label(TestCaseLabelsMap[
 		Step("Verify the pxbackup schedule policy count from metrics endpoint", func() {
 			metricsName := "pxbackup_schedpolicy_metrics"
 
-			//Get namespace of px-backup deployment
+			// Get namespace of px-backup deployment
 			pxbNamespace, err = backup.GetPxBackupNamespace()
 			log.FailOnError(err, "Getting px-backup namespace")
 			log.Infof("namespace is [%v]", pxbNamespace)
 
-			//Fetch all datas from endpoint
+			// Fetch all datas from endpoint
 			allMetricsData, err := RunCurlCmd(pxbNamespace)
 			log.FailOnError(err, "Fetching metrics data")
 
-			//Get total px-backup schedule policy count
+			// Get total px-backup schedule policy count
 			count, err := GetPxBackupSchedulePolicyCount(allMetricsData, metricsName, BackupOrgID)
 			log.Infof("pxbackup_cschedulePolicy count", count)
 			dash.VerifyFatal(schedulePolicyCount, count, "Validate the count")
@@ -852,7 +852,7 @@ var _ = Describe("{VerifyPxBackupSchedulePolicyCount}", Label(TestCaseLabelsMap[
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching admin ctx")
 
-		//Delete all schedule policies
+		// Delete all schedule policies
 		log.Infof("Deleting backup schedule policy")
 		schedulePolicyNames, _ := Inst().Backup.GetAllSchedulePolicies(ctx, BackupOrgID)
 		for _, schedulePolicyName := range schedulePolicyNames {
