@@ -903,7 +903,6 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
 			err = CreateScheduleBackup(scheduleName, clusterName, clsuter1UID, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUser1Ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", scheduleName))
-			// backupScheduleList = append(backupScheduleList, scheduleName)
 
 			// Create restore from backup
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
@@ -977,8 +976,8 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 			err = DeleteScheduleWithUIDAndWait(scheduleName, scheduleUID, clusterName, clsuter1UID, BackupOrgID, testUser1Ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", scheduleName))
 
-			err = DeleteCluster(clusterName, BackupOrgID, testUser1Ctx, false)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster [%s]", clusterName))
+			err = DeleteClusterWithUID(clusterName, clsuter1UID, BackupOrgID, testUser1Ctx, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Cluster [%s]", SourceClusterName))
 		})
 	})
 
