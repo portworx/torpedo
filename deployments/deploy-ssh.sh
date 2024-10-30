@@ -830,6 +830,8 @@ spec:
       value: "${GOOGLE_APPLICATION_CREDENTIALS}"
     - name: TOGGLE_PURE_MGMT_IP
       value: "${TOGGLE_PURE_MGMT_IP}"
+    - name: SIMULATE_FB_FQDN
+      value: "${SIMULATE_FB_FQDN}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
