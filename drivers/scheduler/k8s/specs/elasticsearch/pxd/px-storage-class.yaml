@@ -7,7 +7,7 @@ parameters:
   {{ if .Repl }}
   repl: "{{ .Repl }}"
   {{ else }}
-  repl: "3"{{ end }}
+  repl: "2"{{ end }}
   nodiscard: "true"
   {{ if .IoProfile }}
   io_profile: "{{ .IoProfile }}"{{ end }}
