@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/volume"
@@ -23,7 +24,6 @@ import (
 	"github.com/pure-px/torpedo/pkg/testrailuttils"
 	"github.com/pure-px/torpedo/pkg/units"
 	. "github.com/pure-px/torpedo/tests"
-	. "github.com/onsi/gomega"
 )
 
 var (
@@ -2110,6 +2110,7 @@ var _ = Describe("{AddNewPoolWithPxRestart}", Label("p1", "hal_ops_disruption", 
 		log.FailOnError(err, "Error getting cloud drive specs")
 
 		deviceSpec := driveSpecs[0]
+
 		deviceSpecParams := strings.Split(deviceSpec, ",")
 		paramsArr := make([]string, 0)
 		for _, param := range deviceSpecParams {
@@ -2137,6 +2138,7 @@ var _ = Describe("{AddNewPoolWithPxRestart}", Label("p1", "hal_ops_disruption", 
 		time.Sleep(time.Second * (time.Duration(sleepTime)))
 
 		stepLog = "Restart Portworx"
+		//Restart portworx and wait for it to come up
 		Step(stepLog, func() {
 			log.Info(stepLog)
 
@@ -2190,9 +2192,7 @@ var _ = Describe("{AddNewPoolWithPxRestart}", Label("p1", "hal_ops_disruption", 
 				log.FailOnError(err, fmt.Sprintf("Error occured while Validating the deleted pool %s in the node %s", newPoolID, selectedNode.Name))
 			})
 		}
-
 	})
-
 })
 
 var _ = Describe("{PoolExpandAddDriveWithPXRestart}", func() {
@@ -2310,3 +2310,164 @@ var _ = Describe("{PoolExpandAddDriveWithPXRestart}", func() {
 
 })
 
+var _ = Describe("{DriveAddAsJournalWithPXRestart}", Label("p1", "hal_ops_disreption", "px_restart", "AddJournal", "functional"), func() {
+	/*
+		1. Install portworx in a 5 node cluster
+		2. Deploy apps to do IOs
+		3. Select a node and add journal drive
+		4. With some random delay force restart the portworx
+		5. After node comes up verify px status and check if journal drive is successfully added and apps are running.
+
+		Testrail test cases
+
+		https://portworx.testrail.net/index.php?/cases/view/301926
+		https://portworx.testrail.net/index.php?/cases/view/301927
+	*/
+
+	var nodeDetail *node.Node
+	var poolUUID string
+	var blockDeviceBefore int
+	var systemOpts node.SystemctlOpts
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("DriveAddAsJournalWithPXRestart",
+			"Add drive when as journal",
+			nil, 0)
+	})
+
+	stepLog := "Automate drive add journal with px restart"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check if Journal enabled")
+
+		if isjournal {
+			log.Info("Journal drive already exists")
+			Skip("Skipping the test DriveAddAsJournalWithPXRestart as journal drive already exists")
+		}
+
+		stepLog = "Schedule apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddriveasjournal-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+		defer appsValidateAndDestroy(contexts)
+
+		stepLog = "Select a node to add journal drive"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Get Pool with running IO on the cluster
+			poolUUID = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_AUTO, 0)
+			log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+			// Get Node Details of the Pool with IO
+			nodeDetail, err = GetNodeWithGivenPoolID(poolUUID)
+			log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+			log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+		})
+
+		// Add cloud drive on the selected node
+		driveSpecs, err := GetCloudDriveDeviceSpecs()
+		log.FailOnError(err, "Error getting cloud drive specs")
+
+		deviceSpec := driveSpecs[0]
+		devicespecjournal := deviceSpec + " --journal"
+
+		stepLog = "Add journal drive"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			//enter pool maintenance mode
+			err = Inst().V.EnterPoolMaintenance(*nodeDetail)
+			log.FailOnError(err, "Error Entering Maintenance mode on Node[%v]", nodeDetail.Name)
+			log.InfoD("Enter pool Maintenance mode ")
+			expectedStatus := "In Maintenance"
+
+			log.FailOnError(WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus),
+				fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
+
+			systemOpts = node.SystemctlOpts{
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: defaultRetryInterval,
+				},
+				Action: "start",
+			}
+			drivesMap, err := Inst().N.GetBlockDrives(*nodeDetail, systemOpts)
+			log.FailOnError(err, "error getting block drives from node %s", nodeDetail.Name)
+			blockDeviceBefore = len(drivesMap)
+			err = Inst().V.AddCloudDrive(nodeDetail, devicespecjournal, -1)
+			log.FailOnError(err, "journal add failed")
+		})
+
+		//random delay in secs
+		sleepTime := rand.Intn(60-1) + 1
+		time.Sleep(time.Second * (time.Duration(sleepTime)))
+
+		stepLog = "Restart Portworx"
+		//Restart portworx and wait for it to come up
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			Step(fmt.Sprintf("node with Px restart is: %s", nodeDetail.Name), func() {
+				err := Inst().V.RestartDriver(*nodeDetail, nil)
+				log.FailOnError(err, fmt.Sprintf("Error occured while Restart PX on node:%v", nodeDetail.Name))
+			})
+
+			Step(fmt.Sprintf("wait for volume driver to restart on node: %v", nodeDetail.Name), func() {
+				err := Inst().V.WaitForPxPodsToBeUp(*nodeDetail)
+				log.FailOnError(err, fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", nodeDetail.Name))
+			})
+		})
+
+		stepLog = "Exit pool maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = ExitPoolMaintenance(*nodeDetail)
+			log.FailOnError(err, "Failed to exit maintenance mode")
+			log.Info("exit pool maintenance mode succeed")
+		})
+
+		stepLog = "Verify Px Status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			status, err := Inst().V.GetPxctlStatus(*nodeDetail)
+			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", nodeDetail.Name))
+			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+				nodeDetail.Name, api.Status_STATUS_OK, status))
+			log.InfoD("px status %v", status)
+		})
+
+		stepLog = "Verify if journal is enabled"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			jDev, err := Inst().V.GetJournalDevicePath(nodeDetail)
+			log.FailOnError(err, fmt.Sprintf("error getting journal device path from node %s", nodeDetail.Name))
+			if jDev == "" {
+				log.FailOnError(fmt.Errorf("no journal device path found"), "error getting journal device path from storage spec")
+			}
+			log.Infof("JournalDev path : %s", jDev)
+
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing driver end points")
+		})
+
+		stepLog = "Verify drive is added successfully"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			drivesMap, err := Inst().N.GetBlockDrives(*nodeDetail, systemOpts)
+			log.FailOnError(err, "error getting block drives from node %s", nodeDetail.Name)
+			blockDeviceAfter := len(drivesMap)
+			dash.VerifyFatal(blockDeviceAfter > blockDeviceBefore, true, "adding cloud drive as journal successful")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
