@@ -2,7 +2,13 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
+	"strings"
+	"sync"
+	"time"
+
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	opsapi "github.com/libopenstorage/openstorage/api"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -10,13 +16,12 @@ import (
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/pkg/kvdbutils"
 	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/testrailuttils"
 	. "github.com/pure-px/torpedo/tests"
 	corev1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"math/rand"
-	"strings"
-	"time"
 )
 
 func runCommand(cmd string, n node.Node) error {
@@ -1388,5 +1393,150 @@ var _ = Describe("{FADAPodRecoveryAllPathDownUsingIptableRule}", func() {
 		log.Infof("In Teardown")
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+})
+var _ = Describe("{KVDBCompactionTest}", Label("staging", "kvdb_ops", "p1", "negative"), func() {
+	/*
+		        ticket id:  https://purestorage.atlassian.net/browse/PWX-21544
+				**Requirements**:
+				- Minimum setup must include:
+				- 3 Storage Nodes
+				- 2 Storageless Nodes
+				1.stop px on 2 kvdb nodes for cluster to run in runflat mode
+				2.i/o continued
+			    3.After 10 mins, brought back portworx on 2 storageless nodes.
+				4.after px is started.. kvdb quorum should be established and kvdb nodes should be runing
+	*/
+
+	var testrailID = 58626
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("KVDBCompactionTest", "stop px on kvdb nodes and start px on  KVDB quorum is established and verifify KVDB nodes are running", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "Stop Px on 2 kvdb nodes.After 10 minutes, start px on kvdb nodes. After PX is started, KVDB quorum is established and verifify KVDB nodes are running."
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		if !IsKvdbRunningOnStorageLessNode() {
+			Skip("Skipping test: KVDB is not running on the required storageless nodes.")
+		}
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("kvdb-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+		var wg sync.WaitGroup
+		var storageLessNodes []node.Node
+		storageLessNodes = node.GetStorageLessNodes()
+		storagenode := node.GetStorageNodes()
+		for _, ctx := range contexts {
+			log.Infof("Stopped Portworx on storageless nodes.")
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				log.InfoD("Stopping PX service on nodes: %+v", storageLessNodes)
+				for _, storagelessnode := range storageLessNodes {
+					StopVolDriverAndWait([]node.Node{storagelessnode})
+					log.InfoD("Successfully stopped PX service on nodes: %v", storagelessnode)
+				}
+			})
+			defer func() {
+				log.InfoD("Setting cluster to running")
+				for _, n := range storageLessNodes {
+					err := Inst().V.StartDriver(n)
+					log.FailOnError(err, "Error starting driver on node %s", n.Name)
+					err = Inst().V.WaitDriverUpOnNode(n, 10*time.Minute)
+					log.FailOnError(err, "Error while waiting for driver to be up on node %s", n.Name)
+				}
+			}()
+			stepLog = " Verify cluster is now in run flat mode."
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				output, err := runCmd("pxctl status", storagenode[0])
+				log.FailOnError(err, "Failed to run pxctl status on node: %v", storagenode[0].Name)
+				log.Infof("pxctl status output: %v\n", output)
+				// Check for specific error message in output
+				expect_out := "Volume and node operations may be unavailable but I/O will continue"
+				dash.VerifyFatal(strings.Contains(output, expect_out), true, "Is cluster on flat mode?")
+				_, err = Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to list the volumes for storage node %v in context %v", storagenode[0].Name, ctx)
+				volName := "volume1"
+				cmd := fmt.Sprintf("pxctl volume create %s", volName)
+				log.Infof("Executing command to create volume: %s", cmd)
+				_, err = Inst().N.RunCommandWithNoRetry(
+					storagenode[0],
+					cmd,
+					node.ConnectionOpts{
+						Timeout:         1 * time.Minute,
+						TimeBeforeRetry: defaultRetryInterval,
+					})
+				dash.VerifyFatal(strings.Contains(err.Error(), "All operations (get/update/delete) are unavailable"), true, "Is cluster on flat mode?")
+				poolUID := storagenode[0].Pools
+				expandPoolCmd := fmt.Sprintf("pxctl service pool expand -o auto -s 300 -u %s", poolUID[0].Uuid)
+				log.Infof("Executing command to expand pool: %s", expandPoolCmd)
+				_, err = Inst().N.RunCommandWithNoRetry(
+					storagenode[0],
+					expandPoolCmd,
+					node.ConnectionOpts{
+						Timeout:         1 * time.Minute,
+						TimeBeforeRetry: defaultRetryInterval,
+					})
+				dash.VerifyFatal(strings.Contains(err.Error(), "All operations (get/update/delete) are unavailable"), true, "Is cluster on flat mode?")
+
+			})
+		}
+		Step("validate applications", func() {
+			log.InfoD("Validate applications")
+			for _, ctx := range contexts {
+				wg.Add(1)
+				go func(c *scheduler.Context) {
+					defer wg.Done()
+					ValidateContext(c)
+				}(ctx)
+			}
+
+			wg.Wait()
+		})
+
+		log.InfoD("Waiting for 10 minutes...")
+		time.Sleep(10 * time.Minute)
+		stepLog := "Started Portworx on all storageless nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, n := range storageLessNodes {
+				err := Inst().V.StartDriver(n)
+				log.FailOnError(err, "error starting driver on node %s", n.Name)
+				err = Inst().V.WaitDriverUpOnNode(n, 10*time.Minute)
+				log.FailOnError(err, "error while waiting for driver up on node %s", n.Name)
+			}
+		})
+		stepLog = "Verified that all KVDB nodes are running and in a healthy state."
+		Step(fmt.Sprintf("get kvdb nodes"), func() {
+			log.InfoD(stepLog)
+			kvdbNodes, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Failed to get list of KVDB nodes from the cluster")
+			for _, kvdbNode := range kvdbNodes {
+				nodeInfo, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Unable to get details for node ID: %s", kvdbNode.ID)
+				nodeStatus, err := Inst().V.GetNodeStatus(nodeInfo)
+				dash.VerifyFatal(*nodeStatus, opsapi.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", kvdbNode.ID))
+			}
+			kvdbMembers, err := Inst().V.GetKvdbMembers(storagenode[0])
+			log.FailOnError(err, "Failed to get kvdb members")
+			err = kvdbutils.ValidateKVDBMembers(kvdbMembers)
+			log.FailOnError(err, "Failed to validate kvdb members")
+			output, err := runCmd("pxctl status", storagenode[0])
+			log.FailOnError(err, "Failed to run pxctl status on node: %v", storagenode[0].Name)
+			log.Infof("pxctl status output: %v\n", output)
+			dash.VerifyFatal(!strings.Contains(output, "Warning"), true, "Output contains warnings. Is the cluster healthy?")
+
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })

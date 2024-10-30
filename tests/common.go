@@ -11,7 +11,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"io/ioutil"
 	"maps"
 	"math"
@@ -29,6 +28,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 
 	"github.com/pure-px/torpedo/drivers/applications/databases"
 
@@ -932,6 +933,22 @@ func IsPoolAddDiskSupported() bool {
 		}
 	}
 	return true
+}
+func IsKvdbRunningOnStorageLessNode() bool {
+	storageLessNodes := node.GetStorageLessNodes()
+	kvdbMemberNodes, err := GetAllKvdbNodes()
+	log.FailOnError(err, "Failed to get list of KVDB nodes from the cluster")
+	storageLessNodesCount := 0
+	for _, kvdbNode := range kvdbMemberNodes {
+		for _, storageLessNode := range storageLessNodes {
+			if kvdbNode.ID == storageLessNode.Id {
+				storageLessNodesCount++
+				break
+			}
+		}
+	}
+	return storageLessNodesCount == 2
+
 }
 
 // ValidateContext is the ginkgo spec for validating a scheduled context

@@ -2,8 +2,9 @@ package node
 
 import (
 	"fmt"
-	"github.com/pborman/uuid"
 	"sync"
+
+	"github.com/pborman/uuid"
 )
 
 var (
@@ -222,7 +223,7 @@ func CleanupRegistry() {
 
 // GetNodeDetailsByNodeID get node details for a given node name
 func GetNodeDetailsByNodeID(nodeID string) (Node, error) {
-	storageNodes := GetStorageNodes()
+	storageNodes := GetStorageDriverNodes()
 
 	for _, each := range storageNodes {
 		if each.Id == nodeID {
