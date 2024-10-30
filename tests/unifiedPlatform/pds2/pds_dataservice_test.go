@@ -14,7 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/pure-px/torpedo/drivers/unifiedPlatform/stworkflows/pds"
