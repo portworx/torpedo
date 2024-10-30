@@ -3,11 +3,12 @@ package tests
 import (
 	context1 "context"
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/core"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/sched-ops/k8s/core"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	oputil "github.com/libopenstorage/operator/pkg/util/test"
@@ -22,7 +23,7 @@ import (
 	. "github.com/pure-px/torpedo/tests"
 )
 
-var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
+var _ = Describe("{AddNewDiskToKubevirtVM}", Label("p0", "positive", "kubevirt"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddNewDiskToKubevirtVM", "Add a new disk to a kubevirtVM", nil, 0)
 	})
@@ -91,7 +92,7 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", func() {
 	})
 })
 
-var _ = Describe("{KubeVirtLiveMigration}", func() {
+var _ = Describe("{KubeVirtLiveMigration}", Label("p0", "positive", "kubevirt", "LiveMigration"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("KubeVirtLiveMigration", "Live migrate a kubevirtVM", nil, 0)
 	})
@@ -143,7 +144,7 @@ var _ = Describe("{KubeVirtLiveMigration}", func() {
 	})
 })
 
-var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
+var _ = Describe("{PxKillBeforeAddDiskToVM}", Label("p1", "negative", "kubevirt", "error_injection", "px_crash"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("PxKillBeforeAddDiskToVM", "Kill Px on host node of Kubuevirt VM and then Add a disk", nil, 0)
 	})
@@ -247,7 +248,7 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", func() {
 	})
 })
 
-var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
+var _ = Describe("{PxKillAfterAddDiskToVM}", Label("p1", "negative", "kubevirt", "error_injection", "px_crash"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("PxKillAfterAddDiskToVM", "Add a disk to Kubevirt VM, kill Px, Add another disk and validate the VM", nil, 0)
 	})
@@ -364,7 +365,7 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", func() {
 	})
 })
 
-var _ = Describe("{KubevirtVMVolHaIncrease}", func() {
+var _ = Describe("{KubevirtVMVolHaIncrease}", Label("p0", "positive", "kubevirt", "HA_Increase_Decrease"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("KubevirtVMVolHaIncrease", "Increase the volume HA of a kubevirt VM", nil, 0)
 	})
@@ -439,7 +440,7 @@ var _ = Describe("{KubevirtVMVolHaIncrease}", func() {
 	})
 })
 
-var _ = Describe("{KubevirtVMVolHaDecrease}", func() {
+var _ = Describe("{KubevirtVMVolHaDecrease}", Label("p0", "positive", "kubevirt", "HA_Increase_Decrease"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("KubevirtVMVolHaDecrease", "Decrease the replication factor of kubevirt Vms", nil, 0)
 	})
@@ -518,7 +519,7 @@ var _ = Describe("{KubevirtVMVolHaDecrease}", func() {
 	})
 })
 
-var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
+var _ = Describe("{LiveMigrationBeforeAddDisk}", Label("p0", "positive", "kubevirt", "LiveMigration"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("LiveMigrationBeforeAddDisk", "Live Migrate a VM Before Adding a new disk to a kubevirtVM", nil, 0)
 	})
@@ -587,7 +588,7 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", func() {
 	})
 })
 
-var _ = Describe("{AddDiskAndLiveMigrate}", func() {
+var _ = Describe("{AddDiskAndLiveMigrate}", Label("p0", "positive", "kubevirt", "LiveMigration"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddDiskAndLiveMigrate", "Live Migrate a VM After Adding a new disk to a kubevirtVM", nil, 0)
 	})
@@ -656,7 +657,7 @@ var _ = Describe("{AddDiskAndLiveMigrate}", func() {
 	})
 })
 
-var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
+var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", Label("p0", "positive", "kubevirt", "autopilot", "PvcResize", "PoolExpand"), func() {
 	/*
 		PWX:
 			https://purestorage.atlassian.net/browse/PWX-36709
@@ -873,7 +874,7 @@ var _ = Describe("{KubeVirtPvcAndPoolExpandWithAutopilot}", func() {
 	})
 })
 
-var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
+var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", Label("p1", "positive", "kubevirt", "Upgrade"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("UpgradeClusterAndValidateKubeVirt", "Upgrade OCP cluster and validate kubevirt apps", nil, 0)
 	})
@@ -971,7 +972,7 @@ var _ = Describe("{UpgradeOCPAndValidateKubeVirtApps}", func() {
 	})
 })
 
-var _ = Describe("{RebootRootDiskAttachedNode}", func() {
+var _ = Describe("{RebootRootDiskAttachedNode}", Label("p1", "negative", "error_injection", "kubevirt", "node_reboot"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootRootDiskAttachedNode", "Reboot the node where VMs root disk is attached", nil, 0)
 		DeployVMTemplatesAndValidate()
@@ -1049,7 +1050,7 @@ var _ = Describe("{RebootRootDiskAttachedNode}", func() {
 	})
 })
 
-var _ = Describe("{ParallelAddDiskToVM}", func() {
+var _ = Describe("{ParallelAddDiskToVM}", Label("p1", "postive", "kubevirt", "shared_v4", "MiniScale"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ParallelAddDiskToVM", "Add a new disk to multiple kubevirtVM parallely", nil, 0)
 	})
@@ -1129,7 +1130,7 @@ var _ = Describe("{ParallelAddDiskToVM}", func() {
 	})
 })
 
-var _ = Describe("{MultipleKubeVirtLiveMigration}", func() {
+var _ = Describe("{MultipleKubeVirtLiveMigration}", Label("p0", "postive", "kubevirt", "MiniScale", "LiveMigration"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("MultipleKubeVirtLiveMigration", "Live migrate multiple kubevirtVM's parallely", nil, 0)
 	})
@@ -1189,7 +1190,7 @@ var _ = Describe("{MultipleKubeVirtLiveMigration}", func() {
 	})
 })
 
-var _ = Describe("{AddDiskAndLiveMigrateMultipleVm}", func() {
+var _ = Describe("{AddDiskAndLiveMigrateMultipleVm}", Label("p1", "postive", "kubevirt", "MiniScale", "LiveMigration"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddDiskAndLiveMigrateMultipleVm", "Live Migrate multiple VM's After Adding a new disk to a kubevirtVM", nil, 0)
 	})
@@ -1260,7 +1261,7 @@ var _ = Describe("{AddDiskAndLiveMigrateMultipleVm}", func() {
 	})
 })
 
-var _ = Describe("{LiveMigrationBeforeAddDiskMultipleVm}", func() {
+var _ = Describe("{LiveMigrationBeforeAddDiskMultipleVm}", Label("p1", "postive", "kubevirt", "LiveMigration"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("LiveMigrationBeforeAddDiskMultipleVm", "Live Migrate multiple VM's Before Adding a new disk to a kubevirtVM parallely", nil, 0)
 	})
@@ -1328,7 +1329,7 @@ var _ = Describe("{LiveMigrationBeforeAddDiskMultipleVm}", func() {
 	})
 })
 
-var _ = Describe("{MultipleVMVolHaIncrease}", func() {
+var _ = Describe("{MultipleVMVolHaIncrease}", Label("p1", "postive", "kubevirt", "HA_Increase_Decrease", "MiniScale"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("MultipleVMVolHaIncrease", "Increase the volume HA of multiple kubevirt VM parallely", nil, 0)
 	})
@@ -1406,7 +1407,7 @@ var _ = Describe("{MultipleVMVolHaIncrease}", func() {
 	})
 })
 
-var _ = Describe("{MultipleVMVolHaDecrease}", func() {
+var _ = Describe("{MultipleVMVolHaDecrease}", Label("p1", "postive", "kubevirt", "HA_Increase_Decrease", "MiniScale"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("MultipleVMVolHaDecrease", "Decrease the replication factor of multiple kubevirt Vms paralley", nil, 0)
 	})
@@ -1489,7 +1490,7 @@ var _ = Describe("{MultipleVMVolHaDecrease}", func() {
 	})
 })
 
-var _ = Describe("{LiveMigrateWhileNodeInMaintenance}", func() {
+var _ = Describe("{LiveMigrateWhileNodeInMaintenance}", Label("p2", "negative", "kubevirt", "error_injection", "LiveMigration", "NodeMaintenance"), func() {
 	/*
 		            1. Put replica nodes in maintenance mode
 			    2. Initiate Live Migration of VM
@@ -1595,7 +1596,7 @@ var _ = Describe("{LiveMigrateWhileNodeInMaintenance}", func() {
 	})
 })
 
-var _ = Describe("{LiveMigrateCordonNonReplicaNode}", func() {
+var _ = Describe("{LiveMigrateCordonNonReplicaNode}", Label("p2", "negative", "kubevirt", "error_injection", "LiveMigration", "RecycleNode"), func() {
 
 	/*
 		                1. Schedule a kubevirt VM
@@ -1756,7 +1757,7 @@ var _ = Describe("{LiveMigrateCordonNonReplicaNode}", func() {
 
 })
 
-var _ = Describe("{StopPxOnNodeWhereVMIsProvisioned}", func() {
+var _ = Describe("{StopPxOnNodeWhereVMIsProvisioned}", Label("p1", "negative", "kubevirt", "error_injection", "px_crash"), func() {
 	/*
 			1. Schedule a kubevirt VM
 		`	2. Stop PX on the node where VM is provisioned for 15mins
@@ -1847,7 +1848,7 @@ var _ = Describe("{StopPxOnNodeWhereVMIsProvisioned}", func() {
 	})
 })
 
-var _ = Describe("{RestartPXAndCheckIfVmBindMount}", func() {
+var _ = Describe("{RestartPXAndCheckIfVmBindMount}", Label("p1", "negative", "error_injection", "kubevirt", "px_restart"), func() {
 
 	/*
 			1. Schedule a kubevirt VM
@@ -1959,7 +1960,7 @@ var _ = Describe("{RestartPXAndCheckIfVmBindMount}", func() {
 	})
 })
 
-var _ = Describe("{FillVMRootDisk}", func() {
+var _ = Describe("{FillVMRootDisk}", Label("p2", "negative", "error_injection", "kubevirt", "Throttling"), func() {
 	/*
 			https://purestorage.atlassian.net/browse/PTX-24760
 		        https://portworx.testrail.net/index.php?/cases/view/296895

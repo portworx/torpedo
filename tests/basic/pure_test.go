@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	v12 "github.com/libopenstorage/operator/pkg/apis/core/v1"
@@ -99,7 +98,7 @@ func deleteCloudsnapCredential() {
 }
 
 // This test performs basic tests making sure Pure direct access are running as expected
-var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
+var _ = Describe("{PureVolumeCRUDWithSDK}", Label("p0", "positive", "pure_ops"), func() {
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
 		StartTorpedoTest("PureVolumeCRUDWithSDK", "Test pure volumes on applications, run CRUD", nil, 0)
@@ -134,7 +133,7 @@ var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 })
 
 // This test performs basic tests making sure Pure direct access volumes are running as expected
-var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
+var _ = Describe("{PureVolumeCRUDWithPXCTL}", Label("p0", "positive", "pure_ops"), func() {
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
 		StartTorpedoTest("PureVolumeCRUDWithPXCTL", "Test pure volumes on applications, run CRUD using pxctl", nil, 0)
@@ -168,7 +167,7 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
 
 // This test validates that, on an FACD installation, drives are located
 // on the correct arrays that match their zone.
-var _ = Describe("{PureFACDTopologyValidateDriveLocations}", func() {
+var _ = Describe("{PureFACDTopologyValidateDriveLocations}", Label("p0", "positive", "pure_ops"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("PureFACDTopologyValidateDriveLocations", "Test that FACD cloud drive volumes are located on proper FlashArrays", nil, 0)
 	})
@@ -182,7 +181,7 @@ var _ = Describe("{PureFACDTopologyValidateDriveLocations}", func() {
 })
 
 // this tests brings up large number of pods on multiple namespaces and validate if there is not PANIC or nilpointer exceptions
-var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
+var _ = Describe("{BringUpLargePodsVerifyNoPanic}", Label("p0", "positive", "pure_ops", "MiniScale"), func() {
 	/*
 				https://portworx.atlassian.net/browse/PTX-18792
 			    https://portworx.atlassian.net/browse/PTX-17723
@@ -384,7 +383,7 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 })
 
 // This test validates volume token timeout for FADA-volumes
-var _ = Describe("{FADAVolTokenTimout}", func() {
+var _ = Describe("{FADAVolTokenTimout}", Label("p0", "positive", "pure_ops"), func() {
 	/*
 					https://portworx.atlassian.net/browse/PTX-18941
 
@@ -468,7 +467,7 @@ var _ = Describe("{FADAVolTokenTimout}", func() {
 	})
 })
 
-var _ = Describe("{FADARemoteDetach}", func() {
+var _ = Describe("{FADARemoteDetach}", Label("p1", "negative", "pure_ops", "error_injection"), func() {
 
 	/*
 								https://portworx.atlassian.net/browse/PTX-20624
@@ -706,7 +705,7 @@ https://portworx.testrail.net/index.php?/tests/view/72615025
 
 */
 
-var _ = Describe("{RebootNodeWhileVolCreate}", func() {
+var _ = Describe("{RebootNodeWhileVolCreate}", Label("p1", "negative", "pure_ops", "node_ops", "error_injection", "node_reboot"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootNodeWhileVolCreate", "Test creates multiple FADA volume and reboots a node while volume creation is in progress", nil, 72615025)
 	})
@@ -862,7 +861,7 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 https://portworx.testrail.net/index.php?/tests/view/72615026
 
 */
-var _ = Describe("{RestartPXWhileVolCreate}", func() {
+var _ = Describe("{RestartPXWhileVolCreate}", Label("p1", "negative", "px_ops", "pure_ops", "error_injection", "px_start"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestartPXWhileVolCreate", "Test creates multiple FADA volume and restarts px on a node while volume creation is in progress", nil, 72615026)
 	})
@@ -985,7 +984,7 @@ https://portworx.testrail.net/index.php?/cases/view/93034
 https://portworx.testrail.net/index.php?/cases/view/93035
 
 */
-var _ = Describe("{StopPXResizePVCDeleteApps}", func() {
+var _ = Describe("{StopPXResizePVCDeleteApps}", Label("p1", "negative", "px_ops", "pure_ops", "error_injection", "px_restart"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("StopPXResizePVCDeleteApps", "Test creates multiple FADA volume and stops px on a node,resize pvc and checks if all the pods,pvc's are being deleted gracefully", nil, 93034)
 	})
@@ -1183,7 +1182,7 @@ var _ = Describe("{StopPXResizePVCDeleteApps}", func() {
 https://portworx.testrail.net/index.php?/cases/view/92893
 
 */
-var _ = Describe("{AppCleanUpWhenPxKill}", func() {
+var _ = Describe("{AppCleanUpWhenPxKill}", Label("p1", "negative", "px_ops", "pure_ops", "error_injection", "px_restart", "PvcResize"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("AppCleanUpWhenPxKill", "Test creates multiple FADA volume and kills px nodes while the pods and pvc's are being deleted", nil, 72760884)
 	})
@@ -1340,7 +1339,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 	})
 })
 
-var _ = Describe("{ResizePVCToMaxLimit}", func() {
+var _ = Describe("{ResizePVCToMaxLimit}", Label("p1", "postive", "px_vol_ops", "pure_ops", "VolResize"), func() {
 
 	/*
 		PTX:
@@ -1624,7 +1623,7 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 	})
 })
 
-var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
+var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", Label("p0", "positive", "px_vol_ops", "pure_ops", "MiniScale"), func() {
 
 	/*
 		PTX:
@@ -1997,7 +1996,7 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 	})
 })
 
-var _ = Describe("{PVCLUNValidation}", func() {
+var _ = Describe("{PVCLUNValidation}", Label("p0", "positive", "px_vol_ops", "pure_ops"), func() {
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
 		StartTorpedoTest("PVCLUNValidation", "Create and destroy large number of PVCs and validate LUN in the FA", nil, 0)
@@ -2224,7 +2223,7 @@ func faLUNExists(faVolList []string, pvc string) bool {
 	return false
 }
 
-var _ = Describe("{FADAVolMigrateValidation}", func() {
+var _ = Describe("{FADAVolMigrateValidation}", Label("p0", "positive", "px_vol_ops", "pure_ops"), func() {
 
 	/*
 		          1. Attach FADA PVC on Node 1, confirm proper attachment.
@@ -2423,7 +2422,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 	})
 })
 
-var _ = Describe("{VolAttachFAPxRestart}", func() {
+var _ = Describe("{VolAttachFAPxRestart}", Label("p0", "negative", "px_vol_ops", "pure_ops", "error_injection", "px_start"), func() {
 	/*
 				https://purestorage.atlassian.net/browse/PTX-21440
 			    1. Create a host in the FA whose secret is not present in pure secret
@@ -2646,7 +2645,7 @@ func LogoutFromController(n node.Node, networkInterface flasharray.NetworkInterf
 	return nil
 }
 
-var _ = Describe("{VolAttachSameFAPxRestart}", func() {
+var _ = Describe("{VolAttachSameFAPxRestart}", Label("p0", "negative", "px_vol_ops", "pure_ops", "error_injection", "px_start"), func() {
 	/*
 					https://purestorage.atlassian.net/browse/PTX-21440
 		  		1. Create a host in the FA whose secret is in pure secret
@@ -2889,7 +2888,7 @@ var _ = Describe("{VolAttachSameFAPxRestart}", func() {
 	})
 })
 
-var _ = Describe("{DetachVolumeFromHost}", func() {
+var _ = Describe("{DetachVolumeFromHost}", Label("p0", "positive", "px_vol_ops", "pure_ops"), func() {
 
 	/*
 		                    https://purestorage.atlassian.net/browse/HAZEL-747
@@ -3036,7 +3035,7 @@ var _ = Describe("{DetachVolumeFromHost}", func() {
 This test deploys app with FBDA volume having storageClass with pure_nfs_endpoint parameter.
 It validates that FBDA volume gets consumed over IP mentioned in `pure_nfs_endpoint` parameter of storageClass.
 */
-var _ = Describe("{FBDAMultiTenancyBasicTest}", func() {
+var _ = Describe("{FBDAMultiTenancyBasicTest}", Label("p0", "positive", "px_vol_ops", "pure_ops"), func() {
 	var contexts []*scheduler.Context
 	var testName string
 	var customConfigAppName string
@@ -3085,7 +3084,7 @@ var _ = Describe("{FBDAMultiTenancyBasicTest}", func() {
 	})
 })
 
-var _ = Describe("{FBDAMultiTenancyUpdatePureNFSEnpoint}", func() {
+var _ = Describe("{FBDAMultiTenancyUpdatePureNFSEnpoint}", Label("p0", "positive", "px_vol_ops", "pure_ops"), func() {
 	var contexts []*scheduler.Context
 	var customConfigAppName, originalNFSEndpoint string
 	var origCustomAppConfigs map[string]scheduler.AppConfig
@@ -3283,7 +3282,7 @@ func skipTestIfNoRequiredCustomAppConfigFound() string {
 	return customConfigAppName
 }
 
-var _ = Describe("{FADAPodRecoveryDisableDataPortsOnFA}", func() {
+var _ = Describe("{FADAPodRecoveryDisableDataPortsOnFA}", Label("p1", "negative", "px_vol_ops", "pure_ops", "error_injection", "network_failure"), func() {
 
 	/*
 			PTX : https://purestorage.atlassian.net/browse/PTX-23763
@@ -3476,7 +3475,7 @@ func disableInterfaces(interfaces map[string][]string) {
 }
 
 // Do pool resize when few of the iscsi ports are down in FA
-var _ = Describe("{PoolResizeFewIscsiPortsDown}", func() {
+var _ = Describe("{PoolResizeFewIscsiPortsDown}", Label("p1", "negative", "pool_ops", "pure_ops", "error_injection", "PoolExpand", "network_failure"), func() {
 
 	/*
 			PTX : https://purestorage.atlassian.net/browse/PTX-23831
@@ -3571,7 +3570,7 @@ var _ = Describe("{PoolResizeFewIscsiPortsDown}", func() {
 })
 
 // Do pool resize when all the iscsi ports are down in FA
-var _ = Describe("{PoolResizeAllIscsiPortsDown}", func() {
+var _ = Describe("{PoolResizeAllIscsiPortsDown}", Label("p1", "negative", "pool_ops", "pure_ops", "error_injection", "PoolExpand", "network_failure"), func() {
 
 	/*
 			PTX : https://purestorage.atlassian.net/browse/PTX-23832
@@ -3688,7 +3687,7 @@ var _ = Describe("{PoolResizeAllIscsiPortsDown}", func() {
 })
 
 // Do pool resize when all the iscsi ports are down in FA
-var _ = Describe("{IscsiPortsDownDuringPoolExpandInProgress}", func() {
+var _ = Describe("{IscsiPortsDownDuringPoolExpandInProgress}", Label("p1", "negative", "pool_ops", "pure_ops", "error_injection", "PoolExpand", "network_failure"), func() {
 
 	/*
 			PTX : https://purestorage.atlassian.net/browse/PTX-23835
@@ -3797,7 +3796,7 @@ var _ = Describe("{IscsiPortsDownDuringPoolExpandInProgress}", func() {
 	})
 })
 
-var _ = Describe("{IscsiPortsDownDuringNewPoolCreateInProgress}", func() {
+var _ = Describe("{IscsiPortsDownDuringNewPoolCreateInProgress}", Label("p1", "negative", "pool_ops", "pure_ops", "error_injection", "PoolExpand", "network_failure"), func() {
 
 	/*
 			PTX : https://purestorage.atlassian.net/browse/PTX-23835
@@ -3908,7 +3907,7 @@ var _ = Describe("{IscsiPortsDownDuringNewPoolCreateInProgress}", func() {
 	})
 })
 
-var _ = Describe("{FBDATopologyCreateTest}", func() {
+var _ = Describe("{FBDATopologyCreateTest}", Label("p0", "positive", "pure_ops"), func() {
 	var scName, ns, pvcName, pureNfsEndpoint string
 	JustBeforeEach(func() {
 		StartTorpedoTest("FBDATopologyCreateTest",
@@ -4002,7 +4001,7 @@ var _ = Describe("{FBDATopologyCreateTest}", func() {
 	})
 })
 
-var _ = Describe("{DeleteFADAVolumeFromBackend}", func() {
+var _ = Describe("{DeleteFADAVolumeFromBackend}", Label("p1", "negative", "pure_ops", "error_injection"), func() {
 
 	/*
 			PTX : https://purestorage.atlassian.net/browse/PTX-23835
@@ -4098,7 +4097,7 @@ var _ = Describe("{DeleteFADAVolumeFromBackend}", func() {
 
 })
 
-var _ = Describe("{ExpandMultiplePoolsWhenFADAVolumeCreationInProgress}", func() {
+var _ = Describe("{ExpandMultiplePoolsWhenFADAVolumeCreationInProgress}", Label("p0", "positive", "px_ops", "pool_ops", "pure_ops", "PoolExpand"), func() {
 
 	/*
 			https://purestorage.atlassian.net/browse/PTX-23977
@@ -4209,7 +4208,7 @@ var _ = Describe("{ExpandMultiplePoolsWhenFADAVolumeCreationInProgress}", func()
 
 })
 
-var _ = Describe("{ExpandMultiplePoolsWhenFBDAVolumeCreationInProgress}", func() {
+var _ = Describe("{ExpandMultiplePoolsWhenFBDAVolumeCreationInProgress}", Label("p0", "positive", "px_ops", "pool_ops", "pure_ops", "PoolExpand"), func() {
 
 	/*
 			https://purestorage.atlassian.net/browse/PTX-24081

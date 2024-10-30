@@ -4877,7 +4877,7 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 	})
 })
 
-var _ = Describe("{StorageFullPoolAddDisk}", func() {
+var _ = Describe("{StorageFullPoolAddDisk}", Label("p0", "positive", "px_ops", "pool_ops", "PoolExpand", "AddDrive", "Throttling"), func() {
 
 	//step1: feed p1 size GB I/O on the volume
 	//step2: After I/O done p1 should be offline and full, expand the pool p1 using add-disk
@@ -5044,7 +5044,7 @@ func waitForStorageDown(n node.Node) error {
 	return nil
 }
 
-var _ = Describe("{ResizeKvdbNoQuorum}", func() {
+var _ = Describe("{ResizeKvdbNoQuorum}", Label("p0", "negative", "pool_ops", "kvdb_ops", "error_injection", "PoolExpand", "ResizeDisk", "KVDBFailover"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Make KVDB out of quorum
 	//3) Expand a healthy pools by resize-disk
@@ -5153,7 +5153,7 @@ var _ = Describe("{ResizeKvdbNoQuorum}", func() {
 	})
 })
 
-var _ = Describe("{StoPoolExpMulPools}", func() {
+var _ = Describe("{StoPoolExpMulPools}", Label("p0", "positive", "pool_ops", "PoolExpand", "Miniscale"), func() {
 	/*
 		Having multiple pools and resize only one pool
 	*/
@@ -5234,7 +5234,7 @@ var _ = Describe("{StoPoolExpMulPools}", func() {
 	})
 })
 
-var _ = Describe("{CreateSnapshotsPoolResize}", func() {
+var _ = Describe("{CreateSnapshotsPoolResize}", Label("p0", "positive", "snapshot_ops", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 	/*
 		Try pool resize when a lot of snapshots are created on the volume
 	*/
@@ -5372,7 +5372,7 @@ func WaitTillVolumeInResync(vol string) bool {
 	}
 }
 
-var _ = Describe("{PoolResizeVolumesResync}", func() {
+var _ = Describe("{PoolResizeVolumesResync}", Label("p0", "positive", "px_vol_ops", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 	/*
 		Try pool resize when a lot of volumes are in resync state
 	*/
@@ -5523,7 +5523,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 	})
 })
 
-var _ = Describe("{PoolIncreaseSize20TB}", func() {
+var _ = Describe("{PoolIncreaseSize20TB}", Label("p1", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 	/*
 		Resize a pool of capacity of 100GB to 20TB
 	*/
@@ -5679,7 +5679,7 @@ func addDiskToSpecificPool(node node.Node, sizeOfDisk uint64, poolID int32) (boo
 	return true, nil
 }
 
-var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
+var _ = Describe("{ResizePoolDrivesInDifferentSize}", Label("p1", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 	/*
 		Resizing the pool should fail when drives in the pool have been resized to different size
 	*/
@@ -5770,7 +5770,7 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
-var _ = Describe("{PoolDelete}", func() {
+var _ = Describe("{PoolDelete}", Label("p0", "positive", "pool_ops"), func() {
 	/*
 		1) Place pool on maintenance mode
 		2) Delete the pool
@@ -5950,7 +5950,7 @@ func appsValidateAndDestroy(contexts []*scheduler.Context) {
 	})
 }
 
-var _ = Describe("{VolDeletePoolExpand}", func() {
+var _ = Describe("{VolDeletePoolExpand}", Label("p0", "positive", "px_vol_ops", "pool_ops", "PoolExpand"), func() {
 	/*
 		1) Deploy px with cloud drive.
 		2) Create a large volume on that pool and write 200G on the volume.
@@ -6151,7 +6151,7 @@ var _ = Describe("{VolDeletePoolExpand}", func() {
 	})
 })
 
-var _ = Describe("{PoolResizeSameSize}", func() {
+var _ = Describe("{PoolResizeSameSize}", Label("p1", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolResizeSameSize", "Validate storage pool expansion using resize-disk with same size should fail", nil, 0)
 	})
@@ -6366,7 +6366,7 @@ outer:
 
 }
 
-var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
+var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", Label("p1", "positive", "pool_ops", "px_vol_ops", "PoolExpand"), func() {
 	var testrailID = 79487
 	// Testrail Description : Changed pool IO_priority should persist post pool expand
 	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/79487
@@ -6471,7 +6471,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 	})
 })
 
-var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
+var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", Label("p1", "negative", "pool_ops"), func() {
 	var testrailID = 79487
 	// Testrail Description : Verify deletion of invalid pool ids
 	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/55349
@@ -6601,7 +6601,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 	})
 })
 
-var _ = Describe("{PoolResizeInvalidPoolID}", func() {
+var _ = Describe("{PoolResizeInvalidPoolID}", Label("p1", "negative", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 	var testrailID = 79487
 	// Testrail Description : Resize with invalid pool ID
 	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/84470
@@ -6724,7 +6724,7 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 	})
 })
 
-var _ = Describe("{ResizePoolReduceErrorcheck}", func() {
+var _ = Describe("{ResizePoolReduceErrorcheck}", Label("p0", "positive", "pool_ops", "PoolExpand"), func() {
 	// Testrail Description : Resize to lower size than existing pool size,should fail with proper error statement
 
 	JustBeforeEach(func() {
@@ -6779,7 +6779,7 @@ var _ = Describe("{ResizePoolReduceErrorcheck}", func() {
 	})
 })
 
-var _ = Describe("{PoolDeleteRebalancePxState}", func() {
+var _ = Describe("{PoolDeleteRebalancePxState}", Label("p0", "positive", "pool_ops", "Rebalance"), func() {
 	/*
 		1. Create 4 Pools  say  0, 1 ,2 3, using disk of different size
 		2. Delete Pool 1 and 3 ( after adding additional  disk with some rebalance in progress )
@@ -6965,7 +6965,7 @@ var _ = Describe("{PoolDeleteRebalancePxState}", func() {
 
 })
 
-var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
+var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", Label("p0", "positive", "pool_ops", "AddDrive", "PoolExpand"), func() {
 	/*
 		Pool Resize after adding drives to storage less node
 		https://portworx.testrail.net/index.php?/cases/view/51329
@@ -7079,7 +7079,7 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 
 })
 
-var _ = Describe("{DriveAddPXDown}", func() {
+var _ = Describe("{DriveAddPXDown}", Label("p0", "negative", "pool_ops", "px_ops", "error_injection", "PoolExpand", "px_crash", "AddDrive"), func() {
 	/*
 		Add drive when Px is down
 	*/
@@ -7160,7 +7160,7 @@ var _ = Describe("{DriveAddPXDown}", func() {
 
 })
 
-var _ = Describe("{ExpandUsingAddDriveAndPXRestart}", func() {
+var _ = Describe("{ExpandUsingAddDriveAndPXRestart}", Label("p1", "negative", "pool_ops", "error_injection", "PoolExpand", "px_restart", "AddDrive"), func() {
 	/*
 		Expand Using Add drive and restart Px
 	*/
@@ -7229,7 +7229,7 @@ var _ = Describe("{ExpandUsingAddDriveAndPXRestart}", func() {
 	})
 })
 
-var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", func() {
+var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", Label("p1", "negative", "pool_ops", "error_injection", "node_ops", "PoolExpand", "node_reboot", "AddDrive"), func() {
 	/*
 		Expand Using Add drive and restart Node and verify if Px will be up after restart
 	*/
@@ -7315,7 +7315,7 @@ var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", func() {
 	})
 })
 
-var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
+var _ = Describe("{ResizeDiskAddDiskSamePool}", Label("p1", "positive", "pool_ops", "PoolExpand"), func() {
 	/*
 		Resize Disk Followed by adddisk should not create a new pool
 	*/
@@ -7415,7 +7415,7 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 
 })
 
-var _ = Describe("{DriveAddRebalanceInMaintenance}", func() {
+var _ = Describe("{DriveAddRebalanceInMaintenance}", Label("p1", "negative", "error_injection", "pool_ops", "PoolExpand", "Rebalance", "NodeMaintenance"), func() {
 	/*
 		Rebalance taking long time during drive add in pool maintenance mode [PTX-15691] -> [PWX-26629]
 	*/
@@ -7508,7 +7508,7 @@ var _ = Describe("{DriveAddRebalanceInMaintenance}", func() {
 	})
 })
 
-var _ = Describe("{ResizePoolReduceErrorcheck}", func() {
+var _ = Describe("{ResizePoolReduceErrorcheck}", Label("p1", "positive", "pool_ops", "PoolExpand"), func() {
 	// Testrail Description : Resize to lower size than existing pool size,should fail with proper error statement
 
 	JustBeforeEach(func() {
@@ -7562,7 +7562,7 @@ var _ = Describe("{ResizePoolReduceErrorcheck}", func() {
 	})
 })
 
-var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", func() {
+var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", Label("p0", "positive", "pool_ops"), func() {
 	/*
 	   1. Delete all the pools in a node
 	   2. Verify it becomes a storageless node
@@ -7710,7 +7710,7 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", func() {
 	})
 })
 
-var _ = Describe("{NodeAddDiskWhileAddDiskInProgress}", func() {
+var _ = Describe("{NodeAddDiskWhileAddDiskInProgress}", Label("p0", "positive", "node_ops", "pool_ops", "PoolExpand", "AddDrive"), func() {
 	/*
 	   1.Add disk using add-disk option
 	   2. Add disk again while initial expansion is in-progress
@@ -7825,7 +7825,7 @@ var _ = Describe("{NodeAddDiskWhileAddDiskInProgress}", func() {
 	})
 })
 
-var _ = Describe("{NodeAddDiskWhileResizeDiskInProgress}", func() {
+var _ = Describe("{NodeAddDiskWhileResizeDiskInProgress}", Label("p0", "positive", "node_ops", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 	/*
 	   1.Add disk using resize-disk option
 	   2. Add disk again while initial expansion is in-progress
@@ -7939,7 +7939,7 @@ var _ = Describe("{NodeAddDiskWhileResizeDiskInProgress}", func() {
 	})
 })
 
-var _ = Describe("{MulVolPoolResize}", func() {
+var _ = Describe("{MulVolPoolResize}", Label("p0", "positive", "node_ops", "pool_ops", "PoolExpand", "Throttling"), func() {
 	var testrailID = 51345
 	/*
 			Priority: P0
@@ -8027,7 +8027,7 @@ var _ = Describe("{MulVolPoolResize}", func() {
 	})
 })
 
-var _ = Describe("{MulPoolsUpMetaPoolFullAndResize}", func() {
+var _ = Describe("{MulPoolsUpMetaPoolFullAndResize}", Label("p0", "positive", "pool_ops", "Throttling", "MiniScale", "PoolExpand"), func() {
 	var testrailID = 51350
 	/*
 			Priority: P0
@@ -8211,7 +8211,7 @@ var _ = Describe("{MulPoolsUpMetaPoolFullAndResize}", func() {
 	})
 })
 
-var _ = Describe("{DiffPoolExpansionFromMaintenanceNode}", func() {
+var _ = Describe("{DiffPoolExpansionFromMaintenanceNode}", Label("p1", "negative", "pool_ops", "node_ops", "error_injection", "NodeMaintenance", "PoolExpand"), func() {
 	/*
 			Priority: P2
 		1. Put a node in maintenance mode
@@ -8300,7 +8300,7 @@ var _ = Describe("{DiffPoolExpansionFromMaintenanceNode}", func() {
 	})
 })
 
-var _ = Describe("{ResyncFailedPoolOutOfRebalance}", func() {
+var _ = Describe("{ResyncFailedPoolOutOfRebalance}", Label("p1", "positive", "pool_ops"), func() {
 	// Testrail Description : Resync failed for a volume after pool came out of rebalance PTX-15696 -> PWX-26967
 	/*
 		Deployed systemtest sysbench spec with 1TB volume
@@ -8406,7 +8406,7 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", func() {
 	})
 })
 
-var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
+var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", Label("p0", "positive", "pool_ops", "PoolExpand", "AddDrive"), func() {
 	/*
 	   1.Add disk using add-disk option
 	   2. Create a new pool
@@ -8665,7 +8665,7 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 	})
 })
 
-var _ = Describe("{DriveAddAsJournal}", func() {
+var _ = Describe("{DriveAddAsJournal}", Label("p0", "positive", "pool_ops"), func() {
 	/*
 		Add drive when as journal
 		case1:if dmthin journal is not supported so it should fail with  error message
@@ -8822,7 +8822,7 @@ func waitTillVolumeStatusUp(vol *volume.Volume) error {
 	}
 }
 
-var _ = Describe("{ReplResyncOnPoolExpand}", func() {
+var _ = Describe("{ReplResyncOnPoolExpand}", Label("p0", "positive", "pool_ops", "px_vol_ops", "PoolExpand", "HA_Increase_Decrease"), func() {
 	/*
 		PTX-15696 -> PWX-26967
 		Deploy IO aggressive application using repl-2 volumes
@@ -8941,7 +8941,7 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 })
 
 // Volume replication change
-var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
+var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", Label("p1", "negative", "pool_ops", "kvdb_ops", "error_injection", "PoolExpand", "KVDBFailover", "HA_Increase_Decrease"), func() {
 	var testrailID = 0
 	// Do multiple pool operations on the pool and volume and make sure kvdb leader is up and running
 	// JIRA ID :https://portworx.atlassian.net/browse/PTX-17728
@@ -9129,7 +9129,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 })
 
 // Volume replication change
-var _ = Describe("{KvdbFailoverDuringPoolExpand}", func() {
+var _ = Describe("{KvdbFailoverDuringPoolExpand}", Label("p1", "negative", "pool_ops", "kvdb_ops", "error_injection", "PoolExpand", "KVDBFailover"), func() {
 
 	var (
 		testrailID = 0
@@ -9221,7 +9221,7 @@ var _ = Describe("{KvdbFailoverDuringPoolExpand}", func() {
 	})
 
 })
-var _ = Describe("{KvdbRestartNewNodeAcquired}", func() {
+var _ = Describe("{KvdbRestartNewNodeAcquired}", Label("p1", "negative", "pool_ops", "kvdb_ops", "error_injection", "PoolExpand", "KVDBFailover"), func() {
 	/*
 		PTX-15696 -> PWX-26967
 		Deploy IO aggressive application using repl-2 volumes
@@ -9331,7 +9331,7 @@ func ExpandMultiplePoolsInParallel(poolIds []string, expandSize uint64, expandTy
 	return &wg, nil
 }
 
-var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", func() {
+var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", Label("p0", "positive", "pool_ops", "MiniScale", "PoolExpand"), func() {
 	/*
 			test to expand multiple pool at once in parallel
 		    Pick a Pool from each Storage Node and expand all the node in parallel
@@ -9466,7 +9466,7 @@ func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
 	return nil
 }
 
-var _ = Describe("{CreateNewPoolsOnClusterInParallel}", func() {
+var _ = Describe("{CreateNewPoolsOnClusterInParallel}", Label("p0", "positive", "pool_ops", "MiniScale"), func() {
 	/*
 				Create new pools on the cluster in parallel
 			    https://portworx.atlassian.net/browse/PTX-17614
@@ -9519,7 +9519,7 @@ var _ = Describe("{CreateNewPoolsOnClusterInParallel}", func() {
 	})
 })
 
-var _ = Describe("{AddDriveMetadataPool}", func() {
+var _ = Describe("{AddDriveMetadataPool}", Label("p0", "positive", "pool_ops"), func() {
 	/*
 				Create new pools on the cluster in parallel
 			    https://portworx.atlassian.net/browse/PTX-17616
@@ -9765,7 +9765,7 @@ func verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize string, targetSizeGi
 	})
 }
 
-var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
+var _ = Describe("{PoolExpandRebalanceShutdownNode}", Label("p1", "negative", "node_ops", "pool_ops", "error_injection", "RecycleNode", "PoolExpand", "Rebalance"), func() {
 	/*
 		1. create one pool
 		2. run ios
@@ -9882,7 +9882,7 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 	})
 })
 
-var _ = Describe("{AddDriveWithKernelPanic}", func() {
+var _ = Describe("{AddDriveWithKernelPanic}", Label("p1", "negative", "pool_ops", "error_injection", "RecycleNode", "PoolExpand", "AddDrive"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Expand pool by adding cloud drives.
@@ -10142,7 +10142,7 @@ func selectPoolDeletableNode() *node.Node {
 	return &poolDeletableNodes[0]
 }
 
-var _ = Describe("{PoolDeleteFunctionality}", func() {
+var _ = Describe("{PoolDeleteFunctionality}", Label("p0", "positive", "pool_ops"), func() {
 	/*
 		Migrated from px-test: PoolDeleteFunctionality
 			1. Delete pools till total availble pool is 1 and verify for each delete that the right pool was deleted.
@@ -10267,7 +10267,7 @@ var _ = Describe("{PoolDeleteFunctionality}", func() {
 	})
 })
 
-var _ = Describe("{PoolDeleteNegative}", func() {
+var _ = Describe("{PoolDeleteNegative}", Label("p1", "negative", "error_injection", "pool_ops", "px_crash"), func() {
 
 	/*
 				migrated from px-test: PoolDeleteNegative
@@ -10418,7 +10418,7 @@ var _ = Describe("{PoolDeleteNegative}", func() {
 	})
 })
 
-var _ = Describe("{PoolDeleteVariations}", func() {
+var _ = Describe("{PoolDeleteVariations}", Label("p0", "positive", "pool_ops"), func() {
 
 	/*
 				migrated from px-test: PoolDeleteVariations
@@ -10619,7 +10619,7 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 	})
 })
 
-var _ = Describe("{PoolDeleteServiceDisruption}", func() {
+var _ = Describe("{PoolDeleteServiceDisruption}", Label("p1", "positive", "px_ops", "pool_ops"), func() {
 
 	/*
 		migrated from px-test: RunPoolServiceDisruptiveTests
@@ -10699,7 +10699,7 @@ var _ = Describe("{PoolDeleteServiceDisruption}", func() {
 	})
 })
 
-var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
+var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", Label("p0", "positive", "px_vol_ops", "pool_ops", "PoolExpand", "ResizeDisk", "HA_Increase_Decrease"), func() {
 	/*
 		PTX:
 		https://portworx.atlassian.net/browse/PTX-15465
@@ -10892,7 +10892,7 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 	})
 })
 
-var _ = Describe("{PoolResizeInTrashCanNode}", func() {
+var _ = Describe("{PoolResizeInTrashCanNode}", Label("p0", "positive", "px_vol_ops", "pool_ops", "PoolExpand"), func() {
 	/*
 	   1. Deploy apps
 	   2. Pick a volume and locate the node where this is attached
@@ -11048,7 +11048,7 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 
 // PX pool went offline even when 30% of storage still available [PWX-26872]
 
-var _ = Describe("{CheckPoolOffline}", func() {
+var _ = Describe("{CheckPoolOffline}", Label("p0", "positive", "pool_ops"), func() {
 	/*
 		    1. Deploy fio apps
 		    2. when capacity 70 percent is reached, check if pool is offline (Pool shouldn't be offline)
@@ -11123,7 +11123,7 @@ var _ = Describe("{CheckPoolOffline}", func() {
 
 })
 
-var _ = Describe("{FACDPoolIOPriorityCheck}", func() {
+var _ = Describe("{FACDPoolIOPriorityCheck}", Label("p0", "positive", "pool_ops"), func() {
 
 	/* This test is created to provide functional testing coverage for ticket PWX-35590
 	   1. Create a cluster with FACD backend
@@ -11169,7 +11169,7 @@ func isCloudDriveTypePureBlock(nodeUUID, poolUUID string) bool {
 	return driveType == "pure-block"
 }
 
-var _ = Describe("{OnlineJournalAddCheck}", func() {
+var _ = Describe("{OnlineJournalAddCheck}", Label("p0", "positive", "pool_ops"), func() {
 	/*
 			https://portworx.atlassian.net/browse/PTX-15712
 			1. Deploy apps
@@ -11358,7 +11358,7 @@ func getJournalDevicePath(n node.Node) string {
 	return path
 }
 
-var _ = Describe("{DriveAddMetaDataDiskStatusCheck}", func() {
+var _ = Describe("{DriveAddMetaDataDiskStatusCheck}", Label("p0", "positive", "pool_ops"), func() {
 
 	/*
 		https://portworx.atlassian.net/browse/PTX-15169
@@ -11541,7 +11541,7 @@ func getMetaDataDiskPath(n node.Node) (string, error) {
 	return path, nil
 }
 
-var _ = Describe("{NetworkDelayWhilePoolExpand}", func() {
+var _ = Describe("{NetworkDelayWhilePoolExpand}", Label("p1", "negative", "pool_ops", "error_injection", "network_failure", "PoolExpand"), func() {
 	/*
 	   https://portworx.atlassian.net/browse/PTX-15473
 	   1. Deploy apps
@@ -12376,7 +12376,7 @@ var _ = Describe("{PoolResizeWithNodeRebootWithTimeInterval}", func() {
 	   5.  Wait for pool to expand
 	   6.  Verify pool resized
 	   7.  Check px status
-	   8.  Check if apps are running
+	   8.  Check if apps are running.
 	*/
 
 	var (
