@@ -1729,7 +1729,7 @@ func validatePodCreationWithPVCName(restoredPVCSpec *corev1.PersistentVolumeClai
 		if err != nil {
 			return "", false, err
 		}
-		if !k8sCore.IsPodRunning(*pod) {
+		if !k8sCore.IsPodReady(*pod) {
 			return "", true, fmt.Errorf("waiting for pod %s to be in running state", pod.Name)
 		}
 		return "", false, nil

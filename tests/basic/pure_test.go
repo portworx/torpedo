@@ -3,25 +3,9 @@ package tests
 import (
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
-	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	v12 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s/batch"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/sched-ops/k8s/storage"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
-	newFlashArray "github.com/pure-px/torpedo/drivers/pure/flasharray"
-
-	"github.com/devans10/pugo/flasharray"
-	"github.com/ghodss/yaml"
-	"github.com/google/uuid"
-	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/sched-ops/k8s/core"
-
-	"math/rand"
 	"regexp"
 	"sort"
 	"strconv"
@@ -29,11 +13,35 @@ import (
 	"sync"
 	"time"
 
+	"github.com/devans10/pugo/flasharray"
+	"github.com/ghodss/yaml"
+	"github.com/google/uuid"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	"github.com/libopenstorage/openstorage/api"
+	v12 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/sched-ops/k8s/storage"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/torpedo/drivers/node"
+	newFlashArray "github.com/pure-px/torpedo/drivers/pure/flasharray"
+	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/drivers/scheduler/spec"
 	"github.com/pure-px/torpedo/drivers/volume"
 	"github.com/pure-px/torpedo/drivers/volume/portworx"
 	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/osutils"
+	"github.com/pure-px/torpedo/pkg/pureutils"
 	"github.com/pure-px/torpedo/pkg/testrailuttils"
+	"github.com/pure-px/torpedo/pkg/units"
+	. "github.com/pure-px/torpedo/tests"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -41,18 +49,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/pure-px/torpedo/drivers/node"
-	"github.com/pure-px/torpedo/drivers/scheduler"
-	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
-	"github.com/pure-px/torpedo/drivers/scheduler/spec"
-	"github.com/pure-px/torpedo/pkg/osutils"
-	"github.com/pure-px/torpedo/pkg/pureutils"
-	"github.com/pure-px/torpedo/pkg/units"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	. "github.com/pure-px/torpedo/tests"
 )
 
 const (
@@ -3998,6 +3994,154 @@ var _ = Describe("{FBDATopologyCreateTest}", Label("p0", "positive", "pure_ops")
 
 			EndTorpedoTest()
 		}()
+	})
+})
+
+// The test will create an ROX PVC with FB. The storage class won't have any export rules set
+// PX will set the export rules as *(ro) when it sees that the PVC mode is ROX and export rules
+// are not defined in storage class
+var _ = Describe("{FBDAROXWithoutExportRulesTest}", func() {
+	var scName, ns, pvcName string
+	var pod *corev1.Pod
+	JustBeforeEach(func() {
+		StartTorpedoTest("FBDAROXWithoutExportRulesTest",
+			"Try Creating FBDA pvc with no export rule set, and ROX PVC", nil, 0)
+	})
+	itLog := "FBDAROXWithoutExportRules"
+	It(itLog, func() {
+		params := make(map[string]string)
+		bindMode := storageApi.VolumeBindingImmediate
+		ns = fmt.Sprintf("fbda-rox-%v", time.Now().Unix())
+
+		scName = "fbdaroxwithoutexportrules"
+		storage.Instance().DeleteStorageClass(scName)
+		time.Sleep(1 * time.Second)
+		var allowVolExpansion bool = true
+		err := CreateFlashStorageClass(scName, "pure_file",
+			v1.PersistentVolumeReclaimDelete,
+			params, []string{},
+			&allowVolExpansion, bindMode, nil)
+		dash.VerifyFatal(err, nil,
+			"Verify storage class is created successfully")
+
+		nsName := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: ns,
+			},
+		}
+		log.InfoD("Creating namespace %v", ns)
+		_, err = k8sCore.CreateNamespace(nsName)
+		log.FailOnError(err, fmt.Sprintf("error creating namespace [%s] failed [%v]", ns, err))
+
+		pvcName = fmt.Sprintf("fbda-rox-volume-%v", time.Now().Unix())
+		log.InfoD("creating PVC [%s] in namespace [%s]", pvcName, ns)
+		pvcObj := &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      pvcName,
+				Namespace: ns,
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadOnlyMany},
+				StorageClassName: &scName,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse("5Gi"),
+					},
+				},
+			},
+		}
+		_, err = core.Instance().CreatePersistentVolumeClaim(pvcObj)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Verify PVC [%s] is created successfully", pvcName))
+
+		time.Sleep(10 * time.Second)
+		pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, ns)
+		log.FailOnError(err, "Failed to create PVC [%v]. Error : [%v]", pvcName, err)
+		err = Inst().S.WaitForSinglePVCToBound(pvcName, ns, 3)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Verify PVC [%s] got bound successfully.", pvc.Name))
+
+		podSpec := &corev1.Pod{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Pod",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod-" + pvc.Name,
+				Namespace: pvc.Namespace,
+			},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:  "nginx-container",
+						Image: "nginx:latest",
+						Ports: []corev1.ContainerPort{
+							{
+								ContainerPort: 80,
+							},
+						},
+						VolumeMounts: []corev1.VolumeMount{
+							{
+								MountPath: "/usr/share/nginx/html",
+								Name:      "nginx-volume",
+							},
+						},
+					},
+				},
+				Volumes: []corev1.Volume{
+					{
+						Name: "nginx-volume",
+						VolumeSource: corev1.VolumeSource{
+							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+								ClaimName: pvc.Name,
+							},
+						},
+					},
+				},
+			},
+		}
+		log.Infof("Creating nginx pod from pvc")
+		pod, err = k8sCore.CreatePod(podSpec)
+		log.FailOnError(err, "Failed to create pod")
+
+		t := func() (interface{}, bool, error) {
+			pod, err := k8sCore.GetPodByName(pod.Name, pod.Namespace)
+			if err != nil {
+				return "", false, err
+			}
+			if !k8sCore.IsPodReady(*pod) {
+				return "", true, fmt.Errorf("waiting for pod %s to be in running state", pod.Name)
+			}
+			return "", false, nil
+		}
+		_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+		log.FailOnError(err, "Pod did not go to running state")
+
+		log.Debugf("Writing to pod '%s' in namespace '%s' in data dir '%s'. This will be filename %s", pod.Name, pod.Namespace, "/usr/share/nginx/html", "abc")
+		output, err := k8sCore.RunCommandInPod([]string{"touch", "/usr/share/nginx/html/abc"}, pod.Name, pod.Spec.Containers[0].Name, pod.Namespace)
+		// RunCommandInPod return err if it is a read only fs, instead the error string will be sent in the output
+		// hence validate the error string
+		Expect(output).To(ContainSubstring("Read-only file system"))
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		if pod != nil {
+			log.Infof("Deleting pod [%s] in namespace [%s]", pod.Name, ns)
+			err = k8sCore.DeletePod(pod.Name, pod.Namespace, false)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting pod [%s] in namespace [%s]", pod.Name, ns))
+		}
+		if scName != "" {
+			log.Infof("Deleting storage class [%s] in namespace [%s]", scName, ns)
+			err = storage.Instance().DeleteStorageClass(scName)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting storage class [%s] in namespace [%s]", scName, ns))
+		}
+		if pvcName != "" {
+			log.Infof("Deleting PVC [%s] in namespace [%s]", pvcName, ns)
+			err = core.Instance().DeletePersistentVolumeClaim(pvcName, ns)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting PVC [%s] in namespace [%s]", pvcName, ns))
+		}
+		log.Infof("Deleting namespace[%s]", ns)
+		err = core.Instance().DeleteNamespace(ns)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting namespace[%s]", ns))
 	})
 })
 
