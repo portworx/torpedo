@@ -425,7 +425,7 @@ PodLoop:
 			}
 			log.Infof("Pod [%s/%s] container [%s] and paths [%v] after checking sym links", p.Namespace, p.Name, containerName, paths)
 			for _, path := range paths {
-				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s",
+				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+|[a-zA-Z0-9.-]+.[a-zA-Z]{2,}:(?:/px_[0-9A-Za-z]{8}-pvc.+|px_[0-9A-Za-z]{8}-pvc.+)) %s",
 					PureMapperRegex, path))
 				pxMountNvmeRegex := regexp.MustCompile(`\/dev\/mapper\/eui\.00.*24a937.*`)
 				pxMountFound := false
