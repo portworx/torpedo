@@ -1049,9 +1049,9 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			Step(fmt.Sprintf("Create %d users with random roles and backup share , cluster share config", clusterShareNumberOfUsers), func() {
 				log.InfoD(fmt.Sprintf("Creating %d users with random role and backup share , cluster share config", clusterShareNumberOfUsers))
 				if isClusterShareSupportedForAllRole {
-					roles = []backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.SuperAdmin, backup.ApplicationUser}
+					roles = []backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.ApplicationUser}
 				} else {
-					roles = []backup.PxBackupRole{backup.SuperAdmin, backup.InfrastructureOwner}
+					roles = []backup.PxBackupRole{backup.InfrastructureOwner}
 				}
 				//Set of user who is sharing the cluster
 				for _, user := range CreateUsers(clusterShareNumberOfUsers / 2) {
