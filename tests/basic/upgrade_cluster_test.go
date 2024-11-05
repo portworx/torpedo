@@ -8,7 +8,7 @@ import (
 
 	"github.com/hashicorp/go-version"
 
-	oputil "github.com/libopenstorage/operator/pkg/util/test"
+	oputil "github.com/pure-px/px-operator/pkg/util/test"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -88,14 +88,17 @@ var _ = Describe("{UpgradeCluster}", Label("p0", "positive", "node_ops", "Upgrad
 
 				var mError error
 				opver, err := oputil.GetPxOperatorVersion()
+				stc, err := Inst().V.GetDriver()
 				// Disabling PDB check for anthos as PDB validation doesn't work
 				// Opened a ticket: https://purestorage.atlassian.net/browse/PTX-26450
-				if Inst().S.String() != anthos.SchedName && err == nil && opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
+				// TODO: When smart and parallel upgrades feature is enabled by default then change to "stc.Annotations!=nil || stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] == "" || stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] == "false""
+				isSmartAndParallelUpgradeEnabled := stc.Annotations != nil && stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] == "false"
+				if Inst().S.String() != anthos.SchedName && err == nil && isSmartAndParallelUpgradeEnabled && opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
 					go DoParallelUpgradePDBValidation(stopSignal, &mError)
 					defer func() {
 						close(stopSignal)
 					}()
-				} else if Inst().S.String() != anthos.SchedName && err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) && (opver.LessThan(ParallelUpgradeMinOpVersion) || pxVersion.LessThan(ParallelUpgradeMinPxVersion)) {
+				} else if Inst().S.String() != anthos.SchedName && err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) {
 					go DoPDBValidation(stopSignal, &mError)
 					defer func() {
 						close(stopSignal)
@@ -105,11 +108,9 @@ var _ = Describe("{UpgradeCluster}", Label("p0", "positive", "node_ops", "Upgrad
 				}
 
 				var vQuorumError error
-				stc, err := Inst().V.GetDriver()
 				log.FailOnError(err, "failed to get storage cluster")
 				// validate volume quorum during upgrade
-				// TODO: When smart and parallel upgrades feature is enabled by default then remove condition "stc.Annotations!=nil && stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] == "false""
-				if opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) && stc.Annotations != nil && stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] == "false" {
+				if opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) && isSmartAndParallelUpgradeEnabled {
 					log.Info("Starting volume quorum validation for cluster upgrade .......")
 					stopVolumeQuorumValidationSignal := make(chan struct{})
 					go DoVolumeQuorumValidation(stopVolumeQuorumValidationSignal, &vQuorumError)
@@ -117,7 +118,7 @@ var _ = Describe("{UpgradeCluster}", Label("p0", "positive", "node_ops", "Upgrad
 				} else {
 					// TODO: Change log as well
 					log.Warnf("Skipping volume quorum validation due to version constraints or annotation portworx.io/disable-non-disruptive-upgrade not set to false")
-					log.Warnf("Required Operator version: %s, actual Operator version: %s", PDBValidationMinOpVersion, opver)
+					log.Warnf("Required Operator version: %s, actual Operator version: %s", ParallelUpgradeMinOpVersion, opver)
 					log.Warnf("Required PX version: %s, actual PX version: %s", ParallelUpgradeMinPxVersion, pxVersion)
 				}
 

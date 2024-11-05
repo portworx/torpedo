@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	baseErrors "errors"
 	"fmt"
+	pxutil "github.com/pure-px/px-operator/drivers/storage/portworx/util"
 	"io"
 	"io/ioutil"
 	random "math/rand"
@@ -21,8 +22,6 @@ import (
 	"sync"
 	"text/template"
 	"time"
-
-	pxutil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 
@@ -38,7 +37,7 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	osapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/units"
-	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	operatorcorev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	admissionregistration "github.com/portworx/sched-ops/k8s/admissionregistration"
 	"github.com/portworx/sched-ops/k8s/apiextensions"

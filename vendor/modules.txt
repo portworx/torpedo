@@ -1103,26 +1103,6 @@ github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
 github.com/libopenstorage/openstorage/volume
-# github.com/libopenstorage/operator v0.0.0-20240812060935-09fcd70d5bcc
-## explicit; go 1.21
-github.com/libopenstorage/operator/api/px
-github.com/libopenstorage/operator/drivers/storage
-github.com/libopenstorage/operator/drivers/storage/portworx/util
-github.com/libopenstorage/operator/pkg/apis
-github.com/libopenstorage/operator/pkg/apis/core/v1
-github.com/libopenstorage/operator/pkg/apis/portworx
-github.com/libopenstorage/operator/pkg/apis/portworx/v1
-github.com/libopenstorage/operator/pkg/client/clientset/versioned
-github.com/libopenstorage/operator/pkg/client/clientset/versioned/scheme
-github.com/libopenstorage/operator/pkg/client/clientset/versioned/typed/core/v1
-github.com/libopenstorage/operator/pkg/client/clientset/versioned/typed/portworx/v1
-github.com/libopenstorage/operator/pkg/constants
-github.com/libopenstorage/operator/pkg/errors
-github.com/libopenstorage/operator/pkg/mock
-github.com/libopenstorage/operator/pkg/util
-github.com/libopenstorage/operator/pkg/util/k8s
-github.com/libopenstorage/operator/pkg/util/maps
-github.com/libopenstorage/operator/pkg/util/test
 # github.com/libopenstorage/secrets v0.0.0-20230207140542-56a42ef89592
 ## explicit; go 1.13
 github.com/libopenstorage/secrets/aws/credentials
@@ -1384,8 +1364,8 @@ github.com/portworx/pds-api-go-client/pds/v1alpha1
 github.com/portworx/px-backup-api/pkg/apis/v1
 github.com/portworx/px-backup-api/pkg/kubeauth
 github.com/portworx/px-backup-api/pkg/kubeauth/gcp
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20240731224434-94e4e354c4b2 => github.com/portworx/sched-ops v1.20.4-rc1.0.20240812234304-948bf116243e
-## explicit; go 1.19
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20240731224434-94e4e354c4b2 => github.com/portworx/sched-ops v0.0.0-20241018130318-7e228864063c
+## explicit; go 1.22.6
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/anthos
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -1508,6 +1488,26 @@ github.com/pure-px/platform-api-go-client/platform/v1/targetclusterregistrationm
 github.com/pure-px/platform-api-go-client/platform/v1/template
 github.com/pure-px/platform-api-go-client/platform/v1/tenant
 github.com/pure-px/platform-api-go-client/platform/v1/whoami
+# github.com/pure-px/px-operator v0.0.0-20241022071538-96d1018d4909
+## explicit; go 1.21
+github.com/pure-px/px-operator/api/px
+github.com/pure-px/px-operator/drivers/storage
+github.com/pure-px/px-operator/drivers/storage/portworx/util
+github.com/pure-px/px-operator/pkg/apis
+github.com/pure-px/px-operator/pkg/apis/core/v1
+github.com/pure-px/px-operator/pkg/apis/portworx
+github.com/pure-px/px-operator/pkg/apis/portworx/v1
+github.com/pure-px/px-operator/pkg/client/clientset/versioned
+github.com/pure-px/px-operator/pkg/client/clientset/versioned/scheme
+github.com/pure-px/px-operator/pkg/client/clientset/versioned/typed/core/v1
+github.com/pure-px/px-operator/pkg/client/clientset/versioned/typed/portworx/v1
+github.com/pure-px/px-operator/pkg/constants
+github.com/pure-px/px-operator/pkg/errors
+github.com/pure-px/px-operator/pkg/mock
+github.com/pure-px/px-operator/pkg/util
+github.com/pure-px/px-operator/pkg/util/k8s
+github.com/pure-px/px-operator/pkg/util/maps
+github.com/pure-px/px-operator/pkg/util/test
 # github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
 ## explicit; go 1.19
 github.com/rancher/norman/clientbase
@@ -2889,7 +2889,7 @@ sigs.k8s.io/yaml/goyaml.v2
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240618001010-e4b050e66115
-# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20240812234304-948bf116243e
+# github.com/portworx/sched-ops => github.com/portworx/sched-ops v0.0.0-20241018130318-7e228864063c
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 # k8s.io/api => k8s.io/api v0.25.1
 # k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.25.1

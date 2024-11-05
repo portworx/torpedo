@@ -5,8 +5,8 @@ import (
 	"os"
 	"sync"
 
-	ostclientset "github.com/libopenstorage/operator/pkg/client/clientset/versioned"
 	"github.com/portworx/sched-ops/k8s/common"
+	ostclientset "github.com/pure-px/px-operator/pkg/client/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"

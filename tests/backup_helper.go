@@ -23,7 +23,7 @@ import (
 	"github.com/pure-px/torpedo/drivers/applications/databases"
 
 	"github.com/gogo/protobuf/types"
-	optest "github.com/libopenstorage/operator/pkg/util/test"
+	optest "github.com/pure-px/px-operator/pkg/util/test"
 	"k8s.io/apimachinery/pkg/watch"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -50,7 +50,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/hashicorp/go-version"
-	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	v1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo/v2"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"

@@ -3,7 +3,7 @@ package dcos
 import (
 	"encoding/json"
 	"fmt"
-	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	v1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	"io/ioutil"
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	"os"

@@ -1,8 +1,8 @@
 module github.com/pure-px/torpedo
 
-go 1.21.4
+go 1.22.6
 
-toolchain go1.21.7
+toolchain go1.22.8
 
 require (
 	cloud.google.com/go/storage v1.36.0
@@ -31,7 +31,6 @@ require (
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20240528100711-6310e05a2c40
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
-	github.com/libopenstorage/operator v0.0.0-20240812060935-09fcd70d5bcc
 	github.com/libopenstorage/stork v1.4.1-0.20240424105137-8c6fa2a3f934
 	github.com/onsi/gomega v1.31.1
 	github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
@@ -44,6 +43,7 @@ require (
 	github.com/portworx/talisman v1.1.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0
 	github.com/prometheus/client_golang v1.17.0
+	github.com/pure-px/px-operator v0.0.0-20241022071538-96d1018d4909
 	github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
 	github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525
 	github.com/sirupsen/logrus v1.9.3
@@ -402,7 +402,7 @@ replace (
 
 	// PX dependencies
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240618001010-e4b050e66115
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20240812234304-948bf116243e
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v0.0.0-20241018130318-7e228864063c
 
 	// Stork dependencies
 	//github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81

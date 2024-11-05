@@ -3,7 +3,7 @@ package operator
 import (
 	"context"
 
-	corev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	corev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

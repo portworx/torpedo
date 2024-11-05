@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	pxapi "github.com/libopenstorage/operator/api/px"
+	pxapi "github.com/pure-px/px-operator/api/px"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/pkg/log"

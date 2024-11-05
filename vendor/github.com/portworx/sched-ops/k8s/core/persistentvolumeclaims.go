@@ -29,7 +29,10 @@ type PersistentVolumeClaimOps interface {
 	// GetPersistentVolumeClaim returns the PVC for given name and namespace
 	GetPersistentVolumeClaim(pvcName string, namespace string) (*corev1.PersistentVolumeClaim, error)
 	// GetPersistentVolumeClaims returns all PVCs in given namespace and that match the optional labelSelector
+	// Deprecated: Use GetPersistentVolumeClaimsUsingLabelSelector instead.
 	GetPersistentVolumeClaims(namespace string, labelSelector map[string]string) (*corev1.PersistentVolumeClaimList, error)
+	// GetPersistentVolumeClaimsUsingLabelSelector returns all PVCs in given namespace and that match the optional labelSelector of type metav1.LabelSelector
+	GetPersistentVolumeClaimsUsingLabelSelector(namespace string, labelSelector metav1.LabelSelector) (*corev1.PersistentVolumeClaimList, error)
 	// CreatePersistentVolume creates the given PV
 	CreatePersistentVolume(pv *corev1.PersistentVolume) (*corev1.PersistentVolume, error)
 	// GetPersistentVolume returns the PV for given name
@@ -177,9 +180,22 @@ func (c *Client) GetPersistentVolumeClaim(pvcName string, namespace string) (*co
 }
 
 // GetPersistentVolumeClaims returns all PVCs in given namespace and that match the optional labelSelector
+// Deprecated: Use GetPersistentVolumeClaimsUsingLabelSelector instead.
 func (c *Client) GetPersistentVolumeClaims(namespace string, labelSelector map[string]string) (*corev1.PersistentVolumeClaimList, error) {
 	return c.getPVCsWithListOptions(namespace, metav1.ListOptions{
 		LabelSelector: mapToCSV(labelSelector),
+	})
+}
+
+// GetPersistentVolumeClaimsUsingLabelSelector returns all PVCs in the given namespace and that match the optional labelSelector of type metav1.LabelSelector
+func (c *Client) GetPersistentVolumeClaimsUsingLabelSelector(namespace string, labelSelector metav1.LabelSelector) (*corev1.PersistentVolumeClaimList, error) {
+	pvcLabelSelector, err := metav1.LabelSelectorAsSelector(&labelSelector)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.getPVCsWithListOptions(namespace, metav1.ListOptions{
+		LabelSelector: pvcLabelSelector.String(),
 	})
 }
 

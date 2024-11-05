@@ -11,7 +11,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
-	oputil "github.com/libopenstorage/operator/pkg/util/test"
+	oputil "github.com/pure-px/px-operator/pkg/util/test"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pure-px/torpedo/drivers/node"

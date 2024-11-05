@@ -13,7 +13,7 @@ import (
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
-	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	operatorcorev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	"github.com/pure-px/torpedo/drivers/api"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler/spec"

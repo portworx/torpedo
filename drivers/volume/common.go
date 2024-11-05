@@ -4,12 +4,12 @@ import (
 	"regexp"
 	"time"
 
-	pxapi "github.com/libopenstorage/operator/api/px"
+	pxapi "github.com/pure-px/px-operator/api/px"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
-	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	v1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	"github.com/pborman/uuid"
 	driver_api "github.com/pure-px/torpedo/drivers/api"
 	"github.com/pure-px/torpedo/drivers/node"

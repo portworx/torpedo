@@ -10,8 +10,8 @@ import (
 	"time"
 
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	oputils "github.com/libopenstorage/operator/drivers/storage/portworx/util"
-	opcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	oputils "github.com/pure-px/px-operator/drivers/storage/portworx/util"
+	opcorev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	storkdriver "github.com/libopenstorage/stork/drivers/volume"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"

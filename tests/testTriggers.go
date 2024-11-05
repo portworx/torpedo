@@ -25,7 +25,7 @@ import (
 	"gopkg.in/inf.v0"
 
 	"github.com/devans10/pugo/flasharray"
-	oputil "github.com/libopenstorage/operator/pkg/util/test"
+	oputil "github.com/pure-px/px-operator/pkg/util/test"
 	"github.com/pure-px/torpedo/drivers/scheduler/aks"
 	"github.com/pure-px/torpedo/drivers/scheduler/eks"
 	"github.com/pure-px/torpedo/drivers/scheduler/gke"
@@ -36,7 +36,7 @@ import (
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	opsapi "github.com/libopenstorage/openstorage/api"
-	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	operatorcorev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/onsi/ginkgo/v2"

@@ -55,10 +55,6 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/sched"
-	pxapi "github.com/libopenstorage/operator/api/px"
-	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
-	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
-	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -72,6 +68,10 @@ import (
 	"github.com/portworx/sched-ops/k8s/stork"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
+	pxapi "github.com/pure-px/px-operator/api/px"
+	"github.com/pure-px/px-operator/drivers/storage/portworx/util"
+	oputil "github.com/pure-px/px-operator/drivers/storage/portworx/util"
+	optest "github.com/pure-px/px-operator/pkg/util/test"
 	"go.uber.org/multierr"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/iterator"
@@ -14630,27 +14630,11 @@ func DoParallelUpgradePDBValidation(stopSignal <-chan struct{}, mError *error) {
 	}
 	quorumValue := (len(nodes) / 2) + 1
 
-	// TODO: Remove this when smart and parallel upgrades is enabled by default
+	// If user provides minAvailable then use that instead of quorum. No need to check for feature annotation as check is done before
 	if userMinAvailable >= quorumValue && userMinAvailable < len(nodes) {
 		log.Infof("MinAvailable annotation found, upgrading %d nodes at a time", userMinAvailable)
 		quorumValue = userMinAvailable
-	} else if stc.Annotations == nil || func() bool {
-		val, ok := stc.Annotations["portworx.io/disable-non-disruptive-upgrade"]
-		return !ok || val == "true"
-	}() {
-		log.Infof("Non Disruptive Upgrade is disabled without providing valid minAvailable. Upgrading 1 node at a time")
-		quorumValue = len(nodes) - 1
 	}
-
-	// TODO: Uncomment this when smart and parallel upgrades is enabled by default
-	// if stc.Annotations != nil {
-	// 	if userMinAvailable >= quorumValue && userMinAvailable < len(nodes) {
-	// 		quorumValue = userMinAvailable
-	// 	} else if stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] == "true" {
-	// 		log.Infof("Non Disruptive Upgrade is disabled without providing valid minAvailable. Upgrading 1 node at a time")
-	// 		quorumValue = len(nodes) - 1
-	// 	}
-	// }
 
 	itr := 1
 	for {

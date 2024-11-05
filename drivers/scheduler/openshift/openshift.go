@@ -13,8 +13,8 @@ import (
 
 	"github.com/hashicorp/go-version"
 	"github.com/libopenstorage/openstorage/api"
-	opv1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	optest "github.com/libopenstorage/operator/pkg/util/test"
+	opv1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
+	optest "github.com/pure-px/px-operator/pkg/util/test"
 	openshiftv1 "github.com/openshift/api/config/v1"
 	ocpsecurityv1api "github.com/openshift/api/security/v1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"

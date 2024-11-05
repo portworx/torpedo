@@ -3,7 +3,7 @@ package operator
 import (
 	"context"
 
-	portworxv1 "github.com/libopenstorage/operator/pkg/apis/portworx/v1"
+	portworxv1 "github.com/pure-px/px-operator/pkg/apis/portworx/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
