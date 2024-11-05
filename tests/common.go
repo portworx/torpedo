@@ -7288,7 +7288,7 @@ func CreateLockedBucket(provider string, retentionPeriod int, softDelete bool) (
 		if softDelete {
 			lockedBucketName := fmt.Sprintf("%ssoft-%v", getGlobalLockedBucketName(provider), time.Now().Unix())
 			CreateAzureBucket(lockedBucketName, true, SA_level, retentionPeriod, true)
-			bucketMap[string(SA_level)+"_soft"] = lockedBucketName
+			bucketMap[string(SOFT_SA_LEVEL)] = lockedBucketName
 		}
 		return bucketMap, nil
 	}
