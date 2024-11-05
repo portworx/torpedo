@@ -4431,3 +4431,166 @@ var _ = Describe("{VerifySanpWhenVolumeDown}", Label("p0", "negative", "px_ops")
 	})
 
 })
+
+var _ = Describe("{DetachVolSnapshotTest}", func() {
+	/*
+		1. Deploy Applications
+		2. Validate Applications are Deployed
+		3. Scale down the applications so that the volumes are detached
+		4. Take snapshot of one volume
+		5. Inspect the parent volume, make sure the labels are intact, e.g. namespace, pvc
+		6. Inspect the labels on the snapshot are expected
+	*/
+	var contexts []*scheduler.Context
+	var err error
+	JustBeforeEach(func() {
+		StartTorpedoTest("DetachVolSnapshotTest",
+			"Validate labels are present on detached volumes after taking snapshot", nil, 0)
+	})
+	itLog := "Check labels after detached volumes getting snapshotted"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		stepLog := "Schedule apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("detached-vol-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Scale down apps to detach volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// scaleDownApp scales an app to zero replicas using the given context and waits for pods to terminate
+			scaleDownApp := func(ctx *scheduler.Context) error {
+				scaleApp(ctx, 0)
+				waitForPodsToTerminate := func() (interface{}, bool, error) {
+					vols, err := Inst().S.GetVolumes(ctx)
+					if err != nil {
+						return nil, false, err
+					}
+					podCount := 0
+					for _, vol := range vols {
+						if vol.ID == "" {
+							return nil, false, fmt.Errorf("empty vol.ID in volume [%v]", vol)
+						}
+						pods, err := core.Instance().GetPodsUsingPV(vol.ID)
+						if err != nil {
+							return nil, false, err
+						}
+						podCount += len(pods)
+					}
+					if podCount > 0 {
+						return nil, true, fmt.Errorf("expected no pods, but found [%d] remaining", podCount)
+					}
+					return nil, false, nil
+				}
+				_, err := task.DoRetryWithTimeout(waitForPodsToTerminate, 10*time.Minute, 30*time.Second)
+				if err != nil {
+					return fmt.Errorf("failed to scale down app [%s] and ensure all pods are deleted. Err: [%v]", ctx.App.Key, err)
+				}
+				return nil
+			}
+			for _, ctx := range contexts {
+				log.InfoD("Scaling down app [%s]", ctx.App.Key)
+				err := scaleDownApp(ctx)
+				log.FailOnError(err, "failed to scale down app [%s]", ctx.App.Key)
+			}
+		})
+
+		var volume *volume.Volume
+		newLabels := map[string]string{"foo": "bar"}
+		stepLog = "Get one detached volume and update it"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "failed to get volumes for app [%s]", ctx.App.Key)
+				if len(vols) > 0 {
+					volume = vols[0]
+					break
+				}
+			}
+			if volume == nil {
+				err := fmt.Errorf("unable to find any volume in the cluster")
+				log.FailOnError(err, err.Error())
+			}
+
+			err = Inst().V.UpdateVolumeLabels(volume, newLabels)
+			log.FailOnError(err, fmt.Sprintf("failed to update labels %v for volume %s", newLabels, volume.ID))
+		})
+
+		stepLog = "Get parent volume labels before snapshotting"
+		var parentVolumeLabels map[string]string
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			parentVolInspectResult, err := Inst().V.InspectVolume(volume.ID)
+			log.FailOnError(err, "Failed to inspect volume %v", volume.ID)
+			parentVolumeLabels = parentVolInspectResult.Locator.VolumeLabels
+		})
+
+		stepLog = "Make a snapshot out of the volume"
+		var snapshotResponse *opsapi.SdkVolumeSnapshotCreateResponse
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapshotName := fmt.Sprintf("snapshot_%s", volume.ID)
+			snapshotResponse, err = Inst().V.CreateSnapshot(volume.ID, snapshotName)
+			log.FailOnError(err, "error creeating snapshot out of volume [%s]", volume.ID)
+			log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
+		})
+
+		verifyVolumeLabels := func(volumeId string, expectedLabels map[string]string) bool {
+			volInspect, err := Inst().V.InspectVolume(volumeId)
+			log.FailOnError(err, "Failed to inspect volume %v", volumeId)
+			pass := true
+			for label, expectedValue := range expectedLabels {
+				value, ok := volInspect.Locator.VolumeLabels[label]
+				if !ok {
+					log.Errorf("unable to find label [%s] in the labels from the volume inspect result", label)
+					pass = false
+				}
+				if value != expectedValue {
+					log.Errorf("label [%s] from the volume inspect result is not expected. Expected: [%s], found: [%s]", label, expectedValue, value)
+					pass = false
+				}
+			}
+			return pass
+
+		}
+
+		stepLog = "Verify parent volume having labels as expected"
+		expectedParentVolumeLabels := make(map[string]string, 0)
+		for _, label := range []string{
+			"namespace",
+			"pvc",
+		} {
+			expectedParentVolumeLabels[label] = parentVolumeLabels[label]
+		}
+		for label, value := range newLabels {
+			expectedParentVolumeLabels[label] = value
+		}
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pass := verifyVolumeLabels(volume.ID, expectedParentVolumeLabels)
+			dash.VerifyFatal(pass, true, "Volume labels of the volume is not as expected.")
+		})
+
+		stepLog = "Verify snapshot having labels as expected"
+		expectedSnapshotLabels := make(map[string]string, 0)
+		for label, value := range newLabels {
+			expectedSnapshotLabels[label] = value
+		}
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pass := verifyVolumeLabels(snapshotResponse.GetSnapshotId(), expectedSnapshotLabels)
+			dash.VerifyFatal(pass, true, "Volume labels of the snapshot is not as expected.")
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})

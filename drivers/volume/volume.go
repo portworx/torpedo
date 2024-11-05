@@ -189,6 +189,9 @@ type Driver interface {
 	// UpdateVolumeSpec updates given volume with provided spec
 	UpdateVolumeSpec(vol *Volume, volumeSpec *api.VolumeSpecUpdate) error
 
+	// UpdateVolumeLabels updates given volume with provided labels
+	UpdateVolumeLabels(vol *Volume, labels map[string]string) error
+
 	// ValidateDeleteVolume validates whether a volume is cleanly removed from the volume driver
 	ValidateDeleteVolume(vol *Volume) error
 

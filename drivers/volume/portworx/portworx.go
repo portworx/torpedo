@@ -2362,11 +2362,11 @@ func (d *portworx) SetIoBandwidth(vol *torpedovolume.Volume, readBandwidthMBps u
 	return nil
 }
 
-// UpdateVolumeSpec updates given volume with provided spec
-func (d *portworx) UpdateVolumeSpec(vol *torpedovolume.Volume, volumeSpec *api.VolumeSpecUpdate) error {
+func (d *portworx) updateVolume(vol *torpedovolume.Volume, volumeSpec *api.VolumeSpecUpdate, labels map[string]string) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	log.Infof("Updating volume spec for volume [%s]", volumeName)
 	log.Infof("Volume Spec : %+v", volumeSpec)
+	log.Infof("Volume New Labels: %+v", labels)
 	volDriver := d.getVolDriver()
 	_, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 	if err != nil && errIsNotFound(err) {
@@ -2376,11 +2376,14 @@ func (d *portworx) UpdateVolumeSpec(vol *torpedovolume.Volume, volumeSpec *api.V
 	}
 	log.Debugf("Updating volume [%s]", volumeName)
 	t := func() (interface{}, bool, error) {
-
-		_, err = volDriver.Update(d.getContext(), &api.SdkVolumeUpdateRequest{
-			VolumeId: volumeName,
-			Spec:     volumeSpec,
-		})
+		volumeUpdateRequest := &api.SdkVolumeUpdateRequest{VolumeId: volumeName}
+		if volumeSpec != nil {
+			volumeUpdateRequest.Spec = volumeSpec
+		}
+		if labels != nil {
+			volumeUpdateRequest.Labels = labels
+		}
+		_, err = volDriver.Update(d.getContext(), volumeUpdateRequest)
 		if err != nil {
 			log.Errorf("Failed to update volume [%s]: %v", volumeName, err)
 			return nil, true, fmt.Errorf("volume [%s] not updated yet", volumeName)
@@ -2389,9 +2392,18 @@ func (d *portworx) UpdateVolumeSpec(vol *torpedovolume.Volume, volumeSpec *api.V
 		return nil, false, nil
 	}
 	if _, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, defaultRetryInterval); err != nil {
-		return fmt.Errorf("failed to set set IOps for volumeName [%s], Err: %v", volumeName, err)
+		return fmt.Errorf("failed to update spec/labels for volumeName [%s], Err: %v", volumeName, err)
 	}
 	return nil
+}
+
+// UpdateVolumeSpec updates given volume with provided spec
+func (d *portworx) UpdateVolumeSpec(vol *torpedovolume.Volume, volumeSpec *api.VolumeSpecUpdate) error {
+	return d.updateVolume(vol, volumeSpec, nil)
+}
+
+func (d *portworx) UpdateVolumeLabels(vol *torpedovolume.Volume, labels map[string]string) error {
+	return d.updateVolume(vol, nil, labels)
 }
 
 func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[string]string) error {

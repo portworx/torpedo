@@ -470,6 +470,14 @@ func (d *DefaultDriver) UpdateVolumeSpec(vol *Volume, volumeSpec *api.VolumeSpec
 	}
 }
 
+// UpdateVolumeLabels updates given volume with provided labels
+func (d *DefaultDriver) UpdateVolumeLabels(vol *Volume, labels map[string]string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateVolumeLabels()",
+	}
+}
+
 // ValidateDeleteVolume validates whether a volume is cleanly removed from the volume driver
 func (d *DefaultDriver) ValidateDeleteVolume(vol *Volume) error {
 	return &errors.ErrNotSupported{
