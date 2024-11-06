@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	v1 "k8s.io/api/core/v1"
+	storageApi "k8s.io/api/storage/v1"
 	"k8s.io/utils/strings/slices"
 
 	"math/rand"
@@ -14,11 +15,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
 	"github.com/pure-px/torpedo/drivers/volume"
 	"github.com/pure-px/torpedo/drivers/volume/portworx"
 	"github.com/pure-px/torpedo/drivers/volume/portworx/schedops"
 	corev1 "k8s.io/api/core/v1"
 
+	"github.com/libopenstorage/openstorage/api"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/pure-px/torpedo/pkg/log"
 	"github.com/pure-px/torpedo/pkg/osutils"
@@ -27,10 +30,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/pkg/testrailuttils"
 	. "github.com/pure-px/torpedo/tests"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -2075,5 +2080,262 @@ var _ = Describe("{DrainAllNodes}", Label("p2", "positive", "node_ops"), func() 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{TrashcanPVCRestoreByAttachingExistingPVCToPod}", Label("staging", "p0", "px_vol_ops"), func() {
+	/*
+	   Hazel ticket: https://purestorage.atlassian.net/browse/HAZEL-259
+	   1. Enable trashcan
+	   2. Delete PVC using kubenrnetes command.
+	   3. Restore pvc from trashcan.
+	   4. Attach this new PVC to kuberntes pod and make sure readIO can be performed.
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("TrashcanPVCRestoreByAttachingExistingPVCToPod", "Trashcan restore using Kubenetes way by attaching existing PVC to kubernetes pod", nil, 0)
+	})
+
+	stepLog := "Trashcan PVC restore and validation by attaching restored PVC to Kubernetes pod"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		const (
+			PvProvisionedByAnnotation = "pv.kubernetes.io/provisioned-by"
+			PVProvisionerName         = k8s.CsiProvisioner
+			PVProtectionName          = "kubernetes.io/pv-protection"
+			VolumeMode                = "Filesystem"
+		)
+		var (
+			appNamespace = fmt.Sprintf("tc-cs-%s", Inst().InstanceID)
+			fioPVcName   = "tc-pvc-restore"
+			contexts     = make([]*scheduler.Context, 0)
+			allPvcList   *v1.PersistentVolumeClaimList
+			scForPvc     *storageApi.StorageClass
+			restoredVol  *api.Volume
+			trashcanVols []string
+		)
+
+		stepLog = "Enabling trashcan feature on the cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			currNode := node.GetStorageDriverNodes()[0]
+			err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+				"--volume-expiration-minutes": "600",
+			})
+			log.FailOnError(err, fmt.Sprintf("Failed to enable trashcan feature on the node: %v", currNode.Name))
+			log.InfoD("Trashcan feature enabled successfully on the node: %v", currNode.Name)
+		})
+
+		stepLog = "scheduling application and retrieve PVCs and storageclass created by the application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, fmt.Sprintf("trashrec-%d", i))...)
+			}
+			for _, ctx := range contexts {
+				ctx.SkipVolumeValidation = true
+				ValidateContext(ctx)
+			}
+
+			allPvcList, err = core.Instance().GetPersistentVolumeClaims(appNamespace, nil)
+			log.FailOnError(err, fmt.Sprintf("Failed to retrieve PVCs from application namespace: %v", appNamespace))
+
+			scForPvc, err = k8sCore.GetStorageClassForPVC(&allPvcList.Items[0])
+			log.FailOnError(err, fmt.Sprintf("Failed to retrieve SC from PVC: %v", allPvcList.Items[0].Name))
+
+			log.InfoD("Application scheduled successfully on namespace %v", appNamespace)
+		})
+
+		stepLog = "Creating and deleting a PVC to validate trashcan functionality"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			pvcObj := &v1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fioPVcName,
+					Namespace: appNamespace,
+				},
+				Spec: v1.PersistentVolumeClaimSpec{
+					AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+					StorageClassName: &scForPvc.Name,
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{
+							v1.ResourceStorage: resource.MustParse("5Gi"),
+						},
+					},
+				},
+			}
+			createdPVC, err := core.Instance().CreatePersistentVolumeClaim(pvcObj)
+			log.FailOnError(err, fmt.Sprintf("Failed to create PVC: %v", pvcObj))
+
+			err = Inst().S.WaitForSinglePVCToBound(createdPVC.Name, createdPVC.Namespace, 3)
+			log.FailOnError(err, "Failed to wait for pvc %v to bound in namespace %v", createdPVC.Name, createdPVC.Namespace)
+
+			err = core.Instance().DeletePersistentVolumeClaim(createdPVC.Name, createdPVC.Namespace)
+			log.FailOnError(err, fmt.Sprintf("Failed to delete PVC: %v from namespace: %v", createdPVC.Name, createdPVC.Namespace))
+
+			time.Sleep(10 * time.Second)
+			log.InfoD("PVC %v deleted successfully", createdPVC.Name)
+		})
+
+		stepLog = "Validating that volumes exist in the trashcan"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			node := node.GetStorageDriverNodes()[0]
+			trashcanVols, err = Inst().V.GetTrashCanVolumeIds(node)
+			log.FailOnError(err, fmt.Sprintf("Failed to retrieve trashcan volumes from the node: %v", node))
+
+			log.Infof("trashcan len: %d", len(trashcanVols))
+			dash.VerifyFatal(len(trashcanVols) > 0, true, "Volumes should exist in trashcan")
+		})
+
+		stepLog = "Restoring volumes from trashcan and validating restoration"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, tID := range trashcanVols {
+				if tID != "" {
+					restoredVol, err = Inst().V.InspectVolume(tID)
+					log.FailOnError(err, fmt.Sprintf("error inspecting volume %s", tID))
+					if strings.Contains(restoredVol.Locator.Name, fioPVcName) {
+						err = trashcanRestore(restoredVol.Id, fioPVcName)
+						log.FailOnError(err, fmt.Sprintf("error restoring volume %s from trashcan", restoredVol.Id))
+					}
+				}
+			}
+			log.InfoD("Volume %v restored successfully", restoredVol.Id)
+		})
+
+		stepLog = "Creating PersistentVolume from restored volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pvObj := &corev1.PersistentVolume{
+				TypeMeta: metav1.TypeMeta{Kind: "PersistentVolume"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      restoredVol.Id,
+					Namespace: scForPvc.Namespace,
+					Annotations: map[string]string{
+						PvProvisionedByAnnotation: PVProvisionerName,
+					},
+					Finalizers: []string{
+						PVProtectionName,
+					},
+				},
+
+				Spec: corev1.PersistentVolumeSpec{
+					StorageClassName: scForPvc.Name,
+					AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteMany},
+					Capacity: corev1.ResourceList{
+						corev1.ResourceName(corev1.ResourceStorage): resource.MustParse("5Gi"),
+					},
+					ClaimRef: &corev1.ObjectReference{
+						APIVersion: "v1",
+						Kind:       "PersistentVolumeClaim",
+						Name:       fioPVcName,
+						Namespace:  scForPvc.Namespace,
+					},
+					PersistentVolumeReclaimPolicy: v1.PersistentVolumeReclaimDelete,
+					PersistentVolumeSource: v1.PersistentVolumeSource{
+						PortworxVolume: &v1.PortworxVolumeSource{
+							VolumeID: restoredVol.Id,
+						},
+					},
+					VolumeMode: allPvcList.Items[0].Spec.VolumeMode,
+				},
+			}
+			createdPV, err := k8sCore.CreatePersistentVolume(pvObj)
+			log.FailOnError(err, fmt.Sprintf("Failled to create PV %v", pvObj))
+			log.InfoD("PV created successfully: %v", createdPV)
+		})
+
+		stepLog = "Creating PersistentVolumeClaim and Attaching it to PersistentVolume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			pvcObj := &v1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fioPVcName,
+					Namespace: allPvcList.Items[0].Namespace,
+				},
+				Spec: v1.PersistentVolumeClaimSpec{
+					AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteMany},
+					StorageClassName: &scForPvc.Name,
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{
+							v1.ResourceStorage: resource.MustParse("5Gi"),
+						},
+					},
+				},
+			}
+			pvc, err := core.Instance().CreatePersistentVolumeClaim(pvcObj)
+			log.FailOnError(err, fmt.Sprintf("Failled to create PVC %v", pvcObj))
+			log.InfoD("PVC created successfully: %v", pvc)
+		})
+
+		stepLog = "Attach the restored PVC to the existing deployment"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			depl, err := apps.Instance().ListDeployments(appNamespace, metav1.ListOptions{})
+			log.FailOnError(err, "Failed to list deployments")
+			fioDeployment := depl.Items[0]
+
+			newVolume := v1.Volume{
+				Name: fioPVcName,
+				VolumeSource: v1.VolumeSource{
+					PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+						ClaimName: fioPVcName,
+					},
+				},
+			}
+			newVolumeMount := v1.VolumeMount{
+				Name:      fioPVcName,
+				MountPath: "/pvc-restore",
+			}
+
+			fioDeployment.Spec.Template.Spec.Volumes = append(fioDeployment.Spec.Template.Spec.Volumes, newVolume)
+
+			containers := fioDeployment.Spec.Template.Spec.Containers
+			container := &containers[0]
+			container.VolumeMounts = append(container.VolumeMounts, newVolumeMount)
+
+			_, err = apps.Instance().UpdateDeployment(&fioDeployment)
+			log.FailOnError(err, fmt.Sprintf("Failled to update the deployment: %v", fioDeployment))
+		})
+
+		stepLog = "Validating that all application pods are running"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			waitForPodsRunning := func() (interface{}, bool, error) {
+				for _, eachContext := range contexts {
+					log.Infof("Verifying Context [%v]", eachContext.App.Key)
+					err := Inst().S.WaitForRunning(eachContext, 5*time.Minute, 2*time.Second)
+					if err != nil {
+						return nil, true, err
+					}
+				}
+				return nil, false, nil
+			}
+			_, err = task.DoRetryWithTimeout(waitForPodsRunning, 5*time.Minute, 10*time.Second)
+			dash.VerifyFatal(err == nil, true, "Check all pods are running")
+
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Destroy apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(contexts, nil)
+
+			err = core.Instance().DeletePersistentVolumeClaim(fioPVcName, appNamespace)
+			log.FailOnError(err, fmt.Sprintf("Failled to delete PVC: %v namespace: %v", fioPVcName, appNamespace))
+
+			err = core.Instance().DeletePersistentVolume(restoredVol.Id)
+			log.FailOnError(err, fmt.Sprintf("Failled to delete PV: %v namespace: %v", restoredVol.Id, appNamespace))
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })
