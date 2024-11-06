@@ -1,9 +1,13 @@
 package tests
 
 import (
+	"context"
 	"fmt"
+	"math/rand"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
@@ -2067,5 +2071,518 @@ var _ = Describe("{VerifyRBACForAppUser}", Label(TestCaseLabelsMap[VerifyRBACFor
 		log.InfoD("Switching back context to Source cluster")
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+	})
+})
+
+// VerifyRBACForLargeUserSet validates RBAC operations for all the roles when there are large number of users
+var _ = Describe("{VerifyRBACForLargeUserSet}", func() {
+	const (
+		PermissionDenied = "PermissionDenied"
+	)
+
+	var (
+		err                            error
+		adminCtx                       context.Context
+		scheduledAppContexts           []*scheduler.Context
+		backupLocationMap              map[string]string
+		infraAdminBackupLocationMap    map[string]map[string]string
+		infraAdminCloudCredentialMap   map[string]map[string]string
+		bkpNamespaces                  []string
+		providers                      []string
+		cloudCredName                  string
+		cloudCredUID                   string
+		backupLocationName             string
+		backupLocationUID              string
+		periodicSchedulePolicyName     string
+		periodicSchedulePolicyUid      string
+		periodicSchedulePolicyInterval int64
+		preRuleUid                     string
+		preRuleName                    string
+		postRuleUid                    string
+		postRuleName                   string
+		customRoleName                 backup.PxBackupRole
+		roles                          [3]backup.PxBackupRole
+		numberOfUsers                  int
+		randomlySelectedUsersPerRole   int
+		users                          []string
+		roleUsers                      map[backup.PxBackupRole][]string
+		userContexts                   map[string]context.Context
+		wg                             sync.WaitGroup
+		mutex                          sync.Mutex
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyRBACForLargeUserSet", "Verify RBAC features when there is large number of users", nil, 55821, Dchothani, Q3FY25)
+		backupLocationMap = make(map[string]string)
+		infraAdminBackupLocationMap = make(map[string]map[string]string)
+		infraAdminCloudCredentialMap = make(map[string]map[string]string)
+		userContexts = make(map[string]context.Context)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		bkpNamespaces = make([]string, 0)
+		users = make([]string, 0)
+		providers = GetBackupProviders()
+		periodicSchedulePolicyInterval = 15
+		numberOfUsers, _ = strconv.Atoi(GetEnv(UsersToBeCreated, "150"))
+		randomlySelectedUsersPerRole = 5
+		roles = [3]backup.PxBackupRole{backup.ApplicationOwner, backup.InfrastructureOwner, backup.ApplicationUser}
+		roleUsers = map[backup.PxBackupRole][]string{
+			backup.ApplicationOwner:    make([]string, 0),
+			backup.ApplicationUser:     make([]string, 0),
+			backup.InfrastructureOwner: make([]string, 0),
+		}
+		adminCtx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.InfoD("scheduling applications")
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+				namespace := GetAppNamespace(appCtx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+			}
+		}
+	})
+
+	It("Verify RBAC features when there is large number of users", func() {
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Creating backup location and cloud account by Admin", func() {
+			log.InfoD("Creating backup location and cloud account by Admin")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				cloudCredUID = uuid.New()
+				err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, adminCtx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				backupLocationName = fmt.Sprintf("%s-bl-%v", provider, time.Now().Unix())
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Creation of backup location [%s]", backupLocationName))
+			}
+		})
+
+		Step("Registering clusters for backup by Admin", func() {
+			log.InfoD("Registering clusters for backup")
+			err = CreateApplicationClusters(BackupOrgID, "", "", adminCtx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, adminCtx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			_, err = Inst().Backup.GetClusterUID(adminCtx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, adminCtx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+			_, err = Inst().Backup.GetClusterUID(adminCtx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+		})
+
+		Step("Creating schedule policy by Admin", func() {
+			log.InfoD("Validate creation of schedule policy by Admin")
+			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", RandomString(4))
+			periodicSchedulePolicyUid = uuid.New()
+			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, adminCtx, false, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s]", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
+		})
+
+		Step("Creating pre and post exec rules for applications by Admin", func() {
+			log.InfoD("Creating pre and post exec rules for applications by Admin")
+			preRuleName, postRuleName, err = CreateRuleForBackupWithMultipleApplications(BackupOrgID, Inst().AppList, adminCtx)
+			dash.VerifyFatal(err, nil, "Verifying creation of pre and post exec rules for applications from px-admin")
+			if preRuleName != "" {
+				preRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, adminCtx, preRuleName)
+				log.FailOnError(err, "Fetching pre backup rule [%s] uid", preRuleName)
+				log.Infof("Pre backup rule [%s] uid: [%s]", preRuleName, preRuleUid)
+			}
+			if postRuleName != "" {
+				postRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, adminCtx, postRuleName)
+				log.FailOnError(err, "Fetching post backup rule [%s] uid", postRuleName)
+				log.Infof("Post backup rule [%s] uid: [%s]", postRuleName, postRuleUid)
+			}
+		})
+
+		Step("Creating custom role by Admin", func() {
+			log.InfoD("Creating custom role by Admin")
+			customRoleName = backup.PxBackupRole(fmt.Sprintf("custom-px-admin-role-%s", RandomString(4)))
+			services := []RoleServices{BackupSchedulePolicy, Rules, Cloudcredential, BackupLocation}
+			apis := []RoleApis{All}
+			err = CreateRole(customRoleName, services, apis, adminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of role [%s] by the Admin", customRoleName))
+		})
+
+		Step("Creating users with different types of roles", func() {
+			log.InfoD("Creating users with different types of roles")
+			users = CreateUsers(numberOfUsers)
+			for i, user := range users {
+				wg.Add(1)
+				go func(i int, user string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					roleIndex := i % len(roles)
+					role := roles[roleIndex]
+					err := backup.AddRoleToUser(user, role, fmt.Sprintf("Adding %v role to %s", role, user))
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Adding %v role to %s", role, user))
+					userCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching ctx for user - %s ", user))
+					mutex.Lock()
+					roleUsers[role] = append(roleUsers[role], user)
+					userContexts[user] = userCtx
+					mutex.Unlock()
+				}(i, user)
+			}
+			wg.Wait()
+		})
+
+		Step("Sharing all the RBAC objects to the App Users by Admin", func() {
+			log.InfoD("Sharing all the RBAC objects to the App Users")
+			Step("Sharing cloud credential to all App Users", func() {
+				log.InfoD("Sharing cloud credential to all App Users")
+				for _, provider := range providers {
+					if provider != drivers.ProviderNfs {
+						err = AddCloudCredentialOwnership(cloudCredName, cloudCredUID, roleUsers[backup.ApplicationUser], nil, Read, Invalid, adminCtx, BackupOrgID)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for cloud credential [%s] for all App Users", cloudCredName))
+					}
+				}
+			})
+
+			Step("Sharing backup location to all App Users", func() {
+				log.InfoD("Sharing backup location to all App Users")
+				err = AddBackupLocationOwnership(backupLocationName, backupLocationUID, roleUsers[backup.ApplicationUser], nil, Read, Invalid, adminCtx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for backup location [%s] for all App Users", backupLocationName))
+			})
+
+			Step("Sharing schedule policy to all App Users", func() {
+				log.InfoD("Sharing schedule policy to all App Users")
+				err = AddSchedulePolicyOwnership(periodicSchedulePolicyName, periodicSchedulePolicyUid, roleUsers[backup.ApplicationUser], nil, Read, Invalid, adminCtx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for schedule policy [%s] for all App Users", periodicSchedulePolicyName))
+			})
+
+			Step("Sharing pre and post rules to all App Users", func() {
+				log.InfoD("Sharing pre and post rules to all App Users")
+				if preRuleName != "" {
+					err = AddRuleOwnership(preRuleName, preRuleUid, roleUsers[backup.ApplicationUser], nil, Read, Invalid, adminCtx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for pre-rule [%s] for all App Users", preRuleName))
+				}
+				if postRuleName != "" {
+					err = AddRuleOwnership(postRuleName, postRuleUid, roleUsers[backup.ApplicationUser], nil, Read, Invalid, adminCtx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for post-rule [%s] for all App Users", postRuleName))
+				}
+			})
+		})
+
+		Step("Sharing cloud credential to all the App Admins by Admin", func() {
+			log.InfoD("Sharing cloud credential to all the App Admins by Admin")
+			for _, provider := range providers {
+				if provider != drivers.ProviderNfs {
+					err = AddCloudCredentialOwnership(cloudCredName, cloudCredUID, roleUsers[backup.ApplicationOwner], nil, Read, Invalid, adminCtx, BackupOrgID)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for cloud credential [%s] for all App Admins", cloudCredName))
+				}
+			}
+		})
+
+		Step("Validating RBAC for App Users", func() {
+			for _, user := range roleUsers[backup.ApplicationUser] {
+				Step(fmt.Sprintf("Verifying the App User [%s] doesn't have permission to create cloud credentials and backup location", user), func() {
+					wg.Add(1)
+					go func(user string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						for _, provider := range providers {
+							cloudCredUID := uuid.New()
+							blUID := uuid.New()
+							credName := fmt.Sprintf("cred-%s-%v", provider, RandomString(6))
+							blName := fmt.Sprintf("bl-%s-%v", provider, RandomString(4))
+							err = CreateCloudCredential(provider, credName, cloudCredUID, BackupOrgID, userContexts[user])
+							dash.VerifyFatal(strings.Contains(err.Error(), PermissionDenied), true, fmt.Sprintf("Verifying if App User [%s] doesn't have permission for creating cloud credentials for provider [%s]", user, provider))
+							err = CreateBackupLocationWithContext(provider, blName, blUID, credName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", userContexts[user], true)
+							dash.VerifyFatal(strings.Contains(err.Error(), PermissionDenied), true, fmt.Sprintf("Verifying if App User [%s] doesn't have permission for creating backup location", user))
+						}
+					}(user)
+				})
+
+				Step(fmt.Sprintf("Verifying the App User [%s] doesn't have permission to create a schedule policy", user), func() {
+					wg.Add(1)
+					go func(user string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						periodicSchedulePolicyName := fmt.Sprintf("policy-%v", RandomString(4))
+						periodicSchedulePolicyUid := uuid.New()
+						periodicSchedulePolicyInterval := int64(15)
+						err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, userContexts[user], false, false)
+						dash.VerifyFatal(strings.Contains(err.Error(), PermissionDenied), true, fmt.Sprintf("Verifying if App User [%s] doesn't have permission for creating schedule policy for user", user))
+					}(user)
+				})
+
+				Step(fmt.Sprintf("Verifying the App User [%s] doesn't have permission to create roles", user), func() {
+					wg.Add(1)
+					go func(user string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						appUserRoleName := backup.PxBackupRole(fmt.Sprintf("custom-app-user-role-%s", RandomString(4)))
+						services := []RoleServices{BackupSchedulePolicy, Rules, Cloudcredential, BackupLocation, Role}
+						apis := []RoleApis{All}
+						err = CreateRole(appUserRoleName, services, apis, userContexts[user])
+						dash.VerifyFatal(strings.Contains(err.Error(), PermissionDenied), true, fmt.Sprintf("Verifying if App User [%s] doesn't have permission for creating role", user))
+					}(user)
+				})
+
+				Step(fmt.Sprintf("Verifying the App User [%s] doesn't have permission to create pre and post exec rules for applications", user), func() {
+					wg.Add(1)
+					go func(user string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						_, _, err = CreateRuleForBackupWithMultipleApplications(BackupOrgID, Inst().AppList, userContexts[user])
+						dash.VerifyFatal(strings.Contains(err.Error(), PermissionDenied), true, fmt.Sprintf("Verifying if App User [%s] doesn't have permission for creating rules", user))
+					}(user)
+				})
+			}
+			wg.Wait()
+
+			Step("Verifying the App Users can create manual and scheduled backups and restore them using the shared RBAC Objects", func() {
+				log.InfoD("Verifying the App Users can create manual and scheduled backups and restore them using the shared RBAC Objects")
+				for i := 0; i < randomlySelectedUsersPerRole; i++ {
+					user := roleUsers[backup.ApplicationUser][rand.Intn(len(roleUsers[backup.ApplicationUser]))]
+					wg.Add(1)
+					go func(user string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+
+						var (
+							err                             error
+							srcClusterUid                   string
+							destClusterUid                  string
+							backupName                      string
+							restoreName                     string
+							scheduledBackupName             string
+							firstScheduledBackupName        string
+							scheduledRestoreName            string
+							namespaceMappingManualBackup    map[string]string
+							namespaceMappingScheduledBackup map[string]string
+						)
+
+						log.Infof("Creating source [%s] and destination [%s] clusters for user [%s]", SourceClusterName, DestinationClusterName, user)
+						err = CreateApplicationClusters(BackupOrgID, "", "", userContexts[user])
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with App-User ctx", SourceClusterName, DestinationClusterName))
+						srcClusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, userContexts[user])
+						log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+						dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+						dstClusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, userContexts[user])
+						log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+						dash.VerifyFatal(dstClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+						srcClusterUid, err = Inst().Backup.GetClusterUID(userContexts[user], BackupOrgID, SourceClusterName)
+						log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+						log.Infof("Cluster [%s] uid: [%s]", SourceClusterName, srcClusterUid)
+						destClusterUid, err = Inst().Backup.GetClusterUID(userContexts[user], BackupOrgID, DestinationClusterName)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+						log.InfoD("Creating backup by App User [%s]", user)
+						backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, RandomString(4))
+						err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, srcClusterUid, "", "", "", "", userContexts[user])
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
+						log.InfoD("Creating restore of manual backup [%s] by App User %s", backupName, user)
+						restoreName = fmt.Sprintf("%s-%s", RestoreNamePrefix, RandomString(4))
+						namespaceMappingManualBackup = make(map[string]string)
+						for _, ns := range bkpNamespaces {
+							namespaceMappingManualBackup[ns] = fmt.Sprintf("%s-%s", ns, RandomString(4))
+						}
+						err = CreateRestore(restoreName, backupName, namespaceMappingManualBackup, DestinationClusterName, destClusterUid, BackupOrgID, userContexts[user], make(map[string]string))
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration of backup [%s] by App User [%s]", backupName, user))
+						log.InfoD("Creating scheduled backup by App User [%s]", user)
+						scheduledBackupName = fmt.Sprintf("backup-schedule-%v", RandomString(4))
+						firstScheduledBackupName, err = CreateScheduleBackupWithValidation(userContexts[user], scheduledBackupName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduledBackupName))
+						err = SuspendBackupSchedule(scheduledBackupName, periodicSchedulePolicyName, BackupOrgID, userContexts[user])
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", scheduledBackupName, user))
+						log.InfoD("Creating restore of scheduled backup by App User %s", user)
+						scheduledRestoreName = fmt.Sprintf("%s-%s-restore", RestoreNamePrefix, scheduledBackupName)
+						namespaceMappingScheduledBackup = make(map[string]string)
+						for _, ns := range bkpNamespaces {
+							namespaceMappingScheduledBackup[ns] = fmt.Sprintf("%s-%s", ns, RandomString(4))
+						}
+						err = CreateRestore(scheduledRestoreName, firstScheduledBackupName, namespaceMappingScheduledBackup, DestinationClusterName, destClusterUid, BackupOrgID, userContexts[user], make(map[string]string))
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", scheduledRestoreName, scheduledBackupName))
+					}(user)
+				}
+				wg.Wait()
+			})
+		})
+
+		Step("Validating RBAC for App Admins", func() {
+			for _, user := range roleUsers[backup.ApplicationOwner] {
+				Step(fmt.Sprintf("Verifying the App Admin [%s] doesn't have permission to create cloud account", user), func() {
+					wg.Add(1)
+					go func(user string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						for _, provider := range providers {
+							cloudCredUID := uuid.New()
+							credName := fmt.Sprintf("cred-%s-%v", provider, RandomString(6))
+							err = CreateCloudCredential(provider, credName, cloudCredUID, BackupOrgID, userContexts[user])
+							dash.VerifyFatal(strings.Contains(err.Error(), PermissionDenied), true, fmt.Sprintf("Verifying if App Admin [%s] doesn't have permission for creating cloud credentials for provider [%s]", user, provider))
+						}
+					}(user)
+				})
+
+				Step(fmt.Sprintf("Creating backup location using the shared cloud credential by App Admin [%s]", user), func() {
+					wg.Add(1)
+					go func(user string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						backupLocationName := fmt.Sprintf("autogenerated-backup-location-%v", RandomString(5))
+						backupLocationUID := uuid.New()
+						mutex.Lock()
+						backupLocationMap[backupLocationUID] = backupLocationName
+						mutex.Unlock()
+						for _, provider := range providers {
+							err := CreateBackupLocationWithContext(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", userContexts[user], true)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying create backup location %s using provider %s from shared cloud credentials by App Admin", backupLocationName, provider))
+						}
+					}(user)
+				})
+
+				Step(fmt.Sprintf("Verifying the App Admin [%s] have permission to create a schedule policy", user), func() {
+					wg.Add(1)
+					go func(user string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						periodicSchedulePolicyName := fmt.Sprintf("policy-%v", RandomString(4))
+						periodicSchedulePolicyUid := uuid.New()
+						periodicSchedulePolicyInterval := int64(15)
+						err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, userContexts[user], false, false)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if App Admin [%s] has permission for creating schedule policy", user))
+					}(user)
+				})
+
+				Step(fmt.Sprintf("Verifying the App Admin [%s] have permission to create pre and post exec rules for applications", user), func() {
+					wg.Add(1)
+					go func(user string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						_, _, err := CreateRuleForBackupWithMultipleApplications(BackupOrgID, Inst().AppList, userContexts[user])
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if App Admin [%s] has permission for creating rules", user))
+					}(user)
+				})
+			}
+			wg.Wait()
+		})
+
+		Step("Validating RBAC for Infra Admins", func() {
+			for _, user := range roleUsers[backup.InfrastructureOwner] {
+				Step(fmt.Sprintf("Verifying the Infra Admin [%s] have permission to create cloud credentials and backup location", user), func() {
+					wg.Add(1)
+					go func(user string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						for _, provider := range providers {
+							cloudCredUID := uuid.New()
+							credName := fmt.Sprintf("cred-%s-%v", provider, RandomString(6))
+							blUID := uuid.New()
+							blName := fmt.Sprintf("bl-%s-%v", provider, RandomString(4))
+							mutex.Lock()
+							if _, ok := infraAdminBackupLocationMap[user]; !ok {
+								infraAdminBackupLocationMap[user] = make(map[string]string)
+							}
+							infraAdminBackupLocationMap[user][blUID] = blName
+							if _, ok := infraAdminCloudCredentialMap[user]; !ok {
+								infraAdminCloudCredentialMap[user] = make(map[string]string)
+							}
+							infraAdminCloudCredentialMap[user]["uid"] = cloudCredUID
+							infraAdminCloudCredentialMap[user]["name"] = credName
+							mutex.Unlock()
+							err := CreateCloudCredential(provider, credName, cloudCredUID, BackupOrgID, userContexts[user])
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if Infra Admin [%s] has permission for creating cloud credentials for provider [%s]", user, provider))
+							err = CreateBackupLocationWithContext(provider, blName, blUID, credName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", userContexts[user], true)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if Infra Admin [%s] has permission for creating backup location", user))
+						}
+					}(user)
+				})
+
+				Step(fmt.Sprintf("Verifying the Infra Admin [%s] have permission to create a schedule policy", user), func() {
+					wg.Add(1)
+					go func(user string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						periodicSchedulePolicyName := fmt.Sprintf("policy-%v", RandomString(4))
+						periodicSchedulePolicyUid := uuid.New()
+						periodicSchedulePolicyInterval := int64(15)
+						err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, userContexts[user], false, false)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Infra Admin [%s] has permission for creating schedule policy for user", user))
+					}(user)
+				})
+
+				Step(fmt.Sprintf("Verifying the Infra Admin [%s] have permission to create roles", user), func() {
+					wg.Add(1)
+					go func(user string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						infraAdminRoleName := backup.PxBackupRole(fmt.Sprintf("custom-infra-admin-role-%s", RandomString(4)))
+						services := []RoleServices{BackupSchedulePolicy, Rules, Cloudcredential, BackupLocation, Role}
+						apis := []RoleApis{All}
+						err = CreateRole(infraAdminRoleName, services, apis, userContexts[user])
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Infra Admin [%s] has permission for creating role", user))
+					}(user)
+				})
+
+				Step(fmt.Sprintf("Verifying the Infra Admin [%s] have permission to create pre and post exec rules for applications", user), func() {
+					wg.Add(1)
+					go func(user string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						_, _, err = CreateRuleForBackupWithMultipleApplications(BackupOrgID, Inst().AppList, userContexts[user])
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying Infra Admin [%s] has permission for creating rules", user))
+					}(user)
+				})
+			}
+			wg.Wait()
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed applications")
+		DestroyApps(scheduledAppContexts, opts)
+		bkpScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+			OrgId: BackupOrgID,
+		}
+		schedules, err := Inst().Backup.EnumerateBackupSchedule(adminCtx, bkpScheduleEnumerateReq)
+		log.FailOnError(err, "Getting a list of all schedules as admin")
+		for _, sch := range schedules.GetBackupSchedules() {
+			err = DeleteSchedule(sch.Name, sch.Cluster, BackupOrgID, adminCtx, true)
+			dash.VerifySafely(err, nil, "Deleting Backup Schedule as admin")
+		}
+		policies, err := Inst().Backup.GetAllSchedulePolicies(adminCtx, BackupOrgID)
+		log.FailOnError(err, "Getting a list of all backuo schedule policies as admin")
+		err = DeleteBackupSchedulePolicyWithContext(BackupOrgID, policies, adminCtx)
+		dash.VerifySafely(err, nil, "Verifying deletion of schedule policies as admin")
+		rules, _ := Inst().Backup.GetAllRules(adminCtx, BackupOrgID)
+		for _, ruleName := range rules {
+			err := DeleteRule(ruleName, BackupOrgID, adminCtx)
+			dash.VerifySafely(err, nil, "Verifying deletion of rule as admin")
+		}
+		roles, err := GetAllCustomRoles()
+		log.FailOnError(err, "Getting list of all roles as admin")
+		for _, role := range roles {
+			err = DeleteRole(backup.PxBackupRole(role), BackupOrgID, adminCtx)
+			dash.VerifySafely(err, nil, "Verifying deletion of role as admin")
+		}
+		restores, err := GetAllRestoresAdmin()
+		log.FailOnError(err, "Getting list of all restores as admin")
+		for _, restore := range restores {
+			err = DeleteRestore(restore, BackupOrgID, adminCtx)
+			dash.VerifySafely(err, nil, "Verifying deletion of restore as admin")
+		}
+		for _, user := range roleUsers[backup.InfrastructureOwner] {
+			CleanupCloudSettingsAndClusters(infraAdminBackupLocationMap[user], infraAdminCloudCredentialMap[user]["name"], infraAdminCloudCredentialMap[user]["uid"], userContexts[user])
+		}
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminCtx)
+		err = CleanupAllUserAndGroups()
+		dash.VerifySafely(err, nil, fmt.Sprintf("Delete users %v", users))
 	})
 })

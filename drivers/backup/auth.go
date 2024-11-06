@@ -475,7 +475,7 @@ func FetchIDOfUser(userName string) (string, error) {
 		return "", err
 	}
 	// TODO Need to increase the limit
-	reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
+	reqURL := fmt.Sprintf("%s/users?username=%s", keycloakEndPoint, userName)
 	method := "GET"
 	response, err := processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {

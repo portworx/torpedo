@@ -12730,3 +12730,31 @@ func UpdateClusterWithKubeConfig(clusterName string, clusterUid string, kubeConf
 	}
 	return status, err
 }
+
+// GetAllCustomRoles returns all the roles excluding the default roles
+func GetAllCustomRoles() ([]string, error) {
+	var roles []string
+	defaultRoles := []string{
+		string(backup.ApplicationOwner),
+		string(backup.InfrastructureOwner),
+		string(backup.ApplicationUser),
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return nil, err
+	}
+	bkpRoleEnumerateReq := &api.RoleEnumerateRequest{
+		OrgId: BackupOrgID,
+	}
+	rolesResponse, err := Inst().Backup.EnumerateRole(ctx, bkpRoleEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, role := range rolesResponse.GetRoles() {
+		if Contains(defaultRoles, role.Metadata.Name) {
+			continue
+		}
+		roles = append(roles, role.Metadata.Name)
+	}
+	return roles, nil
+}
