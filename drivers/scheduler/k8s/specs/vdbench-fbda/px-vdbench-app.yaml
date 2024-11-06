@@ -50,7 +50,6 @@ spec:
           name: pvc-fbda-2
       dnsPolicy: ClusterFirst
       restartPolicy: Always
-      schedulerName: stork
       securityContext:
         fsGroupChangePolicy: OnRootMismatch
       terminationGracePeriodSeconds: 30

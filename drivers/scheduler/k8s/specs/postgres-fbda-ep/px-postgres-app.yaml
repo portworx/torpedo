@@ -17,7 +17,6 @@ spec:
       labels:
         app: postgres
     spec:
-      schedulerName: stork
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:

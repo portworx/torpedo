@@ -9,7 +9,6 @@ spec:
   - name: nginx-vol
     persistentVolumeClaim:
         claimName: nginx-fa-xfs-pvc
-  schedulerName: stork
   containers:
   - name: nginx
     image: nginx
@@ -30,7 +29,6 @@ spec:
   - name: nginx-vol
     persistentVolumeClaim:
         claimName: nginx-fa-ext4-pvc
-  schedulerName: stork
   containers:
   - name: nginx
     image: nginx

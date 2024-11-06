@@ -13,7 +13,6 @@ spec:
       labels:
         app: vdbench-fb-volumes
     spec:
-      schedulerName: stork
       securityContext: 
         fsGroupChangePolicy: "OnRootMismatch"
       containers:
