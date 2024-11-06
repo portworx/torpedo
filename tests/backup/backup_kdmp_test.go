@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -1583,4 +1584,148 @@ var _ = Describe("{CrashKopiaToolWhenBackUpRestoreInProgress}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 
+})
+
+// Generic backup deletion, when the S3 bucket is missing
+var _ = Describe("{ValidateGenericBackupDeletionWithMissingS3Bucket}", Label(TestCaseLabelsMap[KDMPBackup]...), func() {
+	var (
+		scheduledAppContexts []*scheduler.Context
+		bkpNamespaces        []string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		backupName           string
+		backupLocationUID    string
+		cloudCredName        string
+		cloudCredUID         string
+		bkpLocationName      string
+		backupNames          []string
+		providers            []string
+		ctx                  context.Context
+	)
+	backupLocationMap := make(map[string]string)
+	bkpNamespaces = make([]string, 0)
+	backupNames = make([]string, 0)
+	labelSelectors := make(map[string]string)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyTestGenericBackupDeletionWithMissingS3Bucket", "Verify Generic backup deletion, when the S3 bucket is missing.", nil, 300192, Pingle, Q3FY25)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		bkpNamespaces = make([]string, 0)
+
+		// Schedule an Application
+		appContexts := ScheduleApplications(TaskNamePrefix)
+		for _, ctx := range appContexts {
+			ctx.ReadinessTimeout = AppReadinessTimeout
+			namespace := GetAppNamespace(ctx, TaskNamePrefix)
+			bkpNamespaces = append(bkpNamespaces, namespace)
+			scheduledAppContexts = append(scheduledAppContexts, ctx)
+		}
+	})
+
+	// Generic backup deletion, when the S3 bucket is missing
+	It("Verify Generic backup deletion, when the S3 bucket is missing", func() {
+		numOfBackup := 1
+		// 1. validate application
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		// 2. common initializations
+		Step("common init", func() {
+			var err error
+			ctx, err = backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			providers = GetBackupProviders()
+		})
+
+		// 3. Create cloud credentials and backup location
+		Step("Creating cloud credentials and backup location", func() {
+			log.InfoD("Creating cloud credentials and backup location")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+
+		// 4. Create application cluster for backup
+		Step("Register cluster for backup", func() {
+			err := CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.InfoD("Uid of [%s] cluster is %s", SourceClusterName, clusterUid)
+		})
+
+		// 5. Take the backup of bkNamespaces.
+		Step("Taking backup of applications", func() {
+			err := os.Setenv("BACKUP_TYPE", "direct_kdmp")
+			log.FailOnError(err, "Setting BACKUP_TYPE env variable")
+			for i := 0; i < numOfBackup; i++ {
+				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
+				namespaceLabel := fmt.Sprintf("%s-label-schedule-%s", BackupNamePrefix, RandomString(4))
+				bkpCreateRequests := &api.BackupCreateRequest{
+					CreateMetadata: &api.CreateMetadata{
+						Name:  backupName,
+						OrgId: BackupOrgID,
+					},
+					BackupLocationRef: &api.ObjectRef{
+						Name: bkpLocationName,
+						Uid:  backupLocationUID,
+					},
+					Cluster:        SourceClusterName,
+					LabelSelectors: labelSelectors,
+					ClusterRef: &api.ObjectRef{
+						Name: SourceClusterName,
+						Uid:  clusterUid,
+					},
+					NsLabelSelectors: namespaceLabel,
+				}
+
+				backupDriver := Inst().Backup
+				_, err = backupDriver.CreateBackup(ctx, bkpCreateRequests)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of KDMP backup [%s]", backupName))
+				backupNames = append(backupNames, backupName)
+			}
+		})
+
+		// 6. Delete s3 bucket
+		Step("Delete s3 bucket and then delete backup", func() {
+			DeleteS3Bucket(getGlobalBucketName(providers[0]))
+			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
+			err = Inst().Backup.WaitForBackupDeletion(ctx, backupName, BackupOrgID, BackupDeleteTimeout, BackupDeleteRetryTime)
+			log.FailOnError(err, "failed while waiting for backup %s to be deleted", backupName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			log.Infof("Unsetting BACKUP_TYPE env variable")
+			err := os.Unsetenv("BACKUP_TYPE")
+			log.FailOnError(err, "Unsetting BACKUP_TYPE env variable")
+		}()
+
+		log.InfoD("Deleting the deployed apps after the testcase")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
+
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
+	})
 })

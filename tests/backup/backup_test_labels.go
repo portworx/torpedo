@@ -157,6 +157,7 @@ const (
 	SoftDeleteAndRecoverBackupOnContainerAndBlobLevel                                  TestCaseName = "SoftDeleteAndRecoverBackupOnContainerAndBlobLevel"
 	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel                            TestCaseName = "DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel"
 	ValidateMetrics                                                                    TestCaseName = "ValidateMetrics"
+	KDMPBackup                                                                         TestCaseName = "ValidateGenericBackupDeletionWithMissingS3Bucket"
 )
 
 // Test case labels
@@ -312,6 +313,7 @@ const (
 	SoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel                                  TestCaseLabel = "SoftDeleteAndRecoverBackupOnContainerAndBlobLevel"
 	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel                            TestCaseLabel = "DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel"
 	ValidateMetricsLabel                                                                    TestCaseLabel = "ValidateMetrics"
+	KDMPBackupLabel                                                                         TestCaseLabel = "ValidateGenericBackupDeletionWithMissingS3Bucket"
 )
 
 // Common Labels
