@@ -4,6 +4,7 @@ import (
 	"fmt"
 	k8sApps "github.com/portworx/sched-ops/k8s/apps"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	k8sApps "github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/operator"
@@ -8801,6 +8803,358 @@ var _ = Describe("{SpaceReclaimed}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+})
+
+func CreateNginxFadaWorkload(pvcName string, replicas int32, deploymentName string, namespace string, storageclassname string) (*appsv1.Deployment, error) {
+	var gracePeriod int64 = 30
+	pvcSpec := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: namespace,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("10Gi"),
+				},
+			},
+			StorageClassName: &storageclassname,
+		},
+	}
+
+	deploymentSpec := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deploymentName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"app": "poc1",
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": "poc1"},
+			},
+			Strategy: appsv1.DeploymentStrategy{
+				Type: appsv1.RollingUpdateDeploymentStrategyType,
+				RollingUpdate: &appsv1.RollingUpdateDeployment{
+					MaxSurge:       &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
+					MaxUnavailable: &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": "poc1"},
+				},
+				Spec: corev1.PodSpec{
+					Affinity: &corev1.Affinity{
+						PodAntiAffinity: &corev1.PodAntiAffinity{
+							PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
+								{
+									Weight: 100,
+									PodAffinityTerm: corev1.PodAffinityTerm{
+										TopologyKey: "kubernetes.io/hostname",
+									},
+								},
+							},
+						},
+					},
+					Containers: []corev1.Container{
+						{
+							Name:            "test-mount-pod",
+							Image:           "nginx",
+							ImagePullPolicy: corev1.PullAlways,
+							Command:         []string{"/bin/sh"},
+							Stdin:           true,
+							TTY:             true,
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "testvol",
+									MountPath: "/testvol",
+								},
+							},
+						},
+					},
+					TerminationGracePeriodSeconds: &gracePeriod,
+					Tolerations: []corev1.Toleration{
+						{
+							Key:      "stateful",
+							Operator: corev1.TolerationOpExists,
+							Effect:   corev1.TaintEffectNoSchedule,
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "testvol",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: pvcName,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	k8sCore := core.Instance()
+	_, err := k8sCore.CreatePersistentVolumeClaim(pvcSpec)
+	if err != nil {
+		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "clone") {
+			log.Errorf("An Error Occured while creating PVC %v", err)
+			return nil, err
+		}
+
+	}
+	deploymentOps := k8sApps.Instance()
+	deployment, err := deploymentOps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
+	if err != nil {
+		log.Errorf("An Error Occured while creating deployment %v", err)
+		return nil, err
+	}
+	err = deploymentOps.ValidateDeployment(deployment, 30*time.Minute, 10*time.Second)
+	if err != nil {
+		log.Errorf("An Error Occured while validating the pod %v", err)
+		return nil, err
+	}
+
+	return deployment, nil
+}
+
+var _ = Describe("{CreatePodsUsingclonewithMT}", func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-27216
+	   1. Check the FA in pure.json, it must contain one FA with realm(optional) and one without realm
+	   2. Create a pod inside a realm and outside the realm
+	   3. Create Storage classes - 1 will have pure_fa_pod_name where pod is created inside realm, one outside realm and one normal pure_block
+	   4. Create a deployment each with above storage classes
+	   5. Check if the deployment are running fine or not
+	   6. Clone the pvc of the deployment
+	   7. Now pass these cloned pvc for a new deployment and check the pods are running or not
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreatePodsUsingclonewithMT", "Create pods using cloned pvc", nil, 0)
+	})
+	itLog := "CreatePodsUsingclonewithMT"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		deploymentNameInsideRealm := "fada-deployment-inside-realm" + Inst().InstanceID
+		deploymentNameOutsideRealm := "fada-deployment-outside-realm" + Inst().InstanceID
+		deploymentNameNormal := "fada-deployment-normal" + Inst().InstanceID
+		storageClassNameInsideRealm := "fada-sc-inside-realm"
+		storageClassNameOutsideRealm := "fada-sc-outside-realm"
+		storageClassNameNormal := "fada-sc-normal"
+		var (
+			realmName               string
+			faWithRealm             *newFlashArray.Client
+			faWithoutRealm          *newFlashArray.Client
+			isRealmExists           bool
+			isFAwithoutRealmExists  bool
+			podNameinSC             string
+			PodNameinFA             string
+			podNameinFAwithoutRealm string
+			isFAexists              bool = false
+			flashArrays             []pureutils.FlashArrayEntry
+			max_iops                = uint64(rand.Intn(99999999) + 1)
+			max_bandwidth           = uint64(rand.Intn(511) + 1)
+		)
+		namespaces := []string{
+			"fada-app-with-realm-ns" + Inst().InstanceID,
+			"fada-app-without-realm-ns" + Inst().InstanceID,
+			"fada-app-normal-ns" + Inst().InstanceID,
+		}
+		storageClasses := []string{
+			storageClassNameInsideRealm,
+			storageClassNameOutsideRealm,
+			storageClassNameNormal,
+		}
+		deployments := map[string]string{
+			deploymentNameInsideRealm:  "fada-app-with-realm-ns",
+			deploymentNameOutsideRealm: "fada-app-without-realm-ns",
+			deploymentNameNormal:       "fada-app-normal-ns",
+		}
+		stepLog = "Check the FA in pure.json, it must contain one FA with realm and one with out realm"
+		Step(stepLog, func() {
+			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+			pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+			if len(pxPureSecret.Arrays) == 0 {
+				log.FailOnError(fmt.Errorf("No FA found in pure.json"), "No FA found in pure.json")
+			} else {
+				isFAexists = true
+			}
+			if isFAexists {
+				flashArrays, err = GetFADetailsUsed()
+				log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
+				for _, fa := range flashArrays {
+					faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+					if err != nil {
+						log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+						continue
+					}
+					if fa.Realm != "" && faWithRealm == nil {
+						realmName = fa.Realm
+						isRealmExists = true
+						faWithRealm = faClient
+					} else if fa.Realm == "" && faWithoutRealm == nil {
+						isFAwithoutRealmExists = true
+						faWithoutRealm = faClient
+					}
+					if faWithRealm != nil && faWithoutRealm != nil {
+						break
+					}
+				}
+				if faWithRealm == nil && faWithoutRealm == nil {
+					log.FailOnError(fmt.Errorf("No accessible FA found in pure.json"), "No accessible FA found in pure.json")
+				}
+				if isRealmExists {
+					log.InfoD("Realm [%v] found in FA", realmName)
+					podNameinSC = "Torpedo-Test" + Inst().InstanceID
+					PodNameinFA = realmName + "::" + podNameinSC
+
+					stepLog := "Create A pod inside Realm"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						_, err = pureutils.CreatePodinFA(faWithRealm, PodNameinFA)
+						log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", PodNameinFA))
+						isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faWithRealm, PodNameinFA)
+						log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", PodNameinFA))
+						if !isPodExists {
+							log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", PodNameinFA), "is pod created in FA?")
+						}
+						log.InfoD("Pod [%v] created ", PodNameinFA)
+
+					})
+				}
+				stepLog = "Create a pod outside Realm"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					podNameinFAwithoutRealm = "Torpedo-Test-without-realm" + Inst().InstanceID
+					_, err = pureutils.CreatePodinFA(faWithoutRealm, podNameinFAwithoutRealm)
+					log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podNameinFAwithoutRealm))
+					isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faWithoutRealm, podNameinFAwithoutRealm)
+					log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", podNameinFAwithoutRealm))
+					if !isPodExists {
+						log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", podNameinFAwithoutRealm), "is pod created in FA?")
+
+					}
+					log.InfoD("Pod [%v] created ", podNameinSC)
+				})
+
+			}
+		})
+		stepLog = "Create Storage classes - 1 will have pure_fa_pod_name where pod is created inside realm, one outside realm and one normal pure_block"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			allowVolExpansionFA := true
+			faParams := map[string]string{
+				"repl":          "1",
+				"max_iops":      strconv.FormatUint(max_iops, 10),
+				"max_bandwidth": strconv.FormatUint(max_bandwidth, 10) + "G",
+				"fs":            "ext4",
+			}
+			faParamsNormal := make(map[string]string)
+			for k, v := range faParams {
+				faParamsNormal[k] = v
+			}
+			if isRealmExists {
+				faParams["pure_fa_pod_name"] = podNameinSC
+				err = CreateFlashStorageClass("fada-sc-inside-realm", "pure_block", v1.PersistentVolumeReclaimDelete, faParams, nil, &allowVolExpansionFA, storageApi.VolumeBindingImmediate, nil)
+				log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", "fada-sc-inside-realm"))
+				log.InfoD("Storage class [%s] for FADA inside realm is created", "fada-sc-inside-realm")
+			}
+			if isFAwithoutRealmExists {
+				faParams["pure_fa_pod_name"] = podNameinFAwithoutRealm
+				err = CreateFlashStorageClass("fada-sc-outside-realm", "pure_block", v1.PersistentVolumeReclaimDelete, faParams, nil, &allowVolExpansionFA, storageApi.VolumeBindingImmediate, nil)
+				log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", "fada-sc-outside-realm"))
+				log.InfoD("Storage class [%s] for FADA outside realm is created", "fada-sc-outside-realm")
+
+			}
+			err = CreateFlashStorageClass("fada-sc-normal", "pure_block", v1.PersistentVolumeReclaimDelete, faParamsNormal, nil, &allowVolExpansionFA, storageApi.VolumeBindingImmediate, nil)
+			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", "fada-sc-normal"))
+			log.InfoD("Normal storage class [%s] is created", "fada-sc-normal")
+
+		})
+		stepLog = "Create a deployment each with  storage classes fada-sc-inside-realm, fada-sc-outside-realm, fada-sc-normal"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			createNameSpace := func(namespace string) error {
+				nsSpec := &v1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: namespace,
+					},
+				}
+				_, err := k8sCore.CreateNamespace(nsSpec)
+				return err
+			}
+			for _, ns := range namespaces {
+				err := createNameSpace(ns)
+				log.FailOnError(err, fmt.Sprintf("Failed to create namespace [%v] ", ns))
+			}
+			if isRealmExists {
+				_, err = CreateNginxFadaWorkload("fada-pvc-inside-realm", 1, deploymentNameInsideRealm, "fada-app-with-realm-ns", storageClassNameInsideRealm)
+				log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v] ", deploymentNameInsideRealm))
+			}
+			_, err = CreateNginxFadaWorkload("fada-pvc-outside-realm", 1, deploymentNameOutsideRealm, "fada-app-without-realm-ns", storageClassNameOutsideRealm)
+			log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v] ", deploymentNameOutsideRealm))
+			_, err = CreateNginxFadaWorkload("fada-pvc-normal", 1, deploymentNameNormal, "fada-app-normal-ns", storageClassNameNormal)
+			log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v] ", deploymentNameNormal))
+		})
+		stepLog = "Clone the pvc of the deployment"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if isRealmExists {
+				err = CloneAndDeployPVCs("fada-app-with-realm-ns", deploymentNameInsideRealm, storageClassNameInsideRealm)
+				log.FailOnError(err, fmt.Sprintf("Failed to clone pvc of the deployment [%v] ", deploymentNameInsideRealm))
+			}
+			err = CloneAndDeployPVCs("fada-app-without-realm-ns", deploymentNameOutsideRealm, storageClassNameOutsideRealm)
+			log.FailOnError(err, fmt.Sprintf("Failed to clone pvc of the deployment [%v] ", deploymentNameOutsideRealm))
+			err = CloneAndDeployPVCs("fada-app-normal-ns", deploymentNameNormal, storageClassNameNormal)
+			log.FailOnError(err, fmt.Sprintf("Failed to clone pvc of the deployment [%v] ", deploymentNameNormal))
+		})
+		stepLog = "Destroy FA Pods,namespaces,storageclasses and deployments"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if !isRealmExists {
+				namespaces = namespaces[1:]
+				storageClasses = storageClasses[1:]
+				deployments = map[string]string{
+					deploymentNameOutsideRealm: "fada-app-without-realm-ns",
+					deploymentNameNormal:       "fada-app-normal-ns",
+				}
+			}
+			for deployment, namespace := range deployments {
+				err := k8sApps.Instance().DeleteDeployment(deployment, namespace)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete deployment [%v]", deployment))
+			}
+			for _, ns := range namespaces {
+				err := core.Instance().DeleteNamespace(ns)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete namespace [%v]", ns))
+				log.InfoD("Namespace [%v] destroyed ", ns)
+			}
+			for _, sc := range storageClasses {
+				err := storage.Instance().DeleteStorageClass(sc)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete storage class [%v]", sc))
+			}
+			log.InfoD("Wait for 1 minute before deleting pods in FA")
+			time.Sleep(1 * time.Minute)
+			err := pureutils.DeletePodinFA(faWithRealm, PodNameinFA)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete pod [%v] in FA", PodNameinFA))
+			log.InfoD("Pod [%v] destroyed ", PodNameinFA)
+			err = pureutils.DeletePodinFA(faWithoutRealm, podNameinFAwithoutRealm)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete pod [%v] in FA", podNameinFAwithoutRealm))
+			log.InfoD("Pod [%v] destroyed ", podNameinFAwithoutRealm)
+
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 })
 

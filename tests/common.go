@@ -15751,3 +15751,44 @@ func DeleteRandomPvcFromDeployedApplication(pvcName string, appContext []*schedu
 	}
 	return allErrors
 }
+
+
+// CloneAndDeployPVCs clones PersistentVolumeClaims (PVCs) from a given namespace and deploys them with Nginx workloads.
+func CloneAndDeployPVCs(namespace string, deploymentName string, storageclassName string) error {
+	// Get volumes from a namespace and clone the PVC
+	allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	if err != nil {
+		log.Errorf("Failed to get volumes from namespace: %v", err)
+		return err
+	}
+
+	for _, pvc := range allPvcList.Items {
+		size := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+		ClonedPvcName := "clone-" + pvc.Name
+		ClonedPvcDeployment := "clone-" + deploymentName
+		clonedPVCSpec, err := k8s.GeneratePVCCloneSpec(size, namespace, ClonedPvcName, pvc.Name, storageclassName)
+		if err != nil {
+			return fmt.Errorf("failed to build cloned PVC Spec: %s", err)
+		}
+		log.Infof("Size of restored PVC in clone test is %v", clonedPVCSpec.Spec.Resources.Requests[corev1.ResourceStorage])
+		clonedPVC, err := k8sCore.CreatePersistentVolumeClaim(clonedPVCSpec)
+		if err != nil {
+			return fmt.Errorf("failed to clone PVC from source PVC %s: %s", pvc.Name, err)
+		}
+
+		// Wait for PVC to be bound
+		err = Inst().S.WaitForSinglePVCToBound(ClonedPvcName, namespace, 60)
+		if err != nil {
+			return fmt.Errorf("failed to wait for cloned PVC %s to bind: %v", "clone-"+pvc.Name, err)
+		}
+
+		log.Infof("Successfully created cloned PVC %s, proceed to mount to a new pod", clonedPVC.Name)
+		_, err = CreateNginxFadaWorkload(ClonedPvcName, 1, ClonedPvcDeployment, namespace, storageclassName)
+		if err != nil {
+			log.Errorf("Failed to create deployment [%v]: %v", ClonedPvcDeployment, err)
+			return err
+		}
+	}
+
+	return nil
+}
