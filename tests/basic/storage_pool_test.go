@@ -2854,7 +2854,7 @@ var _ = Describe("{MulPoolsAddDisk}", func() {
 	})
 })
 
-var _ = Describe("{ResizeWithJrnlAndMeta}", func() {
+var _ = Describe("{ResizeWithJrnlAndMeta}", Label("p0", "positive", "pool_ops", "AddDrive", "PoolExpand", "staging"), func() {
 	//1) Deploy px with cloud drive and journal enabled.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Get the metadata node
@@ -2869,11 +2869,13 @@ var _ = Describe("{ResizeWithJrnlAndMeta}", func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
+	var selectedNode node.Node
 
 	stepLog := "should get the metadata node and expand the pool by resize-disk"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		var selectedPoolUUID string
 		isDmthin, err := IsDMthin()
 		log.FailOnError(err, "Error while checking cluster type")
 		if isDmthin {
@@ -2890,36 +2892,49 @@ var _ = Describe("{ResizeWithJrnlAndMeta}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNode, err := getRandomNodeWithPoolIOs(contexts)
-		log.FailOnError(err, "error identifying node to run test")
-		stNodePools := stNode.Pools
+		stepLog = "Check which node has a metadata pool"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes, err := GetStorageNodes()
+			log.FailOnError(err, "Failed to get storage nodes")
+			log.InfoD("Number of existing storageNodes : [%v]", len(storageNodes))
 
-		var selectedPool *api.StoragePool
-		for _, pool := range stNodePools {
-			if pool.ID == int32(len(stNodePools)-1) {
-				selectedPool = pool
-				break
+			//Check which node has metadata disk if not add one
+			for _, storageNode := range storageNodes {
+				metadataPoolUUID, err := GetPoolUUIDWithMetadataDisk(storageNode)
+				log.FailOnError(err, "Failed to get metadata disk")
+				if metadataPoolUUID != "" {
+					log.InfoD("Metadata Pool UUID: %v", metadataPoolUUID)
+					selectedNode = storageNode
+					selectedPoolUUID = metadataPoolUUID
+					break
+				}
 			}
-		}
+
+			//check if selecteNode is empty or not
+			if selectedPoolUUID == "" {
+				log.FailOnError(fmt.Errorf("no Pool found with metadata disk enabled"), "No Pool found with metadata Disk")
+			}
+		})
 
 		stepLog := "Initiate pool expansion drive and restart PX"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 
-			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
-			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
+			poolToBeResized, err := GetStoragePoolByUUID(selectedPoolUUID)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPoolUUID))
 			drvSize, err := getPoolDiskSize(poolToBeResized)
 			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
-			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+			log.InfoD("Current Size of the pool %s is %d", selectedPoolUUID, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(selectedPoolUUID, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
-			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, journalStatus)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, stNode.Name))
+			resizeErr := waitForPoolToBeResized(expectedSize, selectedPoolUUID, journalStatus)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPoolUUID, selectedNode.Name))
 
 		})
 
