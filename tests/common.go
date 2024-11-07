@@ -815,7 +815,13 @@ func PrintInspectVolume(volID string) {
 }
 
 func PrintCommandOutput(cmnd string) {
-	output, err := Inst().N.RunCommand(node.GetStorageNodes()[0], cmnd, node.ConnectionOpts{
+	// For px-lite there will be no storage nodes so command can be invoked from any node
+	pxNodes := node.GetStorageDriverNodes()
+	if len(pxNodes) == 0 {
+		log.Errorf("nodes not available to invoke pxctl command ")
+
+	}
+	output, err := Inst().N.RunCommand(pxNodes[0], cmnd, node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
 		Timeout:         defaultTimeout,
