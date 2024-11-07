@@ -172,6 +172,8 @@ var _ = Describe("{AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields}"
 			dash.VerifyFatal(err, nil, "Adding source and destination cluster using cloud credential having only mandatory fields")
 			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
 		Step("Taking backup of applications using backup location with cloud credential having all fields", func() {
