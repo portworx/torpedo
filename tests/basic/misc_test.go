@@ -23,6 +23,7 @@ import (
 
 	"github.com/libopenstorage/openstorage/api"
 	opsapi "github.com/libopenstorage/openstorage/api"
+	"github.com/pure-px/torpedo/pkg/kvdbutils"
 	"github.com/pure-px/torpedo/pkg/log"
 	"github.com/pure-px/torpedo/pkg/osutils"
 	"github.com/pure-px/torpedo/pkg/pureutils"
@@ -2336,6 +2337,160 @@ var _ = Describe("{TrashcanPVCRestoreByAttachingExistingPVCToPod}", Label("stagi
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{VerifyNoIOInterruptionDuringRunFlatState}", Label("staging", "kvdb_ops", "p1", "negative"), func() {
+	/*
+		   https://purestorage.atlassian.net/browse/HAZEL-269
+			1. Verify pxctl status show that cluster is in run flat state.
+			2. Verify deployment of new pod is failed but IO is running on existing pods.
+			3. When you bring the KVDB nodes back verify cluster is no more in run-flat state and new deployment is
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyNoIOInterruptionDuringRunFlatState",
+			"Simulate run-flat state, ensuring uninterrupted IO operations and new deployments fail during this state", nil, 0)
+	})
+
+	itLog := "Testing uninterrupted IO operations and new deployments fail during run flat state"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var (
+			contexts          []*scheduler.Context
+			postRunFlatCtx    []*scheduler.Context
+			postPxUpCtx       []*scheduler.Context
+			selectedKvdbNodes []KvdbNode
+			kvdbNodes         []KvdbNode
+		)
+
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("beforerunflat-%d", i))...)
+			}
+		})
+
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		stepLog = "Stopping Portworx service on selected KVDB nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodes, err = GetAllKvdbNodes()
+			log.FailOnError(err, "Failed to retrieve KVDB nodes")
+
+			selectedKvdbNodes = kvdbNodes[1:]
+			log.InfoD("Selected KVDB nodes for PX service stop: %v", selectedKvdbNodes)
+			for _, kvdbNode := range selectedKvdbNodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", kvdbNode.ID)
+
+				StopVolDriverAndWait([]node.Node{nodeDetails})
+				log.InfoD("PX service successfully stopped on node: %v", nodeDetails)
+
+			}
+		})
+
+		stepLog = " Verify cluster is in run-flat state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pxNode, err := node.GetNodeDetailsByNodeID(kvdbNodes[0].ID)
+			output, err := runCmd("pxctl status", pxNode)
+			log.FailOnError(err, "Failed to execute 'pxctl status' on node: %v", pxNode.Name)
+
+			log.Infof("pxctl status output: %v\n", output)
+			expect_out := "Volume and node operations may be unavailable but I/O will continue"
+			dash.VerifyFatal(strings.Contains(output, expect_out), true, "Is cluster in run-flat state?")
+		})
+
+		log.Infof("validate that existing applications remain in running state during run-flat state")
+		ValidateApplications(contexts)
+
+		stepLog = " Verify new deployments fail during the run-flat state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			postRunFlatCtx = append(postRunFlatCtx, ScheduleApplications(fmt.Sprintf("postrunflat"))...)
+
+			for _, ctx := range postRunFlatCtx {
+				err := Inst().S.WaitForRunning(ctx, 5*time.Minute, defaultRetryInterval)
+				dash.VerifyFatal(err != nil, true, "Is scheduling app failled in run-flat state?")
+			}
+		})
+		defer func() {
+			for _, ctx := range postRunFlatCtx {
+				ctx.SkipVolumeValidation = true
+				TearDownContext(ctx, nil)
+			}
+		}()
+
+		stepLog = "Starting Portworx on selected KVDB nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, n := range selectedKvdbNodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(n.ID)
+				log.FailOnError(err, "Failed to retrieve node details for NodeID [%v]", n.ID)
+
+				err = Inst().V.StartDriver(nodeDetails)
+				log.FailOnError(err, "Failed to start Portworx driver on node %s", nodeDetails.Name)
+				err = Inst().V.WaitDriverUpOnNode(nodeDetails, 10*time.Minute)
+				log.FailOnError(err, "Failed to waiting for Portworx driver to start on node %s", nodeDetails.Name)
+
+				log.InfoD("Successfully started Portworx on KVDB node: %v", nodeDetails.Name)
+			}
+		})
+
+		stepLog = "Verify all KVDB nodes are running and in a healthy state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, kvdbNode := range kvdbNodes {
+				nodeInfo, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Failed to get details for KVDB node ID: %s", kvdbNode.ID)
+				nodeStatus, err := Inst().V.GetNodeStatus(nodeInfo)
+				dash.VerifyFatal(*nodeStatus, opsapi.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", kvdbNode.ID))
+			}
+
+			storagenode := node.GetStorageNodes()
+			kvdbMembers, err := Inst().V.GetKvdbMembers(storagenode[0])
+			log.FailOnError(err, "Failed to retrieve KVDB members list")
+
+			err = kvdbutils.ValidateKVDBMembers(kvdbMembers)
+			log.FailOnError(err, "Failed to validate KVDB members")
+
+			output, err := runCmd("pxctl status", storagenode[0])
+			log.FailOnError(err, "Failed to execute pxctl status on node: %v", storagenode[0].Name)
+			dash.VerifyFatal(!strings.Contains(output, "Warning"), true, "Output contains warnings. Is the cluster healthy?")
+		})
+
+		stepLog = "Validating that the application created during the run-flat state is now in a running state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			waitForPodsRunning := func() (interface{}, bool, error) {
+				for _, eachContext := range postRunFlatCtx {
+					log.Infof("Verifying Context [%v]", eachContext.App.Key)
+					err := Inst().S.WaitForRunning(eachContext, 5*time.Minute, 2*time.Second)
+					if err != nil {
+						return nil, true, err
+					}
+				}
+				return nil, false, nil
+			}
+			_, err = task.DoRetryWithTimeout(waitForPodsRunning, 30*time.Minute, 10*time.Second)
+			dash.VerifyFatal(err == nil, true, "Check all pods are running")
+
+			ValidateApplications(postRunFlatCtx)
+		})
+
+		stepLog = "Validating application deployments after KVDB quorum is established"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			postPxUpCtx = append(postPxUpCtx, ScheduleApplications(fmt.Sprintf("afterrunflat"))...)
+			defer DestroyApps(postPxUpCtx, nil)
+			ValidateApplications(postPxUpCtx)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 })
