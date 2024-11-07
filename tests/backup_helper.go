@@ -116,7 +116,7 @@ const (
 	CloudAccountDeleteTimeout                 = 5 * time.Minute
 	CloudAccountDeleteRetryTime               = 30 * time.Second
 	storkDeploymentName                       = "stork"
-	defaultStorkDeploymentNamespace           = "kube-system"
+	DefaultStorkDeploymentNamespace           = "kube-system"
 	UpgradeStorkImage                         = "TARGET_STORK_VERSION"
 	LatestStorkImage                          = "24.3.0-dev"
 	LowerStorkImage                           = "24.2.0"
@@ -185,7 +185,7 @@ const (
 	sshPodName                                = "ssh-pod"
 	sshPodNamespace                           = "ssh-pod-namespace"
 	VirtLauncherContainerName                 = "compute"
-	storkControllerConfigMap                  = "stork-controller-config"
+	StorkControllerConfigMap                  = "stork-controller-config"
 	storkControllerConfigMapUpdateTimeout     = 15 * time.Minute
 	storkControllerConfigMapRetry             = 30 * time.Second
 	BackupLocationValidationTimeout           = 10 * time.Minute
@@ -204,6 +204,9 @@ const (
 	PrivilegedPSAVersion                      = "latest"
 	CustomPrivilegedPSADescription            = "Custom Privileged PSA"
 	BackupDeleteTickerTime                    = 5 * time.Second
+	ReduceLargeResourceSizeLimit              = "REDUCE_LARGE_RESOURCE_SIZE_LIMIT"
+	NumberOfResources                         = "NUMBER_OF_RESOURCES"
+	NumberOfEntries                           = "NUMBER_OF_ENTRIES"
 )
 
 var (
@@ -601,7 +604,7 @@ func getPXNamespace() string {
 	if namespace != "" {
 		return namespace
 	}
-	return defaultStorkDeploymentNamespace
+	return DefaultStorkDeploymentNamespace
 }
 
 // CreateBackup creates backup and checks for success
@@ -9049,7 +9052,7 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 
 		if currentAdminNamespace == namespace {
 			return nil, false, nil
-		} else if namespace == "" && currentAdminNamespace == defaultStorkDeploymentNamespace {
+		} else if namespace == "" && currentAdminNamespace == DefaultStorkDeploymentNamespace {
 			return nil, false, nil
 		} else {
 			return nil, true, fmt.Errorf("Admin namespace not updated")
@@ -9087,7 +9090,7 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	}
 	log.InfoD("Verifying if stork controller configmap is updated with new admin namespace")
 	storkControllerCmUpdate := func() (interface{}, bool, error) {
-		storkControllerConfigMapObject, err := core.Instance().GetConfigMap(storkControllerConfigMap, defaultStorkDeploymentNamespace)
+		storkControllerConfigMapObject, err := core.Instance().GetConfigMap(StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
 		if err != nil {
 			return "", false, fmt.Errorf("error getting stork controller configmap: %v", err)
 		}
@@ -9117,7 +9120,7 @@ func getCurrentAdminNamespace() (string, error) {
 			log.InfoD("Current admin namespace - [%s]", adminNamespace)
 			return adminNamespace, nil
 		} else {
-			adminNamespace = defaultStorkDeploymentNamespace
+			adminNamespace = DefaultStorkDeploymentNamespace
 			return adminNamespace, nil
 		}
 

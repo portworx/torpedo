@@ -15291,3 +15291,114 @@ func RestoreObjects(containerName string) error {
 	}
 	return nil
 }
+
+// PopulateConfigMap populates a configmap in a namespace with data
+func PopulateConfigMap(name string, namespace string, data map[string]string) error {
+	cm, err := core.Instance().GetConfigMap(name, namespace)
+	if err != nil {
+		return err
+	}
+	cm.Data = data
+	_, err = core.Instance().UpdateConfigMap(cm)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// PopulateConfigMapsInContext populates all the configmaps in a scheduled app context with specified number of entries
+func PopulateConfigMapsInContext(ctx *scheduler.Context, numberOfEntries int) (map[string]string, error) {
+	var (
+		entries map[string]string = make(map[string]string)
+		wg      sync.WaitGroup
+	)
+	cmList, err := core.Instance().ListConfigMap(ctx.ScheduleOptions.Namespace, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < numberOfEntries; i++ {
+		randomString := RandomString(80)
+		randomStringWithTimeStamp := fmt.Sprintf("%v.%v", randomString, time.Now().Unix())
+		entries[randomStringWithTimeStamp] = randomString
+	}
+	for _, cm := range cmList.Items {
+		wg.Add(1)
+		go func(name, namespace string) {
+			defer wg.Done()
+			err := PopulateConfigMap(name, namespace, entries)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Populating configmap [%v] from namespace [%s]", name, namespace))
+		}(cm.Name, ctx.ScheduleOptions.Namespace)
+	}
+	wg.Wait()
+	return entries, nil
+}
+
+// PopulateSecret populates a secret in a namespace with data
+func PopulateSecret(name string, namespace string, data map[string]string) error {
+	secret, err := core.Instance().GetSecret(name, namespace)
+	if err != nil {
+		return err
+	}
+	secret.StringData = data
+	_, err = core.Instance().UpdateSecret(secret)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// PopulateSecretsInContext populates all the secrets in a scheduled app context with specified number of entries
+func PopulateSecretsInContext(ctx *scheduler.Context, numberOfEntries int) (map[string]string, error) {
+	var (
+		entries map[string]string = make(map[string]string)
+		wg      sync.WaitGroup
+	)
+	secretsList, err := core.Instance().ListSecret(ctx.ScheduleOptions.Namespace, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < numberOfEntries; i++ {
+		randomString := RandomString(80)
+		randomStringWithTimeStamp := fmt.Sprintf("%v.%v", randomString, time.Now().Unix())
+		entries[randomStringWithTimeStamp] = randomString
+	}
+	for _, cm := range secretsList.Items {
+		wg.Add(1)
+		go func(name, namespace string) {
+			defer wg.Done()
+			err := PopulateSecret(name, namespace, entries)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Populating secret [%v] from namespace [%s]", name, namespace))
+		}(cm.Name, ctx.ScheduleOptions.Namespace)
+	}
+	wg.Wait()
+	return entries, nil
+}
+
+// ValidateConfigMapEntries validates whether all the entries are present in the configmap in a namespace
+func ValidateConfigMapEntries(name string, namespace string, entries map[string]string) (bool, error) {
+	cm, err := core.Instance().GetConfigMap(name, namespace)
+	if err != nil {
+		return false, err
+	}
+	if !reflect.DeepEqual(cm.Data, entries) {
+		return false, fmt.Errorf("comfigmap %s entries do not match", cm.Name)
+	}
+	return true, nil
+}
+
+// ValidateSecretEntries validates whether all the entries are present in the secret in a namespace
+func ValidateSecretEntries(name string, namespace string, entries map[string]string) (bool, error) {
+	secret, err := core.Instance().GetSecret(name, namespace)
+	if err != nil {
+		return false, err
+	}
+	if len(secret.Data) != len(entries) {
+		return false, fmt.Errorf("secret %s entries do not match", secret.Name)
+	}
+	for sKey, sValue := range secret.Data {
+		if value, exists := entries[sKey]; !exists || !bytes.Equal(sValue, []byte(value)) {
+			return false, fmt.Errorf("secret %s entries do not match", secret.Name)
+		}
+	}
+	return true, nil
+}

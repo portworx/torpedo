@@ -1,0 +1,7 @@
+{{- range $val := Iterate .ClaimsCount }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-map-{{ $val }}
+{{- end }}
