@@ -2323,3 +2323,314 @@ var _ = Describe("{RestartPXBackupDuringLargeResourceScheduledBackup}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+// RestartStorkDuringLargeResourceScheduledBackup verifies backup/restore operations are successful when stork pods are restarted while the large resource backup is in progress
+var _ = Describe("{RestartStorkDuringLargeResourceScheduledBackup}", func() {
+	/*
+		Steps:
+		1. Schedule applications
+		2. Create a backup location and cloud setting
+		3. Register source and destination clusters for backup and restore
+		4. Create a schedule policy
+		5. Create a scheduled backup
+		6. Delete the stork pods while the scheduled backup is in progress
+		7. Validate the scheduled backup was successful
+		8. Validate the backup was a large resource backup
+		9. Create restore of the backup on the destination cluster
+		10. Validate the restore was successful
+	*/
+
+	var (
+		err                       error
+		ctx                       context.Context
+		scheduledAppContexts      []*scheduler.Context
+		testrailID                int
+		numberOfResources         int
+		numberOfEntries           int
+		namespace                 string
+		storkNamespace            string
+		storkControllerCM         *corev1.ConfigMap
+		appList                   []string
+		configMapEntries          map[string]string
+		secretEntries             map[string]string
+		providers                 []string
+		cloudCredName             string
+		cloudCredUID              string
+		backupLocationName        string
+		backupLocationUID         string
+		backupLocationMap         map[string]string
+		periodicSchPolicyName     string
+		periodicSchPolicyUid      string
+		schPolicyInterval         int64
+		scheduleBackupName        string
+		sourceClusterUid          string
+		destClusterUid            string
+		firstBackupName           string
+		firstRestoreName          string
+		nextBackupName            string
+		nextRestoreName           string
+		oldLargeResourceSizeLimit string
+		newLargeResourceSizeLimit string
+	)
+
+	JustBeforeEach(func() {
+		testrailID = 85795
+		StartPxBackupTorpedoTest("RestartStorkDuringLargeResourceScheduledBackup", "Restart stork pod when large resource schedule backup in progress", nil, testrailID, Dchothani, Q3FY25)
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		numberOfResources, _ = strconv.Atoi(GetEnv(NumberOfResources, "1000"))
+		numberOfEntries, _ = strconv.Atoi(GetEnv(NumberOfEntries, "1000"))
+		newLargeResourceSizeLimit = GetEnv(ReduceLargeResourceSizeLimit, "102400")
+		namespace = fmt.Sprintf("namespace-%d-%s", testrailID, RandomString(6))
+		backupLocationMap = make(map[string]string)
+		providers = GetBackupProviders()
+		appList = Inst().AppList
+		defer func() {
+			log.Infof("Resetting applist and removing the custom app config")
+			Inst().AppList = appList
+			delete(Inst().CustomAppConfig, "config-maps")
+			delete(Inst().CustomAppConfig, "secrets")
+			err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+			log.FailOnError(err, "Failed while rescanning specs")
+		}()
+		Inst().AppList = []string{"config-maps", "secrets"}
+		Inst().CustomAppConfig["config-maps"] = scheduler.AppConfig{
+			ClaimsCount: numberOfResources,
+		}
+		Inst().CustomAppConfig["secrets"] = scheduler.AppConfig{
+			ClaimsCount: numberOfResources,
+		}
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
+		log.InfoD("Updating %s in %s to set %s:%s", StorkControllerConfigMap, DefaultStorkDeploymentNamespace, k8sutils.LargeResourceSizeLimitName, newLargeResourceSizeLimit)
+		storkControllerCM, err = core.Instance().GetConfigMap(StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
+		log.FailOnError(err, fmt.Sprintf("Failed to get %s configmap", StorkControllerConfigMap))
+		if _, ok := storkControllerCM.Data[k8sutils.LargeResourceSizeLimitName]; ok {
+			oldLargeResourceSizeLimit = storkControllerCM.Data[k8sutils.LargeResourceSizeLimitName]
+		}
+		storkControllerCM.Data[k8sutils.LargeResourceSizeLimitName] = newLargeResourceSizeLimit
+		storkControllerCM, err = core.Instance().UpdateConfigMap(storkControllerCM)
+		log.FailOnError(err, fmt.Sprintf("Failed to update %s configmap", StorkControllerConfigMap))
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, testrailID)
+		appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
+		for _, appCtx := range appContexts {
+			appCtx.ReadinessTimeout = AppReadinessTimeout
+			scheduledAppContexts = append(scheduledAppContexts, appCtx)
+		}
+	})
+
+	It("Restart stork pod when large resource schedule backup in progress", func() {
+
+		Step("Validating applications", func() {
+			log.InfoD("validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Populating the configmaps and secrets with data", func() {
+			log.InfoD("Populating the configmaps and secrets with data")
+			for _, ctx := range scheduledAppContexts {
+				if ctx.App.Key == "config-maps" {
+					configMapEntries, err = PopulateConfigMapsInContext(ctx, numberOfEntries)
+				} else if ctx.App.Key == "secrets" {
+					secretEntries, err = PopulateSecretsInContext(ctx, numberOfEntries)
+				}
+			}
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				backupLocationName = fmt.Sprintf("bl-%v", RandomString(6))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		Step("Registering clusters for backup", func() {
+			log.InfoD("Registering clusters for backup")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+		})
+
+		Step("Create schedule policy", func() {
+			log.InfoD("Creating a schedule policy")
+			periodicSchPolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
+			periodicSchPolicyUid = uuid.New()
+			schPolicyInterval = 15
+			periodicSchPolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, schPolicyInterval, 5)
+			err = Inst().Backup.BackupSchedulePolicy(periodicSchPolicyName, periodicSchPolicyUid, BackupOrgID, periodicSchPolicyInfo)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s]", schPolicyInterval, periodicSchPolicyName))
+			periodicSchPolicyUid, err = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, periodicSchPolicyName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchPolicyName))
+		})
+
+		Step("Creating schedule backup", func() {
+			log.InfoD("Creating schedule backup")
+			scheduleBackupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			_, err = CreateScheduleBackupWithoutCheck(scheduleBackupName, SourceClusterName, sourceClusterUid, backupLocationName, backupLocationUID, []string{namespace}, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchPolicyName, periodicSchPolicyUid, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleBackupName))
+			firstBackupName, err = GetFirstScheduleBackupName(ctx, scheduleBackupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching first scheduled backup name with schedule name [%s]", scheduleBackupName))
+		})
+
+		Step("Deleting stork pods in cyclic fashion while scheduled backup is in progress", func() {
+			log.InfoD("Deleting stork pods in cyclic fashion while scheduled backup is in progress")
+			storkNamespace, err = k8sutils.GetStorkPodNamespace()
+			dash.VerifyFatal(err, nil, "Fetching stork pods namespace")
+			storkPods, err := core.Instance().GetPods(storkNamespace, StorkLabel)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching stork pods in namespace [%s]", storkNamespace))
+			for _, p := range storkPods.Items {
+				err = core.Instance().DeletePod(p.Name, p.Namespace, false)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting stork pod [%s] in namespace [%s]", p.Name, storkNamespace))
+			}
+		})
+
+		Step("Validating the scheduled backup after deleting the stork pods in cyclic fashion", func() {
+			log.InfoD("Validating the scheduled backup after deleting the stork pods in cyclic fashion")
+			err := BackupSuccessCheck(firstBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of the backup [%s]", firstBackupName))
+		})
+
+		Step("Validating the scheduled backup is a large resource backup after deleting the stork pods in cyclic fashion", func() {
+			log.InfoD("Validating the scheduled backup is a large resource backup after deleting the stork pods in cyclic fashion")
+			isLargeResourceBackup, err := IsLargeResourceBackup(ctx, firstBackupName, BackupOrgID)
+			log.FailOnError(err, fmt.Sprintf("Checking the backup [%s] is a large resource backup", firstBackupName))
+			dash.VerifyFatal(isLargeResourceBackup, true, fmt.Sprintf("Verifying the backup [%s] is a large resource backup", firstBackupName))
+		})
+
+		Step("Waiting for next scheduled backup to be triggered", func() {
+			log.InfoD("Waiting for next scheduled backup to be triggered")
+			nextBackupName, err = GetNextScheduleBackupName(scheduleBackupName, time.Duration(schPolicyInterval), ctx)
+			dash.VerifyFatal(err, nil, "Waiting for the next scheduled backup to be triggered")
+		})
+
+		Step("Deleting stork leader pod while scheduled backup is in progress", func() {
+			log.InfoD("Deleting stork leader pod while scheduled backup is in progress")
+			storkLeaderPod, err := GetStorkLeaderPod()
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching stork leader pod from configmap in namespace [%s]", storkNamespace))
+			err = core.Instance().DeletePod(storkLeaderPod.Name, storkNamespace, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting stork leader pod [%s] in namespace [%s]", storkLeaderPod, storkNamespace))
+		})
+
+		Step("Validating the scheduled backup after deleting the stork leader pod", func() {
+			log.InfoD("Validating the scheduled backup after deleting the stork leader pod")
+			err := BackupSuccessCheck(nextBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of the backup [%s]", nextBackupName))
+		})
+
+		Step("Validating the scheduled backup is a large resource backup after deleting the stork leader pod", func() {
+			log.InfoD("Validating the scheduled backup is a large resource backup after deleting the stork leader pod")
+			isLargeResourceBackup, err := IsLargeResourceBackup(ctx, nextBackupName, BackupOrgID)
+			log.FailOnError(err, fmt.Sprintf("Checking the backup [%s] is a large resource backup", nextBackupName))
+			dash.VerifyFatal(isLargeResourceBackup, true, fmt.Sprintf("Verifying the backup [%s] is a large resource backup", nextBackupName))
+		})
+
+		Step("Creating restore of the backup taken when stork pods are deleted in cyclic fashion", func() {
+			log.InfoD("Creating restore of the backup taken when stork pods are deleted in cyclic fashion")
+			firstRestoreName = fmt.Sprintf("%s-%s", RestoreNamePrefix, RandomString(6))
+			restoreNamespace := fmt.Sprintf("%s-%s", namespace, RandomString(6))
+			restoreNamespaceMapping := map[string]string{
+				namespace: restoreNamespace,
+			}
+			err = CreateRestore(firstRestoreName, firstBackupName, restoreNamespaceMapping, DestinationClusterName, destClusterUid, BackupOrgID, ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore [%s] of the backup [%s] taken when stork pods are deleted in cyclic fashion", firstRestoreName, firstBackupName))
+			err = SetDestinationKubeConfig()
+			dash.VerifyFatal(err, nil, "switching to destination kubeconfig")
+			configMapList, err := core.Instance().ListConfigMap(restoreNamespace, metav1.ListOptions{})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching configmaps from restored namespace [%s] in [%s]", restoreNamespace, DestinationClusterName))
+			if len(configMapList.Items) < numberOfResources {
+				dash.Fatal("All the configmaps are not restored")
+			}
+			for _, cm := range configMapList.Items {
+				// this configmap exists in every namespace; excluding this in validation
+				if cm.Name == "kube-root-ca.crt" {
+					continue
+				}
+				_, err = ValidateConfigMapEntries(cm.Name, restoreNamespace, configMapEntries)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating configmap [%s] entries", cm.Name))
+			}
+			secretsList, err := core.Instance().ListSecret(restoreNamespace, metav1.ListOptions{})
+			if len(secretsList.Items) < numberOfResources {
+				dash.Fatal("All the secrets are not restored")
+			}
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching secrets from restored namespace [%s] in [%s]", restoreNamespace, DestinationClusterName))
+			for _, cm := range secretsList.Items {
+				_, err = ValidateSecretEntries(cm.Name, restoreNamespace, secretEntries)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating secret [%s] entries", cm.Name))
+			}
+		})
+
+		Step("Creating restore of the backup taken when stork leader pod is deleted", func() {
+			log.InfoD("Creating restore of the backup taken when stork leader pod is deleted")
+			nextRestoreName = fmt.Sprintf("%s-%s", RestoreNamePrefix, RandomString(6))
+			restoreNamespace := fmt.Sprintf("%s-%s", namespace, RandomString(6))
+			restoreNamespaceMapping := map[string]string{
+				namespace: restoreNamespace,
+			}
+			err = CreateRestore(nextRestoreName, nextBackupName, restoreNamespaceMapping, DestinationClusterName, destClusterUid, BackupOrgID, ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore [%s] of the backup [%s] taken when stork leader pod is deleted", nextRestoreName, nextBackupName))
+			err = SetDestinationKubeConfig()
+			dash.VerifyFatal(err, nil, "switching to destination kubeconfig")
+			configMapList, err := core.Instance().ListConfigMap(restoreNamespace, metav1.ListOptions{})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching configmaps from restored namespace [%s] in [%s]", restoreNamespace, DestinationClusterName))
+			if len(configMapList.Items) < numberOfResources {
+				dash.Fatal("All the configmaps are not restored")
+			}
+			for _, cm := range configMapList.Items {
+				// this configmap exists in every namespace; excluding this in validation
+				if cm.Name == "kube-root-ca.crt" {
+					continue
+				}
+				_, err = ValidateConfigMapEntries(cm.Name, restoreNamespace, configMapEntries)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating configmap [%s] entries", cm.Name))
+			}
+			secretsList, err := core.Instance().ListSecret(restoreNamespace, metav1.ListOptions{})
+			if len(secretsList.Items) < numberOfResources {
+				dash.Fatal("All the secrets are not restored")
+			}
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching secrets from restored namespace [%s] in [%s]", restoreNamespace, DestinationClusterName))
+			for _, cm := range secretsList.Items {
+				_, err = ValidateSecretEntries(cm.Name, restoreNamespace, secretEntries)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating secret [%s] entries", cm.Name))
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			err = SetSourceKubeConfig()
+			dash.VerifyFatal(err, nil, "switching to source kubeconfig")
+			if oldLargeResourceSizeLimit != "" {
+				storkControllerCM.Data[k8sutils.LargeResourceSizeLimitName] = oldLargeResourceSizeLimit
+			} else {
+				delete(storkControllerCM.Data, k8sutils.LargeResourceSizeLimitName)
+			}
+			storkControllerCM, err = core.Instance().UpdateConfigMap(storkControllerCM)
+			log.FailOnError(err, fmt.Sprintf("Failed to update %s configmap", StorkControllerConfigMap))
+		}()
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed applications")
+		DestroyApps(scheduledAppContexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})

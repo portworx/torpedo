@@ -5207,6 +5207,28 @@ func DowngradeStorkVersion(storkImageToDowngrade string) error {
 
 }
 
+func GetStorkLeaderPod() (*corev1.Pod, error) {
+	storkNamespace, err := k8sutils.GetStorkPodNamespace()
+	if err != nil {
+		return nil, err
+	}
+	configMap, err := core.Instance().GetConfigMap("stork", storkNamespace)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := configMap.Annotations["control-plane.alpha.kubernetes.io/leader"]; !ok {
+		return nil, fmt.Errorf("error getting stork annotation from configmap")
+	}
+	leader := configMap.Annotations["control-plane.alpha.kubernetes.io/leader"]
+	storkLeader := strings.Trim(strings.Split(strings.Split(leader, ",")[0], ":")[1], "\"")
+	pod, err := core.Instance().GetPodByName(storkLeader, storkNamespace)
+	if err != nil {
+		return nil, err
+	}
+	return pod, nil
+
+}
+
 // CreateBackupWithNamespaceLabel creates a backup with Namespace label and checks for success
 func CreateBackupWithNamespaceLabel(backupName string, clusterName string, bkpLocation string, bkpLocationUID string,
 	labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string,
