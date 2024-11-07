@@ -2621,6 +2621,159 @@ var _ = Describe("{PoolExpandAddDriveWithPXRestart}", func() {
 
 })
 
+var _ = Describe("{AddMetadataDriveWithNodeReboot}", Label("p1", "hal_ops_disruption", "node_reboot", "AddMetadata", "functional"), func() {
+
+	var (
+		selectedNode node.Node
+		contexts     []*scheduler.Context
+		kvdbNodesIDs []string
+		path         string
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddMetadataDriveWithNodeReboot", "Add Metadata Drive With Node Reboot", nil, 0)
+	})
+
+	itLog := "AddMetadataDriveWithNodeReboot"
+	It(itLog, func() {
+		stepLog := "Schedule Apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = scheduleApps()
+			time.Sleep(5 * time.Minute)
+			log.InfoD("schedule app succeed")
+		})
+		storageNodes := node.GetStorageNodes()
+		index := rand.Intn(len(storageNodes))
+		tNode := storageNodes[index]
+
+		stepLog = "Get KVDB nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbMembers, err := Inst().V.GetKvdbMembers(tNode)
+			log.FailOnError(err, "Error getting KVDB members")
+			log.InfoD("kvdb members %+v", kvdbMembers)
+			for _, n := range kvdbMembers {
+				kvdbNodesIDs = append(kvdbNodesIDs, n.Name)
+			}
+		})
+
+		stepLog = "Check which node has a metadata disk if not add one"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			isDedicatedMetadataDiskExist := false
+			//Check which node has metadata disk if not add one
+			for _, storageNode := range storageNodes {
+
+				path, err := getMetaDataDiskPath(storageNode)
+				log.FailOnError(err, "Failed to get metadata disk")
+				if path != "" {
+					log.InfoD("Metadata disk path: %v", path)
+					isDedicatedMetadataDiskExist = true
+					tNode = storageNode
+					break
+				}
+			}
+			if !isDedicatedMetadataDiskExist {
+				for _, storageNode := range storageNodes {
+					deviceSpec := fmt.Sprintf("size=100 --metadata")
+					log.InfoD("Initiate add cloud drive and validate")
+					// enter pool maintenance mode
+					if Contains(kvdbNodesIDs, storageNode.Id) {
+						log.InfoD("[%s] is kvdb node", storageNode.Hostname)
+						continue
+					}
+
+					stepLog := "Enter maintenance mode"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						err = Inst().V.EnterPoolMaintenance(storageNode)
+						log.FailOnError(err, "node: %v failed to transition to pool maintenance mode", storageNode.Name)
+						log.Info("enter pool maintenance mode succeed")
+					})
+
+					stepLog = "Add metadata disk"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						err := Inst().V.AddCloudDrive(&storageNode, deviceSpec, -1)
+						log.FailOnError(err, "Failed to add metadata device on node : %s", storageNode.Name)
+						log.InfoD("metadata disk added successfully on node [%s]", storageNode.Hostname)
+					})
+					// sleep for some random time
+					sleepTime := rand.Intn(100) + 1
+					time.Sleep(time.Second * (time.Duration(sleepTime)))
+
+					// node restart
+					stepLog = fmt.Sprintf("Verify reboot after [%d] seconds", sleepTime)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						err = Inst().N.RebootNodeAndWait(storageNode)
+						log.FailOnError(err, "Failed to reboot node and wait till it is up")
+						log.InfoD("Verify reboot succeed")
+					})
+
+					// exit pool maintenance
+					stepLog = "Exit pool maintenance mode"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						err = Inst().V.ExitPoolMaintenance(storageNode)
+						log.FailOnError(err, "Node: %v Failed to exit out of maintenance mode", storageNode.Name)
+						log.Info("exit pool maintenance mode succeed")
+					})
+
+					selectedNode = storageNode
+					break
+				}
+			} else {
+				log.InfoD("Metadata disk already exist: [%s]", path)
+				Skip("Metadata disk already exist")
+			}
+			//check if selecteNode is empty or not
+			if selectedNode.Name == "" {
+				log.FailOnError(fmt.Errorf("No node found with metadata disk or metadata disks cannot be added to any nodes"), "No node found with metadata disk ")
+			}
+		})
+
+		//Check PX status
+		stepLog = "Check PX status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			status, err := Inst().V.GetPxctlStatus(selectedNode)
+			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", selectedNode.Name))
+			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+				selectedNode.Name, api.Status_STATUS_OK, status))
+			log.Infof("px status [%v]", status)
+
+		})
+
+		stepLog = fmt.Sprintf("Check if apps are running")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+			log.Info("validate application succeed")
+		})
+
+		stepLog = "validate metadata device has been added successfully"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//get metadata device path from pxctl status
+			metadataDevicePath, err := getMetaDataDiskPath(selectedNode)
+			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", selectedNode.Name))
+			if metadataDevicePath == "" {
+				log.FailOnError(fmt.Errorf("metadata device not added"), "metadata device not added")
+			}
+			log.InfoD("Metadata device path from pxctl : %v", metadataDevicePath)
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		appsValidateAndDestroy(contexts)
+		AfterEachTest(contexts)
+	})
+
+})
+
 var _ = Describe("{DriveAddAsJournalWithPXRestart}", Label("p1", "hal_ops_disreption", "px_restart", "AddJournal", "functional"), func() {
 	/*
 		1. Install portworx in a 5 node cluster
