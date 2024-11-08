@@ -23,21 +23,21 @@ const (
 	validateReplicationUpdateTimeout = 4 * time.Hour
 )
 
-var _ = Describe("{HaIncreaseRebootTarget}", func() {
+var _ = Describe("{HaIncreaseRebootTarget}",Label("p1","negative","error_injection","px_vol_ops","HA_Increase_Decrease","node_reboot"), func() {
 	testName := "ha-inc-reboot-tgt"
 	performHaIncreaseRebootTest(testName)
 })
 
-var _ = Describe("{HaIncreaseRebootSource}", func() {
+var _ = Describe("{HaIncreaseRebootSource}",Label("p1","negative","error_injection","px_vol_ops","HA_Increase_Decrease","node_reboot"), func() {
 	testName := "ha-inc-reboot-src"
 	performHaIncreaseRebootTest(testName)
 })
-var _ = Describe("{HaIncreaseRestartPXSource}", func() {
+var _ = Describe("{HaIncreaseRestartPXSource}",Label("p1","negative","error_injection","px_vol_ops","px_restart","HA_Incease_Decrease"), func() {
 	testName := "ha-inc-restartpx-src"
 	performHaIncreaseRebootTest(testName)
 })
 
-var _ = Describe("{HaIncreaseRestartPXTarget}", func() {
+var _ = Describe("{HaIncreaseRestartPXTarget}",Label("p1","negative","error_injection","px_vol_ops","px_restart","HA_Incease_Decrease"), func() {
 	testName := "ha-inc-restartpx-tgt"
 	performHaIncreaseRebootTest(testName)
 })
@@ -161,7 +161,7 @@ func performHaIncreaseRebootTest(testName string) {
 
 }
 
-var _ = Describe("{VolResizeAllVolumes}", func() {
+var _ = Describe("{VolResizeAllVolumes}",Label("p0","positive","px_vol_ops","HA_Increase_Decrease","MiniScale"), func() {
 
 	/*
 		PTX-23576
@@ -416,7 +416,7 @@ var _ = Describe("{VolResizeAllVolumes}", func() {
 
 })
 
-var _ = Describe("{VolHAIncreaseAllVolumes}", func() {
+var _ = Describe("{VolHAIncreaseAllVolumes}",Label("p0","positive","px_vol_ops","MiniScale","HA_Increase_Decrease"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("VolHAIncreaseAllVolumes", "Trigger vol HA Increase on all volumes at once", nil, 0)
 	})

@@ -814,7 +814,7 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), Label("p0",
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
 // schedules apps and wait until workload is completed on the volumes and then validates
 // sizes of storage pools by adding new disks to the nodes where volumes reside
-var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName),Label("p0","positive","autopilot","PoolExpand"), func() {
 	var testrailID = 85448
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/85448
 	var runID int
@@ -931,7 +931,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), func() {
 })
 
 // Restart Volume driver during resize pool with add-disk option.
-var _ = Describe(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName),Label("p0","negative","autopilot","error_injection","PoolExpand","px_restart"), func() {
 	tags["poolChange"] = "true"
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName), "Pool expansion and volume driver restart test on autopilot", tags, 0)
@@ -1016,7 +1016,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName)
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
 // schedules apps and wait until workload is completed on the volumes and then validates
 // PVC sizes of the volumes and sizes of storage pools
-var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName),Label("p0","positive","autopilot","PvcResize","PoolExpand"), func() {
 	tags["poolChange"] = "true"
 	tags["volumeChange"] = "true"
 	var testrailID = 85449
@@ -1120,7 +1120,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 })
 
 // This test suite is used to run pool expand on Non cloud drive setups, and the error is expected to happen
-var _ = Describe(fmt.Sprintf("{%sPoolExpandInNonCD}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sPoolExpandInNonCD}", testSuiteName),Label("p0","positive","autopilot","PoolExpand"), func() {
 	var testrailID = 93319
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/93319
 	var runID int
@@ -1171,7 +1171,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandInNonCD}", testSuiteName), func() {
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sEvents}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sEvents}", testSuiteName),Label("p1","positive","autopilot","PvcResize","PoolExpand"), func() {
 	tags["volumeChange"] = "true"
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sEvents}", testSuiteName), "Events test on autopilot", tags, 0)
@@ -1233,7 +1233,7 @@ var _ = Describe(fmt.Sprintf("{%sEvents}", testSuiteName), func() {
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName),Label("p1","negative","autopilot","error_injection","PoolExpand","px_crash"), func() {
 	tags["poolChange"] = "true"
 	tags["negative"] = "true"
 	JustBeforeEach(func() {
@@ -1308,7 +1308,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName), func() {
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName),Label("p0","positive","autopilot","Rebalance"), func() {
 	tags["rebalance"] = "true"
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName), "Create volume and rebalance test on autopilot", tags, 0)
@@ -1380,7 +1380,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName), func() {
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName),Label("p0","positive","autopilot","Rebalance"), func() {
 	tags["rebalance"] = "true"
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName), "validate rebalance on autopilot", tags, 0)
@@ -1445,7 +1445,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName), func() {
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sRestartAutopilotRebalance}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sRestartAutopilotRebalance}", testSuiteName),Label("p1","negative","autopilot","error_injection","Rebalace","px_crash"), func() {
 	tags["rebalance"] = "true"
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sRestartAutoPilotRebalance}", testSuiteName), "restart autopilot and rebalance test", tags, 0)
@@ -1555,7 +1555,7 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilotRebalance}", testSuiteName), fu
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName),Label("p1","positive","autopilot","Rebalance"), func() {
 	tags["rebalance"] = "true"
 	tags["volumeChange"] = "true"
 	JustBeforeEach(func() {
@@ -1664,7 +1664,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName), func
 // schedules apps on one of the node, waits until workload is completed on the volumes and then validates
 // rebalalnce and sizes of storage pools
 // NOTE: this test is using volumes with replicaset is 3 and make sure that you have at least 4 nodes to do rebalance
-var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName),Label("p1","positive","autopilot","Rebalance"), func() {
 	tags["rebalance"] = "true"
 	tags["poolChange"] = "true"
 	JustBeforeEach(func() {
@@ -1743,7 +1743,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sRebalanceUpdateDelete}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sRebalanceUpdateDelete}", testSuiteName),Label("p0","positive","autopilot","Rebalance"), func() {
 	tags["rebalance"] = "true"
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sRebalanceUpdateDelete}", testSuiteName), "Rebalance Update and delete volume test on autopilot", tags, 0)
@@ -1819,7 +1819,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceUpdateDelete}", testSuiteName), func()
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sRebalanceWithApproval}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sRebalanceWithApproval}", testSuiteName),Label("p0","positive","autopilot","Rebalance"), func() {
 	tags["rebalance"] = "true"
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sRebalanceWithApproval}", testSuiteName), "Rebalance with approval test on autopilot", tags, 0)
@@ -1943,7 +1943,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceWithApproval}", testSuiteName), func()
 
 // This testsuite for cases including: pvc resize in large scale, pvc resize for sharedv4 volume
 // executing pool reblance and expansion at the same time
-var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName),Label("p0","positive","autopilot"), func() {
 	var testrailID = 12345
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/12345
 	var runID int
@@ -2203,7 +2203,7 @@ func scheduleAppsWithAutopilot(testName string, testScaleFactor int, apRules []a
 //After this event, two storage nodes, one with KVDB, are intentionally crashed,
 //and the test checks whether these nodes successfully recover.
 
-var _ = Describe("{AutoPoolExpandCrashTest}", func() {
+var _ = Describe("{AutoPoolExpandCrashTest}",Label("p1","negative","autopilot","error_injection"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sAutoPoolExpandCrashTest}", testSuiteName), "Crash one kvdb node and one storage node when multiple pools are expanded using autopilot", nil, 0)
 	})

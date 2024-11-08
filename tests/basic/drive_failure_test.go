@@ -20,7 +20,7 @@ const (
 	dfDefaultRetryInterval = 5 * time.Second
 )
 
-var _ = Describe("{DriveFailure}", func() {
+var _ = Describe("{DriveFailure}",Label("p1","negative","error_injection","px_vol_ops","drive_failure"), func() {
 	var testrailID = 35265
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35265
 	var runID int

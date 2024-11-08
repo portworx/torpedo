@@ -147,7 +147,7 @@ func getVolumeRuntimeState(vol string) (string, error) {
 	return runTimeStat, nil
 }
 
-var _ = Describe("{FordRunFlatResync}", func() {
+var _ = Describe("{FordRunFlatResync}",Label("p0","positive","CustomerIssue"), func() {
 	/*
 		Test Needs 10 VM's running with Internal KVDB
 		Cluster should have 6 StorageNodes and 4 Storageless nodes
@@ -399,7 +399,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 	})
 })
 
-var _ = Describe("{ValidateZombieReplicas}", func() {
+var _ = Describe("{ValidateZombieReplicas}",Label("p0","positive","CustomerIssue"), func() {
 	/*
 			1. Create aggressive localsnap for every minute.
 			2. Validate zombie replicas
@@ -580,7 +580,7 @@ var _ = Describe("{ValidateZombieReplicas}", func() {
 	})
 })
 
-var _ = Describe("{CreateCloudSnapAndDelete}", func() {
+var _ = Describe("{CreateCloudSnapAndDelete}",Label("p0","positive","CustomerIssue"), func() {
 	/*
 		1. Create aggressive cloud snaps for every minute
 		2. ValidateCloudSnap Deletion
@@ -842,7 +842,7 @@ func isPodStuckNotRunning(nameSpace string) (bool, map[string]string, error) {
 	return isPodRestarting, restartDetails, nil
 }
 
-var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
+var _ = Describe("{ContainerCreateDeviceRemoval}",Label("p0","positive","CustomerIssue"), func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ContainerCreateDeviceRemoval",
@@ -1069,7 +1069,7 @@ func flushAllIPtableRulesOnAllNodes() {
 	}
 }
 
-var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
+var _ = Describe("{FADAPodRecoveryAfterBounce}",Label("p0","positive","CustomerIssue"), func() {
 
 	/*
 				PTX : https://purestorage.atlassian.net/browse/PWX-31647
@@ -1217,7 +1217,7 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", func() {
 	})
 })
 
-var _ = Describe("{FADAPodRecoveryAllPathDownUsingIptableRule}", func() {
+var _ = Describe("{FADAPodRecoveryAllPathDownUsingIptableRule}",Label("p0","positive","CustomerIssue"), func() {
 
 	/*
 				PTX : https://purestorage.atlassian.net/browse/PTX-19192
