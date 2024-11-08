@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -1709,6 +1711,246 @@ var _ = Describe("{ValidateGenericBackupDeletionWithMissingS3Bucket}", Label(Tes
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
 			err = Inst().Backup.WaitForBackupDeletion(ctx, backupName, BackupOrgID, BackupDeleteTimeout, BackupDeleteRetryTime)
 			log.FailOnError(err, "failed while waiting for backup %s to be deleted", backupName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			log.Infof("Unsetting BACKUP_TYPE env variable")
+			err := os.Unsetenv("BACKUP_TYPE")
+			log.FailOnError(err, "Unsetting BACKUP_TYPE env variable")
+		}()
+
+		log.InfoD("Deleting the deployed apps after the testcase")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
+
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
+	})
+})
+
+// Validate that the backup sync syncs all the backups (both generic and non-genric) present in bucket
+var _ = Describe("{ValidateGenericAndNonGenericBackupSync}", Label(TestCaseLabelsMap[KDMPBackup]...), func() {
+	var (
+		scheduledAppContexts []*scheduler.Context
+		bkpNamespaces        []string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		backupName           string
+		backupLocationUID    string
+		cloudCredName        string
+		cloudCredUID         string
+		bkpLocationName      string
+		backupNames          []string
+		providers            []string
+		ctx                  context.Context
+	)
+	backupLocationMap := make(map[string]string)
+	bkpNamespaces = make([]string, 0)
+	backupNames = make([]string, 0)
+	labelSelectors := make(map[string]string)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyValidateGenericAndNonGenericBackupSync", "Validate that the backup sync syncs all the backups (both generic and non-genric) present in bucket.", nil, 300159, Pingle, Q3FY25)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		bkpNamespaces = make([]string, 0)
+
+		// Schedule an Application
+		appContexts := ScheduleApplications(TaskNamePrefix)
+		for _, ctx := range appContexts {
+			ctx.ReadinessTimeout = AppReadinessTimeout
+			namespace := GetAppNamespace(ctx, TaskNamePrefix)
+			bkpNamespaces = append(bkpNamespaces, namespace)
+			scheduledAppContexts = append(scheduledAppContexts, ctx)
+		}
+	})
+
+	// Validate that the backup sync syncs all the backups (both generic and non-genric) present in bucket
+	It("Verify Validate that the backup sync syncs all the backups", func() {
+		numOfKDMPBackup := 2
+		// 1. validate application
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		// 2. common initializations
+		Step("common init", func() {
+			var err error
+			ctx, err = backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			providers = GetBackupProviders()
+		})
+
+		// 3. Create cloud credentials and backup location
+		Step("Creating cloud credentials and backup location", func() {
+			log.InfoD("Creating cloud credentials and backup location")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+
+		// 4. Create application cluster for backup
+		Step("Register cluster for backup", func() {
+			err := CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.InfoD("Uid of [%s] cluster is %s", SourceClusterName, clusterUid)
+		})
+
+		// 5. Take 1 non generic backup
+		Step("Taking backup of applications", func() {
+			log.InfoD("Taking Backup of application")
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			_, err := CreateBackupWithoutCheck(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of normal backup [%s]", backupName))
+			backupNames = append(backupNames, backupName)
+		})
+
+		// 6. Take 2 KDMP backup.
+		Step("Taking backup of applications", func() {
+			err := os.Setenv("BACKUP_TYPE", "direct_kdmp")
+			log.FailOnError(err, "Setting BACKUP_TYPE env variable")
+			for i := 0; i < numOfKDMPBackup; i++ {
+				backupName = fmt.Sprintf("kdmp-%s-%s-%v-%d", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix(), i)
+				namespaceLabel := fmt.Sprintf("%s-label-schedule-%s", BackupNamePrefix, RandomString(4))
+				bkpCreateRequests := &api.BackupCreateRequest{
+					CreateMetadata: &api.CreateMetadata{
+						Name:  backupName,
+						OrgId: BackupOrgID,
+					},
+					BackupLocationRef: &api.ObjectRef{
+						Name: bkpLocationName,
+						Uid:  backupLocationUID,
+					},
+					Cluster:        SourceClusterName,
+					LabelSelectors: labelSelectors,
+					ClusterRef: &api.ObjectRef{
+						Name: SourceClusterName,
+						Uid:  clusterUid,
+					},
+					NsLabelSelectors: namespaceLabel,
+				}
+
+				backupDriver := Inst().Backup
+				_, err = backupDriver.CreateBackup(ctx, bkpCreateRequests)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of KDMP backup [%s]", backupName))
+				backupNames = append(backupNames, backupName)
+			}
+		})
+
+		// 7. Remove the backup location where backups were taken
+		Step("Remove the backup location where backups were taken", func() {
+			log.InfoD("Remove backup location where backups were taken")
+			// remove backup location call
+			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, BackupOrgID, false)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", bkpLocationName))
+
+			// Wait until backup location is removed
+			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				status, err := IsBackupLocationPresent(bkpLocationName, ctx, BackupOrgID)
+				if err != nil {
+					return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
+				}
+				if status == true {
+					return "", true, fmt.Errorf("backup location %s is not deleted yet", bkpLocationName)
+				}
+				return "", false, nil
+			}
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeleteStatusCheck, 3*time.Minute, 30*time.Second)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", bkpLocationName))
+		})
+
+		// 7. Enumerate backup after location is deleted
+		Step("Enumerate backup:", func() {
+			bkpEnumerateReq := &api.BackupEnumerateRequest{
+				OrgId: BackupOrgID,
+				EnumerateOptions: &api.EnumerateOptions{
+					ClusterUidFilter: clusterUid,
+				},
+			}
+			backupObj, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
+			dash.VerifyFatal(err, nil, "Verifying enumerate backup")
+			log.Infof("backup obj len:%v", len(backupObj.GetBackups()))
+			dash.VerifyFatal(len(backupObj.GetBackups()), 0, "Verifying enumerate backup length")
+		})
+
+		// 8. Add the backup location again which had backups
+		Step("Add the backup location again which had backups", func() {
+			log.InfoD("Add the backup location with backups back")
+			for _, provider := range providers {
+				bkpLocationName = fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err := CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+
+		// Sync-up backup and check the both backups are synced up.
+		Step("Sync-up backup.", func() {
+			// Wait for backups to get synced
+			checkBackupSync := func() (interface{}, bool, error) {
+				fetchedBackupNames, err := GetAllBackupsAdmin()
+				// Debug lines tobe removed in the next patch with the fix
+				log.InfoD(fmt.Sprintf("The list of backups fetched %s", fetchedBackupNames))
+				if err != nil {
+					return "", true, fmt.Errorf("unable to fetch backups. Error: %s", err.Error())
+				}
+				if len(fetchedBackupNames) == len(backupNames) {
+					return "", false, nil
+				}
+				return "", true, fmt.Errorf("expected: %d and actual: %d", len(backupNames), len(fetchedBackupNames))
+			}
+			_, err := DoRetryWithTimeoutWithGinkgoRecover(checkBackupSync, 100*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Wait for BackupSync to complete")
+			fetchedBackupNames, err := GetAllBackupsAdmin()
+			log.FailOnError(err, "Getting a list of all backups")
+
+			// Iterating through all backup and check if they are present in the fetched backup list or not
+			listOfFetchedBackups := strings.Join(fetchedBackupNames, "")
+			for _, backup := range backupNames {
+				re := regexp.MustCompile(fmt.Sprintf("%s-*", backup))
+				dash.VerifyFatal(re.MatchString(listOfFetchedBackups), true, fmt.Sprintf("Checking if backup [%s] was synced or not", backup))
+			}
+
+			var bkp *api.BackupObject
+			backupDriver := Inst().Backup
+			bkpEnumerateReq := &api.BackupEnumerateRequest{
+				OrgId: BackupOrgID}
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+			for _, bkp = range curBackups.GetBackups() {
+				backupInspectRequest := &api.BackupInspectRequest{
+					Name:  bkp.Name,
+					Uid:   bkp.Uid,
+					OrgId: BackupOrgID,
+				}
+				resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+				log.FailOnError(err, "Inspect each backup from list")
+				actual := resp.GetBackup().GetStatus().Status
+				expected := api.BackupInfo_StatusInfo_Success
+				dash.VerifyFatal(actual, expected, fmt.Sprintf("Check each backup for success status %s", bkp.Name))
+			}
 		})
 	})
 
