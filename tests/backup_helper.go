@@ -3288,7 +3288,7 @@ func ValidateBackup(ctx context1.Context, backupName string, orgID string, sched
 			}
 
 			// we only validate namespace level resource
-			if ns != "" {
+			if ns != "" && !theBackup.GetLargeResourceEnabled() {
 				for _, backupObj := range resourceInfoBackupObjs {
 					if name == backupObj.GetName() && kind == backupObj.GetKind() {
 						continue specloop
