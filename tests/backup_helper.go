@@ -11705,6 +11705,7 @@ func IsAdminCtx(ctx context1.Context) (bool, error) {
 	return false, nil
 }
 
+// IsLargeResourceBackup checks whether the backup is a large resource backup
 func IsLargeResourceBackup(ctx context1.Context, backupName string, orgId string) (bool, error) {
 	backupInspectRequest := &api.BackupInspectRequest{
 		Name:  backupName,
@@ -11714,7 +11715,7 @@ func IsLargeResourceBackup(ctx context1.Context, backupName string, orgId string
 	if err != nil {
 		return false, err
 	}
-	return res.Backup.LargeResourceEnabled, nil
+	return res.Backup.GetLargeResourceEnabled(), nil
 }
 
 // GetAllBackupSchedulesAdmin returns all the schedule object that px-central-admin has access to

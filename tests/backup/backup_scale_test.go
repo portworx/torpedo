@@ -9,14 +9,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/pkg/log"
 	. "github.com/pure-px/torpedo/tests"
 	"golang.org/x/sync/errgroup"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // MultipleBackupLocationWithSameEndpoint Create Backup and Restore for Multiple backup location added using same endpoint.
@@ -785,5 +789,275 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", Label(Test
 			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
 		}
 
+	})
+})
+
+// This TC takes backup of a namespace with large number of resources and restores it.
+var _ = Describe("{LargeResourceNamespaceBackup}", func() {
+	/*
+		1. Deploy large number of secrets and configmaps into a namespace.
+		2. Populate the configmaps and secrets with some data.
+		3. Create backup location and cloud settings.
+		4. Register source and destination clusters.
+		5. Create backup of the namespace.
+		6. Validate that the backup is a large resource backup.
+		7. Restore the backup to the destination cluster.
+		8. Restore the backup to the source cluster in different namespace.
+		9. Restore the backup to the source cluster in the same namespace.
+	*/
+
+	var (
+		err                                        error
+		ctx                                        context.Context
+		scheduledAppContexts                       []*scheduler.Context
+		testrailID                                 int
+		numberOfResources                          int
+		numberOfEntries                            int
+		namespace                                  string
+		appList                                    []string
+		configMapEntries                           map[string]string
+		secretEntries                              map[string]string
+		providers                                  []string
+		cloudCredName                              string
+		cloudCredUID                               string
+		backupLocationName                         string
+		backupLocationUID                          string
+		backupLocationMap                          map[string]string
+		sourceClusterUid                           string
+		destClusterUid                             string
+		backupName                                 string
+		restoreToDestinationClusterName            string
+		restoreToSameClusterDifferentNamespaceName string
+		restoreToSameClusterSameNamespaceName      string
+		isLargeResourceBackup                      bool
+		storkControllerCM                          *corev1.ConfigMap
+		oldLargeResourceSizeLimit                  string
+		newLargeResourceSizeLimit                  string
+	)
+
+	JustBeforeEach(func() {
+		testrailID = 85773
+		StartPxBackupTorpedoTest("LargeResourceNamespaceBackup", "To verify backup of namespace with large number of resources and restore it", nil, testrailID, Dchothani, Q3FY25)
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		numberOfResources, _ = strconv.Atoi(GetEnv(NumberOfResources, "1000"))
+		numberOfEntries, _ = strconv.Atoi(GetEnv(NumberOfEntries, "1000"))
+		newLargeResourceSizeLimit = GetEnv(ReduceLargeResourceSizeLimit, "102400")
+		namespace = fmt.Sprintf("namespace-%d-%s", testrailID, RandomString(6))
+		backupLocationMap = make(map[string]string)
+		providers = GetBackupProviders()
+		appList = Inst().AppList
+		defer func() {
+			log.Infof("Resetting applist and removing the custom app config")
+			Inst().AppList = appList
+			delete(Inst().CustomAppConfig, "config-maps")
+			delete(Inst().CustomAppConfig, "secrets")
+			err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+			log.FailOnError(err, "Failed while rescanning specs")
+		}()
+		Inst().AppList = []string{"config-maps", "secrets"}
+		Inst().CustomAppConfig["config-maps"] = scheduler.AppConfig{
+			ClaimsCount: numberOfResources,
+		}
+		Inst().CustomAppConfig["secrets"] = scheduler.AppConfig{
+			ClaimsCount: numberOfResources,
+		}
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
+		log.InfoD("Updating %s in %s to set %s:%s", StorkControllerConfigMap, DefaultStorkDeploymentNamespace, k8sutils.LargeResourceSizeLimitName, newLargeResourceSizeLimit)
+		storkControllerCM, err = core.Instance().GetConfigMap(StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
+		log.FailOnError(err, fmt.Sprintf("Failed to get %s configmap", StorkControllerConfigMap))
+		if _, ok := storkControllerCM.Data[k8sutils.LargeResourceSizeLimitName]; ok {
+			oldLargeResourceSizeLimit = storkControllerCM.Data[k8sutils.LargeResourceSizeLimitName]
+		}
+		storkControllerCM.Data[k8sutils.LargeResourceSizeLimitName] = newLargeResourceSizeLimit
+		storkControllerCM, err = core.Instance().UpdateConfigMap(storkControllerCM)
+		log.FailOnError(err, fmt.Sprintf("Failed to update %s configmap", StorkControllerConfigMap))
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, testrailID)
+		appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
+		for _, appCtx := range appContexts {
+			appCtx.ReadinessTimeout = AppReadinessTimeout
+			scheduledAppContexts = append(scheduledAppContexts, appCtx)
+		}
+	})
+
+	It("Backup a namespace with large number of resources and restore it", func() {
+		Step("Validating applications", func() {
+			log.InfoD("validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Populating the configmaps and secrets with data", func() {
+			log.InfoD("Populating the configmaps and secrets with data")
+			for _, ctx := range scheduledAppContexts {
+				if ctx.App.Key == "config-maps" {
+					configMapEntries, err = PopulateConfigMapsInContext(ctx, numberOfEntries)
+				} else if ctx.App.Key == "secrets" {
+					secretEntries, err = PopulateSecretsInContext(ctx, numberOfEntries)
+				}
+			}
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				backupLocationName = fmt.Sprintf("%s-%v", getGlobalBucketName(provider), RandomString(6))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		Step("Registering clusters for backup", func() {
+			log.InfoD("Registering clusters for backup")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+		})
+
+		Step("Creating a backup of the namespace", func() {
+			log.InfoD("Creating backup of application from source cluster")
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace}, nil, BackupOrgID, sourceClusterUid, "", "", "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] with namespace [%s]", backupName, namespace))
+		})
+
+		Step("Checking whether the backup is a large resource backup", func() {
+			log.InfoD("Checking whether the backup [%s] is a large resource backup", backupName)
+			isLargeResourceBackup, err = IsLargeResourceBackup(ctx, backupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Checking the backup [%s] is a large resource backup", backupName))
+			dash.VerifyFatal(isLargeResourceBackup, true, fmt.Sprintf("Verifying the backup [%s] is a large resource backup", backupName))
+		})
+
+		Step("Restoring the backup on destination cluster", func() {
+			log.InfoD("Restoring the backup on the destination cluster")
+			restoreToDestinationClusterName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			err = CreateRestore(restoreToDestinationClusterName, backupName, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, ctx, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s] on the destination cluster", restoreToDestinationClusterName, backupName))
+			err = SetDestinationKubeConfig()
+			dash.VerifyFatal(err, nil, "switching to destination kubeconfig")
+			configMapList, err := core.Instance().ListConfigMap(namespace, metav1.ListOptions{})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching configmaps from restored namespace [%s] in [%s]", namespace, DestinationClusterName))
+			if len(configMapList.Items) < numberOfResources {
+				dash.Fatal("All the configmaps are not restored")
+			}
+			for _, cm := range configMapList.Items {
+				// this configmap exists in every namespace; excluding this in validation
+				if cm.Name == "kube-root-ca.crt" {
+					continue
+				}
+				_, err = ValidateConfigMapEntries(cm.Name, namespace, configMapEntries)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating configmap [%s] entries", cm.Name))
+			}
+			secretsList, err := core.Instance().ListSecret(namespace, metav1.ListOptions{})
+			if len(secretsList.Items) < numberOfResources {
+				dash.Fatal("All the secrets are not restored")
+			}
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching secrets from restored namespace [%s] in [%s]", namespace, DestinationClusterName))
+			for _, cm := range secretsList.Items {
+				_, err = ValidateSecretEntries(cm.Name, namespace, secretEntries)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating secret [%s] entries", cm.Name))
+			}
+		})
+
+		Step("Restoring the backup on source cluster with different namespace", func() {
+			log.InfoD("Restoring the backup on source cluster with different namespace")
+			restoreNamespace := fmt.Sprintf("namespace-%d-%s", testrailID, RandomString(6))
+			restoreNamespaceMapping := map[string]string{namespace: restoreNamespace}
+			restoreToSameClusterDifferentNamespaceName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			err = CreateRestore(restoreToSameClusterDifferentNamespaceName, backupName, restoreNamespaceMapping, SourceClusterName, sourceClusterUid, BackupOrgID, ctx, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s] on the source cluster with namespace [%s]", restoreToSameClusterDifferentNamespaceName, backupName, restoreNamespace))
+			err = SetSourceKubeConfig()
+			dash.VerifyFatal(err, nil, "switching to source kubeconfig")
+			configMapList, err := core.Instance().ListConfigMap(restoreNamespace, metav1.ListOptions{})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching configmaps from restored namespace [%s] in [%s]", restoreNamespace, SourceClusterName))
+			if len(configMapList.Items) < numberOfResources {
+				dash.Fatal("All the configmaps are not restored")
+			}
+			for _, cm := range configMapList.Items {
+				// this configmap exists in every namespace; excluding this in validation
+				if cm.Name == "kube-root-ca.crt" {
+					continue
+				}
+				_, err = ValidateConfigMapEntries(cm.Name, restoreNamespace, configMapEntries)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating configmap [%s] entries", cm.Name))
+			}
+			secretsList, err := core.Instance().ListSecret(restoreNamespace, metav1.ListOptions{})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching secrets from restored namespace [%s] in [%s]", restoreNamespace, SourceClusterName))
+			if len(secretsList.Items) < numberOfResources {
+				dash.Fatal("All the secrets are not restored")
+			}
+			for _, secret := range secretsList.Items {
+				_, err = ValidateSecretEntries(secret.Name, restoreNamespace, secretEntries)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating secret [%s] entries", secret.Name))
+			}
+		})
+
+		Step("Restoring the backup on source cluster in same namespace", func() {
+			log.InfoD("Restoring the backup on source cluster in same namespace")
+			restoreToSameClusterSameNamespaceName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			err = CreateRestore(restoreToSameClusterSameNamespaceName, backupName, nil, SourceClusterName, sourceClusterUid, BackupOrgID, ctx, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s] on the source cluster in same namespace", restoreToSameClusterDifferentNamespaceName, backupName))
+			err = SetSourceKubeConfig()
+			dash.VerifyFatal(err, nil, "switching to source kubeconfig")
+			configMapList, err := core.Instance().ListConfigMap(namespace, metav1.ListOptions{})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching configmaps from restored namespace [%s] in [%s]", namespace, SourceClusterName))
+			if len(configMapList.Items) < numberOfResources {
+				dash.Fatal("All the configmaps are not restored")
+			}
+			for _, cm := range configMapList.Items {
+				// this configmap exists in every namespace; excluding this in validation
+				if cm.Name == "kube-root-ca.crt" {
+					continue
+				}
+				_, err = ValidateConfigMapEntries(cm.Name, namespace, configMapEntries)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating configmap [%s] entries", cm.Name))
+			}
+			secretsList, err := core.Instance().ListSecret(namespace, metav1.ListOptions{})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching secrets from restored namespace [%s] in [%s]", namespace, SourceClusterName))
+			if len(secretsList.Items) < numberOfResources {
+				dash.Fatal("All the secrets are not restored")
+			}
+			for _, secret := range secretsList.Items {
+				_, err = ValidateSecretEntries(secret.Name, namespace, secretEntries)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating secret [%s] entries", secret.Name))
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			err = SetSourceKubeConfig()
+			dash.VerifyFatal(err, nil, "switching to source kubeconfig")
+			if oldLargeResourceSizeLimit != "" {
+				storkControllerCM.Data[k8sutils.LargeResourceSizeLimitName] = oldLargeResourceSizeLimit
+			} else {
+				delete(storkControllerCM.Data, k8sutils.LargeResourceSizeLimitName)
+			}
+			storkControllerCM, err = core.Instance().UpdateConfigMap(storkControllerCM)
+			log.FailOnError(err, fmt.Sprintf("Failed to update %s configmap", StorkControllerConfigMap))
+		}()
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed applications")
+		DestroyApps(scheduledAppContexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
