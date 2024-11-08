@@ -1063,7 +1063,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", Label(TestCaseLabelsMap[
 		Step("Schedule applications in destination cluster to create new namespaces", func() {
 			log.InfoD("Scheduling applications in destination cluster to create new namespaces")
 			for i := numDeployments; i < numDeployments+1; i++ {
-				taskName := fmt.Sprintf("dst-%s-new-%d", TaskNamePrefix, i)
+				taskName := fmt.Sprintf("dst-%s-%d", TaskNamePrefix, i)
 				appContexts := ScheduleApplications(taskName)
 				for index, ctx := range appContexts {
 					appName := Inst().AppList[index]

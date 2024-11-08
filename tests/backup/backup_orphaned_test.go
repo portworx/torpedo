@@ -189,7 +189,7 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", Label(TestCa
 				createRestore := func(backupName string, restoreName string, namespace string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					customNamespace := "custom-" + namespace + randomSuffix
+					customNamespace := fmt.Sprintf("%s-%s", namespace, RandomString(4))
 					namespaceMapping := map[string]string{namespace: customNamespace}
 					err = CreateRestoreWithValidation(nonAdminCtx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, userClusterMap[user][DestinationClusterName], BackupOrgID, scheduledAppContexts)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", restoreName, backupName))
@@ -525,7 +525,7 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 					createRestore := func(backupName string, restoreName string, namespace string) {
 						defer GinkgoRecover()
 						defer wg.Done()
-						customNamespace := fmt.Sprintf("custom-%s-%v", namespace, RandomString(4))
+						customNamespace := fmt.Sprintf("%s-%s", namespace, RandomString(4))
 						namespaceMapping := map[string]string{namespace: customNamespace}
 						err = CreateRestoreWithValidation(nonAdminCtx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, userClusterMap[user][DestinationClusterName], BackupOrgID, scheduledAppContexts)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", restoreName, backupName))
@@ -873,7 +873,7 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", Label(TestCaseLab
 				createRestore := func(backupName string, restoreName string, namespace string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					customNamespace := fmt.Sprintf("custom-%s-%v", namespace, RandomString(4))
+					customNamespace := fmt.Sprintf("%s-%s", namespace, RandomString(4))
 					namespaceMapping := map[string]string{namespace: customNamespace}
 					err = CreateRestoreWithValidation(nonAdminCtx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, userClusterMap[user][DestinationClusterName], BackupOrgID, scheduledAppContexts)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", restoreName, backupName))
