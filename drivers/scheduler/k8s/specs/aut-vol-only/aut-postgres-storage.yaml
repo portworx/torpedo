@@ -3,7 +3,7 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
    name: px-postgres-sc
-provisioner: kubernetes.io/portworx-volume
+provisioner: pxd.portworx.com
 parameters:
   {{ if .Repl }}
   repl: "{{ .Repl }}"
@@ -20,13 +20,13 @@ metadata:
   labels:
     app: postgres
   annotations:
-    volume.beta.kubernetes.io/storage-class: px-postgres-sc
     torpedo.io/autopilot-enabled: "true"
     torpedo.io/pvclabels-enabled: "true"
     torpedo.io/pvcnodes-enabled: "true"
 spec:
   accessModes:
     - ReadWriteOnce
+  storageClassName: px-postgres-sc
   resources:
     requests:
       {{ if .VolumeSize }}

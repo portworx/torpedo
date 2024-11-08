@@ -7,7 +7,8 @@ parameters:
   backend: "pure_block"
   csi.storage.k8s.io/fstype: xfs
   placement_strategy: "repl-affinity-vps"
-  createoptions: -b size=2048
+  { { if .CreateOptions } }
+  createoptions: "{{ .CreateOptions }}"
   {{ if .PureFaPodName }}
   pure_fa_pod_name: "{{ .PureFaPodName }}"
   {{ end }}
@@ -26,7 +27,8 @@ parameters:
   backend: "pure_block"
   csi.storage.k8s.io/fstype: ext4
   placement_strategy: "repl-affinity-vps"
-  createoptions: -b 2048
+  { { if .CreateOptions } }
+  createoptions: "{{ .CreateOptions }}"
   {{ if .PureFaPodName }}
   pure_fa_pod_name: "{{ .PureFaPodName }}"
   {{ end }}

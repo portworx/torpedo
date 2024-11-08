@@ -29,7 +29,6 @@ type Array struct {
 	Member         Member  `json:"member"`
 	Status         string  `json:"status"`
 	Progress       *string `json:"progress"`
-	FrozenAt       *string `json:"frozen_at"`
 	MediatorStatus string  `json:"mediator_status"`
 	PreElected     bool    `json:"pre_elected"`
 }

@@ -138,8 +138,8 @@ func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 		return resp, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error getting auth-token,response status is [%d]", resp.StatusCode)
-
+		log.Errorf("Response body: %s", bodyString)
+		return nil, fmt.Errorf("Error in getting the status, response status is [%d], response body: %s", resp.StatusCode, bodyString)
 	}
 	if err := validateResponse(resp); err != nil {
 		return resp, err
@@ -314,7 +314,7 @@ func validateResponse(r *http.Response) error {
 	}
 	bodyBytes, _ := ioutil.ReadAll(r.Body)
 	bodyString := string(bodyBytes)
-	return fmt.Errorf("Response code: %d, ResponeBody: %s", r.StatusCode, bodyString)
+	return fmt.Errorf("Response code: %d, ResponseBody: %s", r.StatusCode, bodyString)
 }
 
 // setDefaultRequestKwargs sets default request kwargs if not provided.

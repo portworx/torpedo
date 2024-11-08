@@ -28,9 +28,8 @@ metadata:
   name: wp-pv-claim-sharedv4
   labels:
     app: wordpress
-  annotations:
-    volume.beta.kubernetes.io/storage-class: portworx-sc-cms-repl3-sharedv4
 spec:
+  storageClassName: portworx-sc-cms-repl3-sharedv4
   accessModes:
     - ReadWriteMany
   resources:
@@ -41,9 +40,8 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: mysql-pvc-1-sharedv4
-  annotations:
-    volume.beta.kubernetes.io/storage-class: portworx-sc-db-repl3
 spec:
+  storageClassName: portworx-sc-db-repl3
   accessModes:
     - ReadWriteOnce
   resources:
