@@ -854,6 +854,8 @@ spec:
       value: "${BACKUP_DELETE_WAIT_TIME}"
     - name: VOLUME_COUNT_FOR_PARALLEL_DELETE
       value: "${VOLUME_COUNT_FOR_PARALLEL_DELETE}"
+    - name: SIMULATE_FB_FQDN
+      value: "${SIMULATE_FB_FQDN}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

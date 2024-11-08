@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -19,7 +18,6 @@ import (
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/openstorage/api"
-	v12 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -29,6 +27,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
+	v12 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	"github.com/pure-px/torpedo/drivers/node"
 	newFlashArray "github.com/pure-px/torpedo/drivers/pure/flasharray"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -49,6 +48,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strings"
 )
 
 const (
@@ -91,6 +91,152 @@ func deleteCloudsnapCredential() {
 		Sudo:            true,
 	})
 	Expect(err).NotTo(HaveOccurred(), "unexpected error deleting cloudsnap credential")
+}
+
+// getSimulatedFBFQDNMap returns a map of simulated FQDNs to their corresponding Flash Blade NFS endpoints
+func getSimulatedFBFQDNMap(fbEntries []pureutils.FlashBladeEntry) map[string]string {
+	fbFQDNMap := make(map[string]string)
+	for _, blade := range fbEntries {
+		fbFQDNMap[blade.NFSEndPoint] = "fqdn." + blade.MgmtEndPoint
+	}
+	log.Infof("Simulated Flash Blade FQDN Map: [%v]", fbFQDNMap)
+	return fbFQDNMap
+}
+
+// getPureVolName translates the volume name into its equivalent in the pure backend
+func getPureVolName(clusterUIDPrefix, volName string) string {
+	return "px_" + clusterUIDPrefix + "-" + volName
+}
+
+// createFBStorageClassWithMountOpts creates a Flash Blade storage class with the given mount options
+func createFBStorageClassWithMountOpts(scName string, mountOpts []string) error {
+	log.Infof("Deleting storage class [%s]", scName)
+	_ = storage.Instance().DeleteStorageClass(scName)
+	params := make(map[string]string)
+	params["backend"] = "pure_file"
+	params["pure_export_rules"] = "*(rw)"
+	reclaimPolicy := v1.PersistentVolumeReclaimDelete
+	volumeBindingMode := storageApi.VolumeBindingImmediate
+	storageClass := storageApi.StorageClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: scName,
+		},
+		Provisioner:       k8s.CsiProvisioner,
+		Parameters:        params,
+		ReclaimPolicy:     &reclaimPolicy,
+		MountOptions:      mountOpts,
+		VolumeBindingMode: &volumeBindingMode,
+	}
+	log.Infof("Creating storage class [%s] with mount options [%v]", scName, mountOpts)
+	_, err = storage.Instance().CreateStorageClass(&storageClass)
+	if err != nil {
+		return fmt.Errorf("failed to create storage class [%s]. Err: [%v]", scName, err)
+	}
+	return nil
+}
+
+// createPVC creates a PVC with the given storage class
+func createPVC(pvcName string, scName string, pvcSize string, nsName string) error {
+	nsList, err := core.Instance().ListNamespaces(nil)
+	if err != nil {
+		return fmt.Errorf("failed to list namespaces. Err: [%v]", err)
+	}
+	namespace := v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nsName,
+			Labels: map[string]string{
+				"creator": "torpedo",
+			},
+		},
+	}
+	for _, ns := range nsList.Items {
+		if ns.Name == nsName {
+			goto nsExists
+		}
+	}
+	log.Infof("Creating namespace [%s]", nsName)
+	_, err = core.Instance().CreateNamespace(&namespace)
+	if err != nil {
+		return fmt.Errorf("failed to create namespace [%s]. Err: [%v]", nsName, err)
+	}
+nsExists:
+	size, err := resource.ParseQuantity(pvcSize)
+	if err != nil {
+		return fmt.Errorf("failed to parse pvc size : %s", pvcSize)
+	}
+	pvcClaimSpec := k8s.MakePVC(size, nsName, pvcName, scName)
+	log.Infof("Creating persistent volume claim [%s] with storage class [%s]", pvcName, scName)
+	pvc, err := k8sCore.CreatePersistentVolumeClaim(pvcClaimSpec)
+	if err != nil {
+		return fmt.Errorf("failed to create pvc [%s] with storage class [%s]. Err: [%v]", pvcName, scName, err)
+	}
+	log.Infof("Validating pvc [%s] with storage class [%s]", pvcName, scName)
+	err = k8sCore.ValidatePersistentVolumeClaim(pvc, defaultCommandTimeout, defaultCommandRetry)
+	if err != nil {
+		return fmt.Errorf("failed to validate pvc [%s] with storage class [%s]. Err: [%v]", pvcName, scName, err)
+	}
+	return nil
+}
+
+// createVdBenchPodSpec creates a vdbench pod spec with the given namespace and pvcName
+func createVdBenchPodSpec(podName string, namespace string, pvcName string) v1.Pod {
+	fsGroupChangePolicy := v1.PodFSGroupChangePolicy("OnRootMismatch")
+	return v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: namespace,
+		},
+		Spec: v1.PodSpec{
+			SchedulerName: "stork",
+			SecurityContext: &v1.PodSecurityContext{
+				FSGroupChangePolicy: &fsGroupChangePolicy,
+			},
+			Containers: []v1.Container{
+				{
+					Name:            "vdbench",
+					Image:           "portworx/vdbench:torpedo",
+					ImagePullPolicy: "IfNotPresent",
+					Command:         []string{"./bench_runner.sh"},
+					Args:            []string{"Basic", "5400", podName, "output/" + podName},
+					VolumeMounts: []v1.VolumeMount{
+						{
+							Name:      "vdbench-storage",
+							MountPath: "/output",
+						},
+					},
+				},
+			},
+			Volumes: []v1.Volume{
+				{
+					Name: "vdbench-storage",
+					VolumeSource: v1.VolumeSource{
+						PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+							ClaimName: pvcName,
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// simulateFBFQDN simulates the Flash Blade FQDN by adding entries to /etc/hosts on the given nodes
+func simulateFBFQDN(fbEntries []pureutils.FlashBladeEntry, nodes []node.Node) error {
+	fbFQDNMap := getSimulatedFBFQDNMap(fbEntries)
+	for _, n := range nodes {
+		log.Infof("Adding entries to /etc/hosts of the node [%s]", n.Name)
+		for endpoint, fqdn := range fbFQDNMap {
+			cmd := fmt.Sprintf("grep -q '%s' /etc/hosts || echo '%s %s' | sudo tee -a /etc/hosts", fqdn, endpoint, fqdn)
+			_, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
+				Timeout:         defaultTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to add entry [%s %s] to /etc/hosts of the node [%s]. Err: %v", endpoint, fqdn, n.Name, err)
+			}
+		}
+	}
+	return nil
 }
 
 // This test performs basic tests making sure Pure direct access are running as expected
@@ -8590,5 +8736,178 @@ var _ = Describe("{SpaceReclaimed}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{FlashBladeVolumesMountedWithNFSv3Andv4}", func() {
+
+	var (
+		scList            []string
+		fqdnMountPathList []string
+		contexts          []*scheduler.Context
+		scPodMap          = make(map[string]v1.Pod)
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("FlashBladeVolumesMountedWithNFSv3Andv4", "Validate Flash Blade volumes mounted with NFS v3 and v4", nil, 0)
+	})
+
+	itLog := "Validates Flash Blade volumes mounted with NFS v3 and v4"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		stepLog = "Create a FB storage class with NFS v3 and v4 mount options"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			fbNFSMountOptsMap := make(map[string][]string)
+			fbNFSMountOptsMap["nfsv30"] = []string{"vers=3.0", "tcp"}
+			fbNFSMountOptsMap["nfsv41"] = []string{"vers=4.1", "tcp"}
+			for ver, mountOpts := range fbNFSMountOptsMap {
+				scName := "fb-" + ver + "-sc"
+				log.Infof("Creating storage class [%s] with mount options [%v]", scName, mountOpts)
+				err := createFBStorageClassWithMountOpts(scName, mountOpts)
+				log.FailOnError(err, "failed to create storage class [%s] with mount options [%v]", ver, mountOpts)
+				scList = append(scList, scName)
+			}
+		})
+
+		stepLog = "Create a FB persistent volume claim for each storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, scName := range scList {
+				pvcName := scName + "-pvc"
+				pvcSize := "200Gi"
+				namespace := fmt.Sprintf("%s-ns-%v", pvcName, time.Now().Unix())
+				log.Infof("Creating pvc [%s] with storage class [%s] in namespace [%s]", pvcName, scName, namespace)
+				err := createPVC(pvcName, scName, pvcSize, namespace)
+				log.FailOnError(err, "failed to create pvc [%s] with storage class [%s]", pvcName, scName)
+				scPodMap[scName] = createVdBenchPodSpec(pvcName+"-pod", namespace, pvcName)
+			}
+		})
+
+		if os.Getenv("SIMULATE_FB_FQDN") == "true" {
+			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+			pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+			log.FailOnError(err, "failed to get secret [%s] in namespace [%s]", PureSecretName, volDriverNamespace)
+			err = simulateFBFQDN(pxPureSecret.Blades, node.GetWorkerNodes())
+			log.FailOnError(err, "failed to simulate FB FQDN on all worker nodes")
+			fbFQDNMap := getSimulatedFBFQDNMap(pxPureSecret.Blades)
+
+			stepLog = "Mount volumes on all nodes"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				cluster, err := Inst().V.InspectCurrentCluster()
+				log.FailOnError(err, "failed to inspect current cluster")
+				log.Infof("Current cluster [%s] UID: [%s]", cluster.Cluster.Name, cluster.Cluster.Id)
+				clusterUIDPrefix := strings.Split(cluster.Cluster.Id, "-")[0]
+				volList, err := Inst().V.ListAllVolumes()
+				log.FailOnError(err, "failed to list all volumes")
+				for scName, pod := range scPodMap {
+					pvcName := pod.Spec.Volumes[0].VolumeSource.PersistentVolumeClaim.ClaimName
+					log.Infof("Pod Name [%s] PVC Name [%s] Namespace [%s]", pod.Name, pvcName, pod.Namespace)
+					for _, volName := range volList {
+						vol, err := Inst().V.InspectVolume(volName)
+						log.FailOnError(err, "failed to inspect volume [%s]", volName)
+						volPVCName := vol.Spec.VolumeLabels["pvc"]
+						volNamespace := vol.Spec.VolumeLabels["namespace"]
+						if volPVCName == pvcName && volNamespace == pod.Namespace {
+							mountCmd := ""
+							mountPath := fmt.Sprintf("/tmp/%s/%s", pod.Namespace, pvcName)
+							fbFQDN := fbFQDNMap[vol.Spec.ProxySpec.Endpoint]
+							fsPath := fmt.Sprintf("%s:%s", fbFQDN, getPureVolName(clusterUIDPrefix, vol.Locator.Name))
+							if strings.Contains(scName, "v4") {
+								mountCmd = fmt.Sprintf("mkdir -p %s && mount -t nfs4 %s %s", mountPath, fsPath, mountPath)
+							} else {
+								mountCmd = fmt.Sprintf("mkdir -p %s && mount -t nfs -o nfsvers=3 %s %s", mountPath, fsPath, mountPath)
+							}
+							for _, n := range node.GetWorkerNodes() {
+								log.Infof("Mounting FB volume [%s] on node [%s]", fsPath, n.Name)
+								_, err := Inst().N.RunCommand(n, mountCmd, node.ConnectionOpts{
+									Timeout:         defaultTimeout,
+									TimeBeforeRetry: defaultRetryInterval,
+								})
+								log.FailOnError(err, "failed to mount FB volume [%s] on node [%s]", fsPath, n)
+							}
+							fqdnMountPathList = append(fqdnMountPathList, mountPath)
+						}
+					}
+				}
+			})
+		}
+
+		stepLog = "Create a pod for each FB persistent volume claim"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for podName, podSpec := range scPodMap {
+				log.Infof("Creating pod [%s] in namespace [%s]", podName, podSpec.Namespace)
+				_, err := k8sCore.CreatePod(&podSpec)
+				log.FailOnError(err, "failed to create pod [%s] in namespace [%s]. Err: [%v]", podName, podSpec.Namespace, err)
+			}
+		})
+
+		stepLog = "Generate contexts"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for scName, pod := range scPodMap {
+				ctx := &scheduler.Context{
+					UID: Inst().InstanceID,
+					App: &spec.AppSpec{
+						Key:       "vdbench-fqdn-nfs",
+						NameSpace: pod.Namespace,
+						SpecList:  make([]interface{}, 0),
+						Enabled:   false,
+					},
+				}
+				sc, err := storage.Instance().GetStorageClass(scName)
+				log.FailOnError(err, "failed to get storage class [%s]", scName)
+				ctx.App.SpecList = append(ctx.App.SpecList, sc)
+				podList, err := core.Instance().GetPods(pod.Namespace, nil)
+				log.FailOnError(err, "failed to get pods in namespace [%s]", pod.Namespace)
+				for _, pod := range podList.Items {
+					ctx.App.SpecList = append(ctx.App.SpecList, &pod)
+				}
+				pvcList, err := core.Instance().GetPersistentVolumeClaims(pod.Namespace, nil)
+				log.FailOnError(err, "failed to get pvcs in namespace [%s]", pod.Namespace)
+				for _, pvc := range pvcList.Items {
+					ctx.App.SpecList = append(ctx.App.SpecList, &pvc)
+				}
+				contexts = append(contexts, ctx)
+			}
+		})
+
+		stepLog = "Validate applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
+
+		if os.Getenv("SIMULATE_FB_FQDN") == "true" {
+			stepLog = "Unmount and destroy applications"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				umountCmd := fmt.Sprintf("umount %s", strings.Join(fqdnMountPathList, " "))
+				for _, n := range node.GetWorkerNodes() {
+					log.Infof("Unmounting all FB FQDN mounts [%v] on the node [%v]", fqdnMountPathList, n.Name)
+					_, err := Inst().N.RunCommand(n, umountCmd, node.ConnectionOpts{
+						Timeout:         defaultTimeout,
+						TimeBeforeRetry: defaultRetryInterval,
+					})
+					log.FailOnError(err, "failed to unmount all FB FQDN mounts [%v] on the node [%v]", fqdnMountPathList, n.Name)
+				}
+			})
+		}
+
+		stepLog = "Destroy applications"
+		Step(stepLog, func() {
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = false
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			DestroyApps(contexts, opts)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 })
