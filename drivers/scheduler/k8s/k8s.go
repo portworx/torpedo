@@ -37,7 +37,6 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	osapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/units"
-	operatorcorev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	admissionregistration "github.com/portworx/sched-ops/k8s/admissionregistration"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -60,6 +59,7 @@ import (
 	tektoncd "github.com/portworx/sched-ops/k8s/tektoncd"
 	"github.com/portworx/sched-ops/task"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	operatorcorev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	"github.com/pure-px/torpedo/drivers/api"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -4323,6 +4323,18 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 	return vols, nil
 }
 
+// getPVCStorageClassName gets the StorageClass name of the given PVC
+func getPVCStorageClassName(pvc *corev1.PersistentVolumeClaim) string {
+	if pvc.Spec.StorageClassName != nil {
+		return *pvc.Spec.StorageClassName
+	}
+	if scName, ok := pvc.Annotations["volume.beta.kubernetes.io/storage-class"]; ok && scName != "" {
+		return scName
+	}
+	log.Warnf("The PVC [%s] in namespace [%s] does not have a storage class name", pvc.Name, pvc.Namespace)
+	return ""
+}
+
 func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeClaim) ([]*volume.Volume, error) {
 	shouldAdd, err := k.filterPureVolumesIfEnabled(pvc)
 	if err != nil {
@@ -4376,16 +4388,16 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 	pvcSize, _ := pvcSizeObj.AsInt64()
 	isRaw := pvc.Spec.VolumeMode != nil && *pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock
 	vol := &volume.Volume{
-		ID:           string(pvc.Spec.VolumeName),
-		Name:         pvc.Name,
-		VolumeName:   pvc.Spec.VolumeName,
-		Namespace:    pvc.Namespace,
-		Shared:       k.isPVCShared(pvc),
-		Annotations:  pvc.Annotations,
-		Labels:       labels,
-		Size:         uint64(pvcSize),
-		Raw:          isRaw,
-		StorageClass: *pvc.Spec.StorageClassName,
+		ID:               pvc.Spec.VolumeName,
+		Name:             pvc.Name,
+		VolumeName:       pvc.Spec.VolumeName,
+		Namespace:        pvc.Namespace,
+		Shared:           k.isPVCShared(pvc),
+		Annotations:      pvc.Annotations,
+		Labels:           labels,
+		Size:             uint64(pvcSize),
+		Raw:              isRaw,
+		StorageClassName: getPVCStorageClassName(pvc),
 	}
 	log.Infof("Adding vol [%s/%s] to volume list", vol.ID, vol.Name)
 	return append(vols, vol), nil

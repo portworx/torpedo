@@ -1617,7 +1617,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshot}", func() {
 					log.Infof("Volume snapshot found for volume %s", vol.Name)
 					quantity, err := resource.ParseQuantity(strconv.FormatUint(vol.Size, 10))
 					log.FailOnError(err, "failed to parse size")
-					restoredPVCSpec, err := k8s.GeneratePVCRestoreSpec(quantity, vol.Namespace, vol.Name+"-restore", snapShot.Name, vol.StorageClass)
+					restoredPVCSpec, err := k8s.GeneratePVCRestoreSpec(quantity, vol.Namespace, vol.Name+"-restore", snapShot.Name, vol.StorageClassName)
 					log.FailOnError(err, "failed to build restored PVC Spec")
 					log.Infof("Generating PVC from snapshot source snapshot %s, pvc name %s", snapShot.Name, restoredPVCSpec.Name)
 					_, err = k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
