@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portworx/sched-ops/k8s/autopilot"
+
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/pkg/sched"
 	. "github.com/onsi/ginkgo/v2"
@@ -2271,7 +2273,6 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 		stepLog = "Wait for Autopilot pool expansion, then crash a KVDB and Storage Node"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			//Crash one kvdb node and one storage node where the application is provisioned
 			log.InfoD("Started listening for any autopilot event")
 			err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.AnyToTriggeredEvent})
 			log.FailOnError(err, "Failed to listen for any autopilot events")
@@ -2377,6 +2378,131 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 	})
 	JustAfterEach(func() {
 		EndTorpedoTest()
+	})
+})
+var _ = Describe("{NodeInMaintenanceModeDuringPoolExpandWithAutopilotRule}", Label("staging", "p1", "positive", "autopilot", "PoolExpand"), func() {
+	/*
+		    Ticket ID: https://purestorage.atlassian.net/browse/HAZEL-90
+			1.Put node in maintenance mode
+			2.Add Label for that node
+			3.Apply autopilotrule(the autopilot rule adds a disk to the storage pool when its total size exceeds the current size plus one GiB,
+			maintaining a minimum threshold of 10 GiB, based on the specified pool label.)
+			4.Check the event is normal
+			5.Exit in maintence mode
+			6.Verify the event is triggred
+
+	*/
+	var testrailID = 0
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sNodeInMaintenanceModeDuringPoolExpandWithAutopilotRule}", testSuiteName), "Put node in maintenance mode and apply autopilot rule", tags, testrailID)
+	})
+	It("Put node in maintenance mode, apply autopilot rule, and verify the error", func() {
+		poolLabel := map[string]string{"autopilot": "adddisk"}
+		log.InfoD("Created autopilot rule to expand disk using add drive")
+		storageNodes := node.GetStorageNodes()
+		maintenanceNode := storageNodes[0]
+		var apRuleName string
+		apRules := []apapi.AutopilotRule{
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(maintenanceNode)/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabel),
+		}
+		provisionStatus, err := GetClusterProvisionStatusOnSpecificNode(maintenanceNode)
+		log.FailOnError(err, "Failed to get cluster info for node:%v", maintenanceNode)
+		var sizeBeforePoolExpand float64 = 0
+		for _, pstatus := range provisionStatus {
+			sizeBeforePoolExpand += pstatus.TotalSize
+		}
+		log.Infof("Total pool size before expansion for node %v: %v GiB", maintenanceNode, sizeBeforePoolExpand)
+
+		Step("Enter maintenance mode", func() {
+			log.InfoD("Put node in maintenance* mode [%s]", maintenanceNode.Name)
+			err := Inst().V.EnterMaintenance(maintenanceNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to enter node %s into maintenance mode", maintenanceNode.Name))
+		})
+		defer func() {
+			Inst().V.ExitMaintenance(maintenanceNode)
+		}()
+		Step("Add pool label to storage node during maintenance mode", func() {
+			log.Infof("Attempting to add labels on storage node %v with pool label %v", maintenanceNode, poolLabel)
+			err := AddLabelsOnNode(maintenanceNode, poolLabel)
+			dash.VerifyFatal(err == nil, true, "Failed to add labels on node")
+		})
+		Step("apply autopilot rules for storage pools", func() {
+			log.InfoD("Starting to apply autopilot rules for storage pools %v:", apRules)
+			for _, apRule := range apRules {
+				_, err := Inst().S.CreateAutopilotRule(apRule)
+				dash.VerifyFatal(err == nil, true, "Failed to create autopilot rule: %v")
+				log.InfoD("Successfully applied autopilot rule %v", apRule.Name)
+				apRuleName = apRule.Name
+				log.InfoD("Wait for one minute autopilot rule will enable")
+				time.Sleep(time.Minute * 1)
+
+			}
+			log.InfoD("Completed applying all autopilot rules for storage pools")
+		})
+		Step("Check the event is normal", func() {
+			namespace, err := Inst().S.GetAutopilotNamespace()
+			log.FailOnError(err, "Unable to get autopilot namespace: %v", namespace)
+			listAutopilotRuleObjects, err := autopilot.Instance().ListAutopilotRuleObjects(namespace)
+			log.FailOnError(err, "Unable to get autopilot namespace: %v", namespace)
+			log.Infof("Autopilot rule objects %v", listAutopilotRuleObjects)
+			if len(listAutopilotRuleObjects.Items) == 0 {
+				log.InfoD("The list of autopilot rule objects is empty, please make sure that you have an appropriate autopilot rule")
+			}
+			eventTriggered := false
+			for _, event := range listAutopilotRuleObjects.Items {
+				ruleName := event.GetObjectMeta().GetName()
+				log.InfoD("Checking rule: %v", ruleName)
+				for _, status := range event.Status.Items {
+					log.Infof("Event message: %v", status.Message)
+					if strings.Contains(status.Message, "transition from Initializing => Triggered") && strings.Contains(status.Message, apRuleName) {
+						eventTriggered = true
+						log.Warnf("Undesired state detected for rule: %v", ruleName)
+						break
+					}
+					if strings.Contains(status.Message, "transition from Initializing => Normal") && strings.Contains(status.Message, apRuleName) {
+						log.Infof("Successfully triggered event for rule: %v", ruleName)
+					}
+				}
+				if eventTriggered {
+					break
+				}
+			}
+			dash.VerifyFatal(!eventTriggered, true, "validate Autopilot condition is not triggered")
+
+		})
+		Step("Exit the maintenance mode", func() {
+			err := Inst().V.ExitMaintenance(maintenanceNode)
+			log.FailOnError(err, "Failed to exit maintenance mode for node %v: %v", maintenanceNode, err)
+			log.Infof("Successfully exited maintenance mode for node %v", maintenanceNode)
+		})
+
+		Step("wait for autopilot to trigger an action after exit in maitance mode", func() {
+			log.InfoD("Wait for the autopilot event indicating the resize has been triggered")
+			err := aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.AnyToTriggeredEvent})
+			log.FailOnError(err, "Failed to listen for any autopilot events")
+			err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsInProgressToActiveActionsTaken})
+			log.FailOnError(err, "Failed to listen for active-actions-progress to active-actions-taken event")
+		})
+		provisionStatus, err = GetClusterProvisionStatusOnSpecificNode(maintenanceNode)
+		log.FailOnError(err, "Failed to get cluster info for node:%v", maintenanceNode)
+		var sizeAfterPoolExpand float64 = 0
+		for _, pstatus := range provisionStatus {
+			sizeAfterPoolExpand += pstatus.TotalSize
+		}
+		log.Infof("Total pool size after expansion for node %v: %v GiB", maintenanceNode, sizeAfterPoolExpand)
+		dash.VerifyFatal(sizeAfterPoolExpand > sizeBeforePoolExpand, true, "Pool expand successfully on manitance node")
+		Step("Destroy autopilot rules", func() {
+			for _, apRule := range apRules {
+				Inst().S.DeleteAutopilotRule(apRule.Name)
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
