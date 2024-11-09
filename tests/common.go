@@ -1239,6 +1239,10 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 		})
 
 		Step(fmt.Sprintf("validate %s px pool expansion when pure volumes attached", ctx.App.Key), func() {
+			if len(node.GetStorageNodes()) == 0 {
+				log.Infof("Skipping validation as there are no storage nodes in the context")
+				return
+			}
 			if !ctx.SkipVolumeValidation {
 				ValidatePoolExpansionWithPureVolumes(ctx, errChan...)
 			}
@@ -1354,6 +1358,10 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 		})
 
 		Step(fmt.Sprintf("validate %s px pool expansion when pure volumes attached", ctx.App.Key), func() {
+			if len(node.GetStorageNodes()) == 0 {
+				log.Infof("Skipping validation as there are no storage nodes in the context")
+				return
+			}
 			if !ctx.SkipVolumeValidation {
 				ValidatePoolExpansionWithPureVolumes(ctx, errChan...)
 			}

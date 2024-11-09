@@ -12,6 +12,9 @@ parameters:
   max_iops: "30000"
   max_bandwidth: "10G"
   csi.storage.k8s.io/fstype: ext4
+  { { if .PureFaPodName } }
+  pure_fa_pod_name: "{{ .PureFaPodName }}"
+  { { end } }
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 
