@@ -2768,8 +2768,8 @@ var _ = Describe("{DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel}", La
 					nsMapping[namespace] = fmt.Sprintf("%s-soft-deleted", namespace)
 				}
 				restoreName := fmt.Sprintf("%s-%s-%s", backup, "restored", RandomString(5))
-				destinationClusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+				destinationClusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 				err = CreateRestore(restoreName, backup, nsMapping, DestinationClusterName, destinationClusterUid, BackupOrgID, ctx, storageClassMapping)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
 			}
