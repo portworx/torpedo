@@ -675,6 +675,9 @@ const (
 	SVMotionMultipleNodes    = "svmotionMultipleNodes"
 	PowerOffStoragelessNodes = "powerOffStoragelessNodes"
 	PowerOffStorageNodes     = "powerOffStorageNodes"
+
+	// Live migration of Kubevirt VMs
+	KubevirtVMLiveMigration = "kubevirtVMLiveMigration"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -13927,5 +13930,38 @@ func TriggerPoolExpansionResizeDisk(contexts *[]*scheduler.Context, recordChan *
 	if !isSSIERun() {
 		validateContexts(event, contexts)
 	}
+	updateMetrics(*event)
+}
+
+func TriggerKubevirtVMLiveMigration(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(KubevirtVMLiveMigration)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: KubevirtVMLiveMigration,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+
+	stepLog := "Live migration of Kubevirt VMs"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		for _, appCtx := range *contexts {
+			log.Info("about to start vm live migration")
+			err := StartAndWaitForVMIMigration(appCtx, ctxt.TODO())
+			if err != nil {
+				log.Errorf("failed to migrate VM, error : [%v]", err)
+				UpdateOutcome(event, err)
+			}
+		}
+	})
 	updateMetrics(*event)
 }

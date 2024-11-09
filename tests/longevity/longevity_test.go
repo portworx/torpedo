@@ -169,6 +169,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			CoreChecker:             TriggerCoreChecker,
 			PoolExpansionAuto:       TriggerPoolExpansionAuto,
 			PoolExpansionResizeDisk: TriggerPoolExpansionResizeDisk,
+			KubevirtVMLiveMigration: TriggerKubevirtVMLiveMigration,
 		}
 		// disruptiveTriggerFunctions are mapped to their respective handlers and are invoked by a separate testTrigger
 		disruptiveTriggerFunctions = map[string]TriggerFunction{

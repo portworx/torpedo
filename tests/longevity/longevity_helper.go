@@ -344,6 +344,7 @@ func populateTriggerFuncs() {
 		PoolExpansionResizeDisk:           TriggerPoolExpansionResizeDisk,
 		PowerOffStoragelessNodes:          TriggerPowerOffStoragelessNodes,
 		PowerOffStorageNodes:              TriggerPowerOffStorageNodes,
+		KubevirtVMLiveMigration:           TriggerKubevirtVMLiveMigration,
 	}
 
 	//Creating a distinct trigger to make sure email triggers at regular intervals
@@ -805,6 +806,7 @@ func populateIntervals() {
 	triggerInterval[SVMotionMultipleNodes] = make(map[int]time.Duration)
 	triggerInterval[PowerOffStoragelessNodes] = make(map[int]time.Duration)
 	triggerInterval[PowerOffStorageNodes] = make(map[int]time.Duration)
+	triggerInterval[KubevirtVMLiveMigration] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -1969,6 +1971,17 @@ func populateIntervals() {
 	triggerInterval[PowerOffStoragelessNodes][2] = 24 * baseInterval
 	triggerInterval[PowerOffStoragelessNodes][1] = 27 * baseInterval
 
+	triggerInterval[KubevirtVMLiveMigration][10] = 1 * baseInterval
+	triggerInterval[KubevirtVMLiveMigration][9] = 3 * baseInterval
+	triggerInterval[KubevirtVMLiveMigration][8] = 6 * baseInterval
+	triggerInterval[KubevirtVMLiveMigration][7] = 9 * baseInterval
+	triggerInterval[KubevirtVMLiveMigration][6] = 12 * baseInterval
+	triggerInterval[KubevirtVMLiveMigration][5] = 15 * baseInterval
+	triggerInterval[KubevirtVMLiveMigration][4] = 18 * baseInterval
+	triggerInterval[KubevirtVMLiveMigration][3] = 21 * baseInterval
+	triggerInterval[KubevirtVMLiveMigration][2] = 24 * baseInterval
+	triggerInterval[KubevirtVMLiveMigration][1] = 27 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -2071,6 +2084,7 @@ func populateIntervals() {
 	triggerInterval[DefragScheduleCRUDOperations][0] = 0
 	triggerInterval[PowerOffStorageNodes][0] = 0
 	triggerInterval[PowerOffStoragelessNodes][0] = 0
+	triggerInterval[KubevirtVMLiveMigration][0] = 0
 
 }
 
