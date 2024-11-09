@@ -11,6 +11,7 @@ parameters:
   csi.storage.k8s.io/fstype: "xfs" {{ end }}
   {{ if .CreateOptions }}
   createoptions:  "{{ .CreateOptions }}"
+  {{ end }}
   {{ if .PureFaPodName }}
   pure_fa_pod_name: "{{ .PureFaPodName }}"
   {{ end }}
@@ -28,8 +29,9 @@ metadata:
 parameters:
   backend: "pure_block"
   csi.storage.k8s.io/fstype: ext4
-  { { if .CreateOptions } }
+  {{ if .CreateOptions }}
   createoptions: "{{ .CreateOptions }}"
+  {{ end }}
   {{ if .PureFaPodName }}
   pure_fa_pod_name: "{{ .PureFaPodName }}"
   {{ end }}

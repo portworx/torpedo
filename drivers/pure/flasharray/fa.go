@@ -133,13 +133,12 @@ func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 	defer resp.Body.Close()
 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
 	bodyString := string(bodyBytes)
-	// This is for Deletepod where we are returning nil if we are retention-lock  which is expected error (This is Because SafeMode enabled on Array)
+	// This is for deleted pod where we are returning nil if we are retention-lock which is expected error (This is Because SafeMode enabled on Array)
 	if strings.Contains(bodyString, "retention-locked") && strings.Contains(bodyString, "Cannot eradicate pod") {
 		return resp, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		log.Errorf("Response body: %s", bodyString)
-		return nil, fmt.Errorf("Error in getting the status, response status is [%d], response body: %s", resp.StatusCode, bodyString)
+		return nil, fmt.Errorf("error in getting the status, response status [%d], response body [%s]", resp.StatusCode, bodyString)
 	}
 	if err := validateResponse(resp); err != nil {
 		return resp, err

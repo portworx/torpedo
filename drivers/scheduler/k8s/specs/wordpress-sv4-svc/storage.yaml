@@ -27,7 +27,6 @@ metadata:
   name: wp-pv-claim-sharedv4
   labels:
     app: wordpress
-
 spec:
   storageClassName: portworx-sc-cms-repl3-sharedv4-svc
   accessModes:

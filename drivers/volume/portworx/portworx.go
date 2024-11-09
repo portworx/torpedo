@@ -31,15 +31,15 @@ import (
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	"github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
-	pxapi "github.com/pure-px/px-operator/api/px"
-	v1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
-	optest "github.com/pure-px/px-operator/pkg/util/test"
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
+	pxapi "github.com/pure-px/px-operator/api/px"
+	v1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
+	optest "github.com/pure-px/px-operator/pkg/util/test"
 	driver_api "github.com/pure-px/torpedo/drivers/api"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -2431,7 +2431,12 @@ func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[st
 		return nil, false, nil
 	}
 
-	_, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
+	gctx := context.Background()
+	gctx = context.WithValue(gctx, torpedotask.TimeBeforeRetryKey, inspectVolumeRetryInterval)
+	gctx = context.WithValue(gctx, torpedotask.TimeoutKey, inspectVolumeTimeout)
+	gctx = context.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+
+	_, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx)
 	if err != nil {
 		log.InfoD("Volume inspect returned err: [%v]", err)
 		return &ErrFailedToInspectVolume{
