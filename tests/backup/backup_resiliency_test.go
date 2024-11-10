@@ -9,23 +9,28 @@ import (
 	"sync"
 	"time"
 
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/backup/portworx"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/node/ssh"
 	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/volume/portworx/schedops"
+	"github.com/pure-px/torpedo/pkg/aututils"
 	"github.com/pure-px/torpedo/pkg/log"
 	. "github.com/pure-px/torpedo/tests"
 	"golang.org/x/sync/errgroup"
 	appsV1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -2902,6 +2907,339 @@ var _ = Describe("{RebootNodesDuringLargeResourceScheduledBackup}", func() {
 			storkControllerCM, err = core.Instance().UpdateConfigMap(storkControllerCM)
 			log.FailOnError(err, fmt.Sprintf("Failed to update %s configmap", StorkControllerConfigMap))
 		}()
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed applications")
+		DestroyApps(scheduledAppContexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// AutopilotEnabledBackupRestore verifies backup and restore operations when autopilot is enabled
+var _ = Describe("{AutopilotEnabledBackupRestore}", func() {
+	/*
+		Steps:
+		1. Schedule applications with data injection.
+		2. Create a backup location and cloud setting.
+		3. Register source and destination clusters for backup and restore.
+		4. Take backup of the applications before autopilot rule has executed.
+		5. Create Autopilot rule for volume resize.
+		6. Fill data to the mount paths so the autopilot rule is executed.
+		7. Take backup after autopilot rule has executed.
+		8. Fill date to the mount paths so the autopilot rule is triggered.
+		9. Take backup while the autopilot rule is executing.
+		10.Restore all the three backups.
+	*/
+
+	var (
+		err                                error
+		ctx                                context.Context
+		scheduledAppContexts               []*scheduler.Context
+		apRule                             apapi.AutopilotRule
+		usagePercentage                    int
+		scalePercentage                    int
+		maxSize                            string
+		namespace                          string
+		providers                          []string
+		aroNames                           map[string]bool
+		cloudCredName                      string
+		cloudCredUID                       string
+		backupNameBeforeAPRuleHasExecuted  string
+		backupNameAfterAPRuleHasExecuted   string
+		backupNameWhileAPRuleIsExecuting   string
+		restoreNameBeforeAPRuleHasExecuted string
+		restoreNameAfterAPRuleHasExecuted  string
+		restoreNameWhileAPRuleIsExecuting  string
+		backupLocationName                 string
+		backupLocationUID                  string
+		sourceClusterUid                   string
+		destClusterUid                     string
+		testDir                            string
+		backupLocationMap                  map[string]string
+		wg                                 sync.WaitGroup
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("AutopilotEnabledBackupRestore", "Backup and restore when autopilot is enabled", nil, 93697, Dchothani, Q3FY25)
+		backupLocationMap = make(map[string]string)
+		providers = GetBackupProviders()
+		aroNames = make(map[string]bool)
+		testDir = "testdata"
+		namespace = fmt.Sprintf("ns-%d-%s", 93697, RandomString(6))
+		usagePercentage = 50
+		scalePercentage = 100
+		maxSize = "400Gi"
+		apRule = aututils.PVCRuleByUsageCapacity(usagePercentage, scalePercentage, maxSize)
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		_, err = Inst().S.CreateAutopilotRule(apRule)
+		dash.VerifyFatal(err, nil, "Creating autopilot rule for volume resize")
+		log.InfoD("Scheduling applications")
+		taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, 93697)
+		labels := map[string]string{
+			"autopilot": apRule.Name,
+		}
+		apRule.Spec.ActionsCoolDownPeriod = int64(60)
+		appContexts, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+			AppKeys:            Inst().AppList,
+			StorageProvisioner: Inst().Provisioner,
+			AutopilotRule:      apRule,
+			Namespace:          namespace,
+			Labels:             labels,
+		})
+		dash.VerifyFatal(err, nil, "Scheduling applications")
+		for _, appCtx := range appContexts {
+			appCtx.ReadinessTimeout = AppReadinessTimeout
+			scheduledAppContexts = append(scheduledAppContexts, appCtx)
+		}
+	})
+
+	It("Backup and restore when autopilot is enabled", func() {
+
+		Step("Validating appplications", func() {
+			log.InfoD("validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				backupLocationName = fmt.Sprintf("%s-%v", getGlobalBucketName(provider), RandomString(6))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		Step("Registering clusters for backup", func() {
+			log.InfoD("Registering clusters for backup")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+		})
+
+		Step("Create backup before autopilot rule has executed", func() {
+			log.InfoD("Create backup before autopilot rule has executed")
+			backupNameBeforeAPRuleHasExecuted = fmt.Sprintf("%s-before-ap-%v", BackupNamePrefix, time.Now().Unix())
+			err = CreateBackupWithValidation(ctx, backupNameBeforeAPRuleHasExecuted, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, nil, BackupOrgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] with namespace [%s] before autopilot rule has executed", backupNameBeforeAPRuleHasExecuted, namespace))
+		})
+
+		Step("Filling data into the pod for autopilot rule to execute", func() {
+			log.InfoD("Filling data into the pod for autopilot rule to execute")
+			for _, ctx := range scheduledAppContexts {
+				vols, err := Inst().S.GetVolumeParameters(ctx)
+				log.FailOnError(err, "Getting volumes from ctx")
+				for vol := range vols {
+					aroNames[vol] = true
+				}
+			}
+			wg.Add(1)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				pods, err := core.Instance().GetPods(namespace, nil)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("getting pods from namespace [%s] ", namespace))
+				for _, pod := range pods.Items {
+					containerPaths := schedops.GetContainerPVCMountMap(pod)
+					for containerName, mountPaths := range containerPaths {
+						for _, mountPath := range mountPaths {
+							dir := fmt.Sprintf("%s/%s", mountPath, testDir)
+							cmd := fmt.Sprintf("mkdir %s; dd if=/dev/urandom of=%s/data bs=1M count=1500", dir, dir)
+							cmdArgs := []string{"/bin/sh", "-c", cmd}
+							_, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Writing data to the pod %s on path %s", pod.Name, dir))
+						}
+					}
+				}
+			}()
+		})
+
+		Step("Validating the autopilot rule has triggered", func() {
+			log.InfoD("Validating the autopilot rule has triggered")
+			watcherCtx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			defer cancel()
+			resultChan, errChan, err := aututils.WatchAutoPilotRuleObjects(watcherCtx, namespace)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("watching autopilot events for namespace [%s] ", namespace))
+			wg.Add(1)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				aroEventsReceived := map[string]map[string]bool{}
+				for {
+					select {
+					case aro, open := <-resultChan:
+						if !open {
+							return
+						}
+						if v, ok := aroNames[aro.Name]; ok && v {
+							for _, s := range aro.Status.Items {
+								if _, ok := aroEventsReceived[aro.Name]; !ok {
+									aroEventsReceived[aro.Name] = make(map[string]bool)
+								}
+								if !aroEventsReceived[aro.Name][aututils.AnyToTriggeredEvent] && strings.Contains(s.Message, aututils.AnyToTriggeredEvent) {
+									aroEventsReceived[aro.Name][aututils.AnyToTriggeredEvent] = true
+									log.InfoD("autopilot event: resize has been triggered for [%s]", aro.Name)
+								} else if !aroEventsReceived[aro.Name][aututils.ActiveActionsPendingToActiveActionsInProgress] && strings.Contains(s.Message, aututils.ActiveActionsPendingToActiveActionsInProgress) {
+									aroEventsReceived[aro.Name][aututils.ActiveActionsPendingToActiveActionsInProgress] = true
+									log.InfoD("autopilot event: resize action is in progress for [%s]", aro.Name)
+								} else if !aroEventsReceived[aro.Name][aututils.ActiveActionsInProgressToActiveActionsTaken] && strings.Contains(s.Message, aututils.ActiveActionsInProgressToActiveActionsTaken) {
+									aroEventsReceived[aro.Name][aututils.ActiveActionsInProgressToActiveActionsTaken] = true
+									log.InfoD("autopilot event: resize action is taken for [%s]", aro.Name)
+								} else if !aroEventsReceived[aro.Name][aututils.ActiveActionTakenToNormalEvent] && strings.Contains(s.Message, aututils.ActiveActionTakenToNormalEvent) {
+									aroEventsReceived[aro.Name][aututils.ActiveActionTakenToNormalEvent] = true
+									log.InfoD("autopilot event: autopilot rule back to normal for [%s]", aro.Name)
+									return
+								}
+							}
+						}
+					case err = <-errChan:
+						log.Error(err)
+						return
+					}
+				}
+			}()
+			wg.Wait()
+			dash.VerifyFatal(err, nil, "Autopilot rule executed successfully")
+		})
+
+		Step("Create backup after autopilot rule has executed", func() {
+			log.InfoD("Create backup after autopilot rule has executed")
+			backupNameAfterAPRuleHasExecuted = fmt.Sprintf("%s-after-ap-%v", BackupNamePrefix, time.Now().Unix())
+			err = CreateBackupWithValidation(ctx, backupNameAfterAPRuleHasExecuted, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, nil, BackupOrgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] with namespace [%s] after autopilot rule has executed", backupNameAfterAPRuleHasExecuted, namespace))
+		})
+
+		Step("Filling data into the pod for autopilot rule to execute", func() {
+			log.InfoD("Filling data into the pod for autopilot rule to execute")
+			wg.Add(1)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				pods, err := core.Instance().GetPods(namespace, nil)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("getting pods from namespace [%s] ", namespace))
+				for _, pod := range pods.Items {
+					containerPaths := schedops.GetContainerPVCMountMap(pod)
+					for containerName, mountPaths := range containerPaths {
+						for _, mountPath := range mountPaths {
+							dir := fmt.Sprintf("%s/%s", mountPath, testDir)
+							cmd := fmt.Sprintf("mkdir %s; dd if=/dev/urandom of=%s/data bs=1M count=2072", dir, dir)
+							cmdArgs := []string{"/bin/sh", "-c", cmd}
+							_, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Writing data to the pod %s on path %s", pod.Name, dir))
+						}
+					}
+				}
+			}()
+		})
+
+		Step("Create backup while the autopilot rule is executing", func() {
+			log.InfoD("Create backup while the autopilot rule is executing")
+			watcherCtx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			defer cancel()
+			resultChan, errChan, err := aututils.WatchAutoPilotRuleObjects(watcherCtx, namespace)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("watching autopilot events for namespace [%s] ", namespace))
+			wg.Add(1)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				for {
+					select {
+					case aro, open := <-resultChan:
+						if !open {
+							return
+						}
+						if v, ok := aroNames[aro.Name]; ok && v {
+							for _, s := range aro.Status.Items {
+								if strings.Contains(s.Message, aututils.AnyToTriggeredEvent) {
+									log.InfoD("autopilot event: resize has been triggered for [%s]", aro.Name)
+									return
+								}
+							}
+						}
+					case err = <-errChan:
+						log.Error(err)
+						return
+					}
+				}
+			}()
+			wg.Wait()
+			backupNameWhileAPRuleIsExecuting = fmt.Sprintf("%s-during-ap-%v", BackupNamePrefix, time.Now().Unix())
+			err = CreateBackupWithValidation(ctx, backupNameWhileAPRuleIsExecuting, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, nil, BackupOrgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] with namespace [%s] while the autopilot rule is executing", backupNameWhileAPRuleIsExecuting, namespace))
+		})
+
+		Step("Create storage class on destination cluster for restore", func() {
+			log.InfoD("Create storage class on destination cluster for restore")
+			pvcs, err := core.Instance().GetPersistentVolumeClaims(namespace, make(map[string]string))
+			log.FailOnError(err, "Getting PVCs on source cluster")
+			var storageClasses []*storagev1.StorageClass
+			for _, singlePvc := range pvcs.Items {
+				storageClass, err := core.Instance().GetStorageClassForPVC(&singlePvc)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting storage class %v from PVC in source cluster", storageClass.Name))
+				storageClasses = append(storageClasses, storageClass)
+			}
+			err = SetDestinationKubeConfig()
+			dash.VerifyFatal(err, nil, "Setting destination kubeconfig")
+			for _, sc := range storageClasses {
+				sc.ResourceVersion = ""
+				_, err = storage.Instance().CreateStorageClass(sc)
+				if err != nil && !strings.Contains(err.Error(), "already exists") {
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating storage class %s on dest cluster", sc.Name))
+				}
+			}
+			err = SetSourceKubeConfig()
+			dash.VerifyFatal(err, nil, "Setting source kubeconfig")
+		})
+
+		Step("Restoring backup created before autopilot rule had executed", func() {
+			log.InfoD("Restoring backup created before autopilot rule had executed")
+			log.InfoD("Restoring the backup %s", backupNameBeforeAPRuleHasExecuted)
+			restoreNameBeforeAPRuleHasExecuted = fmt.Sprintf("%s-before-ap-%v", RestoreNamePrefix, time.Now().Unix())
+			namespaceMapping := map[string]string{}
+			namespaceMapping[namespace] = fmt.Sprintf("ns-%s", restoreNameBeforeAPRuleHasExecuted)
+			err = CreateRestoreWithValidation(ctx, restoreNameBeforeAPRuleHasExecuted, backupNameBeforeAPRuleHasExecuted, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreNameBeforeAPRuleHasExecuted, backupNameBeforeAPRuleHasExecuted))
+		})
+
+		Step("Restoring backup created after autopilot rule had executed", func() {
+			log.InfoD("Restoring backup created after autopilot rule had executed")
+			log.InfoD("Restoring the backup %s", backupNameAfterAPRuleHasExecuted)
+			restoreNameAfterAPRuleHasExecuted = fmt.Sprintf("%s-after-ap-%v", RestoreNamePrefix, time.Now().Unix())
+			namespaceMapping := map[string]string{}
+			namespaceMapping[namespace] = fmt.Sprintf("ns-%s", restoreNameAfterAPRuleHasExecuted)
+			err = CreateRestoreWithValidation(ctx, restoreNameAfterAPRuleHasExecuted, backupNameAfterAPRuleHasExecuted, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreNameAfterAPRuleHasExecuted, backupNameAfterAPRuleHasExecuted))
+		})
+
+		Step("Restoring backup created while autopilot rule was executing", func() {
+			log.InfoD("Restoring backup created while autopilot rule was executing")
+			log.InfoD("Restoring the backup %s", backupNameWhileAPRuleIsExecuting)
+			restoreNameWhileAPRuleIsExecuting = fmt.Sprintf("%s-during-ap-%v", RestoreNamePrefix, time.Now().Unix())
+			namespaceMapping := map[string]string{}
+			namespaceMapping[namespace] = fmt.Sprintf("ns-%s", restoreNameWhileAPRuleIsExecuting)
+			err = CreateRestoreWithValidation(ctx, restoreNameWhileAPRuleIsExecuting, backupNameWhileAPRuleIsExecuting, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreNameWhileAPRuleIsExecuting, backupNameWhileAPRuleIsExecuting))
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed applications")

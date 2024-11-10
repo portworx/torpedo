@@ -2,7 +2,7 @@ module github.com/pure-px/torpedo
 
 go 1.22.6
 
-toolchain go1.22.8
+toolchain go1.23.0
 
 require (
 	cloud.google.com/go/storage v1.36.0
@@ -39,7 +39,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae
 	github.com/portworx/px-backup-api v1.2.2-0.20240905150524-292438469f43
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20240731224434-94e4e354c4b2
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20241027143314-f060babbd8ce
 	github.com/portworx/talisman v1.1.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0
 	github.com/prometheus/client_golang v1.17.0
@@ -402,7 +402,7 @@ replace (
 
 	// PX dependencies
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240618001010-e4b050e66115
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v0.0.0-20241018130318-7e228864063c
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20241027143314-f060babbd8ce
 
 	// Stork dependencies
 	//github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81

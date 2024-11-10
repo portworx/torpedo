@@ -1364,7 +1364,7 @@ github.com/portworx/pds-api-go-client/pds/v1alpha1
 github.com/portworx/px-backup-api/pkg/apis/v1
 github.com/portworx/px-backup-api/pkg/kubeauth
 github.com/portworx/px-backup-api/pkg/kubeauth/gcp
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20240731224434-94e4e354c4b2 => github.com/portworx/sched-ops v0.0.0-20241018130318-7e228864063c
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20241027143314-f060babbd8ce => github.com/portworx/sched-ops v1.20.4-rc1.0.20241027143314-f060babbd8ce
 ## explicit; go 1.22.6
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/anthos
@@ -2889,7 +2889,7 @@ sigs.k8s.io/yaml/goyaml.v2
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240618001010-e4b050e66115
-# github.com/portworx/sched-ops => github.com/portworx/sched-ops v0.0.0-20241018130318-7e228864063c
+# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20241027143314-f060babbd8ce
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 # k8s.io/api => k8s.io/api v0.25.1
 # k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.25.1

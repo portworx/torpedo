@@ -1,6 +1,8 @@
 package aututils
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -8,6 +10,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/autopilot"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/torpedo/pkg/log"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -448,4 +451,42 @@ func PoolRuleRebalanceAbsolute(provisionedValLimit, usedValLimit int, approvalRe
 		apRuleObject.Spec.Enforcement = apapi.ApprovalRequired
 	}
 	return apRuleObject
+}
+
+// WatchAutoPilotRuleObjects watches for any changes in the autopilot rule objects in a particular namespace
+func WatchAutoPilotRuleObjects(ctx context.Context, namespace string) (chan *apapi.AutopilotRuleObject, chan error, error) {
+	watcher, err := autopilot.Instance().WatchAutopilotRuleObjects(namespace, meta_v1.ListOptions{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	outChan := make(chan *apapi.AutopilotRuleObject)
+	errChan := make(chan error)
+
+	go func(errChan chan error, outChan chan *apapi.AutopilotRuleObject) {
+		ch := watcher.ResultChan()
+		for {
+			select {
+			case event, open := <-ch:
+				if !open {
+					log.InfoD("Watcher channel closed")
+					errChan <- errors.New("watcher channel closed")
+					close(outChan)
+					return
+				}
+				log.InfoD("sender go routine event %v", event)
+				e := event.Object.(*apapi.AutopilotRuleObject)
+				log.InfoD("sending event to receiver")
+				outChan <- e
+
+			case <-ctx.Done():
+				log.InfoD("Watcher context cancelled")
+				errChan <- ctx.Err()
+				close(outChan)
+				return
+			}
+		}
+	}(errChan, outChan)
+
+	return outChan, errChan, nil
 }

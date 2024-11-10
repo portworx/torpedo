@@ -3,6 +3,7 @@ package autopilot
 import (
 	autv1alpha1 "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 // RuleObjectOps is an interface to perform k8s AutopilotRuleObjects operations
@@ -15,8 +16,10 @@ type RuleObjectOps interface {
 	UpdateAutopilotRuleObject(namespace string, object *autv1alpha1.AutopilotRuleObject) (*autv1alpha1.AutopilotRuleObject, error)
 	// DeleteAutopilotRuleObject deletes the AutopilotRuleObject of the given name
 	DeleteAutopilotRuleObject(namespace, name string) error
-	// ListAutopilotRules lists AutopilotRulesObjects
+	// ListAutopilotRuleObjects lists AutopilotRulesObjects
 	ListAutopilotRuleObjects(namespace string) (*autv1alpha1.AutopilotRuleObjectList, error)
+	// WatchAutopilotRuleObjects watches AutopilotRulesObjects
+	WatchAutopilotRuleObjects(namespace string, options metav1.ListOptions) (watch.Interface, error)
 }
 
 // CreateAutopilotRuleObject creates the AutopilotRuleObject object
@@ -57,4 +60,12 @@ func (c *Client) ListAutopilotRuleObjects(namespace string) (*autv1alpha1.Autopi
 		return nil, err
 	}
 	return c.autopilot.AutopilotV1alpha1().AutopilotRuleObjects(namespace).List(metav1.ListOptions{})
+}
+
+// WatchAutopilotRuleObjects watches AutopilotRuleObjects
+func (c *Client) WatchAutopilotRuleObjects(namespace string, options metav1.ListOptions) (watch.Interface, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+	return c.autopilot.AutopilotV1alpha1().AutopilotRuleObjects(namespace).Watch(options)
 }
