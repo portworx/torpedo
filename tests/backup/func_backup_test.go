@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/pkg/log"
@@ -147,5 +149,83 @@ var _ = Describe("{DeleteCustomResourceBackup}", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// This testcase validates static entries of the stork-controller-config configmap before and after pod restart
+var _ = Describe("{VerifyStaticEntriesOfStorkControllerCm}", Label(TestCaseLabelsMap[StorkControllerConfigCM]...), func() {
+
+	var (
+		scheduledAppContexts            []*scheduler.Context
+		storkControllerConfigMap        string
+		defaultStorkDeploymentNamespace string
+		duplicateMap                    map[string]string
+	)
+	JustBeforeEach(func() {
+		defaultStorkDeploymentNamespace = "kube-system"
+		StorkLabel = map[string]string{"name": "stork"}
+		storkControllerConfigMap = "stork-controller-config"
+		duplicateMap = make(map[string]string)
+
+		StartPxBackupTorpedoTest("VerifyStaticEntriesOfStorkControllerCm", "Validate static entry parameteres like admin-ns, service-account and stork-deploy-ns are not changed after stork pod restart", nil, 300557, Prikumar, Q2FY25)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+	})
+
+	// Validate static entry parameters like admin-ns, service-account and stork-deploy-ns are not changed after stork pod restart
+	It("Test to verify static entries of the stork-controller-config configmap before and after pod restart", func() {
+
+		// Validate static entry parameters of stork-controller-config configmap before pod restart
+		Step("Verify the admin-ns, service-account, stork-deploy-ns value before pod restart", func() {
+			log.InfoD("Verify the admin-ns, service-account, stork-deploy-ns value before pod restart")
+
+			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(storkControllerConfigMap, defaultStorkDeploymentNamespace)
+			log.InfoD("stork map [%v] default-ns [%v]", storkControllerConfigMap, defaultStorkDeploymentNamespace)
+			if err != nil {
+				log.Errorf("Error getting stork controller configmap: %v", err)
+			}
+
+			for key, value := range storkControllerConfigMapObject.Data {
+				duplicateMap[key] = value
+				log.Infof("Value of [%s] in stork controller configmap is [%v]", key, duplicateMap[key])
+			}
+		})
+
+		// Restart stork pods to verify the values
+		Step("Get pods from new admin namespace", func() {
+			storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
+			if err != nil {
+				log.InfoD("error geting strk")
+			}
+			// Delete stork pods with label
+			err = DeletePodWithWithoutLabelInNamespace(storkDeploymentNamespace, StorkLabel, false)
+			dash.VerifyFatal(err, nil, "Restart stork pods")
+			err = ValidatePodByLabel(StorkLabel, storkDeploymentNamespace, 5*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Checking if stork pod is in running state")
+		})
+
+		// Validate static entry parameters of stork-controller-config configmap after pod restart
+		Step("Verify the admin-ns, service-account, stork-deploy-ns value after stork pod restart", func() {
+			log.InfoD("Verify the admin-ns, service-account, stork-deploy-ns value after stork pod restart")
+
+			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(storkControllerConfigMap, defaultStorkDeploymentNamespace)
+			if err != nil {
+				log.Errorf("Error getting stork controller configmap: %v", err)
+			}
+
+			for key, _ := range storkControllerConfigMapObject.Data {
+				log.InfoD("Stork controller configmap value [%s] is equal after stork pod restart %s %s", key, storkControllerConfigMapObject.Data[key], duplicateMap[key])
+				dash.VerifyFatal(storkControllerConfigMapObject.Data[key], duplicateMap[key], "Stork controller configmap values remains same after pod restart")
+
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.InfoD("Deleting the deployed apps after the testcase")
+		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
+
 	})
 })

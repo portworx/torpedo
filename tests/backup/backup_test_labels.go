@@ -158,6 +158,7 @@ const (
 	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel                            TestCaseName = "DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel"
 	ValidateMetrics                                                                    TestCaseName = "ValidateMetrics"
 	KDMPBackup                                                                         TestCaseName = "ValidateGenericBackupDeletionWithMissingS3Bucket"
+	StorkControllerConfigCM                                                            TestCaseName = "StorkControllerConfigCM"
 )
 
 // Test case labels
@@ -314,6 +315,7 @@ const (
 	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel                            TestCaseLabel = "DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel"
 	ValidateMetricsLabel                                                                    TestCaseLabel = "ValidateMetrics"
 	KDMPBackupLabel                                                                         TestCaseLabel = "ValidateGenericBackupDeletionWithMissingS3Bucket"
+	StorkControllerConfigCMLabel                                                            TestCaseLabel = "StorkControllerConfigCM"
 )
 
 // Common Labels
@@ -614,7 +616,8 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	ValidateClusterShareWithConcurrentBackupOperations:                                 {ValidateClusterShareWithConcurrentBackupOperationsLabel, ClusterShareAndSuperAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
 	ValidateBackupShareUsingBackupsFromSharedCluster:                                   {ValidateBackupShareUsingBackupsFromSharedClusterLabel, ClusterShareAndSuperAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
 	ValidateClusterShareWhileBringDownPxBackupPods:                                     {ValidateClusterShareWhileBringDownPxBackupPodsLabel, ClusterShareAndSuperAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
-	BackupShare: {BackupShareLabel},
-	SoftDeleteAndRecoverBackupOnContainerAndBlobLevel:       {SoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
-	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel: {DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
+	StorkControllerConfigCM:                                                            {StorkControllerConfigCMLabel},
+	BackupShare:                                                                        {BackupShareLabel},
+	SoftDeleteAndRecoverBackupOnContainerAndBlobLevel:                                  {SoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
+	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel:                            {DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
 }
