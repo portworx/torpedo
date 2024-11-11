@@ -52,7 +52,7 @@ require (
 	github.com/vmware/govmomi v0.30.4
 	gocloud.dev v0.20.0
 	golang.org/x/crypto v0.21.0
-	golang.org/x/net v0.22.0
+	golang.org/x/net v0.23.0
 	golang.org/x/sync v0.6.0
 	google.golang.org/api v0.156.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20240304212257-790db918fca8 // indirect
@@ -398,7 +398,7 @@ replace (
 	github.com/ktrysmt/go-bitbucket => github.com/portworx/go-bitbucket v0.0.0-20221210015433-3c000e3a8253
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
-	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
+	github.com/libopenstorage/autopilot-api => github.com/pure-px/autopilot-api v0.6.1-0.20240919161416-66682c84b491
 
 	// PX dependencies
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240618001010-e4b050e66115

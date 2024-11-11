@@ -42,10 +42,22 @@ type ActionApprovalSpec struct {
 	Actions []*RuleAction `json:"actions,omitempty"`
 }
 
+// NamespacedName comprises a resource name, with a mandatory namespace,
+// rendered as "<namespace>/<name>".  Being a type captures intent and
+// helps make sure that UIDs, namespaced names and non-namespaced names
+// do not get conflated in code.  For most use cases, namespace and name
+// will already have been format validated at the API entry point, so we
+// don't do that here.  Where that's not the case (e.g. in testing),
+// consider using NamespacedNameOrDie() in testing.go in this package.
+type NamespacedName struct {
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name,omitempty"`
+}
+
 // ActionApprovalStatus is current status of an autopilot action approval
 type ActionApprovalStatus struct {
 	// Rule is the parent autopilot rule that resulted in this action approval
-	Rule types.NamespacedName
+	Rule NamespacedName `json:"rule,omitempty"`
 	// LastProcessTimestamp was the last time this approval was processed
 	LastProcessTimestamp meta.Time `json:"lastProcessTimestamp"`
 	// ActionPreviews provides a dry-run preview of the side-effects of the actions
@@ -65,7 +77,7 @@ type AutopilotActionPreview struct {
 // ActionPreviewExpectedResult captures the expected result for an action preview
 type ActionPreviewExpectedResult struct {
 	// Message is a user friendly description of the outcome of executing the action
-	Message string
+	Message string `json:"message,omitempty"`
 }
 
 func (a *ActionPreviewExpectedResult) String() string {

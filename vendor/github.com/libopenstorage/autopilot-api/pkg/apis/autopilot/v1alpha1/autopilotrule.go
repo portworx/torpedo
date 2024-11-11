@@ -74,6 +74,7 @@ type LabelSelectorRequirement struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:shortName=aprule
 
 // AutopilotRule represents pairing with other clusters
 type AutopilotRule struct {
@@ -83,6 +84,7 @@ type AutopilotRule struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:shortName=aprulelist
 
 // AutopilotRuleList is a list of AutopilotRules in Kubernetes
 type AutopilotRuleList struct {
@@ -119,6 +121,7 @@ type AutopilotRuleSpec struct {
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:shortName=aro
 
 // AutopilotRuleObject represents a particular object that is being monitored by autopilot.
 type AutopilotRuleObject struct {
@@ -142,6 +145,9 @@ type AutopilotRuleObjectList struct {
 type AutopilotRuleObjectStatus struct {
 	// Items contains list of recent status items for an autopilot object
 	Items []*AutopilotRuleObjectStatusItem `json:"items,omitempty"`
+	// ActionPreviews provides a dry-run preview of the side-effects of the actions on this object.
+	// This preview will be used by different states in fsm that want to refer to the dry-run preview of the actions.
+	ActionPreviews []*AutopilotActionPreview `json:"actionPreviews,omitempty"`
 }
 
 // AutopilotRuleObjectStatusItem is a single status item of an autopilot object
@@ -153,6 +159,9 @@ type AutopilotRuleObjectStatusItem struct {
 	// Message is the user friendly status
 	Message string `json:"message"`
 	// TODO add NextProcessTimestamp
+	// ActionApprovalName is a name of the action approval object for this particular aro.
+	// This name is preserved across restarts of autopilot for the AwaitingApproval state and Declided state.
+	ActionApprovalName string `json:"actionApprovalName,omitempty"`
 }
 
 // RuleState is the type for the state of a rule
@@ -186,7 +195,7 @@ type RuleStatusObjectKey string
 // RuleObjectSelector defines an object for the rule
 type RuleObjectSelector struct {
 	// LabelSelector selects the rule objects
-	meta.LabelSelector
+	meta.LabelSelector `json:"labelSelector,omitempty"`
 }
 
 // RuleConditions defines the conditions for the rule
@@ -211,7 +220,7 @@ type RuleAction struct {
 	// ObjectName is the name of the rule
 	Name string `json:"name"`
 	// Params are the opaque paramters that will be used for the above action
-	Params map[string]string `json:"params"`
+	Params map[string]string `json:"params,omitempty"`
 }
 
 // AutopilotRuleStatusType is the type for rule statuses

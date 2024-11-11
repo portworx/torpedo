@@ -26,6 +26,10 @@ const (
 	RuleScaleTypeAddDisk = "add-disk"
 	// RuleScaleTypeResizeDisk is name for resize disk scale type
 	RuleScaleTypeResizeDisk = "resize-disk"
+	// RuleScaleTypeAddDrive is name for add Drive scale type
+	RuleScaleTypeAddDrive = "add-drive"
+	// RuleScaleTypeResizeDrive is name for resize disk scale type
+	RuleScaleTypeResizeDrive = "resize-drive"
 	// RuleMaxSize is name for rule max size
 	RuleMaxSize = "maxsize"
 	// PxPoolAvailableCapacityMetric is metric for pool available capacity
@@ -85,6 +89,15 @@ var (
 
 // PoolRuleByTotalSize returns an autopilot pool expand rule that uses total pool size
 func PoolRuleByTotalSize(total, scalePercentage uint64, expandType string, labelSelector map[string]string) apapi.AutopilotRule {
+
+	matchExpressions := []meta_v1.LabelSelectorRequirement{}
+	for key, value := range labelSelector {
+		matchExpressions = append(matchExpressions, meta_v1.LabelSelectorRequirement{
+			Key:      key,
+			Operator: meta_v1.LabelSelectorOpIn,
+			Values:   []string{value},
+		})
+	}
 	return apapi.AutopilotRule{
 		ObjectMeta: meta_v1.ObjectMeta{
 			Name: fmt.Sprintf("pool-%s-total-%d", expandType, total),
@@ -92,7 +105,7 @@ func PoolRuleByTotalSize(total, scalePercentage uint64, expandType string, label
 		Spec: apapi.AutopilotRuleSpec{
 			Selector: apapi.RuleObjectSelector{
 				LabelSelector: meta_v1.LabelSelector{
-					MatchLabels: labelSelector,
+					MatchExpressions: matchExpressions,
 				},
 			},
 			Conditions: apapi.RuleConditions{

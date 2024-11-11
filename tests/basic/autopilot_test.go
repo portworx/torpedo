@@ -400,7 +400,7 @@ var _ = Describe(fmt.Sprintf("{%sPVCLabelChange}", testSuiteName), Label("p1", "
 		Step(msg, func() {
 			time.Sleep(5 * time.Second)
 			pvcRule, err := Inst().S.GetAutopilotRule(pvcRule.Name)
-			pvcRule.Spec.Selector.MatchLabels["autopilot"] = fmt.Sprintf("%s-No-OP", pvcRule.Name)
+			pvcRule.Spec.Selector.LabelSelector.MatchLabels["autopilot"] = fmt.Sprintf("%s-No-OP", pvcRule.Name)
 			_, err = Inst().S.UpdateAutopilotRule(pvcRule)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -412,7 +412,7 @@ var _ = Describe(fmt.Sprintf("{%sPVCLabelChange}", testSuiteName), Label("p1", "
 		log.InfoD(msg)
 		Step(msg, func() {
 			pvcRule, err := Inst().S.GetAutopilotRule(pvcRule.Name)
-			pvcRule.Spec.Selector.MatchLabels["autopilot"] = fmt.Sprintf("%s", pvcRule.Name)
+			pvcRule.Spec.Selector.LabelSelector.MatchLabels["autopilot"] = fmt.Sprintf("%s", pvcRule.Name)
 			_, err = Inst().S.UpdateAutopilotRule(pvcRule)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -853,7 +853,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName),Label("p0","positi
 				workerNode:    storageNodes[1],
 				labelSelector: poolExpandLabels["addDiskFixedSizeLabel"],
 				apRule: aututils.PoolRuleFixedScaleSizeByTotalSize((getTotalPoolSize(storageNodes[1])*120/100)/units.GiB, "16Gi",
-					aututils.RuleScaleTypeAddDisk, poolExpandLabels["addDiskFixedSizeLabel"]),
+					aututils.RuleScaleTypeAddDrive, poolExpandLabels["addDiskFixedSizeLabel"]),
 			},
 			{
 				workerNode:    storageNodes[2],
@@ -865,7 +865,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName),Label("p0","positi
 				workerNode:    storageNodes[3],
 				labelSelector: poolExpandLabels["resizeFixedSizeLabel"],
 				apRule: aututils.PoolRuleFixedScaleSizeByTotalSize((getTotalPoolSize(storageNodes[3])*120/100)/units.GiB, "32Gi",
-					aututils.RuleScaleTypeResizeDisk, poolExpandLabels["resizeFixedSizeLabel"]),
+					aututils.RuleScaleTypeResizeDrive, poolExpandLabels["resizeFixedSizeLabel"]),
 			},
 		}
 
