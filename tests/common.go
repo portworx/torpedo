@@ -15410,3 +15410,21 @@ func ValidateSecretEntries(name string, namespace string, entries map[string]str
 	}
 	return true, nil
 }
+
+// UpgradePXWithLatestVersion upgrade PX with with latest version
+func UpgradePXWithLatestVersion(upgradeHop string, storageNodes []node.Node) error {
+	log.InfoD("Upgrade PX with latest Version start")
+
+	err := Inst().V.UpgradeDriver(upgradeHop)
+	if err != nil {
+		return err
+	}
+
+	updatedPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+	if err != nil {
+		return err
+	}
+
+	log.InfoD(fmt.Sprintf("updated version is [%s]", updatedPXVersion))
+	return nil
+}

@@ -3,18 +3,19 @@ package tests
 import (
 	context1 "context"
 	"fmt"
-	"github.com/hashicorp/go-version"
-	k8score "github.com/portworx/sched-ops/k8s/core"
-	"github.com/pure-px/torpedo/drivers"
-	"github.com/pure-px/torpedo/drivers/backup/portworx"
-	"github.com/pure-px/torpedo/drivers/node"
-	corev1 "k8s.io/api/core/v1"
 	"math/rand"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/hashicorp/go-version"
+	k8score "github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/torpedo/drivers"
+	"github.com/pure-px/torpedo/drivers/backup/portworx"
+	"github.com/pure-px/torpedo/drivers/node"
+	corev1 "k8s.io/api/core/v1"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
@@ -2920,4 +2921,236 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 
+})
+
+// This testcase Upgrade px version to latest px version and take a backup and restore it
+var _ = Describe("{PxUpgradeWithBackupAndRestore}", func() {
+	var (
+		scheduledAppContexts   []*scheduler.Context
+		controlChannel         chan string
+		errorGroup             *errgroup.Group
+		cloudCredName          string
+		backupLocationName     string
+		cloudCredUID           string
+		backupLocationUID      string
+		backupLocationMap      map[string]string
+		providers              []string
+		sourceClusterUid       string
+		destClusterUid         string
+		labelSelectors         map[string]string
+		clusterStatus          api.ClusterInfo_StatusInfo_Status
+		bkpNamespaces          []string
+		restoreName            string
+		postUpgradeRestoreName string
+		preUpgradeBackupName   string
+		postUpgradeBackupName  string
+		numDeployments         int
+		storageNodes           []node.Node
+	)
+
+	JustBeforeEach(func() {
+		preUpgradeBackupName = fmt.Sprintf("%s-%v", "pre-upgrade-backup", time.Now().Unix())
+		postUpgradeBackupName = fmt.Sprintf("%s-%v", "post-upgrade-backup", time.Now().Unix())
+
+		bkpNamespaces = make([]string, 0)
+		backupLocationMap = make(map[string]string)
+		labelSelectors = make(map[string]string)
+		providers = GetBackupProviders()
+		numDeployments = 2
+		storageNodes = node.GetStorageNodes()
+
+		if len(storageNodes) == 0 {
+			Skip("Skip test beacause storage nodes not available")
+		}
+
+		if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
+			log.Fatalf("Unable to perform volume driver upgrade hops, none were given")
+		}
+
+		tags := make(map[string]string)
+		tags["upgradeHops"] = Inst().UpgradeStorageDriverEndpointList
+		tags["PxUpgradeWithBackupAndRestore"] = "true"
+		log.InfoD("Volume driver upgrade tags list [%v]", tags)
+		StartPxBackupTorpedoTest("PxUpgradeWithBackupAndRestore", "Upgrade px version to latest px version and take a backup and restore it", tags, 79914, MMurdanar, Q3FY25)
+		log.InfoD("scheduling applications")
+
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		log.InfoD("Starting to deploy applications")
+
+		for i := 0; i < numDeployments; i++ {
+			log.InfoD(fmt.Sprintf("Iteration %v of deploying applications", i))
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = AppReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+	})
+
+	It("Upgrade px version to latest px version and take a backup and restore it", func() {
+
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+
+			backupLocationMap = make(map[string]string)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredUID = uuid.New()
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				log.Infof("Creating a cloud credential [%s] with UID [%s] using [%s] as the provider", cloudCredUID, cloudCredName, provider)
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential [%s] with UID [%s] using [%s] as the provider", cloudCredName, BackupOrgID, provider))
+				backupLocationName = fmt.Sprintf("%s-bl-%v", getGlobalBucketName(provider), time.Now().Unix())
+
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				bucketName := getGlobalBucketName(provider)
+				log.Infof("Creating a backup location [%s] with UID [%s] using the [%s] bucket", backupLocationName, backupLocationUID, bucketName)
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, bucketName, BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location [%s] with UID [%s] using the bucket [%s]", backupLocationName, backupLocationUID, bucketName))
+			}
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid, dest cluster uid [%s]", DestinationClusterName, destClusterUid))
+		})
+
+		Step("Taking backup of multiple namespaces before upgrading PX", func() {
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v] before upgrading PX", bkpNamespaces))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			err = CreateBackupWithValidation(ctx, preUpgradeBackupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", preUpgradeBackupName))
+		})
+
+		Step("upgrade portworx version on source-cluster", func() {
+			log.InfoD("Upgrade Portworx to latest version on source-cluster")
+
+			// Perform upgrade hops based on a given list of upgradeEndpoints passed
+			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+				currentPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+
+				log.FailOnError(err, "fetching Px version before upgrade PX")
+				log.InfoD("px version before upgrading is [%s]", currentPXVersion)
+
+				err = UpgradePXWithLatestVersion(upgradeHop, storageNodes)
+				dash.VerifyFatal(err, nil, "Verifying upgrade PX with latest version on source-cluster")
+			}
+
+			log.InfoD("upgrade portworx to latest version on source-cluster successfully")
+		})
+
+		Step("upgrade portworx version on destination-cluster", func() {
+			log.InfoD("Upgrade Portworx to latest version on destination-cluster")
+
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+
+			storageNodes = node.GetStorageNodes()
+
+			if len(storageNodes) == 0 {
+				Skip("Skip test beacause storage nodes not available")
+			}
+
+			// Perform upgrade hops based on a given list of upgradeEndpoints passed
+			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+				currentPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+
+				log.FailOnError(err, "fetching Px version before upgrade PX")
+				log.InfoD("px version before upgrading is [%s]", currentPXVersion)
+
+				err = UpgradePXWithLatestVersion(upgradeHop, storageNodes)
+				dash.VerifyFatal(err, nil, "Verifying upgrade PX with latest version on destination-cluster")
+			}
+
+			log.InfoD("upgrade portworx to latest version on destination-cluster successfully")
+
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+		})
+
+		Step("Restoring pre-upgrade backup after upgrading PX", func() {
+			log.InfoD("Restoring pre-upgrade backup after upgrading PX")
+
+			bkpNamespaceMapping := make(map[string]string)
+			restoreName = fmt.Sprintf("%s-%s", "restore-pre-upgrade-backup", RandomString(4))
+			for _, namespace := range bkpNamespaces {
+				bkpNamespaceMapping[namespace] = fmt.Sprintf("%s-%s", namespace, RandomString(4))
+			}
+			log.InfoD("application namespaces to restore: [%v]", bkpNamespaces)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			err = CreateRestoreWithValidation(ctx, restoreName, preUpgradeBackupName, bkpNamespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s] with selected namespaces [%v]", restoreName, preUpgradeBackupName, bkpNamespaces))
+		})
+
+		Step("Taking backup of multiple namespaces after upgrading PX", func() {
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v] after upgrading PX", bkpNamespaces))
+
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			err = CreateBackupWithValidation(ctx, postUpgradeBackupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", postUpgradeBackupName))
+		})
+
+		Step("Restoring post-upgrade backup after upgrading PX", func() {
+			log.InfoD("Restoring post-upgrade backup after upgrading PX")
+
+			bkpNamespaceMapping := make(map[string]string)
+			postUpgradeRestoreName = fmt.Sprintf("%s-%s", "restore-post-upgrade-backup", RandomString(4))
+			for _, namespace := range bkpNamespaces {
+				bkpNamespaceMapping[namespace] = fmt.Sprintf("%s-%s", namespace, RandomString(4))
+			}
+			log.InfoD("application namespaces to restore: [%v]", bkpNamespaces)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			err = CreateRestoreWithValidation(ctx, postUpgradeRestoreName, postUpgradeBackupName, bkpNamespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s] with selected namespaces [%v]", postUpgradeRestoreName, postUpgradeBackupName, bkpNamespaces))
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.Info("Destroying scheduled apps on source cluster")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
+
+		err = DeleteClusterWithUID(SourceClusterName, sourceClusterUid, BackupOrgID, ctx, false)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+		err = DeleteClusterWithUID(DestinationClusterName, destClusterUid, BackupOrgID, ctx, false)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster %s", DestinationClusterName))
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
 })
