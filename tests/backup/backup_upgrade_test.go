@@ -2598,6 +2598,7 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 		postUpgradeBackupName     string
 		namespaceMap              map[string]string
 		labelSelectors            map[string]string
+		upgradePxBackupImageStr   string
 		upgradeStorkImageStr      string
 		pxbackupVersion           string
 		preUpgradePxBackupVersion *version.Version
@@ -2697,14 +2698,15 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 		})
 
 		Step("Upgrade Px Backup", func() {
-			log.InfoD("Upgrade Px Backup to version %s", LatestPxBackupVersion)
-			err := PxBackupUpgrade(LatestPxBackupVersion)
+			upgradePxBackupImageStr = GetEnv(UpgradePxBackupImage, LatestPxBackupVersion)
+			log.InfoD("Upgrade Px Backup to version %s", upgradePxBackupImageStr)
+			err := PxBackupUpgrade(upgradePxBackupImageStr)
 			dash.VerifyFatal(err, nil, "Verifying Px Backup upgrade completion")
 		})
 
 		Step("Upgrade the stork version", func() {
 			log.InfoD("Upgrade the stork version")
-			upgradeStorkImageStr = LatestStorkImage
+			upgradeStorkImageStr = GetEnv(UpgradeStorkImage, LatestStorkImage)
 			log.Infof("Upgrading stork version on source cluster to %s ", upgradeStorkImageStr)
 			err := UpgradeStorkVersion(upgradeStorkImageStr)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of stork version upgrade to - %s on source cluster", upgradeStorkImageStr))

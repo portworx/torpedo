@@ -50,7 +50,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/hashicorp/go-version"
-	v1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo/v2"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -59,6 +58,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/kdmp"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
+	v1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -118,6 +118,7 @@ const (
 	storkDeploymentName                       = "stork"
 	DefaultStorkDeploymentNamespace           = "kube-system"
 	UpgradeStorkImage                         = "TARGET_STORK_VERSION"
+	UpgradePxBackupImage                      = "TARGET_PXBACKUP_VERSION"
 	LatestStorkImage                          = "24.3.0-dev"
 	LowerStorkImage                           = "24.2.0"
 	restoreNamePrefix                         = "tp-restore"

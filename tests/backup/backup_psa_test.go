@@ -1091,6 +1091,8 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 
 				if psaType != RestrictedPSA {
 					Inst().AppList = defaultAppList
+				} else {
+					Inst().AppList = psaApp
 				}
 
 				currentScheduledAppContexts := make([]*scheduler.Context, 0)
@@ -1518,7 +1520,7 @@ var _ = Describe("{PsaTakeBackupInLowerPrivilegeRestoreInHigherPrivilege}", Labe
 			//  Taking restore of the backup taken
 			log.InfoD("Restoring backup of multiple namespaces with different PSA set in default")
 			customRestoreWithNamespaceAndStorageClassMapping = fmt.Sprintf("%s-%v-ns-mapping-%v", RestoreNamePrefix, RandomString(3), backupNameWithMultipleNsHavingDiffPSALabel)
-			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMapping, backupNameWithMultipleNsHavingDiffPSALabel, nil, nil, SourceClusterName, destClusterUid, BackupOrgID, allScheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, customRestoreWithNamespaceAndStorageClassMapping, backupNameWithMultipleNsHavingDiffPSALabel, nil, nil, SourceClusterName, srcClusterUid, BackupOrgID, allScheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation on multiple NS with defferent PAS label with namespace mapping %v and storage class mapping %v", backupNameWithMultipleNsHavingDiffPSALabel, customRestoreWithNamespaceAndStorageClassMapping, nil, nil))
 			restoreList = append(restoreList, customRestoreWithNamespaceAndStorageClassMapping)
 		})
