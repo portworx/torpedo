@@ -12,6 +12,7 @@ import (
 
 	"github.com/blang/semver"
 
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/pure-px/torpedo/drivers"
 	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
@@ -4524,4 +4525,241 @@ var _ = Describe("{NamespaceBackupRestoreWithHugeConfigMap}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 
+})
+
+// LargeResourceBackupSync verifies backup sync in case of large resource backups
+var _ = Describe("{LargeResourceBackupSync}", func() {
+	/*
+		Steps:
+		1. Schedule applications
+		2. Create a backup location and cloud setting
+		3. Register source and destination clusters for backup and restore
+		4. Create backup
+		5. Verify the backup is a large resource backup
+		6. Delete the backup location
+		7. Add the backup location again
+		8. Check if all the backups are synced or not
+	*/
+
+	var (
+		err                    error
+		ctx                    context.Context
+		scheduledAppContexts   []*scheduler.Context
+		testrailID             int
+		numberOfResources      int
+		numberOfEntries        int
+		namespace              string
+		appList                []string
+		providers              []string
+		cloudCredName          string
+		cloudCredUID           string
+		backupLocationName     string
+		backupLocationUID      string
+		backupLocationMap      map[string]string
+		bucketName             string
+		backupName             string
+		backupNames            []string
+		sourceClusterUid       string
+		storkControllerCM      *v1.ConfigMap
+		largeResourceSizeLimit string
+	)
+
+	JustBeforeEach(func() {
+		testrailID = 85797
+		StartPxBackupTorpedoTest("LargeResourceBackupSync", "Verifies backup sync in case of large resource backups", nil, testrailID, Dchothani, Q3FY25)
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		numberOfResources, _ = strconv.Atoi(GetEnv(NumberOfResources, "1000"))
+		numberOfEntries, _ = strconv.Atoi(GetEnv(NumberOfEntries, "1000"))
+		largeResourceSizeLimit = GetEnv(ReduceLargeResourceSizeLimit, "102400")
+		namespace = fmt.Sprintf("namespace-%d-%s", testrailID, RandomString(6))
+		backupLocationMap = make(map[string]string)
+		providers = GetBackupProviders()
+		appList = Inst().AppList
+		defer func() {
+			log.Infof("Resetting applist and removing the custom app config")
+			Inst().AppList = appList
+			delete(Inst().CustomAppConfig, "config-maps")
+			delete(Inst().CustomAppConfig, "secrets")
+			err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+			log.FailOnError(err, "Failed while rescanning specs")
+		}()
+		Inst().AppList = []string{"config-maps", "secrets"}
+		Inst().CustomAppConfig["config-maps"] = scheduler.AppConfig{
+			ClaimsCount: numberOfResources,
+		}
+		Inst().CustomAppConfig["secrets"] = scheduler.AppConfig{
+			ClaimsCount: numberOfResources,
+		}
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
+		log.InfoD("Updating %s in %s to set %s:%s", StorkControllerConfigMap, DefaultStorkDeploymentNamespace, k8sutils.LargeResourceSizeLimitName, largeResourceSizeLimit)
+		storkControllerCM, err = core.Instance().GetConfigMap(StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
+		log.FailOnError(err, fmt.Sprintf("Failed to get %s configmap", StorkControllerConfigMap))
+		storkControllerCM.Data[k8sutils.LargeResourceSizeLimitName] = largeResourceSizeLimit
+		storkControllerCM, err = core.Instance().UpdateConfigMap(storkControllerCM)
+		log.FailOnError(err, fmt.Sprintf("Failed to update %s configmap", StorkControllerConfigMap))
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, testrailID)
+		appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
+		for _, appCtx := range appContexts {
+			appCtx.ReadinessTimeout = AppReadinessTimeout
+			scheduledAppContexts = append(scheduledAppContexts, appCtx)
+		}
+	})
+
+	It("Restart PX Backup pod when large resource schedule backup in progress", func() {
+		Step("Validating applications", func() {
+			log.InfoD("validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Populating the configmaps and secrets with data", func() {
+			log.InfoD("Populating the configmaps and secrets with data")
+			for _, ctx := range scheduledAppContexts {
+				if ctx.App.Key == "config-maps" {
+					_, err = PopulateConfigMapsInContext(ctx, numberOfEntries)
+				} else if ctx.App.Key == "secrets" {
+					_, err = PopulateSecretsInContext(ctx, numberOfEntries)
+				}
+			}
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				backupLocationName = fmt.Sprintf("bl-%v", RandomString(6))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				bucketName = GetCustomBucketName(provider, "largeresourcebackupsync")
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, bucketName, BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		Step("Registering clusters for backup", func() {
+			log.InfoD("Registering clusters for backup")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+		})
+
+		Step("Creating backup", func() {
+			log.InfoD("Creating backup")
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
+			isLargeResourceBackup, err := IsLargeResourceBackup(ctx, backupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Checking the backup [%s] is a large resource backup", backupName))
+			dash.VerifyFatal(isLargeResourceBackup, true, fmt.Sprintf("Verifying the backup [%s] is a large resource backup", backupName))
+			backupNames = append(backupNames, backupName)
+		})
+
+		Step("Deleting the backup location", func() {
+			log.InfoD("Deleting the backup location")
+			err = DeleteBackupLocation(backupLocationName, backupLocationUID, BackupOrgID, false)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
+			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
+				status, err := IsBackupLocationPresent(backupLocationName, ctx, BackupOrgID)
+				if err != nil {
+					return "", true, fmt.Errorf("backup location %s still present with error %v", backupLocationName, err)
+				}
+				if status == true {
+					return "", true, fmt.Errorf("backup location %s is not deleted yet", backupLocationName)
+				}
+				return "", false, nil
+			}
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeleteStatusCheck, 3*time.Minute, 30*time.Second)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
+		})
+
+		Step("Add the backup location again", func() {
+			log.InfoD("Add the backup location again")
+			for _, provider := range providers {
+				backupLocationName = fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, bucketName, BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocationName))
+			}
+		})
+
+		Step("Creating backup to trigger backup sync", func() {
+			log.InfoD("Creating backup to trigger backup sync")
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
+			isLargeResourceBackup, err := IsLargeResourceBackup(ctx, backupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Checking the backup [%s] is a large resource backup", backupName))
+			dash.VerifyFatal(isLargeResourceBackup, true, fmt.Sprintf("Verifying the backup [%s] is a large resource backup", backupName))
+			backupNames = append(backupNames, backupName)
+		})
+
+		Step("Verifying all the backups are synced", func() {
+			log.InfoD("Verifying all the backups are synced")
+			checkBackupSync := func() (interface{}, bool, error) {
+				fetchedBackupNames, err := GetAllBackupsAdmin()
+				log.InfoD(fmt.Sprintf("The list of backups fetched %s", fetchedBackupNames))
+				if err != nil {
+					return "", true, fmt.Errorf("unable to fetch backups. Error: %s", err.Error())
+				}
+				if len(fetchedBackupNames) == len(backupNames) {
+					return "", false, nil
+				}
+				return "", true, fmt.Errorf("expected: %d and actual: %d", len(backupNames), len(fetchedBackupNames))
+			}
+			_, err := DoRetryWithTimeoutWithGinkgoRecover(checkBackupSync, 100*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Wait for BackupSync to complete")
+			fetchedBackupNames, err := GetAllBackupsAdmin()
+			log.FailOnError(err, "Getting a list of all backups")
+			for _, backup := range backupNames {
+				matched := false
+				for _, fetchedBackup := range fetchedBackupNames {
+					if strings.HasPrefix(fetchedBackup, backup) {
+						matched = true
+						break
+					}
+				}
+				dash.VerifyFatal(matched, true, fmt.Sprintf("Backup [%s] synced", backup))
+			}
+			bkpEnumerateReq := &api.BackupEnumerateRequest{
+				OrgId: BackupOrgID,
+			}
+			curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
+			log.FailOnError(err, "enumerating all backups")
+			for _, bkp := range curBackups.GetBackups() {
+				dash.VerifyFatal(bkp.GetStatus().Status, api.BackupInfo_StatusInfo_Success, fmt.Sprintf("Verifying success status for backup %s", bkp.Name))
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			err = SetSourceKubeConfig()
+			dash.VerifyFatal(err, nil, "switching to source kubeconfig")
+			delete(storkControllerCM.Data, k8sutils.LargeResourceSizeLimitName)
+			storkControllerCM, err = core.Instance().UpdateConfigMap(storkControllerCM)
+			log.FailOnError(err, fmt.Sprintf("Failed to update %s configmap", StorkControllerConfigMap))
+		}()
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed applications")
+		DestroyApps(scheduledAppContexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		for _, provider := range providers {
+			DeleteBucket(provider, bucketName)
+		}
+	})
 })
