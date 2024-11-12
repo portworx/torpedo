@@ -4493,12 +4493,12 @@ var _ = Describe("{NamespaceBackupRestoreWithHugeConfigMap}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] with custom resources [%s]", backupName, []string{"ConfigMap"}))
 		})
 
-		Step("Checking whether the backup is a large resource backup", func() {
-			log.InfoD("Checking whether the backup [%s] is a large resource backup", backupName)
+		Step("Verifying the backup is not a large resource backup", func() {
+			log.InfoD("Verifying the backup [%s] is not a large resource backup", backupName)
 
 			isLargeResourceBackup, err = IsLargeResourceBackup(ctx, backupName, BackupOrgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Checking the backup [%s] is a large resource backup", backupName))
-			dash.VerifyFatal(isLargeResourceBackup, true, fmt.Sprintf("Verifying the backup [%s] is a large resource backup", backupName))
+			dash.VerifyFatal(isLargeResourceBackup, false, fmt.Sprintf("Verifying the backup [%s] is not a large resource backup", backupName))
 		})
 
 		Step("Restoring the backup on the destination cluster", func() {
