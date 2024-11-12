@@ -493,3 +493,98 @@ var _ = Describe("{VerifyBackupIsLargeResourceBackup}", Label(TestCaseLabelsMap[
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+// This testcase validates large-resource-size-limit configmap value is not changed after pod restart
+var _ = Describe("{VerifyLargeResourceSizeLimitValueIsNotChangedAfterPodRestart}", Label(TestCaseLabelsMap[StorkControllerConfigCM]...), func() {
+
+	var (
+		scheduledAppContexts []*scheduler.Context
+		largeResourceSize    string
+	)
+	JustBeforeEach(func() {
+		largeResourceSize = "10000"
+
+		StartPxBackupTorpedoTest("VerifyLargeResourceSizeLimitValueIsNotChangedAfterPodRestart", "Validate large-resource-size-limit configmap value is not changed after stork pod restart", nil, 300554, Prikumar, Q2FY25)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+	})
+
+	// Validates large-resource-size-limit configmap value remains same after stork pod restart
+	It("Test to verify large-resource-size-limit configmap value remains same after stork pod restart", func() {
+		// Check stork version
+		Step("Check stork version", func() {
+			CurrentStorkImage, err := GetStorkImageVersion()
+			log.FailOnError(err, "Getting the current stork version")
+			log.InfoD("Current stork image version is - %s", CurrentStorkImage)
+		})
+
+		// Adding new parameter to stork-controller-config configmap
+		Step("Adding large-resource-size-limit parameter to strok-controller-config CM before pod restart", func() {
+			log.InfoD("Adding large-resource-size-limit parameter to strok-controller-config CM before pod restart")
+
+			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
+			log.InfoD("stork map [%v] default-ns [%v]", StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
+			if err != nil {
+				log.Errorf("Error getting stork controller configmap: %v", err)
+			}
+
+			storkControllerConfigMapObject.Data["large-resource-size-limit"] = largeResourceSize
+			log.Infof("Value of large-resource-size-limit in stork controller configmap is %s", storkControllerConfigMapObject.Data["large-resource-size-limit"])
+
+			storkControllerConfigMapObject, err = core.Instance().UpdateConfigMap(storkControllerConfigMapObject)
+			if err != nil {
+				log.InfoD("Object is not updated")
+			}
+			for key, _ := range storkControllerConfigMapObject.Data {
+				log.Infof("Value of [%s] in stork controller configmap is [%v]", key, storkControllerConfigMapObject.Data[key])
+			}
+		})
+
+		// Restart stork pods to verify the values
+		Step("Get pods from new admin namespace", func() {
+			storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
+			if err != nil {
+				log.InfoD("error geting strk")
+			}
+			// Delete stork pods with label
+			err = DeletePodWithWithoutLabelInNamespace(storkDeploymentNamespace, StorkLabel, false)
+			dash.VerifyFatal(err, nil, "Restart stork pods")
+			err = ValidatePodByLabel(StorkLabel, storkDeploymentNamespace, 5*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Checking if stork pod is in running state")
+		})
+
+		// Validate large-resource-size-limit configmap value remains same after pod restart
+		Step("Verify large-resource-size-limit configmap value remains same after pod restart", func() {
+			log.InfoD("Verify large-resource-size-limit configmap value remains same after pod restart")
+
+			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
+			if err != nil {
+				log.Errorf("Error getting stork controller configmap: %v", err)
+			}
+
+			for key, _ := range storkControllerConfigMapObject.Data {
+				log.Infof("value of [%s] in stork controller configmap after pod restart [%v]", key, storkControllerConfigMapObject.Data[key])
+			}
+			dash.VerifyFatal(storkControllerConfigMapObject.Data["large-resource-size-limit"], largeResourceSize,
+				fmt.Sprintf("Large resource size limit CM value [%s] remains same after pod restart", storkControllerConfigMapObject.Data["large-resource-size-limit"]))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		defer func() {
+			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
+			if err != nil {
+				log.Errorf("Error getting stork controller configmap: %v", err)
+			}
+			// Delete large-resource-size-limit parameter from strok-controller-configmap
+			delete(storkControllerConfigMapObject.Data, "large-resource-size-limit")
+			storkControllerConfigMapObject, err = core.Instance().UpdateConfigMap(storkControllerConfigMapObject)
+			log.FailOnError(err, fmt.Sprintf("Failed to update %s configmap", storkControllerConfigMapObject))
+		}()
+		log.InfoD("Deleting the deployed apps after the testcase")
+		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
+
+	})
+})
