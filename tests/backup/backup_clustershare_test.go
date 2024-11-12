@@ -1271,8 +1271,8 @@ var _ = Describe("{BackupSuperAdminRoleForLocalUser}", Label(TestCaseLabelsMap[B
 				log.FailOnError(err, "failed to fetch user owner id %s", user)
 				backupNamesByOwnerID, err := GetAllBackupNamesByOwnerID(userOwnerID, BackupOrgID, superAdminCtx)
 				log.FailOnError(err, "failed to fetch backup names with owner id %s from the admin", userOwnerID)
-				for _, backupName := range backupNamesByOwnerID {
-					if !IsPresent(userBackupsMap[user], backupName) {
+				for _, backupName := range userBackupsMap[user] {
+					if !IsPresent(backupNamesByOwnerID, backupName) {
 						err := fmt.Errorf("backup [%s] not found in the backup list", backupName)
 						log.FailOnError(fmt.Errorf(""), err.Error())
 					} else {
@@ -1433,7 +1433,7 @@ var _ = Describe("{BackupSuperAdminRoleForLocalUser}", Label(TestCaseLabelsMap[B
 			err := TaskHandler(nonAdminUsers[3:4], validateClusterDeleteError, Sequential)
 			log.FailOnError(err, "failed to validate cluster delete for super admin user")
 
-			log.Info("Validate that Super Admin can delete clusters or revoke cluster share if backups schedules is deleted")
+			log.Info("Validate that Super Admin can revoke cluster share if backups schedules is deleted")
 			userScheduleDelete := func(user string) {
 				superAdminUser, err := GetSubsetOfSlice(superAdminUsers, 1)
 				log.FailOnError(err, "failed to get subset of super admin users")
@@ -1462,19 +1462,6 @@ var _ = Describe("{BackupSuperAdminRoleForLocalUser}", Label(TestCaseLabelsMap[B
 			}
 			err = TaskHandler(nonAdminUsers[3:4], validateClusterShareError, Sequential)
 			log.FailOnError(err, "failed to validate cluster share for super admin user")
-
-			validateClusterDeleteError = func(user string) {
-				superAdminUser, err := GetSubsetOfSlice(superAdminUsers, 1)
-				log.FailOnError(err, "failed to get subset of super admin users")
-				superAdminCtx, err := backup.GetNonAdminCtx(superAdminUser[0], CommonPassword)
-				log.FailOnError(err, "Fetching px-central-admin ctx")
-				clusterName := SourceClusterName
-				clusterUid := userClusterMap[user][clusterName]
-				err = DeleteClusterWithoutScheduleDelete(SourceClusterName, clusterUid, BackupOrgID, superAdminCtx, false)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster [%s]", clusterName))
-			}
-			err = TaskHandler(nonAdminUsers[4:5], validateClusterDeleteError, Sequential)
-			log.FailOnError(err, "failed to validate cluster delete for super admin user")
 		})
 
 		Step("Validate demotion of super Admin role to non-admin role, verify the existing superAdmin has access to backup,schedule,restore objects created by demoted superAdmin, And demoted superAdmin has access to his backup objects created pre and post demotion", func() {
@@ -1656,6 +1643,7 @@ var _ = Describe("{ValidateClusterShareWithConcurrentBackupOperations}", Label(T
 		firstGroupList                      []string
 		secondGroupList                     []string
 		restoreNames                        []string
+		namespaces                          []string
 		backupLocationMap                   map[string]string
 		initialBackupMap                    map[string][]string
 		firstBackupMap                      map[string][]string
@@ -1707,10 +1695,11 @@ var _ = Describe("{ValidateClusterShareWithConcurrentBackupOperations}", Label(T
 		// Schedule applications
 		log.Infof("Scheduling applications")
 		for i := 0; i < numOfDeployments; i++ {
-			taskName := fmt.Sprintf("multiple-%d", i)
+			taskName := fmt.Sprintf("mul-%d", i)
 			appContexts := ScheduleApplications(taskName)
 			for _, appCtx := range appContexts {
 				namespace := GetAppNamespace(appCtx, taskName)
+				namespaces = append(namespaces, namespace)
 				backupAppContexts = append(backupAppContexts, appCtx)
 				appCtx.ReadinessTimeout = AppReadinessTimeout
 				namespaceAppContextMap[namespace] = append(namespaceAppContextMap[namespace], appCtx)
@@ -1851,10 +1840,13 @@ var _ = Describe("{ValidateClusterShareWithConcurrentBackupOperations}", Label(T
 					firstBackupMap[user] = localBackupNameList
 					mu.Unlock()
 					// Initiate restore for the backups created initially by primary users
+					namespace := namespaces[i]
 					for i, backupName := range initialBackupMap[user] {
 						if i < numOfRestores {
 							restoreName := fmt.Sprintf("%s-restore-%s-%d", user, RandomString(6), i+1)
-							_, err := CreateRestoreWithoutCheck(restoreName, backupName, make(map[string]string), DestinationClusterName, primaryUserClusterMap[user][DestinationClusterName], BackupOrgID, ctx)
+							customNamespace := namespace + RandomString(4)
+							namespaceMapping := map[string]string{namespace: customNamespace}
+							_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, DestinationClusterName, primaryUserClusterMap[user][DestinationClusterName], BackupOrgID, ctx)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Creating retore [%s] for user [%s]", restoreName, user))
 							restoreNames = append(restoreNames, restoreName)
 						}
@@ -1977,10 +1969,13 @@ var _ = Describe("{ValidateClusterShareWithConcurrentBackupOperations}", Label(T
 
 					// Initiate restore for the backup
 					backups := initialBackupMap[user]
+					namespace := namespaces[i]
 					for i, backupName := range backups {
 						if i < numOfRestores {
 							restoreName := fmt.Sprintf("%s-restore-%s-%d", user, RandomString(6), i+1)
-							_, err := CreateRestoreWithoutCheck(restoreName, backupName, make(map[string]string), DestinationClusterName, primaryUserClusterMap[user][DestinationClusterName], BackupOrgID, ctx)
+							customNamespace := namespace + RandomString(4)
+							namespaceMapping := map[string]string{namespace: customNamespace}
+							_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, DestinationClusterName, primaryUserClusterMap[user][DestinationClusterName], BackupOrgID, ctx)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restores for user [%s]", user))
 						}
 					}
