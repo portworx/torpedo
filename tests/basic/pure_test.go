@@ -68,7 +68,10 @@ const (
 )
 
 func createCloudsnapCredential() {
-	fbConfigs, err := pureutils.GetS3Secret(secretNamespace)
+	// Get Namespace of Volume Driver on which Px is installed
+	volDriverNameSpace, err := Inst().V.GetVolumeDriverNamespace()
+	Expect(err).NotTo(HaveOccurred(), " Unable to fetch details of Volume driver NameSpace ")
+	fbConfigs, err := pureutils.GetS3Secret(volDriverNameSpace)
 	Expect(err).NotTo(HaveOccurred())
 	nodes := node.GetStorageDriverNodes()
 	_, err = Inst().N.RunCommand(nodes[0], fmt.Sprintf(formattingPxctlEstablishBackupCredential, fbConfigs.Blades[0].S3AccessKey, fbConfigs.Blades[0].S3SecretKey, fbConfigs.Blades[0].ObjectStoreEndpoint, fbS3CredentialName), node.ConnectionOpts{
