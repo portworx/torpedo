@@ -156,15 +156,10 @@ var _ = Describe("{DeleteCustomResourceBackup}", func() {
 var _ = Describe("{VerifyStaticEntriesOfStorkControllerCm}", Label(TestCaseLabelsMap[StorkControllerConfigCM]...), func() {
 
 	var (
-		scheduledAppContexts            []*scheduler.Context
-		storkControllerConfigMap        string
-		defaultStorkDeploymentNamespace string
-		duplicateMap                    map[string]string
+		scheduledAppContexts []*scheduler.Context
+		duplicateMap         map[string]string
 	)
 	JustBeforeEach(func() {
-		defaultStorkDeploymentNamespace = "kube-system"
-		StorkLabel = map[string]string{"name": "stork"}
-		storkControllerConfigMap = "stork-controller-config"
 		duplicateMap = make(map[string]string)
 
 		StartPxBackupTorpedoTest("VerifyStaticEntriesOfStorkControllerCm", "Validate static entry parameteres like admin-ns, service-account and stork-deploy-ns are not changed after stork pod restart", nil, 300557, Prikumar, Q2FY25)
@@ -178,8 +173,8 @@ var _ = Describe("{VerifyStaticEntriesOfStorkControllerCm}", Label(TestCaseLabel
 		Step("Verify the admin-ns, service-account, stork-deploy-ns value before pod restart", func() {
 			log.InfoD("Verify the admin-ns, service-account, stork-deploy-ns value before pod restart")
 
-			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(storkControllerConfigMap, defaultStorkDeploymentNamespace)
-			log.InfoD("stork map [%v] default-ns [%v]", storkControllerConfigMap, defaultStorkDeploymentNamespace)
+			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
+			log.InfoD("stork map [%v] default-ns [%v]", StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
 			if err != nil {
 				log.Errorf("Error getting stork controller configmap: %v", err)
 			}
@@ -207,7 +202,7 @@ var _ = Describe("{VerifyStaticEntriesOfStorkControllerCm}", Label(TestCaseLabel
 		Step("Verify the admin-ns, service-account, stork-deploy-ns value after stork pod restart", func() {
 			log.InfoD("Verify the admin-ns, service-account, stork-deploy-ns value after stork pod restart")
 
-			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(storkControllerConfigMap, defaultStorkDeploymentNamespace)
+			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
 			if err != nil {
 				log.Errorf("Error getting stork controller configmap: %v", err)
 			}
@@ -234,15 +229,10 @@ var _ = Describe("{VerifyStaticEntriesOfStorkControllerCm}", Label(TestCaseLabel
 var _ = Describe("{VerifyLargeResourceSizeLimitParamIsRemovedFromStorkCM}", Label(TestCaseLabelsMap[StorkControllerConfigCM]...), func() {
 
 	var (
-		scheduledAppContexts            []*scheduler.Context
-		storkControllerConfigMap        string
-		defaultStorkDeploymentNamespace string
-		largeResourceSize               string
+		scheduledAppContexts []*scheduler.Context
+		largeResourceSize    string
 	)
 	JustBeforeEach(func() {
-		defaultStorkDeploymentNamespace = "kube-system"
-		StorkLabel = map[string]string{"name": "stork"}
-		storkControllerConfigMap = "stork-controller-config"
 		largeResourceSize = "10000"
 
 		StartPxBackupTorpedoTest("VerifyLargeResourceSizeLimitParamIsRemovedFromStorkCM", "Validate large-resource-size-limit parameter is added and removed from stork-controller-config configmap after stork pod restart", nil, 300555, Prikumar, Q2FY25)
@@ -256,8 +246,8 @@ var _ = Describe("{VerifyLargeResourceSizeLimitParamIsRemovedFromStorkCM}", Labe
 		Step("Adding large-resource-size-limit parameter to strok-controller-config CM before pod restart", func() {
 			log.InfoD("Adding large-resource-size-limit parameter to strok-controller-config CM before pod restart")
 
-			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(storkControllerConfigMap, defaultStorkDeploymentNamespace)
-			log.InfoD("stork map [%v] default-ns [%v]", storkControllerConfigMap, defaultStorkDeploymentNamespace)
+			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
+			log.InfoD("stork map [%v] default-ns [%v]", StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
 			if err != nil {
 				log.Errorf("Error getting stork controller configmap: %v", err)
 			}
@@ -277,7 +267,7 @@ var _ = Describe("{VerifyLargeResourceSizeLimitParamIsRemovedFromStorkCM}", Labe
 
 		// Remove newly added parameter from stork-controller-config configmap
 		Step("Remove newly added large-resource-size-limit parameter from stork-controller-config CM", func() {
-			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(storkControllerConfigMap, defaultStorkDeploymentNamespace)
+			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
 			if err != nil {
 				log.Errorf("Error getting stork controller configmap: %v", err)
 			}
@@ -311,7 +301,7 @@ var _ = Describe("{VerifyLargeResourceSizeLimitParamIsRemovedFromStorkCM}", Labe
 		Step("Verify large-resource-size-limit parameter is removed from stork-controller-config CM", func() {
 			log.InfoD("Verify large-resource-size-limit parameter is removed from stork-controller-config CM after stork pod restart")
 
-			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(storkControllerConfigMap, defaultStorkDeploymentNamespace)
+			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
 			if err != nil {
 				log.Errorf("Error getting stork controller configmap: %v", err)
 			}
@@ -330,5 +320,176 @@ var _ = Describe("{VerifyLargeResourceSizeLimitParamIsRemovedFromStorkCM}", Labe
 		log.InfoD("Deleting the deployed apps after the testcase")
 		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
 
+	})
+})
+
+// This testcase verifies whether the backup is a large resource backup by adding small value to large-resource-size-limit configmap
+var _ = Describe("{VerifyBackupIsLargeResourceBackup}", Label(TestCaseLabelsMap[StorkControllerConfigCM]...), func() {
+
+	var (
+		scheduledAppContexts []*scheduler.Context
+		backupName           string
+		bkpNamespaces        []string
+		namespace            string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		cloudCredName        string
+		cloudCredUID         string
+		backupLocationUID    string
+		providers            []string
+		backupLocationMap    map[string]string
+		backupLocation       string
+		largeResourceSize    string
+		totalBackupSize      uint64
+	)
+	JustBeforeEach(func() {
+		bkpNamespaces = make([]string, 0)
+		backupLocationMap = make(map[string]string)
+		providers = GetBackupProviders()
+		largeResourceSize = "100"
+
+		StartPxBackupTorpedoTest("VerifyBackupIsLargeResourceBackup", "Verify whether the backup is a large resource backup by adding small value to large-resource-size-limit configmap parameter", nil, 300556, Prikumar, Q2FY25)
+		log.InfoD("Deploy applications")
+
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = AppReadinessTimeout
+				namespace = GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+	})
+
+	// Verify whether the backup is a large resource backup by adding small value to large-resource-size-limit configmap parameter
+	It("Test to verify whether the backup is a large resource backup", func() {
+
+		Step("Validate applications", func() {
+			log.Infof("Validate applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		// Creating cloud credentials and backup location
+		Step("Creating cloud credentials and backup location", func() {
+			log.InfoD("Creating cloud credentials and backup location")
+			providers = GetBackupProviders()
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				cloudCredUID = uuid.New()
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				log.InfoD("Created Cloud Credentials with name - %s", cloudCredName)
+				backupLocation = fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocation
+				err = CreateBackupLocation(provider, backupLocation, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %v", backupLocation))
+				log.InfoD("Created Backup Location with name - %s", backupLocation)
+
+			}
+		})
+
+		// Create cluster for backup
+		Step("Register cluster for backup", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+
+		// Check stork version
+		Step("Check stork version", func() {
+			CurrentStorkImage, err := GetStorkImageVersion()
+			log.FailOnError(err, "Getting the current stork version")
+			log.InfoD("Current stork image version is - %s", CurrentStorkImage)
+		})
+
+		// Adding new parameter to stork-controller-config configmap
+		Step("Adding large-resource-size-limit parameter to strok-controller-config CM before pod restart", func() {
+			log.InfoD("Adding large-resource-size-limit parameter to strok-controller-config CM before pod restart")
+
+			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
+			log.InfoD("stork map [%v] default-ns [%v]", StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
+			if err != nil {
+				log.Errorf("Error getting stork controller configmap: %v", err)
+			}
+
+			storkControllerConfigMapObject.Data["large-resource-size-limit"] = largeResourceSize
+			log.Infof("Value of large-resource-size-limit in stork controller configmap is %s", storkControllerConfigMapObject.Data["large-resource-size-limit"])
+
+			storkControllerConfigMapObject, err = core.Instance().UpdateConfigMap(storkControllerConfigMapObject)
+			if err != nil {
+				log.InfoD("Object is not updated")
+			}
+			for key, _ := range storkControllerConfigMapObject.Data {
+				log.Infof("Value of [%s] in stork controller configmap is [%v]", key, storkControllerConfigMapObject.Data[key])
+			}
+		})
+
+		Step("Taking backup of applications", func() {
+			log.InfoD("Taking Backup of application")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+		})
+
+		// Fetch actual volumes backup size from cluster
+		Step("Get total Actual backup size volumes from cluster", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			bkpEnumerateReq := &api.BackupEnumerateRequest{OrgId: BackupOrgID}
+			enumerateRsp, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
+			dash.VerifyFatal(err, nil, "Backup enumeration for the ctx")
+
+			for i, bk := range enumerateRsp.GetBackups() {
+				for _, volume := range bk.GetVolumes() {
+					totalBackupSize = totalBackupSize + volume.ActualSize
+					log.InfoD("Verify backup size [%v] [%d]", i, totalBackupSize)
+				}
+			}
+			log.InfoD("total backup size from cluster: [%v]", totalBackupSize)
+		})
+
+		// Verify whether the backup is a large resource backup
+		Step("Checking whether the backup is a large resource backup", func() {
+			log.InfoD("Checking whether the backup [%s] is a large resource backup", backupName)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			isLargeResourceBackup, err := IsLargeResourceBackup(ctx, backupName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Checking the backup [%s] is a large resource backup", backupName))
+			dash.VerifyFatal(isLargeResourceBackup, true, fmt.Sprintf("Verifying the backup [%s] is a large resource backup", backupName))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		defer func() {
+			storkControllerConfigMapObject, err := core.Instance().GetConfigMap(StorkControllerConfigMap, DefaultStorkDeploymentNamespace)
+			if err != nil {
+				log.Errorf("Error getting stork controller configmap: %v", err)
+			}
+			// Delete large-resource-size-limit parameter from strok-controller-configmap
+			delete(storkControllerConfigMapObject.Data, "large-resource-size-limit")
+			storkControllerConfigMapObject, err = core.Instance().UpdateConfigMap(storkControllerConfigMapObject)
+			log.FailOnError(err, fmt.Sprintf("Failed to update %s configmap", storkControllerConfigMapObject))
+		}()
+		log.InfoD("Deleting the deployed apps after the testcase")
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
