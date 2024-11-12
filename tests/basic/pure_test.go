@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	k8sApps "github.com/portworx/sched-ops/k8s/apps"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -8971,6 +8972,144 @@ var _ = Describe("{FlashBladeVolumesMountedWithNFSv3Andv4}", func() {
 		})
 	})
 
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{DeployedApplicationsInMultipleTenants}", func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-27379
+		1. This Testcase creates multiple tenants inside a realm
+		2. We use these different pure FA pods in different storage classes and deploy nginx workloads parallely using these storage classes
+		3. Once Deployed we will validate and once validation is done we will cleanup the resources
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeployedApplicationsInMultipleTenants", "Deployed Applications in multiple Tenants", nil, 0)
+	})
+	itLog := "DeployedApplicationsInMultipleTenants"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var (
+			realmName     string
+			faWithRealm   *newFlashArray.Client
+			max_iops      = uint64(rand.Intn(99999999) + 1)
+			max_bandwidth = uint64(rand.Intn(511) + 1)
+			wg            sync.WaitGroup
+		)
+		deployments := map[string]string{}
+		podNamesinFA := []string{}
+		storageClasses := []string{}
+		stepLog := "Check the FA in pure.json, it must contain one FA with realm"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			flashArrays, err := GetFADetailsUsed()
+			log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
+			for _, fa := range flashArrays {
+				faClient, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+				if err != nil {
+					log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+					continue
+				}
+				if fa.Realm != "" {
+					realmName = fa.Realm
+					faWithRealm = faClient
+				}
+			}
+
+			if faWithRealm == nil {
+				log.FailOnError(fmt.Errorf("No FA with realm found in pure.json"), "No  FA with realm found in pure.json")
+			}
+		})
+
+		stepLog = "Deploy the Applications in multiple Tenants at same time"
+		Step(stepLog, func() {
+			log.InfoD(itLog)
+			for i := 1; i <= 3; i++ {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+
+					podNameinSC := fmt.Sprintf("Torpedo-Test-%d-%s", i, Inst().InstanceID)
+					PodNameinFA := fmt.Sprintf("%s::%s", realmName, podNameinSC)
+					scName := fmt.Sprintf("fada-sc-multitenant-%d", i)
+
+					// Create pod in FA
+					_, err := pureutils.CreatePodinFA(faWithRealm, PodNameinFA)
+					log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v]", PodNameinFA))
+
+					isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faWithRealm, PodNameinFA)
+					log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists", PodNameinFA))
+
+					if !isPodExists {
+						log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", PodNameinFA), "is pod created in FA?")
+					}
+					log.InfoD("Pod [%v] created in FA", PodNameinFA)
+					podNamesinFA = append(podNamesinFA, PodNameinFA)
+
+					allowVolExpansionFA := true
+					faParams := map[string]string{
+						"repl":             "1",
+						"max_iops":         strconv.FormatUint(max_iops, 10),
+						"max_bandwidth":    strconv.FormatUint(max_bandwidth, 10) + "G",
+						"fs":               "ext4",
+						"pure_fa_pod_name": podNameinSC,
+					}
+					err = CreateFlashStorageClass(scName, "pure_block", v1.PersistentVolumeReclaimDelete, faParams, nil, &allowVolExpansionFA, storageApi.VolumeBindingImmediate, nil)
+					log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v]", scName))
+					log.InfoD("Storage class [%s] is created", scName)
+					storageClasses = append(storageClasses, scName)
+					createNameSpace := func(namespace string) error {
+						nsSpec := &v1.Namespace{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: namespace,
+							},
+						}
+						_, err := k8sCore.CreateNamespace(nsSpec)
+						return err
+					}
+
+					deployment := fmt.Sprintf("fada-deployment-multitenant-%d", i)
+					pvc := fmt.Sprintf("fada-pvc-multitenant-%d", i)
+					ns := fmt.Sprintf("fada-app-multitenant-ns-%d", i)
+					err = createNameSpace(ns)
+					log.FailOnError(err, fmt.Sprintf("Failed to create namespace [%v]", ns))
+					deployments[deployment] = ns
+					_, err = CreateNginxFadaWorkload(pvc, 1, deployment, ns, scName)
+					log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v]", deployment))
+
+				}(i)
+			}
+			wg.Wait()
+		})
+
+		stepLog = "Destroy FA Pods,namespaces,storageclasses and deployments"
+		Step(stepLog, func() {
+			log.InfoD(itLog)
+			for deployment, namespace := range deployments {
+				err := k8sApps.Instance().DeleteDeployment(deployment, namespace)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete deployment [%v]", deployment))
+			}
+			for _, ns := range deployments {
+				err := core.Instance().DeleteNamespace(ns)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete namespace [%v]", ns))
+				log.InfoD("Namespace [%v] destroyed ", ns)
+			}
+			for _, sc := range storageClasses {
+				err := storage.Instance().DeleteStorageClass(sc)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete storage class [%v]", sc))
+			}
+			log.InfoD("Wait for 1 minute before deleting pods in FA")
+			time.Sleep(1 * time.Minute)
+			for _, podName := range podNamesinFA {
+				err := pureutils.DeletePodinFA(faWithRealm, podName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete pod [%v] in FA", podName))
+				log.InfoD("Pod [%v] destroyed ", podName)
+
+			}
+		})
+
+	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 	})

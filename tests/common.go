@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"maps"
 	"math"
 	"math/rand"
@@ -85,9 +86,11 @@ import (
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	k8sApps "github.com/portworx/sched-ops/k8s/apps"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsapi "k8s.io/api/apps/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -15504,6 +15507,164 @@ func UpgradePXWithLatestVersion(upgradeHop string, storageNodes []node.Node) err
 	}
 
 	log.InfoD(fmt.Sprintf("updated version is [%s]", updatedPXVersion))
+	return nil
+}
+
+func CreateNginxFadaWorkload(pvcName string, replicas int32, deploymentName string, namespace string, storageclassname string) (*appsv1.Deployment, error) {
+	var gracePeriod int64 = 30
+	pvcSpec := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: namespace,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("10Gi"),
+				},
+			},
+			StorageClassName: &storageclassname,
+		},
+	}
+
+	deploymentSpec := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deploymentName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"app": "poc1",
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": "poc1"},
+			},
+			Strategy: appsv1.DeploymentStrategy{
+				Type: appsv1.RollingUpdateDeploymentStrategyType,
+				RollingUpdate: &appsv1.RollingUpdateDeployment{
+					MaxSurge:       &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
+					MaxUnavailable: &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": "poc1"},
+				},
+				Spec: corev1.PodSpec{
+					Affinity: &corev1.Affinity{
+						PodAntiAffinity: &corev1.PodAntiAffinity{
+							PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
+								{
+									Weight: 100,
+									PodAffinityTerm: corev1.PodAffinityTerm{
+										TopologyKey: "kubernetes.io/hostname",
+									},
+								},
+							},
+						},
+					},
+					Containers: []corev1.Container{
+						{
+							Name:            "test-mount-pod",
+							Image:           "nginx",
+							ImagePullPolicy: corev1.PullAlways,
+							Command:         []string{"/bin/sh"},
+							Stdin:           true,
+							TTY:             true,
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "testvol",
+									MountPath: "/testvol",
+								},
+							},
+						},
+					},
+					TerminationGracePeriodSeconds: &gracePeriod,
+					Tolerations: []corev1.Toleration{
+						{
+							Key:      "stateful",
+							Operator: corev1.TolerationOpExists,
+							Effect:   corev1.TaintEffectNoSchedule,
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "testvol",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: pvcName,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	k8sCore := core.Instance()
+	_, err := k8sCore.CreatePersistentVolumeClaim(pvcSpec)
+	if err != nil {
+		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "clone") {
+			log.Errorf("An Error Occured while creating PVC %v", err)
+			return nil, err
+		}
+
+	}
+	deploymentOps := k8sApps.Instance()
+	deployment, err := deploymentOps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
+	if err != nil {
+		log.Errorf("An Error Occured while creating deployment %v", err)
+		return nil, err
+	}
+	err = deploymentOps.ValidateDeployment(deployment, 30*time.Minute, 10*time.Second)
+	if err != nil {
+		log.Errorf("An Error Occured while validating the pod %v", err)
+		return nil, err
+	}
+
+	return deployment, nil
+}
+func CloneAndDeployPVCs(namespace string, deploymentName string, storageclassName string) error {
+	// Get volumes from a namespace and clone the PVC
+	allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	if err != nil {
+		log.Errorf("Failed to get volumes from namespace: %v", err)
+		return err
+	}
+
+	for _, pvc := range allPvcList.Items {
+		size := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+		ClonedPvcName := "clone-" + pvc.Name
+		ClonedPvcDeployment := "clone-" + deploymentName
+		clonedPVCSpec, err := k8s.GeneratePVCCloneSpec(size, namespace, ClonedPvcName, pvc.Name, storageclassName)
+		if err != nil {
+			return fmt.Errorf("failed to build cloned PVC Spec: %s", err)
+		}
+		log.Infof("Size of restored PVC in clone test is %v", clonedPVCSpec.Spec.Resources.Requests[corev1.ResourceStorage])
+		clonedPVC, err := k8sCore.CreatePersistentVolumeClaim(clonedPVCSpec)
+		if err != nil {
+			return fmt.Errorf("failed to clone PVC from source PVC %s: %s", pvc.Name, err)
+		}
+
+		// Wait for PVC to be bound
+		err = Inst().S.WaitForSinglePVCToBound(ClonedPvcName, namespace, 60)
+		if err != nil {
+			return fmt.Errorf("failed to wait for cloned PVC %s to bind: %v", "clone-"+pvc.Name, err)
+		}
+
+		log.Infof("Successfully created cloned PVC %s, proceed to mount to a new pod", clonedPVC.Name)
+		_, err = CreateNginxFadaWorkload(ClonedPvcName, 1, ClonedPvcDeployment, namespace, storageclassName)
+		if err != nil {
+			log.Errorf("Failed to create deployment [%v]: %v", ClonedPvcDeployment, err)
+			return err
+		}
+	}
+
 	return nil
 }
 
