@@ -98,6 +98,12 @@ func (d *genericCsi) ValidatePureFBDAMountSource(nodes []node.Node, vols []*volu
 	}
 }
 
+// IsPxLiteCluster returns true if cluster is PX lite cluster
+func (d *genericCsi) IsPxLiteCluster() bool {
+	log.Warnf("IsPxLiteCluster not implemented for volume driver - %s", d.String())
+	return false
+}
+
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &genericCsi{})
 }

@@ -133,6 +133,12 @@ func (i *pso) ValidatePureFBDAMountSource(nodes []node.Node, vols []*volume.Volu
 	}
 }
 
+// IsPxLiteCluster returns true if cluster is PX lite cluster
+func (i *pso) IsPxLiteCluster() bool {
+	log.Warnf("IsPxLiteCluster not implemented for volume driver - %s", i.String())
+	return false
+}
+
 // GetPsoNamespace returns namespace where PSO is running
 func GetPsoNamespace() (string, error) {
 	allServices, err := core.Instance().ListServices("", metav1.ListOptions{})

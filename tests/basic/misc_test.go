@@ -346,13 +346,18 @@ var _ = Describe("{VolumeDriverCrash}", Label("p0", "negative", "px_vol_ops", "s
 		stepLog = "crash volume driver in all nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+
 			for _, appNode := range node.GetStorageDriverNodes() {
 				stepLog = fmt.Sprintf("crash volume driver %s on node: %v",
 					Inst().V.String(), appNode.Name)
 				Step(stepLog,
 					func() {
 						log.InfoD(stepLog)
-						CrashVolDriverAndWait([]node.Node{appNode})
+						if Inst().V.IsPxLiteCluster() {
+							CrashPXDaemonAndWait([]node.Node{appNode})
+						} else {
+							CrashVolDriverAndWait([]node.Node{appNode})
+						}
 					})
 			}
 		})

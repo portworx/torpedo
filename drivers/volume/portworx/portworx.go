@@ -232,6 +232,7 @@ type portworx struct {
 	skipPXSvcEndpoint     bool
 	skipPxOperatorUpgrade bool
 	DiagsFile             string
+	isPxLite              bool
 
 	pureDeviceBaseline map[string]map[string]pureLocalPathEntry // Stores a list of Pure mapper devices present on each storage node
 }
@@ -552,6 +553,11 @@ func (d *portworx) updateNodes(pxNodes []*api.StorageNode) error {
 		if err := d.updateNode(&n, pxNodes); err != nil {
 			return err
 		}
+	}
+
+	// Setting px-lite to true
+	if len(node.GetStorageNodes()) == 0 {
+		d.isPxLite = true
 	}
 	return nil
 }
@@ -6640,4 +6646,9 @@ func (d *portworx) GetTrashCanVolumeNames(n node.Node) ([]string, error) {
 
 	return trashcanVols, nil
 
+}
+
+// IsPxLiteCluster returns true if cluster is PX lite cluster
+func (d *portworx) IsPxLiteCluster() bool {
+	return d.isPxLite
 }

@@ -92,6 +92,12 @@ func (d *aws) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDrive
 	return nil
 }
 
+// IsPxLiteCluster returns true if cluster is PX lite cluster
+func (d *aws) IsPxLiteCluster() bool {
+	log.Warnf("IsPxLiteCluster not implemented for volume driver - %s", d.String())
+	return false
+}
+
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &aws{})
 }

@@ -570,6 +570,9 @@ type Driver interface {
 
 	// ValidateLastDefragScheduleStatus validate defrag status in given node ids
 	ValidateLastDefragScheduleStatus(scheduleId string, nodeIDList []string) ([]string, error)
+
+	// IsPxLiteCluster return true if cluster is px-lite cluster
+	IsPxLiteCluster() bool
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

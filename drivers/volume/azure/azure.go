@@ -128,6 +128,12 @@ func (d *azure) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDri
 	return nil
 }
 
+// IsPxLiteCluster returns true if cluster is PX lite cluster
+func (d *azure) IsPxLiteCluster() bool {
+	log.Warnf("IsPxLiteCluster not implemented for volume driver - %s", d.String())
+	return false
+}
+
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &azure{})
 }

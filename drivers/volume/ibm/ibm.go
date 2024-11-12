@@ -174,6 +174,12 @@ func (i *ibm) DeleteSnapshotsForVolumes(volumeNames []string, apiKey string) err
 	return nil
 }
 
+// IsPxLiteCluster returns true if cluster is PX lite cluster
+func (i *ibm) IsPxLiteCluster() bool {
+	log.Warnf("IsPxLiteCluster not implemented for volume driver - %s", i.String())
+	return false
+}
+
 func init() {
 	log.Infof("Registering IBM volume driver")
 	torpedovolume.Register(IbmDriverName, provisionersForIKS, &ibm{})

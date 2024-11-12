@@ -165,6 +165,12 @@ func (d *linstor) ValidatePureFBDAMountSource(nodes []node.Node, vols []*volume.
 	}
 }
 
+// IsPxLiteCluster returns true if cluster is PX lite clusters
+func (d *linstor) IsPxLiteCluster() bool {
+	log.Warnf("IsPxLiteCluster not implemented for volume driver - %s", d.String())
+	return false
+}
+
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &linstor{})
 }

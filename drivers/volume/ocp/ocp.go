@@ -135,6 +135,12 @@ func (o *ocp) DeleteSnapshotsForVolumes(volumeNames []string, clusterProviderCre
 	return nil
 }
 
+// IsPxLiteCluster returns true if cluster is PX lite cluster
+func (o *ocp) IsPxLiteCluster() bool {
+	log.Warnf("IsPxLiteCluster not implemented for volume driver - %s", o.String())
+	return false
+}
+
 func init() {
 	log.Infof("Registering ocp driver")
 	torpedovolume.Register(OcpDriverName, provisionersForOcp, &ocp{})
