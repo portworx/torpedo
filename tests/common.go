@@ -15510,6 +15510,7 @@ func UpgradePXWithLatestVersion(upgradeHop string, storageNodes []node.Node) err
 	return nil
 }
 
+// CloneAndDeployPVCs clones PersistentVolumeClaims (PVCs) from a given namespace and deploys them with Nginx workloads.
 func CreateNginxFadaWorkload(pvcName string, replicas int32, deploymentName string, namespace string, storageclassname string) (*appsv1.Deployment, error) {
 	var gracePeriod int64 = 30
 	pvcSpec := &corev1.PersistentVolumeClaim{
@@ -15629,6 +15630,8 @@ func CreateNginxFadaWorkload(pvcName string, replicas int32, deploymentName stri
 
 	return deployment, nil
 }
+
+// CloneAndDeployPVCs clones PersistentVolumeClaims (PVCs) from a given namespace and deploys them with Nginx workloads.
 func CloneAndDeployPVCs(namespace string, deploymentName string, storageclassName string) error {
 	// Get volumes from a namespace and clone the PVC
 	allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
