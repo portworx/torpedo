@@ -9556,7 +9556,7 @@ func GetExcludeFileListValue(storageClassesMap map[*storagev1.StorageClass][]str
 // and directories of specified file types ('f' for files and 'd' for directories).
 func FetchFilesAndDirectoriesFromPod(pod corev1.Pod, containerName string, path string, excludeFileDirectoryList []string) ([]string, []string, error) {
 	fileList := make(map[string][]string)
-	var fileTypes = [2]string{"f,l", "d"}
+	var fileTypes = [3]string{"f", "l", "d"}
 	//Fetch the user ID associated with the command execution.
 	cmdArgs := []string{"/bin/sh", "-c", "whoami"}
 	user, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
@@ -9592,7 +9592,7 @@ func FetchFilesAndDirectoriesFromPod(pod corev1.Pod, containerName string, path 
 			}
 		}
 	}
-	return fileList["f,l"], fileList["d"], nil
+	return append(fileList["f"], fileList["l"]...), fileList["d"], nil
 }
 
 // isFBDAVolume check if storageClass is of FBDA volume.

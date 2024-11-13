@@ -702,7 +702,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 							restoredCombinedList = append(restoredCombinedList, fileList...)
 							restoredCombinedList = append(restoredCombinedList, dirList...)
 							log.Infof(fmt.Sprintf("the list of combined directories and files after restore: %v", restoredCombinedList))
-							for _, item := range finalFileList[mountPath] {
+							for _, item := range mountPathExcludeFileDirMap[mountPath] {
 								if item != "" {
 									if !IsPresent(restoredCombinedList, item) {
 										err := fmt.Errorf("item(file/directory) [%s] is not present in mountPath [%s] for pod [%s] in namespace [%s]", item, mountPath, pod.Name, restoredNamespace)
@@ -1357,7 +1357,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 							restoredCombinedList = append(restoredCombinedList, fileList...)
 							restoredCombinedList = append(restoredCombinedList, dirList...)
 							log.Infof(fmt.Sprintf("the list of combined directories and files after restore: %v", restoredCombinedList))
-							for _, item := range finalFileList[mountPath] {
+							for _, item := range mountPathExcludeFileDirMap[mountPath] {
 								if item != "" {
 									if !IsPresent(restoredCombinedList, item) {
 										err := fmt.Errorf("item(file/directory) [%s] is not present in mountPath [%s] for pod [%s] in namespace [%s]", item, mountPath, pod.Name, restoredNamespace)
