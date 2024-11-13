@@ -13,34 +13,35 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pure-px/torpedo/drivers/volume/portworx"
-	"github.com/pure-px/torpedo/pkg/restutil"
-
 	"github.com/google/uuid"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/openstorage/api"
+	opsapi "github.com/libopenstorage/openstorage/api"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/core"
+	csisnapshot "github.com/portworx/sched-ops/k8s/externalsnapshotter"
+	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
-	"github.com/pure-px/torpedo/pkg/log"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	opsapi "github.com/libopenstorage/openstorage/api"
-	"github.com/pure-px/torpedo/pkg/testrailuttils"
-
-	. "github.com/onsi/ginkgo/v2"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/drivers/scheduler/spec"
 	"github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/drivers/volume/portworx"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/restutil"
+	"github.com/pure-px/torpedo/pkg/testrailuttils"
 	"github.com/pure-px/torpedo/pkg/units"
 	. "github.com/pure-px/torpedo/tests"
-
-	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	corev1 "k8s.io/api/core/v1"
+	storageApi "k8s.io/api/storage/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -1507,6 +1508,7 @@ var _ = Describe("{LocalsnapAndRestore}", Label("p0", "positive", "px_vol_ops", 
 		AfterEachTest(contexts)
 	})
 })
+
 var _ = Describe("{CSIOnlyTestCloudSnapshot}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("CSICloudsnapAndRestore", "Validate cloud-snap creation and restore", nil, 0)
@@ -1672,71 +1674,1307 @@ var _ = Describe("{CSIOnlyTestCloudSnapshot}", func() {
 	})
 })
 
-func validatePodCreationWithPVCName(restoredPVCSpec *corev1.PersistentVolumeClaim) {
-	podSpec := &corev1.Pod{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Pod",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pod-" + restoredPVCSpec.Name,
-			Namespace: restoredPVCSpec.Namespace,
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:  "nginx-container",
-					Image: "nginx:latest",
-					Ports: []corev1.ContainerPort{
-						{
-							ContainerPort: 80,
-						},
-					},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							MountPath: "/usr/share/nginx/html",
-							Name:      "nginx-volume",
-						},
-					},
-				},
-			},
-			Volumes: []corev1.Volume{
-				{
-					Name: "nginx-volume",
-					VolumeSource: corev1.VolumeSource{
-						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: restoredPVCSpec.Name,
-						},
-					},
-				},
-			},
-		},
-	}
-	log.Infof("Creating nginx pod from restored spec")
-	pod, err := k8sCore.CreatePod(podSpec)
-	if err != nil {
-		log.FailOnError(err, "Failed to create pod from snapshot")
-	}
-	defer func() {
-		err := k8sCore.DeletePod(pod.Name, pod.Namespace, false)
-		if err != nil {
-			log.Warnf("Failed to delete pod %s: %v", pod.Name, err)
-		}
-	}()
+// CSI snapshot tests with invalid credentials
+var _ = Describe("{CSIOnlyTestCloudSnapshotInvalidCredentials}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CSIOnlyTestCloudSnapshotInvalidCredentials", "Test create and restore snapshot with invalid creds", nil, 0)
+	})
 
-	t := func() (interface{}, bool, error) {
-		pod, err := k8sCore.GetPodByName(pod.Name, pod.Namespace)
-		if err != nil {
-			return "", false, err
-		}
-		if !k8sCore.IsPodReady(*pod) {
-			return "", true, fmt.Errorf("waiting for pod %s to be in running state", pod.Name)
-		}
-		return "", false, nil
+	var pvcName, ns, snapShotClassName, snapName, scName, secretName string
+	context := &scheduler.Context{
+		App: &spec.AppSpec{
+			Key: "snapshot-invalid-cred-test",
+		},
 	}
-	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
-	log.FailOnError(err, "Failed to create pods from snapshot")
-}
+	var pvc *corev1.PersistentVolumeClaim
+	stepLog := "has to test with invalid credentials"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
+		stepLog = "Create CSI storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			scName = fmt.Sprintf("storage-class-for-invalid-creds-test")
+			createStorageClass(scName, nil)
+		})
+
+		ns = fmt.Sprintf("csi-creds-test-ns-%v", time.Now().Unix())
+		createNamespace(ns)
+
+		secretName = "cred-secret"
+		var data = make(map[string]string)
+		data["snapshot-credential-id"] = "invalid"
+		metaObj := metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: ns,
+		}
+		obj := &corev1.Secret{
+			ObjectMeta: metaObj,
+			StringData: data,
+		}
+
+		_, err = k8sCore.CreateSecret(obj)
+		log.FailOnError(err, fmt.Sprintf("error creating secret [%s] failed [%v]", ns, err))
+
+		stepLog = "Create invalid credentials storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName = fmt.Sprintf(CloudSnapShotClass+"-invalid-%v", time.Now().Unix())
+			createVolumeSnapshotClass(snapShotClassName, map[string]string{
+				"csi.storage.k8s.io/snapshotter-secret-name":      "cred-secret",
+				"csi.storage.k8s.io/snapshotter-secret-namespace": ns,
+				"csi.openstorage.org/snapshot-type":               "cloud",
+			})
+		})
+
+		stepLog = "Create PVC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.FailOnError(err, fmt.Sprintf("error creating namespace [%s] failed [%v]", ns, err))
+
+			pvcName = fmt.Sprintf("csi-creds-test-%v", time.Now().Unix())
+			pvc = createPVC(pvcName, ns, scName)
+		})
+
+		stepLog = "Create cloud-snap with invalid credentials"
+		Step(stepLog, func() {
+			log.Infof("create cloudsnapshot with invalid credentials")
+
+			_, err := Inst().S.CreateCsiSnapshot(fmt.Sprintf("csi-creds-test-%v", time.Now().Unix()), ns, snapShotClassName, pvcName)
+			log.FailOnNoError(err, "snapshot should have failed as credentials were invalid")
+		})
+
+		stepLog = "Create valid secret"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			uuid, err := GetPXCloudCredential()
+			log.FailOnError(err, "could not get cloudsnap credentials")
+
+			err = Inst().S.DeleteSecret(ns, secretName)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting snapshots in namespace [%s]", ns))
+
+			data = make(map[string]string)
+			data["snapshot-credential-id"] = uuid
+			metaObj := metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: ns,
+			}
+			obj := &corev1.Secret{
+				ObjectMeta: metaObj,
+				StringData: data,
+			}
+			_, err = k8sCore.CreateSecret(obj)
+			log.FailOnError(err, fmt.Sprintf("error creating secret [%s] failed [%v]", ns, err))
+		})
+
+		stepLog = "Create cloud-snap with valid credentials"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapName = fmt.Sprintf("csi-creds-test-%v", time.Now().Unix())
+
+			_, err := Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			log.FailOnError(err, "snapshot should not have failed")
+		})
+
+		stepLog = "Delete cloud credentials"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			err := DeletePXCloudCredential()
+			log.FailOnError(err, "snapshot should not have failed")
+		})
+
+		stepLog = "Restore snapshot should fail"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			restoredPVCSpec, err := k8s.GeneratePVCRestoreSpec(resource.MustParse("5Gi"), pvc.Namespace, pvc.Name+"-restore", snapName, scName)
+			log.FailOnError(err, "failed to build restored PVC Spec")
+			log.Infof("Generating PVC from snapshot source snapshot %s, pvc name %s", snapName, restoredPVCSpec.Name)
+			restoredPvc, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+			log.FailOnError(err, "failed to restore PVC")
+			err = Inst().S.WaitForSinglePVCToBound(restoredPvc.Name, ns, 3)
+			log.FailOnNoError(err, "restore should have failed as cloudsnap creds doesn't exist")
+		})
+
+		stepLog = "Delete snapshots, this should use updated credentials"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			err := CreatePXCloudCredential()
+			log.FailOnError(err, "could not create cloudsnap credentials")
+
+			uuid, err := GetPXCloudCredential()
+			log.FailOnError(err, "could not get cloudsnap credentials")
+
+			err = Inst().S.DeleteSecret(ns, secretName)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting snapshots in namespace [%s]", ns))
+
+			// wait for some time for secret to be deleted
+			time.Sleep(10 * time.Second)
+
+			data = make(map[string]string)
+			data["snapshot-credential-id"] = uuid
+			metaObj := metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: ns,
+			}
+			obj := &corev1.Secret{
+				ObjectMeta: metaObj,
+				StringData: data,
+			}
+			_, err = k8sCore.CreateSecret(obj)
+			log.FailOnError(err, fmt.Sprintf("error creating secret [%s] failed [%v]", ns, err))
+
+			err = Inst().S.DeletePvcsFromNamespace(context, ns)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting PVCs in namespace [%s]", ns))
+
+			err = Inst().S.WaitForPvcsToBeDeleted(context, ns)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Waiting for PVCs to be deleted in namespace [%s]", ns))
+
+			err = Inst().S.DeleteCsiSnapshot(context, snapName, ns)
+			log.FailOnError(err, fmt.Sprintf("error deleting snapshot %s in namespace [%s]", snapName, ns))
+
+			t := func() (interface{}, bool, error) {
+				_, err = csisnapshot.Instance().GetSnapshot(snapName, ns)
+				if err != nil && k8serrors.IsNotFound(err) {
+					return "", false, nil
+				}
+				return "", true, fmt.Errorf("snapshot is not deleted")
+			}
+			if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+				log.FailOnError(err, fmt.Sprintf("error deleting snapshot %s in namespace [%s]", snapName, ns))
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		err = Inst().S.DeleteCsiSnapshotsFromNamespace(context, ns)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting snapshots in namespace [%s]", ns))
+
+		err = Inst().S.WaitForSnapshotsToBeDeleted(context, ns)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Waiting for snapshots to be deleted in namespace [%s]", ns))
+
+		cleanupSnapshotests(context, ns)
+		AfterEachTest(contexts)
+	})
+})
+
+// Test CSI snapshot when volume is in HA update state
+// Write lots of data, increase repl factor, then take snapshot
+var _ = Describe("{CSIOnlyTestCloudSnapshotHAUpdateState}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CSIOnlyTestCloudSnapshotHAUpdateState", "Test create and restore snapshot, volume in HA update", nil, 0)
+	})
+
+	var pvcName, ns, snapShotClassName, snapName, scName string
+	context := &scheduler.Context{
+		App: &spec.AppSpec{
+			Key: "snapshot-ha-update-test",
+		},
+	}
+	var pvc *corev1.PersistentVolumeClaim
+	var pod *corev1.Pod
+	stepLog := "Take snapshots of volume in HA update state mode"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
+		ns = fmt.Sprintf("csi-snapshot-ha-update-test-ns-%v", time.Now().Unix())
+		createNamespace(ns)
+
+		stepLog = "Create CSI storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			scName = fmt.Sprintf("csi-storage-class-ha-update")
+			createStorageClass(scName, nil)
+		})
+
+		stepLog = "Create volume snapshot class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName = CloudSnapShotClass
+			createVolumeSnapshotClass(snapShotClassName, map[string]string{"csi.openstorage.org/snapshot-type": "cloud"})
+		})
+
+		stepLog = "Create PVC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pvcName = fmt.Sprintf("csi-snapshot-ha-update-test-%v", time.Now().Unix())
+			pvc = createPVC(pvcName, ns, scName)
+		})
+
+		stepLog = "Create Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pod = createPod(pvc)
+		})
+
+		stepLog = "Write data"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			writeCmd := []string{"bash", "-c", fmt.Sprintf("dd if=/dev/urandom of=%s/filename bs=1048576 count=4096", "/usr/share/nginx/html")}
+			_, err := k8sCore.RunCommandInPod(writeCmd, pod.Name, pod.Spec.Containers[0].Name, pod.Namespace)
+			log.FailOnError(err, "Unable to write data")
+		})
+
+		stepLog = "Update HA mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pv := pvc.Spec.VolumeName
+			pxNodes, err := GetStorageNodes()
+			log.FailOnError(err, "Unable to get the storage nodes")
+			pxNode := GetRandomNode(pxNodes)
+			pxctlCmdFull := fmt.Sprintf("v ha-update --repl 2 %s", pv)
+			_, err = Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
+			log.FailOnError(err, fmt.Sprintf("error ha-updating legacy shared volume %s", pv))
+		})
+
+		stepLog = "Create cloud-snap with valid credentials"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapName = fmt.Sprintf("csi-snapshot-ha-update-test-snap-%v", time.Now().Unix())
+			_, err := Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			log.FailOnError(err, "snapshot should not have failed")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		cleanupSnapshotests(context, ns)
+
+		AfterEachTest(contexts)
+	})
+})
+
+// Test Snapshot restore when PX driver is restarting
+var _ = Describe("{CSIOnlyTestCloudSnapshotRestartPX}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CSIOnlyTestCloudSnapshotRestartPX", "Test create snapshot, with restart px", nil, 0)
+	})
+
+	var pvcName, ns, snapShotClassName, snapName, scName string
+	context := &scheduler.Context{
+		App: &spec.AppSpec{
+			Key: "snapshpot-restart-px-test",
+		},
+	}
+	var pvc *corev1.PersistentVolumeClaim
+	var pod *corev1.Pod
+	stepLog := "Create snapshot, with restart px"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
+		ns = fmt.Sprintf("csi-snapshot-restart-px-test-ns-%v", time.Now().Unix())
+		createNamespace(ns)
+
+		stepLog = "Create CSI storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			scName = fmt.Sprintf("csi-storage-class-restart-px")
+			createStorageClass(scName, nil)
+		})
+
+		stepLog = "Create volume snapshot class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName = CloudSnapShotClass
+			createVolumeSnapshotClass(snapShotClassName, map[string]string{"csi.openstorage.org/snapshot-type": "cloud"})
+		})
+
+		stepLog = "Create PVC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pvcName = fmt.Sprintf("csi-snapshot-restart-px-test-%v", time.Now().Unix())
+			pvc = createPVC(pvcName, ns, scName)
+		})
+
+		stepLog = "Create Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pod = createPod(pvc)
+		})
+
+		stepLog = "Write data"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			writeCmd := []string{"bash", "-c", fmt.Sprintf("dd if=/dev/urandom of=%s/filename bs=1048576 count=4096", "/usr/share/nginx/html")}
+			_, err := k8sCore.RunCommandInPod(writeCmd, pod.Name, pod.Spec.Containers[0].Name, pod.Namespace)
+			log.FailOnError(err, "Unable to write data")
+		})
+
+		stepLog = "Create cloud-snap, with px restart"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("create cloudsnapshot with valid credentials")
+			snapName = fmt.Sprintf("csi-snapshot-restart-px-test-snap-%v", time.Now().Unix())
+
+			v1obj := metav1.ObjectMeta{
+				Name:      snapName,
+				Namespace: ns,
+			}
+			source := volsnapv1.VolumeSnapshotSource{
+				PersistentVolumeClaimName: &pvcName,
+			}
+			spec := volsnapv1.VolumeSnapshotSpec{
+				VolumeSnapshotClassName: &snapShotClassName,
+				Source:                  source,
+			}
+			snap := volsnapv1.VolumeSnapshot{
+				ObjectMeta: v1obj,
+				Spec:       spec,
+			}
+			_, err := csisnapshot.Instance().CreateSnapshot(&snap)
+			log.FailOnError(err, "snapshot should not have failed")
+
+			replicaSets, err := Inst().V.GetReplicaSets(&volume.Volume{
+				ID: pvc.Spec.VolumeName,
+			})
+			var nodeForPxStop node.Node
+			// Put the volume in Degraded state.
+			replicasNodes := replicaSets[0].Nodes
+			// Stop Driver on one of the replicas.
+			storagenodes, err := GetStorageNodes()
+			for _, n := range storagenodes {
+				if n.Id == replicasNodes[0] {
+					nodeForPxStop = n
+					break
+				}
+			}
+			restartPx(nodeForPxStop)
+
+			err = k8s.WaitForCsiSnapToBeReady(snapName, ns)
+			log.FailOnError(err, "snapshot should have been completed successfully")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		cleanupSnapshotests(context, ns)
+		AfterEachTest(contexts)
+	})
+})
+
+// Test CSI snapshots with multiple Snapshot/Restore requests in parallel
+var _ = Describe("{CSIOnlyTestCloudSnapshotMultipleSnapshotAndRestore}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CSIOnlyTestCloudSnapshotMultipleSnapshotAndRestore", "Test create and restore multiple snapshots", nil, 0)
+	})
+
+	var ns, snapShotClassName, scName string
+	context := &scheduler.Context{
+		App: &spec.AppSpec{
+			Key: "snapshot-multiple-test",
+		},
+	}
+	stepLog := "Create multiple PVCS, snapshot and restore"
+	count := 100
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
+		ns = fmt.Sprintf("csi-snapshot-multiple-test-ns-%v", time.Now().Unix())
+		createNamespace(ns)
+
+		stepLog = "Create CSI storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			scName = fmt.Sprintf("csi-storage-class-multiple")
+			createStorageClass(scName, nil)
+		})
+
+		stepLog = "Create volume snapshot class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName = CloudSnapShotClass
+			createVolumeSnapshotClass(snapShotClassName, map[string]string{"csi.openstorage.org/snapshot-type": "cloud"})
+		})
+
+		timeNow := time.Now().Unix()
+		stepLog = "Create PVCs"
+
+		wg := sync.WaitGroup{}
+		wg.Add(count)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < count; i++ {
+				num := i
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					pvcName := fmt.Sprintf("csi-snapshot-multiple-test-%d-%v", num, timeNow)
+					createPVC(pvcName, ns, scName)
+
+				}()
+			}
+		})
+		wg.Wait()
+
+		wg = sync.WaitGroup{}
+		wg.Add(count)
+		stepLog = "Create snapshots in parallel"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < count; i++ {
+				num := i
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					pvcName := fmt.Sprintf("csi-snapshot-multiple-test-%d-%v", num, timeNow)
+					log.Infof("Create cloudsnapshot with valid credentials for pvc %s", pvcName)
+					snapName := fmt.Sprintf("csi-snapshot-multiple-test-snap-%d-%v", num, timeNow)
+					_, err := Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+					log.FailOnError(err, "snapshot failed")
+				}()
+			}
+		})
+		wg.Wait()
+
+		wg = sync.WaitGroup{}
+		wg.Add(count)
+		stepLog = "Create restores in parallel"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < count; i++ {
+				num := i
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					snapName := fmt.Sprintf("csi-snapshot-multiple-test-snap-%d-%v", num, timeNow)
+					pvcName := fmt.Sprintf("csi-snapshot-multiple-test-%d-%v", num, timeNow)
+					restoredPVCSpec, err := k8s.GeneratePVCRestoreSpec(resource.MustParse("5Gi"), ns, pvcName+"-restore", snapName, scName)
+					log.FailOnError(err, "failed to build restored PVC Spec")
+					log.Infof("Generating PVC from snapshot source snapshot %s, pvc name %s", snapName, restoredPVCSpec.Name)
+					restoredPvc, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+					log.FailOnError(err, "failed to restore PVC")
+					err = Inst().S.WaitForSinglePVCToBound(restoredPvc.Name, ns, 3)
+					log.FailOnError(err, "restore failed with error")
+				}()
+			}
+		})
+		wg.Wait()
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		cleanupSnapshotests(context, ns)
+		AfterEachTest(contexts)
+	})
+})
+
+// Test CSI snapshots when a node is restarted
+var _ = Describe("{CSIOnlyTestCloudSnapshotRestartNode}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CSIOnlyTestCloudSnapshotRestartNode", "Test create snapshot, with restart node", nil, 0)
+	})
+
+	var pvcName, ns, snapShotClassName, snapName, scName string
+	context := &scheduler.Context{
+		App: &spec.AppSpec{
+			Key: "snapshot-restart-node-test",
+		},
+	}
+	var pvc *corev1.PersistentVolumeClaim
+	var pod *corev1.Pod
+	stepLog := "Create snapshot, with restart node"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
+		ns = fmt.Sprintf("csi-snapshot-restart-node-test-ns-%v", time.Now().Unix())
+		createNamespace(ns)
+
+		stepLog = "Create CSI storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			scName = fmt.Sprintf("csi-storage-class-restart-node")
+			createStorageClass(scName, nil)
+		})
+
+		stepLog = "Create volume snapshot class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName = CloudSnapShotClass
+			createVolumeSnapshotClass(snapShotClassName, map[string]string{"csi.openstorage.org/snapshot-type": "cloud"})
+		})
+
+		stepLog = "Create PVC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pvcName = fmt.Sprintf("csi-snapshot-restart-node-test-%v", time.Now().Unix())
+			pvc = createPVC(pvcName, ns, scName)
+		})
+
+		stepLog = "Create Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pod = createPod(pvc)
+		})
+
+		stepLog = "Write data"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			writeCmd := []string{"bash", "-c", fmt.Sprintf("dd if=/dev/urandom of=%s/filename bs=1048576 count=4096", "/usr/share/nginx/html")}
+			_, err := k8sCore.RunCommandInPod(writeCmd, pod.Name, pod.Spec.Containers[0].Name, pod.Namespace)
+			log.FailOnError(err, "Unable to write data")
+		})
+
+		stepLog = "Create cloud-snap, with px restart"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("create cloudsnapshot with valid credentials")
+			snapName = fmt.Sprintf("csi-snapshot-restart-node-test-snap-%v", time.Now().Unix())
+
+			v1obj := metav1.ObjectMeta{
+				Name:      snapName,
+				Namespace: ns,
+			}
+			source := volsnapv1.VolumeSnapshotSource{
+				PersistentVolumeClaimName: &pvcName,
+			}
+			spec := volsnapv1.VolumeSnapshotSpec{
+				VolumeSnapshotClassName: &snapShotClassName,
+				Source:                  source,
+			}
+			snap := volsnapv1.VolumeSnapshot{
+				ObjectMeta: v1obj,
+				Spec:       spec,
+			}
+			_, err := csisnapshot.Instance().CreateSnapshot(&snap)
+			log.FailOnError(err, "snapshot should not have failed")
+
+			replicaSets, err := Inst().V.GetReplicaSets(&volume.Volume{
+				ID: pvc.Spec.VolumeName,
+			})
+			var nodeForPxStop node.Node
+			// Put the volume in Degraded state.
+			replicasNodes := replicaSets[0].Nodes
+			// Stop Driver on one of the replicas.
+			storagenodes, err := GetStorageNodes()
+			for _, n := range storagenodes {
+				if n.Id == replicasNodes[0] {
+					nodeForPxStop = n
+					break
+				}
+			}
+			err = Inst().N.RebootNodeAndWait(nodeForPxStop)
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Reboot node %s", nodeForPxStop.Name))
+
+			err = Inst().V.WaitDriverUpOnNode(nodeForPxStop, 5*time.Minute)
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver to start"))
+
+			err = k8s.WaitForCsiSnapToBeReady(snapName, ns)
+			log.FailOnError(err, "Snapshot creation failed")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		cleanupSnapshotests(context, ns)
+
+		AfterEachTest(contexts)
+	})
+})
+
+// Test CSI snapshot restore when CSI pods are restarted
+var _ = Describe("{CSIOnlyTestCloudSnapshotRestartCSIPods}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CSIOnlyTestCloudSnapshotRestartCSIPods", "Test create snapshot, with restart csi pods", nil, 0)
+	})
+
+	var pvcName, ns, snapShotClassName, snapName, scName string
+	context := &scheduler.Context{
+		App: &spec.AppSpec{
+			Key: "snapshot-restart-csi-pods-test",
+		},
+	}
+	var pvc *corev1.PersistentVolumeClaim
+	var pod *corev1.Pod
+	stepLog := "Create snapshot with CSI pod restart"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
+		ns = fmt.Sprintf("csi-snapshot-restart-csi-pods-test-ns-%v", time.Now().Unix())
+		createNamespace(ns)
+
+		stepLog = "Create CSI storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			scName = fmt.Sprintf("csi-storage-class-restart-csi-pods-snapshot")
+			createStorageClass(scName, nil)
+		})
+
+		stepLog = "Create volume snapshot class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName = CloudSnapShotClass
+			createVolumeSnapshotClass(snapShotClassName, map[string]string{"csi.openstorage.org/snapshot-type": "cloud"})
+		})
+
+		stepLog = "Create PVC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pvcName = fmt.Sprintf("csi-snapshot-restart-csi-pods-%v", time.Now().Unix())
+			pvc = createPVC(pvcName, ns, scName)
+		})
+
+		stepLog = "Create Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pod = createPod(pvc)
+		})
+
+		stepLog = "Write data"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			writeCmd := []string{"bash", "-c", fmt.Sprintf("dd if=/dev/urandom of=%s/filename bs=1048576 count=4096", "/usr/share/nginx/html")}
+			_, err := k8sCore.RunCommandInPod(writeCmd, pod.Name, pod.Spec.Containers[0].Name, pod.Namespace)
+			log.FailOnError(err, "Unable to write data")
+		})
+
+		stepLog = "Create cloud-snap, with px restart"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("create cloudsnapshot with valid credentials")
+			snapName = fmt.Sprintf("csi-snapshot-restart-node-test-snap-%v", time.Now().Unix())
+
+			v1obj := metav1.ObjectMeta{
+				Name:      snapName,
+				Namespace: ns,
+			}
+			source := volsnapv1.VolumeSnapshotSource{
+				PersistentVolumeClaimName: &pvcName,
+			}
+			spec := volsnapv1.VolumeSnapshotSpec{
+				VolumeSnapshotClassName: &snapShotClassName,
+				Source:                  source,
+			}
+			snap := volsnapv1.VolumeSnapshot{
+				ObjectMeta: v1obj,
+				Spec:       spec,
+			}
+			_, err := csisnapshot.Instance().CreateSnapshot(&snap)
+			log.FailOnError(err, "snapshot should not have failed")
+
+			wg := sync.WaitGroup{}
+			wg.Add(3)
+
+			pods, err := core.Instance().ListPods(map[string]string{"app": "px-csi-driver"})
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Listed CSI pods"))
+
+			for _, pod := range pods.Items {
+				pod := pod
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					err = core.Instance().DeletePod(pod.Name, pod.Namespace, false)
+					dash.VerifyFatal(err == nil, true, fmt.Sprintf("delete csi pod"))
+				}()
+			}
+			wg.Wait()
+
+			err = k8s.WaitForCsiSnapToBeReady(snapName, ns)
+			log.FailOnError(err, "snapshot should have been completed successfully")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		cleanupSnapshotests(context, ns)
+		AfterEachTest(contexts)
+	})
+})
+
+// Test CSI snapshot restore when CSI pods are restarted
+var _ = Describe("{CSIOnlyTestCloudRestoreRestartCSIPods}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CSIOnlyTestCloudRestoreRestartCSIPods", "Test create snapshot, with restart csi pods", nil, 0)
+	})
+
+	var pvcName, ns, snapShotClassName, snapName, scName string
+	context := &scheduler.Context{
+		App: &spec.AppSpec{
+			Key: "snapshot-restart-csi-pods-test",
+		},
+	}
+	var pvc *corev1.PersistentVolumeClaim
+	var pod *corev1.Pod
+	stepLog := "Create restore, with restart node"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
+		ns = fmt.Sprintf("csi-restore-restart-csi-pods-test-ns-%v", time.Now().Unix())
+		createNamespace(ns)
+
+		stepLog = "Create CSI storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			scName = fmt.Sprintf("csi-storage-class-restart-csi-pods-restore")
+			createStorageClass(scName, nil)
+		})
+
+		stepLog = "Create volume snapshot class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName = CloudSnapShotClass
+			createVolumeSnapshotClass(snapShotClassName, map[string]string{"csi.openstorage.org/snapshot-type": "cloud"})
+		})
+
+		stepLog = "Create PVC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pvcName = fmt.Sprintf("csi-restore-restart-csi-pods-%v", time.Now().Unix())
+			pvc = createPVC(pvcName, ns, scName)
+		})
+
+		stepLog = "Create Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pod = createPod(pvc)
+		})
+
+		stepLog = "Write data"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			writeCmd := []string{"bash", "-c", fmt.Sprintf("dd if=/dev/urandom of=%s/filename bs=1048576 count=4096", "/usr/share/nginx/html")}
+			_, err := k8sCore.RunCommandInPod(writeCmd, pod.Name, pod.Spec.Containers[0].Name, pod.Namespace)
+			log.FailOnError(err, "Unable to write data")
+		})
+
+		stepLog = "Create cloud-snap"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("create cloudsnapshot with valid credentials")
+			snapName = fmt.Sprintf("csi-snapshot-restart-node-test-snap-%v", time.Now().Unix())
+
+			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			log.FailOnError(err, fmt.Sprintf("error creating snapshot [%v]", snapName))
+		})
+		stepLog = "Restore cloud-snap with CSI pod restart"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			restoredPVCSpec, err := k8s.GeneratePVCRestoreSpec(resource.MustParse("50Gi"), pvc.Namespace, pvc.Name+"-restore", snapName, scName)
+			log.FailOnError(err, "failed to build restored PVC Spec")
+			log.Infof("Generating PVC from snapshot source snapshot %s, pvc name %s", snapName, restoredPVCSpec.Name)
+			restoredPvc, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+			log.FailOnError(err, "failed to restore PVC")
+
+			pods, err := core.Instance().ListPods(map[string]string{"app": "px-csi-driver"})
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Listed CSI pods"))
+
+			wg := sync.WaitGroup{}
+			wg.Add(3)
+
+			for _, pod := range pods.Items {
+				pod := pod
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					err = core.Instance().DeletePod(pod.Name, pod.Namespace, false)
+					dash.VerifyFatal(err == nil, true, fmt.Sprintf("delete csi pod"))
+				}()
+			}
+			wg.Wait()
+
+			err = Inst().S.WaitForSinglePVCToBound(restoredPvc.Name, ns, 3)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		cleanupSnapshotests(context, ns)
+		AfterEachTest(contexts)
+	})
+})
+
+// Test CSI snapshot restore when node is restarted
+var _ = Describe("{CSIOnlyTestCloudRestoreRestartNode}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CSIOnlyTestCloudRestoreRestartNode", "Test create restore, with restart node", nil, 0)
+	})
+
+	var pvcName, ns, snapShotClassName, snapName, scName string
+	context := &scheduler.Context{
+		App: &spec.AppSpec{
+			Key: "restore-restart-node-test",
+		},
+	}
+	var pvc *corev1.PersistentVolumeClaim
+	var pod *corev1.Pod
+	stepLog := "Create restore, with restart node"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
+		ns = fmt.Sprintf("csi-restore-restart-node-test-ns-%v", time.Now().Unix())
+		createNamespace(ns)
+
+		stepLog = "Create CSI storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			scName = fmt.Sprintf("csi-storage-class-restart-node")
+			createStorageClass(scName, nil)
+		})
+
+		stepLog = "Create volume snapshot class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName = CloudSnapShotClass
+			createVolumeSnapshotClass(snapShotClassName, map[string]string{"csi.openstorage.org/snapshot-type": "cloud"})
+		})
+
+		stepLog = "Create PVC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pvcName = fmt.Sprintf("csi-snapshot-restart-node-test-%v", time.Now().Unix())
+			pvc = createPVC(pvcName, ns, scName)
+		})
+
+		stepLog = "Create Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pod = createPod(pvc)
+		})
+
+		stepLog = "Write data"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			writeCmd := []string{"bash", "-c", fmt.Sprintf("dd if=/dev/urandom of=%s/filename bs=1048576 count=4096", "/usr/share/nginx/html")}
+			_, err := k8sCore.RunCommandInPod(writeCmd, pod.Name, pod.Spec.Containers[0].Name, pod.Namespace)
+			log.FailOnError(err, "Unable to write data")
+		})
+
+		stepLog = "Create cloud-snap"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("create cloudsnapshot with valid credentials")
+			snapName = fmt.Sprintf("csi-snapshot-restart-node-test-snap-%v", time.Now().Unix())
+
+			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			log.FailOnError(err, fmt.Sprintf("error creating snapshot [%v]", snapName))
+		})
+		stepLog = "Restore cloud-snap with Node restart"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			restoredPVCSpec, err := k8s.GeneratePVCRestoreSpec(resource.MustParse("50Gi"), pvc.Namespace, pvc.Name+"-restore", snapName, scName)
+			log.FailOnError(err, "failed to build restored PVC Spec")
+			log.Infof("Generating PVC from snapshot source snapshot %s, pvc name %s", snapName, restoredPVCSpec.Name)
+			restoredPvc, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+			log.FailOnError(err, "failed to restore PVC")
+
+			// Stop Driver on one of the replicas.
+			storagenodes, err := GetStorageNodes()
+			wg := sync.WaitGroup{}
+			wg.Add(3)
+			for _, n := range storagenodes {
+				num := n
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					err = Inst().N.RebootNodeAndWait(num)
+					dash.VerifyFatal(err == nil, true, fmt.Sprintf("Reboot node"))
+					err = Inst().V.WaitDriverUpOnNode(num, 5*time.Minute)
+					dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver to start"))
+				}()
+			}
+			wg.Wait()
+			err = Inst().S.WaitForSinglePVCToBound(restoredPvc.Name, ns, 3)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		cleanupSnapshotests(context, ns)
+		AfterEachTest(contexts)
+	})
+})
+
+// Test CSI snapshot restore when PX is restarted
+var _ = Describe("{CSIOnlyTestCloudRestoreRestartPx}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CSIOnlyTestCloudRestoreRestartPx", "Test create restore, with restart px", nil, 0)
+	})
+
+	var pvcName, ns, snapShotClassName, snapName, scName string
+	context := &scheduler.Context{
+		App: &spec.AppSpec{
+			Key: "restore-restart-px-test",
+		},
+	}
+	var pvc *corev1.PersistentVolumeClaim
+	var pod *corev1.Pod
+	stepLog := "Create restore, with restart px"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
+		ns = fmt.Sprintf("csi-restore-restart-px-test-ns-%v", time.Now().Unix())
+		createNamespace(ns)
+
+		stepLog = "Create CSI storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			scName = fmt.Sprintf("csi-storage-class-restart-node")
+			createStorageClass(scName, nil)
+		})
+
+		stepLog = "Create volume snapshot class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName = CloudSnapShotClass
+			createVolumeSnapshotClass(snapShotClassName, map[string]string{"csi.openstorage.org/snapshot-type": "cloud"})
+		})
+
+		stepLog = "Create PVC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pvcName = fmt.Sprintf("csi-snapshot-restart-px-test-%v", time.Now().Unix())
+			pvc = createPVC(pvcName, ns, scName)
+		})
+
+		stepLog = "Create Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pod = createPod(pvc)
+		})
+
+		stepLog = "Write data"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			writeCmd := []string{"bash", "-c", fmt.Sprintf("dd if=/dev/urandom of=%s/filename bs=1048576 count=4096", "/usr/share/nginx/html")}
+			_, err := k8sCore.RunCommandInPod(writeCmd, pod.Name, pod.Spec.Containers[0].Name, pod.Namespace)
+			log.FailOnError(err, "Unable to write data")
+		})
+
+		stepLog = "Create cloud-snap"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("create cloudsnapshot with valid credentials")
+			snapName = fmt.Sprintf("csi-snapshot-restart-px-test-snap-%v", time.Now().Unix())
+
+			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			log.FailOnError(err, fmt.Sprintf("error creating snapshot [%v]", snapName))
+		})
+
+		stepLog = "Restore cloud-snap with Node restart"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			restoredPVCSpec, err := k8s.GeneratePVCRestoreSpec(resource.MustParse("50Gi"), pvc.Namespace, pvc.Name+"-restore", snapName, scName)
+			log.FailOnError(err, "failed to build restored PVC Spec")
+			log.Infof("Generating PVC from snapshot source snapshot %s, pvc name %s", snapName, restoredPVCSpec.Name)
+			restoredPvc, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+			log.FailOnError(err, "failed to restore PVC")
+
+			// Stop Driver on one of the replicas.
+			storagenodes, err := GetStorageNodes()
+			wg := sync.WaitGroup{}
+			wg.Add(3)
+			for _, n := range storagenodes {
+				num := n
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					// restart portworx on node.
+					restartPx(num)
+				}()
+			}
+			wg.Wait()
+			err = Inst().S.WaitForSinglePVCToBound(restoredPvc.Name, ns, 3)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		cleanupSnapshotests(context, ns)
+		AfterEachTest(contexts)
+	})
+})
+
+// Test CSI snapshot restore after deleting bucket
+var _ = Describe("{CSIOnlyTestCloudRestoreAfterBucketDelete}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CSIOnlyTestCloudRestoreAfterBucketDelete", "Test create restore, after deleting bucket", nil, 0)
+	})
+
+	var pvcName, ns, snapShotClassName, snapName, scName string
+	context := &scheduler.Context{
+		App: &spec.AppSpec{
+			Key: "restore-bucket-delete-test",
+		},
+	}
+	var pvc *corev1.PersistentVolumeClaim
+	stepLog := "Create restore, after deleting bucket"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
+		ns = fmt.Sprintf("csi-restore-bucket-delete-ns-%v", time.Now().Unix())
+		createNamespace(ns)
+
+		stepLog = "Create CSI storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			scName = fmt.Sprintf("csi-storage-class-bucket-delete")
+			createStorageClass(scName, nil)
+		})
+
+		stepLog = "Create volume snapshot class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName = CloudSnapShotClass
+			createVolumeSnapshotClass(snapShotClassName, map[string]string{"csi.openstorage.org/snapshot-type": "cloud"})
+		})
+
+		stepLog = "Create PVC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pvcName = fmt.Sprintf("csi-snapshot-bucket-delete-test-%v", time.Now().Unix())
+			pvc = createPVC(pvcName, ns, scName)
+		})
+
+		stepLog = "Create cloud-snap"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("create cloudsnapshot with valid credentials")
+			snapName = fmt.Sprintf("csi-snapshot-restart-px-test-snap-%v", time.Now().Unix())
+
+			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			log.FailOnError(err, fmt.Sprintf("error creating snapshot [%v]", snapName))
+		})
+
+		stepLog = "Delete bucket"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("create cloudsnapshot with valid credentials")
+
+			params := make(map[string]string)
+			for k, v := range pvc.Annotations {
+				params[k] = v
+			}
+			params[k8s.PvcNameKey] = pvc.GetName()
+			params[k8s.PvcNamespaceKey] = pvc.GetNamespace()
+			csBksps, err := Inst().V.GetCloudsnaps(pvc.Spec.VolumeName, params)
+			log.FailOnError(err, "failed to get cloudsnaps")
+			var bucketName string
+			for _, csBksp := range csBksps {
+				bkid := csBksp.GetId()
+				bucketName = strings.Split(bkid, "/")[0]
+				break
+			}
+			log.Infof("Got Bucket Name [%s]", bucketName)
+			DeleteCloudSnapBucket(bucketName)
+		})
+
+		stepLog = "Restore cloud-snap"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			restoredPVCSpec, err := k8s.GeneratePVCRestoreSpec(resource.MustParse("50Gi"), pvc.Namespace, pvc.Name+"-restore", snapName, scName)
+			log.FailOnError(err, "failed to build restored PVC Spec")
+			log.Infof("Generating PVC from snapshot source snapshot %s, pvc name %s", snapName, restoredPVCSpec.Name)
+			restoredPvc, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+			log.FailOnError(err, "failed to restore PVC")
+			err = Inst().S.WaitForSinglePVCToBound(restoredPvc.Name, ns, 3)
+			log.FailOnNoError(err, "restore should have failed as bucket is deleted")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		cleanupSnapshotests(context, ns)
+		AfterEachTest(contexts)
+	})
+})
+
+// Test CSI snapshot when a volume is in degraded state.
+// We do this by stopping one replica
+var _ = Describe("{CSIOnlyTestCloudSnapshotDegradedState}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CSIOnlyTestCloudSnapshotDegradedState", "Test create and restore snapshot, volume in degraded state", nil, 0)
+	})
+
+	var pvcName, ns, snapShotClassName, snapName, scName string
+	context := &scheduler.Context{
+		App: &spec.AppSpec{
+			Key: "snapshot-degraded-stateƒIn",
+		},
+	}
+	var pvc *corev1.PersistentVolumeClaim
+	stepLog := "Take snapshot in volume degraded state"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
+		ns = fmt.Sprintf("csi-snapshot-degraded-test-ns-%v", time.Now().Unix())
+		createNamespace(ns)
+
+		stepLog = "Create CSI storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			scName = fmt.Sprintf("csi-storage-class-degraded")
+			createStorageClass(scName, map[string]string{"repl": "2"})
+		})
+
+		stepLog = "Create volume snapshot class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName = CloudSnapShotClass
+			createVolumeSnapshotClass(snapShotClassName, map[string]string{"csi.openstorage.org/snapshot-type": "cloud"})
+		})
+
+		stepLog = "Create PVC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pvcName = fmt.Sprintf("si-snapshot-degraded-test-%v", time.Now().Unix())
+			pvc = createPVC(pvcName, ns, scName)
+		})
+
+		stepLog = "Get PV, put volume in degraded mode, and take snapshot"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pv := pvc.Spec.VolumeName
+			replicaSets, err := Inst().V.GetReplicaSets(&volume.Volume{
+				ID: pv,
+			})
+			var nodeForPxStop node.Node
+			// Put the volume in Degraded state.
+			replicasNodes := replicaSets[0].Nodes
+			// Stop Driver on one of the replicas.
+			storagenodes, err := GetStorageNodes()
+			for _, n := range storagenodes {
+				if n.Id == replicasNodes[0] {
+					nodeForPxStop = n
+					break
+				}
+			}
+			// Stop px, and try taking snapshot
+			err = Inst().V.StopDriver([]node.Node{nodeForPxStop}, false, nil)
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Stop driver"))
+			err = Inst().V.WaitDriverDownOnNode(nodeForPxStop)
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver to sop"))
+			// defer Restart
+			defer func() {
+				err = Inst().V.StartDriver(nodeForPxStop)
+				dash.VerifyFatal(err == nil, true, fmt.Sprintf("Start driver"))
+				err = Inst().V.WaitDriverUpOnNode(nodeForPxStop, 5*time.Minute)
+				dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver to start"))
+			}()
+
+			log.Infof("create cloudsnapshot with valid credentials")
+			snapName = fmt.Sprintf("si-snapshot-degraded-test-snap-%v", time.Now().Unix())
+			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			log.FailOnError(err, "snapshot should have failed")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		cleanupSnapshotests(context, ns)
+		AfterEachTest(contexts)
+	})
+})
+
+// Test CSI snapshot when a volume is in out of quorum state.
+// We do this by stopping all replicas
+var _ = Describe("{CSIOnlyTestCloudSnapshotOutOfQuorum}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CSIOnlyTestCloudSnapshotOutOfQuorum", "Test create and restore snapshot, volume in out of quorum state", nil, 0)
+	})
+
+	var pvcName, ns, snapShotClassName, snapName, scName string
+	context := &scheduler.Context{
+		App: &spec.AppSpec{
+			Key: "snapshot-out-of-quorum",
+		},
+	}
+	var pvc *corev1.PersistentVolumeClaim
+	stepLog := "Take snapshot in volume out of quorum state"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
+		ns = fmt.Sprintf("csi-snapshot-out-of-quorum-test-ns-%v", time.Now().Unix())
+		createNamespace(ns)
+
+		stepLog = "Create CSI storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			scName = fmt.Sprintf("csi-storage-class-out-of-quorum")
+			createStorageClass(scName, nil)
+		})
+
+		stepLog = "Create volume snapshot class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName = CloudSnapShotClass
+			createVolumeSnapshotClass(snapShotClassName, map[string]string{"csi.openstorage.org/snapshot-type": "cloud"})
+		})
+
+		stepLog = "Create PVC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pvcName = fmt.Sprintf("csi-snapshot-out-of-quorum-test-%v", time.Now().Unix())
+			pvc = createPVC(pvcName, ns, scName)
+		})
+
+		stepLog = "Get PV, put volume in degraded mode, and take snapshot"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pv := pvc.Spec.VolumeName
+			replicaSets, err := Inst().V.GetReplicaSets(&volume.Volume{
+				ID: pv,
+			})
+			var nodeForPxStop node.Node
+			// Put the volume in Degraded state.
+			replicasNodes := replicaSets[0].Nodes
+			// Stop Driver on one of the replicas.
+			storagenodes, err := GetStorageNodes()
+			for _, n := range storagenodes {
+				if n.Id == replicasNodes[0] {
+					nodeForPxStop = n
+					break
+				}
+			}
+			// Stop node and take snapshot
+			err = Inst().V.StopDriver([]node.Node{nodeForPxStop}, false, nil)
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Stop driverr"))
+			err = Inst().V.WaitDriverDownOnNode(nodeForPxStop)
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver to sopt"))
+			// defer Restart
+			defer func() {
+				err = Inst().V.StartDriver(nodeForPxStop)
+				dash.VerifyFatal(err == nil, true, fmt.Sprintf("Start driver"))
+				err = Inst().V.WaitDriverUpOnNode(nodeForPxStop, 5*time.Minute)
+				dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver to start"))
+			}()
+
+			log.Infof("create cloudsnapshot with valid credentials")
+			snapName = fmt.Sprintf("csi-creds-test-%v", time.Now().Unix())
+			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			log.FailOnNoError(err, "snapshot should have failed")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		cleanupSnapshotests(context, ns)
+
+		AfterEachTest(contexts)
+	})
+})
 
 var _ = Describe("{ResizeVolumeAfterFull}", Label("p1", "positive", "px_vol_ops", "VolResize"), func() {
 	/*
@@ -4594,3 +5832,236 @@ var _ = Describe("{DetachVolSnapshotTest}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+func restartPx(nodeForPxStop node.Node) {
+	// restart portworx on node.
+	err = Inst().V.StopDriver([]node.Node{nodeForPxStop}, false, nil)
+	dash.VerifyFatal(err == nil, true, fmt.Sprintf("Stop px driver"))
+	err = Inst().V.WaitDriverDownOnNode(nodeForPxStop)
+	dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver down"))
+	err = Inst().V.StartDriver(nodeForPxStop)
+	dash.VerifyFatal(err == nil, true, fmt.Sprintf("Start px driver"))
+	err = Inst().V.WaitDriverUpOnNode(nodeForPxStop, 5*time.Minute)
+	dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver to start"))
+}
+
+func verifyNoError(err error, description string) {
+	dash.VerifyFatal(err == nil, true, description)
+}
+
+func createPod(pvc *corev1.PersistentVolumeClaim) *corev1.Pod {
+	podSpec := &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pod-" + pvc.Name,
+			Namespace: pvc.Namespace,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "nginx-container",
+					Image: "nginx:latest",
+					Ports: []corev1.ContainerPort{
+						{
+							ContainerPort: 80,
+						},
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							MountPath: "/usr/share/nginx/html",
+							Name:      "nginx-volume",
+						},
+					},
+				},
+			},
+			Volumes: []corev1.Volume{
+				{
+					Name: "nginx-volume",
+					VolumeSource: corev1.VolumeSource{
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: pvc.Name,
+						},
+					},
+				},
+			},
+		},
+	}
+	log.Infof("Creating nginx pod from pvc")
+	pod, err := k8sCore.CreatePod(podSpec)
+	log.FailOnError(err, "Failed to create pod")
+
+	t := func() (interface{}, bool, error) {
+		pod, err := k8sCore.GetPodByName(pod.Name, pod.Namespace)
+		if err != nil {
+			return "", false, err
+		}
+		if !k8sCore.IsPodReady(*pod) {
+			return "", true, fmt.Errorf("waiting for pod %s to be in running state", pod.Name)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+	log.FailOnError(err, "Pod did not go to running state")
+	return pod
+}
+
+func createStorageClass(scName string, parameters map[string]string) {
+	reclaimPolicyDelete := corev1.PersistentVolumeReclaimDelete
+	bindMode := storageApi.VolumeBindingImmediate
+
+	v1obj := metav1.ObjectMeta{
+		Name: scName,
+	}
+	scObj := storageApi.StorageClass{
+		ObjectMeta:        v1obj,
+		Provisioner:       k8s.CsiProvisioner,
+		ReclaimPolicy:     &reclaimPolicyDelete,
+		VolumeBindingMode: &bindMode,
+		Parameters:        parameters,
+	}
+
+	k8sStorage := storage.Instance()
+	_, err = k8sStorage.CreateStorageClass(&scObj)
+	if err != nil {
+		isStorageClassExists := strings.Contains(err.Error(), "already exists")
+		dash.VerifyFatal(isStorageClassExists, true, "Check if storage class exists")
+	} else {
+		log.InfoD("Successfully created storage class: %v", scName)
+	}
+}
+
+func createVolumeSnapshotClass(snapShotClassName string, params map[string]string) {
+	volSnapshotClass, err := Inst().S.CreateCSISnapshotClass(scheduler.CSISnapshotClassCreateRequest{
+		SnapClassName:  snapShotClassName,
+		DeletionPolicy: "Delete",
+		Parameters:     params,
+	})
+	if err != nil {
+		isSnapshotClassExists := strings.Contains(err.Error(), "already exists")
+		dash.VerifyFatal(isSnapshotClassExists, true, "Check if snapshot class exists")
+	} else {
+		log.InfoD("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
+	}
+}
+
+func createPVC(pvcName string, ns string, scName string) *corev1.PersistentVolumeClaim {
+	log.InfoD("creating PVC [%s] in namespace [%s]", pvcName, ns)
+	pvcObj := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: ns,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("50Gi"),
+				},
+			},
+			StorageClassName: &scName,
+		},
+	}
+	_, err := core.Instance().CreatePersistentVolumeClaim(pvcObj)
+	dash.VerifyFatal(err, nil, fmt.Sprintf("Verify PVC [%s] is created successfully", pvcName))
+	time.Sleep(10 * time.Second)
+	pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, ns)
+	log.FailOnError(err, "Failed to create PVC [%v]. Error : [%v]", pvcName, err)
+	err = Inst().S.WaitForSinglePVCToBound(pvcName, ns, 3)
+	dash.VerifyFatal(err, nil, fmt.Sprintf("Verify PVC [%s] got bound successfully.", pvc.Name))
+	return pvc
+}
+
+func validatePodCreationWithPVCName(restoredPVCSpec *corev1.PersistentVolumeClaim) {
+	podSpec := &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pod-" + restoredPVCSpec.Name,
+			Namespace: restoredPVCSpec.Namespace,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "nginx-container",
+					Image: "nginx:latest",
+					Ports: []corev1.ContainerPort{
+						{
+							ContainerPort: 80,
+						},
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							MountPath: "/usr/share/nginx/html",
+							Name:      "nginx-volume",
+						},
+					},
+				},
+			},
+			Volumes: []corev1.Volume{
+				{
+					Name: "nginx-volume",
+					VolumeSource: corev1.VolumeSource{
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: restoredPVCSpec.Name,
+						},
+					},
+				},
+			},
+		},
+	}
+	log.Infof("Creating nginx pod from restored spec")
+	pod, err := k8sCore.CreatePod(podSpec)
+	if err != nil {
+		log.FailOnError(err, "Failed to create pod from snapshot")
+	}
+	defer func() {
+		err := k8sCore.DeletePod(pod.Name, pod.Namespace, false)
+		if err != nil {
+			log.Warnf("Failed to delete pod %s: %v", pod.Name, err)
+		}
+	}()
+
+	t := func() (interface{}, bool, error) {
+		pod, err := k8sCore.GetPodByName(pod.Name, pod.Namespace)
+		if err != nil {
+			return "", false, err
+		}
+		if !k8sCore.IsPodReady(*pod) {
+			return "", true, fmt.Errorf("waiting for pod %s to be in running state", pod.Name)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+	log.FailOnError(err, "Failed to create pods from snapshot")
+}
+
+func cleanupSnapshotests(context *scheduler.Context, ns string) {
+	err = Inst().S.DeletePodsFromNamespace(context, ns)
+	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting pods in namespace [%s]", ns))
+
+	err = Inst().S.DeletePvcsFromNamespace(context, ns)
+	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting PVCs in namespace [%s]", ns))
+
+	err = Inst().S.DeleteCsiSnapshotsFromNamespace(context, ns)
+	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting snapshots in namespace [%s]", ns))
+
+	log.Infof("Deleting namespace[%s]", ns)
+	err = core.Instance().DeleteNamespace(ns)
+	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting namespace[%s]", ns))
+}
+
+func createNamespace(ns string) {
+	nsName := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: ns,
+		},
+	}
+	log.InfoD("Creating namespace %v", ns)
+	_, err = k8sCore.CreateNamespace(nsName)
+	log.FailOnError(err, "failed to create namespace")
+}

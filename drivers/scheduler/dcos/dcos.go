@@ -1222,6 +1222,38 @@ func (d *dcos) GetPodMetrics(podName, namespace string) (*v1beta1.PodMetrics, er
 	}
 }
 
+func (d *dcos) DeletePvcsFromNamespace(ctx *scheduler.Context, namespace string) error {
+	// DeletePvcsFromNamespace is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeletePvcsFromNamespace()",
+	}
+
+}
+
+func (k *dcos) WaitForSnapshotsToBeDeleted(ctx *scheduler.Context, namespace string) error {
+	// WaitForSnapshotsToBeDeleted is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeletePvcsFromNamespace()",
+	}
+}
+
+func (k *dcos) WaitForPvcsToBeDeleted(ctx *scheduler.Context, namespace string) error {
+	// WaitForPvcsToBeDeleted is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "WaitForPvcsToBeDeleted()",
+	}
+}
+func (k *dcos) DeletePodsFromNamespace(ctx *scheduler.Context, namespace string) error {
+	// DeletePodsFromNamespace is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeletePodsFromNamespace()",
+	}
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

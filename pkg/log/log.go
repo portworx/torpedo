@@ -430,6 +430,7 @@ func FailOnNoError(err error, description string, args ...interface{}) {
 	} else {
 		tpLog.Errorf(description, args...)
 		dash.Fatal(description, args...)
+		gomega.Expect(err).To(gomega.HaveOccurred())
 	}
 }
 

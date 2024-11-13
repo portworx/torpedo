@@ -4896,6 +4896,73 @@ func (k *K8s) DeleteCsiSnapshotsFromNamespace(ctx *scheduler.Context, namespace 
 
 }
 
+// WaitForSnapshotsToBeDeleted will wait for all snapshots to be deleted from a namespace
+func (k *K8s) WaitForSnapshotsToBeDeleted(ctx *scheduler.Context, namespace string) error {
+	snaplist, err := k.GetSnapshotsInNameSpace(ctx, namespace)
+	if err != nil {
+		log.InfoD("Failed to get Snapshots for app [%v] in namespace [%v]", ctx.App.Key, namespace)
+		return err
+	}
+	for _, snap := range snaplist.Items {
+		err = k.waitForCsiSnapToBeDeleted(snap.ObjectMeta.Name, namespace)
+		if err != nil {
+			log.InfoD("Failed to delete snapshot [%v] in namespace [%v]", snap.ObjectMeta.Name, namespace)
+			return err
+		}
+	}
+	return nil
+}
+
+// WaitForPvcsToBeDeleted will wait for all pvc to be deleted from a namespace
+func (k *K8s) WaitForPvcsToBeDeleted(ctx *scheduler.Context, namespace string) error {
+	volList, err := k8sCore.GetPersistentVolumeClaims(namespace, nil)
+	if err != nil {
+		log.InfoD("Failed to get volumes for app [%v] in namespace [%v]", ctx.App.Key, namespace)
+		return err
+	}
+	for _, vol := range volList.Items {
+		err = k8sCore.DeletePersistentVolumeClaim(vol.ObjectMeta.Name, namespace)
+		if err != nil {
+			log.InfoD("Failed to delete snapshot [%v] in namespace [%v]", vol.ObjectMeta.Name, namespace)
+			return err
+		}
+	}
+	return nil
+}
+
+func (k *K8s) DeletePvcsFromNamespace(ctx *scheduler.Context, namespace string) error {
+	volList, err := k8sCore.GetPersistentVolumeClaims(namespace, nil)
+	if err != nil {
+		log.InfoD("Failed to get volumes for app [%v] in namespace [%v]", ctx.App.Key, namespace)
+		return err
+	}
+	for _, vol := range volList.Items {
+		err = k8sCore.DeletePersistentVolumeClaim(vol.ObjectMeta.Name, namespace)
+		if err != nil {
+			log.InfoD("Failed to delete snapshot [%v] in namespace [%v]", vol.ObjectMeta.Name, namespace)
+			return err
+		}
+	}
+	return nil
+
+}
+
+func (k *K8s) DeletePodsFromNamespace(ctx *scheduler.Context, namespace string) error {
+	podList, err := k8sCore.GetPods(namespace, nil)
+	if err != nil {
+		log.InfoD("Failed to get volumes for app [%v] in namespace [%v]", ctx.App.Key, namespace)
+		return err
+	}
+	for _, pod := range podList.Items {
+		err = k8sCore.DeletePod(pod.ObjectMeta.Name, namespace, false)
+		if err != nil {
+			log.InfoD("Failed to delete pod [%v] in namespace [%v]", pod.ObjectMeta.Name, namespace)
+			return err
+		}
+	}
+	return nil
+}
+
 // GetNodesForApp get the node for the app
 func (k *K8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	t := func() (interface{}, bool, error) {
@@ -8383,8 +8450,8 @@ func (k *K8s) CreateVolumeSnapshotClassesWithParameters(snapClassName string, pr
 	return volumeSnapClass, nil
 }
 
-// waitForCsiSnapToBeReady wait for snapshot status to be ready
-func (k *K8s) waitForCsiSnapToBeReady(snapName string, namespace string) error {
+// WaitForCsiSnapToBeReady wait for snapshot status to be ready
+func WaitForCsiSnapToBeReady(snapName string, namespace string) error {
 	var snap *volsnapv1.VolumeSnapshot
 	var err error
 	log.Infof("Waiting for snapshot [%s] to be ready in namespace: %s ", snapName, namespace)
@@ -8404,6 +8471,42 @@ func (k *K8s) waitForCsiSnapToBeReady(snapName string, namespace string) error {
 		return err
 	}
 	log.Infof("Snapshot is ready to use: %s", snap.Name)
+	return nil
+}
+
+// waitForCsiSnapToBeReady wait for snapshot status to be ready
+func (k *K8s) waitForCsiSnapToBeDeleted(snapName string, namespace string) error {
+	var err error
+	log.Infof("Waiting for snapshot [%s] to be deleted in namespace: %s ", snapName, namespace)
+	t := func() (interface{}, bool, error) {
+		_, err = k8sExternalsnap.GetSnapshot(snapName, namespace)
+		if err != nil && k8serrors.IsNotFound(err) {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("snapshot is not deleted")
+	}
+	if _, err := task.DoRetryWithTimeout(t, SnapshotReadyTimeout, DefaultRetryInterval); err != nil {
+		return err
+	}
+	log.Errorf("Snapshot is not deleted: %s", snapName)
+	return nil
+}
+
+// waitForCsiSnapToBeReady wait for snapshot status to be ready
+func (k *K8s) waitForPvcsToBeDeleted(pvcName string, namespace string) error {
+	var err error
+	log.Infof("Waiting for PVC [%s] to be ready in namespace: %s ", pvcName, namespace)
+	t := func() (interface{}, bool, error) {
+		_, err = k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+		if err != nil && k8serrors.IsNotFound(err) {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("snapshot is not deleted")
+	}
+	if _, err := task.DoRetryWithTimeout(t, SnapshotReadyTimeout, DefaultRetryInterval); err != nil {
+		return err
+	}
+	log.Errorf("PVC is not deleted: %s", pvcName)
 	return nil
 }
 
@@ -8524,7 +8627,7 @@ func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc
 			Cause:   err,
 		}
 	}
-	if err = k.waitForCsiSnapToBeReady(snapshot.Name, namespace); err != nil {
+	if err = WaitForCsiSnapToBeReady(snapshot.Name, namespace); err != nil {
 		return nil, &scheduler.ErrFailedToCreateSnapshot{
 			PvcName: pvc,
 			Cause:   fmt.Errorf("snapshot is not ready. Error: %v", err),

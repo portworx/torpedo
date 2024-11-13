@@ -12798,6 +12798,72 @@ func CreatePXCloudCredential() error {
 
 }
 
+func DeletePXCloudCredential() error {
+	/*
+		Delete the cloud credential
+	*/
+	n := node.GetStorageDriverNodes()[0]
+	uuidCmd := "cred list -j | grep uuid"
+
+	output, err := Inst().V.GetPxctlCmdOutputConnectionOpts(n, uuidCmd, node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}, false)
+	if err != nil {
+		log.Warnf("No creds found, creating new cred, Err: %v", err)
+		return err
+	}
+
+	if output != "" {
+		log.Infof("Cloud Cred exists [%s]", output)
+		log.Warnf("Deleting existing cred and creating new cred with given params")
+		credUUID := strings.Split(output, ":")[1]
+		credUUID = strings.ReplaceAll(strings.TrimSpace(credUUID), "\"", "")
+		credDeleteCmd := fmt.Sprintf("cred delete %s", credUUID)
+		output, err = Inst().V.GetPxctlCmdOutputConnectionOpts(n, credDeleteCmd, node.ConnectionOpts{
+			IgnoreError:     false,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		}, false)
+
+		if err != nil {
+			err = fmt.Errorf("error deleting existing cred [%s], cause: %v", credUUID, err)
+			return err
+		}
+
+		log.Infof("Deleted exising cred [%s]", output)
+	}
+	return nil
+}
+
+func GetPXCloudCredential() (string, error) {
+	/*
+		Delete the cloud credential
+	*/
+	n := node.GetStorageDriverNodes()[0]
+	uuidCmd := "cred list -j | grep uuid"
+
+	output, err := Inst().V.GetPxctlCmdOutputConnectionOpts(n, uuidCmd, node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}, false)
+	if err != nil {
+		log.Warnf("No creds found, creating new cred, Err: %v", err)
+		return "", err
+	}
+
+	if output != "" {
+		log.Infof("Cloud Cred exists [%s]", output)
+		log.Warnf("Deleting existing cred and creating new cred with given params")
+		credUUID := strings.Split(output, ":")[1]
+		credUUID = strings.ReplaceAll(strings.TrimSpace(credUUID), "\"", "")
+		return credUUID, nil
+	}
+	return "", fmt.Errorf("unable to get cloudsnap credential")
+}
+
 func GetCloudsnapBucketName(contexts []*scheduler.Context) (string, error) {
 
 	var bucketName string

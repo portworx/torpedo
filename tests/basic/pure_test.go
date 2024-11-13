@@ -4294,6 +4294,67 @@ var _ = Describe("{FBDAROXWithoutExportRulesTest}", func() {
 	})
 })
 
+// Test CSI snapshots with FA, FA does not support cloud snap
+var _ = Describe("{CSIOnlyTestCloudSnapshotFA}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CSIOnlyTestCloudSnapshotFA", "Test create snapshot using FA", nil, 0)
+	})
+
+	var ns, snapShotClassName, scName, pvcName string
+	context := &scheduler.Context{
+		App: &spec.AppSpec{
+			Key: "snapshot-fa",
+		},
+	}
+	stepLog := "Create snapshot of FA volume"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+
+		ns = fmt.Sprintf("csi-snapshot-fa-test-ns-%v", time.Now().Unix())
+		createNamespace(ns)
+
+		stepLog = "Create CSI storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			scName = fmt.Sprintf("csi-storage-fa")
+			createStorageClass(scName, map[string]string{"backend": "pure_block"})
+		})
+
+		stepLog = "Create volume snapshot class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			snapShotClassName = CloudSnapShotClass
+			createVolumeSnapshotClass(snapShotClassName, map[string]string{"csi.openstorage.org/snapshot-type": "cloud"})
+		})
+
+		timeNow := time.Now().Unix()
+		stepLog = "Create PVC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pvcName = fmt.Sprintf("csi-snapshot-fa-test-%v", timeNow)
+			createPVC(pvcName, ns, scName)
+		})
+
+		stepLog = "Create snapshot"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pvcName := fmt.Sprintf("csi-snapshot-fa-test-%v", timeNow)
+			log.Infof("Create cloudsnapshot with valid credentials for pvc %s", pvcName)
+			snapName := fmt.Sprintf("csi-snapshot-fa-test-snap-%v", timeNow)
+			_, err := Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			log.FailOnNoError(err, "Snapshot should have failed")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		cleanupSnapshotests(context, ns)
+		AfterEachTest(contexts)
+	})
+})
+
 var _ = Describe("{DeleteFADAVolumeFromBackend}", Label("p1", "negative", "pure_ops", "error_injection"), func() {
 
 	/*

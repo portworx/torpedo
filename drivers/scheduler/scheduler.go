@@ -244,8 +244,20 @@ type Driver interface {
 	// GetSnapshotsInNameSpace get the snapshots list for the namespace
 	GetSnapshotsInNameSpace(ctx *Context, snapshotNameSpace string) (*volsnapv1.VolumeSnapshotList, error)
 
-	//DeleteCsiSnapshotsFromNamespace deletes the all snapshots from a namespace
+	// DeleteCsiSnapshotsFromNamespace deletes the all snapshots from a namespace
 	DeleteCsiSnapshotsFromNamespace(ctx *Context, namespace string) error
+
+	// WaitForSnapshotsToBeDeleted will wait for all snapshots to be deleted from a namespace
+	WaitForSnapshotsToBeDeleted(ctx *Context, namespace string) error
+
+	// WaitForPvcsToBeDeleted will wait for all PVCs to be deleted from a namespace
+	WaitForPvcsToBeDeleted(ctx *Context, namespace string) error
+
+	// DeletePvcsFromNamespace deletes the all pvcs from namespace
+	DeletePvcsFromNamespace(ctx *Context, namespace string) error
+
+	// DeletePodsFromNamespace deletes the all pods from namespace
+	DeletePodsFromNamespace(ctx *Context, namespace string) error
 
 	//IsCsiSnapshotExists checks if a snapshot exists in the particular namespace
 	IsCsiSnapshotExists(ctx *Context, snapshotName string, namespace string) (bool, error)
